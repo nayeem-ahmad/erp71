@@ -7,6 +7,7 @@ import { ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shar
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
 const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
+const DEMAND_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'product-demands')!.permissions;
 /** The subset of a group that MANAGER actually carries in the matrix. */
 const managerShare = (perms: StorePermission[]) =>
     perms.filter((perm) => ROLE_DEFAULT_PERMISSIONS[UserRole.MANAGER].includes(perm));
@@ -91,7 +92,13 @@ describe('syncRolePermissions', () => {
                 .filter((perm) => PROJECT_PERMS.includes(perm))
                 .sort(),
         ).toEqual([...PROJECT_PERMS].sort());
-        expect(tables.tenantRolePermission.every((r) => r.tenant_role_id === ROLE_IDS.manager)).toBe(true);
+        // Scoped to this group's permissions: other groups in the same run may
+        // legitimately grant to other roles (product-demands reaches the cashier).
+        expect(
+            tables.tenantRolePermission
+                .filter((r) => PROJECT_PERMS.includes(r.permission))
+                .every((r) => r.tenant_role_id === ROLE_IDS.manager),
+        ).toBe(true);
     });
 
     it('also backfills the short-links group in the same run', async () => {
@@ -154,8 +161,28 @@ describe('syncRolePermissions', () => {
         // The manager holds the role and has two stores; the cashier's role gained
         // nothing, so the cashier gets nothing.
         expect(result.memberGrants).toBe(PROJECT_PERMS.length * 2);
-        expect(tables.userStorePermission.every((r) => r.user_id === 'u-mgr')).toBe(true);
-        expect(new Set(tables.userStorePermission.map((r) => r.store_id))).toEqual(new Set(['s1', 's2']));
+        const projectRows = tables.userStorePermission.filter((r) => PROJECT_PERMS.includes(r.permission));
+        expect(projectRows.every((r) => r.user_id === 'u-mgr')).toBe(true);
+        expect(new Set(projectRows.map((r) => r.store_id))).toEqual(new Set(['s1', 's2']));
+    });
+
+    it('carries product demands to the manager and only the submit half to the cashier', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        const demands = results.find((r) => r.key === 'product-demands')!;
+
+        const byRole = (roleId: string) => tables.tenantRolePermission
+            .filter((r) => r.tenant_role_id === roleId && DEMAND_PERMS.includes(r.permission))
+            .map((r) => r.permission)
+            .sort();
+
+        // The one group in the run that reaches two roles — a cashier notices the
+        // empty shelf and raises the demand, but does not get to approve it.
+        expect(demands.rolesTouched).toBe(2);
+        expect(byRole(ROLE_IDS.manager)).toEqual([...DEMAND_PERMS].sort());
+        expect(byRole(ROLE_IDS.cashier)).toEqual([StorePermission.CREATE_PRODUCT_DEMAND]);
+        expect(byRole(ROLE_IDS.accountant)).toEqual([]);
     });
 
     it('writes nothing on a dry run but reports what it would do', async () => {

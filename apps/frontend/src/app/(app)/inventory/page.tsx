@@ -8,6 +8,7 @@ import {
     Boxes,
     Calculator,
     ClipboardCheck,
+    ClipboardList,
     FolderTree,
     Package,
     Settings,
@@ -26,6 +27,7 @@ const INVENTORY_HUB_SECTIONS: HubSectionConfig[] = [
         sectionKey: 'dailyOperations',
         links: [
             { href: routes.inventory.products, key: 'products', icon: Package, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+            { href: routes.inventory.demands, key: 'demands', icon: ClipboardList, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
             { href: routes.inventory.transfers, key: 'transfers', icon: Boxes, accent: 'bg-primary-light text-blue-700 border-primary-border' },
             { href: routes.inventory.stockTakes, key: 'stockTakes', icon: ClipboardCheck, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.inventory.shrinkage, key: 'shrinkage', icon: AlertTriangle, accent: 'bg-danger-light text-danger-text border-red-200' },

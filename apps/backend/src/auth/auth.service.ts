@@ -9,8 +9,9 @@ import { AssetsService } from '../assets/assets.service';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto } from './auth.dto';
+import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto, MobileSignInDto } from './auth.dto';
 import { GoogleProfile, GoogleTokenService } from './google-token.service';
+import { FirebasePhoneProfile, FirebaseTokenService } from './firebase-token.service';
 import { isPlatformAdminEmail } from './platform-admin.util';
 import { AUTH_SCOPE_APP } from './token-scope';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
@@ -22,6 +23,7 @@ import {
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
     DEFAULT_MOBILE_COUNTRY_CODE,
+    countryCodeFromE164,
     normalizeMobileToE164,
     resolveTenantFeatures,
 } from '@erp71/shared-types';
@@ -52,6 +54,7 @@ export class AuthService {
         private readonly referrals: ReferralsService,
         private readonly planEntitlements: PlanEntitlementsService,
         private readonly google: GoogleTokenService,
+        private readonly firebase: FirebaseTokenService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -310,6 +313,160 @@ export class AuthService {
         };
     }
 
+    /**
+     * Sign in — or sign up — with a Firebase phone identity, after the browser
+     * has already put an SMS one-time code in front of the user.
+     *
+     * The cases, in the order they are tried:
+     *  1. We already know this Firebase uid → sign in.
+     *  2. Exactly one account carries this number → adopt the Firebase identity
+     *     onto it, so someone who signed up with a password can start using the
+     *     SMS code without ending up with a second, empty workspace.
+     *  3. Several accounts carry it → refuse. Mobile numbers were never unique
+     *     here (one person, several businesses), so there is no honest way to
+     *     pick one; those users sign in with their email and password.
+     *  4. Nobody matches → create the account, once the caller supplies an email
+     *     address. Until then the answer is `requires_signup`, and nothing is
+     *     written.
+     */
+    async mobileSignIn(dto: MobileSignInDto, meta: AuditRequestMeta = {}) {
+        const profile = await this.firebase.verifyPhoneIdToken(dto.idToken);
+
+        const linked = await this.db.user.findUnique({ where: { firebase_uid: profile.firebaseUid } });
+        if (linked) {
+            return this.completeMobileLoginForExistingUser(linked, profile, meta);
+        }
+
+        // `take: 2` is all the ambiguity check needs, and it keeps the query cheap
+        // for a number that somehow sits on dozens of rows.
+        const byNumber = await this.db.user.findMany({
+            where: { mobile: profile.phoneNumber },
+            orderBy: { created_at: 'asc' },
+            take: 2,
+        });
+        if (byNumber.length > 1) {
+            throw new ConflictException(
+                'This mobile number is linked to more than one account. Please sign in with your email and password.',
+            );
+        }
+        if (byNumber.length === 1) {
+            return this.completeMobileLoginForExistingUser(byNumber[0], profile, meta);
+        }
+
+        return this.createUserFromMobile(profile, dto, meta);
+    }
+
+    private async completeMobileLoginForExistingUser(
+        user: {
+            id: string;
+            firebase_uid: string | null;
+            mobile: string | null;
+            mobile_verified_at: Date | null;
+            totp_secret: string | null;
+        },
+        profile: FirebasePhoneProfile,
+        meta: AuditRequestMeta,
+    ) {
+        const patch: Record<string, unknown> = {};
+        if (!user.firebase_uid) patch.firebase_uid = profile.firebaseUid;
+        // Firebase is the authority on which number this identity holds now, so a
+        // number changed there (new SIM, ported line) follows through to here.
+        if (user.mobile !== profile.phoneNumber) {
+            patch.mobile = profile.phoneNumber;
+            patch.mobile_country_code = countryCodeFromE164(profile.phoneNumber) ?? DEFAULT_MOBILE_COUNTRY_CODE;
+        }
+        if (!user.mobile_verified_at || patch.mobile) patch.mobile_verified_at = new Date();
+        if (Object.keys(patch).length > 0) {
+            await this.db.user.update({ where: { id: user.id }, data: patch });
+        }
+
+        if (this.totp.isEnabled(user.totp_secret)) {
+            // The SMS code proves the number, not that they hold the second factor.
+            return { requires_2fa: true, user_id: user.id };
+        }
+
+        this.audit
+            .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'mobile' })
+            .catch(() => {});
+
+        return { ...(await this.generateAuthResponse(user.id)), is_new_user: false };
+    }
+
+    private async createUserFromMobile(
+        profile: FirebasePhoneProfile,
+        dto: MobileSignInDto,
+        meta: AuditRequestMeta,
+    ) {
+        const email = dto.email?.trim().toLowerCase();
+        if (!email) {
+            // Nothing is written yet: the caller now collects an email address and
+            // posts the same Firebase token back with it.
+            return { requires_signup: true, mobile: profile.phoneNumber };
+        }
+
+        // Deliberately not a link: the SMS code proved the number, and nothing at
+        // all about this address. Attaching it to an existing account would let
+        // anyone with a phone claim any account whose email they can guess.
+        if (await this.db.user.findUnique({ where: { email } })) {
+            throw new ConflictException(
+                'An account with this email already exists. Sign in with it, then add your mobile number.',
+            );
+        }
+
+        const wantsWorkspace = !!dto.tenantName?.trim();
+        const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
+
+        const user = await this.db.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+                data: {
+                    email,
+                    // No password: this identity lives in Firebase until they set one
+                    // through "forgot password".
+                    passwordHash: null,
+                    firebase_uid: profile.firebaseUid,
+                    name: dto.name?.trim() || email.split('@')[0],
+                    mobile: profile.phoneNumber,
+                    mobile_country_code: countryCodeFromE164(profile.phoneNumber) ?? DEFAULT_MOBILE_COUNTRY_CODE,
+                    mobile_verified_at: new Date(),
+                },
+            });
+
+            if (wantsWorkspace) {
+                await this.provisionTenant(tx, createdUser.id, {
+                    tenantName: dto.tenantName!.trim(),
+                    storeName: dto.storeName?.trim() || 'Main Store',
+                    address: dto.address,
+                    planCode: defaultPlan,
+                    referralCode: dto.referralCode,
+                });
+            }
+
+            return createdUser;
+        });
+
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
+            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
+        });
+        // The number is verified; the address they just typed is not.
+        this.sendVerificationEmail(user.id).catch((err) => {
+            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
+        });
+        this.audit
+            .logForUserTenants('USER_SIGNUP', 'User', { userId: user.id, ...meta }, user.id, {
+                email: user.email,
+                provider: 'mobile',
+            })
+            .catch(() => {});
+
+        return {
+            ...(await this.generateAuthResponse(user.id)),
+            is_new_user: true,
+            // Tells the page to hand them to the onboarding wizard rather than a
+            // dashboard with no workspace behind it.
+            requires_workspace: !wantsWorkspace,
+        };
+    }
+
     async logout(userId: string, meta: AuditRequestMeta = {}): Promise<void> {
         // Increment token_version to invalidate all existing app JWTs for this user.
         // `storefront_token_version` is deliberately untouched: signing out of the
@@ -544,6 +701,10 @@ export class AuthService {
             // account, which has no current password to confirm.
             has_password: !!user.passwordHash,
             google_connected: !!(user as any).google_id,
+            // Same idea for mobile sign-in: an account with a Firebase identity
+            // can get back in with an SMS code even with no password set.
+            mobile_connected: !!(user as any).firebase_uid,
+            mobile_verified: !!(user as any).mobile_verified_at,
             avatar_url: (user as any).avatar_url || null,
             platform_features: platformFeatures,
             referee: referee

@@ -121,6 +121,7 @@ export const routes = {
     inventory: {
         root: '/inventory',
         products: '/inventory/products',
+        demands: '/inventory/demands',
         transfers: '/inventory/transfers',
         transferDetail: (id: string) => `/inventory/transfers/${id}` as const,
         shrinkage: '/inventory/shrinkage',

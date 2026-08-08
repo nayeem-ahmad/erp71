@@ -53,6 +53,29 @@ export function normalizeMobileToE164(countryCode: string, rawNational: string):
     return isValidE164Mobile(e164) ? e164 : null;
 }
 
+/**
+ * Best-effort reverse of `normalizeMobileToE164`: which of the supported
+ * countries does this E.164 number belong to? Used when a number arrives
+ * already in E.164 (a verified Firebase phone identity, say) and the account
+ * still needs a `mobile_country_code` to store alongside it.
+ *
+ * Longest dial prefix wins, so `+1` never shadows a longer code that starts
+ * with the same digits.
+ */
+export function countryCodeFromE164(e164: string | null | undefined): string | null {
+    const value = (e164 ?? '').trim();
+    if (!isValidE164Mobile(value)) return null;
+
+    let match: MobileCountryOption | null = null;
+    for (const country of MOBILE_COUNTRY_OPTIONS) {
+        if (!value.startsWith(country.dial)) continue;
+        if (!match || country.dial.length > match.dial.length) {
+            match = country;
+        }
+    }
+    return match?.code ?? null;
+}
+
 export function formatMobileForDisplay(e164: string | null | undefined, countryCode = DEFAULT_MOBILE_COUNTRY_CODE): string {
     if (!e164) return '—';
     const country = getMobileCountryOption(countryCode);

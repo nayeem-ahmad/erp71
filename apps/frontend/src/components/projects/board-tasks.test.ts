@@ -13,6 +13,7 @@ import {
     labelsOf,
     matchesFilters,
     NO_FILTERS,
+    projectLabelOf,
     type BoardColumn,
     type BoardTask,
     type ProjectLabel,
@@ -299,5 +300,25 @@ describe('coverClass', () => {
 
     it('is null for a colour it does not know, rather than an empty class', () => {
         expect(coverClass('CHARTREUSE')).toBeNull();
+    });
+});
+
+describe('projectLabelOf', () => {
+    it('prefers the short name — that is what the field is for', () => {
+        expect(
+            projectLabelOf({ id: 'p1', code: 'PRJ-0001', name: 'Gulshan fit-out', short_name: 'Gulshan' }),
+        ).toBe('Gulshan');
+    });
+
+    it('falls back to the code, which every project has', () => {
+        expect(projectLabelOf({ id: 'p1', code: 'PRJ-0001', name: 'Gulshan fit-out' })).toBe('PRJ-0001');
+        expect(
+            projectLabelOf({ id: 'p1', code: 'PRJ-0001', name: 'Gulshan fit-out', short_name: '   ' }),
+        ).toBe('PRJ-0001');
+    });
+
+    it('is null without a project, so the card renders nothing rather than a stray dash', () => {
+        expect(projectLabelOf(null)).toBeNull();
+        expect(projectLabelOf(undefined)).toBeNull();
     });
 });
