@@ -3,12 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Eye, Pencil, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Eye, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
+import { hasPlanEntitlement } from '@erp71/shared-types';
 import { Button, Checkbox, ConfirmDialog, Field, Input, Select, Textarea } from '@/components/ui';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
+import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { resolveTenantPlanFeatures } from '@/lib/plan-entitlements';
 
 type Category = { id: string; name: string };
 
@@ -22,9 +27,17 @@ type Category = { id: string; name: string };
  * customer base at once.
  */
 export default function TenantPostEditor({ postId }: { postId?: string }) {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.storefront.blog;
     const router = useRouter();
+    const { aiChat: aiChatEnabled } = usePlatformFeatures();
+    const { planCode, features: rawPlanFeatures } = useTenantPlanFeatures();
+    // Same two gates as every other AI feature (see (app)/layout.tsx): the
+    // platform kill switch and the plan entitlement. The server already
+    // enforces the entitlement via enforceCredits, but showing the button to
+    // every non-premium shop means the failure only surfaces after the owner
+    // has typed a brief and pressed Generate.
+    const canUseAi = aiChatEnabled && hasPlanEntitlement(resolveTenantPlanFeatures(planCode, rawPlanFeatures), 'premiumAi');
 
     const [tab, setTab] = useState<'write' | 'preview'>('write');
     const [title, setTitle] = useState('');
@@ -46,6 +59,10 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(!!postId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiDraft, setAiDraft] = useState<any>(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -120,6 +137,41 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
         }
     }
 
+    /** Fills the fields for review; nothing is written until the owner saves. */
+    function applyDraft(draft: any) {
+        setTitle(draft.title ?? '');
+        setExcerpt(draft.excerpt ?? '');
+        setBody(draft.body_md ?? '');
+        setSeoTitle(draft.seo_title ?? '');
+        setSeoDescription(draft.seo_description ?? '');
+        if (draft.slug) setSlug(draft.slug);
+        setCategoryId(draft.category_id ?? '');
+        if (draft.author_name) setAuthorName(draft.author_name);
+        if (draft.cover_alt) setCoverAlt(draft.cover_alt);
+        setFeatured(!!draft.featured);
+
+        toast.success(m.ai.filled);
+    }
+
+    async function generateDraft() {
+        setAiLoading(true);
+        try {
+            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt, locale });
+            setAiOpen(false);
+
+            if (title.trim() || excerpt.trim() || body.trim()) {
+                setAiDraft(draft);
+                return;
+            }
+
+            applyDraft(draft);
+        } catch (error) {
+            toast.error((error as Error).message);
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
     async function run(action: () => Promise<any>, nextStatus?: string) {
         setSaving(true);
         try {
@@ -143,6 +195,16 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                 </Link>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    {canUseAi && (
+                        <Button
+                            variant="secondary"
+                            icon={<Sparkles className="h-4 w-4" />}
+                            onClick={() => setAiOpen(true)}
+                            disabled={saving}
+                        >
+                            {m.ai.button}
+                        </Button>
+                    )}
                     <Button variant="secondary" onClick={save} loading={saving} disabled={!title.trim() || !body.trim()}>
                         {m.save}
                     </Button>
@@ -326,6 +388,37 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                     if (!postId) return;
                     await run(() => api.deleteTenantBlogPost(postId));
                     router.push('/settings/blog');
+                }}
+            />
+
+            <AiDraftModal
+                open={aiOpen}
+                prompt={aiPrompt}
+                loading={aiLoading}
+                labels={{
+                    modalTitle: m.ai.modalTitle,
+                    promptLabel: m.ai.promptLabel,
+                    promptPlaceholder: m.ai.promptPlaceholder,
+                    generate: m.ai.generate,
+                    cancel: t.common.cancel,
+                }}
+                onPromptChange={setAiPrompt}
+                onClose={() => setAiOpen(false)}
+                onGenerate={generateDraft}
+            />
+
+            <ConfirmDialog
+                open={!!aiDraft}
+                title={m.ai.overwriteTitle}
+                prompt={m.ai.overwritePrompt}
+                confirmLabel={m.ai.replace}
+                cancelLabel={t.common.cancel}
+                danger
+                onCancel={() => setAiDraft(null)}
+                onConfirm={() => {
+                    const draft = aiDraft;
+                    setAiDraft(null);
+                    applyDraft(draft);
                 }}
             />
         </div>

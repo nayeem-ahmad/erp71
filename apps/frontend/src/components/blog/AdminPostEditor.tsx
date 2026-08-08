@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Eye, Pencil, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Eye, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Button, Field, Input, Select, Textarea, Checkbox, ConfirmDialog } from '@/components/ui';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
+import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -66,6 +67,10 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(!!postId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiDraft, setAiDraft] = useState<any>(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     const current = useMemo(
@@ -203,6 +208,71 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
         }
     }
 
+    /**
+     * Fills the fields but writes nothing — the author reviews in the form and
+     * saves through the normal button. Only the open locale tab is patched,
+     * because the request asked for that language; the post-level fields
+     * (slug, category, audience, author, featured) belong to the post rather
+     * than to a language and are always applied.
+     */
+    function applyDraft(draft: any) {
+        patchCurrent({
+            title: draft.title ?? '',
+            excerpt: draft.excerpt ?? '',
+            body_md: draft.body_md ?? '',
+            seo_title: draft.seo_title ?? '',
+            seo_description: draft.seo_description ?? '',
+        });
+
+        if (draft.slug) setSlug(draft.slug);
+        setCategoryId(draft.category_id ?? '');
+        if (draft.audience) setAudience(draft.audience);
+        if (draft.author_name) setAuthorName(draft.author_name);
+        if (draft.author_title) setAuthorTitle(draft.author_title);
+        if (draft.cover_alt) setCoverAlt(draft.cover_alt);
+        setFeatured(!!draft.featured);
+
+        toast.success(e.ai.filled);
+    }
+
+    async function generateDraft() {
+        setAiLoading(true);
+        try {
+            const draft = await api.draftAdminBlogPost({ prompt: aiPrompt, locale });
+            setAiOpen(false);
+
+            // Confirm only once there is something to apply — a cancelled
+            // overwrite should not also have thrown the generation away.
+            // For an existing post, applyDraft also overwrites the post-level
+            // fields (slug, category, audience, author, featured) unconditionally,
+            // so any of those already holding a value counts as content too —
+            // not just the open locale tab.
+            const hasContent = !!(
+                current.title.trim() ||
+                current.excerpt.trim() ||
+                current.body_md.trim() ||
+                (postId &&
+                    (slug.trim() ||
+                        categoryId ||
+                        audience !== 'BOTH' ||
+                        authorName.trim() ||
+                        authorTitle.trim() ||
+                        coverAlt.trim() ||
+                        featured))
+            );
+            if (hasContent) {
+                setAiDraft(draft);
+                return;
+            }
+
+            applyDraft(draft);
+        } catch (error) {
+            toast.error((error as Error).message);
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
     if (loading) return <p className="text-sm text-gray-500">{t.common.loading}</p>;
 
     return (
@@ -214,6 +284,14 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
                 </Link>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        variant="secondary"
+                        icon={<Sparkles className="h-4 w-4" />}
+                        onClick={() => setAiOpen(true)}
+                        disabled={saving}
+                    >
+                        {e.ai.button}
+                    </Button>
                     <Button variant="secondary" onClick={save} loading={saving}>
                         {e.save}
                     </Button>
@@ -436,6 +514,37 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
                     if (!postId) return;
                     await run(() => api.deleteAdminBlogPost(postId));
                     router.push('/admin/blog');
+                }}
+            />
+
+            <AiDraftModal
+                open={aiOpen}
+                prompt={aiPrompt}
+                loading={aiLoading}
+                labels={{
+                    modalTitle: e.ai.modalTitle,
+                    promptLabel: e.ai.promptLabel,
+                    promptPlaceholder: e.ai.promptPlaceholder,
+                    generate: e.ai.generate,
+                    cancel: t.common.cancel,
+                }}
+                onPromptChange={setAiPrompt}
+                onClose={() => setAiOpen(false)}
+                onGenerate={generateDraft}
+            />
+
+            <ConfirmDialog
+                open={!!aiDraft}
+                title={e.ai.overwriteTitle}
+                prompt={e.ai.overwritePrompt}
+                confirmLabel={e.ai.replace}
+                cancelLabel={t.common.cancel}
+                danger
+                onCancel={() => setAiDraft(null)}
+                onConfirm={() => {
+                    const draft = aiDraft;
+                    setAiDraft(null);
+                    applyDraft(draft);
                 }}
             />
         </div>
