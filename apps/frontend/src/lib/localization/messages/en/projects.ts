@@ -136,6 +136,9 @@ export const projectsMessages = {
         updated: 'Task updated',
         editTitle: 'Edit title',
         renameFailed: 'Could not rename the task',
+        details: 'Details',
+        unassigned: 'Unassigned',
+        saveFailed: 'Could not update the task',
     },
 
     description: {
@@ -245,7 +248,6 @@ export const projectsMessages = {
 
     remaining: {
         history: 'Remaining hours history',
-        note: 'Why did this change?',
         notePlaceholder: 'e.g. client added two more rooms',
         empty: 'No changes recorded yet.',
         by: 'by',
@@ -267,6 +269,7 @@ export const projectsMessages = {
         note: 'Note',
         remainingAfter: 'Remaining after this',
         remainingHint: 'Defaults to what is left after these hours. Change it if the work has grown.',
+        logHint: 'Log hours, revise what is left, or both — one form, one save.',
         empty: 'No time logged yet.',
         logged: 'Time logged',
         deleted: 'Time entry deleted',
