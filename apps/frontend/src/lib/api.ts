@@ -3499,13 +3499,6 @@ export const api = {
         }
         return fetchPaginated(`/project-tasks?${query}`);
     },
-    // TODO(Task 10): `getProjectBoard` is retired by the cross-project Boards feature.
-    // Its last caller is app/(app)/projects/[id]/board/page.tsx, which Task 10 removes
-    // along with the page; delete this method then.
-    /** Kanban passes no sprintId; scrum passes the active sprint's. */
-    getProjectBoard: (projectId: string, sprintId?: string) =>
-        fetchWithAuth(`/project-tasks/board/${projectId}${sprintId ? `?sprintId=${sprintId}` : ''}`),
-
     getBoards: () => fetchWithAuth('/projects/boards'),
     getBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`),
     createBoard: (data: { name: string; description?: string }) =>
