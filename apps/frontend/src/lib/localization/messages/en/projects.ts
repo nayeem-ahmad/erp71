@@ -17,6 +17,8 @@ export const projectsMessages = {
     fields: {
         code: 'Code',
         name: 'Name',
+        shortName: 'Short name',
+        shortNameHint: 'Shown on board cards where the full name will not fit.',
         description: 'Description',
         customer: 'Customer',
         type: 'Type',
@@ -304,6 +306,7 @@ export const projectsMessages = {
         card: {
             drag: 'Drag to move',
             open: 'Open task',
+            project: 'Project',
             overdue: 'Overdue',
             dueToday: 'Due today',
             due: 'Due {date}',

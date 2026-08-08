@@ -92,6 +92,10 @@ export class CreateProjectDto {
     @IsString() @MinLength(1) @MaxLength(200)
     name!: string;
 
+    /** Shown wherever the full name will not fit — a board card, a chip. */
+    @IsOptional() @IsString() @MaxLength(20)
+    shortName?: string;
+
     @IsOptional() @IsString() @MaxLength(5000)
     description?: string;
 

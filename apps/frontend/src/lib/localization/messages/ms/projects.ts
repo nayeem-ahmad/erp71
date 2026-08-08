@@ -17,6 +17,8 @@ export const projectsMessages = {
     fields: {
         code: 'Kod',
         name: 'Nama',
+        shortName: 'Nama ringkas',
+        shortNameHint: 'Dipaparkan pada kad papan apabila nama penuh tidak muat.',
         description: 'Penerangan',
         customer: 'Pelanggan',
         type: 'Jenis',
@@ -304,6 +306,7 @@ export const projectsMessages = {
         card: {
             drag: 'Seret untuk alih',
             open: 'Buka tugasan',
+            project: 'Projek',
             overdue: 'Lewat tempoh',
             dueToday: 'Tamat hari ini',
             due: 'Tamat {date}',
