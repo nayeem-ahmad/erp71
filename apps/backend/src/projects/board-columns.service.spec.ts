@@ -87,12 +87,18 @@ describe('BoardColumnsService', () => {
 
         await service.bindProject(tenantId, 'b1', 'p1');
 
-        const rows = db.boardColumnStatus.createMany.mock.calls[0][0].data;
-        expect(rows).toEqual([
-            { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c1', status_id: 'p-todo' },
-            { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c2', status_id: 'p-doing' },
-            { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c4', status_id: 'p-done' },
-        ]);
+        // Assert the whole call, not just `.data`: `skipDuplicates` is the only
+        // thing standing between two concurrent binds of the same project and a
+        // violation of the (board_id, status_id) unique — losing it silently
+        // would not fail any other test here.
+        expect(db.boardColumnStatus.createMany).toHaveBeenCalledWith({
+            data: [
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c1', status_id: 'p-todo' },
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c2', status_id: 'p-doing' },
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c4', status_id: 'p-done' },
+            ],
+            skipDuplicates: true,
+        });
     });
 
     it('never overwrites a binding that already exists, so a manual override survives', async () => {
@@ -106,10 +112,14 @@ describe('BoardColumnsService', () => {
 
         await service.bindProject(tenantId, 'b1', 'p1');
 
-        const rows = db.boardColumnStatus.createMany.mock.calls[0][0].data;
-        expect(rows).toEqual([
-            { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c1', status_id: 'p-todo' },
-        ]);
+        // Same reasoning as the test above: check `skipDuplicates` reached
+        // Prisma, not just the row data.
+        expect(db.boardColumnStatus.createMany).toHaveBeenCalledWith({
+            data: [
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c1', status_id: 'p-todo' },
+            ],
+            skipDuplicates: true,
+        });
     });
 
     it('writes nothing when no status can be placed', async () => {
