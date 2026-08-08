@@ -418,9 +418,13 @@ export const projectsMessages = {
         columnName: 'Column name',
         category: 'Category',
         wipLimit: 'WIP limit',
+        wipInvalid: 'WIP limit must be at least 1.',
         addColumn: 'Add column',
         mappedStatuses: 'Mapped statuses',
         noMappings: 'Not mapped for any project on this board',
+        loadFailed: 'Could not load the columns.',
+        deleteColumn: 'Delete column',
+        deleteColumnConfirm: 'Delete "{name}"? Its cards fall back to Unsorted, and its status mappings go too.',
     },
 
 } as const;

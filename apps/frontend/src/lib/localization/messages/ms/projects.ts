@@ -418,9 +418,13 @@ export const projectsMessages = {
         columnName: 'Nama lajur',
         category: 'Kategori',
         wipLimit: 'Had WIP',
+        wipInvalid: 'Had WIP mestilah sekurang-kurangnya 1.',
         addColumn: 'Tambah lajur',
         mappedStatuses: 'Status dipetakan',
         noMappings: 'Tidak dipetakan untuk mana-mana projek pada papan ini',
+        loadFailed: 'Lajur tidak dapat dimuatkan.',
+        deleteColumn: 'Padam lajur',
+        deleteColumnConfirm: 'Padam "{name}"? Kadnya akan kembali ke Tidak disusun, dan pemetaan statusnya turut dipadam.',
     },
 
 } as const;
