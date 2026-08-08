@@ -2,9 +2,17 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
+import { AiService } from '../ai/ai.service';
 import { resolveSlug } from '../blog/blog-slug';
 import { readingMinutes } from '../blog/reading-time';
 import { BlogStatus, canTransition } from '../blog/blog-status';
+import {
+    BLOG_DRAFT_MAX_TOKENS,
+    BlogAiDraft,
+    buildBlogDraftPrompt,
+    normalizeBlogDraft,
+} from '../blog/blog-ai-draft';
+import { BlogAiDraftDto } from '../blog/blog.dto';
 import {
     UpdateTenantBlogSettingsDto,
     UpsertTenantBlogCategoryDto,
@@ -29,6 +37,7 @@ export class TenantBlogService {
     constructor(
         private readonly db: DatabaseService,
         private readonly assets: AssetsService,
+        private readonly ai: AiService,
     ) {}
 
     // -----------------------------------------------------------------------
@@ -382,6 +391,43 @@ export class TenantBlogService {
             where: { tenant_id: tenantId, deleted_at: null },
             orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
         });
+    }
+
+    /**
+     * Turn a one-line brief into a filled post for the shop owner to review.
+     *
+     * Billed, unlike the platform blog's equivalent: this is a tenant spending
+     * its own AI credits, so the balance is checked before the call and the
+     * tokens are logged after — including when the reply fails to parse, since
+     * they were spent either way.
+     */
+    async draftWithAi(tenantId: string, dto: BlogAiDraftDto): Promise<BlogAiDraft> {
+        await this.ai.enforceCredits(tenantId);
+
+        const rows = await this.db.tenantBlogCategory.findMany({
+            where: { tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true },
+            orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+        });
+        const categories = rows.map((row) => ({ id: row.id, name: row.name }));
+
+        const model = await this.ai.getDefaultModel();
+        const { systemPrompt, userMessage } = buildBlogDraftPrompt({
+            prompt: dto.prompt,
+            locale: dto.locale ?? 'en',
+            categories,
+            includeAudience: false,
+        });
+
+        const { text, usage, model: usedModel } = await this.ai.completeUnbilled(
+            model,
+            systemPrompt,
+            userMessage,
+            BLOG_DRAFT_MAX_TOKENS,
+        );
+        await this.ai.logUsage(tenantId, 'blog_post_draft', usedModel, usage);
+
+        return normalizeBlogDraft(text, { categories, includeAudience: false });
     }
 
     async createCategory(tenantId: string, dto: UpsertTenantBlogCategoryDto) {

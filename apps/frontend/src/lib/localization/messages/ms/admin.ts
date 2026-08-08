@@ -963,6 +963,17 @@ export const adminMessages = {
                 deleteConfirm: 'Padam catatan ini? URLnya kekal ditempah supaya pautan lama tidak menuju artikel lain.',
                 englishRequired: 'Catatan perlu tajuk dan kandungan Inggeris sebelum boleh diterbitkan.',
                 back: 'Kembali ke catatan',
+                ai: {
+                    button: 'Pembantu AI',
+                    modalTitle: 'Draf dengan AI',
+                    promptLabel: 'Catatan ini tentang apa?',
+                    promptPlaceholder: 'Lima cara kedai kecil mengurangkan stok tidak laku sebelum Raya',
+                    generate: 'Jana',
+                    overwriteTitle: 'Ganti apa yang anda tulis?',
+                    overwritePrompt: 'Catatan ini sudah mempunyai kandungan. Menjana akan menggantikan tajuk, petikan dan kandungan pada tab bahasa ini, serta slug, kategori, khalayak dan tanda keistimewaan untuk keseluruhan catatan.',
+                    replace: 'Gantikan',
+                    filled: 'Draf telah diisi — semak sebelum menyimpan.',
+                },
             },
             categoryManager: {
                 title: 'Kategori blog',

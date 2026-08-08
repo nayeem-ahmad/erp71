@@ -91,6 +91,50 @@ export class GoogleSignInDto {
     mobile_country_code?: string;
 }
 
+/**
+ * A Firebase phone sign-in, in one or two rounds against the same ID token.
+ *
+ * Round one carries the token alone: if the number already belongs to an
+ * account that is the whole exchange. When it doesn't, the response asks for an
+ * email address and the page sends the token back with `email` (and whatever
+ * workspace fields it has) to create the account. The signup page, which
+ * already has an email on screen, sends everything in one round.
+ */
+export class MobileSignInDto {
+    /** The Firebase ID token returned by `signInWithPhoneNumber().confirm()`. */
+    @IsString({ message: 'Mobile sign-in failed. Please request a new code and try again.' })
+    idToken: string;
+
+    /** Required only to create a new account; ignored when one already exists. */
+    @IsOptional()
+    @IsEmail({}, { message: 'Please enter a valid email address.' })
+    email?: string;
+
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    tenantName?: string;
+
+    @IsOptional()
+    @IsString()
+    storeName?: string;
+
+    @IsOptional()
+    @IsString()
+    address?: string;
+
+    @IsOptional()
+    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
+    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+
+    @IsOptional()
+    @IsString()
+    referralCode?: string;
+}
+
 export class CreateStoreDto {
     @IsOptional()
     @IsString()

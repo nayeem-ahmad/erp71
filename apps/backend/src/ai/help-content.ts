@@ -114,6 +114,10 @@ export const HELP_SECTIONS: HelpSection[] = [
                 q: 'What is a stock take, and when does it need approval?',
                 a: 'A stock take (Inventory → Stock Takes) counts physical stock against the system. Starting a session snapshots the expected quantity for every product in the chosen warehouse; you enter counted quantities and each variance is calculated. If the largest variance exceeds the discrepancy threshold (25 by default, set in Inventory Settings) the session must be reviewed before it can be posted, and posting adjusts stock and records an accounting voucher.',
             },
+            {
+                q: 'How does a branch ask head office for stock it has run out of?',
+                a: 'Inventory → Demands. Raise a demand listing the products and quantities the branch needs, with a priority and an optional needed-by date, then either save it as a draft or submit it for approval. Anyone holding "Approve & fulfil product demands" can approve it — trimming the quantity line by line if only part can be met — or reject it with a note. A demand never moves stock on its own: once approved, meet it with a warehouse transfer or a purchase and then mark the demand fulfilled, noting the transfer or PO number.',
+            },
         ],
     },
     {

@@ -37,6 +37,89 @@ export const inventoryExtrasMessages = {
             },
             saving: "সংরক্ষণ হচ্ছে...",
         },
+        inventoryDemands: {
+            title: "পণ্যের চাহিদা",
+            subtitle: "শাখায় যে পণ্য শেষ হয়েছে তার চাহিদা পাঠান এবং কী অনুমোদন হলো তা দেখুন",
+            newDemand: "নতুন চাহিদা",
+            newTitle: "নতুন পণ্যের চাহিদা",
+            editTitle: "পণ্যের চাহিদা সম্পাদনা",
+            formHint: "শাখার যা প্রয়োজন তা লিখুন। এতে স্টক নড়ে না — অনুমোদিত চাহিদা স্থানান্তর বা ক্রয়ের মাধ্যমে পূরণ হয়।",
+            loadFailed: "পণ্যের চাহিদা লোড করা যায়নি।",
+            empty: "এখনো কোনো পণ্যের চাহিদা দেওয়া হয়নি",
+            searchPlaceholder: "চাহিদা খুঁজুন...",
+            filters: {
+                allStatuses: "সব অবস্থা",
+                allPriorities: "সব অগ্রাধিকার",
+                allWarehouses: "সব গুদাম",
+                mineOnly: "শুধু আমার"
+            },
+            form: {
+                warehouse: "যেখানে পাঠাতে হবে",
+                selectWarehouse: "গুদাম নির্বাচন করুন",
+                selectProduct: "পণ্য নির্বাচন করুন",
+                lineNote: "লাইন নোট",
+                lineNotePlaceholder: "যেমন শুক্রবার থেকে শেলফ খালি",
+                notesPlaceholder: "অনুমোদনকারীর জানা দরকার এমন কিছু",
+                addLine: "পণ্য যোগ করুন",
+                removeLine: "পণ্যের লাইন সরান",
+                saveDraft: "খসড়া হিসেবে সংরক্ষণ",
+                submitForApproval: "অনুমোদনের জন্য পাঠান"
+            },
+            columns: {
+                demandNumber: "চাহিদা নং",
+                warehouse: "যেখানে পাঠাতে হবে",
+                priority: "অগ্রাধিকার",
+                requested: "চাওয়া হয়েছে",
+                approved: "অনুমোদিত",
+                neededBy: "যে তারিখের মধ্যে দরকার",
+                created: "উত্থাপিত"
+            },
+            statuses: {
+                draft: "খসড়া",
+                submitted: "জমা দেওয়া",
+                approved: "অনুমোদিত",
+                rejected: "প্রত্যাখ্যাত",
+                fulfilled: "পূরণ হয়েছে",
+                cancelled: "বাতিল"
+            },
+            priorities: {
+                low: "নিম্ন",
+                normal: "সাধারণ",
+                high: "উচ্চ",
+                urgent: "জরুরি"
+            },
+            actions: {
+                submit: "অনুমোদনের জন্য পাঠান",
+                cancel: "প্রত্যাহার",
+                approve: "অনুমোদন",
+                reject: "প্রত্যাখ্যান",
+                markFulfilled: "পূরণ হিসেবে চিহ্নিত করুন"
+            },
+            detail: {
+                reviewedOn: "পর্যালোচনা",
+                reviewNote: "অনুমোদনকারীর নোট",
+                reviewNotePlaceholder: "পরিমাণ কেন বদলানো হলো, বা কেন প্রত্যাখ্যান",
+                fulfilmentNote: "পূরণের নোট",
+                fulfilmentNotePlaceholder: "যেমন TRF-00012",
+                fulfilmentHint: "যে স্থানান্তর বা ক্রয়ে চাহিদা পূরণ হয়েছে তা লিখুন।"
+            },
+            toasts: {
+                saved: "চাহিদা সংরক্ষিত হয়েছে।",
+                submitted: "চাহিদা অনুমোদনের জন্য পাঠানো হয়েছে।",
+                cancelled: "চাহিদা প্রত্যাহার করা হয়েছে।",
+                approved: "চাহিদা অনুমোদিত হয়েছে।",
+                rejected: "চাহিদা প্রত্যাখ্যান করা হয়েছে।",
+                fulfilled: "চাহিদা পূরণ হিসেবে চিহ্নিত হয়েছে।"
+            },
+            errors: {
+                warehouseRequired: "পণ্য যে গুদামে দরকার তা নির্বাচন করুন।",
+                noLines: "অন্তত একটি পণ্য যোগ করুন।",
+                badQuantity: "প্রতিটি লাইনে পরিমাণ কমপক্ষে ১ (পূর্ণসংখ্যা) হতে হবে।",
+                duplicateProduct: "একই পণ্য দুইবার আছে। লাইনগুলো একত্র করুন।",
+                saveFailed: "চাহিদা সংরক্ষণ করা যায়নি।",
+                actionFailed: "কাজটি সম্পন্ন করা যায়নি।"
+            }
+        },
         inventoryTransfers: {
             title: "গুদাম ট্রান্সফার",
             subtitle: "গুদামের মধ্যে স্টক পাঠান এবং শারীরিকভাবে পৌঁছালে গ্রহণ করুন",

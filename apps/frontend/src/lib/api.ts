@@ -648,6 +648,52 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getProductDemands: (params?: {
+        status?: string;
+        warehouseId?: string;
+        productId?: string;
+        priority?: string;
+        mine?: boolean;
+        from?: string;
+        to?: string;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params?.productId) query.set('productId', params.productId);
+        if (params?.priority) query.set('priority', params.priority);
+        if (params?.mine) query.set('mine', 'true');
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/product-demands${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getProductDemand: (id: string) => fetchWithAuth(`/product-demands/${id}`),
+    createProductDemand: (data: any) => fetchWithAuth('/product-demands', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateProductDemand: (id: string, data: any) => fetchWithAuth(`/product-demands/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    submitProductDemand: (id: string) => fetchWithAuth(`/product-demands/${id}/submit`, {
+        method: 'POST',
+    }),
+    cancelProductDemand: (id: string) => fetchWithAuth(`/product-demands/${id}/cancel`, {
+        method: 'POST',
+    }),
+    reviewProductDemand: (id: string, data: any) => fetchWithAuth(`/product-demands/${id}/review`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    fulfilProductDemand: (id: string, data: any) => fetchWithAuth(`/product-demands/${id}/fulfil`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     getInventoryShrinkage: () => fetchWithAuth('/inventory-shrinkage'),
     getInventoryShrinkageRecord: (id: string) => fetchWithAuth(`/inventory-shrinkage/${id}`),
     createInventoryShrinkage: (data: any) => fetchWithAuth('/inventory-shrinkage', {
@@ -1811,6 +1857,8 @@ export const api = {
     },
     removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
     getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
+    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+        fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
     createAdminBlogCategory: (data: any) =>
         fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateAdminBlogCategory: (id: string, data: any) =>
@@ -1880,6 +1928,8 @@ export const api = {
     },
     removeTenantBlogCover: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}/cover`, { method: 'DELETE' }),
     getTenantBlogCategories: () => fetchWithAuth('/blog/manage/categories'),
+    draftTenantBlogPost: (data: { prompt: string; locale?: string }) =>
+        fetchWithAuth('/blog/manage/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
     createTenantBlogCategory: (data: any) =>
         fetchWithAuth('/blog/manage/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateTenantBlogCategory: (id: string, data: any) =>
@@ -1986,6 +2036,27 @@ export const api = {
             if (!res.ok) {
                 const raw = body?.error?.message ?? body?.message;
                 throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Google sign-in failed'));
+            }
+            return body && 'data' in body ? body.data : body;
+        }),
+    // Runtime-configured for the same reason as the Google config above: the
+    // Firebase web keys are public client identifiers, but baking them in as
+    // NEXT_PUBLIC_ values would make enabling mobile sign-in a frontend rebuild.
+    getFirebaseAuthConfig: () => fetch(`${API_BASE}/auth/firebase/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
+        return body && 'data' in body ? body.data : body;
+    }),
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string }) =>
+        fetch(`${API_BASE}/auth/mobile`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }).then(async res => {
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                const raw = body?.error?.message ?? body?.message;
+                throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Mobile sign-in failed'));
             }
             return body && 'data' in body ? body.data : body;
         }),

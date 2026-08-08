@@ -2,10 +2,12 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
+import { AiService } from '../ai/ai.service';
 import { resolveSlug } from './blog-slug';
 import { readingMinutes } from './reading-time';
 import { BlogStatus, canTransition, isInAppAudience, isPublicAudience } from './blog-status';
-import { UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
+import { BLOG_DRAFT_MAX_TOKENS, BlogAiDraft, buildBlogDraftPrompt, normalizeBlogDraft } from './blog-ai-draft';
+import { BlogAiDraftDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
 
 const DEFAULT_LOCALE = 'en';
 const MAX_PAGE_SIZE = 50;
@@ -47,6 +49,7 @@ export class BlogService {
     constructor(
         private readonly db: DatabaseService,
         private readonly assets: AssetsService,
+        private readonly ai: AiService,
     ) {}
 
     // -----------------------------------------------------------------------
@@ -148,6 +151,32 @@ export class BlogService {
 
     async listCategories() {
         return this.db.blogCategory.findMany({ orderBy: [{ sort_order: 'asc' }, { name_en: 'asc' }] });
+    }
+
+    /**
+     * Turn a one-line brief into a filled post for the author to review.
+     *
+     * Nothing is written — the editor patches its own fields and the author
+     * saves through the normal path. Unbilled: a platform post belongs to no
+     * tenant, so there is no credit balance to charge.
+     */
+    async draftWithAi(dto: BlogAiDraftDto): Promise<BlogAiDraft> {
+        const rows = await this.db.blogCategory.findMany({
+            select: { id: true, name_en: true },
+            orderBy: [{ sort_order: 'asc' }, { name_en: 'asc' }],
+        });
+        const categories = rows.map((row) => ({ id: row.id, name: row.name_en }));
+
+        const model = await this.ai.getDefaultModel();
+        const { systemPrompt, userMessage } = buildBlogDraftPrompt({
+            prompt: dto.prompt,
+            locale: dto.locale ?? 'en',
+            categories,
+            includeAudience: true,
+        });
+
+        const { text } = await this.ai.completeUnbilled(model, systemPrompt, userMessage, BLOG_DRAFT_MAX_TOKENS);
+        return normalizeBlogDraft(text, { categories, includeAudience: true });
     }
 
     /**

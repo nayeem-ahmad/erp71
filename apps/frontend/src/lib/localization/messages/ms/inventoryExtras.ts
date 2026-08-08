@@ -37,6 +37,89 @@ export const inventoryExtrasMessages = {
             },
             saving: "Menyimpan...",
         },
+        inventoryDemands: {
+            title: "Permintaan Produk",
+            subtitle: "Mohon stok yang telah habis di cawangan dan jejaki apa yang diluluskan",
+            newDemand: "Permintaan Baharu",
+            newTitle: "Permintaan Produk Baharu",
+            editTitle: "Sunting Permintaan Produk",
+            formHint: "Senaraikan keperluan cawangan. Ini tidak menggerakkan stok — permintaan yang diluluskan dipenuhi melalui pemindahan atau pembelian.",
+            loadFailed: "Gagal memuatkan permintaan produk.",
+            empty: "Belum ada permintaan produk",
+            searchPlaceholder: "Cari permintaan...",
+            filters: {
+                allStatuses: "Semua Status",
+                allPriorities: "Semua Keutamaan",
+                allWarehouses: "Semua Gudang",
+                mineOnly: "Milik saya sahaja"
+            },
+            form: {
+                warehouse: "Hantar Ke",
+                selectWarehouse: "Pilih gudang",
+                selectProduct: "Pilih produk",
+                lineNote: "Nota Baris",
+                lineNotePlaceholder: "cth. rak kosong sejak Jumaat",
+                notesPlaceholder: "Apa-apa yang perlu diketahui pelulus",
+                addLine: "Tambah Produk",
+                removeLine: "Buang baris produk",
+                saveDraft: "Simpan sebagai Draf",
+                submitForApproval: "Hantar untuk Kelulusan"
+            },
+            columns: {
+                demandNumber: "No. Permintaan",
+                warehouse: "Hantar Ke",
+                priority: "Keutamaan",
+                requested: "Dipohon",
+                approved: "Diluluskan",
+                neededBy: "Diperlukan Sebelum",
+                created: "Dibuat"
+            },
+            statuses: {
+                draft: "Draf",
+                submitted: "Dihantar",
+                approved: "Diluluskan",
+                rejected: "Ditolak",
+                fulfilled: "Dipenuhi",
+                cancelled: "Dibatalkan"
+            },
+            priorities: {
+                low: "Rendah",
+                normal: "Biasa",
+                high: "Tinggi",
+                urgent: "Segera"
+            },
+            actions: {
+                submit: "Hantar untuk Kelulusan",
+                cancel: "Tarik Balik",
+                approve: "Lulus",
+                reject: "Tolak",
+                markFulfilled: "Tanda Dipenuhi"
+            },
+            detail: {
+                reviewedOn: "Disemak",
+                reviewNote: "Nota Pelulus",
+                reviewNotePlaceholder: "Sebab kuantiti diubah, atau sebab ditolak",
+                fulfilmentNote: "Nota Pemenuhan",
+                fulfilmentNotePlaceholder: "cth. TRF-00012",
+                fulfilmentHint: "Rekod pemindahan atau pembelian yang memenuhi permintaan ini."
+            },
+            toasts: {
+                saved: "Permintaan disimpan.",
+                submitted: "Permintaan dihantar untuk kelulusan.",
+                cancelled: "Permintaan ditarik balik.",
+                approved: "Permintaan diluluskan.",
+                rejected: "Permintaan ditolak.",
+                fulfilled: "Permintaan ditanda dipenuhi."
+            },
+            errors: {
+                warehouseRequired: "Pilih gudang tempat barang diperlukan.",
+                noLines: "Tambah sekurang-kurangnya satu produk.",
+                badQuantity: "Setiap baris memerlukan kuantiti nombor bulat 1 atau lebih.",
+                duplicateProduct: "Produk yang sama disenaraikan dua kali. Gabungkan baris tersebut.",
+                saveFailed: "Gagal menyimpan permintaan.",
+                actionFailed: "Tindakan itu tidak dapat diselesaikan."
+            }
+        },
         inventoryTransfers: {
             title: "Pemindahan Gudang",
             subtitle: "Hantar stok antara gudang dan terima hanya apabila ia tiba secara fizikal",

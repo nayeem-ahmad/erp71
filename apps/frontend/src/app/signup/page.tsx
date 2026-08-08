@@ -17,6 +17,7 @@ import {
 } from '@erp71/shared-types';
 import PhoneNumberField from '@/components/PhoneNumberField';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
+import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 
@@ -76,6 +77,7 @@ function SignupPageContent() {
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [googleAvailable, setGoogleAvailable] = useState(false);
+    const [mobileAvailable, setMobileAvailable] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [referralDiscount, setReferralDiscount] = useState<number | null>(null);
@@ -287,6 +289,36 @@ function SignupPageContent() {
         }
     };
 
+    /**
+     * Whatever the visitor has already typed travels with the verified number,
+     * so a filled-in form provisions the workspace in the same round trip. The
+     * panel asks for an email itself only if this one is still blank.
+     */
+    const mobileSignUpFields = () => ({
+        email: form.email.trim() || undefined,
+        tenantName: form.tenantName.trim() || undefined,
+        planCode: form.planCode,
+        referralCode: form.referralCode.trim() || undefined,
+    });
+
+    const handleMobileAuth = async (authRes: any) => {
+        if (authRes?.requires_2fa) {
+            // An existing account with 2FA used the signup page — the code
+            // prompt lives on the login page.
+            router.push('/login');
+            return;
+        }
+
+        const { redirectTo } = await storeAuthResponse(authRes, true);
+        clearReferralCode();
+
+        if (authRes?.requires_workspace) {
+            router.push(routes.onboarding);
+            return;
+        }
+        router.push(authRes?.is_new_user ? postAuthPath : redirectTo);
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
             <div className="w-full max-w-2xl">
@@ -430,6 +462,17 @@ function SignupPageContent() {
                         {googleAvailable && (
                             <p className="mt-2 text-center text-xs text-gray-400">{t.auth.signup.googleHint}</p>
                         )}
+                    </div>
+
+                    <div className={mobileAvailable ? 'mt-4' : ''}>
+                        <MobileSignInPanel
+                            onSuccess={handleMobileAuth}
+                            onError={setError}
+                            onAvailabilityChange={setMobileAvailable}
+                            signUpFields={mobileSignUpFields}
+                            intent="signup"
+                            disabled={isLoading || isGoogleLoading}
+                        />
                     </div>
 
                     <div className="mt-8 text-center text-sm text-gray-500">

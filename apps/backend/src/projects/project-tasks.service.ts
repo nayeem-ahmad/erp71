@@ -23,7 +23,7 @@ const TASK_SORTABLE: SortableMap = {
 };
 
 const TASK_INCLUDE = {
-    project: { select: { id: true, code: true, name: true } },
+    project: { select: { id: true, code: true, name: true, short_name: true } },
     status: { select: { id: true, name: true, category: true, sort_order: true } },
     assignee: { select: { id: true, name: true, email: true } },
     assigneeEmployee: { select: { id: true, name: true } },

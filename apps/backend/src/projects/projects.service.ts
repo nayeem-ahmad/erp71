@@ -77,6 +77,7 @@ export class ProjectsService {
             where.OR = [
                 { code: { contains: search, mode: 'insensitive' } },
                 { name: { contains: search, mode: 'insensitive' } },
+                { short_name: { contains: search, mode: 'insensitive' } },
                 { customer: { name: { contains: search, mode: 'insensitive' } } },
             ];
         }
@@ -183,6 +184,7 @@ export class ProjectsService {
                         tenant_id: tenantId,
                         code: await this.nextCode(tenantId),
                         name: dto.name.trim(),
+                        short_name: dto.shortName?.trim() || null,
                         description: dto.description?.trim() || null,
                         store_id: dto.storeId ?? null,
                         customer_id: dto.customerId ?? null,
@@ -221,6 +223,7 @@ export class ProjectsService {
             where: { id },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+                ...(dto.shortName !== undefined ? { short_name: dto.shortName?.trim() || null } : {}),
                 ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
                 ...(dto.storeId !== undefined ? { store_id: dto.storeId || null } : {}),
                 ...(dto.customerId !== undefined ? { customer_id: dto.customerId || null } : {}),

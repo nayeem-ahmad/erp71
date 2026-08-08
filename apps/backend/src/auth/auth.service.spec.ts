@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from './totp.service';
 import { GoogleTokenService } from './google-token.service';
+import { FirebaseTokenService } from './firebase-token.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -106,6 +107,12 @@ describe('AuthService', () => {
         verifyIdToken: jest.fn(),
     };
 
+    const firebaseTokenService = {
+        isEnabled: jest.fn().mockReturnValue(true),
+        getWebConfig: jest.fn().mockReturnValue(null),
+        verifyPhoneIdToken: jest.fn(),
+    };
+
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
         id: 'user-1',
         email: 'owner@example.com',
@@ -190,6 +197,7 @@ describe('AuthService', () => {
                 { provide: PlatformSettingsService, useValue: platformSettings },
                 { provide: ReferralsService, useValue: referralsService },
                 { provide: GoogleTokenService, useValue: googleTokenService },
+                { provide: FirebaseTokenService, useValue: firebaseTokenService },
                 PlanEntitlementsService,
             ],
         }).compile();
@@ -681,6 +689,7 @@ describe('AuthService.getSignupDefaults', () => {
     const service = new AuthService(
         {} as any, {} as any, {} as any, {} as any, {} as any,
         {} as any, platformSettings as any, {} as any, {} as any, {} as any,
+        {} as any,
     );
 
     beforeEach(() => jest.clearAllMocks());
@@ -714,6 +723,7 @@ describe('AuthService.signup', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, {} as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
+            {} as any,
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
@@ -790,6 +800,7 @@ describe('AuthService.googleSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, google as any,
+            {} as any,
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
@@ -934,6 +945,215 @@ describe('AuthService.googleSignIn', () => {
         google.verifyIdToken.mockRejectedValue(new UnauthorizedException('bad token'));
 
         await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        expect(db.user.findUnique).not.toHaveBeenCalled();
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+});
+
+describe('AuthService.mobileSignIn', () => {
+    const profile = {
+        firebaseUid: 'firebase-uid-1',
+        phoneNumber: '+8801712345678',
+    };
+
+    let createdUser: any;
+
+    const tx = {
+        user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+    };
+    const db = {
+        user: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(async () => ({})) },
+        $transaction: jest.fn(async (cb: any) => cb(tx)),
+    };
+    const email = { sendWelcome: jest.fn(async () => {}) };
+    const audit = { log: jest.fn(async () => {}), logForUserTenants: jest.fn(async () => {}) };
+    const totp = { isEnabled: jest.fn(() => false) };
+    const platformSettings = { getRawValue: jest.fn(async () => 'STANDARD') };
+    const firebase = { verifyPhoneIdToken: jest.fn(async () => profile) };
+
+    const makeService = () => {
+        const svc = new AuthService(
+            db as any, {} as any, email as any, audit as any, totp as any,
+            {} as any, platformSettings as any, {} as any, {} as any, {} as any,
+            firebase as any,
+        );
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
+        jest.spyOn(svc as any, 'sendVerificationEmail').mockResolvedValue(undefined);
+        return svc;
+    };
+
+    const existingUser = (overrides: Record<string, any> = {}) => ({
+        id: 'u9',
+        email: 'owner@shop.com',
+        name: 'Nayeem',
+        firebase_uid: null,
+        mobile: profile.phoneNumber,
+        mobile_verified_at: null,
+        totp_secret: null,
+        ...overrides,
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        createdUser = undefined;
+        db.user.findUnique.mockResolvedValue(null);
+        db.user.findMany.mockResolvedValue([]);
+        db.user.update.mockResolvedValue({});
+        db.$transaction.mockImplementation(async (cb: any) => cb(tx));
+        tx.user.create.mockImplementation(async ({ data }: any) => {
+            createdUser = { id: 'u1', ...data };
+            return createdUser;
+        });
+        totp.isEnabled.mockReturnValue(false);
+        email.sendWelcome.mockResolvedValue(undefined);
+        audit.logForUserTenants.mockResolvedValue(undefined);
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
+        firebase.verifyPhoneIdToken.mockResolvedValue(profile);
+    });
+
+    it('asks for an email instead of creating a half-formed account', async () => {
+        const svc = makeService();
+
+        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).resolves.toEqual({
+            requires_signup: true,
+            mobile: profile.phoneNumber,
+        });
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('creates a passwordless account with the number already verified', async () => {
+        const svc = makeService();
+        const res = await svc.mobileSignIn({ idToken: 'tok', email: '  Owner@Shop.com ' } as any);
+
+        expect(createdUser).toMatchObject({
+            email: 'owner@shop.com',
+            passwordHash: null,
+            firebase_uid: profile.firebaseUid,
+            mobile: profile.phoneNumber,
+            mobile_country_code: 'BD',
+            name: 'owner',
+        });
+        expect(createdUser.mobile_verified_at).toBeInstanceOf(Date);
+        // The SMS code proved the number, not the address they just typed.
+        expect(createdUser.email_verified_at).toBeUndefined();
+        expect((svc as any).sendVerificationEmail).toHaveBeenCalledWith('u1');
+        expect(res).toMatchObject({ is_new_user: true, requires_workspace: true });
+    });
+
+    it('provisions the workspace when the signup form supplied an org name', async () => {
+        const svc = makeService();
+        const res = await svc.mobileSignIn({
+            idToken: 'tok',
+            email: 'owner@shop.com',
+            name: '  Nayeem Ahmad ',
+            tenantName: '  Dhaka Retail Co. ',
+            referralCode: 'PARTNER1',
+        } as any);
+
+        expect(createdUser).toMatchObject({ name: 'Nayeem Ahmad' });
+        expect((svc as any).provisionTenant).toHaveBeenCalledWith(
+            expect.anything(), 'u1',
+            expect.objectContaining({
+                tenantName: 'Dhaka Retail Co.',
+                storeName: 'Main Store',
+                planCode: 'STANDARD',
+                referralCode: 'PARTNER1',
+            }),
+        );
+        expect(res).toMatchObject({ is_new_user: true, requires_workspace: false });
+    });
+
+    it('refuses to attach a verified number to someone else\'s email account', async () => {
+        const svc = makeService();
+        db.user.findUnique
+            .mockResolvedValueOnce(null)                            // by firebase_uid
+            .mockResolvedValueOnce(existingUser({ mobile: null })); // by email
+
+        await expect(
+            svc.mobileSignIn({ idToken: 'tok', email: 'owner@shop.com' } as any),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('signs in a returning user matched on their Firebase uid', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            firebase_uid: profile.firebaseUid,
+            mobile_verified_at: new Date(),
+        }));
+
+        const res = await svc.mobileSignIn({ idToken: 'tok' } as any);
+
+        expect(db.user.findMany).not.toHaveBeenCalled();
+        expect(db.user.update).not.toHaveBeenCalled();
+        expect(res).toMatchObject({ is_new_user: false, access_token: 'x' });
+    });
+
+    it('adopts the Firebase identity onto the one account carrying the number', async () => {
+        const svc = makeService();
+        db.user.findMany.mockResolvedValueOnce([existingUser()]);
+
+        const res = await svc.mobileSignIn({ idToken: 'tok' } as any);
+
+        expect(db.user.update).toHaveBeenCalledWith({
+            where: { id: 'u9' },
+            data: {
+                firebase_uid: profile.firebaseUid,
+                mobile_verified_at: expect.any(Date),
+            },
+        });
+        expect(res).toMatchObject({ is_new_user: false });
+    });
+
+    it('follows a number changed at Firebase through to the account', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            firebase_uid: profile.firebaseUid,
+            mobile: '+8801811111111',
+            mobile_verified_at: new Date('2026-01-01'),
+        }));
+
+        await svc.mobileSignIn({ idToken: 'tok' } as any);
+
+        expect(db.user.update).toHaveBeenCalledWith({
+            where: { id: 'u9' },
+            data: {
+                mobile: profile.phoneNumber,
+                mobile_country_code: 'BD',
+                mobile_verified_at: expect.any(Date),
+            },
+        });
+    });
+
+    it('refuses to guess when the number sits on more than one account', async () => {
+        const svc = makeService();
+        db.user.findMany.mockResolvedValueOnce([existingUser(), existingUser({ id: 'u10' })]);
+
+        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).rejects.toBeInstanceOf(ConflictException);
+        expect(db.user.update).not.toHaveBeenCalled();
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('still demands the second factor from a 2FA account', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(
+            existingUser({ firebase_uid: profile.firebaseUid, mobile_verified_at: new Date(), totp_secret: 'SECRET' }),
+        );
+        totp.isEnabled.mockReturnValue(true);
+
+        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).resolves.toEqual({
+            requires_2fa: true,
+            user_id: 'u9',
+        });
+        expect((svc as any).generateAuthResponse).not.toHaveBeenCalled();
+    });
+
+    it('never touches the database when the token fails verification', async () => {
+        const svc = makeService();
+        firebase.verifyPhoneIdToken.mockRejectedValue(new UnauthorizedException('bad token'));
+
+        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
         expect(db.user.findUnique).not.toHaveBeenCalled();
         expect(db.$transaction).not.toHaveBeenCalled();
     });
