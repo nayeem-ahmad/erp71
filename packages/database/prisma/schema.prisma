@@ -351,6 +351,7 @@ model User {
   projectAttachments                ProjectAttachment[]         @relation("ProjectAttachmentCreator")
   authoredBlogPosts                 BlogPost[]                  @relation("BlogPostAuthor")
   authoredTenantBlogPosts           TenantBlogPost[]            @relation("TenantBlogPostAuthor")
+  authoredSocialMediaPosts          SocialMediaPost[]           @relation("SocialMediaPostAuthor")
 
   // Mobile sign-in looks an account up by number on every SMS code entered.
   // Deliberately not unique: one person may own several workspaces under the
@@ -5718,4 +5719,91 @@ model TenantBlogSettings {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("tenant_blog_settings")
+}
+
+/// Marketing copy the platform posts to its own social accounts.
+///
+/// Platform-owned like `BlogPost` — there is no `tenant_id` because these are
+/// ERP71's own Facebook/LinkedIn/X posts, not a shop's. Publishing is delegated
+/// to Buffer rather than to each network's API: Buffer already holds the page
+/// tokens and the review queue, so the only thing stored here is the copy and
+/// the record of what was handed over.
+model SocialMediaPost {
+  id String @id @default(uuid())
+
+  /// DRAFT | SCHEDULED | PUBLISHED | FAILED — see social-media-status.ts.
+  status String @default("DRAFT")
+
+  /// Internal label for the list view only; never sent to any network.
+  title   String?
+  content String
+
+  /// Appended to the copy by most networks as a link preview. Kept separate
+  /// from `content` so it can be swapped without re-editing the text.
+  link_url String?
+  /// Must be a public URL: Buffer fetches the asset itself and has no upload.
+  image_url String?
+
+  /// Networks this copy is written for — facebook | instagram | linkedin | x |
+  /// threads | pinterest. Advisory: what actually goes out is whichever Buffer
+  /// channels the operator picks at push time.
+  networks String[] @default([])
+
+  scheduled_for DateTime?
+  published_at  DateTime?
+
+  author_user_id String?
+  /// Denormalised for the same reason as BlogPost.author_name — the row should
+  /// keep the name it was written under after that person leaves.
+  author_name    String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  author User?                 @relation("SocialMediaPostAuthor", fields: [author_user_id], references: [id], onDelete: SetNull)
+  pushes SocialMediaPostPush[]
+
+  @@index([status, scheduled_for])
+  @@index([deleted_at])
+  @@map("social_media_posts")
+}
+
+/// One handover of a post to one Buffer channel.
+///
+/// A row per channel rather than a status column on the post: pushing to three
+/// pages can half-fail, and a single field cannot say which page rejected it.
+/// Rows are kept after failure so the error is still readable on the next visit.
+model SocialMediaPostPush {
+  id      String @id @default(uuid())
+  post_id String
+
+  /// buffer — the only provider today, named so a second one does not need a
+  /// migration to tell the rows apart.
+  provider        String  @default("buffer")
+  channel_id      String
+  /// Buffer's own name for the network (facebook, linkedin, …) and the page
+  /// label, both copied at push time so the history reads correctly even after
+  /// the channel is disconnected in Buffer.
+  channel_service String?
+  channel_name    String?
+
+  /// addToQueue | now | next | customScheduled — Buffer's `mode` verbatim.
+  mode   String    @default("addToQueue")
+  due_at DateTime?
+
+  /// SENT | FAILED. There is no PENDING: the Buffer call is synchronous, so a
+  /// row is only written once its outcome is known.
+  status           String  @default("SENT")
+  /// Buffer's post id, which is what makes the queued item findable in Buffer.
+  external_post_id String?
+  error            String?
+
+  created_at DateTime @default(now())
+  created_by String?
+
+  post SocialMediaPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@map("social_media_post_pushes")
 }
