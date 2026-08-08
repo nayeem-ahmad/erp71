@@ -131,7 +131,7 @@ export function normalizeBlogDraft(
     // Falls back to the title, then to nothing at all: slugify() drops
     // non-ASCII, so a Bangla-only title yields '' and the create endpoint's
     // resolveSlug supplies the fallback rather than us sending an empty slug.
-    assign(draft, 'slug', slugify(text(parsed.slug) || title));
+    assign(draft, 'slug', slugify(text(parsed.slug)) || slugify(title));
 
     if (options.includeAudience) {
         const audience = text(parsed.audience).toUpperCase();

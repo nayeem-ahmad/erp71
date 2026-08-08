@@ -163,6 +163,15 @@ describe('normalizeBlogDraft', () => {
         expect(draft.slug).toBe('cutting-dead-stock');
     });
 
+    it('falls back to the title when the model writes a slug that cannot be slugified', () => {
+        const draft = normalizeBlogDraft(reply({ slug: 'মজুদ-কমানো' }), {
+            categories: CATEGORIES,
+            includeAudience: true,
+        });
+
+        expect(draft.slug).toBe('cutting-dead-stock');
+    });
+
     // slugify() drops non-ASCII rather than transliterating it, so a Bangla
     // title yields ''. Omitting the field lets the backend's resolveSlug pick a
     // fallback instead of the editor sending an empty slug.
