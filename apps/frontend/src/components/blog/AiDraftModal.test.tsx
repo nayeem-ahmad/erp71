@@ -73,6 +73,11 @@ describe('AiDraftModal', () => {
     it('blocks a second submit while a generation is in flight', () => {
         const props = setup({ prompt: 'dead stock', loading: true });
 
+        const generate = screen.getByRole('button', { name: 'Generate' });
+        expect(generate).toBeDisabled();
+
+        fireEvent.click(generate);
+
         expect(props.onGenerate).not.toHaveBeenCalled();
         expect(screen.getByRole('textbox')).toBeDisabled();
     });

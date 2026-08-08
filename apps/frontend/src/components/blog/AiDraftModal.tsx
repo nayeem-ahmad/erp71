@@ -50,8 +50,9 @@ export default function AiDraftModal({
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 md:p-4">
-                <Field label={labels.promptLabel}>
+                <Field label={labels.promptLabel} htmlFor="ai-draft-prompt">
                     <Textarea
+                        id="ai-draft-prompt"
                         rows={4}
                         autoFocus
                         disabled={loading}
