@@ -931,6 +931,16 @@ export const adminMessages = {
             deleteConfirm: 'Delete this post? Its URL stays reserved so old links never point at a different article.',
             englishRequired: 'A post needs an English title and body before it can be published.',
             back: 'Back to posts',
+            ai: {
+                button: 'AI Assistant',
+                modalTitle: 'Draft with AI',
+                promptLabel: 'What should this post be about?',
+                promptPlaceholder: 'Five ways a small shop in Dhaka can cut dead stock before Eid',
+                generate: 'Generate',
+                overwriteTitle: 'Replace what you have written?',
+                overwritePrompt: 'This post already has content. Generating will replace the title, excerpt and body on this language tab.',
+                filled: 'Draft filled in — review it before saving.',
+            },
         },
         categoryManager: {
             title: 'Blog categories',

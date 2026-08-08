@@ -1811,6 +1811,8 @@ export const api = {
     },
     removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
     getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
+    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+        fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
     createAdminBlogCategory: (data: any) =>
         fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateAdminBlogCategory: (id: string, data: any) =>
@@ -1856,6 +1858,8 @@ export const api = {
     },
     removeTenantBlogCover: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}/cover`, { method: 'DELETE' }),
     getTenantBlogCategories: () => fetchWithAuth('/blog/manage/categories'),
+    draftTenantBlogPost: (data: { prompt: string }) =>
+        fetchWithAuth('/blog/manage/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
     createTenantBlogCategory: (data: any) =>
         fetchWithAuth('/blog/manage/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateTenantBlogCategory: (id: string, data: any) =>
