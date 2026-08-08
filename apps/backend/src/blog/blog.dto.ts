@@ -10,8 +10,11 @@ import {
     MinLength,
     ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { BLOG_AUDIENCES, BLOG_STATUSES } from './blog-status';
+
+const trim = ({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value;
 
 /** Locales a translation may be written in — mirrors the frontend registry. */
 export const BLOG_LOCALES = ['en', 'bn', 'ms'] as const;
@@ -141,6 +144,7 @@ export class PublishBlogPostDto {
  * sends whichever tab is open.
  */
 export class BlogAiDraftDto {
+    @Transform(trim)
     @IsString()
     @MinLength(1)
     @MaxLength(2000)

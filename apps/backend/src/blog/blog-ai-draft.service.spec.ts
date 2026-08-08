@@ -18,6 +18,7 @@ const REPLY = JSON.stringify({
 describe('BlogService.draftWithAi', () => {
     const db = {
         blogCategory: { findMany: jest.fn() },
+        blogPost: { create: jest.fn() },
     } as any;
     const ai = {
         getDefaultModel: jest.fn(),
@@ -80,5 +81,6 @@ describe('BlogService.draftWithAi', () => {
         await service.draftWithAi({ prompt: 'dead stock', locale: 'en' });
 
         expect(db.blogCategory.findMany).toHaveBeenCalledTimes(1);
+        expect(db.blogPost.create).not.toHaveBeenCalled();
     });
 });
