@@ -17,6 +17,8 @@ export const projectsMessages = {
     fields: {
         code: 'কোড',
         name: 'নাম',
+        shortName: 'সংক্ষিপ্ত নাম',
+        shortNameHint: 'পুরো নাম না আঁটলে বোর্ড কার্ডে এটি দেখানো হয়।',
         description: 'বিবরণ',
         customer: 'গ্রাহক',
         type: 'ধরন',
@@ -301,6 +303,7 @@ export const projectsMessages = {
         card: {
             drag: 'সরাতে টেনে নিন',
             open: 'টাস্ক খুলুন',
+            project: 'প্রকল্প',
             overdue: 'সময় পার',
             dueToday: 'আজ শেষ তারিখ',
             due: 'শেষ {date}',
