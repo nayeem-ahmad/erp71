@@ -243,7 +243,23 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
 
             // Confirm only once there is something to apply — a cancelled
             // overwrite should not also have thrown the generation away.
-            const hasContent = !!(current.title.trim() || current.excerpt.trim() || current.body_md.trim());
+            // For an existing post, applyDraft also overwrites the post-level
+            // fields (slug, category, audience, author, featured) unconditionally,
+            // so any of those already holding a value counts as content too —
+            // not just the open locale tab.
+            const hasContent = !!(
+                current.title.trim() ||
+                current.excerpt.trim() ||
+                current.body_md.trim() ||
+                (postId &&
+                    (slug.trim() ||
+                        categoryId ||
+                        audience !== 'BOTH' ||
+                        authorName.trim() ||
+                        authorTitle.trim() ||
+                        coverAlt.trim() ||
+                        featured))
+            );
             if (hasContent) {
                 setAiDraft(draft);
                 return;
@@ -521,8 +537,9 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
                 open={!!aiDraft}
                 title={e.ai.overwriteTitle}
                 prompt={e.ai.overwritePrompt}
-                confirmLabel={e.ai.generate}
+                confirmLabel={e.ai.replace}
                 cancelLabel={t.common.cancel}
+                danger
                 onCancel={() => setAiDraft(null)}
                 onConfirm={() => {
                     const draft = aiDraft;

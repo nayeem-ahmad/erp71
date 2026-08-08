@@ -397,8 +397,9 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                 open={!!aiDraft}
                 title={m.ai.overwriteTitle}
                 prompt={m.ai.overwritePrompt}
-                confirmLabel={m.ai.generate}
+                confirmLabel={m.ai.replace}
                 cancelLabel={t.common.cancel}
+                danger
                 onCancel={() => setAiDraft(null)}
                 onConfirm={() => {
                     const draft = aiDraft;
