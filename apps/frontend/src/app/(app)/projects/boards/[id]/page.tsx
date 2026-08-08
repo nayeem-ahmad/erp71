@@ -47,7 +47,7 @@ import {
     type DueState,
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -167,10 +167,18 @@ export default function BoardPage() {
 
         try {
             await api.moveBoardCard(boardId, taskId, { columnId, sortOrder });
-        } catch {
-            // The drop was refused — most likely the target column has no status
-            // mapped for this card's project. Reload undoes the optimistic move.
-            toast.error(m.unmappedDrop);
+        } catch (error) {
+            // A 400 here means exactly one thing — the target column has no
+            // status mapped for this card's project (moveCard's only
+            // BadRequestException). Anything else — a 401, a 500, a dropped
+            // connection — is not that, and claiming it is would send the
+            // user to board settings to "fix" a mapping that was never the
+            // problem. Reload either way: it undoes the optimistic move.
+            if (error instanceof ApiError && error.status === 400) {
+                toast.error(m.unmappedDrop.replace('{project}', projectLabelOf(task.project) ?? ''));
+            } else {
+                toast.error(bm.moveFailed);
+            }
             await loadBoard();
         }
     };

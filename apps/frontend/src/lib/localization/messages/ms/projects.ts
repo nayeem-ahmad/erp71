@@ -413,7 +413,7 @@ export const projectsMessages = {
         boardSettings: 'Tetapan papan',
         unsorted: 'Tidak disusun',
         unsortedHint: 'Kad ini berada dalam status yang belum dipetakan ke mana-mana lajur pada papan ini.',
-        unmappedDrop: 'Lajur itu tidak dipetakan untuk projek kad ini. Petakannya dalam tetapan papan.',
+        unmappedDrop: 'Lajur itu tidak dipetakan untuk {project}. Petakannya dalam tetapan papan.',
         columns: 'Lajur',
         columnName: 'Nama lajur',
         category: 'Kategori',

@@ -42,8 +42,27 @@ describe('BoardsPage', () => {
         fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
         await waitFor(() =>
-            expect(api.createBoard).toHaveBeenCalledWith({ name: 'Support queue', description: '' }),
+            expect(api.createBoard).toHaveBeenCalledWith({ name: 'Support queue' }),
         );
         expect(api.getBoards).toHaveBeenCalledTimes(2);
+    });
+
+    it('includes a trimmed description when one is given', async () => {
+        render(<BoardsPage />);
+        await screen.findByText('Release 4');
+
+        fireEvent.click(screen.getByRole('button', { name: /new board/i }));
+        fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'Support queue' } });
+        fireEvent.change(screen.getByLabelText(/description/i), {
+            target: { value: '  Cross-team triage  ' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+        await waitFor(() =>
+            expect(api.createBoard).toHaveBeenCalledWith({
+                name: 'Support queue',
+                description: 'Cross-team triage',
+            }),
+        );
     });
 });

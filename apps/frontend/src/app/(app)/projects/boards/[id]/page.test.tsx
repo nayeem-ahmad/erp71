@@ -3,21 +3,32 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
 import BoardPage from './page';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { COLUMN_ATTR } from '@/components/projects/board-drag';
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'b1' }),
     useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
 }));
 
-jest.mock('@/lib/api', () => ({
-    api: {
-        getBoard: jest.fn(),
-        moveBoardCard: jest.fn(),
-        removeBoardTask: jest.fn(),
-        getProjectLabels: jest.fn(),
-    },
-}));
+jest.mock('@/lib/api', () => {
+    class ApiError extends Error {
+        constructor(message: string, public readonly status: number) {
+            super(message);
+            this.name = 'ApiError';
+        }
+    }
+    return {
+        ApiError,
+        api: {
+            getBoard: jest.fn(),
+            moveBoardCard: jest.fn(),
+            removeBoardTask: jest.fn(),
+            getProjectLabels: jest.fn(),
+        },
+    };
+});
 
 const task = (id: string, title: string, project: { id: string; code: string; short_name?: string }) => ({
     id,
@@ -129,6 +140,66 @@ describe('BoardPage', () => {
         // just the mapped columns.
         expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
         expect(screen.queryByText('Other orphan')).not.toBeInTheDocument();
+    });
+
+    // Pointer dragging needs real layout to pick a drop target (see
+    // board-drag.ts), which jsdom does not have — resolveDropTarget instead
+    // asks `document.elementFromPoint`, so a full drag can be driven here by
+    // stubbing that one lookup to say "the pointer is over this column".
+    // Everything else — beginDrag/continueDrag/endDrag, the optimistic
+    // update, and the real `move` handler under test — runs unmodified.
+    const dragCardToColumn = (cardTitle: string, columnId: string) => {
+        const card = screen.getByRole('button', { name: new RegExp(`open task: ${cardTitle}`, 'i') });
+        const column = document.querySelector(`[${COLUMN_ATTR}="${columnId}"]`) as Element;
+        (document.elementFromPoint as jest.Mock).mockReturnValue(column);
+
+        fireEvent.pointerDown(card, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(card, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 40 });
+        fireEvent.pointerUp(card, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 40 });
+    };
+
+    describe('a refused drop', () => {
+        let toastErrorSpy: jest.SpyInstance;
+
+        beforeEach(() => {
+            document.elementFromPoint = jest.fn();
+            toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+        });
+
+        afterEach(() => {
+            toastErrorSpy.mockRestore();
+        });
+
+        it('reports the target column as unmapped for this card’s project on a 400, and reloads', async () => {
+            (api.moveBoardCard as jest.Mock).mockRejectedValue(
+                new ApiError('That column is not mapped', 400),
+            );
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            dragCardToColumn('Fix login', 'c2');
+
+            await waitFor(() => expect(api.moveBoardCard).toHaveBeenCalled());
+            await waitFor(() =>
+                expect(toastErrorSpy).toHaveBeenCalledWith('That column is not mapped for ALP. Map it in board settings.'),
+            );
+            // The optimistic move is undone by a reload, not left dangling.
+            await waitFor(() => expect(api.getBoard).toHaveBeenCalledTimes(2));
+        });
+
+        it('shows a generic failure, not the unmapped-column message, for a non-400 error', async () => {
+            (api.moveBoardCard as jest.Mock).mockRejectedValue(new ApiError('Server error', 500));
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            dragCardToColumn('Fix login', 'c2');
+
+            await waitFor(() => expect(api.moveBoardCard).toHaveBeenCalled());
+            await waitFor(() => expect(toastErrorSpy).toHaveBeenCalled());
+            expect(toastErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('not mapped'));
+        });
     });
 
     it('shows a loading state before the board arrives, and an error state (not a stuck spinner) when the fetch fails', async () => {

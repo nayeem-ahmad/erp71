@@ -112,8 +112,9 @@ export class BoardsService {
         for (const row of cards as any[]) {
             // A soft-deleted task is filtered out here rather than having its
             // BoardTask row cleaned up: undeleting the task should bring the
-            // card back to the board it was on.
-            if (!row.task || row.task.deleted_at) continue;
+            // card back to the board it was on. `task_id` is a non-nullable
+            // FK, so `row.task` itself is never missing.
+            if (row.task.deleted_at) continue;
 
             const columnId = columnOfStatus.get(row.task.status_id);
             if (columnId && buckets.has(columnId)) buckets.get(columnId)!.push(row.task);
@@ -209,35 +210,52 @@ export class BoardsService {
 
         const task = await this.db.projectTask.findFirst({
             where: { id: taskId, tenant_id: tenantId, deleted_at: null },
-            select: { id: true, project_id: true },
+            select: { id: true, project_id: true, status_id: true },
         });
         if (!task) throw new NotFoundException('Task not found');
-
-        const statusId = await this.columns.resolveStatusId(
-            tenantId,
-            boardId,
-            dto.columnId,
-            task.project_id,
-        );
-        if (!statusId) {
-            throw new BadRequestException(
-                'That column is not mapped to a status in this card’s project. Map it in board settings first.',
-            );
-        }
 
         // The bound statuses of the *target* column: the set that defines
         // which BoardTask rows render in it on the next findOne(). This is
         // what the sibling renumber below is scoped to — the direct analogue
         // of the (project_id, status_id) sibling scope in
-        // ProjectTasksService.move (project-tasks.service.ts:344-375).
+        // ProjectTasksService.move (project-tasks.service.ts:344-375). It also
+        // decides whether this drop is a reorder within the same column: if
+        // the task's *current* status is already among these, the card never
+        // left its column.
         const boardColumns = await this.columns.listColumns(tenantId, boardId);
         const targetColumn = (boardColumns as any[]).find((column) => column.id === dto.columnId);
         const boundStatusIds = (targetColumn?.bindings ?? []).map((b: any) => b.status_id);
 
-        await this.tasks.move(tenantId, userId, taskId, {
-            statusId,
-            sortOrder: dto.sortOrder,
-        });
+        const reorderInPlace = boundStatusIds.includes(task.status_id);
+
+        // A same-column reorder must not touch the task's status. Resolving
+        // one anyway would use resolveStatusId's tie-break (the bound status
+        // with the lowest sort_order for this project), which can differ from
+        // the task's own current status whenever a project binds two
+        // statuses to the same column — e.g. "Doing" and "Reviewing" both
+        // IN_PROGRESS, auto-bound to the board's single IN_PROGRESS column.
+        // Dragging a "Reviewing" card up one slot would otherwise silently
+        // flip it to "Doing": a STATUS_CHANGED activity row, a watcher
+        // notification, and a task-list reshuffle for what the user
+        // experiences as a no-op.
+        if (!reorderInPlace) {
+            const statusId = await this.columns.resolveStatusId(
+                tenantId,
+                boardId,
+                dto.columnId,
+                task.project_id,
+            );
+            if (!statusId) {
+                throw new BadRequestException(
+                    'That column is not mapped to a status in this card’s project. Map it in board settings first.',
+                );
+            }
+
+            await this.tasks.move(tenantId, userId, taskId, {
+                statusId,
+                sortOrder: dto.sortOrder,
+            });
+        }
 
         // `BoardTask.sort_order` is a board-global counter on write (see
         // addTasks) but `dto.sortOrder` from the client — and findOne()'s
@@ -250,7 +268,12 @@ export class BoardsService {
                     board_id: boardId,
                     tenant_id: tenantId,
                     id: { not: membership.id },
-                    task: { status_id: { in: boundStatusIds } },
+                    // Scoped to visible cards only: the client computes
+                    // dto.sortOrder over the same set, and a soft-deleted
+                    // task's card — never shown, never cleaned up — would
+                    // otherwise push every drop one slot further than the
+                    // client intended.
+                    task: { status_id: { in: boundStatusIds }, deleted_at: null },
                 },
                 orderBy: [{ sort_order: 'asc' }, { added_at: 'asc' }],
                 select: { id: true },

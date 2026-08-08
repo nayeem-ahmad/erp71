@@ -413,7 +413,7 @@ export const projectsMessages = {
         boardSettings: 'Board settings',
         unsorted: 'Unsorted',
         unsortedHint: 'These cards sit in a status this board has not mapped to a column.',
-        unmappedDrop: 'That column is not mapped for this card’s project. Map it in board settings.',
+        unmappedDrop: 'That column is not mapped for {project}. Map it in board settings.',
         columns: 'Columns',
         columnName: 'Column name',
         category: 'Category',

@@ -52,7 +52,10 @@ describe('BoardsService', () => {
             boardColumnStatus: { findMany: jest.fn().mockResolvedValue([]) },
             projectTask: {
                 findMany: jest.fn().mockResolvedValue([{ id: 'k1', project_id: 'p1' }]),
-                findFirst: jest.fn().mockResolvedValue({ id: 'k1', project_id: 'p1', tenant_id: tenantId, deleted_at: null }),
+                // status_id 's1' is bound to c1, not c2 (see columns.listColumns
+                // below), so the default fixture is a genuine cross-column
+                // move unless a test overrides it.
+                findFirst: jest.fn().mockResolvedValue({ id: 'k1', project_id: 'p1', tenant_id: tenantId, status_id: 's1', deleted_at: null }),
             },
         };
         // Every real transaction below is a same-model batch of updates, so a
@@ -243,6 +246,83 @@ describe('BoardsService', () => {
         expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt2' }, data: { sort_order: 0 } });
         expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt3' }, data: { sort_order: 1 } });
         expect(db.boardTask.update).toHaveBeenNthCalledWith(3, { where: { id: 'bt1' }, data: { sort_order: 2 } });
+    });
+
+    it('does not call tasks.move for a reorder within the same column', async () => {
+        // Task k1 is already in status s1, which is what c1 binds (see
+        // columns.listColumns above) — dropping it back into c1 is a reorder,
+        // not a move across columns.
+        db.projectTask.findFirst.mockResolvedValue({
+            id: 'k1',
+            project_id: 'p1',
+            tenant_id: tenantId,
+            status_id: 's1',
+            deleted_at: null,
+        });
+        db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }]);
+
+        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c1', sortOrder: 0 });
+
+        expect(tasks.move).not.toHaveBeenCalled();
+        expect(columns.resolveStatusId).not.toHaveBeenCalled();
+        expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt1' }, data: { sort_order: 0 } });
+        expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt2' }, data: { sort_order: 1 } });
+    });
+
+    it('still calls tasks.move with the resolved status for a genuine cross-column move', async () => {
+        // Default fixture: k1's status s1 is bound to c1, dropped onto c2
+        // (bound to s2) — the card really is changing columns.
+        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+
+        expect(columns.resolveStatusId).toHaveBeenCalledWith(tenantId, 'b1', 'c2', 'p1');
+        expect(tasks.move).toHaveBeenCalledWith(tenantId, userId, 'k1', {
+            statusId: 's-target',
+            sortOrder: 0,
+        });
+    });
+
+    it('keeps the task’s own status when two statuses bound to one column are reordered in place', async () => {
+        // Doing (s1) and Reviewing (s2) are both IN_PROGRESS and both land on
+        // the single column c2 — what pickColumnForStatus's category fallback
+        // does whenever a project's status names don't match the board's
+        // column names. The card sits in Reviewing (the higher-sort-order
+        // status); reordering it within c2 must not resolve to Doing.
+        columns.listColumns.mockResolvedValue([
+            { id: 'c1', name: 'To Do', category: 'TODO', sort_order: 0, wip_limit: null, bindings: [] },
+            {
+                id: 'c2',
+                name: 'In Progress',
+                category: 'IN_PROGRESS',
+                sort_order: 1,
+                wip_limit: null,
+                bindings: [{ status_id: 's1' }, { status_id: 's2' }],
+            },
+        ]);
+        db.projectTask.findFirst.mockResolvedValue({
+            id: 'k1',
+            project_id: 'p1',
+            tenant_id: tenantId,
+            status_id: 's2',
+            deleted_at: null,
+        });
+        db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }]);
+
+        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+
+        expect(tasks.move).not.toHaveBeenCalled();
+        expect(columns.resolveStatusId).not.toHaveBeenCalled();
+    });
+
+    it('excludes a soft-deleted task’s card from the sibling renumber', async () => {
+        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+
+        expect(db.boardTask.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    task: { status_id: { in: ['s2'] }, deleted_at: null },
+                }),
+            }),
+        );
     });
 
     it('refuses a drop onto a column with no binding for that card’s project, leaving the task alone', async () => {

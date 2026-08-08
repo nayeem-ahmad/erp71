@@ -62,7 +62,11 @@ export default function BoardsPage() {
         }
         setSaving(true);
         try {
-            await api.createBoard({ name: name.trim(), description });
+            const trimmedDescription = description.trim();
+            await api.createBoard({
+                name: name.trim(),
+                ...(trimmedDescription ? { description: trimmedDescription } : {}),
+            });
             toast.success(m.created);
             closeModal();
             await load();
