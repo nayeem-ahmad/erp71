@@ -37,6 +37,89 @@ export const inventoryExtrasMessages = {
         },
         "saving": "Saving..."
     },
+    "inventoryDemands": {
+        "title": "Product Demands",
+        "subtitle": "Ask head office for stock a branch has run out of, and track what was approved",
+        "newDemand": "New Demand",
+        "newTitle": "New Product Demand",
+        "editTitle": "Edit Product Demand",
+        "formHint": "List what the branch needs. Nothing moves stock — an approved demand is met by a transfer or a purchase.",
+        "loadFailed": "Failed to load product demands.",
+        "empty": "No product demands raised yet",
+        "searchPlaceholder": "Search demands...",
+        "filters": {
+            "allStatuses": "All Statuses",
+            "allPriorities": "All Priorities",
+            "allWarehouses": "All Warehouses",
+            "mineOnly": "Only mine"
+        },
+        "form": {
+            "warehouse": "Deliver To",
+            "selectWarehouse": "Select warehouse",
+            "selectProduct": "Select product",
+            "lineNote": "Line Note",
+            "lineNotePlaceholder": "e.g. shelf empty since Friday",
+            "notesPlaceholder": "Anything the approver should know",
+            "addLine": "Add Product",
+            "removeLine": "Remove product line",
+            "saveDraft": "Save as Draft",
+            "submitForApproval": "Submit for Approval"
+        },
+        "columns": {
+            "demandNumber": "Demand #",
+            "warehouse": "Deliver To",
+            "priority": "Priority",
+            "requested": "Requested",
+            "approved": "Approved",
+            "neededBy": "Needed By",
+            "created": "Raised"
+        },
+        "statuses": {
+            "draft": "Draft",
+            "submitted": "Submitted",
+            "approved": "Approved",
+            "rejected": "Rejected",
+            "fulfilled": "Fulfilled",
+            "cancelled": "Cancelled"
+        },
+        "priorities": {
+            "low": "Low",
+            "normal": "Normal",
+            "high": "High",
+            "urgent": "Urgent"
+        },
+        "actions": {
+            "submit": "Submit for Approval",
+            "cancel": "Withdraw",
+            "approve": "Approve",
+            "reject": "Reject",
+            "markFulfilled": "Mark Fulfilled"
+        },
+        "detail": {
+            "reviewedOn": "Reviewed",
+            "reviewNote": "Approver Note",
+            "reviewNotePlaceholder": "Why the quantities were changed, or why it was rejected",
+            "fulfilmentNote": "Fulfilment Note",
+            "fulfilmentNotePlaceholder": "e.g. TRF-00012",
+            "fulfilmentHint": "Record the transfer or purchase that met this demand."
+        },
+        "toasts": {
+            "saved": "Demand saved.",
+            "submitted": "Demand submitted for approval.",
+            "cancelled": "Demand withdrawn.",
+            "approved": "Demand approved.",
+            "rejected": "Demand rejected.",
+            "fulfilled": "Demand marked fulfilled."
+        },
+        "errors": {
+            "warehouseRequired": "Choose the warehouse the goods are needed at.",
+            "noLines": "Add at least one product.",
+            "badQuantity": "Every line needs a whole quantity of 1 or more.",
+            "duplicateProduct": "The same product is listed twice. Combine the lines.",
+            "saveFailed": "Failed to save the demand.",
+            "actionFailed": "That action could not be completed."
+        }
+    },
     "inventoryTransfers": {
         "title": "Warehouse Transfers",
         "subtitle": "Send stock between warehouses and receive it only when it physically arrives",

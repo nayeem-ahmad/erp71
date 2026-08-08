@@ -303,6 +303,7 @@ export const coreMessages = {
                 ledger: "Lejar",
                 postingExceptions: "Pengecualian Catatan",
                 products: "Produk",
+                demands: "Permintaan",
                 transfers: "Pindahan",
                 shrinkage: "Susut",
                 stockTakes: "Kiraan Stok",
@@ -1688,6 +1689,7 @@ export const coreMessages = {
                 setup: "Persediaan Inventori",
                 links: {
                     products: { title: "Produk", description: "Layari katalog, harga, tahap stok, dan butiran produk." },
+                    demands: { title: "Permintaan", description: "Mohon stok yang telah habis di cawangan." },
                     transfers: { title: "Pemindahan", description: "Pindahkan stok antara cawangan atau gudang." },
                     stockTakes: { title: "Pengiraan Stok", description: "Kira stok fizikal dan selesaikan perbezaan." },
                     shrinkage: { title: "Susut", description: "Rekod inventori rosak, hilang, atau dilupuskan." },

@@ -39,6 +39,8 @@ export const StorePermission = {
   CREATE_GOODS_TRANSFER: "CREATE_GOODS_TRANSFER",
   APPROVE_GOODS_TRANSFER: "APPROVE_GOODS_TRANSFER",
   STOCK_TAKE: "STOCK_TAKE",
+  CREATE_PRODUCT_DEMAND: "CREATE_PRODUCT_DEMAND",
+  APPROVE_PRODUCT_DEMAND: "APPROVE_PRODUCT_DEMAND",
 
   // Transactions
   CREATE_SALE: "CREATE_SALE",
@@ -124,6 +126,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.CREATE_INVENTORY_MOVEMENTS,
     StorePermission.CREATE_GOODS_TRANSFER,
     StorePermission.STOCK_TAKE,
+    StorePermission.CREATE_PRODUCT_DEMAND,
+    StorePermission.APPROVE_PRODUCT_DEMAND,
     StorePermission.CREATE_SALE,
     StorePermission.CREATE_PURCHASE,
     StorePermission.CREATE_RETURN,
@@ -163,6 +167,9 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
+    // The person at the counter is the one who notices a shelf is empty, so
+    // raising a demand is a cashier capability. Approving it is not.
+    StorePermission.CREATE_PRODUCT_DEMAND,
     StorePermission.CREATE_SALE,
     StorePermission.CREATE_RETURN,
     StorePermission.SWITCH_STORES,
@@ -213,6 +220,8 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.CREATE_GOODS_TRANSFER]: "Create goods transfers",
   [StorePermission.APPROVE_GOODS_TRANSFER]: "Approve goods transfers",
   [StorePermission.STOCK_TAKE]: "Perform stock takes",
+  [StorePermission.CREATE_PRODUCT_DEMAND]: "Submit product demands",
+  [StorePermission.APPROVE_PRODUCT_DEMAND]: "Approve & fulfil product demands",
   [StorePermission.CREATE_SALE]: "Create sales",
   [StorePermission.CREATE_PURCHASE]: "Create purchases",
   [StorePermission.CREATE_RETURN]: "Process returns",
@@ -278,6 +287,8 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.CREATE_GOODS_TRANSFER,
       StorePermission.APPROVE_GOODS_TRANSFER,
       StorePermission.STOCK_TAKE,
+      StorePermission.CREATE_PRODUCT_DEMAND,
+      StorePermission.APPROVE_PRODUCT_DEMAND,
     ],
   },
   {

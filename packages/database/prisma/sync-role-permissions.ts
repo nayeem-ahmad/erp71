@@ -134,6 +134,17 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.PUBLISH_BLOG,
         ],
     },
+    {
+        // Inventory > Demands. Both permissions in one group because they ship
+        // together and no existing role holds either: `ROLE_DEFAULT_PERMISSIONS`
+        // decides who actually gets what, which is Manager (both) and Cashier
+        // (submit only).
+        key: 'product-demands',
+        permissions: [
+            StorePermission.CREATE_PRODUCT_DEMAND,
+            StorePermission.APPROVE_PRODUCT_DEMAND,
+        ],
+    },
 ];
 
 export interface GroupResult {
