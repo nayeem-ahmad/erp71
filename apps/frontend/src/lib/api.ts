@@ -1945,6 +1945,26 @@ export const api = {
         if (!res.ok) throw new Error(body?.error?.message || body?.message || '2FA verification failed');
         return body && 'data' in body ? body.data : body;
     }),
+    // Runtime-configured rather than a NEXT_PUBLIC_ build arg, so turning Google
+    // sign-in on is a backend restart instead of a frontend rebuild.
+    getGoogleAuthConfig: () => fetch(`${API_BASE}/auth/google/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
+        return body && 'data' in body ? body.data : body;
+    }),
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string }) =>
+        fetch(`${API_BASE}/auth/google`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }).then(async res => {
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                const raw = body?.error?.message ?? body?.message;
+                throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Google sign-in failed'));
+            }
+            return body && 'data' in body ? body.data : body;
+        }),
     resendVerificationEmail: () => fetchWithAuth('/auth/resend-verification', { method: 'POST' }),
     signup: (data: any) => fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',

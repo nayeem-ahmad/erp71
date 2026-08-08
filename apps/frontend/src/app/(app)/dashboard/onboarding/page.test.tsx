@@ -130,11 +130,13 @@ describe('OnboardingPage', () => {
         fireEvent.click(screen.getByRole('button', { name: /create store/i }));
 
         await waitFor(() => {
+            // No planCode: FREE is rejected for new workspaces, so the backend
+            // picks the platform default instead.
             expect(api.setupTenant).toHaveBeenCalledWith({
                 tenantName: 'New Biz',
                 name: 'Main Branch',
                 address: undefined,
-                planCode: 'FREE',
+                businessType: undefined,
             });
         });
     });

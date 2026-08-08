@@ -413,6 +413,7 @@ export const coreMessages = {
             defaultError: 'Login failed. Please check your credentials.',
             demoFailed: 'Demo login failed. Please try again.',
             sessionExpired: 'Your session has expired. Please sign in again.',
+            googleFailed: 'Google sign-in failed. Please try again.',
         },
         signup: {
             title: 'Create your ERP71 workspace',
@@ -430,6 +431,9 @@ export const coreMessages = {
             privacyLink: 'Privacy Policy',
             submit: 'Create workspace',
             alreadyHaveAccount: 'Already have an account?',
+            googleDivider: 'or sign up with',
+            googleHint: 'We\u2019ll use your Google name and email. Fill in your organization above to finish setup in one step.',
+            googleFailed: 'Google sign-up failed. Please try again.',
             signIn: 'Sign in',
             defaultError: 'Signup failed. Please try again.',
             passwordTooShort: 'Password must be at least 8 characters.',
