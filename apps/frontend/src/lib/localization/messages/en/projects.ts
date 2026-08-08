@@ -422,6 +422,7 @@ export const projectsMessages = {
         addColumn: 'Add column',
         mappedStatuses: 'Mapped statuses',
         noMappings: 'Not mapped for any project on this board',
+        currentlyIn: '(currently in {column})',
         loadFailed: 'Could not load the columns.',
         deleteColumn: 'Delete column',
         deleteColumnConfirm: 'Delete "{name}"? Its cards fall back to Unsorted, and its status mappings go too.',

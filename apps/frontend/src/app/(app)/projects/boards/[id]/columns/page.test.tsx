@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
 import BoardColumnsSettingsPage from './page';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'b1' }),
@@ -20,6 +21,10 @@ jest.mock('@/lib/api', () => ({
         deleteBoardColumn: jest.fn(),
         setBoardColumnStatuses: jest.fn(),
     },
+}));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 const binding = (
@@ -77,6 +82,8 @@ describe('BoardColumnsSettingsPage', () => {
         (api.updateBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
         (api.deleteBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
         (api.setBoardColumnStatuses as jest.Mock).mockReset().mockResolvedValue({});
+        (toast.error as jest.Mock).mockReset();
+        (toast.success as jest.Mock).mockReset();
     });
 
     it('lists every column and the board it belongs to', async () => {
@@ -191,5 +198,94 @@ describe('BoardColumnsSettingsPage', () => {
         (api.getBoardColumns as jest.Mock).mockReset().mockRejectedValue(new Error('nope'));
         render(<BoardColumnsSettingsPage />);
         expect(await screen.findByText(/could not load the columns/i)).toBeInTheDocument();
+    });
+
+    it('offers a project whose statuses are entirely unbound — because that is exactly what this page is for', async () => {
+        // Project GAM has a card sitting in Unsorted (its status is not bound to
+        // any column) and is deliberately absent from the tenant-wide project
+        // list below — its name has to come from the board's own cards, not
+        // from a fallback lookup, or this test would pass for the wrong reason.
+        (api.getBoard as jest.Mock).mockReset().mockResolvedValue({
+            id: 'b1',
+            name: 'Release 4',
+            columns: [
+                {
+                    tasks: [
+                        { project: { id: 'p1', code: 'ALP', name: 'Alpha', short_name: null } },
+                        { project: { id: 'p2', code: 'BET', name: 'Beta', short_name: null } },
+                    ],
+                },
+            ],
+            unsorted: [{ project: { id: 'p3', code: 'GAM', name: 'Gamma', short_name: null } }],
+        });
+        (api.getProjectColumns as jest.Mock).mockImplementation((projectId: string) => {
+            if (projectId === 'p3') {
+                return Promise.resolve([{ id: 's-gamma-todo', name: 'Backlog' }]);
+            }
+            if (projectId === 'p1') {
+                return Promise.resolve([
+                    { id: 's-alpha-todo', name: 'To Do' },
+                    { id: 's-alpha-progress', name: 'In Progress' },
+                ]);
+            }
+            return Promise.resolve([
+                { id: 's-beta-todo', name: 'Backlog' },
+                { id: 's-beta-doing', name: 'Doing' },
+            ]);
+        });
+
+        render(<BoardColumnsSettingsPage />);
+        await screen.findByDisplayValue('To Do');
+
+        const select = await screen.findByLabelText('Mapped statuses — GAM — To Do');
+        expect((select as HTMLSelectElement).value).toBe('');
+        await waitFor(() => expect(within(select).getByText('Backlog')).toBeInTheDocument());
+
+        fireEvent.change(select, { target: { value: 's-gamma-todo' } });
+
+        // The wholesale payload keeps c1's two pre-existing bindings and adds
+        // the newly-mapped project's status alongside them.
+        await waitFor(() =>
+            expect(api.setBoardColumnStatuses).toHaveBeenCalledWith(
+                'b1',
+                'c1',
+                expect.arrayContaining(['s-alpha-todo', 's-beta-todo', 's-gamma-todo']),
+            ),
+        );
+        const [, , sentIds] = (api.setBoardColumnStatuses as jest.Mock).mock.calls[0];
+        expect(sentIds).toHaveLength(3);
+    });
+
+    it('reverts the select and shows an error toast when a binding write fails', async () => {
+        (api.setBoardColumnStatuses as jest.Mock).mockReset().mockRejectedValue(new Error('Conflict'));
+
+        render(<BoardColumnsSettingsPage />);
+        await screen.findByDisplayValue('To Do');
+
+        const select = (await screen.findByLabelText(
+            'Mapped statuses — ALP — To Do',
+        )) as HTMLSelectElement;
+        expect(select.value).toBe('s-alpha-todo');
+
+        fireEvent.change(select, { target: { value: '' } });
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Conflict'));
+        // Nothing was persisted, so the select must show the last-saved
+        // binding again, not the value the failed change attempted.
+        expect(select.value).toBe('s-alpha-todo');
+    });
+
+    it('marks a status option that belongs to a different column on this board', async () => {
+        render(<BoardColumnsSettingsPage />);
+        await screen.findByLabelText('Column name — Done');
+
+        // Column c2 ("Done") has no bindings of its own, but project ALP's
+        // "To Do" status is already bound to c1 — its option in c2's ALP
+        // select must say so, while "In Progress" (unbound anywhere) is plain.
+        const select = await screen.findByLabelText('Mapped statuses — ALP — Done');
+        await waitFor(() =>
+            expect(within(select).getByText('To Do (currently in To Do)')).toBeInTheDocument(),
+        );
+        expect(within(select).getByText('In Progress')).toBeInTheDocument();
     });
 });

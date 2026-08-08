@@ -422,6 +422,7 @@ export const projectsMessages = {
         addColumn: 'কলাম যোগ',
         mappedStatuses: 'ম্যাপ করা অবস্থা',
         noMappings: 'এই বোর্ডের কোনো প্রকল্পের জন্য ম্যাপ করা নেই',
+        currentlyIn: '(বর্তমানে {column}-এ আছে)',
         loadFailed: 'কলামগুলো লোড করা যায়নি।',
         deleteColumn: 'কলাম মুছুন',
         deleteColumnConfirm: '"{name}" মুছবেন? এর কার্ডগুলো অবিন্যস্তে ফিরে যাবে, এবং এর স্ট্যাটাস ম্যাপিংও মুছে যাবে।',

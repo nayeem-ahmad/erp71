@@ -9,7 +9,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { projectLabelOf, type BoardProject } from '@/components/projects/board-tasks';
+import { projectLabelOf, type BoardProject, type BoardTask } from '@/components/projects/board-tasks';
 
 interface BoundStatus {
     id: string;
@@ -35,6 +35,14 @@ interface Column {
 interface ProjectStatus {
     id: string;
     name: string;
+}
+
+/** The subset of `api.getBoard`'s response this page reads. */
+interface BoardDetail {
+    id: string;
+    name: string;
+    columns?: { tasks: BoardTask[] }[];
+    unsorted?: BoardTask[];
 }
 
 interface EditDraft {
@@ -66,6 +74,14 @@ export default function BoardColumnsSettingsPage() {
 
     const [boardName, setBoardName] = useState<string | null>(null);
     const [columns, setColumns] = useState<Column[]>([]);
+    // Projects with a card on this board right now — the primary source for
+    // which projects get a row in the bindings panel below, and for their
+    // display names (real names, not derived from a status/binding).
+    const [cardProjects, setCardProjects] = useState<Record<string, BoardProject>>({});
+    // Tenant-wide project list, kept only as a name fallback for a project
+    // that is bound on this board but no longer has any card on it (see
+    // `boardProjects` below) — it is never used to decide which projects to
+    // offer.
     const [projects, setProjects] = useState<BoardProject[]>([]);
     const [statusesByProject, setStatusesByProject] = useState<Record<string, ProjectStatus[]>>({});
     const [edits, setEdits] = useState<Record<string, EditDraft>>({});
@@ -90,28 +106,53 @@ export default function BoardColumnsSettingsPage() {
     useEffect(() => {
         load();
         api.getBoard(boardId)
-            .then((res: unknown) => setBoardName((res as { name?: string } | null)?.name ?? null))
-            .catch(() => setBoardName(null));
+            .then((res: unknown) => {
+                const board = res as BoardDetail | null;
+                setBoardName(board?.name ?? null);
+
+                // Every project with a card on the board, bound or not — a card
+                // sits in Unsorted *because* its status has no binding, so this
+                // is deliberately not derived from `bindings`. That would erase
+                // from this page's own controls exactly the projects this page
+                // exists to fix.
+                const tasks: BoardTask[] = [
+                    ...(board?.columns ?? []).flatMap((column) => column.tasks ?? []),
+                    ...(board?.unsorted ?? []),
+                ];
+                const map: Record<string, BoardProject> = {};
+                for (const task of tasks) {
+                    if (task.project) map[task.project.id] = task.project;
+                }
+                setCardProjects(map);
+            })
+            .catch(() => {
+                setBoardName(null);
+                setCardProjects({});
+            });
+        // Fallback name source only — see the `projects` state comment above.
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as BoardProject[]))
             .catch(() => setProjects([]));
     }, [load, boardId]);
 
-    // Only projects that actually have a status bound somewhere on this board
-    // — a project with no card mapped to a column has nothing to configure
-    // here (its cards, if any, sit in Unsorted until something maps them).
-    const boardProjectIds = useMemo(() => {
-        const ids = new Set<string>();
+    // The board's own cards decide which projects get a row, unioned with
+    // whatever is currently bound — so a binding whose project no longer has
+    // a card on the board still shows (and is fixable) rather than becoming
+    // unreachable.
+    const boardProjects = useMemo(() => {
+        const byId: Record<string, BoardProject> = { ...cardProjects };
         for (const column of columns) {
-            for (const binding of column.bindings) ids.add(binding.status.project_id);
+            for (const binding of column.bindings) {
+                const projectId = binding.status.project_id;
+                if (!byId[projectId]) {
+                    byId[projectId] =
+                        projects.find((p) => p.id === projectId) ??
+                        ({ id: projectId, code: projectId, name: projectId } as BoardProject);
+                }
+            }
         }
-        return ids;
-    }, [columns]);
-
-    const boardProjects = useMemo(
-        () => projects.filter((project) => boardProjectIds.has(project.id)),
-        [projects, boardProjectIds],
-    );
+        return Object.values(byId);
+    }, [cardProjects, columns, projects]);
 
     // Fetched once per project, lazily, the first time it shows up bound to a
     // column — most boards only ever touch a handful of projects. A ref (not
@@ -196,9 +237,21 @@ export default function BoardColumnsSettingsPage() {
     };
 
     const projectLabel = (projectId: string) => {
-        const project = projects.find((p) => p.id === projectId);
+        const project = cardProjects[projectId] ?? projects.find((p) => p.id === projectId);
         return project ? projectLabelOf(project) : projectId;
     };
+
+    // Which column currently holds each status — so a project's status list
+    // can flag the ones that belong to a *different* column on this board.
+    // Picking one of those moves it there and then: the server takes a status
+    // off whichever column holds it before binding it here, silently.
+    const columnByStatusId = useMemo(() => {
+        const map: Record<string, Column> = {};
+        for (const column of columns) {
+            for (const binding of column.bindings) map[binding.status_id] = column;
+        }
+        return map;
+    }, [columns]);
 
     return (
         <PageShell>
@@ -364,11 +417,18 @@ export default function BoardColumnsSettingsPage() {
                                                                 }
                                                             >
                                                                 <option value="">{t.common.none}</option>
-                                                                {options.map((status) => (
-                                                                    <option key={status.id} value={status.id}>
-                                                                        {status.name}
-                                                                    </option>
-                                                                ))}
+                                                                {options.map((status) => {
+                                                                    const holder = columnByStatusId[status.id];
+                                                                    const heldElsewhere =
+                                                                        holder && holder.id !== column.id;
+                                                                    return (
+                                                                        <option key={status.id} value={status.id}>
+                                                                            {heldElsewhere
+                                                                                ? `${status.name} ${m.currentlyIn.replace('{column}', holder.name)}`
+                                                                                : status.name}
+                                                                        </option>
+                                                                    );
+                                                                })}
                                                             </Select>
                                                         </label>
                                                     );
