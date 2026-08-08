@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Eye, Pencil, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Eye, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Button, Checkbox, ConfirmDialog, Field, Input, Select, Textarea } from '@/components/ui';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
+import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -46,6 +47,10 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(!!postId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiDraft, setAiDraft] = useState<any>(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -120,6 +125,41 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
         }
     }
 
+    /** Fills the fields for review; nothing is written until the owner saves. */
+    function applyDraft(draft: any) {
+        setTitle(draft.title ?? '');
+        setExcerpt(draft.excerpt ?? '');
+        setBody(draft.body_md ?? '');
+        setSeoTitle(draft.seo_title ?? '');
+        setSeoDescription(draft.seo_description ?? '');
+        if (draft.slug) setSlug(draft.slug);
+        setCategoryId(draft.category_id ?? '');
+        if (draft.author_name) setAuthorName(draft.author_name);
+        if (draft.cover_alt) setCoverAlt(draft.cover_alt);
+        setFeatured(!!draft.featured);
+
+        toast.success(m.ai.filled);
+    }
+
+    async function generateDraft() {
+        setAiLoading(true);
+        try {
+            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt });
+            setAiOpen(false);
+
+            if (title.trim() || excerpt.trim() || body.trim()) {
+                setAiDraft(draft);
+                return;
+            }
+
+            applyDraft(draft);
+        } catch (error) {
+            toast.error((error as Error).message);
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
     async function run(action: () => Promise<any>, nextStatus?: string) {
         setSaving(true);
         try {
@@ -143,6 +183,14 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                 </Link>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        variant="secondary"
+                        icon={<Sparkles className="h-4 w-4" />}
+                        onClick={() => setAiOpen(true)}
+                        disabled={saving}
+                    >
+                        {m.ai.button}
+                    </Button>
                     <Button variant="secondary" onClick={save} loading={saving} disabled={!title.trim() || !body.trim()}>
                         {m.save}
                     </Button>
@@ -326,6 +374,36 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                     if (!postId) return;
                     await run(() => api.deleteTenantBlogPost(postId));
                     router.push('/settings/blog');
+                }}
+            />
+
+            <AiDraftModal
+                open={aiOpen}
+                prompt={aiPrompt}
+                loading={aiLoading}
+                labels={{
+                    modalTitle: m.ai.modalTitle,
+                    promptLabel: m.ai.promptLabel,
+                    promptPlaceholder: m.ai.promptPlaceholder,
+                    generate: m.ai.generate,
+                    cancel: t.common.cancel,
+                }}
+                onPromptChange={setAiPrompt}
+                onClose={() => setAiOpen(false)}
+                onGenerate={generateDraft}
+            />
+
+            <ConfirmDialog
+                open={!!aiDraft}
+                title={m.ai.overwriteTitle}
+                prompt={m.ai.overwritePrompt}
+                confirmLabel={m.ai.generate}
+                cancelLabel={t.common.cancel}
+                onCancel={() => setAiDraft(null)}
+                onConfirm={() => {
+                    const draft = aiDraft;
+                    setAiDraft(null);
+                    applyDraft(draft);
                 }}
             />
         </div>
