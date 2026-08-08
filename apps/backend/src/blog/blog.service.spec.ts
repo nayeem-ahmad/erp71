@@ -41,7 +41,7 @@ describe('BlogService', () => {
         db.blogPost.count.mockResolvedValue(0);
         db.blogPostSlug.findMany.mockResolvedValue([]);
         db.$transaction.mockImplementation((fn: any) => (typeof fn === 'function' ? fn(db) : Promise.all(fn)));
-        service = new BlogService(db, assets);
+        service = new BlogService(db, assets, {} as any);
     });
 
     const translation = (overrides: Record<string, unknown> = {}) => ({

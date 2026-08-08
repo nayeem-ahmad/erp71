@@ -110,4 +110,11 @@ describe('BlogAdminController', () => {
         const methods = Object.getOwnPropertyNames(BlogAdminController.prototype);
         expect(methods).toEqual(expect.arrayContaining(['publish', 'unpublish', 'archive']));
     });
+
+    // The AI endpoint spends platform money on every call. Without the class
+    // guards any logged-in user of any tenant could burn it.
+    it('keeps the AI draft route behind the platform-admin guards', () => {
+        expect(guardsOn(BlogAdminController)).toEqual([JwtAuthGuard, PlatformAdminGuard]);
+        expect(typeof BlogAdminController.prototype.draftWithAi).toBe('function');
+    });
 });

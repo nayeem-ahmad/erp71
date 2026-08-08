@@ -10,8 +10,11 @@ import {
     MinLength,
     ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { BLOG_AUDIENCES, BLOG_STATUSES } from './blog-status';
+
+const trim = ({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value;
 
 /** Locales a translation may be written in — mirrors the frontend registry. */
 export const BLOG_LOCALES = ['en', 'bn', 'ms'] as const;
@@ -133,4 +136,21 @@ export class PublishBlogPostDto {
     @IsOptional()
     @IsISO8601()
     published_at?: string;
+}
+
+/**
+ * The editors' AI Assistant request. Shared by the platform and tenant blogs —
+ * a shop writes in one language and sends its own locale, the platform editor
+ * sends whichever tab is open.
+ */
+export class BlogAiDraftDto {
+    @Transform(trim)
+    @IsString()
+    @MinLength(1)
+    @MaxLength(2000)
+    prompt!: string;
+
+    @IsOptional()
+    @IsIn(BLOG_LOCALES as unknown as string[])
+    locale?: string;
 }
