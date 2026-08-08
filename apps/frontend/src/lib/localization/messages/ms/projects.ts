@@ -409,7 +409,7 @@ export const projectsMessages = {
         created: 'Papan dicipta',
         deleted: 'Papan dipadam',
         deleteBoard: 'Padam papan',
-        deleteConfirm: 'Padam papan ini? Tugasan di dalamnya tidak terjejas.',
+        deleteConfirm: 'Padam {name}? Tugasan di dalamnya tidak terjejas.',
         boardSettings: 'Tetapan papan',
         unsorted: 'Tidak disusun',
         unsortedHint: 'Kad ini berada dalam status yang belum dipetakan ke mana-mana lajur pada papan ini.',

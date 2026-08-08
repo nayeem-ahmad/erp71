@@ -15,7 +15,6 @@ interface BoardSummary {
     id: string;
     name: string;
     description?: string | null;
-    created_at: string;
     card_count: number;
 }
 
@@ -178,7 +177,7 @@ export default function BoardsPage() {
             <ConfirmDialog
                 open={pendingDelete !== null}
                 title={m.deleteBoard}
-                prompt={m.deleteConfirm}
+                prompt={m.deleteConfirm.replace('{name}', pendingDelete?.name ?? '')}
                 confirmLabel={t.common.delete}
                 cancelLabel={t.common.cancel}
                 loading={deleting}

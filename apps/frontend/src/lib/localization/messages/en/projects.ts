@@ -409,7 +409,7 @@ export const projectsMessages = {
         created: 'Board created',
         deleted: 'Board deleted',
         deleteBoard: 'Delete board',
-        deleteConfirm: 'Delete this board? The tasks on it are not affected.',
+        deleteConfirm: 'Delete {name}? The tasks on it are not affected.',
         boardSettings: 'Board settings',
         unsorted: 'Unsorted',
         unsortedHint: 'These cards sit in a status this board has not mapped to a column.',

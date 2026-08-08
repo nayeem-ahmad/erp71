@@ -409,7 +409,7 @@ export const projectsMessages = {
         created: 'বোর্ড তৈরি হয়েছে',
         deleted: 'বোর্ড মুছে ফেলা হয়েছে',
         deleteBoard: 'বোর্ড মুছুন',
-        deleteConfirm: 'এই বোর্ডটি মুছবেন? এর টাস্কগুলো প্রভাবিত হবে না।',
+        deleteConfirm: '{name} মুছবেন? এর টাস্কগুলো প্রভাবিত হবে না।',
         boardSettings: 'বোর্ড সেটিংস',
         unsorted: 'অবিন্যস্ত',
         unsortedHint: 'এই কার্ডগুলো এমন একটি অবস্থায় আছে যা এই বোর্ডে কোনো কলামের সঙ্গে যুক্ত করা হয়নি।',
