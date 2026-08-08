@@ -78,6 +78,71 @@ describe('AuditInterceptor', () => {
         expect(audit.log).not.toHaveBeenCalled();
     });
 
+    it('records a platform-admin mutation with a null tenant', async () => {
+        await run(
+            makeRequest({
+                method: 'DELETE',
+                route: { path: '/api/v1/admin/short-links/:id' },
+                params: { id: 'link-9' },
+                body: {},
+                tenantId: undefined,
+                isPlatformAdmin: true,
+            }),
+        );
+
+        expect(audit.log).toHaveBeenCalledWith(
+            'short-links.delete',
+            'short-links',
+            expect.objectContaining({ userId: 'user-1', tenantId: undefined }),
+            'link-9',
+            { _scope: 'platform' },
+        );
+    });
+
+    it('marks platform rows with a scope so they are not mistaken for unscoped ones', async () => {
+        await run(
+            makeRequest({
+                route: { path: '/api/v1/admin/blog/posts' },
+                body: { title: 'Hello' },
+                tenantId: undefined,
+                isPlatformAdmin: true,
+            }),
+        );
+
+        expect(audit.log).toHaveBeenCalledWith(
+            'blog.posts.create',
+            'blog',
+            expect.anything(),
+            'sale-1',
+            { title: 'Hello', _scope: 'platform' },
+        );
+    });
+
+    it('does not treat a tenant-less storefront customer as a platform admin', async () => {
+        // Storefront customers and portal users are authenticated and carry no
+        // tenant either. Only the guard-set flag admits a request.
+        await run(
+            makeRequest({
+                route: { path: '/api/v1/storefront/shop/orders' },
+                tenantId: undefined,
+                isPlatformAdmin: undefined,
+            }),
+        );
+        expect(audit.log).not.toHaveBeenCalled();
+    });
+
+    it('keeps the tenant on a platform admin acting inside a tenant context', async () => {
+        await run(makeRequest({ isPlatformAdmin: true }));
+
+        expect(audit.log).toHaveBeenCalledWith(
+            'sales.create',
+            'sales',
+            expect.objectContaining({ tenantId: 'tenant-1' }),
+            'sale-1',
+            expect.objectContaining({ _scope: 'platform' }),
+        );
+    });
+
     it('skips unauthenticated requests', async () => {
         await run(makeRequest({ user: undefined }));
         expect(audit.log).not.toHaveBeenCalled();

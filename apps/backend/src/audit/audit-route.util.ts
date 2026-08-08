@@ -79,9 +79,20 @@ export interface ResolveAuditTargetInput {
     params?: Record<string, unknown>;
 }
 
+/**
+ * A hyphenated all-lowercase word — `platform-settings`, `messaging-identity`.
+ * Long enough to trip `OPAQUE_ID_RE`, but never what a generated id looks like:
+ * uuid, cuid and nanoid all carry digits. Excluding these matters most for the
+ * *first* segment, which becomes the entity — `resolveAuditTarget` bails out
+ * entirely when that looks like an id, so `POST /admin/platform-settings` would
+ * otherwise go unrecorded rather than merely mislabelled.
+ */
+const RESOURCE_WORD_RE = /^[a-z]+(?:-[a-z]+)*$/;
+
 function isIdentifierSegment(segment: string): boolean {
     if (segment.startsWith(':')) return true;
-    return UUID_RE.test(segment) || NUMERIC_RE.test(segment) || OPAQUE_ID_RE.test(segment);
+    if (UUID_RE.test(segment) || NUMERIC_RE.test(segment)) return true;
+    return OPAQUE_ID_RE.test(segment) && !RESOURCE_WORD_RE.test(segment);
 }
 
 function splitPath(path: string): string[] {
@@ -89,6 +100,15 @@ function splitPath(path: string): string[] {
     const segments = withoutQuery.split('/').filter(Boolean);
     // Drop the `api/v1` global prefix, however many leading pieces it spans.
     while (segments.length && API_PREFIX_RE.test(segments[0])) {
+        segments.shift();
+    }
+    // `admin` is a routing prefix, not a resource: every controller under it is
+    // guarded by `PlatformAdminGuard`, and keeping the segment would file the
+    // blog, the tenant list and platform settings all under one `admin` entity,
+    // making the entity filter useless for exactly the rows that most need it.
+    // What separates a platform row from a tenant one is its null `tenant_id`.
+    // Only dropped when something follows, so a bare `/admin` still resolves.
+    if (segments.length > 1 && segments[0].toLowerCase() === 'admin') {
         segments.shift();
     }
     return segments;
