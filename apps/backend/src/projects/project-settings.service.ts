@@ -87,8 +87,8 @@ export class ProjectSettingsService {
      * `prisma db push` (`apps/backend/Dockerfile`), never `migrate deploy`, so
      * the SQL under `prisma/migrations/` is documentation there. `db push` would
      * add `project_id` and leave every task pointing at a template row, which
-     * `board()` then matches against the project's own columns and finds
-     * nothing — every board would render empty.
+     * matches none of the project's own columns — every board built from those
+     * tasks would render empty.
      *
      * Idempotent: after it runs, no task in this project is on a template row.
      */

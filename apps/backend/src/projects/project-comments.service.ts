@@ -54,7 +54,7 @@ export class ProjectCommentsService {
             actorId: userId,
             title: task.title,
             body: comment.body.slice(0, 140),
-            link: `/projects/${task.project_id}/board`,
+            link: `/projects/${task.project_id}`,
         });
         await this.activity.watch(tenantId, taskId, userId);
 
