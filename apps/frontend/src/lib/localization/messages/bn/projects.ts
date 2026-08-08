@@ -17,6 +17,8 @@ export const projectsMessages = {
     fields: {
         code: 'কোড',
         name: 'নাম',
+        shortName: 'সংক্ষিপ্ত নাম',
+        shortNameHint: 'পুরো নাম না আঁটলে বোর্ড কার্ডে এটি দেখানো হয়।',
         description: 'বিবরণ',
         customer: 'গ্রাহক',
         type: 'ধরন',
@@ -134,6 +136,9 @@ export const projectsMessages = {
         updated: 'টাস্ক হালনাগাদ হয়েছে',
         editTitle: 'শিরোনাম সম্পাদনা',
         renameFailed: 'টাস্কের নাম বদলানো যায়নি',
+        details: 'বিস্তারিত',
+        unassigned: 'দায়িত্বপ্রাপ্ত কেউ নেই',
+        saveFailed: 'টাস্ক হালনাগাদ করা যায়নি',
     },
 
     description: {
@@ -243,7 +248,6 @@ export const projectsMessages = {
 
     remaining: {
         history: 'বাকি ঘণ্টার ইতিহাস',
-        note: 'কেন পরিবর্তন হলো?',
         notePlaceholder: 'যেমন: গ্রাহক আরও দুটি কক্ষ যোগ করেছেন',
         empty: 'এখনও কোনো পরিবর্তন রেকর্ড হয়নি।',
         by: 'দ্বারা',
@@ -265,6 +269,7 @@ export const projectsMessages = {
         note: 'নোট',
         remainingAfter: 'এরপর বাকি',
         remainingHint: 'এই ঘণ্টার পর যা বাকি থাকে তা ডিফল্ট। কাজ বাড়লে পরিবর্তন করুন।',
+        logHint: 'ঘণ্টা লগ করুন, বাকি কাজের হিসাব বদলান, বা দুটোই — একটি ফর্ম, একটি সেভ।',
         empty: 'এখনও কোনো সময় লগ হয়নি।',
         logged: 'সময় লগ হয়েছে',
         deleted: 'সময় এন্ট্রি মুছে ফেলা হয়েছে',
@@ -301,6 +306,7 @@ export const projectsMessages = {
         card: {
             drag: 'সরাতে টেনে নিন',
             open: 'টাস্ক খুলুন',
+            project: 'প্রকল্প',
             overdue: 'সময় পার',
             dueToday: 'আজ শেষ তারিখ',
             due: 'শেষ {date}',

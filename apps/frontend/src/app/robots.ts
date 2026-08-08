@@ -16,6 +16,8 @@ import type { MetadataRoute } from 'next';
  * `/store/` is left crawlable on purpose: storefronts and their per-product
  * pages are marketing, and shop owners want them found.
  */
+import { siteOrigin } from '@/lib/blog/api';
+
 export default function robots(): MetadataRoute.Robots {
     return {
         rules: {
@@ -23,5 +25,8 @@ export default function robots(): MetadataRoute.Robots {
             allow: '/',
             disallow: ['/q/', '/s/'],
         },
+        // Pointing at the sitemap here is what makes it discoverable without
+        // anyone submitting it: robots.txt is the first thing a crawler reads.
+        sitemap: `${siteOrigin()}/sitemap.xml`,
     };
 }

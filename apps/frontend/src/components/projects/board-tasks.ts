@@ -48,11 +48,20 @@ export function labelsOf(task: Pick<BoardTask, 'labels'>): ProjectLabel[] {
     return (task.labels ?? []).map((row) => row.label).filter(Boolean);
 }
 
+export interface BoardProject {
+    id: string;
+    code: string;
+    name: string;
+    /** Optional abbreviation; the card falls back to `code` without it. */
+    short_name?: string | null;
+}
+
 export interface BoardTask {
     id: string;
     title: string;
     description?: string | null;
     priority: string;
+    project?: BoardProject | null;
     labels?: { label: ProjectLabel }[];
     cover_color?: ProjectLabelColor | null;
     start_date?: string | null;
@@ -132,6 +141,16 @@ export function dueStateOf(dueDate?: string | null, completedAt?: string | null)
     if (due < today) return 'overdue';
     if (due === today) return 'today';
     return due <= shiftedDayKey(2) ? 'soon' : 'later';
+}
+
+/**
+ * What a card shows for its project. The short name is the point of the field,
+ * but it is optional, so the code — which every project has — is the fallback,
+ * and the full name is left for the tooltip.
+ */
+export function projectLabelOf(project: BoardProject | null | undefined): string | null {
+    if (!project) return null;
+    return project.short_name?.trim() || project.code || project.name || null;
 }
 
 export function initialsOf(name: string): string {

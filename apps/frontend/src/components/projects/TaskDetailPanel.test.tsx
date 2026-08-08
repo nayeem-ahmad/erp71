@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskDetailPanel from './TaskDetailPanel';
 
 jest.mock('@/lib/toast', () => ({
@@ -24,6 +24,8 @@ const getProjectColumns = jest.fn();
 const getTaskAttachments = jest.fn();
 const addTaskAttachment = jest.fn();
 const deleteTaskAttachment = jest.fn();
+const getProject = jest.fn();
+const logProjectTime = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -49,6 +51,9 @@ jest.mock('@/lib/api', () => ({
         getTaskAttachments: (...args: unknown[]) => getTaskAttachments(...args),
         addTaskAttachment: (...args: unknown[]) => addTaskAttachment(...args),
         deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
+        getProject: (...args: unknown[]) => getProject(...args),
+        logProjectTime: (...args: unknown[]) => logProjectTime(...args),
+        deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
 }));
 
@@ -91,10 +96,13 @@ beforeEach(() => {
         getTaskAttachments,
         addTaskAttachment,
         deleteTaskAttachment,
+        getProject,
+        logProjectTime,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
     }
+    getProject.mockResolvedValue({ id: 'project-1', members: [] });
     getProjectLabels.mockResolvedValue([]);
     getTaskComments.mockResolvedValue([]);
     getTaskActivity.mockResolvedValue([]);
@@ -679,6 +687,306 @@ describe('TaskDetailPanel description', () => {
         expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
         expect(onClose).not.toHaveBeenCalled();
         expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel assignee', () => {
+    const karim = { id: 'user-2', name: 'Karim', email: 'karim@x.com' };
+    const rahim = { id: 'emp-1', name: 'Rahim Uddin' };
+
+    const roster = () =>
+        getProject.mockResolvedValue({
+            id: 'project-1',
+            members: [
+                { id: 'm1', user: karim },
+                { id: 'm2', employee: rahim },
+            ],
+        });
+
+    // The roster loads after the task, so every case here waits for an option
+    // rather than for the select — which is on screen before either arrives.
+    const picker = async () => {
+        await screen.findByRole('option', { name: 'Karim' });
+        return screen.getByLabelText('Assignee');
+    };
+
+    it('offers the project roster, including the employees with no login', async () => {
+        roster();
+        panel();
+
+        const select = within(await picker());
+        expect(select.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+        expect(select.getByRole('option', { name: 'Rahim Uddin' })).toBeInTheDocument();
+        expect(select.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument();
+    });
+
+    it('shows who holds the card', async () => {
+        roster();
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
+        panel();
+
+        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
+    });
+
+    // Sending only the column that gained a value would leave a card holding a
+    // user and an employee at the same time.
+    it('assigns a user and clears the employee column in the same PATCH', async () => {
+        roster();
+        panel();
+
+        fireEvent.change(await picker(), { target: { value: 'user:user-2' } });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                assigneeId: 'user-2',
+                assigneeEmployeeId: '',
+            }),
+        );
+    });
+
+    it('assigns an employee who has no login', async () => {
+        roster();
+        panel();
+
+        fireEvent.change(await picker(), { target: { value: 'employee:emp-1' } });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                assigneeId: '',
+                assigneeEmployeeId: 'emp-1',
+            }),
+        );
+    });
+
+    // PATCH reads undefined as "leave alone", so only '' can mean nobody — and
+    // the DTO has a ValidateIf so the empty string is not a 400.
+    it('unassigns with empty strings, not undefined', async () => {
+        roster();
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Assignee'), { target: { value: '' } });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                assigneeId: '',
+                assigneeEmployeeId: '',
+            }),
+        );
+    });
+
+    // Otherwise the select falls back to its first option and the card reads as
+    // assigned to somebody it is not.
+    it('still lists the holder after they have left the project', async () => {
+        getProject.mockResolvedValue({ id: 'project-1', members: [] });
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
+        panel();
+
+        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
+        expect(screen.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+    });
+
+    it('opens with the picker usable when the roster cannot be read', async () => {
+        getProject.mockRejectedValue(new Error('nope'));
+        panel();
+
+        expect(await screen.findByLabelText('Assignee')).toBeInTheDocument();
+        expect(screen.getByText('Pull the cable')).toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel estimate', () => {
+    const withEstimate = (estimate: string | null) => ({
+        ...withChecklist([]),
+        estimate_hours: estimate,
+    });
+
+    it('shows the estimate the task carries', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        expect(await screen.findByLabelText('Estimate (h)')).toHaveValue(6);
+    });
+
+    it('saves a new estimate on Enter', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        const field = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(field, { target: { value: '8' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { estimateHours: 8 }),
+        );
+    });
+
+    it('saves when the field loses focus', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        const field = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(field, { target: { value: '2.5' } });
+        fireEvent.blur(field);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { estimateHours: 2.5 }),
+        );
+    });
+
+    it('does not save an estimate that changed nothing', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        fireEvent.blur(await screen.findByLabelText('Estimate (h)'));
+
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    // Reading an emptied box as zero would throw the burndown off without
+    // anyone having asked for it.
+    it('puts the stored figure back when the box is emptied', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        const field = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(field, { target: { value: '' } });
+        fireEvent.blur(field);
+
+        expect(updateProjectTask).not.toHaveBeenCalled();
+        await waitFor(() => expect(field).toHaveValue(6));
+    });
+
+    it('discards the edit on Escape', async () => {
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        panel();
+
+        const field = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(field, { target: { value: '9' } });
+        fireEvent.keyDown(field, { key: 'Escape' });
+
+        await waitFor(() => expect(field).toHaveValue(6));
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed save and restores what the server has', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        getProjectTask.mockResolvedValue(withEstimate('6'));
+        updateProjectTask.mockRejectedValue(new Error('Nope'));
+        panel();
+
+        const field = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(field, { target: { value: '8' } });
+        fireEvent.blur(field);
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Nope'));
+        await waitFor(() => expect(field).toHaveValue(6));
+    });
+});
+
+// Hours and the revised remaining figure used to be two forms with two Save
+// buttons; logging an afternoon and re-estimating it was two round trips.
+describe('TaskDetailPanel logging work', () => {
+    const workSection = (field: HTMLElement) => within(field.closest('section') as HTMLElement);
+
+    // Wrapped in act: the click starts a request whose resolution clears the
+    // form, and React warns about that state update landing outside a test.
+    const save = async () => {
+        const hours = await screen.findByLabelText('Hours');
+        await act(async () => {
+            fireEvent.click(workSection(hours).getByRole('button', { name: 'Save' }));
+        });
+    };
+
+    it('logs hours with the remaining figure in one save', async () => {
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Hours'), { target: { value: '3' } });
+        fireEvent.change(screen.getByLabelText('Remaining after this'), {
+            target: { value: '4' },
+        });
+        fireEvent.change(screen.getByLabelText('Note'), { target: { value: '  Rewired  ' } });
+        await save();
+
+        await waitFor(() =>
+            expect(logProjectTime).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    taskId: 't1',
+                    hours: 3,
+                    remainingHours: 4,
+                    note: 'Rewired',
+                }),
+            ),
+        );
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('leaves the remaining figure to the server when the box is blank', async () => {
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Hours'), { target: { value: '3' } });
+        await save();
+
+        await waitFor(() =>
+            expect(logProjectTime).toHaveBeenCalledWith(
+                expect.objectContaining({ hours: 3, remainingHours: undefined }),
+            ),
+        );
+    });
+
+    // The same form, with no hours in it, is the re-estimate that used to have a
+    // section of its own.
+    it('re-estimates without logging time when only the remaining figure is given', async () => {
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Remaining after this'), {
+            target: { value: '9' },
+        });
+        fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Two more rooms' } });
+        await save();
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                remainingHours: 9,
+                remainingNote: 'Two more rooms',
+            }),
+        );
+        expect(logProjectTime).not.toHaveBeenCalled();
+    });
+
+    it('has nothing to save until one of the two is filled in', async () => {
+        panel();
+        const hours = await screen.findByLabelText('Hours');
+
+        expect(workSection(hours).getByRole('button', { name: 'Save' })).toBeDisabled();
+
+        fireEvent.change(hours, { target: { value: '2' } });
+        expect(workSection(hours).getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('clears the form after a save', async () => {
+        panel();
+
+        const hours = await screen.findByLabelText('Hours');
+        fireEvent.change(hours, { target: { value: '3' } });
+        fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Rewired' } });
+        await save();
+
+        await waitFor(() => expect(hours).toHaveValue(null));
+        expect(screen.getByLabelText('Note')).toHaveValue('');
+    });
+
+    it('reports a failed log instead of clearing the form', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        logProjectTime.mockRejectedValue(new Error('Nope'));
+        panel();
+
+        const hours = await screen.findByLabelText('Hours');
+        fireEvent.change(hours, { target: { value: '3' } });
+        await save();
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Nope'));
+        expect(hours).toHaveValue(3);
     });
 });
 

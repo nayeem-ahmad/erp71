@@ -2,8 +2,9 @@ import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, Param, H
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
+import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { GoogleTokenService } from './google-token.service';
 import { TotpService } from './totp.service';
 import { extractRequestMeta } from '../audit/audit-route.util';
 
@@ -12,6 +13,7 @@ export class AuthController {
     constructor(
         private authService: AuthService,
         private totpService: TotpService,
+        private googleTokenService: GoogleTokenService,
     ) { }
 
     @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -24,6 +26,25 @@ export class AuthController {
     @Post('login')
     async login(@Body() dto: LoginDto, @Request() req) {
         return this.authService.login(dto, extractRequestMeta(req));
+    }
+
+    /**
+     * Read at runtime by the login and signup pages, because the frontend's
+     * build-time `NEXT_PUBLIC_*` variables are baked into the image — configuring
+     * Google would otherwise mean rebuilding the frontend, not just restarting it.
+     */
+    @Get('google/config')
+    googleConfig() {
+        return {
+            enabled: this.googleTokenService.isEnabled(),
+            client_id: this.googleTokenService.getPrimaryClientId(),
+        };
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('google')
+    async googleSignIn(@Body() dto: GoogleSignInDto, @Request() req) {
+        return this.authService.googleSignIn(dto, extractRequestMeta(req));
     }
 
     @UseGuards(JwtAuthGuard)

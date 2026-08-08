@@ -10,6 +10,7 @@ import { routes } from '@/lib/routes';
 
 export interface ProjectFormValues {
     name: string;
+    shortName: string;
     description: string;
     customerId: string;
     projectTypeId: string;
@@ -22,6 +23,7 @@ export interface ProjectFormValues {
 
 const EMPTY: ProjectFormValues = {
     name: '',
+    shortName: '',
     description: '',
     customerId: '',
     projectTypeId: '',
@@ -39,6 +41,7 @@ export function toFormValues(project: Record<string, unknown> | null): ProjectFo
     if (!project) return { ...EMPTY };
     return {
         name: (project.name as string) ?? '',
+        shortName: (project.short_name as string) ?? '',
         description: (project.description as string) ?? '',
         customerId: (project.customer_id as string) ?? '',
         projectTypeId: (project.project_type_id as string) ?? '',
@@ -113,6 +116,7 @@ export default function ProjectForm({
         const clearable = (value: string) => (mode === 'edit' ? value : value || undefined);
         const payload = {
             name: form.name.trim(),
+            shortName: clearable(form.shortName.trim()),
             description: clearable(form.description.trim()),
             customerId: clearable(form.customerId),
             projectTypeId: clearable(form.projectTypeId),
@@ -145,6 +149,9 @@ export default function ProjectForm({
             <FormGrid>
                 <Field label={m.fields.name} required error={nameError ?? undefined}>
                     <Input value={form.name} onChange={set('name')} autoFocus />
+                </Field>
+                <Field label={m.fields.shortName} hint={m.fields.shortNameHint}>
+                    <Input value={form.shortName} onChange={set('shortName')} maxLength={20} />
                 </Field>
                 <Field label={m.fields.type}>
                     <Select value={form.projectTypeId} onChange={set('projectTypeId')}>
