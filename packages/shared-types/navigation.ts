@@ -237,6 +237,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
   'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/admin/url-shortener' },
   'admin.blog': { id: 'admin.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.blog', href: '/admin/blog' },
+  'admin.social-media': { id: 'admin.social-media', kind: 'link', icon: 'Share2', labelKey: 'sidebar.items.socialMedia', href: '/admin/social-media' },
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
   'admin.support': { id: 'admin.support', kind: 'link', icon: 'Headset', labelKey: 'sidebar.items.adminSupport', href: '/admin/support' },
   'admin.system-health': { id: 'admin.system-health', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.systemHealth', href: '/admin/system-health' },
@@ -253,6 +254,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.platform-settings.plans': { id: 'admin.platform-settings.plans', kind: 'link', icon: 'BadgePercent', labelKey: 'sidebar.items.platformSettingsPlans', href: '/admin/platform-settings/plans' },
   'admin.platform-settings.addons': { id: 'admin.platform-settings.addons', kind: 'link', icon: 'PackagePlus', labelKey: 'sidebar.items.platformSettingsAddons', href: '/admin/platform-settings/addons' },
   'admin.platform-settings.feedback-automation': { id: 'admin.platform-settings.feedback-automation', kind: 'link', icon: 'Bot', labelKey: 'sidebar.items.platformSettingsFeedbackAutomation', href: '/admin/platform-settings/feedback-automation' },
+  'admin.platform-settings.buffer': { id: 'admin.platform-settings.buffer', kind: 'link', icon: 'Share2', labelKey: 'sidebar.items.platformSettingsBuffer', href: '/admin/platform-settings/buffer' },
 
   help: { id: 'help', kind: 'module', icon: 'HelpCircle', labelKey: 'sidebar.modules.help', href: '/help', moduleKey: 'help', platformFeature: 'help' },
 };
@@ -412,6 +414,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.support', 'admin', 4),
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
+  layoutNode('admin.social-media', 'admin', 7),
   layoutNode('whats-new', null, 13),
   layoutNode('help', null, 14),
 ];
@@ -431,7 +434,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.referrals', 'admin', 6),
   layoutNode('admin.url-shortener', 'admin', 7),
   layoutNode('admin.blog', 'admin', 8),
-  layoutNode('admin.platform-settings', 'admin', 9),
+  layoutNode('admin.social-media', 'admin', 9),
+  layoutNode('admin.platform-settings', 'admin', 10),
   layoutNode('whats-new', null, 1),
   layoutNode('help', null, 2),
 ];

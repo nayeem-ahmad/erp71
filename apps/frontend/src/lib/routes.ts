@@ -216,6 +216,7 @@ export const routes = {
         users: '/admin/users',
         referrals: '/admin/referrals',
         urlShortener: '/admin/url-shortener',
+        socialMedia: '/admin/social-media',
         feedback: '/admin/feedback',
         support: '/admin/support',
         systemHealth: '/admin/system-health',
@@ -230,6 +231,7 @@ export const routes = {
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
             plans: '/admin/platform-settings/plans',
+            buffer: '/admin/platform-settings/buffer',
         },
     },
 

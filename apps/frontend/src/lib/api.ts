@@ -1817,6 +1817,30 @@ export const api = {
         fetchWithAuth(`/admin/blog/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteAdminBlogCategory: (id: string) => fetchWithAuth(`/admin/blog/categories/${id}`, { method: 'DELETE' }),
 
+    // --- Platform social media (Admin → Social Media, published via Buffer) ---
+    getAdminSocialPosts: (params: { status?: string; search?: string; page?: number; limit?: number } = {}) => {
+        const query = new URLSearchParams();
+        if (params.status) query.set('status', params.status);
+        if (params.search) query.set('search', params.search);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/admin/social-media/posts${query.size ? `?${query}` : ''}`);
+    },
+    getAdminSocialPost: (id: string) => fetchWithAuth(`/admin/social-media/posts/${id}`),
+    createAdminSocialPost: (data: any) =>
+        fetchWithAuth('/admin/social-media/posts', { method: 'POST', body: JSON.stringify(data) }),
+    updateAdminSocialPost: (id: string, data: any) =>
+        fetchWithAuth(`/admin/social-media/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    duplicateAdminSocialPost: (id: string) =>
+        fetchWithAuth(`/admin/social-media/posts/${id}/duplicate`, { method: 'POST', body: JSON.stringify({}) }),
+    pushAdminSocialPost: (id: string, data: { channel_ids?: string[]; mode?: string; due_at?: string | null }) =>
+        fetchWithAuth(`/admin/social-media/posts/${id}/push`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteAdminSocialPost: (id: string) => fetchWithAuth(`/admin/social-media/posts/${id}`, { method: 'DELETE' }),
+    getBufferStatus: () => fetchWithAuth('/admin/social-media/buffer/status'),
+    getBufferChannels: () => fetchWithAuth('/admin/social-media/buffer/channels'),
+    testBufferConnection: () =>
+        fetchWithAuth('/admin/social-media/buffer/test', { method: 'POST', body: JSON.stringify({}) }),
+
     getBlogUpdates: (params: { locale?: string; page?: number; limit?: number } = {}) => {
         const query = new URLSearchParams();
         if (params.locale) query.set('locale', params.locale);
