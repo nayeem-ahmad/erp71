@@ -1965,6 +1965,27 @@ export const api = {
             }
             return body && 'data' in body ? body.data : body;
         }),
+    // Runtime-configured for the same reason as the Google config above: the
+    // Firebase web keys are public client identifiers, but baking them in as
+    // NEXT_PUBLIC_ values would make enabling mobile sign-in a frontend rebuild.
+    getFirebaseAuthConfig: () => fetch(`${API_BASE}/auth/firebase/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
+        return body && 'data' in body ? body.data : body;
+    }),
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string }) =>
+        fetch(`${API_BASE}/auth/mobile`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }).then(async res => {
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                const raw = body?.error?.message ?? body?.message;
+                throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Mobile sign-in failed'));
+            }
+            return body && 'data' in body ? body.data : body;
+        }),
     resendVerificationEmail: () => fetchWithAuth('/auth/resend-verification', { method: 'POST' }),
     signup: (data: any) => fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',

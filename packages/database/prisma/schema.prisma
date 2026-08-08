@@ -286,8 +286,16 @@ model User {
   /// no per-user-per-post row: writing a Notification for every user of every
   /// tenant on publish would be one row per platform user per post.
   blog_last_seen_at        DateTime?
+  // Firebase's stable per-account uid, set the first time someone signs in with
+  // an SMS one-time code. Unique so one Firebase identity can never be linked to
+  // two ERP71 users.
+  firebase_uid             String?   @unique
   mobile_country_code      String    @default("BD")
   mobile                   String?
+  /// When the number in `mobile` was proved by an SMS code. Null means it was
+  /// only ever typed into a form, which is why mobile sign-in matches on it only
+  /// after Firebase has verified the same number.
+  mobile_verified_at       DateTime?
   email_verified_at        DateTime?
   avatar_url               String?
   totp_secret              String?
@@ -341,6 +349,11 @@ model User {
   projectAttachments                ProjectAttachment[]         @relation("ProjectAttachmentCreator")
   authoredBlogPosts                 BlogPost[]                  @relation("BlogPostAuthor")
   authoredTenantBlogPosts           TenantBlogPost[]            @relation("TenantBlogPostAuthor")
+
+  // Mobile sign-in looks an account up by number on every SMS code entered.
+  // Deliberately not unique: one person may own several workspaces under the
+  // same number, and sign-in resolves that ambiguity rather than the schema.
+  @@index([mobile])
 }
 
 model PasswordResetToken {
