@@ -1,4 +1,24 @@
 export const marketingMessages = {
+    blog: {
+        title: 'Blog',
+        description: 'Guides, product updates and notes on running a shop in Bangladesh',
+        heading: 'The ERP71 blog',
+        subheading: 'Practical writing for shop owners — stock, cash, staff and the software in between.',
+        empty: 'No posts yet. Check back soon.',
+        readMore: 'Read',
+        minRead: '{minutes} min read',
+        allPosts: 'All posts',
+        backToBlog: 'Back to the blog',
+        publishedOn: 'Published {date}',
+        updatedOn: 'Updated {date}',
+        by: 'By {author}',
+        notFoundTitle: "This post isn't available",
+        notFoundBody: 'It may have been removed or the link may be out of date.',
+        newer: 'Newer',
+        older: 'Older',
+        rss: 'RSS feed',
+    },
+
     home: {
         preview: {
             url: 'app.erp71.com/dashboard',

@@ -6,7 +6,7 @@ import { Menu, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 type MarketingNavProps = {
-    active?: 'home' | 'pricing';
+    active?: 'home' | 'pricing' | 'blog';
 };
 
 export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
@@ -31,6 +31,12 @@ export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
                         className={active === 'pricing' ? 'text-blue-600 font-semibold' : 'hover:text-gray-900 transition-colors'}
                     >
                         {m.pricing}
+                    </Link>
+                    <Link
+                        href="/blog"
+                        className={active === 'blog' ? 'text-blue-600 font-semibold' : 'hover:text-gray-900 transition-colors'}
+                    >
+                        {m.blog}
                     </Link>
                     <Link href="/#testimonials" className="hover:text-gray-900 transition-colors">{m.reviews}</Link>
                     <Link href="/contact" className="hover:text-gray-900 transition-colors">{m.contact}</Link>
@@ -69,6 +75,13 @@ export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
                         onClick={() => setMobileMenuOpen(false)}
                     >
                         {m.pricing}
+                    </Link>
+                    <Link
+                        href="/blog"
+                        className={`${navLinkCls} ${active === 'blog' ? 'text-blue-600 font-semibold' : ''}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                    >
+                        {m.blog}
                     </Link>
                     <Link href="/#testimonials" className={navLinkCls} onClick={() => setMobileMenuOpen(false)}>{m.reviews}</Link>
                     <Link href="/contact" className={navLinkCls} onClick={() => setMobileMenuOpen(false)}>{m.contact}</Link>

@@ -1,4 +1,24 @@
 export const marketingMessages = {
+        blog: {
+            title: "Blog",
+            description: "Panduan, kemas kini produk dan nota tentang mengurus kedai",
+            heading: "Blog ERP71",
+            subheading: "Penulisan praktikal untuk pemilik kedai — stok, tunai, kakitangan dan perisian di antaranya.",
+            empty: "Tiada catatan lagi. Sila kembali kemudian.",
+            readMore: "Baca",
+            minRead: "{minutes} minit bacaan",
+            allPosts: "Semua catatan",
+            backToBlog: "Kembali ke blog",
+            publishedOn: "Diterbitkan {date}",
+            updatedOn: "Dikemas kini {date}",
+            by: "Oleh {author}",
+            notFoundTitle: "Catatan ini tiada",
+            notFoundBody: "Ia mungkin telah dibuang atau pautan sudah lapuk.",
+            newer: "Lebih baharu",
+            older: "Lebih lama",
+            rss: "Suapan RSS",
+        },
+
         home: {
             preview: {
                 url: "app.erp71.com/dashboard",

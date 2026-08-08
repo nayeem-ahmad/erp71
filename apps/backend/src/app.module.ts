@@ -108,6 +108,8 @@ import { SupportModule } from './support/support.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { DemoDataModule } from './demo-data/demo-data.module';
 import { ShortLinksModule } from './short-links/short-links.module';
+import { BlogModule } from './blog/blog.module';
+import { TenantBlogModule } from './tenant-blog/tenant-blog.module';
 
 @Module({
     imports: [
@@ -219,6 +221,8 @@ import { ShortLinksModule } from './short-links/short-links.module';
         ReferralsModule,
         DemoDataModule,
         ShortLinksModule,
+        BlogModule,
+        TenantBlogModule,
     ],
     controllers: [],
     providers: [

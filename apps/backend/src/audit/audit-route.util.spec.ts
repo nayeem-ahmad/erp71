@@ -48,6 +48,45 @@ describe('resolveAuditTarget', () => {
         });
     });
 
+    it('strips the admin routing prefix so platform rows keep a usable entity', () => {
+        expect(
+            resolveAuditTarget({ method: 'DELETE', path: '/api/v1/admin/short-links/:id', params: { id: 'l1' } }),
+        ).toEqual({ entity: 'short-links', action: 'short-links.delete', entityId: 'l1' });
+
+        expect(
+            resolveAuditTarget({
+                method: 'PATCH',
+                path: '/api/v1/admin/tenants/:tenantId/messaging-identity',
+                params: { tenantId: 't1' },
+            }),
+        ).toEqual({
+            entity: 'tenants',
+            action: 'tenants.messaging-identity.update',
+            entityId: 't1',
+        });
+    });
+
+    it('does not mistake a long hyphenated resource name for an opaque id', () => {
+        // `platform-settings` is 17 chars of [a-z-], which OPAQUE_ID_RE matches.
+        // As the entity segment that would make the whole route unattributable
+        // and the mutation would go unrecorded.
+        expect(
+            resolveAuditTarget({ method: 'PUT', path: '/api/v1/admin/platform-settings/email' }),
+        ).toEqual({
+            entity: 'platform-settings',
+            action: 'platform-settings.email.update',
+            entityId: undefined,
+        });
+    });
+
+    it('keeps a bare /admin path attributable rather than dropping it to nothing', () => {
+        expect(resolveAuditTarget({ method: 'POST', path: '/api/v1/admin' })).toEqual({
+            entity: 'admin',
+            action: 'admin.create',
+            entityId: undefined,
+        });
+    });
+
     it('reads ids positionally when handed a concrete URL instead of a route template', () => {
         const uuid = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
         expect(resolveAuditTarget({ method: 'PATCH', path: `/api/v1/customers/${uuid}` })).toEqual({
