@@ -250,4 +250,80 @@ describe('BoardColumnsService column CRUD', () => {
         db.boardColumn.findFirst.mockResolvedValue(null);
         await expect(service.deleteColumn(tenantId, 'b1', 'c2')).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('deletes a column that belongs to this board', async () => {
+        await service.deleteColumn(tenantId, 'b1', 'c2');
+        expect(db.boardColumn.delete).toHaveBeenCalledWith({ where: { id: 'c2' } });
+    });
+
+    it('uses the given sortOrder instead of appending after the last column', async () => {
+        await service.createColumn(tenantId, 'b1', { name: 'Blocked', category: 'TODO', sortOrder: 0 });
+
+        expect(db.boardColumn.aggregate).not.toHaveBeenCalled();
+        expect(db.boardColumn.create).toHaveBeenCalledWith({
+            data: {
+                tenant_id: tenantId,
+                board_id: 'b1',
+                name: 'Blocked',
+                category: 'TODO',
+                sort_order: 0,
+                wip_limit: null,
+            },
+        });
+    });
+
+    it('constrains the status lookup in setBindings to this tenant', async () => {
+        await service.setBindings(tenantId, 'b1', 'c2', ['s1', 's2']);
+
+        expect(db.projectTaskStatus.findMany).toHaveBeenCalledWith({
+            where: { id: { in: ['s1', 's2'] }, tenant_id: tenantId },
+            select: { id: true },
+        });
+    });
+
+    it('maps every updateColumn field to its snake_case column', async () => {
+        await service.updateColumn(tenantId, 'b1', 'c2', {
+            name: 'Renamed',
+            category: 'DONE',
+            sortOrder: 2,
+            wipLimit: 5,
+        });
+
+        expect(db.boardColumn.update).toHaveBeenCalledWith({
+            where: { id: 'c2' },
+            data: {
+                name: 'Renamed',
+                category: 'DONE',
+                sort_order: 2,
+                wip_limit: 5,
+            },
+        });
+    });
+
+    it('omits fields that were not supplied rather than sending them as undefined', async () => {
+        await service.updateColumn(tenantId, 'b1', 'c2', { name: 'Renamed' });
+
+        expect(db.boardColumn.update).toHaveBeenCalledWith({
+            where: { id: 'c2' },
+            data: { name: 'Renamed' },
+        });
+        const data = db.boardColumn.update.mock.calls[0][0].data;
+        expect(Object.keys(data)).toEqual(['name']);
+    });
+
+    it('clears a WIP limit by sending wip_limit: null, not by dropping the field', async () => {
+        await service.updateColumn(tenantId, 'b1', 'c2', { wipLimit: null });
+
+        expect(db.boardColumn.update).toHaveBeenCalledWith({
+            where: { id: 'c2' },
+            data: { wip_limit: null },
+        });
+    });
+
+    it('refuses to update a column belonging to a different board', async () => {
+        db.boardColumn.findFirst.mockResolvedValue(null);
+        await expect(service.updateColumn(tenantId, 'b1', 'c2', { name: 'X' })).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+    });
 });
