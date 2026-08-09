@@ -19,7 +19,8 @@
 - All user-visible strings go through the i18n catalog and must be added to **all three** locales (`en`, `bn`, `ms`) in the same commit — `apps/frontend/src/lib/localization/messages/catalog.test.ts` fails otherwise.
 - Money via `formatBDT()`; never a literal `$`.
 - Notifications go through the global `toast` store; validation errors render inline.
-- Backend tests: `npm test -w @erp71/backend`. Frontend tests: `npm test -w @erp71/frontend`. Both jest configs map `@erp71/shared-types` straight to source, so tests never need a package build.
+- Backend tests: `npm test -w @erp71/backend`. Frontend tests: `npm test -w @erp71/frontend`. Shared-types tests: `npm test -w @erp71/shared-types` (the runner is added in Task 1). Backend and frontend jest configs map `@erp71/shared-types` straight to source, so tests never need a package build.
+- `packages/shared-types` had **no test runner at all** before this plan — its two existing test files (`phone.test.ts`, `subscription-plans.test.ts`, 23 tests) matched neither app's jest config and had never run. Task 1 adds the runner; those 23 tests must pass alongside the new ones.
 - The **frontend dev server and production build** resolve `@erp71/shared-types` through `dist`. After changing that package run `npm run build -w @erp71/shared-types`.
 - Do not run `prisma migrate dev` — the local database has no `_prisma_migrations` table. Commit the migration folder and apply the SQL directly, then `npm run generate -w @erp71/database`.
 - Update `TODO.md` when the plan is complete (see Task 12).
@@ -34,6 +35,7 @@
 | ---- | -------------- |
 | `packages/shared-types/campaign-rows.ts` | Row shape, the 1,000-row cap, and the one validator both apps call |
 | `packages/shared-types/campaign-rows.test.ts` | Validator tests |
+| `packages/shared-types/jest.config.js` | The runner this package has been missing |
 | `packages/database/prisma/migrations/20260809120000_crm_campaign_upload_lists/migration.sql` | Schema migration |
 | `apps/backend/src/crm-campaigns/campaign-body.util.ts` | Turning a stored message into email HTML per `body_format` |
 | `apps/backend/src/crm-campaigns/campaign-body.util.spec.ts` | Body rendering tests |
@@ -52,6 +54,7 @@
 | File | Change |
 | ---- | ------ |
 | `packages/shared-types/index.ts` | Re-export `campaign-rows` |
+| `packages/shared-types/package.json` | `test` script and jest devDependencies |
 | `packages/database/prisma/schema.prisma` | `CrmCampaign` and `CrmCampaignRecipient` columns; back-relations on `Lead` and `CrmContact` |
 | `apps/backend/src/crm-campaigns/crm-campaigns.dto.ts` | `recipient_source`, `body_format`, `rows[]`, optional `message` |
 | `apps/backend/src/crm-campaigns/crm-campaigns.service.ts` | Upload-aware `create`, `cancel`, live progress in `findOne`, `send` delegates to dispatch; the old inline dispatcher and cron move out |
@@ -73,11 +76,50 @@ The single source of truth for what a valid uploaded row is. Both the browser pr
 **Files:**
 - Create: `packages/shared-types/campaign-rows.ts`
 - Create: `packages/shared-types/campaign-rows.test.ts`
+- Create: `packages/shared-types/jest.config.js`
 - Modify: `packages/shared-types/index.ts`
+- Modify: `packages/shared-types/package.json`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `CAMPAIGN_UPLOAD_MAX_ROWS: 1000`, `RawCampaignRow`, `ValidCampaignRow`, `CampaignRowIssue`, `CampaignRowsResult`, `validateCampaignRows(raw: RawCampaignRow[]): CampaignRowsResult`. Tasks 4 and 10 both call `validateCampaignRows`.
+
+- [ ] **Step 0: Give the package a test runner**
+
+`packages/shared-types` has never had one — `phone.test.ts` and `subscription-plans.test.ts` match neither app's jest config, so their 23 tests have never run. Wire them up first, so the tests you write next actually execute.
+
+Create `packages/shared-types/jest.config.js`:
+
+```js
+module.exports = {
+    moduleFileExtensions: ['js', 'json', 'ts'],
+    rootDir: '.',
+    testRegex: '.*\\.test\\.ts$',
+    transform: {
+        '^.+\\.ts$': ['ts-jest', { diagnostics: { warnOnly: true } }],
+    },
+    testEnvironment: 'node',
+    testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+};
+```
+
+In `packages/shared-types/package.json`, add a `test` script beside `build`:
+
+```json
+    "test": "jest",
+```
+
+and add the two runners to `devDependencies`:
+
+```json
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+```
+
+Run: `npm install` from the repo root, then `npm test -w @erp71/shared-types`
+Expected: `Tests: 23 passed, 23 total` across 2 suites. Root `npm test` now picks this workspace up through its existing `--if-present` loop.
+
+If any of the 23 pre-existing tests fails, stop and report it — that is a pre-existing bug this plan did not cause, and the human decides whether to fix it here.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -174,7 +216,7 @@ describe('validateCampaignRows', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -w @erp71/backend -- campaign-rows`
+Run: `npm test -w @erp71/shared-types -- campaign-rows`
 Expected: FAIL — `Cannot find module './campaign-rows'`.
 
 - [ ] **Step 3: Write the implementation**
@@ -296,8 +338,8 @@ export * from './campaign-rows';
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npm test -w @erp71/backend -- campaign-rows`
-Expected: PASS, 10 tests.
+Run: `npm test -w @erp71/shared-types`
+Expected: PASS — 3 suites, 33 tests (the 10 new ones plus the 23 that were previously orphaned).
 
 - [ ] **Step 5: Rebuild the package so the frontend build can see it**
 
@@ -307,8 +349,11 @@ Expected: exits 0 and `packages/shared-types/dist/campaign-rows.js` exists.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/shared-types/campaign-rows.ts packages/shared-types/campaign-rows.test.ts packages/shared-types/index.ts packages/shared-types/dist
-git commit -m "feat(crm): shared validator for uploaded campaign rows"
+git add packages/shared-types package-lock.json
+git commit -m "feat(crm): shared validator for uploaded campaign rows
+
+Also gives packages/shared-types the jest runner it never had, so its two
+existing test files stop being dead weight."
 ```
 
 ---
@@ -3440,8 +3485,8 @@ Add any follow-up work the build surfaced to the appropriate priority section �
 
 - [ ] **Step 2: Run the full suite one last time**
 
-Run: `npm test -w @erp71/backend && npm test -w @erp71/frontend && npm run build -w @erp71/backend && npm run build -w @erp71/frontend`
-Expected: all four exit 0.
+Run: `npm test -w @erp71/shared-types && npm test -w @erp71/backend && npm test -w @erp71/frontend && npm run build -w @erp71/backend && npm run build -w @erp71/frontend`
+Expected: all five exit 0.
 
 - [ ] **Step 3: Commit and push**
 
