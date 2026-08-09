@@ -1953,16 +1953,17 @@ model Lead {
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt
 
-  tenant            Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  assignee          User?               @relation("LeadAssignee", fields: [assigned_to], references: [id])
-  nextStepAssignee  User?               @relation("LeadNextStepAssignee", fields: [next_step_assigned_to], references: [id])
-  creator           User?               @relation("LeadCreator", fields: [created_by], references: [id])
-  convertedCustomer Customer?           @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
-  sourceOption      LeadSourceOption?   @relation(fields: [source_id], references: [id], onDelete: Restrict)
-  categoryOption    LeadCategoryOption? @relation(fields: [category_id], references: [id], onDelete: Restrict)
-  conversations     LeadConversation[]
-  crmFollowUps      CrmFollowUp[]
-  projects          Project[]
+  tenant             Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee           User?                  @relation("LeadAssignee", fields: [assigned_to], references: [id])
+  nextStepAssignee   User?                  @relation("LeadNextStepAssignee", fields: [next_step_assigned_to], references: [id])
+  creator            User?                  @relation("LeadCreator", fields: [created_by], references: [id])
+  convertedCustomer  Customer?              @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
+  sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
+  categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  conversations      LeadConversation[]
+  crmFollowUps       CrmFollowUp[]
+  projects           Project[]
+  campaignRecipients CrmCampaignRecipient[]
 
   @@unique([tenant_id, mobile])
   @@index([tenant_id, status])
@@ -2064,10 +2065,11 @@ model CrmContact {
   created_at     DateTime                @default(now())
   updated_at     DateTime                @updatedAt
 
-  tenant      Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  assignee    User?                  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
-  creator     User?                  @relation("CrmContactCreator", fields: [created_by], references: [id])
-  attachments CrmContactAttachment[]
+  tenant             Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee           User?                  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
+  creator            User?                  @relation("CrmContactCreator", fields: [created_by], references: [id])
+  attachments        CrmContactAttachment[]
+  campaignRecipients CrmCampaignRecipient[]
 
   // Mobile is the dedupe key, as it is on Lead. Postgres treats NULLs as
   // distinct, so any number of contacts may have no mobile at all.
@@ -2260,10 +2262,16 @@ model CrmCampaign {
   description        String?
   status             String    @default("DRAFT")
   channel            String // SMS | WHATSAPP | EMAIL
+  /// SEGMENT resolves recipients from the customer base at send time.
+  /// UPLOAD carries its own recipient rows, written when the campaign is created.
+  recipient_source   String    @default("SEGMENT")
+  /// TEXT escapes the message and turns newlines into breaks; HTML sends it as-is.
+  body_format        String    @default("TEXT")
   target_segment     String? // VIP | At-Risk | Regular | New | ALL
   target_group_id    String?
-  subject            String? // required for EMAIL channel
-  message            String
+  subject            String? // required for EMAIL channel with recipient_source SEGMENT
+  /// Null for UPLOAD campaigns, where every recipient carries its own message.
+  message            String?
   scheduled_at       DateTime?
   sent_at            DateTime?
   recipient_count    Int       @default(0)
@@ -2286,17 +2294,33 @@ model CrmCampaign {
 model CrmCampaignRecipient {
   id          String    @id @default(uuid())
   campaign_id String
-  customer_id String
-  phone       String
+  /// All three links are optional: an uploaded address may match a customer, a
+  /// lead, a contact, or none of them. At most one is set.
+  customer_id String?
+  lead_id     String?
+  contact_id  String?
+  /// Null on SMS/WhatsApp segment campaigns, which reach people by phone.
+  phone       String?
+  /// The address actually emailed. Null on SMS/WhatsApp segment campaigns.
+  email       String?
+  name        String?
+  /// Set only on UPLOAD campaigns; segment campaigns fall back to the campaign's own.
+  subject     String?
+  message     String?
   status      String    @default("PENDING")
   sent_at     DateTime?
   error       String?
 
   campaign CrmCampaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  customer Customer    @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  customer Customer?   @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  lead     Lead?       @relation(fields: [lead_id], references: [id], onDelete: SetNull)
+  contact  CrmContact? @relation(fields: [contact_id], references: [id], onDelete: SetNull)
 
   @@unique([campaign_id, customer_id])
+  @@unique([campaign_id, email])
   @@index([campaign_id, status])
+  @@index([lead_id])
+  @@index([contact_id])
 }
 
 model AccountGroup {
