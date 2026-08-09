@@ -21,7 +21,7 @@
 - Notifications go through the global `toast` store; validation errors render inline.
 - Backend tests: `npm test -w @erp71/backend`. Frontend tests: `npm test -w @erp71/frontend`. Shared-types tests: `npm test -w @erp71/shared-types` (the runner is added in Task 1). Backend and frontend jest configs map `@erp71/shared-types` straight to source, so tests never need a package build.
 - `packages/shared-types` had **no test runner at all** before this plan — its two existing test files (`phone.test.ts`, `subscription-plans.test.ts`, 23 tests) matched neither app's jest config and had never run. Task 1 adds the runner; those 23 tests must pass alongside the new ones.
-- The **frontend dev server and production build** resolve `@erp71/shared-types` through `dist`. After changing that package run `npm run build -w @erp71/shared-types`.
+- The **frontend dev server and local production build** resolve `@erp71/shared-types` through `dist`, which is git-ignored (`.gitignore:22`) — so after changing that package run `npm run build -w @erp71/shared-types` locally. Nothing to commit; the frontend Dockerfile rebuilds the package during the image build.
 - Do not run `prisma migrate dev` — the local database has no `_prisma_migrations` table. Commit the migration folder and apply the SQL directly, then `npm run generate -w @erp71/database`.
 - Update `TODO.md` when the plan is complete (see Task 12).
 
