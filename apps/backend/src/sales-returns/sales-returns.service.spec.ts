@@ -22,6 +22,11 @@ describe('SalesReturnsService', () => {
     jest.clearAllMocks();
     db = {
       $transaction: jest.fn().mockImplementation(async (cb) => cb(db)),
+      // resolveProductCosts runs on the create and edit paths to cost the
+      // returned goods. No settings row and no pool is the common case.
+      inventorySettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      productCost: { findMany: jest.fn().mockResolvedValue([]) },
+      productPrice: { findMany: jest.fn().mockResolvedValue([]) },
       sale: {
           findUnique: jest.fn()
       },
@@ -206,6 +211,11 @@ describe('SalesReturnsService — returns without a sale', () => {
     jest.clearAllMocks();
     db = {
       $transaction: jest.fn().mockImplementation(async (cb) => cb(db)),
+      // resolveProductCosts runs on the create and edit paths to cost the
+      // returned goods. No settings row and no pool is the common case.
+      inventorySettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      productCost: { findMany: jest.fn().mockResolvedValue([]) },
+      productPrice: { findMany: jest.fn().mockResolvedValue([]) },
       sale: { findUnique: jest.fn() },
       product: { findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }) },
       salesReturn: { create: jest.fn().mockResolvedValue({ id: 'ret-1', return_number: 'RET-1', total_refund: 250, items: [] }) },

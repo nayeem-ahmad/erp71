@@ -79,7 +79,12 @@ export class ProductsService {
                     movementType: 'INITIAL_STOCK',
                     referenceType: 'PRODUCT',
                     referenceId: product.id,
-                    unitCost: dto.price,
+                    // Opening stock seeds the weighted-average pool, so this has
+                    // to be what the goods cost. It used to pass dto.price — the
+                    // *selling* price — which started every new product's
+                    // average at retail and reported its first sales at zero
+                    // margin. Omitted when unknown: no basis beats a wrong one.
+                    unitCost: dto.cost,
                 });
             }
 

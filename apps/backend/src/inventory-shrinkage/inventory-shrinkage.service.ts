@@ -37,7 +37,10 @@ export class InventoryShrinkageService {
                     movementType: 'SHRINKAGE',
                     referenceType: 'INVENTORY_SHRINKAGE',
                     referenceId: referenceNumber,
-                    unitCost: Number(productsById.get(item.productId)?.price ?? 0),
+                    // No unitCost: written-off stock leaves at the weighted
+                    // average, which the movement is stamped with. This used to
+                    // pass the product's *selling* price, overstating every
+                    // shrinkage write-off by the whole margin on it.
                     note: item.note,
                 });
             }

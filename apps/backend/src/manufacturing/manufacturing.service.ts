@@ -4,6 +4,7 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, CreateJobCostDto, WastageItemDto } from './manufacturing.dto';
 import { applyInventoryMovement, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { resolveProductCosts } from '../database/product-cost.utils';
 
 @Injectable()
 export class ManufacturingService {
@@ -318,20 +319,17 @@ export class ManufacturingService {
         });
     }
 
-    /** Latest known cost price per product (tenant-wide, most recently effective). */
+    /**
+     * What each product costs, on whatever basis the tenant has configured —
+     * the weighted-average pool by default, the price list under LATEST_COST.
+     *
+     * This used to read `ProductPrice.cost` directly, which meant a job valued
+     * its raw materials at a standard cost while the stock those materials came
+     * out of was held at a real one. The two disagreed, and the difference
+     * landed in the finished goods' cost.
+     */
     private async getCostMap(tenantId: string, productIds: string[]): Promise<Map<string, number>> {
-        const prices = await this.db.productPrice.findMany({
-            where: { tenant_id: tenantId, product_id: { in: productIds }, cost: { not: null } },
-            orderBy: { effective_from: 'desc' },
-            select: { product_id: true, cost: true },
-        });
-        const costByProductId = new Map<string, number>();
-        for (const p of prices) {
-            if (!costByProductId.has(p.product_id)) {
-                costByProductId.set(p.product_id, Number(p.cost));
-            }
-        }
-        return costByProductId;
+        return resolveProductCosts(this.db, { tenantId, productIds });
     }
 
     async completeJob(tenantId: string, id: string, wastage: WastageItemDto[] = []) {
@@ -408,18 +406,7 @@ export class ManufacturingService {
                 materialCost += w.quantity * (costMap.get(w.productId) ?? 0);
             }
 
-            // Increment output product's stock
             const outputQty = job.quantity * recipe.outputQty;
-            await applyInventoryMovement(tx, {
-                tenantId,
-                productId: job.productId,
-                warehouseId,
-                quantityDelta: outputQty,
-                movementType: 'MANUFACTURING_OUTPUT',
-                referenceType: 'PRODUCTION_JOB',
-                referenceId: id,
-                unitCost: costMap.get(job.productId),
-            });
 
             // Snapshot raw-material cost as a job cost line so it rolls up alongside
             // any printing/binding/transport/labor costs already recorded on the job,
@@ -436,7 +423,29 @@ export class ManufacturingService {
                 });
             }
 
+            // Totalled before the output movement, because that movement is what
+            // puts the finished goods into the cost pool and it needs to know
+            // what they cost to make.
             const { totalJobCost, costPerUnit } = await this.recomputeJobCostTotals(tx, tenantId, id, outputQty);
+
+            // Increment output product's stock, valued at what this job actually
+            // cost per unit — materials consumed plus printing, binding,
+            // transport and labour. It used to enter at the output product's own
+            // price-list cost, which is a number someone typed into the catalog
+            // and has nothing to do with this production run.
+            await applyInventoryMovement(tx, {
+                tenantId,
+                productId: job.productId,
+                warehouseId,
+                quantityDelta: outputQty,
+                movementType: 'MANUFACTURING_OUTPUT',
+                referenceType: 'PRODUCTION_JOB',
+                referenceId: id,
+                // A job with no cost lines at all values nothing: better to leave
+                // the finished goods on the pool's existing basis than to book
+                // them in at zero.
+                unitCost: costPerUnit > 0 ? costPerUnit : undefined,
+            });
 
             // Mark job as completed
             return tx.productionJob.update({

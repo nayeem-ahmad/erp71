@@ -50,17 +50,6 @@ export class ProjectTasksController {
         return this.tasks.list(tenant.tenantId, query);
     }
 
-    /** Both board modes come from here — scrum passes a sprintId, kanban does not. */
-    @Get('board/:projectId')
-    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    board(
-        @Tenant() tenant: TenantContext,
-        @Param('projectId') projectId: string,
-        @Query('sprintId') sprintId?: string,
-    ) {
-        return this.tasks.board(tenant.tenantId, projectId, sprintId || undefined);
-    }
-
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTaskDto) {

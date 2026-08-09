@@ -300,32 +300,6 @@ describe('ProjectTasksService', () => {
         });
     });
 
-    describe('board', () => {
-        it('groups tasks under their column without a query per column', async () => {
-            db.projectTask.findMany.mockResolvedValue([
-                { id: 'task-1', status_id: todo.id },
-                { id: 'task-2', status_id: done.id },
-            ]);
-
-            const board = await service.board('tenant-1', 'project-1');
-
-            expect(db.projectTask.findMany).toHaveBeenCalledTimes(1);
-            expect(board.columns).toHaveLength(3);
-            expect(board.columns[0].tasks.map((t: any) => t.id)).toEqual(['task-1']);
-            expect(board.columns[2].tasks.map((t: any) => t.id)).toEqual(['task-2']);
-        });
-
-        it('narrows to a sprint in scrum mode', async () => {
-            await service.board('tenant-1', 'project-1', 'sprint-1');
-
-            expect(db.projectTask.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: expect.objectContaining({ sprint_id: 'sprint-1' }),
-                }),
-            );
-        });
-    });
-
     describe('labels', () => {
         it('replaces the whole set: clears first, then writes what was sent', async () => {
             db.projectLabel.count.mockResolvedValue(2);
@@ -567,13 +541,6 @@ describe('ProjectTasksService', () => {
     });
 
     describe('per-project columns and covers', () => {
-        it('asks for the project’s own columns when building its board', async () => {
-            const settings = (service as any).settings;
-            await service.board('tenant-1', 'project-1');
-
-            expect(settings.listTaskStatuses).toHaveBeenCalledWith('tenant-1', false, 'project-1');
-        });
-
         // Columns belong to a project now, so a status id from another board
         // would put the card somewhere nobody on this one can see.
         it('refuses a column that belongs to another project', async () => {
@@ -606,35 +573,6 @@ describe('ProjectTasksService', () => {
                     statusId: todo.id,
                 } as never),
             ).resolves.toBeDefined();
-        });
-
-        // The failure this prevents is total: production applies the schema with
-        // `prisma db push`, so 3L's data migration never runs there, and a task
-        // left on a template column matches nothing — the board renders empty.
-        it('heals a board whose tasks are still on the tenant template', async () => {
-            const settings = (service as any).settings;
-            settings.adoptTasksFromTemplate = jest.fn().mockResolvedValue(undefined);
-            db.projectTask.findMany.mockResolvedValue([
-                { id: 'task-1', status_id: 'template-status' },
-            ]);
-
-            await service.board('tenant-1', 'project-1');
-
-            expect(settings.adoptTasksFromTemplate).toHaveBeenCalledWith('tenant-1', 'project-1');
-            // Re-read, so the caller gets the healed board rather than the
-            // empty one that triggered the repair.
-            expect(db.projectTask.findMany).toHaveBeenCalledTimes(2);
-        });
-
-        it('does not repair a board whose tasks are already on its own columns', async () => {
-            const settings = (service as any).settings;
-            settings.adoptTasksFromTemplate = jest.fn().mockResolvedValue(undefined);
-            db.projectTask.findMany.mockResolvedValue([{ id: 'task-1', status_id: todo.id }]);
-
-            await service.board('tenant-1', 'project-1');
-
-            expect(settings.adoptTasksFromTemplate).not.toHaveBeenCalled();
-            expect(db.projectTask.findMany).toHaveBeenCalledTimes(1);
         });
 
         it('stores a cover colour', async () => {

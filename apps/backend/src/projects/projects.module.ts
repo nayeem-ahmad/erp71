@@ -2,10 +2,13 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AssetsModule } from '../assets/assets.module';
+import { BoardsController } from './boards.controller';
 import { ProjectsController } from './projects.controller';
 import { ProjectTasksController } from './project-tasks.controller';
 import { ProjectTimeController } from './project-time.controller';
 import { SprintsController } from './sprints.controller';
+import { BoardsService } from './boards.service';
+import { BoardColumnsService } from './board-columns.service';
 import { ProjectsService } from './projects.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
@@ -21,6 +24,9 @@ import { ProjectsScheduler } from './projects.scheduler';
 @Module({
     imports: [DatabaseModule, NotificationsModule, AssetsModule],
     controllers: [
+        // First: `/projects/boards` would otherwise be captured by
+        // ProjectsController's `:id` route.
+        BoardsController,
         ProjectsController,
         ProjectTasksController,
         ProjectTimeController,
@@ -28,6 +34,8 @@ import { ProjectsScheduler } from './projects.scheduler';
     ],
     providers: [
         ProjectsService,
+        BoardsService,
+        BoardColumnsService,
         ProjectTasksService,
         ProjectTimeService,
         ProjectSettingsService,

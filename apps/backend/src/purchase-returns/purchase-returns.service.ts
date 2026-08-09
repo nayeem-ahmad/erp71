@@ -240,6 +240,10 @@ export class PurchaseReturnsService {
                         movementType: 'PURCHASE_RETURN_REVERSAL',
                         referenceType: 'PURCHASE_RETURN',
                         referenceId: id,
+                        // Goods rejoin the average at the cost they left at, so
+                        // editing a purchase return nets to zero against the
+                        // PURCHASE_RETURN that created it.
+                        unitCost: Number(oldItem.unit_cost),
                     });
                 }
 
@@ -305,6 +309,9 @@ export class PurchaseReturnsService {
                     movementType: 'PURCHASE_RETURN_DELETE',
                     referenceType: 'PURCHASE_RETURN',
                     referenceId: id,
+                    // Same symmetry as the edit path above: deleting the return
+                    // must put back exactly the value it took out.
+                    unitCost: Number(item.unit_cost),
                 });
             }
 

@@ -164,11 +164,6 @@ export default function ProjectDetailPage() {
                                 {m.editProject}
                             </Button>
                         </Link>
-                        <Link href={routes.projects.board(projectId)}>
-                            <Button variant="secondary" className="min-h-touch">
-                                {m.tabs.board}
-                            </Button>
-                        </Link>
                         <Button className="min-h-touch" onClick={() => setCreating(true)}>
                             <Plus className="h-4 w-4" />
                             {m.task.newTask}

@@ -10,7 +10,11 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import {
     GetBranchReportDto,
     GetConsolidatedReportDto,
+    GetCostCoverageDto,
     GetCustomerRetentionDto,
+    GetGrossProfitBySalespersonDto,
+    GetMarginBridgeDto,
+    GetMarginExceptionsDto,
     GetMonthlySalesByCustomerDto,
     GetReturnsAnalysisDto,
     GetSalesBreakdownDto,
@@ -93,5 +97,43 @@ export class SalesReportsController {
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
     getCustomerRetention(@Tenant() tenant: TenantContext, @Query() query: GetCustomerRetentionDto) {
         return this.service.getCustomerRetention(tenant.tenantId, query);
+    }
+
+    // ── Gross profit ─────────────────────────────────────────────────────────
+    // All behind VIEW_FINANCIAL_REPORTS: these expose what the business pays
+    // for its stock, which is not the same thing as what it sells it for and
+    // should not follow the same permission.
+
+    @Get('gross-profit/by-product')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getGrossProfitByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
+        return this.service.getGrossProfitByProduct(tenant.tenantId, query);
+    }
+
+    @Get('gross-profit/by-salesperson')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getGrossProfitBySalesperson(
+        @Tenant() tenant: TenantContext,
+        @Query() query: GetGrossProfitBySalespersonDto,
+    ) {
+        return this.service.getGrossProfitBySalesperson(tenant.tenantId, query);
+    }
+
+    @Get('gross-profit/exceptions')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getMarginExceptions(@Tenant() tenant: TenantContext, @Query() query: GetMarginExceptionsDto) {
+        return this.service.getMarginExceptions(tenant.tenantId, query);
+    }
+
+    @Get('gross-profit/bridge')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getMarginBridge(@Tenant() tenant: TenantContext, @Query() query: GetMarginBridgeDto) {
+        return this.service.getMarginBridge(tenant.tenantId, query);
+    }
+
+    @Get('gross-profit/cost-coverage')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getCostCoverage(@Tenant() tenant: TenantContext, @Query() query: GetCostCoverageDto) {
+        return this.service.getCostCoverage(tenant.tenantId, query);
     }
 }

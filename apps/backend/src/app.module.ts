@@ -111,6 +111,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
 import { ShortLinksModule } from './short-links/short-links.module';
 import { BlogModule } from './blog/blog.module';
 import { TenantBlogModule } from './tenant-blog/tenant-blog.module';
+import { SocialMediaModule } from './social-media/social-media.module';
 
 @Module({
     imports: [
@@ -225,6 +226,7 @@ import { TenantBlogModule } from './tenant-blog/tenant-blog.module';
         ShortLinksModule,
         BlogModule,
         TenantBlogModule,
+        SocialMediaModule,
     ],
     controllers: [],
     providers: [
