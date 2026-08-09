@@ -353,6 +353,7 @@ model User {
   authoredTenantBlogPosts           TenantBlogPost[]            @relation("TenantBlogPostAuthor")
   createdBoards                     Board[]                     @relation("BoardCreator")
   addedBoardCards                   BoardTask[]                 @relation("BoardTaskAdder")
+  authoredSocialMediaPosts          SocialMediaPost[]           @relation("SocialMediaPostAuthor")
 
   // Mobile sign-in looks an account up by number on every SMS code entered.
   // Deliberately not unique: one person may own several workspaces under the
@@ -527,6 +528,7 @@ model Tenant {
   productGroups              ProductGroup[]
   productSubgroups           ProductSubgroup[]
   productStocks              ProductStock[]
+  productCosts               ProductCost[]
   inventoryMovements         InventoryMovement[]
   inventoryReasons           InventoryReason[]
   inventorySettings          InventorySettings?
@@ -1113,6 +1115,7 @@ model Product {
   group                  ProductGroup?            @relation(fields: [group_id], references: [id])
   subgroup               ProductSubgroup?         @relation(fields: [subgroup_id], references: [id])
   stocks                 ProductStock[]
+  cost                   ProductCost?
   inventoryMovements     InventoryMovement[]
   transferItems          WarehouseTransferItem[]
   shrinkageItems         InventoryShrinkageItem[]
@@ -1156,6 +1159,46 @@ model ProductStock {
 
   @@unique([tenant_id, product_id, warehouse_id])
   @@index([tenant_id, warehouse_id])
+}
+
+/// The running weighted-average cost of a product, held tenant-wide rather than
+/// per warehouse. One pool per product means a warehouse transfer is a pure
+/// quantity move with no cost effect, and every report agrees on what a unit of
+/// this product cost — at the price of blurring genuinely different buying
+/// prices between branches.
+///
+/// Maintained by `applyCostMovement` inside `applyInventoryMovement`, so every
+/// stock movement in the system keeps it current. Nothing else may write it.
+model ProductCost {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  /// Unique on its own — a Product belongs to exactly one tenant, so one pool
+  /// per product is already one pool per tenant. The composite below is what
+  /// the code upserts against, so tenant scoping stays explicit at every call
+  /// site rather than relying on that argument holding.
+  product_id  String   @unique
+  /// Four decimal places, not two: an average divides, and rounding to paisa at
+  /// every receipt compounds into visible drift over a few hundred movements.
+  /// Callers round for display; the pool stays precise.
+  avg_cost    Decimal  @db.Decimal(12, 4)
+  /// The quantity the average is held against. Kept here rather than summed
+  /// from ProductStock so that the average and the basis it was computed over
+  /// move together in one atomic update — a sum taken separately can be read
+  /// mid-transaction and produce an average that never existed.
+  ///
+  /// Can go negative: `allowNegative` movements let an import book a sale for
+  /// stock that was never received, and the pool has to represent that
+  /// honestly rather than clamp and silently misstate the next receipt.
+  qty_on_hand Int      @default(0)
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, product_id])
+  @@index([tenant_id])
+  @@map("product_costs")
 }
 
 model ProductSerial {
@@ -1231,6 +1274,12 @@ model InventorySettings {
   default_shrinkage_warehouse_id            String?
   default_transfer_source_warehouse_id      String?
   default_transfer_destination_warehouse_id String?
+  /// WEIGHTED_AVERAGE | LATEST_COST — which cost a sale snapshots into
+  /// SaleItem.unit_cost_at_sale, and therefore what every gross-profit report
+  /// is computed from. WEIGHTED_AVERAGE reads the running ProductCost pool;
+  /// LATEST_COST reads the newest ProductPrice.cost, which is what this system
+  /// did before the pool existed.
+  costing_method                            String   @default("WEIGHTED_AVERAGE")
   default_reorder_level                     Int      @default(10)
   default_safety_stock                      Int      @default(0)
   default_lead_time_days                    Int      @default(0)
@@ -2580,14 +2629,23 @@ model SalesReturn {
 }
 
 model SalesReturnItem {
-  id            String  @id @default(uuid())
-  return_id     String
+  id                  String   @id @default(uuid())
+  return_id           String
   /// Null when the return has no parent sale; `product_id` then identifies the
   /// goods and `refund_amount` carries the agreed value.
-  sale_item_id  String?
-  product_id    String
-  quantity      Int
-  refund_amount Decimal @db.Decimal(12, 2)
+  sale_item_id        String?
+  product_id          String
+  quantity            Int
+  refund_amount       Decimal  @db.Decimal(12, 2)
+  /// What the returned goods cost, snapshotted when the return is recorded —
+  /// the original sale line's `unit_cost_at_sale` where there is one, otherwise
+  /// the cost pool's average at the time of return.
+  ///
+  /// Without it a return reduced revenue while leaving COGS untouched, so every
+  /// refund overstated gross profit by the whole cost of the goods coming back.
+  /// Nullable because a return of stock nobody ever costed still has to be
+  /// recordable, and zero would claim the goods were free.
+  unit_cost_at_return Decimal? @db.Decimal(12, 2)
 
   // Relations
   return    SalesReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)
@@ -5814,4 +5872,91 @@ model TenantBlogSettings {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("tenant_blog_settings")
+}
+
+/// Marketing copy the platform posts to its own social accounts.
+///
+/// Platform-owned like `BlogPost` — there is no `tenant_id` because these are
+/// ERP71's own Facebook/LinkedIn/X posts, not a shop's. Publishing is delegated
+/// to Buffer rather than to each network's API: Buffer already holds the page
+/// tokens and the review queue, so the only thing stored here is the copy and
+/// the record of what was handed over.
+model SocialMediaPost {
+  id String @id @default(uuid())
+
+  /// DRAFT | SCHEDULED | PUBLISHED | FAILED — see social-media-status.ts.
+  status String @default("DRAFT")
+
+  /// Internal label for the list view only; never sent to any network.
+  title   String?
+  content String
+
+  /// Appended to the copy by most networks as a link preview. Kept separate
+  /// from `content` so it can be swapped without re-editing the text.
+  link_url String?
+  /// Must be a public URL: Buffer fetches the asset itself and has no upload.
+  image_url String?
+
+  /// Networks this copy is written for — facebook | instagram | linkedin | x |
+  /// threads | pinterest. Advisory: what actually goes out is whichever Buffer
+  /// channels the operator picks at push time.
+  networks String[] @default([])
+
+  scheduled_for DateTime?
+  published_at  DateTime?
+
+  author_user_id String?
+  /// Denormalised for the same reason as BlogPost.author_name — the row should
+  /// keep the name it was written under after that person leaves.
+  author_name    String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  author User?                 @relation("SocialMediaPostAuthor", fields: [author_user_id], references: [id], onDelete: SetNull)
+  pushes SocialMediaPostPush[]
+
+  @@index([status, scheduled_for])
+  @@index([deleted_at])
+  @@map("social_media_posts")
+}
+
+/// One handover of a post to one Buffer channel.
+///
+/// A row per channel rather than a status column on the post: pushing to three
+/// pages can half-fail, and a single field cannot say which page rejected it.
+/// Rows are kept after failure so the error is still readable on the next visit.
+model SocialMediaPostPush {
+  id      String @id @default(uuid())
+  post_id String
+
+  /// buffer — the only provider today, named so a second one does not need a
+  /// migration to tell the rows apart.
+  provider        String  @default("buffer")
+  channel_id      String
+  /// Buffer's own name for the network (facebook, linkedin, …) and the page
+  /// label, both copied at push time so the history reads correctly even after
+  /// the channel is disconnected in Buffer.
+  channel_service String?
+  channel_name    String?
+
+  /// addToQueue | now | next | customScheduled — Buffer's `mode` verbatim.
+  mode   String    @default("addToQueue")
+  due_at DateTime?
+
+  /// SENT | FAILED. There is no PENDING: the Buffer call is synchronous, so a
+  /// row is only written once its outcome is known.
+  status           String  @default("SENT")
+  /// Buffer's post id, which is what makes the queued item findable in Buffer.
+  external_post_id String?
+  error            String?
+
+  created_at DateTime @default(now())
+  created_by String?
+
+  post SocialMediaPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@map("social_media_post_pushes")
 }

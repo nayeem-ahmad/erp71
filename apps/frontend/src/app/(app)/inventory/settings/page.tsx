@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
+import { Coins, Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -49,6 +49,7 @@ export default function InventorySettingsPage() {
                 defaultSafetyStock: settingsData.default_safety_stock ?? 0,
                 defaultLeadTimeDays: settingsData.default_lead_time_days ?? 0,
                 discrepancyApprovalThreshold: settingsData.discrepancy_approval_threshold ?? 25,
+                costingMethod: settingsData.costing_method ?? 'WEIGHTED_AVERAGE',
             });
             setWarehouseForm((current: any) => ({ ...current, storeId: warehouseData[0]?.store_id || '' }));
         } catch (error) {
@@ -251,6 +252,35 @@ export default function InventorySettingsPage() {
                             </div>
                         ))}
                     </div>
+                </section>
+
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <Coins className="w-5 h-5 text-blue-600" />
+                        <h2 className="font-bold text-lg">{t.inventorySettings.costingMethod}</h2>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1" htmlFor="costing-method">
+                                {t.inventorySettings.costingMethodLabel}
+                            </label>
+                            <select
+                                id="costing-method"
+                                value={form.costingMethod}
+                                onChange={(e) => setForm((current: any) => ({ ...current, costingMethod: e.target.value }))}
+                                className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                            >
+                                <option value="WEIGHTED_AVERAGE">{t.inventorySettings.costingWeightedAverage}</option>
+                                <option value="LATEST_COST">{t.inventorySettings.costingLatestCost}</option>
+                            </select>
+                        </div>
+                        <p className="text-xs text-gray-500 md:self-end md:pb-3">
+                            {form.costingMethod === 'LATEST_COST'
+                                ? t.inventorySettings.costingLatestCostHelp
+                                : t.inventorySettings.costingWeightedAverageHelp}
+                        </p>
+                    </div>
+                    <p className="text-xs text-gray-500">{t.inventorySettings.costingMethodNote}</p>
                 </section>
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">

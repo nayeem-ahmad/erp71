@@ -14,7 +14,11 @@ import {
 import {
     GetBranchReportDto,
     GetConsolidatedReportDto,
+    GetCostCoverageDto,
     GetCustomerRetentionDto,
+    GetGrossProfitBySalespersonDto,
+    GetMarginBridgeDto,
+    GetMarginExceptionsDto,
     GetMonthlySalesByCustomerDto,
     GetReturnsAnalysisDto,
     GetSalesBreakdownDto,
@@ -26,6 +30,16 @@ import {
     GetTopMoversDto,
     type SalesBreakdownDimension,
 } from './sales-reports.dto';
+import {
+    groupMargin,
+    marginBridge,
+    returnLines,
+    saleLines,
+    summariseMargin,
+    type MarginLine,
+    type ReturnForMargin,
+    type SaleForMargin,
+} from './gross-profit.utils';
 
 /**
  * Which figures an aggregate was built from. Line-item and invoice totals do
@@ -34,6 +48,25 @@ import {
  * breakdown says which one it used rather than leaving the caller to assume.
  */
 export type RevenueBasis = 'sale_line_items' | 'invoice_totals' | 'payment_records';
+
+/**
+ * Grouping keys for the two buckets that have no id of their own. Sentinels
+ * rather than null keys, because a Map keyed on null collides with a product
+ * that genuinely has no group.
+ */
+const WALK_IN_KEY = '__walkin__';
+const UNCATEGORIZED_KEY = '__uncategorized__';
+const UNATTRIBUTED_KEY = '__unattributed__';
+const WALK_IN_CUSTOMER = { id: null, name: 'Walk-in Customer', phone: null, customer_code: null };
+
+/** Coverage for a bucket that produced no margin lines at all. */
+const EMPTY_COVERAGE = {
+    costedLines: 0,
+    uncostedLines: 0,
+    costedRevenue: 0,
+    uncostedRevenue: 0,
+    costedRevenuePct: null as number | null,
+};
 
 export interface BreakdownRow {
     key: string;
@@ -55,106 +88,241 @@ export interface BreakdownAggregate {
 export class SalesReportsService {
     constructor(private db: DatabaseService) {}
 
-    async getSalesSummary(tenantId: string, query: GetSalesSummaryDto) {
-        const saleDateFilter = buildSaleDateWindow(query.from, query.to);
-        const returnDateFilter = buildReturnDateWindow(query.from, query.to);
-
-        const saleFilter = {
+    /**
+     * Sales and returns in a window, shaped for the margin helpers.
+     *
+     * Every gross-profit report loads the same two things, and each one used to
+     * write its own query — which is how three of them ended up folding an
+     * uncosted line in as free stock while a fourth handled it correctly. One
+     * loader, one shape, one set of rules on top.
+     */
+    private async loadMarginSource(
+        tenantId: string,
+        query: { from?: string; to?: string; storeId?: string },
+    ): Promise<{ sales: SaleForMargin[]; returns: ReturnForMargin[]; rawSales: any[]; rawReturns: any[] }> {
+        const saleWhere = {
             tenant_id: tenantId,
             status: 'COMPLETED',
             ...(query.storeId ? { store_id: query.storeId } : {}),
-            ...saleDateFilter,
+            ...buildSaleDateWindow(query.from, query.to),
         };
 
-        const [sales, returns, saleItems] = await Promise.all([
+        const [rawSales, rawReturns] = await Promise.all([
             this.db.sale.findMany({
-                where: saleFilter,
-                select: { id: true, total_amount: true, sale_date: true },
+                where: saleWhere,
+                select: {
+                    id: true,
+                    serial_number: true,
+                    total_amount: true,
+                    sale_date: true,
+                    store_id: true,
+                    counter_id: true,
+                    created_by: true,
+                    customer_id: true,
+                    customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                    items: {
+                        select: {
+                            product_id: true,
+                            quantity: true,
+                            price_at_sale: true,
+                            unit_cost_at_sale: true,
+                        },
+                    },
+                },
                 orderBy: { sale_date: 'asc' },
             }),
             this.db.salesReturn.findMany({
                 where: {
                     tenant_id: tenantId,
                     ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...returnDateFilter,
+                    ...buildReturnDateWindow(query.from, query.to),
                 },
-                select: { total_refund: true, created_at: true },
-            }),
-            this.db.saleItem.findMany({
-                where: { sale: saleFilter },
                 select: {
-                    quantity: true,
-                    unit_cost_at_sale: true,
-                    sale: { select: { sale_date: true } },
+                    id: true,
+                    created_at: true,
+                    store_id: true,
+                    total_refund: true,
+                    // The customer who is getting the refund is the one on the
+                    // original sale — a return row carries no customer of its
+                    // own, so per-customer margin has to reach through it.
+                    sale: { select: { customer_id: true, counter_id: true, created_by: true } },
+                    items: {
+                        select: {
+                            product_id: true,
+                            quantity: true,
+                            refund_amount: true,
+                            unit_cost_at_return: true,
+                        },
+                    },
                 },
             }),
         ]);
 
-        const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-        const totalReturns = returns.reduce((sum, r) => sum + Number(r.total_refund), 0);
-        const transactionCount = sales.length;
-        const netRevenue = totalRevenue - totalReturns;
+        return {
+            rawSales,
+            rawReturns,
+            sales: rawSales.map((sale: any) => ({
+                id: sale.id,
+                totalAmount: Number(sale.total_amount),
+                items: sale.items.map((item: any) => ({
+                    productId: item.product_id,
+                    quantity: item.quantity,
+                    priceAtSale: Number(item.price_at_sale),
+                    unitCostAtSale: item.unit_cost_at_sale === null ? null : Number(item.unit_cost_at_sale),
+                })),
+            })),
+            returns: rawReturns.map((ret: any) => ({
+                id: ret.id,
+                items: ret.items.map((item: any) => ({
+                    productId: item.product_id,
+                    quantity: item.quantity,
+                    refundAmount: Number(item.refund_amount),
+                    unitCostAtReturn:
+                        item.unit_cost_at_return === null ? null : Number(item.unit_cost_at_return),
+                })),
+            })),
+        };
+    }
+
+    async getSalesSummary(tenantId: string, query: GetSalesSummaryDto) {
+        const { sales, returns, rawSales, rawReturns } = await this.loadMarginSource(tenantId, query);
+
+        const totalRevenue = rawSales.reduce((sum: number, s: any) => sum + Number(s.total_amount), 0);
+        const totalReturns = rawReturns.reduce((sum: number, r: any) => sum + Number(r.total_refund), 0);
+        const transactionCount = rawSales.length;
         const avgOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
-        const totalCogs = (saleItems ?? []).reduce(
-            (sum, i) => sum + (i.unit_cost_at_sale !== null ? Number(i.unit_cost_at_sale) * i.quantity : 0),
-            0,
-        );
-        const grossProfit = netRevenue - totalCogs;
 
-        // Build daily breakdown map
-        const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number; cogs: number }>();
+        // Day is taken in Dhaka time, not UTC: a sale rung up at 1am local falls
+        // on the previous day under toISOString, which puts the evening's takings
+        // in the wrong row for every tenant this product serves.
+        const dayOf = (date: Date) => toDhakaParts(date).date;
+        const saleDay = new Map(rawSales.map((s: any) => [s.id, dayOf(s.sale_date)]));
+        const returnDay = new Map(rawReturns.map((r: any) => [r.id, dayOf(r.created_at)]));
 
-        for (const sale of sales) {
-            const day = sale.sale_date.toISOString().slice(0, 10);
-            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
-            existing.transactions += 1;
-            existing.grossRevenue += Number(sale.total_amount);
-            dayMap.set(day, existing);
-        }
-
+        const lines = [
+            ...saleLines(sales, (_item, sale) => ({
+                key: saleDay.get(sale.id) ?? '',
+                label: saleDay.get(sale.id) ?? '',
+            })),
+        ];
+        // Returns are keyed by their own date, so a refund lands on the day it
+        // was given rather than the day of the sale it reverses.
         for (const ret of returns) {
-            const day = ret.created_at.toISOString().slice(0, 10);
-            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
-            existing.returns += Number(ret.total_refund);
-            dayMap.set(day, existing);
+            const day = returnDay.get(ret.id) ?? '';
+            lines.push(
+                ...returnLines([ret], () => ({ key: day, label: day })),
+            );
         }
 
-        for (const item of (saleItems ?? [])) {
-            const day = item.sale.sale_date.toISOString().slice(0, 10);
-            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
-            existing.cogs += item.unit_cost_at_sale !== null ? Number(item.unit_cost_at_sale) * item.quantity : 0;
-            dayMap.set(day, existing);
+        const totals = summariseMargin(lines);
+        const perDay = groupMargin(lines);
+        const transactionsByDay = new Map<string, number>();
+        for (const day of saleDay.values()) {
+            transactionsByDay.set(day, (transactionsByDay.get(day) ?? 0) + 1);
         }
 
-        const rows = Array.from(dayMap.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, data]) => {
-                const dayNetRevenue = data.grossRevenue - data.returns;
-                const dayGrossProfit = dayNetRevenue - data.cogs;
+        // Invoice totals and refunds per day, kept alongside the margin figures
+        // because the trend report buckets on them and a reader comparing this
+        // to the till expects to see both the gross take and what went back.
+        const grossByDay = new Map<string, number>();
+        for (const sale of rawSales as any[]) {
+            const day = saleDay.get(sale.id)!;
+            grossByDay.set(day, (grossByDay.get(day) ?? 0) + Number(sale.total_amount));
+        }
+        const refundsByDay = new Map<string, number>();
+        for (const ret of rawReturns as any[]) {
+            const day = returnDay.get(ret.id)!;
+            refundsByDay.set(day, (refundsByDay.get(day) ?? 0) + Number(ret.total_refund));
+        }
+
+        // Revenue comes from invoice totals, margin from allocated lines.
+        //
+        // The invoice is what the customer was charged and is authoritative for
+        // the top line; the lines exist to attribute that revenue to products
+        // and costs. `discountRatio` makes the two agree, so this is not two
+        // answers to one question — but where they could ever diverge, the
+        // invoice is the one that matches the till.
+        const dayKeys = new Set([...perDay.map((d) => d.key), ...grossByDay.keys(), ...refundsByDay.keys()]);
+        const marginByDay = new Map(perDay.map((d) => [d.key, d]));
+
+        const rows = [...dayKeys]
+            .map((date) => {
+                const margin = marginByDay.get(date);
+                const grossRevenue = grossByDay.get(date) ?? 0;
+                const returnsForDay = refundsByDay.get(date) ?? 0;
                 return {
                     date,
-                    transactions: data.transactions,
-                    grossRevenue: data.grossRevenue,
-                    returns: data.returns,
-                    netRevenue: dayNetRevenue,
-                    cogs: data.cogs,
-                    grossProfit: dayGrossProfit,
+                    transactions: transactionsByDay.get(date) ?? 0,
+                    grossRevenue,
+                    returns: returnsForDay,
+                    netRevenue: grossRevenue - returnsForDay,
+                    cogs: margin?.cogs ?? 0,
+                    costedRevenue: margin?.coverage.costedRevenue ?? 0,
+                    grossProfit: margin?.grossProfit ?? null,
+                    grossMarginPct: margin?.grossMarginPct ?? null,
+                    coverage: margin?.coverage ?? EMPTY_COVERAGE,
                 };
-            });
+            })
+            .sort((a, b) => a.date.localeCompare(b.date));
 
         return {
             summary: {
                 totalRevenue,
                 totalReturns,
-                netRevenue,
+                netRevenue: totalRevenue - totalReturns,
                 transactionCount,
                 avgOrderValue,
-                totalCogs,
-                grossProfit,
-                grossMarginPct: netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0,
+                totalCogs: totals.cogs,
+                grossProfit: totals.grossProfit,
+                grossMarginPct: totals.grossMarginPct,
+                coverage: totals.coverage,
             },
             rows,
         };
+    }
+
+    /**
+     * Gross profit per product. Groups the same lines every other margin report
+     * is built from, so the totals here reconcile with the summary above.
+     */
+    async getGrossProfitByProduct(tenantId: string, query: GetSalesByProductDto) {
+        const { sales, returns } = await this.loadMarginSource(tenantId, query);
+        const names = await this.productNames(tenantId, [...sales, ...returns]);
+        const label = (productId: string) => names.get(productId) ?? 'Unknown product';
+
+        const lines = [
+            ...saleLines(sales, (item) => ({ key: item.productId, label: label(item.productId) })),
+            ...returnLines(returns, (item) => ({ key: item.productId, label: label(item.productId) })),
+        ];
+
+        const groups = groupMargin(lines);
+        return {
+            summary: summariseMargin(lines),
+            rows: groups.map((g) => ({
+                productId: g.key,
+                productName: g.label,
+                unitsSold: g.units,
+                revenue: g.netRevenue,
+                cogs: g.cogs,
+                grossProfit: g.grossProfit,
+                grossMarginPct: g.grossMarginPct,
+                coverage: g.coverage,
+            })),
+        };
+    }
+
+    /** Product names for every product touched by these sales and returns. */
+    private async productNames(
+        tenantId: string,
+        sources: Array<{ items: Array<{ productId: string }> }>,
+    ): Promise<Map<string, string>> {
+        const ids = [...new Set(sources.flatMap((s) => s.items.map((i) => i.productId)))];
+        if (ids.length === 0) return new Map();
+        const products = await this.db.product.findMany({
+            where: { tenant_id: tenantId, id: { in: ids } },
+            select: { id: true, name: true },
+        });
+        return new Map(products.map((p) => [p.id, p.name]));
     }
 
     async getSalesByProduct(tenantId: string, query: GetSalesByProductDto) {
@@ -246,60 +414,85 @@ export class SalesReportsService {
     }
 
     async getSalesByCategory(tenantId: string, query: GetSalesByCategoryDto) {
-        const dateFilter = buildSaleDateWindow(query.from, query.to);
+        const { sales, returns } = await this.loadMarginSource(tenantId, query);
 
-        const saleItems = await this.db.saleItem.findMany({
-            where: {
-                sale: {
-                    tenant_id: tenantId,
-                    status: 'COMPLETED',
-                    ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...dateFilter,
-                },
-            },
-            select: {
-                quantity: true,
-                price_at_sale: true,
-                product: {
-                    select: {
-                        group_id: true,
-                        group: { select: { id: true, name: true } },
-                    },
-                },
-            },
-        });
+        // Which group each product belongs to. Uncategorised products are a
+        // real bucket, not an error — most catalogs have a long tail of them.
+        const productIds = [
+            ...new Set([...sales, ...returns].flatMap((s) => s.items.map((i) => i.productId))),
+        ];
+        const products = productIds.length
+            ? await this.db.product.findMany({
+                  where: { tenant_id: tenantId, id: { in: productIds } },
+                  select: { id: true, group_id: true, group: { select: { id: true, name: true } } },
+              })
+            : [];
+        const groupOf = new Map(
+            products.map((p) => [
+                p.id,
+                { key: p.group_id ?? UNCATEGORIZED_KEY, label: p.group?.name ?? 'Uncategorized' },
+            ]),
+        );
+        const keyOf = (item: { productId: string }) =>
+            groupOf.get(item.productId) ?? { key: UNCATEGORIZED_KEY, label: 'Uncategorized' };
 
-        const catMap = new Map<string, { categoryId: string | null; categoryName: string; revenue: number }>();
-        for (const item of saleItems) {
-            const groupId = item.product?.group_id ?? null;
-            const key = groupId ?? '__uncategorized__';
-            const name = item.product?.group?.name ?? 'Uncategorized';
-            const existing = catMap.get(key) ?? { categoryId: groupId, categoryName: name, revenue: 0 };
-            existing.revenue += item.quantity * Number(item.price_at_sale);
-            catMap.set(key, existing);
-        }
+        const lines = [...saleLines(sales, keyOf), ...returnLines(returns, keyOf)];
+        const totals = summariseMargin(lines);
 
-        const sorted = Array.from(catMap.values()).sort((a, b) => b.revenue - a.revenue);
-        const totalRevenue = sorted.reduce((sum, r) => sum + r.revenue, 0);
+        // Sorted by revenue rather than gross profit: this one feeds a share-of-
+        // sales chart, where ordering by profit would make the slices disagree
+        // with their own labels.
+        const sorted = groupMargin(lines).sort((a, b) => b.netRevenue - a.netRevenue);
 
         const TOP_N = 5;
-        const rows = sorted.slice(0, TOP_N).map((r) => ({
-            ...r,
-            share: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
-        }));
+        const toRow = (group: (typeof sorted)[number], categoryId: string | null) => ({
+            categoryId,
+            categoryName: group.label,
+            revenue: group.netRevenue,
+            cogs: group.cogs,
+            grossProfit: group.grossProfit,
+            grossMarginPct: group.grossMarginPct,
+            units: group.units,
+            coverage: group.coverage,
+            share: totals.netRevenue > 0 ? (group.netRevenue / totals.netRevenue) * 100 : 0,
+        });
+
+        const rows = sorted
+            .slice(0, TOP_N)
+            .map((group) => toRow(group, group.key === UNCATEGORIZED_KEY ? null : group.key));
 
         const rest = sorted.slice(TOP_N);
         if (rest.length > 0) {
-            const otherRevenue = rest.reduce((sum, r) => sum + r.revenue, 0);
+            // "Other" is summarised from its own lines rather than by adding up
+            // the group rows, so its margin and coverage are computed over the
+            // same rules as everything else instead of averaging averages.
+            const restKeys = new Set(rest.map((g) => g.key));
+            const restLines = lines.filter((l) => restKeys.has(l.key));
+            const otherTotals = summariseMargin(restLines);
             rows.push({
                 categoryId: null,
                 categoryName: 'Other',
-                revenue: otherRevenue,
-                share: totalRevenue > 0 ? (otherRevenue / totalRevenue) * 100 : 0,
+                revenue: otherTotals.netRevenue,
+                cogs: otherTotals.cogs,
+                grossProfit: otherTotals.grossProfit,
+                grossMarginPct: otherTotals.grossMarginPct,
+                units: restLines.reduce((sum, l) => sum + l.quantity, 0),
+                coverage: otherTotals.coverage,
+                share: totals.netRevenue > 0 ? (otherTotals.netRevenue / totals.netRevenue) * 100 : 0,
             });
         }
 
-        return { summary: { totalRevenue, categoryCount: sorted.length }, rows };
+        return {
+            summary: {
+                totalRevenue: totals.netRevenue,
+                categoryCount: sorted.length,
+                cogs: totals.cogs,
+                grossProfit: totals.grossProfit,
+                grossMarginPct: totals.grossMarginPct,
+                coverage: totals.coverage,
+            },
+            rows,
+        };
     }
 
     async getConsolidatedReport(tenantId: string, query: GetConsolidatedReportDto) {
@@ -410,60 +603,100 @@ export class SalesReportsService {
             by_store: byStore,
         };
     }
+    /**
+     * Revenue and gross profit per customer.
+     *
+     * The gross-profit half is the point: a customer on negotiated wholesale
+     * pricing can be among the largest by revenue and still be sold to at a
+     * loss, and until this carried COGS there was no report in the system that
+     * would say so.
+     */
     async getSalesByCustomer(tenantId: string, query: GetSalesByCustomerDto) {
-        const dateFilter = buildSaleDateWindow(query.from, query.to);
+        const { sales, returns, rawSales, rawReturns } = await this.loadMarginSource(tenantId, query);
 
-        const sales = await this.db.sale.findMany({
-            where: {
-                tenant_id: tenantId,
-                status: 'COMPLETED',
-                ...(query.storeId ? { store_id: query.storeId } : {}),
-                ...dateFilter,
-            },
-            select: {
-                id: true,
-                total_amount: true,
-                customer_id: true,
-                customer: { select: { id: true, name: true, phone: true, customer_code: true } },
-            },
-        });
-
-        const customerMap = new Map<string, {
-            customer: any;
-            orderCount: number;
-            revenue: number;
-        }>();
-
-        for (const sale of sales) {
-            const key = sale.customer_id ?? '__walkin__';
-            const existing = customerMap.get(key) ?? {
-                customer: sale.customer ?? { id: null, name: 'Walk-in Customer', phone: null, customer_code: null },
-                orderCount: 0,
-                revenue: 0,
-            };
-            existing.orderCount += 1;
-            existing.revenue += Number(sale.total_amount);
-            customerMap.set(key, existing);
+        const customerOf = new Map<string, { key: string; label: string; customer: any }>();
+        const orderCounts = new Map<string, number>();
+        for (const sale of rawSales as any[]) {
+            const key = sale.customer_id ?? WALK_IN_KEY;
+            if (!customerOf.has(sale.id)) {
+                customerOf.set(sale.id, {
+                    key,
+                    label: sale.customer?.name ?? 'Walk-in Customer',
+                    customer: sale.customer ?? WALK_IN_CUSTOMER,
+                });
+            }
+            orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
+        }
+        // A refund belongs to whoever bought the goods, so returns reach through
+        // to the original sale's customer. A parentless return has none, and
+        // lands on walk-in alongside the cash sales it resembles.
+        const returnCustomer = new Map<string, { key: string; label: string; customer: any }>();
+        for (const ret of rawReturns as any[]) {
+            const key = ret.sale?.customer_id ?? WALK_IN_KEY;
+            returnCustomer.set(ret.id, {
+                key,
+                label: 'Walk-in Customer',
+                customer: WALK_IN_CUSTOMER,
+            });
         }
 
-        const rows = Array.from(customerMap.values())
-            .sort((a, b) => b.revenue - a.revenue)
-            .map((r) => ({
-                customer: r.customer,
-                orderCount: r.orderCount,
-                revenue: r.revenue,
-                avgOrderValue: r.orderCount > 0 ? r.revenue / r.orderCount : 0,
-            }));
+        const lines: MarginLine[] = [];
+        for (const sale of sales) {
+            const owner = customerOf.get(sale.id)!;
+            lines.push(...saleLines([sale], () => ({ key: owner.key, label: owner.label })));
+        }
+        for (const ret of returns) {
+            const owner = returnCustomer.get(ret.id)!;
+            lines.push(...returnLines([ret], () => ({ key: owner.key, label: owner.label })));
+        }
 
-        const totalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
-        const totalOrders = rows.reduce((sum, r) => sum + r.orderCount, 0);
+        // Customer records for labelling, including customers who only appear on
+        // the return side of the window.
+        const customerById = new Map<string, any>();
+        for (const entry of customerOf.values()) {
+            if (entry.customer?.id) customerById.set(entry.key, entry.customer);
+        }
+        const missing = [...new Set(lines.map((l) => l.key))].filter(
+            (key) => key !== WALK_IN_KEY && !customerById.has(key),
+        );
+        if (missing.length > 0) {
+            const rows = await this.db.customer.findMany({
+                where: { tenant_id: tenantId, id: { in: missing } },
+                select: { id: true, name: true, phone: true, customer_code: true },
+            });
+            for (const row of rows) customerById.set(row.id, row);
+        }
+
+        const totals = summariseMargin(lines);
+        const groups = groupMargin(lines);
+
+        const rows = groups.map((group) => {
+            const customer = group.key === WALK_IN_KEY ? WALK_IN_CUSTOMER : customerById.get(group.key) ?? null;
+            const orderCount = orderCounts.get(group.key) ?? 0;
+            return {
+                customer,
+                orderCount,
+                revenue: group.netRevenue,
+                avgOrderValue: orderCount > 0 ? group.netRevenue / orderCount : 0,
+                cogs: group.cogs,
+                grossProfit: group.grossProfit,
+                grossMarginPct: group.grossMarginPct,
+                coverage: group.coverage,
+            };
+        });
+
+        const totalOrders = rawSales.length;
 
         return {
             summary: {
-                totalRevenue,
+                totalRevenue: totals.netRevenue,
                 totalOrders,
                 customerCount: rows.length,
-                avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+                avgOrderValue: totalOrders > 0 ? totals.netRevenue / totalOrders : 0,
+                cogs: totals.cogs,
+                grossProfit: totals.grossProfit,
+                grossMarginPct: totals.grossMarginPct,
+                coverage: totals.coverage,
             },
             rows,
         };
@@ -1022,6 +1255,334 @@ export class SalesReportsService {
         };
     }
 
+    /**
+     * Every sale line whose margin fell below a floor, worst first.
+     *
+     * The exception report the other margin reports imply but never surface: an
+     * average hides the line sold at half cost, and a product-level roll-up
+     * hides which till rang it up. `anomaly-detection.service.ts` already spots
+     * below-cost lines as an AI signal; this is the same question asked plainly,
+     * with a threshold the reader chooses.
+     *
+     * Uncosted lines are excluded rather than reported at 0% — a line nobody has
+     * priced is not evidence of anything, and including it would bury the real
+     * exceptions under noise. The count is returned so their absence is visible.
+     */
+    async getMarginExceptions(tenantId: string, query: GetMarginExceptionsDto) {
+        const { sales, returns, rawSales } = await this.loadMarginSource(tenantId, query);
+        const floorPct = query.marginFloorPct ?? 0;
+        const limit = Math.min(query.limit ?? 100, 500);
+
+        const names = await this.productNames(tenantId, [...sales, ...returns]);
+        const saleMeta = new Map(
+            (rawSales as any[]).map((s) => [
+                s.id,
+                { serial: s.serial_number as string | undefined, date: s.sale_date as Date, createdBy: s.created_by as string | null, storeId: s.store_id as string },
+            ]),
+        );
+
+        type Exception = {
+            saleId: string;
+            saleDate: Date;
+            productId: string;
+            productName: string;
+            quantity: number;
+            revenue: number;
+            cogs: number;
+            grossProfit: number;
+            grossMarginPct: number;
+            soldBelowCost: boolean;
+            createdBy: string | null;
+        };
+
+        const exceptions: Exception[] = [];
+        let uncostedLines = 0;
+
+        for (const sale of sales) {
+            // Same discount allocation as everywhere else — judging a line
+            // against its list price would clear lines that were in fact
+            // discounted below cost, which is exactly the case worth catching.
+            const lines = saleLines([sale], (item) => ({ key: item.productId, label: '' }));
+            sale.items.forEach((item, index) => {
+                const line = lines[index];
+                if (line.cost === null) {
+                    uncostedLines += 1;
+                    return;
+                }
+                if (line.revenue <= 0) {
+                    // A giveaway has no margin to be below a floor; it is a
+                    // pricing decision, not an exception.
+                    return;
+                }
+                const grossProfit = line.revenue - line.cost;
+                const marginPct = (grossProfit / line.revenue) * 100;
+                if (marginPct >= floorPct) return;
+
+                const meta = saleMeta.get(sale.id);
+                exceptions.push({
+                    saleId: sale.id,
+                    saleDate: meta?.date ?? new Date(0),
+                    productId: item.productId,
+                    productName: names.get(item.productId) ?? 'Unknown product',
+                    quantity: item.quantity,
+                    revenue: line.revenue,
+                    cogs: line.cost,
+                    grossProfit,
+                    grossMarginPct: marginPct,
+                    soldBelowCost: grossProfit < 0,
+                    createdBy: meta?.createdBy ?? null,
+                });
+            });
+        }
+
+        exceptions.sort((a, b) => a.grossMarginPct - b.grossMarginPct);
+        const worst = exceptions.slice(0, limit);
+
+        const byUser = new Map<string, { userId: string | null; lines: number; lostMargin: number }>();
+        for (const ex of exceptions) {
+            const key = ex.createdBy ?? '__unattributed__';
+            const entry = byUser.get(key) ?? { userId: ex.createdBy, lines: 0, lostMargin: 0 };
+            entry.lines += 1;
+            // How far under the floor this line came in — the size of the
+            // problem, not merely that there was one.
+            entry.lostMargin += (floorPct / 100) * ex.revenue - ex.grossProfit;
+            byUser.set(key, entry);
+        }
+
+        const userIds = [...byUser.values()].map((u) => u.userId).filter((id): id is string => Boolean(id));
+        const users = userIds.length
+            ? await this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+            : [];
+        const userName = new Map(users.map((u) => [u.id, u.name]));
+
+        return {
+            summary: {
+                marginFloorPct: floorPct,
+                exceptionCount: exceptions.length,
+                belowCostCount: exceptions.filter((e) => e.soldBelowCost).length,
+                exceptionRevenue: exceptions.reduce((sum, e) => sum + e.revenue, 0),
+                // Nothing was necessarily lost — a deliberate loss-leader is
+                // still a decision — so this is "margin forgone against the
+                // floor", not a loss.
+                marginForgone: exceptions.reduce(
+                    (sum, e) => sum + ((floorPct / 100) * e.revenue - e.grossProfit),
+                    0,
+                ),
+                uncostedLines,
+                truncated: exceptions.length > worst.length,
+            },
+            rows: worst,
+            byUser: [...byUser.values()]
+                .map((u) => ({
+                    userId: u.userId,
+                    userName: u.userId ? userName.get(u.userId) ?? 'Unknown user' : 'Unattributed',
+                    lines: u.lines,
+                    marginForgone: u.lostMargin,
+                }))
+                .sort((a, b) => b.marginForgone - a.marginForgone),
+        };
+    }
+
+    /**
+     * Gross profit by whoever rang the sale up, and by till.
+     *
+     * `Sale.created_by` and `Sale.counter_id` have always been recorded and
+     * nothing ever aggregated margin against them, so commission and
+     * performance conversations had only revenue to work with — which rewards
+     * discounting.
+     */
+    async getGrossProfitBySalesperson(tenantId: string, query: GetGrossProfitBySalespersonDto) {
+        const { sales, returns, rawSales, rawReturns } = await this.loadMarginSource(tenantId, query);
+        const groupBy = query.groupBy ?? 'user';
+
+        const keyForSale = new Map<string, string>();
+        for (const sale of rawSales as any[]) {
+            keyForSale.set(sale.id, (groupBy === 'counter' ? sale.counter_id : sale.created_by) ?? UNATTRIBUTED_KEY);
+        }
+        const keyForReturn = new Map<string, string>();
+        for (const ret of rawReturns as any[]) {
+            // Attributed to whoever made the original sale, not whoever
+            // processed the refund: the margin being reversed is theirs.
+            keyForReturn.set(
+                ret.id,
+                (groupBy === 'counter' ? ret.sale?.counter_id : ret.sale?.created_by) ?? UNATTRIBUTED_KEY,
+            );
+        }
+
+        const lines: MarginLine[] = [];
+        const orderCounts = new Map<string, number>();
+        for (const sale of sales) {
+            const key = keyForSale.get(sale.id) ?? UNATTRIBUTED_KEY;
+            orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
+            lines.push(...saleLines([sale], () => ({ key, label: key })));
+        }
+        for (const ret of returns) {
+            const key = keyForReturn.get(ret.id) ?? UNATTRIBUTED_KEY;
+            lines.push(...returnLines([ret], () => ({ key, label: key })));
+        }
+
+        const ids = [...new Set(lines.map((l) => l.key))].filter((k) => k !== UNATTRIBUTED_KEY);
+        const labels = new Map<string, string>();
+        if (ids.length > 0) {
+            if (groupBy === 'counter') {
+                const counters = await this.db.posCounter.findMany({
+                    where: { tenant_id: tenantId, id: { in: ids } },
+                    select: { id: true, name: true },
+                });
+                for (const c of counters) labels.set(c.id, c.name);
+            } else {
+                const users = await this.db.user.findMany({
+                    where: { id: { in: ids } },
+                    select: { id: true, name: true },
+                });
+                for (const u of users) labels.set(u.id, u.name);
+            }
+        }
+
+        const totals = summariseMargin(lines);
+        return {
+            summary: { groupBy, ...totals },
+            rows: groupMargin(lines).map((group) => ({
+                id: group.key === UNATTRIBUTED_KEY ? null : group.key,
+                name:
+                    group.key === UNATTRIBUTED_KEY
+                        ? 'Unattributed'
+                        : labels.get(group.key) ?? (groupBy === 'counter' ? 'Unknown counter' : 'Unknown user'),
+                orders: orderCounts.get(group.key) ?? 0,
+                units: group.units,
+                revenue: group.netRevenue,
+                cogs: group.cogs,
+                grossProfit: group.grossProfit,
+                grossMarginPct: group.grossMarginPct,
+                coverage: group.coverage,
+            })),
+        };
+    }
+
+    /**
+     * Why gross profit moved between two periods, split into volume, price,
+     * cost and mix — overall and per product.
+     *
+     * "Margin fell three points" is not actionable. "Margin fell three points
+     * because supplier cost rose on flat volume" is a conversation with a
+     * supplier; "because we discounted" is a conversation with the shop floor.
+     */
+    async getMarginBridge(tenantId: string, query: GetMarginBridgeDto) {
+        const current = await this.loadMarginSource(tenantId, query);
+        const previous = await this.loadMarginSource(tenantId, {
+            from: query.compareFrom,
+            to: query.compareTo,
+            storeId: query.storeId,
+        });
+
+        const names = await this.productNames(tenantId, [
+            ...current.sales,
+            ...current.returns,
+            ...previous.sales,
+            ...previous.returns,
+        ]);
+        const keyOf = (item: { productId: string }) => ({
+            key: item.productId,
+            label: names.get(item.productId) ?? 'Unknown product',
+        });
+
+        const linesFor = (src: typeof current) => [
+            ...saleLines(src.sales, keyOf),
+            ...returnLines(src.returns, keyOf),
+        ];
+        const currentLines = linesFor(current);
+        const previousLines = linesFor(previous);
+
+        // The bridge is arithmetic on costed lines only. An uncosted line has no
+        // cost to attribute a change to, so folding it in would show movement in
+        // the cost effect that is really just a gap in the data.
+        const costedOnly = (lines: MarginLine[]) => lines.filter((l) => l.cost !== null);
+        const toBridgeInput = (lines: MarginLine[]) => ({
+            units: lines.reduce((sum, l) => sum + l.quantity, 0),
+            revenue: lines.reduce((sum, l) => sum + l.revenue, 0),
+            cogs: lines.reduce((sum, l) => sum + (l.cost ?? 0), 0),
+        });
+
+        const overall = marginBridge(
+            toBridgeInput(costedOnly(previousLines)),
+            toBridgeInput(costedOnly(currentLines)),
+        );
+
+        const byProductKey = new Set([
+            ...costedOnly(currentLines).map((l) => l.key),
+            ...costedOnly(previousLines).map((l) => l.key),
+        ]);
+        const rows = [...byProductKey]
+            .map((key) => {
+                const curr = costedOnly(currentLines).filter((l) => l.key === key);
+                const prev = costedOnly(previousLines).filter((l) => l.key === key);
+                return {
+                    productId: key,
+                    productName: names.get(key) ?? 'Unknown product',
+                    ...marginBridge(toBridgeInput(prev), toBridgeInput(curr)),
+                };
+            })
+            // Largest movers first in either direction — a collapse matters as
+            // much as a jump, so the sort is on magnitude.
+            .sort((a, b) => Math.abs(b.totalChange) - Math.abs(a.totalChange));
+
+        return {
+            summary: {
+                current: summariseMargin(currentLines),
+                previous: summariseMargin(previousLines),
+                bridge: overall,
+            },
+            rows,
+        };
+    }
+
+    /**
+     * How much of what was sold has a cost behind it, and which products are
+     * missing one.
+     *
+     * The report that makes the others defensible: a margin computed over a
+     * third of the basket is not a margin, and this is the list someone works
+     * through to fix that. Every other gross-profit report carries a `coverage`
+     * block; this one is that block, itemised.
+     */
+    async getCostCoverage(tenantId: string, query: GetCostCoverageDto) {
+        const { sales, returns } = await this.loadMarginSource(tenantId, query);
+        const names = await this.productNames(tenantId, [...sales, ...returns]);
+        const keyOf = (item: { productId: string }) => ({
+            key: item.productId,
+            label: names.get(item.productId) ?? 'Unknown product',
+        });
+
+        const lines = [...saleLines(sales, keyOf), ...returnLines(returns, keyOf)];
+        const totals = summariseMargin(lines);
+
+        const rows = groupMargin(lines)
+            .map((group) => ({
+                productId: group.key,
+                productName: group.label,
+                units: group.units,
+                revenue: group.netRevenue,
+                costedLines: group.coverage.costedLines,
+                uncostedLines: group.coverage.uncostedLines,
+                uncostedRevenue: group.coverage.uncostedRevenue,
+                costedRevenuePct: group.coverage.costedRevenuePct,
+            }))
+            .filter((row) => row.uncostedLines > 0)
+            // Ordered by the revenue that cannot be explained, so the product
+            // worth pricing first is at the top rather than the one with the
+            // most lines.
+            .sort((a, b) => b.uncostedRevenue - a.uncostedRevenue);
+
+        return {
+            summary: {
+                ...totals.coverage,
+                netRevenue: totals.netRevenue,
+                productsMissingCost: rows.length,
+            },
+            rows,
+        };
+    }
+
     // ── Shared aggregation ───────────────────────────────────────────────────
 
     private async aggregateBreakdown(
@@ -1241,7 +1802,10 @@ type DailyRow = {
     returns: number;
     netRevenue: number;
     cogs: number;
-    grossProfit: number;
+    /** Revenue on lines that have a cost — the base gross profit is measured over. */
+    costedRevenue: number;
+    /** Null on a day where nothing sold had a cost basis. */
+    grossProfit: number | null;
 };
 
 /**
@@ -1259,7 +1823,11 @@ function buildBuckets(range: DateRange, granularity: Granularity, rows: DailyRow
         returns: 0,
         netRevenue: 0,
         cogs: 0,
-        grossProfit: 0,
+        costedRevenue: 0,
+        // Null until a day with a cost basis lands in this bucket. An empty
+        // bucket has no margin to report, and zero would draw a point on the
+        // chart claiming the business broke even that week.
+        grossProfit: null as number | null,
     });
 
     for (let day = range.from; day <= range.to; day = addDays(day, 1)) {
@@ -1277,7 +1845,10 @@ function buildBuckets(range: DateRange, granularity: Granularity, rows: DailyRow
         entry.returns += row.returns;
         entry.netRevenue += row.netRevenue;
         entry.cogs += row.cogs;
-        entry.grossProfit += row.grossProfit;
+        entry.costedRevenue += row.costedRevenue;
+        if (row.grossProfit !== null) {
+            entry.grossProfit = (entry.grossProfit ?? 0) + row.grossProfit;
+        }
         buckets.set(start, entry);
     }
 
@@ -1295,8 +1866,15 @@ function buildBuckets(range: DateRange, granularity: Granularity, rows: DailyRow
             returns: entry.returns,
             netRevenue: entry.netRevenue,
             cogs: entry.cogs,
+            costedRevenue: entry.costedRevenue,
             grossProfit: entry.grossProfit,
-            grossMarginPct: entry.netRevenue > 0 ? (entry.grossProfit / entry.netRevenue) * 100 : 0,
+            // Over costed revenue, matching summariseMargin. Dividing by net
+            // revenue would dilute the margin by however much uncosted stock
+            // happened to sell that period.
+            grossMarginPct:
+                entry.grossProfit === null || entry.costedRevenue <= 0
+                    ? null
+                    : (entry.grossProfit / entry.costedRevenue) * 100,
             changeFromPreviousPct: previous ? percentChange(entry.netRevenue, previous.netRevenue) : null,
         };
     });

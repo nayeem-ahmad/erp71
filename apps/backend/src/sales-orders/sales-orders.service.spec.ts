@@ -18,6 +18,14 @@ describe('SalesOrdersService', () => {
         count: jest.fn(),
         findFirst: jest.fn()
       },
+      // Every stock movement maintains the weighted-average cost pool.
+      // findUnique resolving null is the no-basis-yet case, which is what
+      // a fresh product in a unit test actually looks like.
+      productCost: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+          upsert: jest.fn().mockResolvedValue({}),
+      },
       productStock: {
         updateMany: jest.fn(),
         findUnique: jest.fn(),

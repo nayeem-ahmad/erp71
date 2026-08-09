@@ -49,6 +49,11 @@ export const routes = {
             customers: '/sales/reports/customers',
             consolidated: '/sales/reports/consolidated',
             branchReport: '/sales/reports/branch-report',
+            grossProfit: '/sales/reports/gross-profit',
+            grossProfitExceptions: '/sales/reports/gross-profit/exceptions',
+            grossProfitSalespeople: '/sales/reports/gross-profit/salespeople',
+            grossProfitBridge: '/sales/reports/gross-profit/bridge',
+            grossProfitCoverage: '/sales/reports/gross-profit/coverage',
         },
     },
 
@@ -219,6 +224,7 @@ export const routes = {
         users: '/admin/users',
         referrals: '/admin/referrals',
         urlShortener: '/admin/url-shortener',
+        socialMedia: '/admin/social-media',
         feedback: '/admin/feedback',
         support: '/admin/support',
         systemHealth: '/admin/system-health',
@@ -233,6 +239,7 @@ export const routes = {
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
             plans: '/admin/platform-settings/plans',
+            buffer: '/admin/platform-settings/buffer',
         },
     },
 

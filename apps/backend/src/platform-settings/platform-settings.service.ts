@@ -92,6 +92,21 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         tenant_layout: { isSecret: false },
         platform_admin_layout: { isSecret: false },
     },
+    /**
+     * Buffer, used to publish the platform's own social posts (Admin → Social
+     * Media). One API key covers every connected page, so there is nothing here
+     * per network — the Facebook page is just a channel id like any other.
+     */
+    social_buffer: {
+        access_token:       { isSecret: true },
+        // Buffer scopes `channels` by organisation and has no "mine" default, so
+        // this is required, not a convenience.
+        organization_id:    { isSecret: false },
+        api_url:            { isSecret: false, default: 'https://api.buffer.com' },
+        // Pre-selected in the composer and used by a push that names no channel.
+        // Normally the Facebook page — the one target this feature was asked for.
+        default_channel_id: { isSecret: false },
+    },
     feedback_automation: {
         enabled:                    { isSecret: false, default: 'false' },
         // 'manual' | 'daily' | 'weekly' — cadence for the batch plan-proposal cron;

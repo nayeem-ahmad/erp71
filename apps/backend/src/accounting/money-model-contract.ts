@@ -83,6 +83,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
 
     // ── Exempt: periodic inventory (deliberately no journal) ─────────────────
     { model: 'InventoryMovement', exempt: 'Periodic inventory: stock is expensed at purchase, so a movement posts nothing.' },
+    { model: 'ProductCost', exempt: 'Running weighted-average cost, a reporting basis rather than a balance; periodic inventory posts nothing when it changes.' },
     { model: 'ProductionJob', exempt: 'Manufacturing cost reclassification; periodic inventory, no new money.' },
     { model: 'ProductionWastage', exempt: 'Quantity, not money; periodic inventory.' },
     { model: 'BomComponent', exempt: 'Quantity, not money.' },
