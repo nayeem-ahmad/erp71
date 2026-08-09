@@ -11,12 +11,13 @@ import {
     GripVertical,
     MessageSquare,
     Plus,
+    Trash2,
     X,
 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge } from '@/components/ui';
 import type { StatusBadgeTone } from '@/components/ui';
-import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import {
     CARD_ATTR,
     COLUMN_ATTR,
@@ -37,6 +38,7 @@ import {
     isOverWip,
     labelClass,
     labelsOf,
+    matchesFilters,
     NO_FILTERS,
     projectLabelOf,
     type BoardColumn,
@@ -45,29 +47,18 @@ import {
     type DueState,
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { projectChildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
-interface Sprint {
+interface BoardSummary {
     id: string;
     name: string;
-    goal?: string | null;
-    status: string;
-    start_date: string;
-    end_date: string;
+    description?: string | null;
 }
-
-interface ProjectSummary {
-    id: string;
-    code: string;
-    name: string;
-}
-
-type Mode = 'kanban' | 'scrum';
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
@@ -90,124 +81,114 @@ interface DragState {
     title: string;
 }
 
-export default function ProjectBoardPage() {
+export default function BoardPage() {
     const params = useParams<{ id: string }>();
-    const projectId = params.id;
+    const boardId = params.id;
     const { t } = useI18n();
-    const m = t.projects;
+    const m = t.projects.boards;
+    const bm = t.projects.board;
 
-    const [mode, setMode] = useState<Mode>('kanban');
-    const [project, setProject] = useState<ProjectSummary | null>(null);
+    const [board, setBoard] = useState<BoardSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
-    const [sprints, setSprints] = useState<Sprint[]>([]);
-    const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
+    const [unsorted, setUnsorted] = useState<BoardTask[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
-
-    const activeSprint = useMemo(() => sprints.find((s) => s.status === 'ACTIVE') ?? null, [sprints]);
+    const [adding, setAdding] = useState(false);
 
     const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
+    const visibleUnsorted = useMemo(
+        () => unsorted.filter((task) => matchesFilters(task, filters)),
+        [unsorted, filters],
+    );
     const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
     const filtered = hasActiveFilter(filters);
-    const shown = countTasks(visibleColumns);
-    const total = countTasks(columns);
+    const shown = countTasks(visibleColumns) + visibleUnsorted.length;
+    const total = countTasks(columns) + unsorted.length;
 
-    const loadBoard = useCallback(
-        async (sprintId?: string) => {
-            setLoading(true);
-            try {
-                const board = await api.getProjectBoard(projectId, sprintId);
-                setColumns(((board as { columns?: BoardColumn[] })?.columns ?? []) as BoardColumn[]);
-            } catch {
-                setColumns([]);
-            } finally {
-                setLoading(false);
-            }
-        },
-        [projectId],
-    );
+    const loadBoard = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = (await api.getBoard(boardId)) as {
+                id: string;
+                name: string;
+                description?: string | null;
+                columns?: BoardColumn[];
+                unsorted?: BoardTask[];
+            };
+            setBoard({ id: res.id, name: res.name, description: res.description ?? null });
+            setColumns(res.columns ?? []);
+            setUnsorted(res.unsorted ?? []);
+            setLoadError(false);
+        } catch (error) {
+            // Distinguished from "still loading" below, so a 403/404/network
+            // failure gets an exit rather than an indefinite spinner. A failure
+            // once the board is already on screen is reported the same way
+            // `removeCard` reports its own failures — a toast, not a state wipe.
+            setLoadError(true);
+            toast.error(error instanceof Error ? error.message : t.common.error);
+        } finally {
+            setLoading(false);
+        }
+    }, [boardId, t.common.error]);
 
     useEffect(() => {
-        api.getSprints(projectId)
-            .then((list: unknown) => setSprints(Array.isArray(list) ? list : []))
-            .catch(() => setSprints([]));
-    }, [projectId]);
+        loadBoard();
+    }, [loadBoard]);
 
-    // Tenant-wide, so it does not need re-fetching when the board or sprint
-    // changes. A failure only costs the label filter, not the board.
+    // Tenant-wide, so it does not need re-fetching when the board changes. A
+    // failure only costs the label filter, not the board.
     useEffect(() => {
         api.getProjectLabels()
             .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
             .catch(() => setLabels([]));
     }, []);
 
-    // Header identity only. Fetched separately from the board so switching
-    // kanban/scrum or sprint does not re-request it, and a failure here leaves
-    // the board usable with a plain breadcrumb rather than blocking it.
-    useEffect(() => {
-        api.getProject(projectId)
-            .then((res: unknown) => setProject(res as ProjectSummary))
-            .catch(() => setProject(null));
-    }, [projectId]);
+    const move = async (taskId: string, columnId: string, sortOrder: number) => {
+        const task =
+            columns.flatMap((column) => column.tasks).find((tk) => tk.id === taskId) ??
+            unsorted.find((tk) => tk.id === taskId);
+        if (!task) return;
 
-    useEffect(() => {
-        // Scrum mode is the active sprint's slice of the same board; kanban is
-        // everything. One fetch either way.
-        loadBoard(mode === 'scrum' ? (activeSprint?.id ?? undefined) : undefined);
-    }, [mode, activeSprint, loadBoard]);
-
-    useEffect(() => {
-        if (mode !== 'scrum' || !activeSprint) {
-            setBurndown(null);
-            return;
-        }
-        api.getSprintBurndown(activeSprint.id)
-            .then((res: unknown) => setBurndown((res as { series?: BurndownPoint[] })?.series ?? []))
-            .catch(() => setBurndown([]));
-    }, [mode, activeSprint]);
-
-    const move = async (taskId: string, statusId: string, sortOrder: number) => {
-        const previous = columns;
         // Optimistic: the card should follow the cursor, not the round-trip.
-        setColumns((cols) => {
-            const task = cols.flatMap((c) => c.tasks).find((tk) => tk.id === taskId);
-            if (!task) return cols;
-            return cols.map((col) => {
+        setUnsorted((list) => list.filter((tk) => tk.id !== taskId));
+        setColumns((cols) =>
+            cols.map((col) => {
                 const without = col.tasks.filter((tk) => tk.id !== taskId);
-                if (col.id !== statusId) return { ...col, tasks: without };
+                if (col.id !== columnId) return { ...col, tasks: without };
                 const next = [...without];
-                next.splice(Math.min(sortOrder, next.length), 0, { ...task, status_id: statusId });
+                next.splice(Math.min(sortOrder, next.length), 0, task);
                 return { ...col, tasks: next };
-            });
-        });
+            }),
+        );
 
         try {
-            await api.moveProjectTask(taskId, {
-                statusId,
-                sortOrder,
-                ...(mode === 'scrum' && activeSprint ? { sprintId: activeSprint.id } : {}),
-            });
+            await api.moveBoardCard(boardId, taskId, { columnId, sortOrder });
         } catch (error) {
-            setColumns(previous);
-            toast.error(error instanceof Error ? error.message : m.board.moveFailed);
+            // A 400 here means exactly one thing — the target column has no
+            // status mapped for this card's project (moveCard's only
+            // BadRequestException). Anything else — a 401, a 500, a dropped
+            // connection — is not that, and claiming it is would send the
+            // user to board settings to "fix" a mapping that was never the
+            // problem. Reload either way: it undoes the optimistic move.
+            if (error instanceof ApiError && error.status === 400) {
+                toast.error(m.unmappedDrop.replace('{project}', projectLabelOf(task.project) ?? ''));
+            } else {
+                toast.error(bm.moveFailed);
+            }
+            await loadBoard();
         }
     };
 
-    const addCard = async (statusId: string, title: string) => {
+    const removeCard = async (taskId: string) => {
         try {
-            await api.createProjectTask({
-                projectId,
-                title,
-                statusId,
-                ...(mode === 'scrum' && activeSprint ? { sprintId: activeSprint.id } : {}),
-            });
-            await loadBoard(mode === 'scrum' ? (activeSprint?.id ?? undefined) : undefined);
+            await api.removeBoardTask(boardId, taskId);
+            await loadBoard();
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : m.board.createFailed);
-            throw error;
+            toast.error(error instanceof Error ? error.message : t.common.error);
         }
     };
 
@@ -292,89 +273,62 @@ export default function ProjectBoardPage() {
 
     const cancelDrag = () => setDrag(null);
 
-    const startSprint = async (sprintId: string) => {
-        try {
-            await api.startSprint(sprintId);
-            const list = await api.getSprints(projectId);
-            setSprints(Array.isArray(list) ? list : []);
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : m.sprint.oneActive);
+    if (!board) {
+        if (loadError) {
+            return (
+                <PageShell>
+                    <PageHeader
+                        title={m.title}
+                        breadcrumbs={modulePageBreadcrumbs(
+                            t.dashboardHome.breadcrumbHome,
+                            t.sidebar.modules.projects,
+                            m.title,
+                            'projects',
+                        )}
+                    />
+                    <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 md:p-4">
+                        <p className="text-sm text-red-700">{t.common.error}</p>
+                        <Link href={routes.projects.boards}>
+                            <Button variant="secondary" className="min-h-touch">
+                                {t.common.back}
+                            </Button>
+                        </Link>
+                    </div>
+                </PageShell>
+            );
         }
-    };
+        return (
+            <PageShell>
+                <p className="text-sm text-gray-500">{t.common.loading}</p>
+            </PageShell>
+        );
+    }
 
     return (
         <PageShell>
             <PageHeader
-                title={m.board.title}
-                subtitle={activeSprint && mode === 'scrum' ? activeSprint.name : m.board.allTasks}
-                breadcrumbs={projectChildBreadcrumbs(
+                title={board.name}
+                subtitle={board.description ?? undefined}
+                breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.projects,
-                    project,
-                    m.board.title,
+                    board.name,
+                    'projects',
                 )}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex overflow-hidden rounded-md border border-gray-200">
-                            {(['kanban', 'scrum'] as Mode[]).map((value) => (
-                                <button
-                                    key={value}
-                                    type="button"
-                                    onClick={() => setMode(value)}
-                                    className={`min-h-touch px-3 text-sm ${
-                                        mode === value
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-white text-gray-700'
-                                    }`}
-                                >
-                                    {value === 'kanban' ? m.board.kanban : m.board.scrum}
-                                </button>
-                            ))}
-                        </div>
-                        {/* Planning is tenant-wide now: a sprint pulls from every
-                            project, so it lives in Sprints rather than here. */}
-                        <Link href={routes.projects.columns(projectId)}>
+                        <Button className="min-h-touch" onClick={() => setAdding(true)}>
+                            <Plus className="h-4 w-4" />
+                            {m.addTasks}
+                        </Button>
+                        <Link href={routes.projects.boardColumns(boardId)}>
                             <Button variant="secondary" className="min-h-touch">
-                                {m.columns.title}
-                            </Button>
-                        </Link>
-                        <Link href={routes.projects.sprints}>
-                            <Button variant="secondary" className="min-h-touch">
-                                {m.sprint.sprints}
+                                {m.boardSettings}
                             </Button>
                         </Link>
                     </div>
                 }
             />
-
-            {mode === 'scrum' && !activeSprint && (
-                <div className="rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                    <p>{m.board.noSprint}</p>
-                    {sprints.filter((s) => s.status === 'PLANNED').length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                            {sprints
-                                .filter((s) => s.status === 'PLANNED')
-                                .map((sprint) => (
-                                    <Button
-                                        key={sprint.id}
-                                        variant="secondary"
-                                        className="min-h-touch"
-                                        onClick={() => startSprint(sprint.id)}
-                                    >
-                                        {m.sprint.start}: {sprint.name}
-                                    </Button>
-                                ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {mode === 'scrum' && activeSprint && burndown && (
-                <section className="rounded-md border border-gray-200 bg-white p-3 md:p-4">
-                    <h2 className="mb-3 text-sm font-medium">{m.burndown.title}</h2>
-                    <BurndownChart series={burndown} />
-                </section>
-            )}
 
             <BoardFilterBar
                 filters={filters}
@@ -389,6 +343,40 @@ export default function ProjectBoardPage() {
                 scrolls sideways on a phone. */}
             <div className="overflow-x-auto pb-2">
                 <div className="flex min-w-max gap-3">
+                    {unsorted.length > 0 && (
+                        <div className="flex w-72 flex-col rounded-md border border-amber-300 bg-amber-50">
+                            <div className="border-b border-amber-300 px-3 py-2">
+                                <p className="text-sm font-medium text-amber-800">{m.unsorted}</p>
+                                <p className="text-xs text-gray-500">{m.unsortedHint}</p>
+                            </div>
+                            <div className="flex flex-1 flex-col gap-2 p-2">
+                                {visibleUnsorted.length === 0 && (
+                                    <p className="px-1 py-4 text-center text-xs text-gray-400">
+                                        {bm.noMatches}
+                                    </p>
+                                )}
+                                {visibleUnsorted.map((task) => (
+                                    <TaskCard
+                                        key={task.id}
+                                        task={task}
+                                        dragging={drag?.active === true && drag.taskId === task.id}
+                                        onPointerDownBody={(e) =>
+                                            beginDrag(e, task, { fromHandle: false })
+                                        }
+                                        onPointerDownHandle={(e) =>
+                                            beginDrag(e, task, { fromHandle: true })
+                                        }
+                                        onPointerMove={continueDrag}
+                                        onPointerUp={endDrag}
+                                        onPointerCancel={cancelDrag}
+                                        onOpen={() => setOpenTaskId(task.id)}
+                                        onRemove={() => removeCard(task.id)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {visibleColumns.map((column) => {
                         const remaining = column.tasks.reduce(
                             (total, task) => total + num(task.remaining_hours),
@@ -416,7 +404,7 @@ export default function ProjectBoardPage() {
                                                 tone={overWip ? 'danger' : 'neutral'}
                                                 aria-label={
                                                     overWip
-                                                        ? m.columns.overLimit.replace(
+                                                        ? t.projects.columns.overLimit.replace(
                                                               '{name}',
                                                               column.name,
                                                           )
@@ -429,14 +417,14 @@ export default function ProjectBoardPage() {
                                         ) : (
                                             <span>{column.tasks.length}</span>
                                         )}
-                                        {remaining > 0 ? `${remaining}${m.board.columnTotal}` : ''}
+                                        {remaining > 0 ? `${remaining}${bm.columnTotal}` : ''}
                                     </span>
                                 </div>
 
                                 <div className="flex flex-1 flex-col gap-2 p-2">
                                     {column.tasks.length === 0 && dropIndex === null && (
                                         <p className="px-1 py-4 text-center text-xs text-gray-400">
-                                            {filtered ? m.board.noMatches : m.board.emptyColumn}
+                                            {filtered ? bm.noMatches : bm.emptyColumn}
                                         </p>
                                     )}
                                     {column.tasks.map((task, index) => (
@@ -455,15 +443,11 @@ export default function ProjectBoardPage() {
                                                 onPointerUp={endDrag}
                                                 onPointerCancel={cancelDrag}
                                                 onOpen={() => setOpenTaskId(task.id)}
+                                                onRemove={() => removeCard(task.id)}
                                             />
                                         </Fragment>
                                     ))}
                                     {dropIndex === column.tasks.length && <DropIndicator />}
-
-                                    <AddCardComposer
-                                        onAdd={(title) => addCard(column.id, title)}
-                                        columnName={column.name}
-                                    />
                                 </div>
                             </div>
                         );
@@ -489,9 +473,15 @@ export default function ProjectBoardPage() {
                 <TaskDetailPanel
                     taskId={openTaskId}
                     onClose={() => setOpenTaskId(null)}
-                    onChanged={() =>
-                        loadBoard(mode === 'scrum' ? (activeSprint?.id ?? undefined) : undefined)
-                    }
+                    onChanged={() => loadBoard()}
+                />
+            )}
+
+            {adding && (
+                <AddBoardTasksModal
+                    boardId={boardId}
+                    onClose={() => setAdding(false)}
+                    onAdded={() => loadBoard()}
                 />
             )}
         </PageShell>
@@ -616,92 +606,11 @@ function BoardFilterBar({
     );
 }
 
-/**
- * Trello's defining interaction: type a title, press Enter, keep typing. The
- * composer stays open after a save so a column can be filled in one go, and
- * anything more than a title is left to the detail panel.
- */
-function AddCardComposer({
-    onAdd,
-    columnName,
-}: {
-    onAdd: (title: string) => Promise<void>;
-    columnName: string;
-}) {
-    const { t } = useI18n();
-    const m = t.projects.board;
-
-    const [open, setOpen] = useState(false);
-    const [title, setTitle] = useState('');
-    const [saving, setSaving] = useState(false);
-
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const trimmed = title.trim();
-        if (!trimmed || saving) return;
-        setSaving(true);
-        try {
-            await onAdd(trimmed);
-            setTitle('');
-        } catch {
-            // onAdd has already reported it; keep the text so it is not lost.
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (!open) {
-        return (
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="min-h-touch rounded-md px-2 py-1.5 text-left text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-            >
-                <Plus className="mr-1 inline h-4 w-4" />
-                {m.addCard}
-            </button>
-        );
-    }
-
-    return (
-        <form onSubmit={submit} className="space-y-2">
-            <Input
-                autoFocus
-                value={title}
-                aria-label={`${m.addCard} — ${columnName}`}
-                placeholder={m.newCardPlaceholder}
-                onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                        setOpen(false);
-                        setTitle('');
-                    }
-                }}
-            />
-            <div className="flex items-center gap-2">
-                <Button type="submit" className="min-h-touch" disabled={saving || !title.trim()}>
-                    {t.common.add}
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-touch"
-                    onClick={() => {
-                        setOpen(false);
-                        setTitle('');
-                    }}
-                >
-                    {t.common.cancel}
-                </Button>
-            </div>
-        </form>
-    );
-}
-
 function TaskCard({
     task,
     dragging,
     onOpen,
+    onRemove,
     onPointerDownBody,
     onPointerDownHandle,
     onPointerMove,
@@ -711,6 +620,7 @@ function TaskCard({
     task: BoardTask;
     dragging: boolean;
     onOpen: () => void;
+    onRemove: () => void;
     onPointerDownBody: (e: React.PointerEvent) => void;
     onPointerDownHandle: (e: React.PointerEvent) => void;
     onPointerMove: (e: React.PointerEvent) => void;
@@ -719,6 +629,7 @@ function TaskCard({
 }) {
     const { t, locale } = useI18n();
     const c = t.projects.board.card;
+    const m = t.projects.boards;
 
     const labels = labelsOf(task);
     const cover = coverClass(task.cover_color);
@@ -795,6 +706,21 @@ function TaskCard({
                         </p>
                     )}
                 </div>
+                <button
+                    type="button"
+                    aria-label={m.removeCard}
+                    tabIndex={-1}
+                    // Stopped here, before it reaches the article's handler, so a
+                    // click on this button never arms a drag or opens the card.
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove();
+                    }}
+                    className="min-h-touch min-w-touch -mr-1 rounded px-1 text-gray-300 hover:text-red-600"
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
+                </button>
             </div>
 
             {/* Above the badges, as on a Trello card: colour is what the eye

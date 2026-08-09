@@ -3572,9 +3572,57 @@ export const api = {
         }
         return fetchPaginated(`/project-tasks?${query}`);
     },
-    /** Kanban passes no sprintId; scrum passes the active sprint's. */
-    getProjectBoard: (projectId: string, sprintId?: string) =>
-        fetchWithAuth(`/project-tasks/board/${projectId}${sprintId ? `?sprintId=${sprintId}` : ''}`),
+    getBoards: () => fetchWithAuth('/projects/boards'),
+    getBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`),
+    createBoard: (data: { name: string; description?: string }) =>
+        fetchWithAuth('/projects/boards', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateBoard: (id: string, data: { name?: string; description?: string }) =>
+        fetchWithAuth(`/projects/boards/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`, { method: 'DELETE' }),
+    addBoardTasks: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/tasks`, {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeBoardTask: (id: string, taskId: string) =>
+        fetchWithAuth(`/projects/boards/${id}/tasks/${taskId}`, { method: 'DELETE' }),
+    moveBoardCard: (id: string, taskId: string, data: { columnId: string; sortOrder: number }) =>
+        fetchWithAuth(`/projects/boards/${id}/tasks/${taskId}/move`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getBoardColumns: (id: string) => fetchWithAuth(`/projects/boards/${id}/columns`),
+    createBoardColumn: (id: string, data: { name: string; category: string; wipLimit?: number }) =>
+        fetchWithAuth(`/projects/boards/${id}/columns`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateBoardColumn: (id: string, columnId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteBoardColumn: (id: string, columnId: string) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}`, { method: 'DELETE' }),
+    setBoardColumnStatuses: (id: string, columnId: string, statusIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/statuses`, {
+            method: 'PUT',
+            body: JSON.stringify({ statusIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
     getProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`),
     getTaskRemainingHistory: (id: string) =>
         fetchWithAuth(`/project-tasks/${id}/remaining-history`),

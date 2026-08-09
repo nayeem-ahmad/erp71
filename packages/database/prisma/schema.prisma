@@ -351,6 +351,8 @@ model User {
   projectAttachments                ProjectAttachment[]         @relation("ProjectAttachmentCreator")
   authoredBlogPosts                 BlogPost[]                  @relation("BlogPostAuthor")
   authoredTenantBlogPosts           TenantBlogPost[]            @relation("TenantBlogPostAuthor")
+  createdBoards                     Board[]                     @relation("BoardCreator")
+  addedBoardCards                   BoardTask[]                 @relation("BoardTaskAdder")
   authoredSocialMediaPosts          SocialMediaPost[]           @relation("SocialMediaPostAuthor")
 
   // Mobile sign-in looks an account up by number on every SMS code entered.
@@ -670,6 +672,10 @@ model Tenant {
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
   blogSettings               TenantBlogSettings?
+  boards                     Board[]
+  boardColumns               BoardColumn[]
+  boardColumnStatuses        BoardColumnStatus[]
+  boardTasks                 BoardTask[]
 
   @@index([deleted_at])
 }
@@ -5165,6 +5171,8 @@ model ProjectTaskStatus {
   project Project?      @relation(fields: [project_id], references: [id], onDelete: Cascade)
   tasks   ProjectTask[]
 
+  boardBindings BoardColumnStatus[]
+
   /// Postgres treats NULLs as distinct, so this does not constrain template
   /// rows. `ProjectSettingsService` checks those for a name clash instead.
   @@unique([tenant_id, project_id, name])
@@ -5228,6 +5236,7 @@ model ProjectTask {
   remainingLogs  ProjectTaskRemainingLog[]
   comments       ProjectComment[]
   attachments    ProjectAttachment[]
+  boardCards     BoardTask[]
 
   @@index([tenant_id, project_id, deleted_at])
   @@index([tenant_id, sprint_id])
@@ -5308,6 +5317,93 @@ model ProjectTaskActivity {
   @@index([task_id, created_at])
   @@index([tenant_id, project_id, created_at])
   @@map("project_task_activities")
+}
+
+/// A wall of hand-picked cards. Unlike a project, a board has no work of its
+/// own — every card on it is a ProjectTask that still belongs to its project.
+model Board {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  name        String
+  description String?
+  created_by  String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant  Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  creator User?  @relation("BoardCreator", fields: [created_by], references: [id])
+
+  columns BoardColumn[]
+  cards   BoardTask[]
+
+  /// Names are deliberately not unique: a unique (tenant_id, name) would let a
+  /// soft-deleted board hold its name hostage against a new one.
+  @@index([tenant_id, deleted_at])
+  @@map("boards")
+}
+
+model BoardColumn {
+  id         String                    @id @default(uuid())
+  tenant_id  String
+  board_id   String
+  name       String
+  category   ProjectTaskStatusCategory @default(TODO)
+  sort_order Int                       @default(0)
+  /// Advisory, exactly like ProjectTaskStatus.wip_limit: the board marks a
+  /// column over-limit, it does not refuse the drop.
+  wip_limit  Int?
+  created_at DateTime                  @default(now())
+  updated_at DateTime                  @updatedAt
+
+  tenant   Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  board    Board               @relation(fields: [board_id], references: [id], onDelete: Cascade)
+  bindings BoardColumnStatus[]
+
+  @@unique([board_id, name])
+  @@index([board_id, sort_order])
+  @@map("board_columns")
+}
+
+/// Binds one project status to one column of one board.
+model BoardColumnStatus {
+  id              String @id @default(uuid())
+  tenant_id       String
+  board_id        String
+  board_column_id String
+  status_id       String
+
+  tenant Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  column BoardColumn       @relation(fields: [board_column_id], references: [id], onDelete: Cascade)
+  status ProjectTaskStatus @relation(fields: [status_id], references: [id], onDelete: Cascade)
+
+  /// `board_id` is denormalised for exactly this constraint. It guarantees a
+  /// status resolves to at most one column, which is what stops a card
+  /// appearing twice on the same board. Deriving it through board_column_id
+  /// would lose that.
+  @@unique([board_id, status_id])
+  @@index([board_column_id])
+  @@map("board_column_statuses")
+}
+
+/// Explicit membership. Nothing joins a board by rule.
+model BoardTask {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  board_id   String
+  task_id    String
+  sort_order Int      @default(0)
+  added_by   String?
+  added_at   DateTime @default(now())
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  board  Board       @relation(fields: [board_id], references: [id], onDelete: Cascade)
+  task   ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  adder  User?       @relation("BoardTaskAdder", fields: [added_by], references: [id])
+
+  @@unique([board_id, task_id])
+  @@index([board_id, sort_order])
+  @@map("board_tasks")
 }
 
 /// Who hears about a task. Employees without a login are deliberately absent:
