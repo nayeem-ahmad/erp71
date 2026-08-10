@@ -1248,6 +1248,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     sendCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}/send`, { method: 'POST' }),
+    cancelCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}/cancel`, { method: 'POST' }),
     deleteCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`, { method: 'DELETE' }),
     // Customer Groups
     getCustomerGroups: () => fetchAllPages('/customer-groups'),
