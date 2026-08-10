@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Megaphone, Plus, Send, Eye, Trash2, RefreshCw, Users, Search, Loader2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import type { CampaignRowIssue, ValidCampaignRow } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -11,6 +12,8 @@ import { PageShell, PageHeader, Button, Input, Select, Textarea, Field, StatusBa
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { dhakaLocalToIso, isoToDhakaLocal } from '@/lib/schedule-time';
+import UploadRecipients from './upload-recipients';
 
 interface Campaign {
     id: string;
@@ -20,7 +23,8 @@ interface Campaign {
     channel: string;
     subject: string | null;
     target_segment: string | null;
-    message: string;
+    /** Null on UPLOAD campaigns — the body lives on each recipient row. */
+    message: string | null;
     scheduled_at: string | null;
     sent_at: string | null;
     recipient_count: number;
@@ -30,6 +34,17 @@ interface Campaign {
     attributed_orders: number | null;
     created_at: string;
     creator: { name: string | null; email: string } | null;
+    recipient_source: string;
+    body_format: string;
+    progress?: { total: number; sent: number; failed: number; pending: number };
+    recipients?: Array<{
+        id: string;
+        email: string | null;
+        name: string | null;
+        subject: string | null;
+        status: string;
+        error: string | null;
+    }>;
 }
 
 const SEGMENTS = ['ALL', 'VIP', 'At-Risk', 'Regular', 'New'];
@@ -44,6 +59,14 @@ const campaignStatusTone: Record<string, StatusBadgeTone> = {
     SENDING: 'warning',
     COMPLETED: 'success',
     CANCELLED: 'danger',
+};
+
+const recipientStatusTone: Record<string, StatusBadgeTone> = {
+    PENDING: 'neutral',
+    SENDING: 'warning',
+    SENT: 'success',
+    FAILED: 'danger',
+    CANCELLED: 'neutral',
 };
 
 export default function CrmCampaignsPage() {
@@ -62,17 +85,24 @@ export default function CrmCampaignsPage() {
         name: '',
         description: '',
         channel: 'SMS',
+        recipient_source: 'SEGMENT',
+        body_format: 'TEXT',
         subject: '',
         target_segment: 'ALL',
         message: '',
         scheduled_at: '',
     });
+    const [uploadRows, setUploadRows] = useState<ValidCampaignRow[]>([]);
+    const [uploadIssues, setUploadIssues] = useState<CampaignRowIssue[]>([]);
 
     // Detail/send modal state
     const [selected, setSelected] = useState<Campaign | null>(null);
     const [preview, setPreview] = useState<{ count: number; sample: any[] } | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [sending, setSending] = useState(false);
+    const [rescheduleValue, setRescheduleValue] = useState('');
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
 
     const loadCampaigns = useCallback(async () => {
         setLoading(true);
@@ -86,21 +116,55 @@ export default function CrmCampaignsPage() {
     useEffect(() => { void loadCampaigns(); }, [loadCampaigns]);
 
     const isEmail = form.channel === 'EMAIL';
-    const canSubmit = form.name.trim() && form.message.trim() && (!isEmail || form.subject.trim());
+    const isUpload = form.recipient_source === 'UPLOAD';
+    const canSubmit = isUpload
+        ? Boolean(form.name.trim()) && uploadRows.length > 0
+        : Boolean(form.name.trim() && form.message.trim() && (!isEmail || form.subject.trim()));
+
+    const resetForm = () => {
+        setForm({
+            name: '', description: '', channel: 'SMS', recipient_source: 'SEGMENT',
+            body_format: 'TEXT', subject: '', target_segment: 'ALL', message: '', scheduled_at: '',
+        });
+        setUploadRows([]);
+        setUploadIssues([]);
+    };
+
+    const setSource = (source: string) => {
+        setForm((f) => ({ ...f, recipient_source: source, channel: source === 'UPLOAD' ? 'EMAIL' : f.channel }));
+        if (source === 'SEGMENT') { setUploadRows([]); setUploadIssues([]); }
+    };
 
     const handleCreate = async () => {
         if (!canSubmit) return;
         setCreating(true);
         try {
-            await api.createCrmCampaign({
-                ...form,
-                subject: isEmail ? form.subject : undefined,
-                scheduled_at: form.scheduled_at || undefined,
-                description: form.description || undefined,
-            });
+            await api.createCrmCampaign(
+                isUpload
+                    ? {
+                          name: form.name,
+                          description: form.description || undefined,
+                          channel: 'EMAIL',
+                          recipient_source: 'UPLOAD',
+                          body_format: form.body_format,
+                          rows: uploadRows,
+                          scheduled_at: dhakaLocalToIso(form.scheduled_at) ?? undefined,
+                      }
+                    : {
+                          name: form.name,
+                          description: form.description || undefined,
+                          channel: form.channel,
+                          recipient_source: 'SEGMENT',
+                          body_format: isEmail ? form.body_format : undefined,
+                          subject: isEmail ? form.subject : undefined,
+                          target_segment: form.target_segment,
+                          message: form.message,
+                          scheduled_at: dhakaLocalToIso(form.scheduled_at) ?? undefined,
+                      },
+            );
             toast.success(m.created);
             setShowCreate(false);
-            setForm({ name: '', description: '', channel: 'SMS', subject: '', target_segment: 'ALL', message: '', scheduled_at: '' });
+            resetForm();
             await loadCampaigns();
         } catch (err: any) {
             toast.error(err?.message ?? m.createFailed);
@@ -112,14 +176,59 @@ export default function CrmCampaignsPage() {
     const handleSelect = async (campaign: Campaign) => {
         setSelected(campaign);
         setPreview(null);
-        if (campaign.status === 'DRAFT') {
-            setPreviewLoading(true);
-            try {
-                const data = await api.previewCampaignRecipients(campaign.id);
-                setPreview(data);
-            } finally {
-                setPreviewLoading(false);
+        setRescheduleValue(isoToDhakaLocal(campaign.scheduled_at));
+        setPreviewLoading(true);
+        try {
+            const full = await api.getCrmCampaign(campaign.id);
+            setSelected(full);
+            if (full.status === 'DRAFT' && full.recipient_source === 'SEGMENT') {
+                setPreview(await api.previewCampaignRecipients(campaign.id));
+            } else {
+                setPreview({ count: full.progress?.total ?? full.recipient_count, sample: [] });
             }
+        } catch (err: any) {
+            // Without this the modal sits open on the stale row it was opened
+            // from, with an unhandled rejection and no sign anything failed.
+            toast.error(err?.message ?? m.loadFailed);
+            setSelected(null);
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!selected) return;
+        if (!confirm(m.schedule.cancelConfirm.replace('{name}', selected.name))) return;
+        setCancelling(true);
+        try {
+            await api.cancelCrmCampaign(selected.id);
+            toast.success(m.schedule.cancelled);
+            setSelected(null);
+            await loadCampaigns();
+        } catch (err: any) {
+            toast.error(err?.message ?? m.schedule.cancelFailed);
+        } finally {
+            setCancelling(false);
+        }
+    };
+
+    const handleReschedule = async () => {
+        if (!selected) return;
+        setSavingSchedule(true);
+        try {
+            // Explicitly null, not undefined: clearing the field has to reach
+            // the server as "unschedule this", and an undefined key is dropped
+            // from the PATCH body, making it a no-op.
+            await api.updateCrmCampaign(selected.id, {
+                scheduled_at: dhakaLocalToIso(rescheduleValue),
+            });
+            toast.success(m.schedule.rescheduled);
+            setSelected(null);
+            await loadCampaigns();
+        } catch (err: any) {
+            toast.error(err?.message ?? m.schedule.rescheduleFailed);
+        } finally {
+            setSavingSchedule(false);
         }
     };
 
@@ -159,7 +268,7 @@ export default function CrmCampaignsPage() {
         return campaigns.filter((c) => {
             if (statusFilter && c.status !== statusFilter) return false;
             if (channelFilter && c.channel !== channelFilter) return false;
-            if (q && !(`${c.name} ${c.subject ?? ''} ${c.message}`.toLowerCase().includes(q))) return false;
+            if (q && !(`${c.name} ${c.subject ?? ''} ${c.message ?? ''}`.toLowerCase().includes(q))) return false;
             return true;
         });
     }, [campaigns, search, statusFilter, channelFilter]);
@@ -184,7 +293,7 @@ export default function CrmCampaignsPage() {
                         {c.channel === 'EMAIL' && c.subject && (
                             <p className="text-xs text-gray-600 font-medium truncate">{c.subject}</p>
                         )}
-                        <p className="text-xs text-gray-400 truncate">{c.message}</p>
+                        {c.message && <p className="text-xs text-gray-400 truncate">{c.message}</p>}
                     </div>
                 );
             },
@@ -316,10 +425,10 @@ export default function CrmCampaignsPage() {
 
             {/* Create modal */}
             {showCreate && (
-                <ModalShell size="md" onBackdropClick={() => setShowCreate(false)}>
-                    <ModalHeader title={m.newCampaign} onClose={() => setShowCreate(false)} />
+                <ModalShell size="md" onBackdropClick={() => { setShowCreate(false); resetForm(); }}>
+                    <ModalHeader title={m.newCampaign} onClose={() => { setShowCreate(false); resetForm(); }} />
                     <div className="p-4 overflow-y-auto flex-1 space-y-4">
-                        <Field label={m.columns.name}>
+                        <Field label={m.columns.name} required>
                             <Input
                                 type="text"
                                 placeholder={m.placeholders.name}
@@ -328,50 +437,107 @@ export default function CrmCampaignsPage() {
                             />
                         </Field>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <Field label="Channel">
-                                <Select
-                                    value={form.channel}
-                                    onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
-                                >
-                                    {CHANNELS.map((ch) => <option key={ch}>{ch}</option>)}
-                                </Select>
-                            </Field>
-                            <Field label="Target Segment">
-                                <Select
-                                    value={form.target_segment}
-                                    onChange={(e) => setForm((f) => ({ ...f, target_segment: e.target.value }))}
-                                >
-                                    {SEGMENTS.map((s) => <option key={s}>{s}</option>)}
-                                </Select>
-                            </Field>
-                        </div>
+                        <Field label={m.upload.recipientsLabel}>
+                            <div className="flex gap-4">
+                                {[
+                                    { value: 'SEGMENT', label: m.upload.sourceSegment },
+                                    { value: 'UPLOAD', label: m.upload.sourceUpload },
+                                ].map((option) => (
+                                    <label key={option.value} className="flex items-center gap-2 cursor-pointer min-h-touch">
+                                        <input
+                                            type="radio"
+                                            name="recipient-source"
+                                            value={option.value}
+                                            checked={form.recipient_source === option.value}
+                                            onChange={() => setSource(option.value)}
+                                            className="accent-blue-600"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">{option.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </Field>
 
-                        {isEmail && (
-                            <Field label={m.subjectLabel}>
-                                <Input
-                                    type="text"
-                                    placeholder={m.placeholders.subject}
-                                    value={form.subject}
-                                    onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                                />
+                        {isUpload ? (
+                            <UploadRecipients
+                                rows={uploadRows}
+                                issues={uploadIssues}
+                                onChange={(rows, issues) => { setUploadRows(rows); setUploadIssues(issues); }}
+                            />
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Field label="Channel">
+                                        <Select
+                                            value={form.channel}
+                                            onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
+                                        >
+                                            {CHANNELS.map((ch) => <option key={ch}>{ch}</option>)}
+                                        </Select>
+                                    </Field>
+                                    <Field label="Target Segment">
+                                        <Select
+                                            value={form.target_segment}
+                                            onChange={(e) => setForm((f) => ({ ...f, target_segment: e.target.value }))}
+                                        >
+                                            {SEGMENTS.map((s) => <option key={s}>{s}</option>)}
+                                        </Select>
+                                    </Field>
+                                </div>
+
+                                {isEmail && (
+                                    <Field label={m.subjectLabel} required>
+                                        <Input
+                                            type="text"
+                                            placeholder={m.placeholders.subject}
+                                            value={form.subject}
+                                            onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                                        />
+                                    </Field>
+                                )}
+
+                                <Field
+                                    label="Message"
+                                    required
+                                    hint={form.channel === 'SMS' ? `${charCount} chars · ${smsPages} SMS page${smsPages !== 1 ? 's' : ''}` : undefined}
+                                >
+                                    <Textarea
+                                        placeholder={m.placeholders.message}
+                                        value={form.message}
+                                        onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+                                        rows={4}
+                                    />
+                                </Field>
+                            </>
+                        )}
+
+                        {(isEmail || isUpload) && (
+                            <Field label={m.upload.bodyFormatLabel}>
+                                <div className="flex gap-4">
+                                    {[
+                                        { value: 'TEXT', label: m.upload.bodyFormatText },
+                                        { value: 'HTML', label: m.upload.bodyFormatHtml },
+                                    ].map((option) => (
+                                        <label key={option.value} className="flex items-center gap-2 cursor-pointer min-h-touch">
+                                            <input
+                                                type="radio"
+                                                name="body-format"
+                                                value={option.value}
+                                                checked={form.body_format === option.value}
+                                                onChange={() => setForm((f) => ({ ...f, body_format: option.value }))}
+                                                className="accent-blue-600"
+                                            />
+                                            <span className="text-sm font-medium text-gray-700">{option.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </Field>
                         )}
 
                         <Field
-                            label="Message"
-                            required
-                            hint={form.channel === 'SMS' ? `${charCount} chars · ${smsPages} SMS page${smsPages !== 1 ? 's' : ''}` : undefined}
+                            label={m.schedule.label}
+                            hint={form.scheduled_at ? m.schedule.resolved.replace('{when}', form.scheduled_at.replace('T', ' ')) : undefined}
                         >
-                            <Textarea
-                                placeholder={m.placeholders.message}
-                                value={form.message}
-                                onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                                rows={4}
-                            />
-                        </Field>
-
-                        <Field label="Schedule (optional)">
                             <Input
                                 type="datetime-local"
                                 value={form.scheduled_at}
@@ -380,7 +546,7 @@ export default function CrmCampaignsPage() {
                         </Field>
                     </div>
                     <ModalFooter>
-                        <Button variant="secondary" onClick={() => setShowCreate(false)}>
+                        <Button variant="secondary" onClick={() => { setShowCreate(false); resetForm(); }}>
                             Cancel
                         </Button>
                         <Button onClick={handleCreate} disabled={!canSubmit} loading={creating}>
@@ -408,9 +574,13 @@ export default function CrmCampaignsPage() {
                             </div>
                         )}
 
-                        <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
-                            {selected.message}
-                        </div>
+                        {/* An UPLOAD campaign has no campaign-level body — each
+                            recipient carries its own — so there is no panel to show. */}
+                        {selected.message && (
+                            <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                                {selected.message}
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-3 text-sm">
                             <div><span className="text-gray-400">Channel:</span> <span className="font-medium">{selected.channel}</span></div>
@@ -453,11 +623,88 @@ export default function CrmCampaignsPage() {
                                 ) : null}
                             </div>
                         )}
+
+                        {selected.progress && selected.progress.total > 0 && (
+                            <p className="text-xs text-gray-500">
+                                {m.recipients.progress
+                                    .replace('{sent}', String(selected.progress.sent))
+                                    .replace('{failed}', String(selected.progress.failed))
+                                    .replace('{pending}', String(selected.progress.pending))}
+                            </p>
+                        )}
+
+                        {selected.recipient_source === 'UPLOAD' && (
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-2">{m.recipients.title}</p>
+                                {selected.recipients && selected.recipients.length > 0 ? (
+                                    <>
+                                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                            <table className="w-full text-xs">
+                                                <thead>
+                                                    <tr className="bg-gray-50">
+                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.recipients.columnRecipient}</th>
+                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500 hidden md:table-cell">{m.recipients.columnSubject}</th>
+                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.recipients.columnStatus}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selected.recipients.map((r) => (
+                                                        <tr key={r.id} className="border-t border-gray-100">
+                                                            <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate">
+                                                                {r.name ?? r.email}
+                                                                <span className="block text-gray-400">{r.email}</span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate hidden md:table-cell">{r.subject}</td>
+                                                            <td className="px-3 py-2">
+                                                                <StatusBadge tone={recipientStatusTone[r.status] ?? 'neutral'}>{r.status}</StatusBadge>
+                                                                {r.error && <span className="block text-danger mt-0.5">{r.error}</span>}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {(selected.progress?.total ?? 0) > selected.recipients.length && (
+                                            <p className="text-xs text-gray-400 mt-1.5">
+                                                {m.recipients.showingFirst
+                                                    .replace('{shown}', String(selected.recipients.length))
+                                                    .replace('{total}', String(selected.progress?.total ?? 0))}
+                                            </p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-xs text-gray-400">{m.recipients.none}</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* DRAFT as well as SCHEDULED: update() allows both, and
+                            without DRAFT a draft could never be given a schedule
+                            after it was created. */}
+                        {['DRAFT', 'SCHEDULED'].includes(selected.status) && (
+                            <Field label={m.schedule.label}>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="datetime-local"
+                                        value={rescheduleValue}
+                                        onChange={(e) => setRescheduleValue(e.target.value)}
+                                    />
+                                    <Button variant="secondary" onClick={handleReschedule} loading={savingSchedule}>
+                                        {m.schedule.reschedule}
+                                    </Button>
+                                </div>
+                            </Field>
+                        )}
                     </div>
                     <ModalFooter>
                         <Button variant="secondary" onClick={() => setSelected(null)}>
                             Close
                         </Button>
+                        {['SCHEDULED', 'SENDING'].includes(selected.status) && (
+                            <Button variant="secondary" onClick={handleCancel} loading={cancelling}>
+                                {m.schedule.cancel}
+                            </Button>
+                        )}
                         {selected.status === 'DRAFT' && (
                             <Button onClick={handleSend} disabled={preview?.count === 0} loading={sending} icon={<Send className="w-4 h-4" />}>
                                 {m.sendNow}
