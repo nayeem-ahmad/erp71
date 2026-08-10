@@ -46,6 +46,11 @@ export class CrmCampaignsController {
         return this.service.send(tenant.tenantId, id);
     }
 
+    @Post(':id/cancel')
+    cancel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.service.cancel(tenant.tenantId, id);
+    }
+
     @Patch(':id')
     update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCampaignDto) {
         return this.service.update(tenant.tenantId, id, dto);

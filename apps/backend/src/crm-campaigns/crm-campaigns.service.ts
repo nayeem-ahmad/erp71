@@ -1,27 +1,31 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { validateCampaignRows } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
-import { SmsService } from '../sms/sms.service';
-import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { EmailService } from '../email/email.service';
 import { AppLogger } from '../common/app-logger.service';
 import { CreateCampaignDto, UpdateCampaignDto } from './crm-campaigns.dto';
 import { paginate } from '../common/pagination.dto';
-import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
-import { JOB_NAMES } from '../system-health/jobs/job-names';
+import { CampaignRecipientsService } from './campaign-recipients.service';
+import { CampaignDispatchService } from './campaign-dispatch.service';
 
 @Injectable()
 export class CrmCampaignsService {
     constructor(
         private db: DatabaseService,
-        private sms: SmsService,
-        private whatsapp: WhatsAppService,
-        private email: EmailService,
+        private recipients: CampaignRecipientsService,
+        private dispatch: CampaignDispatchService,
         private readonly logger: AppLogger,
-        private readonly jobTracker: JobTrackerService,
     ) {}
 
     async create(tenantId: string, userId: string, dto: CreateCampaignDto) {
+        const source = dto.recipient_source ?? 'SEGMENT';
+
+        if (source === 'UPLOAD') {
+            return this.createFromUpload(tenantId, userId, dto);
+        }
+
+        if (!dto.message) {
+            throw new BadRequestException('message is required.');
+        }
         if (dto.channel === 'EMAIL' && !dto.subject) {
             throw new BadRequestException('subject is required for EMAIL campaigns.');
         }
@@ -32,6 +36,8 @@ export class CrmCampaignsService {
                 name: dto.name,
                 description: dto.description,
                 channel: dto.channel,
+                recipient_source: 'SEGMENT',
+                body_format: dto.body_format ?? 'TEXT',
                 subject: dto.subject,
                 message: dto.message,
                 target_segment: dto.target_segment ?? 'ALL',
@@ -42,6 +48,47 @@ export class CrmCampaignsService {
             },
             include: { creator: { select: { id: true, name: true, email: true } } },
         });
+    }
+
+    /**
+     * An uploaded list is validated with the same rules the browser previewed
+     * with, then materialised into recipients straight away — so the detail
+     * view can show exactly who will be emailed before anything is sent.
+     */
+    private async createFromUpload(tenantId: string, userId: string, dto: CreateCampaignDto) {
+        if (dto.channel !== 'EMAIL') {
+            throw new BadRequestException('An uploaded recipient list can only be sent by email.');
+        }
+
+        const { rows, fileError } = validateCampaignRows(dto.rows ?? []);
+        if (fileError) throw new BadRequestException(fileError);
+
+        const campaign = await this.db.crmCampaign.create({
+            data: {
+                tenant_id: tenantId,
+                name: dto.name,
+                description: dto.description,
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+                body_format: dto.body_format ?? 'TEXT',
+                subject: null,
+                message: null,
+                target_segment: null,
+                target_group_id: null,
+                scheduled_at: dto.scheduled_at ? new Date(dto.scheduled_at) : null,
+                created_by: userId,
+                status: dto.scheduled_at ? 'SCHEDULED' : 'DRAFT',
+            },
+            include: { creator: { select: { id: true, name: true, email: true } } },
+        });
+
+        const written = await this.recipients.writeUploadedRecipients(tenantId, campaign.id, rows, userId);
+        await this.db.crmCampaign.update({
+            where: { id: campaign.id },
+            data: { recipient_count: written },
+        });
+
+        return { ...campaign, recipient_count: written };
     }
 
     async findAll(tenantId: string, opts?: { page?: number; limit?: number }) {
@@ -72,14 +119,24 @@ export class CrmCampaignsService {
             include: {
                 creator: { select: { id: true, name: true, email: true } },
                 recipients: {
-                    include: { customer: { select: { id: true, name: true, phone: true } } },
-                    orderBy: { sent_at: 'desc' },
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                        phone: true,
+                        subject: true,
+                        status: true,
+                        sent_at: true,
+                        error: true,
+                    },
+                    orderBy: [{ status: 'asc' }, { sent_at: 'desc' }],
                     take: 100,
                 },
             },
         });
         if (!campaign) throw new NotFoundException('Campaign not found');
-        return campaign;
+
+        return { ...campaign, progress: await this.progressOf(id) };
     }
 
     async update(tenantId: string, id: string, dto: UpdateCampaignDto) {
@@ -88,7 +145,12 @@ export class CrmCampaignsService {
         if (!['DRAFT', 'SCHEDULED'].includes(existing.status)) {
             throw new BadRequestException('Only DRAFT/SCHEDULED campaigns can be edited');
         }
-        if (existing.channel === 'EMAIL' && dto.subject !== undefined && !dto.subject) {
+        if (
+            existing.channel === 'EMAIL' &&
+            existing.recipient_source === 'SEGMENT' &&
+            dto.subject !== undefined &&
+            !dto.subject
+        ) {
             throw new BadRequestException('subject is required for EMAIL campaigns.');
         }
 
@@ -115,12 +177,48 @@ export class CrmCampaignsService {
         return { success: true };
     }
 
+    /**
+     * Stops a campaign before, or part-way through, its send. Emails already
+     * out cannot be recalled, so the counts of what did go are kept.
+     */
+    async cancel(tenantId: string, id: string) {
+        const campaign = await this.db.crmCampaign.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!campaign) throw new NotFoundException('Campaign not found');
+        if (!['SCHEDULED', 'SENDING'].includes(campaign.status)) {
+            throw new BadRequestException(`Campaign is ${campaign.status} and cannot be cancelled`);
+        }
+
+        if (campaign.status === 'SCHEDULED') {
+            await this.db.crmCampaign.update({ where: { id }, data: { status: 'CANCELLED' } });
+            return { success: true };
+        }
+
+        await this.db.crmCampaignRecipient.updateMany({
+            where: { campaign_id: id, status: 'PENDING' },
+            data: { status: 'CANCELLED' },
+        });
+        const progress = await this.progressOf(id);
+        await this.db.crmCampaign.update({
+            where: { id },
+            data: { status: 'CANCELLED', delivered_count: progress.sent, failed_count: progress.failed },
+        });
+        this.logger.log(`Campaign ${id} cancelled after ${progress.sent} sent`);
+        return { success: true };
+    }
+
     async previewRecipients(tenantId: string, id: string) {
         const campaign = await this.db.crmCampaign.findFirst({ where: { id, tenant_id: tenantId } });
         if (!campaign) throw new NotFoundException('Campaign not found');
 
-        const customers = await this.resolveTargetCustomers(
-            tenantId, campaign.target_segment, campaign.target_group_id,
+        if (campaign.recipient_source === 'UPLOAD') {
+            const progress = await this.progressOf(id);
+            return { count: progress.total, sample: [] };
+        }
+
+        const customers = await this.recipients.resolveTargetCustomers(
+            tenantId,
+            campaign.target_segment,
+            campaign.target_group_id,
         );
         return {
             count: customers.length,
@@ -128,44 +226,8 @@ export class CrmCampaignsService {
         };
     }
 
-    async send(tenantId: string, id: string) {
-        const campaign = await this.db.crmCampaign.findFirst({ where: { id, tenant_id: tenantId } });
-        if (!campaign) throw new NotFoundException('Campaign not found');
-        if (!['DRAFT', 'SCHEDULED'].includes(campaign.status)) {
-            throw new BadRequestException(`Campaign is ${campaign.status} and cannot be sent`);
-        }
-
-        const customers = await this.resolveTargetCustomers(
-            tenantId, campaign.target_segment, campaign.target_group_id,
-        );
-        if (customers.length === 0) throw new BadRequestException('No eligible recipients found');
-
-        await this.db.crmCampaign.update({
-            where: { id },
-            data: { status: 'SENDING', recipient_count: customers.length },
-        });
-
-        await this.db.crmCampaignRecipient.createMany({
-            data: customers.map((c) => ({
-                id: require('crypto').randomUUID(),
-                campaign_id: id,
-                customer_id: c.id,
-                phone: c.phone,
-                status: 'PENDING',
-            })),
-            skipDuplicates: true,
-        });
-
-        void this.dispatchCampaign(
-            tenantId,
-            id,
-            campaign.message,
-            campaign.subject,
-            campaign.channel,
-            customers,
-        ).catch((err) => this.logger.error(`Campaign ${id} dispatch error: ${err}`));
-
-        return { queued: customers.length };
+    send(tenantId: string, id: string) {
+        return this.dispatch.queue(tenantId, id);
     }
 
     /** Called by SalesService after a sale to attribute revenue to recent campaigns. */
@@ -197,112 +259,17 @@ export class CrmCampaignsService {
         });
     }
 
-    /** Cron: dispatch SCHEDULED campaigns whose scheduled_at has passed. */
-    @Cron('*/5 * * * *')
-    async processScheduledCampaigns(): Promise<void> {
-        await this.jobTracker.track(JOB_NAMES.CRM_CAMPAIGNS, () => this.processScheduledCampaignsImpl());
-    }
-
-    private async processScheduledCampaignsImpl(): Promise<void> {
-        const now = new Date();
-
-        const dueCampaigns = await this.db.crmCampaign.findMany({
-            where: {
-                status: 'SCHEDULED',
-                scheduled_at: { lte: now },
-            },
+    private async progressOf(campaignId: string) {
+        const grouped = await this.db.crmCampaignRecipient.groupBy({
+            by: ['status'],
+            where: { campaign_id: campaignId },
+            _count: { _all: true },
         });
-
-        for (const campaign of dueCampaigns) {
-            this.logger.log(`Auto-dispatching scheduled campaign ${campaign.id} (${campaign.name})`);
-            try {
-                await this.send(campaign.tenant_id, campaign.id);
-            } catch (err) {
-                this.logger.error(`Scheduled campaign ${campaign.id} dispatch failed: ${err}`);
-            }
-        }
-    }
-
-    private async dispatchCampaign(
-        tenantId: string,
-        campaignId: string,
-        message: string,
-        subject: string | null,
-        channel: string,
-        customers: Array<{ id: string; phone: string; email?: string | null }>,
-    ) {
-        let delivered = 0;
-        let failed = 0;
-
-        for (const customer of customers) {
-            try {
-                if (channel === 'SMS') {
-                    const result = await this.sms.sendSms(customer.phone, message, {
-                        tenantId,
-                        purpose: 'CRM campaign',
-                    });
-                    if (!result.sent) {
-                        throw new Error('Insufficient SMS credits');
-                    }
-                } else if (channel === 'WHATSAPP') {
-                    await this.whatsapp.sendMessage(customer.phone, message, { tenantId });
-                } else if (channel === 'EMAIL') {
-                    if (!customer.email) {
-                        throw new Error('Customer has no email address on file');
-                    }
-                    await this.email.sendCustom(
-                        customer.email,
-                        subject ?? '',
-                        message.replace(/\n/g, '<br>'),
-                        { tenantId },
-                    );
-                }
-                await this.db.crmCampaignRecipient.updateMany({
-                    where: { campaign_id: campaignId, customer_id: customer.id },
-                    data: { status: 'SENT', sent_at: new Date() },
-                });
-                delivered++;
-            } catch (err) {
-                await this.db.crmCampaignRecipient.updateMany({
-                    where: { campaign_id: campaignId, customer_id: customer.id },
-                    data: { status: 'FAILED', error: String(err) },
-                });
-                failed++;
-            }
-        }
-
-        await this.db.crmCampaign.update({
-            where: { id: campaignId },
-            data: {
-                status: 'COMPLETED',
-                sent_at: new Date(),
-                delivered_count: delivered,
-                failed_count: failed,
-            },
-        });
-
-        this.logger.log(`Campaign ${campaignId} completed: ${delivered} sent, ${failed} failed`);
-    }
-
-    private async resolveTargetCustomers(
-        tenantId: string,
-        targetSegment: string | null,
-        targetGroupId: string | null,
-    ) {
-        // Every channel writes a CrmCampaignRecipient, which requires a phone —
-        // so customers without one are never eligible, whatever the channel.
-        const where: any = { tenant_id: tenantId, deleted_at: null, phone: { not: null } };
-
-        if (targetSegment && targetSegment !== 'ALL') {
-            where.segment_category = targetSegment;
-        }
-        if (targetGroupId) {
-            where.customer_group_id = targetGroupId;
-        }
-
-        return this.db.customer.findMany({
-            where,
-            select: { id: true, name: true, phone: true, email: true },
-        });
+        const countOf = (status: string) =>
+            grouped.find((g: any) => g.status === status)?._count?._all ?? 0;
+        const sent = countOf('SENT');
+        const failed = countOf('FAILED');
+        const pending = countOf('PENDING') + countOf('SENDING');
+        return { total: sent + failed + pending + countOf('CANCELLED'), sent, failed, pending };
     }
 }

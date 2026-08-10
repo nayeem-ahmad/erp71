@@ -1,4 +1,18 @@
-import { IsString, IsOptional, IsEnum, IsUUID, IsDateString, IsIn } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+    IsString,
+    IsOptional,
+    IsEnum,
+    IsUUID,
+    IsDateString,
+    IsIn,
+    IsEmail,
+    IsNotEmpty,
+    IsArray,
+    ArrayMaxSize,
+    ValidateNested,
+} from 'class-validator';
+import { CAMPAIGN_UPLOAD_MAX_ROWS } from '@erp71/shared-types';
 
 export enum CampaignChannel {
     SMS = 'SMS',
@@ -14,6 +28,34 @@ export enum CampaignTargetSegment {
     NEW = 'New',
 }
 
+export enum CampaignRecipientSource {
+    SEGMENT = 'SEGMENT',
+    UPLOAD = 'UPLOAD',
+}
+
+export enum CampaignBodyFormat {
+    TEXT = 'TEXT',
+    HTML = 'HTML',
+}
+
+/** One row of an uploaded recipient list. */
+export class CampaignUploadRowDto {
+    @IsEmail()
+    email: string;
+
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsString()
+    @IsNotEmpty()
+    subject: string;
+
+    @IsString()
+    @IsNotEmpty()
+    message: string;
+}
+
 export class CreateCampaignDto {
     @IsString()
     name: string;
@@ -26,11 +68,28 @@ export class CreateCampaignDto {
     channel: CampaignChannel;
 
     @IsOptional()
+    @IsEnum(CampaignRecipientSource)
+    recipient_source?: CampaignRecipientSource;
+
+    @IsOptional()
+    @IsEnum(CampaignBodyFormat)
+    body_format?: CampaignBodyFormat;
+
+    @IsOptional()
     @IsString()
     subject?: string;
 
+    /** Required for SEGMENT campaigns; UPLOAD campaigns carry a message per row. */
+    @IsOptional()
     @IsString()
-    message: string;
+    message?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(CAMPAIGN_UPLOAD_MAX_ROWS)
+    @ValidateNested({ each: true })
+    @Type(() => CampaignUploadRowDto)
+    rows?: CampaignUploadRowDto[];
 
     @IsOptional()
     @IsIn(['ALL', 'VIP', 'At-Risk', 'Regular', 'New'])
@@ -61,6 +120,10 @@ export class UpdateCampaignDto {
     @IsOptional()
     @IsString()
     message?: string;
+
+    @IsOptional()
+    @IsEnum(CampaignBodyFormat)
+    body_format?: CampaignBodyFormat;
 
     @IsOptional()
     @IsIn(['ALL', 'VIP', 'At-Risk', 'Regular', 'New'])
