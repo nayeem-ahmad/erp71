@@ -1,6 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { CampaignDispatchService, CAMPAIGN_BATCH_SIZE, STALE_CLAIM_MS } from './campaign-dispatch.service';
+import {
+    CampaignDispatchService,
+    CAMPAIGN_BATCH_SIZE,
+    STALE_CLAIM_MS,
+    CLAIM_HEARTBEAT_MS,
+} from './campaign-dispatch.service';
 import { CampaignRecipientsService } from './campaign-recipients.service';
 import { DatabaseService } from '../database/database.service';
 import { SmsService } from '../sms/sms.service';
@@ -60,7 +65,7 @@ describe('CampaignDispatchService', () => {
                 { provide: SmsService, useValue: sms },
                 { provide: WhatsAppService, useValue: whatsapp },
                 { provide: EmailService, useValue: email },
-                { provide: AppLogger, useValue: { log: jest.fn(), error: jest.fn() } },
+                { provide: AppLogger, useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } },
                 { provide: JobTrackerService, useValue: { track: jest.fn((_n, fn) => fn()) } },
             ],
         }).compile();
@@ -132,15 +137,40 @@ describe('CampaignDispatchService', () => {
          * PENDING queue, then back the rows it actually claimed — so the mock
          * answers on the shape of the `where` rather than on call order.
          */
-        const queueRows = (rows: any[], opts: { claimed?: any[] } = {}) => {
+        const queueRows = (
+            rows: any[],
+            opts: { claimed?: any[]; heartbeatHeld?: boolean } = {},
+        ) => {
             const claimedRows = opts.claimed ?? rows;
+            const heartbeatHeld = opts.heartbeatHeld ?? true;
             db.crmCampaignRecipient.findMany.mockImplementation(({ where }: any) =>
                 Promise.resolve(where.status === 'PENDING' ? rows.map((r) => ({ id: r.id })) : claimedRows),
             );
-            db.crmCampaignRecipient.updateMany.mockImplementation(({ data }: any) =>
-                Promise.resolve({ count: data.status === 'SENDING' ? claimedRows.length : 0 }),
-            );
+            db.crmCampaignRecipient.updateMany.mockImplementation(({ where, data }: any) => {
+                if (data.status === 'SENDING') return Promise.resolve({ count: claimedRows.length });
+                // The stale sweep: back to PENDING, claim cleared.
+                if (data.status === 'PENDING') return Promise.resolve({ count: 0 });
+                // The heartbeat: claimed_at alone, no status change.
+                if (data.claimed_at !== undefined) {
+                    return Promise.resolve({ count: heartbeatHeld ? where.id.in.length : 0 });
+                }
+                // A terminal SENT/FAILED write for one row.
+                return Promise.resolve({ count: 1 });
+            });
         };
+
+        /** All heartbeat calls, in order — claimed_at refreshed, status untouched. */
+        const heartbeats = () =>
+            db.crmCampaignRecipient.updateMany.mock.calls
+                .map(([arg]: any[]) => arg)
+                .filter((arg: any) => arg.data.claimed_at !== undefined && !arg.data.status);
+
+        /** Makes every send outrun the heartbeat interval. */
+        const sendsSlowerThanTheHeartbeat = () =>
+            email.sendCustom.mockImplementation(() => {
+                jest.setSystemTime(Date.now() + CLAIM_HEARTBEAT_MS + 1_000);
+                return Promise.resolve(undefined);
+            });
 
         it('claims a batch before sending so an overlapping pass cannot double-send', async () => {
             db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
@@ -246,8 +276,8 @@ describe('CampaignDispatchService', () => {
 
             await service.drainCampaign('camp-1');
 
-            expect(db.crmCampaignRecipient.update).toHaveBeenCalledWith({
-                where: { id: 'r1' },
+            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                where: { id: 'r1', status: 'SENDING', claimed_at: expect.any(Date) },
                 data: { status: 'FAILED', error: 'Error: SMTP down' },
             });
         });
@@ -259,8 +289,8 @@ describe('CampaignDispatchService', () => {
             await service.drainCampaign('camp-1');
 
             expect(email.sendCustom).not.toHaveBeenCalled();
-            expect(db.crmCampaignRecipient.update).toHaveBeenCalledWith({
-                where: { id: 'r1' },
+            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                where: { id: 'r1', status: 'SENDING', claimed_at: expect.any(Date) },
                 data: { status: 'FAILED', error: 'Error: Recipient has no email address' },
             });
         });
@@ -346,8 +376,8 @@ describe('CampaignDispatchService', () => {
 
             await service.drainCampaign('camp-1');
 
-            expect(db.crmCampaignRecipient.update).toHaveBeenCalledWith({
-                where: { id: 'r1' },
+            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                where: { id: 'r1', status: 'SENDING', claimed_at: expect.any(Date) },
                 data: { status: 'FAILED', error: 'Error: Insufficient SMS credits' },
             });
         });
@@ -441,6 +471,96 @@ describe('CampaignDispatchService', () => {
 
                 expect(order[0]).toBe('updateMany:PENDING');
                 expect(order[1]).toBe('findMany');
+            });
+
+            // The sweep only knows "SENDING and old". Without a heartbeat it
+            // cannot tell a dead pass from a slow one, so a batch that outran
+            // STALE_CLAIM_MS would be reclaimed and re-sent by a concurrent
+            // pass while this loop, holding the rows in memory, sent them
+            // again. One batch over 15 minutes is ~4.5s/recipient across 200,
+            // which a handful of timing-out SMTP sockets reaches on its own.
+            describe('while a slow batch is in flight', () => {
+                beforeEach(() => {
+                    jest.useFakeTimers();
+                    jest.setSystemTime(new Date('2026-08-10T00:00:00.000Z'));
+                });
+                afterEach(() => jest.useRealTimers());
+
+                it('renews the claim on the unsent tail so a live pass is never swept', async () => {
+                    db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
+                    queueRows([pending('r1'), pending('r2'), pending('r3')]);
+                    sendsSlowerThanTheHeartbeat();
+
+                    await service.drainCampaign('camp-1');
+
+                    const claim = db.crmCampaignRecipient.updateMany.mock.calls
+                        .map(([arg]: any[]) => arg)
+                        .find((arg: any) => arg.data.status === 'SENDING');
+                    const beats = heartbeats();
+
+                    expect(email.sendCustom).toHaveBeenCalledTimes(3);
+                    // First beat fires before r2 and covers only what is unsent,
+                    // matched on the stamp the claim wrote.
+                    expect(beats[0].where.id.in).toEqual(['r2', 'r3']);
+                    expect(beats[0].where.status).toBe('SENDING');
+                    expect(beats[0].where.claimed_at).toEqual(claim.data.claimed_at);
+                    // The second beat chains off the first, not off the claim.
+                    expect(beats[1].where.id.in).toEqual(['r3']);
+                    expect(beats[1].where.claimed_at).toEqual(beats[0].data.claimed_at);
+                });
+
+                it('stops rather than re-sending when a sweep has already reclaimed the batch', async () => {
+                    db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
+                    queueRows([pending('r1'), pending('r2'), pending('r3')], {
+                        heartbeatHeld: false,
+                    });
+                    sendsSlowerThanTheHeartbeat();
+
+                    await service.drainCampaign('camp-1');
+
+                    // r1 went out before the claim lapsed; r2 and r3 belong to
+                    // whoever swept them and must not be sent from here too.
+                    expect(email.sendCustom).toHaveBeenCalledTimes(1);
+                    expect(email.sendCustom).toHaveBeenCalledWith(
+                        'r1@example.com',
+                        expect.anything(),
+                        expect.anything(),
+                        expect.anything(),
+                    );
+                    expect(db.crmCampaign.updateMany).not.toHaveBeenCalled();
+                });
+            });
+
+            it('writes SENT only while it still holds the claim', async () => {
+                db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
+                queueRows([pending('r1')]);
+
+                await service.drainCampaign('camp-1');
+
+                expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                    where: { id: 'r1', status: 'SENDING', claimed_at: expect.any(Date) },
+                    data: { status: 'SENT', sent_at: expect.any(Date) },
+                });
+            });
+
+            it('does not overwrite a row another pass reclaimed mid-send', async () => {
+                db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
+                queueRows([pending('r1')]);
+                // The claim-scoped SENT write matches nothing: the row moved on.
+                db.crmCampaignRecipient.updateMany.mockImplementation(({ data }: any) =>
+                    Promise.resolve({ count: data.status === 'SENDING' ? 1 : 0 }),
+                );
+
+                await expect(service.drainCampaign('camp-1')).resolves.toBeUndefined();
+
+                const sent = db.crmCampaignRecipient.updateMany.mock.calls
+                    .map(([arg]: any[]) => arg)
+                    .find((arg: any) => arg.data.status === 'SENT');
+                expect(sent.where).toEqual({
+                    id: 'r1',
+                    status: 'SENDING',
+                    claimed_at: expect.any(Date),
+                });
             });
 
             it('refuses to complete while any row is still pending or claimed', async () => {

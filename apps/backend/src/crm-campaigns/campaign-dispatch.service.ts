@@ -21,6 +21,14 @@ export const CAMPAIGN_BATCH_SIZE = 200;
  */
 export const STALE_CLAIM_MS = 15 * 60 * 1000;
 
+/**
+ * How often a running batch refreshes its claim. A third of the stale
+ * threshold, so a pass that is alive but slow is always two missed heartbeats
+ * away from looking abandoned — a live batch is never swept out from under
+ * itself and re-sent by a concurrent pass.
+ */
+export const CLAIM_HEARTBEAT_MS = STALE_CLAIM_MS / 3;
+
 interface PendingRecipient {
     id: string;
     email: string | null;
@@ -134,7 +142,15 @@ export class CampaignDispatchService {
             orderBy: { id: 'asc' },
         });
 
-        for (const recipient of batch) {
+        // The stamp this pass currently holds its rows under. The heartbeat
+        // below moves it forward, so every ownership check compares against the
+        // latest one rather than the original claim.
+        let claimStamp = claimedAt;
+        let lastBeat = claimedAt.getTime();
+
+        for (let i = 0; i < batch.length; i++) {
+            const recipient = batch[i];
+
             // Cancelling flips the campaign and its rows, but a batch already
             // claimed is in this loop's hands — without re-reading, "Send then
             // Cancel" on a campaign that fits in one batch sends the lot. A
@@ -144,15 +160,49 @@ export class CampaignDispatchService {
                 return;
             }
 
+            // Keep the claim fresh. Without this a batch that outruns
+            // STALE_CLAIM_MS gets swept back to PENDING by a concurrent pass,
+            // re-claimed, and sent again — while this loop, holding the rows in
+            // memory, sends them a second time. Heartbeating rather than
+            // re-checking ownership on every row is the cheaper half of the
+            // trade (one updateMany per five minutes instead of per recipient)
+            // and it fixes the cause: a live pass never looks abandoned, so the
+            // sweep cannot take it. The count doubles as the ownership proof —
+            // zero means a sweep got there first and this loop must stop before
+            // it sends anything twice.
+            if (Date.now() - lastBeat >= CLAIM_HEARTBEAT_MS) {
+                const renewed = await this.renewClaim(
+                    batch.slice(i).map((r) => r.id),
+                    claimStamp,
+                );
+                if (!renewed) {
+                    this.logger.warn(
+                        `Campaign ${campaignId} drain stopped: claim lost before recipient ${recipient.id}`,
+                    );
+                    return;
+                }
+                claimStamp = renewed;
+                lastBeat = renewed.getTime();
+            }
+
             try {
                 await this.deliver(campaign, recipient);
-                await this.db.crmCampaignRecipient.update({
-                    where: { id: recipient.id },
+                // Conditional on the claim we still hold. A pause long enough to
+                // outlast a heartbeat (a stalled VM, a wedged socket) can still
+                // let another pass take the row mid-send; its state is then the
+                // authoritative one and ours must not overwrite it.
+                const written = await this.db.crmCampaignRecipient.updateMany({
+                    where: { id: recipient.id, status: 'SENDING', claimed_at: claimStamp },
                     data: { status: 'SENT', sent_at: new Date() },
                 });
+                if (written.count === 0) {
+                    this.logger.warn(
+                        `Campaign ${campaignId}: recipient ${recipient.id} was reclaimed mid-send`,
+                    );
+                }
             } catch (err) {
-                await this.db.crmCampaignRecipient.update({
-                    where: { id: recipient.id },
+                await this.db.crmCampaignRecipient.updateMany({
+                    where: { id: recipient.id, status: 'SENDING', claimed_at: claimStamp },
                     data: { status: 'FAILED', error: String(err) },
                 });
             }
@@ -164,6 +214,23 @@ export class CampaignDispatchService {
         if (queued.length < CAMPAIGN_BATCH_SIZE) {
             await this.complete(campaignId);
         }
+    }
+
+    /**
+     * Refreshes claimed_at on the unsent tail of a batch and proves this pass
+     * still owns it. Returns the new stamp, or null when a sweep has already
+     * taken the rows — the caller must then stop rather than send them again.
+     *
+     * All the rows carry the same stamp, so a sweep takes the whole tail or
+     * none of it; there is no partial outcome to reconcile.
+     */
+    private async renewClaim(ids: string[], heldSince: Date): Promise<Date | null> {
+        const renewed = new Date();
+        const held = await this.db.crmCampaignRecipient.updateMany({
+            where: { id: { in: ids }, status: 'SENDING', claimed_at: heldSince },
+            data: { claimed_at: renewed },
+        });
+        return held.count === 0 ? null : renewed;
     }
 
     /** True while the campaign is still SENDING — i.e. not cancelled underneath us. */
@@ -184,6 +251,10 @@ export class CampaignDispatchService {
      * longer ago than STALE_CLAIM_MS goes back to PENDING so the drain really
      * is resumable. A null claimed_at on a SENDING row predates this column and
      * can only be such an orphan, so it is recovered too.
+     *
+     * Safe only because a live pass heartbeats its claim every
+     * CLAIM_HEARTBEAT_MS: without that, this sweep would reclaim the tail of a
+     * slow-but-healthy batch and send it a second time.
      */
     private async requeueStaleClaims(campaignId: string): Promise<void> {
         const cutoff = new Date(Date.now() - STALE_CLAIM_MS);

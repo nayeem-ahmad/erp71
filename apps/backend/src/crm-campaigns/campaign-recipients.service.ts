@@ -156,12 +156,14 @@ export class CampaignRecipientsService {
      * `rahim@example.com` or every upload mints a duplicate contact for it —
      * precisely what the resolution order exists to prevent.
      *
-     * The cost of that is a scan: `mode: 'insensitive'` compiles to ILIKE,
-     * which no btree index can serve. That is the deliberate trade. The `in`
-     * set is bounded by the 1,000-row upload cap, so this is three unindexed
-     * scans per upload however large the list — acceptable where the 3N it
-     * replaced was not. A `LOWER(email)` functional index would make it
-     * index-backed if these tables ever grow enough to care.
+     * The cost of that is a scan: `mode: 'insensitive'` on an `in` compiles to
+     * `LOWER(email) IN (…)`, and no plain btree index on email can serve a
+     * function of the column. It is a hash probe per row rather than a pattern
+     * match, so the scan is cheap — and the `in` set is bounded by the
+     * 1,000-row upload cap, making this three sequential scans per upload
+     * however large the list, where the 3N it replaced was not acceptable. A
+     * `LOWER(email)` functional index would make it index-backed with no
+     * change here, if these tables ever grow enough to care.
      */
     private async resolveParties(
         tenantId: string,
