@@ -19,6 +19,10 @@ export function dhakaLocalToIso(localValue: string): string | null {
 /** The inverse: an instant rendered for a `datetime-local` input, in Dhaka time. */
 export function isoToDhakaLocal(iso: string | null): string {
     if (!iso) return '';
-    const shifted = new Date(new Date(iso).getTime() + DHAKA_OFFSET_MS);
-    return shifted.toISOString().slice(0, 16);
+    const parsed = new Date(iso).getTime();
+    // An unparseable timestamp is an empty picker, not a crash: toISOString()
+    // on an invalid Date throws RangeError, which would take the whole modal
+    // down over one bad row of data.
+    if (Number.isNaN(parsed)) return '';
+    return new Date(parsed + DHAKA_OFFSET_MS).toISOString().slice(0, 16);
 }

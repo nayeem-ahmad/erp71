@@ -32,4 +32,12 @@ describe('isoToDhakaLocal', () => {
     it('returns an empty string for null', () => {
         expect(isoToDhakaLocal(null)).toBe('');
     });
+
+    it.each(['not a date', '2026-13-45T99:99', ''])(
+        'returns an empty string rather than throwing on %p',
+        (bad) => {
+            expect(() => isoToDhakaLocal(bad)).not.toThrow();
+            expect(isoToDhakaLocal(bad)).toBe('');
+        },
+    );
 });
