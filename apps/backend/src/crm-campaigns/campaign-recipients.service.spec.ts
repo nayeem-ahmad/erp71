@@ -166,20 +166,20 @@ describe('CampaignRecipientsService', () => {
 
             await service.writeUploadedRecipients('t1', 'camp-1', rows, null);
 
-            const emails = ['rahim@example.com', 'karim@example.com'];
+            const email = { in: ['rahim@example.com', 'karim@example.com'], mode: 'insensitive' };
             expect(db.customer.findMany).toHaveBeenCalledTimes(1);
             expect(db.customer.findMany).toHaveBeenCalledWith({
-                where: { tenant_id: 't1', deleted_at: null, email: { in: emails } },
+                where: { tenant_id: 't1', deleted_at: null, email },
                 select: { id: true, name: true, phone: true, email: true },
             });
             expect(db.lead.findMany).toHaveBeenCalledTimes(1);
             expect(db.lead.findMany).toHaveBeenCalledWith({
-                where: { tenant_id: 't1', email: { in: emails } },
+                where: { tenant_id: 't1', email },
                 select: { id: true, name: true, mobile: true, email: true },
             });
             expect(db.crmContact.findMany).toHaveBeenCalledTimes(1);
             expect(db.crmContact.findMany).toHaveBeenCalledWith({
-                where: { tenant_id: 't1', email: { in: emails } },
+                where: { tenant_id: 't1', email },
                 select: { id: true, name: true, mobile: true, email: true },
             });
             expect(db.crmCampaignRecipient.createMany).toHaveBeenCalledTimes(1);
@@ -202,6 +202,43 @@ describe('CampaignRecipientsService', () => {
 
             expect(db.crmContact.createMany).not.toHaveBeenCalled();
             expect(writtenRow()).toEqual(expect.objectContaining({ customer_id: 'cus-1' }));
+        });
+
+        // The spec requires case-insensitive resolution, and none of the three
+        // tables normalises email on write. Without it, every upload mints a
+        // fresh duplicate contact for an address stored in mixed case — the
+        // exact duplicate the resolution order exists to prevent.
+        it('matches a customer whose stored address differs only in case', async () => {
+            // The mock stands in for Postgres honouring mode: 'insensitive':
+            // it only returns the row when the lookup asks for insensitivity.
+            db.customer.findMany.mockImplementation(({ where }: any) =>
+                Promise.resolve(
+                    where.email.mode === 'insensitive'
+                        ? [{ id: 'cus-1', name: 'Rahim Real', phone: '017', email: 'Rahim@Example.com' }]
+                        : [],
+                ),
+            );
+
+            await service.writeUploadedRecipients(
+                't1',
+                'camp-1',
+                [ROW, { ...ROW, email: 'karim@example.com', name: 'Karim' }],
+                'user-1',
+            );
+
+            const rows = db.crmCampaignRecipient.createMany.mock.calls[0][0].data;
+            expect(rows[0]).toEqual(
+                expect.objectContaining({
+                    customer_id: 'cus-1',
+                    contact_id: null,
+                    name: 'Rahim Real',
+                    phone: '017',
+                }),
+            );
+            // Only the genuinely unknown address becomes a contact.
+            expect(db.crmContact.createMany.mock.calls[0][0].data).toEqual([
+                expect.objectContaining({ email: 'karim@example.com' }),
+            ]);
         });
 
         it('writes through the transaction client it is given', async () => {

@@ -150,28 +150,37 @@ export class CampaignRecipientsService {
     /**
      * Looks a whole batch of addresses up across customers, leads and contacts.
      *
-     * The addresses arrive already lower-cased by validateCampaignRows, so this
-     * is an exact `in` on an indexed column rather than a per-row ILIKE, which
-     * no btree index can serve. The stored side is lower-cased in JS when the
-     * map is keyed, so casing differences in what Postgres returns still fold
-     * together.
+     * One query per table for the whole upload, not three per row. Matching
+     * stays case-insensitive: none of these three tables normalises email on
+     * write, so a stored `Rahim@Example.com` must still match an uploaded
+     * `rahim@example.com` or every upload mints a duplicate contact for it —
+     * precisely what the resolution order exists to prevent.
+     *
+     * The cost of that is a scan: `mode: 'insensitive'` compiles to ILIKE,
+     * which no btree index can serve. That is the deliberate trade. The `in`
+     * set is bounded by the 1,000-row upload cap, so this is three unindexed
+     * scans per upload however large the list — acceptable where the 3N it
+     * replaced was not. A `LOWER(email)` functional index would make it
+     * index-backed if these tables ever grow enough to care.
      */
     private async resolveParties(
         tenantId: string,
         emails: string[],
         client: Client,
     ): Promise<Map<string, ResolvedParty>> {
+        const email = { in: emails, mode: 'insensitive' as const };
+
         const [customers, leads, contacts] = await Promise.all([
             client.customer.findMany({
-                where: { tenant_id: tenantId, deleted_at: null, email: { in: emails } },
+                where: { tenant_id: tenantId, deleted_at: null, email },
                 select: { id: true, name: true, phone: true, email: true },
             }),
             client.lead.findMany({
-                where: { tenant_id: tenantId, email: { in: emails } },
+                where: { tenant_id: tenantId, email },
                 select: { id: true, name: true, mobile: true, email: true },
             }),
             client.crmContact.findMany({
-                where: { tenant_id: tenantId, email: { in: emails } },
+                where: { tenant_id: tenantId, email },
                 select: { id: true, name: true, mobile: true, email: true },
             }),
         ]);

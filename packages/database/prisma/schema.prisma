@@ -1978,9 +1978,6 @@ model Lead {
   @@index([tenant_id, status, closed_at])
   // Serves the same dashboard's new-leads-in-period count and daily trend buckets.
   @@index([tenant_id, created_at])
-  // Serves the uploaded-campaign resolver, which looks a whole batch of
-  // addresses up at once.
-  @@index([tenant_id, email])
 }
 
 /// Tenant-editable lead sources. Replaces the `LeadSource` enum.
@@ -2081,9 +2078,6 @@ model CrmContact {
   @@index([tenant_id, company])
   @@index([tenant_id, assigned_to])
   @@index([tenant_id, created_at])
-  // Serves the uploaded-campaign resolver, which looks a whole batch of
-  // addresses up at once.
-  @@index([tenant_id, email])
 }
 
 /// A file kept alongside a contact — today only the photographed business card
