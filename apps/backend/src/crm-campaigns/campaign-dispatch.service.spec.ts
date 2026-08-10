@@ -130,6 +130,7 @@ describe('CampaignDispatchService', () => {
             expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { campaign_id: 'camp-1', status: 'PENDING' },
+                    orderBy: { id: 'asc' },
                     take: CAMPAIGN_BATCH_SIZE,
                 }),
             );
@@ -138,6 +139,18 @@ describe('CampaignDispatchService', () => {
                 data: { status: 'SENDING' },
             });
             expect(email.sendCustom).toHaveBeenCalledTimes(2);
+        });
+
+        it('reads the batch in a deterministic order so racing passes claim all-or-nothing', async () => {
+            db.crmCampaign.findFirst.mockResolvedValue(emailCampaign());
+            db.crmCampaignRecipient.findMany.mockResolvedValueOnce([]);
+            db.crmCampaignRecipient.groupBy.mockResolvedValueOnce([]);
+
+            await service.drainCampaign('camp-1');
+
+            expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { id: 'asc' } }),
+            );
         });
 
         it('sends nothing when another pass already claimed the batch', async () => {

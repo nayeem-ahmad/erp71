@@ -83,9 +83,16 @@ export class CampaignDispatchService {
         const campaign = await this.db.crmCampaign.findFirst({ where: { id: campaignId } });
         if (!campaign || campaign.status !== 'SENDING') return;
 
+        // orderBy is load-bearing, not cosmetic: without it Postgres can hand two
+        // concurrent passes two different subsets of the same PENDING rows, and
+        // the claim below only guards whole overlapping sets, not partial ones.
+        // A deterministic order makes racing reads-before-either-claims see the
+        // identical set (so the claim is all-or-nothing) and a read-after-a-claim
+        // see a disjoint set (claimed rows are no longer PENDING) — do not remove.
         const batch: PendingRecipient[] = await this.db.crmCampaignRecipient.findMany({
             where: { campaign_id: campaignId, status: 'PENDING' },
             select: { id: true, email: true, phone: true, subject: true, message: true },
+            orderBy: { id: 'asc' },
             take: CAMPAIGN_BATCH_SIZE,
         });
 
