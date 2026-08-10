@@ -422,7 +422,6 @@ export const crmHrMessages = {
                 dropzone: "ফাইল টেনে আনুন বা ক্লিক করুন",
                 dropzoneHint: ".csv ও .xlsx সমর্থিত — সর্বোচ্চ ১,০০০ সারি",
                 downloadTemplate: "টেমপ্লেট ডাউনলোড",
-                mapTitle: "কলাম মেলান",
                 mapHint: "কোন কলামে কোন তথ্য আছে জানান। * চিহ্নিত ঘরগুলো আবশ্যক।",
                 skipColumn: "— বাদ দিন —",
                 fieldEmail: "ইমেইল",
@@ -435,7 +434,6 @@ export const crmHrMessages = {
                 issueLine: "সারি {line} ({email}): {reason}",
                 changeFile: "অন্য ফাইল বাছুন",
                 nameFallbackHint: "নাম না থাকলে ইমেইলের @ এর আগের অংশ নাম হিসেবে ব্যবহৃত হবে।",
-                uploadRequired: "এগোতে হলে একটি প্রাপক তালিকা আপলোড করুন।",
             },
             schedule: {
                 label: "সময় নির্ধারণ (ঐচ্ছিক)",
@@ -472,6 +470,7 @@ export const crmHrMessages = {
             created: "ক্যাম্পেইন তৈরি হয়েছে",
             createFailed: "ক্যাম্পেইন তৈরি ব্যর্থ",
             sendFailed: "পাঠাতে ব্যর্থ",
+            loadFailed: "ক্যাম্পেইন লোড করা যায়নি",
             deleted: "ক্যাম্পেইন মুছে ফেলা হয়েছে",
             deleteFailed: "মুছতে ব্যর্থ",
             creating: "তৈরি হচ্ছে...",

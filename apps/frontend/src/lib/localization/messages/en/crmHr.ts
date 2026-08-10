@@ -422,7 +422,6 @@ export const crmHrMessages = {
             "dropzone": "Drag & drop or click to browse",
             "dropzoneHint": "Supports .csv and .xlsx — up to 1,000 rows",
             "downloadTemplate": "Download template",
-            "mapTitle": "Match your columns",
             "mapHint": "Tell us which column holds each field. Required fields are marked *.",
             "skipColumn": "— skip —",
             "fieldEmail": "Email",
@@ -434,8 +433,7 @@ export const crmHrMessages = {
             "issuesTitle": "{count} rows skipped",
             "issueLine": "Row {line} ({email}): {reason}",
             "changeFile": "Choose a different file",
-            "nameFallbackHint": "Rows with no name are named after the part of the address before the @.",
-            "uploadRequired": "Upload a recipient list to continue."
+            "nameFallbackHint": "Rows with no name are named after the part of the address before the @."
         },
         "schedule": {
             "label": "Schedule (optional)",
@@ -472,6 +470,7 @@ export const crmHrMessages = {
         "created": "Campaign created",
         "createFailed": "Failed to create campaign",
         "sendFailed": "Failed to send",
+        "loadFailed": "Failed to load the campaign",
         "deleted": "Campaign deleted",
         "deleteFailed": "Failed to delete",
         "creating": "Creating...",

@@ -422,7 +422,6 @@ export const crmHrMessages = {
             dropzone: "Seret & lepas atau klik untuk pilih",
             dropzoneHint: "Menyokong .csv dan .xlsx — sehingga 1,000 baris",
             downloadTemplate: "Muat turun templat",
-            mapTitle: "Padankan lajur anda",
             mapHint: "Beritahu kami lajur mana untuk setiap medan. Medan wajib ditanda *.",
             skipColumn: "— langkau —",
             fieldEmail: "E-mel",
@@ -435,7 +434,6 @@ export const crmHrMessages = {
             issueLine: "Baris {line} ({email}): {reason}",
             changeFile: "Pilih fail lain",
             nameFallbackHint: "Baris tanpa nama akan dinamakan mengikut bahagian alamat sebelum @.",
-            uploadRequired: "Muat naik senarai penerima untuk meneruskan.",
         },
         schedule: {
             label: "Jadual (pilihan)",
@@ -472,6 +470,7 @@ export const crmHrMessages = {
         created: "Kempen dicipta",
         createFailed: "Gagal mencipta kempen",
         sendFailed: "Gagal menghantar",
+        loadFailed: "Gagal memuatkan kempen",
         deleted: "Kempen dipadam",
         deleteFailed: "Gagal memadam",
         creating: "Mencipta...",
