@@ -7,6 +7,9 @@ import { paginate } from '../common/pagination.dto';
 import { CampaignRecipientsService } from './campaign-recipients.service';
 import { CampaignDispatchService } from './campaign-dispatch.service';
 
+/** How many recipient rows the campaign detail view carries. */
+const RECIPIENT_PREVIEW_LIMIT = 100;
+
 @Injectable()
 export class CrmCampaignsService {
     constructor(
@@ -63,29 +66,43 @@ export class CrmCampaignsService {
         const { rows, fileError } = validateCampaignRows(dto.rows ?? []);
         if (fileError) throw new BadRequestException(fileError);
 
-        const campaign = await this.db.crmCampaign.create({
-            data: {
-                tenant_id: tenantId,
-                name: dto.name,
-                description: dto.description,
-                channel: 'EMAIL',
-                recipient_source: 'UPLOAD',
-                body_format: dto.body_format ?? 'TEXT',
-                subject: null,
-                message: null,
-                target_segment: null,
-                target_group_id: null,
-                scheduled_at: dto.scheduled_at ? new Date(dto.scheduled_at) : null,
-                created_by: userId,
-                status: dto.scheduled_at ? 'SCHEDULED' : 'DRAFT',
-            },
-            include: { creator: { select: { id: true, name: true, email: true } } },
-        });
+        // One transaction, because the three writes are only meaningful
+        // together: a failure between them would leave a DRAFT campaign holding
+        // a partial list with recipient_count 0, which then sends to a silently
+        // truncated subset.
+        const { campaign, written } = await this.db.$transaction(async (tx) => {
+            const created = await tx.crmCampaign.create({
+                data: {
+                    tenant_id: tenantId,
+                    name: dto.name,
+                    description: dto.description,
+                    channel: 'EMAIL',
+                    recipient_source: 'UPLOAD',
+                    body_format: dto.body_format ?? 'TEXT',
+                    subject: null,
+                    message: null,
+                    target_segment: null,
+                    target_group_id: null,
+                    scheduled_at: dto.scheduled_at ? new Date(dto.scheduled_at) : null,
+                    created_by: userId,
+                    status: dto.scheduled_at ? 'SCHEDULED' : 'DRAFT',
+                },
+                include: { creator: { select: { id: true, name: true, email: true } } },
+            });
 
-        const written = await this.recipients.writeUploadedRecipients(tenantId, campaign.id, rows, userId);
-        await this.db.crmCampaign.update({
-            where: { id: campaign.id },
-            data: { recipient_count: written },
+            const count = await this.recipients.writeUploadedRecipients(
+                tenantId,
+                created.id,
+                rows,
+                userId,
+                tx,
+            );
+            await tx.crmCampaign.update({
+                where: { id: created.id },
+                data: { recipient_count: count },
+            });
+
+            return { campaign: created, written: count };
         });
 
         return { ...campaign, recipient_count: written };
@@ -116,27 +133,54 @@ export class CrmCampaignsService {
     async findOne(tenantId: string, id: string) {
         const campaign = await this.db.crmCampaign.findFirst({
             where: { id, tenant_id: tenantId },
-            include: {
-                creator: { select: { id: true, name: true, email: true } },
-                recipients: {
-                    select: {
-                        id: true,
-                        email: true,
-                        name: true,
-                        phone: true,
-                        subject: true,
-                        status: true,
-                        sent_at: true,
-                        error: true,
-                    },
-                    orderBy: [{ status: 'asc' }, { sent_at: 'desc' }],
-                    take: 100,
-                },
-            },
+            include: { creator: { select: { id: true, name: true, email: true } } },
         });
         if (!campaign) throw new NotFoundException('Campaign not found');
 
-        return { ...campaign, progress: await this.progressOf(id) };
+        const [recipients, progress] = await Promise.all([
+            this.recipientPreview(id),
+            this.progressOf(id),
+        ]);
+        return { ...campaign, recipients, progress };
+    }
+
+    /**
+     * The recipients the detail modal shows, most interesting first.
+     *
+     * `orderBy: { status: 'asc' }` sorted alphabetically, so CANCELLED and
+     * FAILED led and SENT trailed — on a 1,000-row campaign the visible 100
+     * were all the cancelled ones. Prisma has no CASE ordering, so the priority
+     * is walked one group at a time and the walk stops as soon as the page is
+     * full; @@index([campaign_id, status]) makes each group a keyed lookup.
+     * Failures lead because they are the only rows anyone opens this for; the
+     * progress line carries the totals, so nothing is lost by truncating tail
+     * groups.
+     */
+    private async recipientPreview(campaignId: string) {
+        const groups = [['FAILED'], ['SENDING', 'PENDING'], ['SENT'], ['CANCELLED']];
+        const rows: any[] = [];
+
+        for (const statuses of groups) {
+            if (rows.length >= RECIPIENT_PREVIEW_LIMIT) break;
+            const page = await this.db.crmCampaignRecipient.findMany({
+                where: { campaign_id: campaignId, status: { in: statuses } },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    phone: true,
+                    subject: true,
+                    status: true,
+                    sent_at: true,
+                    error: true,
+                },
+                orderBy: [{ sent_at: 'desc' }, { id: 'asc' }],
+                take: RECIPIENT_PREVIEW_LIMIT - rows.length,
+            });
+            rows.push(...page);
+        }
+
+        return rows;
     }
 
     async update(tenantId: string, id: string, dto: UpdateCampaignDto) {
@@ -193,8 +237,12 @@ export class CrmCampaignsService {
             return { success: true };
         }
 
+        // SENDING as well as PENDING: a batch the drain has already claimed is
+        // exactly the batch a user cancelling an in-flight send wants stopped.
+        // Rows are flipped before the campaign so that by the time the drain
+        // notices the campaign is CANCELLED, its remaining rows already are.
         await this.db.crmCampaignRecipient.updateMany({
-            where: { campaign_id: id, status: 'PENDING' },
+            where: { campaign_id: id, status: { in: ['PENDING', 'SENDING'] } },
             data: { status: 'CANCELLED' },
         });
         const progress = await this.progressOf(id);

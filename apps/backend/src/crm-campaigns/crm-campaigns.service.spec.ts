@@ -25,7 +25,12 @@ describe('CrmCampaignsService', () => {
             crmCampaignRecipient: {
                 updateMany: jest.fn().mockResolvedValue({ count: 0 }),
                 groupBy: jest.fn().mockResolvedValue([]),
+                findMany: jest.fn().mockResolvedValue([]),
             },
+            // The upload path runs its three writes in one transaction; the
+            // callback is handed the same mock client so the assertions below
+            // still see them.
+            $transaction: jest.fn((fn: any) => fn(db)),
         };
         recipients = { writeUploadedRecipients: jest.fn().mockResolvedValue(0), resolveTargetCustomers: jest.fn().mockResolvedValue([]) };
         dispatch = { queue: jest.fn().mockResolvedValue({ queued: 0 }) };
@@ -98,11 +103,40 @@ describe('CrmCampaignsService', () => {
                 'camp-1',
                 [{ email: 'a@example.com', name: 'A', subject: 'Hi', message: 'Hello' }],
                 'u1',
+                db,
             );
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
                 data: { recipient_count: 1 },
             });
+        });
+
+        // I5: three separate writes could leave a DRAFT campaign holding a
+        // partial list with recipient_count 0, which then sends to a silently
+        // truncated subset.
+        it('creates the campaign, its recipients and its count in one transaction', async () => {
+            recipients.writeUploadedRecipients.mockResolvedValueOnce(1);
+
+            await service.create('t1', 'u1', uploadDto() as any);
+
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            expect(recipients.writeUploadedRecipients).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+                db,
+            );
+        });
+
+        it('lets a mid-write failure escape the transaction so it rolls back', async () => {
+            recipients.writeUploadedRecipients.mockRejectedValueOnce(new Error('boom'));
+
+            await expect(service.create('t1', 'u1', uploadDto() as any)).rejects.toThrow('boom');
+
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            // The count patch is the third write; it must not have run alone.
+            expect(db.crmCampaign.update).not.toHaveBeenCalled();
         });
 
         it('does not require a campaign-level subject or message', async () => {
@@ -174,7 +208,10 @@ describe('CrmCampaignsService', () => {
             });
         });
 
-        it('cancels the pending remainder of a sending campaign and keeps its counts', async () => {
+        // C1: a batch the drain has already claimed sits on SENDING, not
+        // PENDING. Cancelling only the PENDING rows left the claimed batch to
+        // go out in full — on a campaign of one batch, the entire campaign.
+        it('cancels the pending and the already-claimed remainder, and keeps its counts', async () => {
             db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
             db.crmCampaignRecipient.groupBy.mockResolvedValueOnce([
                 { status: 'SENT', _count: { _all: 3 } },
@@ -184,13 +221,30 @@ describe('CrmCampaignsService', () => {
             await service.cancel('t1', 'camp-1');
 
             expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
-                where: { campaign_id: 'camp-1', status: 'PENDING' },
+                where: { campaign_id: 'camp-1', status: { in: ['PENDING', 'SENDING'] } },
                 data: { status: 'CANCELLED' },
             });
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
                 data: { status: 'CANCELLED', delivered_count: 3, failed_count: 1 },
             });
+        });
+
+        it('flips the rows before the campaign, so the drain sees them already cancelled', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            const order: string[] = [];
+            db.crmCampaignRecipient.updateMany.mockImplementationOnce(() => {
+                order.push('rows');
+                return Promise.resolve({ count: 2 });
+            });
+            db.crmCampaign.update.mockImplementationOnce(() => {
+                order.push('campaign');
+                return Promise.resolve({});
+            });
+
+            await service.cancel('t1', 'camp-1');
+
+            expect(order).toEqual(['rows', 'campaign']);
         });
 
         it('refuses to cancel a completed campaign', async () => {
@@ -211,6 +265,57 @@ describe('CrmCampaignsService', () => {
             const result = await service.findOne('t1', 'camp-1');
 
             expect(result.progress).toEqual({ total: 10, sent: 5, failed: 1, pending: 4 });
+        });
+
+        // M17: `orderBy: { status: 'asc' }` sorted alphabetically, so on a
+        // 1,000-row campaign the visible 100 were CANCELLED and every failure
+        // was off the end of the page.
+        it('leads the recipient page with failures, then in-flight, then sent', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.findMany.mockImplementation(({ where }: any) =>
+                Promise.resolve(where.status.in.map((s: string) => ({ id: `${s}-1`, status: s }))),
+            );
+
+            const result = await service.findOne('t1', 'camp-1');
+
+            expect(result.recipients.map((r: any) => r.status)).toEqual([
+                'FAILED',
+                'SENDING',
+                'PENDING',
+                'SENT',
+                'CANCELLED',
+            ]);
+            expect(db.crmCampaignRecipient.findMany.mock.calls.map(([a]: any[]) => a.where.status.in)).toEqual([
+                ['FAILED'],
+                ['SENDING', 'PENDING'],
+                ['SENT'],
+                ['CANCELLED'],
+            ]);
+        });
+
+        it('stops fetching once the page is full', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.findMany.mockImplementation(({ take }: any) =>
+                Promise.resolve(Array.from({ length: take }, (_, i) => ({ id: `r${i}`, status: 'FAILED' }))),
+            );
+
+            const result = await service.findOne('t1', 'camp-1');
+
+            expect(result.recipients).toHaveLength(100);
+            expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('scopes the campaign lookup to the tenant', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'DRAFT' });
+
+            await service.findOne('t1', 'camp-1');
+
+            expect(db.crmCampaign.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'camp-1', tenant_id: 't1' } }),
+            );
+            expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ campaign_id: 'camp-1' }) }),
+            );
         });
     });
 });
