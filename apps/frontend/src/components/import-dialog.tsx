@@ -2,10 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { Upload, ChevronRight, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
+import { parseSpreadsheetFile, autoMapHeaders } from '@/lib/spreadsheet';
 
 export interface ImportField {
   key: string;
@@ -30,29 +29,6 @@ interface ImportDialogProps {
 }
 
 type Step = 'upload' | 'map' | 'preview' | 'result';
-
-async function parseFile(file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  if (!ext || !['csv', 'xlsx', 'xls'].includes(ext)) {
-    throw new Error(`Unsupported file type ".${ext ?? ''}". Please upload a .csv or .xlsx file.`);
-  }
-  if (ext === 'csv' || file.type === 'text/csv') {
-    return new Promise((resolve, reject) => {
-      Papa.parse<Record<string, string>>(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (r) => resolve({ headers: r.meta.fields ?? [], rows: r.data }),
-        error: (err) => reject(new Error(err.message)),
-      });
-    });
-  }
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' });
-  const headers = json.length > 0 ? Object.keys(json[0]) : [];
-  return { headers, rows: json };
-}
 
 function applyMapping(
   rawRows: Record<string, string>[],
@@ -108,20 +84,11 @@ export function ImportDialog({
   const handleFile = async (file: File) => {
     setParseError(null);
     try {
-      const { headers, rows } = await parseFile(file);
+      const { headers, rows } = await parseSpreadsheetFile(file);
       if (rows.length === 0) { setParseError('File has no data rows.'); return; }
       setRawHeaders(headers);
       setRawRows(rows);
-      const auto: Record<string, string> = {};
-      for (const field of fields) {
-        const match = headers.find(
-          (h) =>
-            h.trim().toLowerCase() === field.label.toLowerCase() ||
-            h.trim().toLowerCase() === field.key.toLowerCase(),
-        );
-        auto[field.key] = match ?? '';
-      }
-      setMapping(auto);
+      setMapping(autoMapHeaders(headers, fields));
       setStep('map');
     } catch (e: any) {
       setParseError(`Failed to parse file: ${e?.message ?? 'unknown error'}`);

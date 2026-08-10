@@ -85,3 +85,22 @@ if (typeof window !== 'undefined' && typeof (window as any).PointerEvent === 'un
     (window as any).PointerEvent = PointerEventPolyfill;
     (globalThis as any).PointerEvent = PointerEventPolyfill;
 }
+
+/**
+ * jsdom's Blob/File implementation has no `.text()` (or `.arrayBuffer()`), so
+ * any code exercising the real browser `File.prototype.text()` API — e.g. the
+ * spreadsheet parser reading an uploaded CSV — throws "file.text is not a
+ * function" under this jest environment even though the same code works fine
+ * in a browser. jsdom does implement FileReader, so polyfill `.text()` on top
+ * of that rather than changing the implementation under test.
+ */
+if (typeof window !== 'undefined' && typeof (window as any).Blob !== 'undefined' && typeof (window as any).Blob.prototype.text !== 'function') {
+    (window as any).Blob.prototype.text = function (this: Blob): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.onerror = () => reject(reader.error);
+            reader.readAsText(this);
+        });
+    };
+}

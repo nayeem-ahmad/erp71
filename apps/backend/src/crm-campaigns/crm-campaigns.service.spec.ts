@@ -2,45 +2,46 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { CrmCampaignsService } from './crm-campaigns.service';
 import { DatabaseService } from '../database/database.service';
-import { SmsService } from '../sms/sms.service';
-import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { EmailService } from '../email/email.service';
 import { AppLogger } from '../common/app-logger.service';
-import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { CampaignRecipientsService } from './campaign-recipients.service';
+import { CampaignDispatchService } from './campaign-dispatch.service';
 
 describe('CrmCampaignsService', () => {
     let service: CrmCampaignsService;
     let db: any;
-    let sms: any;
-    let whatsapp: any;
-    let email: any;
+    let recipients: any;
+    let dispatch: any;
 
     beforeEach(async () => {
         db = {
             crmCampaign: {
-                create: jest.fn(),
+                create: jest.fn().mockResolvedValue({ id: 'camp-1' }),
                 findFirst: jest.fn(),
-                update: jest.fn(),
+                findMany: jest.fn().mockResolvedValue([]),
+                count: jest.fn().mockResolvedValue(0),
+                update: jest.fn().mockResolvedValue({}),
+                delete: jest.fn().mockResolvedValue({}),
             },
             crmCampaignRecipient: {
-                updateMany: jest.fn().mockResolvedValue({}),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+                groupBy: jest.fn().mockResolvedValue([]),
+                findMany: jest.fn().mockResolvedValue([]),
             },
+            // The upload path runs its three writes in one transaction; the
+            // callback is handed the same mock client so the assertions below
+            // still see them.
+            $transaction: jest.fn((fn: any) => fn(db)),
         };
-        sms = { sendSms: jest.fn() };
-        whatsapp = { sendMessage: jest.fn() };
-        email = { sendCustom: jest.fn() };
-        const logger = { log: jest.fn(), error: jest.fn() };
-        const jobTracker = { track: jest.fn() };
+        recipients = { writeUploadedRecipients: jest.fn().mockResolvedValue(0), resolveTargetCustomers: jest.fn().mockResolvedValue([]) };
+        dispatch = { queue: jest.fn().mockResolvedValue({ queued: 0 }) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CrmCampaignsService,
                 { provide: DatabaseService, useValue: db },
-                { provide: SmsService, useValue: sms },
-                { provide: WhatsAppService, useValue: whatsapp },
-                { provide: EmailService, useValue: email },
-                { provide: AppLogger, useValue: logger },
-                { provide: JobTrackerService, useValue: jobTracker },
+                { provide: CampaignRecipientsService, useValue: recipients },
+                { provide: CampaignDispatchService, useValue: dispatch },
+                { provide: AppLogger, useValue: { log: jest.fn(), error: jest.fn() } },
             ],
         }).compile();
 
@@ -71,96 +72,306 @@ describe('CrmCampaignsService', () => {
         });
     });
 
-    describe('dispatchCampaign()', () => {
-        const customers = [
-            { id: 'c1', phone: '01700000001', email: 'c1@example.com' },
-            { id: 'c2', phone: '01700000002', email: 'c2@example.com' },
-        ];
+    describe('create() — uploaded lists', () => {
+        const uploadDto = (over: Record<string, unknown> = {}) => ({
+            name: 'Eid blast',
+            channel: 'EMAIL',
+            recipient_source: 'UPLOAD',
+            body_format: 'TEXT',
+            rows: [{ email: 'a@example.com', name: 'A', subject: 'Hi', message: 'Hello' }],
+            ...over,
+        });
 
-        const runDispatch = (subject: string | null, channel: string, custs = customers) =>
-            (service as any).dispatchCampaign('tenant-1', 'camp-1', 'Hello there', subject, channel, custs);
+        it('creates the campaign and writes its recipients', async () => {
+            recipients.writeUploadedRecipients.mockResolvedValueOnce(1);
 
-        it('sends via SMS and marks all recipients SENT when credits are available', async () => {
-            sms.sendSms.mockResolvedValue({ sent: true });
+            await service.create('t1', 'u1', uploadDto() as any);
 
-            await runDispatch(null, 'SMS');
-
-            expect(sms.sendSms).toHaveBeenCalledTimes(2);
-            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith(
-                expect.objectContaining({ data: { status: 'SENT', sent_at: expect.any(Date) } }),
+            expect(db.crmCampaign.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        recipient_source: 'UPLOAD',
+                        body_format: 'TEXT',
+                        message: null,
+                        subject: null,
+                        status: 'DRAFT',
+                    }),
+                }),
+            );
+            expect(recipients.writeUploadedRecipients).toHaveBeenCalledWith(
+                't1',
+                'camp-1',
+                [{ email: 'a@example.com', name: 'A', subject: 'Hi', message: 'Hello' }],
+                'u1',
+                db,
             );
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
-                data: expect.objectContaining({ status: 'COMPLETED', delivered_count: 2, failed_count: 0 }),
+                data: { recipient_count: 1 },
             });
         });
 
-        it('marks a recipient FAILED when SMS credits are insufficient', async () => {
-            sms.sendSms.mockResolvedValue({ sent: false });
+        // I5: three separate writes could leave a DRAFT campaign holding a
+        // partial list with recipient_count 0, which then sends to a silently
+        // truncated subset.
+        it('creates the campaign, its recipients and its count in one transaction', async () => {
+            recipients.writeUploadedRecipients.mockResolvedValueOnce(1);
 
-            await runDispatch(null, 'SMS');
+            await service.create('t1', 'u1', uploadDto() as any);
 
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            expect(recipients.writeUploadedRecipients).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+                db,
+            );
+        });
+
+        it('lets a mid-write failure escape the transaction so it rolls back', async () => {
+            recipients.writeUploadedRecipients.mockRejectedValueOnce(new Error('boom'));
+
+            await expect(service.create('t1', 'u1', uploadDto() as any)).rejects.toThrow('boom');
+
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            // The count patch is the third write; it must not have run alone.
+            expect(db.crmCampaign.update).not.toHaveBeenCalled();
+        });
+
+        it('does not require a campaign-level subject or message', async () => {
+            recipients.writeUploadedRecipients.mockResolvedValueOnce(1);
+            await expect(service.create('t1', 'u1', uploadDto() as any)).resolves.toBeDefined();
+        });
+
+        it('rejects an uploaded list on a non-EMAIL channel', async () => {
+            await expect(
+                service.create('t1', 'u1', uploadDto({ channel: 'SMS' }) as any),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.crmCampaign.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects an upload with no rows', async () => {
+            await expect(
+                service.create('t1', 'u1', uploadDto({ rows: [] }) as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('rejects an upload whose rows all fail validation', async () => {
+            await expect(
+                service.create('t1', 'u1', uploadDto({ rows: [{ email: 'nope', subject: 'a', message: 'b' }] }) as any),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.crmCampaign.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects an upload over the row cap', async () => {
+            const rows = Array.from({ length: 1001 }, (_, i) => ({
+                email: `p${i}@example.com`, name: 'P', subject: 'Hi', message: 'Hello',
+            }));
+            await expect(service.create('t1', 'u1', uploadDto({ rows }) as any)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+
+        it('marks the campaign SCHEDULED when a time is given', async () => {
+            recipients.writeUploadedRecipients.mockResolvedValueOnce(1);
+            await service.create('t1', 'u1', uploadDto({ scheduled_at: '2026-08-10T14:30:00+06:00' }) as any);
+            expect(db.crmCampaign.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ status: 'SCHEDULED' }) }),
+            );
+        });
+    });
+
+    describe('create() — segment campaigns', () => {
+        it('still requires a message', async () => {
+            await expect(
+                service.create('t1', 'u1', { name: 'X', channel: 'SMS' } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('send()', () => {
+        it('delegates to the dispatcher', async () => {
+            dispatch.queue.mockResolvedValueOnce({ queued: 4 });
+            await expect(service.send('t1', 'camp-1')).resolves.toEqual({ queued: 4 });
+            expect(dispatch.queue).toHaveBeenCalledWith('t1', 'camp-1');
+        });
+    });
+
+    describe('update() — scheduling', () => {
+        // M10's server half: the UI now sends an explicit null to unschedule.
+        it('unschedules and returns to DRAFT when scheduled_at is null', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'SCHEDULED',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { scheduled_at: null } as any);
+
+            expect(db.crmCampaign.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'camp-1' },
+                    data: expect.objectContaining({ scheduled_at: null, status: 'DRAFT' }),
+                }),
+            );
+        });
+
+        it('schedules a DRAFT campaign given a time', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'DRAFT',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { scheduled_at: '2026-08-20T09:00:00+06:00' } as any);
+
+            expect(db.crmCampaign.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        scheduled_at: new Date('2026-08-20T09:00:00+06:00'),
+                        status: 'SCHEDULED',
+                    }),
+                }),
+            );
+        });
+
+        it('leaves the schedule alone when the key is absent', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'SCHEDULED',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { name: 'Renamed' } as any);
+
+            const data = db.crmCampaign.update.mock.calls[0][0].data;
+            expect(data).not.toHaveProperty('scheduled_at');
+            expect(data).not.toHaveProperty('status');
+        });
+    });
+
+    describe('cancel()', () => {
+        it('cancels a scheduled campaign', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SCHEDULED' });
+            await service.cancel('t1', 'camp-1');
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
-                data: expect.objectContaining({ delivered_count: 0, failed_count: 2 }),
+                data: { status: 'CANCELLED' },
             });
         });
 
-        it('sends via WhatsApp for each recipient', async () => {
-            whatsapp.sendMessage.mockResolvedValue(undefined);
+        // C1: a batch the drain has already claimed sits on SENDING, not
+        // PENDING. Cancelling only the PENDING rows left the claimed batch to
+        // go out in full — on a campaign of one batch, the entire campaign.
+        it('cancels the pending and the already-claimed remainder, and keeps its counts', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.groupBy.mockResolvedValueOnce([
+                { status: 'SENT', _count: { _all: 3 } },
+                { status: 'FAILED', _count: { _all: 1 } },
+            ]);
 
-            await runDispatch(null, 'WHATSAPP');
+            await service.cancel('t1', 'camp-1');
 
-            expect(whatsapp.sendMessage).toHaveBeenCalledTimes(2);
-            expect(whatsapp.sendMessage).toHaveBeenCalledWith('01700000001', 'Hello there', {
-                tenantId: 'tenant-1',
+            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                where: { campaign_id: 'camp-1', status: { in: ['PENDING', 'SENDING'] } },
+                data: { status: 'CANCELLED' },
             });
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
-                data: expect.objectContaining({ delivered_count: 2, failed_count: 0 }),
+                data: { status: 'CANCELLED', delivered_count: 3, failed_count: 1 },
             });
         });
 
-        it('sends EMAIL campaigns with the subject line to each customer email', async () => {
-            email.sendCustom.mockResolvedValue(undefined);
+        it('flips the rows before the campaign, so the drain sees them already cancelled', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            const order: string[] = [];
+            db.crmCampaignRecipient.updateMany.mockImplementationOnce(() => {
+                order.push('rows');
+                return Promise.resolve({ count: 2 });
+            });
+            db.crmCampaign.update.mockImplementationOnce(() => {
+                order.push('campaign');
+                return Promise.resolve({});
+            });
 
-            await runDispatch('Big Sale', 'EMAIL');
+            await service.cancel('t1', 'camp-1');
 
-            // The tenant id rides along so the send picks up that tenant's own
-            // sender identity when a platform admin has configured one.
-            expect(email.sendCustom).toHaveBeenCalledWith('c1@example.com', 'Big Sale', 'Hello there', {
-                tenantId: 'tenant-1',
-            });
-            expect(email.sendCustom).toHaveBeenCalledWith('c2@example.com', 'Big Sale', 'Hello there', {
-                tenantId: 'tenant-1',
-            });
-            expect(db.crmCampaign.update).toHaveBeenCalledWith({
-                where: { id: 'camp-1' },
-                data: expect.objectContaining({ delivered_count: 2, failed_count: 0 }),
-            });
+            expect(order).toEqual(['rows', 'campaign']);
         });
 
-        it('marks a recipient FAILED (not silently SENT) when they have no email on file', async () => {
-            const custsWithoutEmail = [{ id: 'c3', phone: '01700000003', email: null }];
+        it('refuses to cancel a completed campaign', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'COMPLETED' });
+            await expect(service.cancel('t1', 'camp-1')).rejects.toThrow(BadRequestException);
+        });
+    });
 
-            await runDispatch('Big Sale', 'EMAIL', custsWithoutEmail);
+    describe('findOne()', () => {
+        it('reports live progress alongside the campaign', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.groupBy.mockResolvedValueOnce([
+                { status: 'SENT', _count: { _all: 5 } },
+                { status: 'FAILED', _count: { _all: 1 } },
+                { status: 'PENDING', _count: { _all: 4 } },
+            ]);
 
-            expect(email.sendCustom).not.toHaveBeenCalled();
-            expect(db.crmCampaign.update).toHaveBeenCalledWith({
-                where: { id: 'camp-1' },
-                data: expect.objectContaining({ delivered_count: 0, failed_count: 1 }),
-            });
+            const result = await service.findOne('t1', 'camp-1');
+
+            expect(result.progress).toEqual({ total: 10, sent: 5, failed: 1, pending: 4 });
         });
 
-        it('propagates EmailService failures as a FAILED recipient', async () => {
-            email.sendCustom.mockRejectedValue(new Error('SMTP is not configured'));
+        // M17: `orderBy: { status: 'asc' }` sorted alphabetically, so on a
+        // 1,000-row campaign the visible 100 were CANCELLED and every failure
+        // was off the end of the page.
+        it('leads the recipient page with failures, then in-flight, then sent', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.findMany.mockImplementation(({ where }: any) =>
+                Promise.resolve(where.status.in.map((s: string) => ({ id: `${s}-1`, status: s }))),
+            );
 
-            await runDispatch('Big Sale', 'EMAIL');
+            const result = await service.findOne('t1', 'camp-1');
 
-            expect(db.crmCampaign.update).toHaveBeenCalledWith({
-                where: { id: 'camp-1' },
-                data: expect.objectContaining({ delivered_count: 0, failed_count: 2 }),
-            });
+            expect(result.recipients.map((r: any) => r.status)).toEqual([
+                'FAILED',
+                'SENDING',
+                'PENDING',
+                'SENT',
+                'CANCELLED',
+            ]);
+            expect(db.crmCampaignRecipient.findMany.mock.calls.map(([a]: any[]) => a.where.status.in)).toEqual([
+                ['FAILED'],
+                ['SENDING', 'PENDING'],
+                ['SENT'],
+                ['CANCELLED'],
+            ]);
+        });
+
+        it('stops fetching once the page is full', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SENDING' });
+            db.crmCampaignRecipient.findMany.mockImplementation(({ take }: any) =>
+                Promise.resolve(Array.from({ length: take }, (_, i) => ({ id: `r${i}`, status: 'FAILED' }))),
+            );
+
+            const result = await service.findOne('t1', 'camp-1');
+
+            expect(result.recipients).toHaveLength(100);
+            expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('scopes the campaign lookup to the tenant', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'DRAFT' });
+
+            await service.findOne('t1', 'camp-1');
+
+            expect(db.crmCampaign.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'camp-1', tenant_id: 't1' } }),
+            );
+            expect(db.crmCampaignRecipient.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ campaign_id: 'camp-1' }) }),
+            );
         });
     });
 });
