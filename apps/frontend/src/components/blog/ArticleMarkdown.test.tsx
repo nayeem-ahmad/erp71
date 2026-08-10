@@ -92,4 +92,49 @@ describe('ArticleMarkdown', () => {
         expect(table).toBeInTheDocument();
         expect(table?.parentElement?.className).toContain('overflow-x-auto');
     });
+
+    /**
+     * The variant exists because this component is shared by three surfaces with
+     * different type scales: the marketing blog (display scale, matching the home
+     * page), a shop's storefront, and `(app)/whats-new` — which sits inside the
+     * app shell and is bound by the compact-density UI rule. `compact` is the
+     * default precisely so those last two cannot be enlarged by accident.
+     */
+    describe('variant', () => {
+        it('defaults to the compact scale, so the in-app and storefront surfaces are unaffected', () => {
+            const { container } = render(<ArticleMarkdown content={'Body copy'} />);
+
+            const paragraph = container.querySelector('p');
+            expect(paragraph).toHaveClass('text-sm', 'leading-7');
+        });
+
+        it('renders body copy at the marketing scale when asked for the article variant', () => {
+            const { container } = render(<ArticleMarkdown content={'Body copy'} variant="article" />);
+
+            const paragraph = container.querySelector('p');
+            expect(paragraph).toHaveClass('text-base', 'leading-8');
+        });
+
+        it('scales article headings up without changing the heading levels', () => {
+            render(<ArticleMarkdown content={'## Section\n\n### Subsection'} variant="article" />);
+
+            expect(screen.getByRole('heading', { level: 2, name: 'Section' })).toHaveClass('text-2xl');
+            expect(screen.getByRole('heading', { level: 3, name: 'Subsection' })).toHaveClass('text-xl');
+        });
+
+        it('keeps the compact heading sizes on the default variant', () => {
+            render(<ArticleMarkdown content={'## Section\n\n### Subsection'} />);
+
+            expect(screen.getByRole('heading', { level: 2, name: 'Section' })).toHaveClass('text-lg');
+            expect(screen.getByRole('heading', { level: 3, name: 'Subsection' })).toHaveClass('text-base');
+        });
+
+        it('still refuses raw HTML in the article variant', () => {
+            const { container } = render(
+                <ArticleMarkdown content={'<div id="injected">hello</div>\n\nAfter'} variant="article" />,
+            );
+
+            expect(container.querySelector('#injected')).toBeNull();
+        });
+    });
 });

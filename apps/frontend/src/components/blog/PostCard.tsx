@@ -26,13 +26,13 @@ export default function PostCard({ post, basePath = '/blog' }: { post: BlogListP
 
                 <div className="flex flex-1 flex-col p-4">
                     {post.category && (
-                        <span className="text-xs font-medium text-blue-600">{post.category.name_en}</span>
+                        <span className="text-xs font-semibold text-blue-600">{post.category.name_en}</span>
                     )}
-                    <h2 className="mt-1 text-sm font-semibold leading-6 text-gray-900 group-hover:text-blue-600">
+                    <h2 className="mt-1 text-lg font-bold leading-snug text-gray-900 group-hover:text-blue-600">
                         {post.title}
                     </h2>
                     {post.excerpt && (
-                        <p className="mt-2 line-clamp-3 text-xs leading-6 text-gray-600">{post.excerpt}</p>
+                        <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-gray-500">{post.excerpt}</p>
                     )}
                     <p className="mt-auto pt-4 text-xs text-gray-500">
                         {formatPostDate(post.published_at)}
