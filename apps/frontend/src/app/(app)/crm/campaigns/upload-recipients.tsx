@@ -83,16 +83,19 @@ export default function UploadRecipients({ rows, issues, onChange }: UploadRecip
     if (rawRows.length === 0) {
         return (
             <div className="space-y-3">
-                <div
+                {/* A real button, not a div with onClick: the file input is
+                    hidden, so this is the only way in from the keyboard. */}
+                <button
+                    type="button"
                     onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void handleFile(f); }}
                     onDragOver={(e) => e.preventDefault()}
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors min-h-touch"
+                    className="w-full border-2 border-dashed border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 focus:outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/30 transition-colors min-h-touch"
                 >
                     <Upload className="w-8 h-8 text-gray-300 mb-3" />
-                    <p className="font-semibold text-gray-700 text-sm">{m.dropzone}</p>
-                    <p className="text-xs text-gray-400 mt-1">{m.dropzoneHint}</p>
-                </div>
+                    <span className="block font-semibold text-gray-700 text-sm">{m.dropzone}</span>
+                    <span className="block text-xs text-gray-400 mt-1">{m.dropzoneHint}</span>
+                </button>
                 <input
                     ref={fileInputRef}
                     type="file"
