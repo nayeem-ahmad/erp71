@@ -1978,6 +1978,9 @@ model Lead {
   @@index([tenant_id, status, closed_at])
   // Serves the same dashboard's new-leads-in-period count and daily trend buckets.
   @@index([tenant_id, created_at])
+  // Serves the uploaded-campaign resolver, which looks a whole batch of
+  // addresses up at once.
+  @@index([tenant_id, email])
 }
 
 /// Tenant-editable lead sources. Replaces the `LeadSource` enum.
@@ -2078,6 +2081,9 @@ model CrmContact {
   @@index([tenant_id, company])
   @@index([tenant_id, assigned_to])
   @@index([tenant_id, created_at])
+  // Serves the uploaded-campaign resolver, which looks a whole batch of
+  // addresses up at once.
+  @@index([tenant_id, email])
 }
 
 /// A file kept alongside a contact — today only the photographed business card
@@ -2308,6 +2314,10 @@ model CrmCampaignRecipient {
   subject     String?
   message     String?
   status      String    @default("PENDING")
+  /// When this row was claimed for sending. A row left SENDING for longer than
+  /// STALE_CLAIM_MS (a crash or redeploy mid-batch) is re-queued by the next
+  /// drain pass instead of being stranded and counted as neither sent nor failed.
+  claimed_at  DateTime?
   sent_at     DateTime?
   error       String?
 
