@@ -60,14 +60,14 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 function NotAvailable() {
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav active="blog" />
             <main className="mx-auto flex max-w-3xl flex-col items-center px-6 pb-16 pt-32 text-center">
-                <h1 className="text-lg font-semibold text-gray-900">This post isn&apos;t available</h1>
-                <p className="mt-2 text-sm text-gray-600">
+                <h1 className="text-3xl font-black tracking-tight text-gray-900">This post isn&apos;t available</h1>
+                <p className="mt-3 text-base text-gray-600">
                     It may have been removed or the link may be out of date.
                 </p>
-                <Link href="/blog" className="mt-6 text-sm font-medium text-blue-600 hover:underline">
+                <Link href="/blog" className="mt-6 text-sm font-semibold text-blue-600 hover:underline">
                     Back to the blog
                 </Link>
             </main>
@@ -107,7 +107,7 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
     };
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav active="blog" />
 
             <script
@@ -116,20 +116,20 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
             />
 
             <main className="mx-auto max-w-3xl px-6 pb-16 pt-28">
-                <Link href="/blog" className="text-xs font-medium text-blue-600 hover:underline">
+                <Link href="/blog" className="text-sm font-semibold text-blue-600 hover:underline">
                     ← Back to the blog
                 </Link>
 
                 <header className="mt-6 border-b border-gray-100 pb-8">
                     {post.category && (
-                        <span className="text-xs font-medium text-blue-600">{post.category.name_en}</span>
+                        <span className="text-sm font-semibold text-blue-600">{post.category.name_en}</span>
                     )}
-                    <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight text-gray-900">
+                    <h1 className="mt-2 text-4xl font-black leading-none tracking-tighter text-gray-900 md:text-5xl">
                         {post.title}
                     </h1>
-                    {post.excerpt && <p className="mt-4 text-sm leading-7 text-gray-600">{post.excerpt}</p>}
+                    {post.excerpt && <p className="mt-5 text-lg leading-relaxed text-gray-600">{post.excerpt}</p>}
 
-                    <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                    <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
                         {post.author_name && (
                             <span>
                                 By <span className="font-medium text-gray-700">{post.author_name}</span>
@@ -152,7 +152,7 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
                 )}
 
                 <div className="mt-8">
-                    <ArticleMarkdown content={post.body_md} />
+                    <ArticleMarkdown content={post.body_md} variant="article" />
                 </div>
             </main>
 
