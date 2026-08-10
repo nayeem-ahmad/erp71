@@ -23,7 +23,44 @@ import remarkGfm from 'remark-gfm';
  * A server component: nothing here is interactive, so the whole article ships
  * as HTML with no client bundle. That is also what puts the prose in the
  * initial response for a crawler.
+ *
+ * Two type scales, because three surfaces share this renderer and they do not
+ * agree on one. `article` is the marketing blog, which has to read like the rest
+ * of the marketing site — a display scale, body copy at 16px. `compact` is a
+ * shop's storefront and `(app)/whats-new`; the latter sits inside the app shell,
+ * where the compact-density UI rule applies. `compact` is the default so those
+ * two can never be enlarged by adding a caller.
  */
+
+export type ArticleMarkdownVariant = 'compact' | 'article';
+
+/** The class sets differ only in size, weight and leading. Color, spacing
+ * rhythm and every behavioural choice below are shared, so a change to one
+ * cannot silently diverge the two surfaces. */
+const SCALE: Record<ArticleMarkdownVariant, Record<string, string>> = {
+    compact: {
+        h1: 'text-xl font-semibold',
+        h2: 'text-lg font-semibold',
+        h3: 'text-base font-semibold',
+        h4: 'text-sm font-semibold',
+        h5: 'text-sm font-semibold',
+        h6: 'text-xs font-semibold uppercase',
+        body: 'text-sm leading-7',
+        table: 'text-xs',
+        code: 'text-xs',
+    },
+    article: {
+        h1: 'text-3xl font-bold tracking-tight',
+        h2: 'text-2xl font-bold tracking-tight',
+        h3: 'text-xl font-bold',
+        h4: 'text-lg font-semibold',
+        h5: 'text-base font-semibold',
+        h6: 'text-sm font-semibold uppercase',
+        body: 'text-base leading-8',
+        table: 'text-sm',
+        code: 'text-sm',
+    },
+};
 
 function styled<T extends keyof JSX.IntrinsicElements>(tag: T, className: string) {
     function StyledTag({ node: _node, ...props }: JSX.IntrinsicElements[T] & ExtraProps) {
@@ -41,36 +78,39 @@ function isInternalPath(href: string | undefined): href is string {
     return !!href && href.startsWith('/') && !href.startsWith('//');
 }
 
-const components: Components = {
+function buildComponents(variant: ArticleMarkdownVariant): Components {
+    const s = SCALE[variant];
+
+    return {
     // A real hierarchy, unlike the chat panel. h1 is the page title, rendered
     // by the page itself, so a body heading starts at h2.
-    h1: styled('h2', 'mt-8 text-xl font-semibold text-gray-900 first:mt-0'),
-    h2: styled('h2', 'mt-8 text-lg font-semibold text-gray-900 first:mt-0'),
-    h3: styled('h3', 'mt-6 text-base font-semibold text-gray-900'),
-    h4: styled('h4', 'mt-5 text-sm font-semibold text-gray-900'),
-    h5: styled('h5', 'mt-4 text-sm font-semibold text-gray-700'),
-    h6: styled('h6', 'mt-4 text-xs font-semibold uppercase text-gray-500'),
+    h1: styled('h2', `mt-8 ${s.h1} text-gray-900 first:mt-0`),
+    h2: styled('h2', `mt-8 ${s.h2} text-gray-900 first:mt-0`),
+    h3: styled('h3', `mt-6 ${s.h3} text-gray-900`),
+    h4: styled('h4', `mt-5 ${s.h4} text-gray-900`),
+    h5: styled('h5', `mt-4 ${s.h5} text-gray-700`),
+    h6: styled('h6', `mt-4 ${s.h6} text-gray-500`),
 
-    p: styled('p', 'mt-4 text-sm leading-7 text-gray-700 first:mt-0'),
+    p: styled('p', `mt-4 ${s.body} text-gray-700 first:mt-0`),
     strong: styled('strong', 'font-semibold text-gray-900'),
     em: styled('em', 'italic'),
     del: styled('del', 'text-gray-500 line-through'),
     hr: styled('hr', 'my-8 border-gray-200'),
 
-    ul: styled('ul', 'mt-4 list-disc space-y-2 pl-5 text-sm leading-7 text-gray-700'),
-    ol: styled('ol', 'mt-4 list-decimal space-y-2 pl-5 text-sm leading-7 text-gray-700'),
+    ul: styled('ul', `mt-4 list-disc space-y-2 pl-5 ${s.body} text-gray-700`),
+    ol: styled('ol', `mt-4 list-decimal space-y-2 pl-5 ${s.body} text-gray-700`),
     li: styled('li', 'marker:text-gray-400'),
 
     blockquote: styled(
         'blockquote',
-        'mt-6 border-l-2 border-blue-600 bg-blue-50/40 py-2 pl-4 text-sm italic leading-7 text-gray-700',
+        `mt-6 border-l-2 border-blue-600 bg-blue-50/40 py-2 pl-4 ${s.body} italic text-gray-700`,
     ),
 
     // Wide tables scroll in their own container; the article body never
     // scrolls sideways, which is what would break the page at 360px.
     table: ({ node: _node, ...props }) => (
         <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full border-collapse text-xs" {...props} />
+            <table className={`w-full border-collapse ${s.table}`} {...props} />
         </div>
     ),
     thead: styled('thead', 'bg-gray-50'),
@@ -80,9 +120,9 @@ const components: Components = {
     code: ({ node: _node, className, ...props }) => {
         const fenced = /language-/.test(className ?? '');
         return fenced ? (
-            <code className="font-mono text-xs leading-relaxed" {...props} />
+            <code className={`font-mono ${s.code} leading-relaxed`} {...props} />
         ) : (
-            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800" {...props} />
+            <code className={`rounded bg-gray-100 px-1.5 py-0.5 font-mono ${s.code} text-gray-800`} {...props} />
         );
     },
     pre: styled('pre', 'mt-6 overflow-x-auto rounded-lg bg-gray-900 p-4 text-gray-100'),
@@ -116,11 +156,25 @@ const components: Components = {
             {...props}
         />
     ),
+    };
+}
+
+/** Built once per variant at module scope rather than per render, so a long
+ * article does not rebuild forty component identities on every pass. */
+const COMPONENTS: Record<ArticleMarkdownVariant, Components> = {
+    compact: buildComponents('compact'),
+    article: buildComponents('article'),
 };
 
-export default function ArticleMarkdown({ content }: { content: string }) {
+export default function ArticleMarkdown({
+    content,
+    variant = 'compact',
+}: {
+    content: string;
+    variant?: ArticleMarkdownVariant;
+}) {
     return (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} skipHtml>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS[variant]} skipHtml>
             {content}
         </ReactMarkdown>
     );

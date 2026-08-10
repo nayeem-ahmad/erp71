@@ -50,16 +50,16 @@ export default async function BlogCategoryPage({
     const lastPage = Math.max(Math.ceil(list.total / PAGE_SIZE), 1);
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav active="blog" />
 
             <main className="mx-auto max-w-5xl px-6 pb-16 pt-28">
-                <Link href="/blog" className="text-xs font-medium text-blue-600 hover:underline">
+                <Link href="/blog" className="text-sm font-semibold text-blue-600 hover:underline">
                     ← All posts
                 </Link>
 
                 <header className="mt-6 border-b border-gray-100 pb-8">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                    <h1 className="text-5xl font-black leading-none tracking-tighter text-gray-900 md:text-6xl">
                         {category?.name_en ?? slug}
                     </h1>
                 </header>
@@ -87,7 +87,7 @@ export default async function BlogCategoryPage({
                 </nav>
 
                 {list.rows.length === 0 ? (
-                    <p className="mt-12 text-sm text-gray-500">No posts in this category yet.</p>
+                    <p className="mt-12 text-base text-gray-500">No posts in this category yet.</p>
                 ) : (
                     <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {list.rows.map((post) => (

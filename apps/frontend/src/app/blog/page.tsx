@@ -55,13 +55,15 @@ export default async function BlogIndexPage({
     const lastPage = Math.max(Math.ceil(list.total / PAGE_SIZE), 1);
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav active="blog" />
 
             <main className="mx-auto max-w-5xl px-6 pb-16 pt-28">
                 <header className="border-b border-gray-100 pb-8">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">The ERP71 blog</h1>
-                    <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">
+                    <h1 className="text-5xl font-black leading-none tracking-tighter text-gray-900 md:text-6xl">
+                        The ERP71 blog
+                    </h1>
+                    <p className="mt-6 max-w-2xl text-lg leading-relaxed text-gray-600">
                         Practical writing for shop owners — stock, cash, staff and the software in between.
                     </p>
                 </header>
@@ -84,7 +86,7 @@ export default async function BlogIndexPage({
                 )}
 
                 {list.rows.length === 0 ? (
-                    <p className="mt-12 text-sm text-gray-500">No posts yet. Check back soon.</p>
+                    <p className="mt-12 text-base text-gray-500">No posts yet. Check back soon.</p>
                 ) : (
                     <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {list.rows.map((post) => (
