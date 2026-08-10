@@ -23,7 +23,8 @@ interface Campaign {
     channel: string;
     subject: string | null;
     target_segment: string | null;
-    message: string;
+    /** Null on UPLOAD campaigns — the body lives on each recipient row. */
+    message: string | null;
     scheduled_at: string | null;
     sent_at: string | null;
     recipient_count: number;
@@ -185,6 +186,11 @@ export default function CrmCampaignsPage() {
             } else {
                 setPreview({ count: full.progress?.total ?? full.recipient_count, sample: [] });
             }
+        } catch (err: any) {
+            // Without this the modal sits open on the stale row it was opened
+            // from, with an unhandled rejection and no sign anything failed.
+            toast.error(err?.message ?? m.loadFailed);
+            setSelected(null);
         } finally {
             setPreviewLoading(false);
         }
@@ -210,8 +216,11 @@ export default function CrmCampaignsPage() {
         if (!selected) return;
         setSavingSchedule(true);
         try {
+            // Explicitly null, not undefined: clearing the field has to reach
+            // the server as "unschedule this", and an undefined key is dropped
+            // from the PATCH body, making it a no-op.
             await api.updateCrmCampaign(selected.id, {
-                scheduled_at: dhakaLocalToIso(rescheduleValue) ?? undefined,
+                scheduled_at: dhakaLocalToIso(rescheduleValue),
             });
             toast.success(m.schedule.rescheduled);
             setSelected(null);
@@ -259,7 +268,7 @@ export default function CrmCampaignsPage() {
         return campaigns.filter((c) => {
             if (statusFilter && c.status !== statusFilter) return false;
             if (channelFilter && c.channel !== channelFilter) return false;
-            if (q && !(`${c.name} ${c.subject ?? ''} ${c.message}`.toLowerCase().includes(q))) return false;
+            if (q && !(`${c.name} ${c.subject ?? ''} ${c.message ?? ''}`.toLowerCase().includes(q))) return false;
             return true;
         });
     }, [campaigns, search, statusFilter, channelFilter]);
@@ -284,7 +293,7 @@ export default function CrmCampaignsPage() {
                         {c.channel === 'EMAIL' && c.subject && (
                             <p className="text-xs text-gray-600 font-medium truncate">{c.subject}</p>
                         )}
-                        <p className="text-xs text-gray-400 truncate">{c.message}</p>
+                        {c.message && <p className="text-xs text-gray-400 truncate">{c.message}</p>}
                     </div>
                 );
             },
@@ -565,9 +574,13 @@ export default function CrmCampaignsPage() {
                             </div>
                         )}
 
-                        <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
-                            {selected.message}
-                        </div>
+                        {/* An UPLOAD campaign has no campaign-level body — each
+                            recipient carries its own — so there is no panel to show. */}
+                        {selected.message && (
+                            <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                                {selected.message}
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-3 text-sm">
                             <div><span className="text-gray-400">Channel:</span> <span className="font-medium">{selected.channel}</span></div>
@@ -665,7 +678,10 @@ export default function CrmCampaignsPage() {
                             </div>
                         )}
 
-                        {selected.status === 'SCHEDULED' && (
+                        {/* DRAFT as well as SCHEDULED: update() allows both, and
+                            without DRAFT a draft could never be given a schedule
+                            after it was created. */}
+                        {['DRAFT', 'SCHEDULED'].includes(selected.status) && (
                             <Field label={m.schedule.label}>
                                 <div className="flex gap-2">
                                     <Input

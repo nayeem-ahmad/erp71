@@ -198,6 +198,62 @@ describe('CrmCampaignsService', () => {
         });
     });
 
+    describe('update() — scheduling', () => {
+        // M10's server half: the UI now sends an explicit null to unschedule.
+        it('unschedules and returns to DRAFT when scheduled_at is null', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'SCHEDULED',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { scheduled_at: null } as any);
+
+            expect(db.crmCampaign.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'camp-1' },
+                    data: expect.objectContaining({ scheduled_at: null, status: 'DRAFT' }),
+                }),
+            );
+        });
+
+        it('schedules a DRAFT campaign given a time', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'DRAFT',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { scheduled_at: '2026-08-20T09:00:00+06:00' } as any);
+
+            expect(db.crmCampaign.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        scheduled_at: new Date('2026-08-20T09:00:00+06:00'),
+                        status: 'SCHEDULED',
+                    }),
+                }),
+            );
+        });
+
+        it('leaves the schedule alone when the key is absent', async () => {
+            db.crmCampaign.findFirst.mockResolvedValueOnce({
+                id: 'camp-1',
+                status: 'SCHEDULED',
+                channel: 'EMAIL',
+                recipient_source: 'UPLOAD',
+            });
+
+            await service.update('t1', 'camp-1', { name: 'Renamed' } as any);
+
+            const data = db.crmCampaign.update.mock.calls[0][0].data;
+            expect(data).not.toHaveProperty('scheduled_at');
+            expect(data).not.toHaveProperty('status');
+        });
+    });
+
     describe('cancel()', () => {
         it('cancels a scheduled campaign', async () => {
             db.crmCampaign.findFirst.mockResolvedValueOnce({ id: 'camp-1', status: 'SCHEDULED' });

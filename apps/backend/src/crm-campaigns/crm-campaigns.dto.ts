@@ -133,7 +133,12 @@ export class UpdateCampaignDto {
     @IsUUID()
     target_group_id?: string;
 
+    /**
+     * Explicitly null unschedules the campaign and returns it to DRAFT; absent
+     * leaves the existing schedule alone. @IsOptional skips null as well as
+     * undefined, so the null reaches the service intact.
+     */
     @IsOptional()
     @IsDateString()
-    scheduled_at?: string;
+    scheduled_at?: string | null;
 }
