@@ -47,11 +47,10 @@ Two smaller defects sit inside the same code and are fixed here rather than left
 HR
   Overview                    /hr                             hr.overview
   Employees                   /hr/employees                   hr.employees
-  ▾ Attendance                                                hr.attendance
+  ▾ Attendance & Leave                                        hr.attendance
       Attendance Records      /hr/attendance                   hr.attendance.records
       In/Out Records          /hr/attendance/punches           hr.attendance.punches      NEW
-  ▾ Leave                                                     hr.leave
-      Leaves                  /hr/leaves                       hr.leave.requests
+      Leaves                  /hr/leaves                       hr.attendance.leaves
   ▾ Payroll                                                   hr.payroll
       Salary Payments         /hr/salary-payments              hr.payroll.salary-payments
   ▾ Recruitment                                               hr.recruitment             unchanged
@@ -64,7 +63,7 @@ HR
       Calendar & Schedules    /hr/schedules                    hr.setup.schedules
 ```
 
-Eleven flat links become two links and five groups. The nesting is `module → subgroup → link`, which
+Eleven flat links become two links and four groups. The nesting is `module → subgroup → link`, which
 is exactly what `Sidebar.tsx` and `nav-resolver.ts` already support; no rendering change is needed.
 
 ### Placement decisions
@@ -72,8 +71,8 @@ is exactly what `Sidebar.tsx` and `nav-resolver.ts` already support; no renderin
 **Overview and Employees stay top-level.** Employees is the module's most-opened page. Every module
 here keeps its Overview at depth one, and burying Employees would cost a click on every visit.
 
-**Recruitment becomes the sixth group.** It was not in the original request, but it already exists in
-the registry with three real pages. Leaving it flat beside five grouped siblings would read as an
+**Recruitment becomes the fourth group.** It was not in the original request, but it already exists in
+the registry with three real pages. Leaving it flat beside three grouped siblings would read as an
 oversight.
 
 **Calendar & Schedules belongs to HR Setup, not Attendance.** The page's own header comment states
@@ -82,11 +81,18 @@ that without a schedule "'late' and 'overtime' are both uncomputable"
 reporting it, and its Holidays tab feeds leave as well. Setup is the neutral home for something two
 groups depend on.
 
-**Leave and Payroll ship as single-child groups.** One extra click on two pages today, in exchange
-for a menu shape that stops changing: Leave Types and Leave Balances (`LeaveType`, `LeaveBalance`
-already exist as Prisma models) and Payroll Runs / Salary Structures drop into an existing group
-instead of forcing a second restructure. Given the migration gap below, a second restructure is the
-specific thing worth avoiding.
+**Leave lives inside Attendance & Leave rather than in a group of its own.** Both answer the same
+question — who was at work, and why not — and they share their inputs: the Holidays half of
+`/hr/schedules` is the base for both, and `AttendanceRecord` and `LeaveRequest` describe the same
+days. A separate one-item Leave group would also put a submenu in front of a single page for no gain.
+Leave Types and Leave Balances (`LeaveType` and `LeaveBalance` already exist as Prisma models) join
+this group when they get pages; if leave ever outgrows it, splitting a three-item group is a smaller
+change than the flat-to-nested restructure being done here.
+
+**Payroll ships as a group of one.** The exception to the reasoning above: Salary Payments has no
+sibling to sit beside today, but the backend payroll module is built and its UI is a known gap, so
+Payroll Runs and Salary Structures have a place to land. Given the migration gap below, a second
+restructure is the specific thing worth avoiding.
 
 ---
 
@@ -135,8 +141,7 @@ restructure becomes unshippable by these means. That argues for landing it as on
 
 | Action | Entry |
 |---|---|
-| Add | `hr.attendance` — subgroup, `Clock`, `hr.hub.attendance` |
-| Add | `hr.leave` — subgroup, `CalendarOff`, `hr.hub.leave` |
+| Add | `hr.attendance` — subgroup, `Clock`, `hr.hub.attendanceLeave` |
 | Add | `hr.payroll` — subgroup, `Banknote`, `hr.hub.payroll` |
 | Add | `hr.setup` — subgroup, `Layers`, `hr.hub.setup` (matches `sales.setup` / `inventory.setup` / `accounting.setup`) |
 | Add | `hr.attendance.punches` — link, `ArrowLeftRight`, `sidebar.items.attendancePunches`, `/hr/attendance/punches` |
@@ -147,8 +152,9 @@ restructure becomes unshippable by these means. That argues for landing it as on
 highlights both it and In/Out Records whenever `/hr/attendance/punches` is open — the same trap that
 `sales.reports.gross-profit` documents.
 
-`DEFAULT_TENANT_NAV_LAYOUT`: the HR block is rewritten so the four new subgroups are placed under
-`hr` and each link hangs off its group, in the order shown in the target tree.
+`DEFAULT_TENANT_NAV_LAYOUT`: the HR block is rewritten so the three new subgroups plus the existing
+`hr.recruitment` are placed under `hr`, and each link hangs off its group, in the order shown in the
+target tree.
 
 All icons used are already in `NAV_ICON_MAP` except `CalendarDays` — see below.
 
@@ -159,7 +165,7 @@ Schedules entry.
 
 ### `apps/frontend/src/app/(app)/hr/page.tsx`
 
-`HR_HUB_SECTIONS` is regrouped into the same six sections (People, Attendance, Leave, Payroll,
+`HR_HUB_SECTIONS` is regrouped into the same five sections (People, Attendance & Leave, Payroll,
 Recruitment, HR Setup), and `sectionLabels` updated to match. The hub and the sidebar must tell the
 same story; today the hub's grouping (`dailyOperations` / `organization` / `operations` /
 `recruitment`) is a third structure agreeing with neither.
@@ -172,8 +178,7 @@ Schedules is currently missing from the hub too — it joins the HR Setup sectio
 
 | Key | English |
 |---|---|
-| `attendance` | Attendance |
-| `leave` | Leave |
+| `attendanceLeave` | Attendance & Leave |
 | `payroll` | Payroll |
 | `setup` | HR Setup |
 | `people` | People |
@@ -199,12 +204,12 @@ those files.
 ### Tests
 
 - `packages/shared-types` — `validateNavLayout(DEFAULT_TENANT_NAV_LAYOUT)` is valid; the HR module
-  resolves to five subgroups in order; each subgroup's children resolve to the expected hrefs in the
+  resolves to four subgroups in order; each subgroup's children resolve to the expected hrefs in the
   expected order; `hr.organization` and `hr.operations` are gone from the registry.
 - `nav-resolver.test.ts` — the HR module resolves with nested children rather than a flat list.
 - `Sidebar.test.tsx` — an HR subgroup expands, and `/hr/attendance/punches` does not also highlight
   Attendance Records (the `exact: true` guard).
-- `hr/page.test.tsx` — the hub renders the six sections and the new Schedules tile.
+- `hr/page.test.tsx` — the hub renders the five sections and the new Schedules tile.
 
 Note: `packages/shared-types/*.test.ts` is currently run by no jest project (open item in `TODO.md`),
 so shared-types assertions need a deliberate run rather than relying on CI.
@@ -226,6 +231,6 @@ the next nav change safe, and it is also what would have made *this* one hard.
 - **HR Reports group** — create it when the first HR report page exists.
 - **Payroll UI** — the backend payroll module has no frontend. Until it does, Payroll is a group of
   one.
-- **No browser pass.** Verification will be unit tests, typecheck and lint only. Whether six nested
-  groups make the HR module scroll awkwardly at 360px, and whether the accordion feels right with
-  single-child groups, cannot be established in jsdom.
+- **No browser pass.** Verification will be unit tests, typecheck and lint only. Whether four nested
+  groups make the HR module scroll awkwardly at 360px, and whether the accordion feels right in front
+  of Payroll's single child, cannot be established in jsdom.

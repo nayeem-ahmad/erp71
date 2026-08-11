@@ -6,6 +6,7 @@ import {
     BadgeCheck,
     Banknote,
     Briefcase,
+    CalendarDays,
     CalendarOff,
     ClipboardList,
     Clock,
@@ -20,26 +21,25 @@ import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 
+/** Mirrors the HR sidebar tree in `NAV_REGISTRY` — the hub and the menu must group alike. */
 const HR_HUB_SECTIONS: HubSectionConfig[] = [
     {
-        sectionKey: 'dailyOperations',
+        sectionKey: 'people',
         links: [
             { href: routes.hr.employees, key: 'employees', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
         ],
     },
     {
-        sectionKey: 'organization',
-        links: [
-            { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-primary-light text-blue-700 border-primary-border' },
-            { href: routes.hr.designations, key: 'designations', icon: BadgeCheck, accent: 'bg-primary-light text-blue-700 border-primary-border' },
-        ],
-    },
-    {
-        sectionKey: 'operations',
+        sectionKey: 'attendanceLeave',
         links: [
             { href: routes.hr.attendance, key: 'attendance', icon: Clock, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.hr.attendancePunches, key: 'attendancePunches', icon: ArrowLeftRight, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.hr.leaves, key: 'leaves', icon: CalendarOff, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+        ],
+    },
+    {
+        sectionKey: 'payroll',
+        links: [
             { href: routes.hr.salaryPayments, key: 'salaryPayments', icon: Banknote, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         ],
     },
@@ -49,6 +49,14 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.hr.jobPosts, key: 'jobPosts', icon: Briefcase, accent: 'bg-primary-light text-blue-700 border-primary-border' },
             { href: routes.hr.applicants, key: 'applicants', icon: UserSearch, accent: 'bg-primary-light text-blue-700 border-primary-border' },
             { href: routes.hr.applications, key: 'applications', icon: ClipboardList, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+        ],
+    },
+    {
+        sectionKey: 'setup',
+        links: [
+            { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.designations, key: 'designations', icon: BadgeCheck, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.schedules, key: 'schedules', icon: CalendarDays, accent: 'bg-primary-light text-blue-700 border-primary-border' },
         ],
     },
 ];
@@ -63,10 +71,11 @@ export default function HrHubPage() {
     const canViewHr = hasPermission(permissions, 'VIEW_HR');
     const hub = t.hr.hub;
     const sectionLabels = useMemo(() => ({
-        dailyOperations: hub.dailyOperations,
-        organization: hub.organization,
-        operations: hub.operations,
+        people: hub.people,
+        attendanceLeave: hub.attendanceLeave,
+        payroll: hub.payroll,
         recruitment: hub.recruitment,
+        setup: hub.setup,
     }), [hub]);
 
     return (
