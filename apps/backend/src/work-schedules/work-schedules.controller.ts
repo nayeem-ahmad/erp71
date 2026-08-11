@@ -1,5 +1,5 @@
 import {
-    Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query,
+    Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query,
     UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
@@ -10,8 +10,8 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { WorkSchedulesService } from './work-schedules.service';
 import {
-    AssignScheduleDto, CreateHolidayDto, CreateWorkScheduleDto, HolidayQueryDto,
-    UpdateHolidayDto, UpdateWorkScheduleDto,
+    AssignScheduleDto, BulkHolidayDto, CopyHolidayYearDto, CreateHolidayDto, CreateWorkScheduleDto,
+    HolidayQueryDto, HolidayYearQueryDto, UpdateHolidayDto, UpdateWorkScheduleDto,
 } from './work-schedules.dto';
 
 /**
@@ -32,10 +32,42 @@ export class WorkSchedulesController {
         return this.service.listHolidays(tenant.tenantId, query.year);
     }
 
+    /**
+     * The fixed-date national holidays for a year, flagged with what the tenant
+     * already has. Declared before `holidays/:id` routes so the literal path
+     * cannot be swallowed by a parameter segment.
+     */
+    @Get('holidays/suggestions')
+    suggestHolidays(@Tenant() tenant: TenantContext, @Query() query: HolidayYearQueryDto) {
+        return this.service.suggestHolidays(tenant.tenantId, query.year);
+    }
+
     @Post('holidays')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     createHoliday(@Tenant() tenant: TenantContext, @Body() dto: CreateHolidayDto) {
         return this.service.createHoliday(tenant.tenantId, dto);
+    }
+
+    /** Add a year's holidays in one go — an import, or the suggested set. */
+    @Post('holidays/bulk')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.OK)
+    bulkCreateHolidays(@Tenant() tenant: TenantContext, @Body() dto: BulkHolidayDto) {
+        return this.service.bulkCreateHolidays(tenant.tenantId, dto);
+    }
+
+    @Post('holidays/copy-year')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.OK)
+    copyHolidayYear(@Tenant() tenant: TenantContext, @Body() dto: CopyHolidayYearDto) {
+        return this.service.copyHolidaysToYear(tenant.tenantId, dto);
+    }
+
+    @Delete('holidays/year/:year')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.OK)
+    clearHolidayYear(@Tenant() tenant: TenantContext, @Param('year', ParseIntPipe) year: number) {
+        return this.service.clearHolidayYear(tenant.tenantId, year);
     }
 
     @Patch('holidays/:id')

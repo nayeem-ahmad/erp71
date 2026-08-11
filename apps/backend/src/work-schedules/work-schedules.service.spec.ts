@@ -24,8 +24,10 @@ describe('WorkSchedulesService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 findFirst: jest.fn().mockResolvedValue(null),
                 create: jest.fn().mockResolvedValue({}),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
                 update: jest.fn().mockResolvedValue({}),
                 delete: jest.fn().mockResolvedValue({}),
+                deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             workSchedule: {
                 findMany: jest.fn().mockResolvedValue([]),
@@ -89,6 +91,169 @@ describe('WorkSchedulesService', () => {
             const keys = await service.holidayKeysBetween('t1', new Date(), new Date());
             expect(keys.has('2026-04-14')).toBe(true);
             expect(keys.has('2026-12-16')).toBe(true);
+        });
+    });
+
+    describe('holidays for the year', () => {
+        const holiday = (date: string, name: string) => ({
+            id: `h-${date}`, date: new Date(`${date}T00:00:00.000Z`), name,
+        });
+
+        describe('bulk add', () => {
+            it('creates the dates the tenant does not have yet', async () => {
+                const result = await service.bulkCreateHolidays('t1', {
+                    items: [
+                        { date: '2026-02-21', name: 'Shaheed Day' },
+                        { date: '2026-03-26', name: 'Independence Day' },
+                    ],
+                });
+
+                expect(result).toEqual({ created: 2, updated: 0, skipped: 0 });
+                expect(db.holiday.createMany.mock.calls[0][0].data).toHaveLength(2);
+            });
+
+            it('skips a date that already has a holiday instead of failing the batch', async () => {
+                // One clash must not throw away the other rows — an import run
+                // twice should be a no-op, not an error.
+                db.holiday.findMany.mockResolvedValue([holiday('2026-02-21', 'Shaheed Day')]);
+
+                const result = await service.bulkCreateHolidays('t1', {
+                    items: [
+                        { date: '2026-02-21', name: 'Renamed' },
+                        { date: '2026-03-26', name: 'Independence Day' },
+                    ],
+                });
+
+                expect(result).toEqual({ created: 1, updated: 0, skipped: 1 });
+                expect(db.holiday.update).not.toHaveBeenCalled();
+            });
+
+            it('renames an existing date when overwrite is set', async () => {
+                db.holiday.findMany.mockResolvedValue([holiday('2026-02-21', 'Shaheed Day')]);
+
+                const result = await service.bulkCreateHolidays('t1', {
+                    items: [{ date: '2026-02-21', name: 'Mother Language Day' }],
+                    overwrite: true,
+                });
+
+                expect(result).toEqual({ created: 0, updated: 1, skipped: 0 });
+                expect(db.holiday.update.mock.calls[0][0].data).toEqual({ name: 'Mother Language Day' });
+            });
+
+            it('counts an unchanged name as skipped rather than updated', async () => {
+                db.holiday.findMany.mockResolvedValue([holiday('2026-02-21', 'Shaheed Day')]);
+
+                const result = await service.bulkCreateHolidays('t1', {
+                    items: [{ date: '2026-02-21', name: 'Shaheed Day' }],
+                    overwrite: true,
+                });
+
+                expect(result).toEqual({ created: 0, updated: 0, skipped: 1 });
+            });
+
+            it('keeps the last name when the payload repeats a date', async () => {
+                // The unique index would reject the second row, and the caller
+                // meant both — so the later intent wins.
+                const result = await service.bulkCreateHolidays('t1', {
+                    items: [
+                        { date: '2026-02-21', name: 'First' },
+                        { date: '2026-02-21', name: 'Second' },
+                    ],
+                });
+
+                expect(result.created).toBe(1);
+                expect(db.holiday.createMany.mock.calls[0][0].data[0].name).toBe('Second');
+            });
+
+            it('stores bulk dates as midnight UTC, like the single-date path', async () => {
+                await service.bulkCreateHolidays('t1', {
+                    items: [{ date: '2026-04-14', name: 'Pohela Boishakh' }],
+                });
+                const stored = db.holiday.createMany.mock.calls[0][0].data[0].date;
+                expect(stored.toISOString()).toBe('2026-04-14T00:00:00.000Z');
+            });
+
+            it('rejects a year outside the supported range', async () => {
+                await expect(service.bulkCreateHolidays('t1', {
+                    items: [{ date: '1899-01-01', name: 'Too early' }],
+                })).rejects.toThrow(BadRequestException);
+            });
+        });
+
+        describe('copy year', () => {
+            it('lands each holiday on the same day of the month', async () => {
+                db.holiday.findMany
+                    .mockResolvedValueOnce([holiday('2026-12-16', 'Victory Day')]) // source year
+                    .mockResolvedValueOnce([]); // clash lookup inside the bulk add
+
+                const result = await service.copyHolidaysToYear('t1', { from_year: 2026, to_year: 2027 });
+
+                expect(result).toMatchObject({ created: 1, unmapped: 0 });
+                expect(db.holiday.createMany.mock.calls[0][0].data[0].date.toISOString())
+                    .toBe('2027-12-16T00:00:00.000Z');
+            });
+
+            it('reports 29 February rather than sliding it onto the 28th', async () => {
+                // Moving it would invent a holiday the tenant never declared.
+                db.holiday.findMany
+                    .mockResolvedValueOnce([
+                        holiday('2028-02-29', 'Leap day'),
+                        holiday('2028-05-01', 'May Day'),
+                    ])
+                    .mockResolvedValueOnce([]);
+
+                const result = await service.copyHolidaysToYear('t1', { from_year: 2028, to_year: 2029 });
+
+                expect(result.unmapped).toBe(1);
+                expect(db.holiday.createMany.mock.calls[0][0].data).toHaveLength(1);
+            });
+
+            it('refuses to copy a year onto itself', async () => {
+                await expect(service.copyHolidaysToYear('t1', { from_year: 2026, to_year: 2026 }))
+                    .rejects.toThrow(BadRequestException);
+            });
+
+            it('refuses to copy from a year with no holidays', async () => {
+                db.holiday.findMany.mockResolvedValue([]);
+                await expect(service.copyHolidaysToYear('t1', { from_year: 2025, to_year: 2026 }))
+                    .rejects.toThrow(BadRequestException);
+            });
+        });
+
+        describe('clear year', () => {
+            it('deletes only the requested year, scoped to the tenant', async () => {
+                db.holiday.deleteMany.mockResolvedValue({ count: 7 });
+
+                const result = await service.clearHolidayYear('t1', 2026);
+
+                expect(result).toEqual({ deleted: 7 });
+                const where = db.holiday.deleteMany.mock.calls[0][0].where;
+                expect(where.tenant_id).toBe('t1');
+                expect(where.date.gte.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+                expect(where.date.lte.toISOString()).toBe('2026-12-31T00:00:00.000Z');
+            });
+
+            it('rejects a nonsense year', async () => {
+                await expect(service.clearHolidayYear('t1', 12)).rejects.toThrow(BadRequestException);
+                expect(db.holiday.deleteMany).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('suggestions', () => {
+            it('resolves the fixed-date national holidays into the asked-for year', async () => {
+                const suggestions = await service.suggestHolidays('t1', 2027);
+                expect(suggestions.every((item) => item.date.startsWith('2027-'))).toBe(true);
+                expect(suggestions.map((item) => item.date)).toContain('2027-12-16');
+            });
+
+            it('flags the ones the tenant already has', async () => {
+                db.holiday.findMany.mockResolvedValue([holiday('2026-12-16', 'Victory Day')]);
+
+                const suggestions = await service.suggestHolidays('t1', 2026);
+                const victoryDay = suggestions.find((item) => item.date === '2026-12-16');
+                expect(victoryDay?.exists).toBe(true);
+                expect(suggestions.filter((item) => item.exists)).toHaveLength(1);
+            });
         });
     });
 
