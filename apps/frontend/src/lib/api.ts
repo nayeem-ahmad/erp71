@@ -2802,6 +2802,23 @@ export const api = {
         }),
     deleteHoliday: (id: string) => fetchWithAuth(`/hr/holidays/${id}`, { method: 'DELETE' }),
 
+    // Whole-year holiday management
+    getHolidaySuggestions: (year: number) => fetchWithAuth(`/hr/holidays/suggestions?year=${year}`),
+    bulkCreateHolidays: (data: { items: { date: string; name: string }[]; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/bulk', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    copyHolidayYear: (data: { from_year: number; to_year: number; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/copy-year', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    clearHolidayYear: (year: number) =>
+        fetchWithAuth(`/hr/holidays/year/${year}`, { method: 'DELETE' }),
+
     getWorkSchedules: () => fetchWithAuth('/hr/work-schedules'),
     getWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`),
     createWorkSchedule: (data: any) => fetchWithAuth('/hr/work-schedules', {
