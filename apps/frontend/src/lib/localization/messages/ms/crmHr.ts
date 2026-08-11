@@ -444,6 +444,8 @@ export const crmHrMessages = {
                 requirementsPlaceholder: 'Pengalaman, pendidikan, dan kemahiran yang diharapkan.',
                 status: 'Status',
                 closingDate: 'Tarikh Tutup',
+                publishToBoard: 'Papan kerjaya awam',
+                publishToBoardHint: 'Senaraikan kekosongan ini di papan kerjaya ERP71 supaya sesiapa sahaja boleh mencarinya dan memohon. Biarkan tutup untuk kekal dalaman.',
                 none: '— tiada —',
                 salaryBandError: 'Gaji minimum tidak boleh melebihi gaji maksimum.',
             },
@@ -573,6 +575,7 @@ export const crmHrMessages = {
                 notePlaceholder: 'Apa yang berlaku — keputusan temu duga, ringkasan panggilan…',
                 rejectionReason: 'Sebab Penolakan',
                 rejectionPlaceholder: 'Mengapa calon ini tidak diteruskan.',
+                coverLetter: 'Nota calon',
                 hiredHint: 'Gunakan tindakan Ambil Bekerja supaya rekod pekerja dicipta bersama pengambilan.',
             },
             hireForm: {

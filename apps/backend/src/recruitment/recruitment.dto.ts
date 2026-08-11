@@ -36,6 +36,13 @@ export class CreateJobPostDto {
 
     @IsOptional() @IsEnum(JOB_POST_STATUSES as any) status?: JobPostStatus;
     @IsOptional() @IsDateString() closing_date?: string;
+
+    /**
+     * List this vacancy on the public, cross-tenant careers board at `/careers`.
+     * Separate from `status` so OPEN keeps meaning "we are hiring" and does not
+     * silently become "advertised to the internet" — see `JobPost.publish_to_board`.
+     */
+    @IsOptional() @IsBoolean() publish_to_board?: boolean;
 }
 
 export class UpdateJobPostDto extends CreateJobPostDto {

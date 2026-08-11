@@ -88,6 +88,32 @@ describe('RecruitmentService', () => {
             expect(draft.opened_at).toBeNull();
         });
 
+        it('leaves a new post off the public careers board unless asked', async () => {
+            db.jobPost.findFirst.mockResolvedValue(null);
+
+            // OPEN alone must not publish: it meant "we are hiring" long before a
+            // public board existed, so advertising is a separate, explicit choice.
+            const open = await service.createJobPost('t1', { title: 'Cashier', status: 'OPEN' });
+            expect(open.publish_to_board).toBe(false);
+
+            const listed = await service.createJobPost('t1', {
+                title: 'Cashier', status: 'OPEN', publish_to_board: true,
+            });
+            expect(listed.publish_to_board).toBe(true);
+        });
+
+        it('can take a post off the board without closing it', async () => {
+            db.jobPost.findFirst.mockResolvedValue({ ...POST, publish_to_board: true });
+
+            await service.updateJobPost('t1', 'post-1', {
+                title: 'Cashier', publish_to_board: false,
+            });
+
+            const patch = db.jobPost.update.mock.calls[0][0].data;
+            expect(patch.publish_to_board).toBe(false);
+            expect(patch.status).toBeUndefined();
+        });
+
         it('keeps the original opening date when a paused post reopens', async () => {
             const openedAt = new Date('2026-01-05T00:00:00Z');
             db.jobPost.findFirst.mockResolvedValue({ ...POST, status: 'ON_HOLD', opened_at: openedAt });

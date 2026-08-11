@@ -61,6 +61,7 @@ export class PasswordResetService {
                     passwordHash,
                     token_version: { increment: 1 },
                     storefront_token_version: { increment: 1 },
+                    applicant_token_version: { increment: 1 },
                     ...(!user?.email_verified_at && { email_verified_at: new Date() }),
                 },
             });

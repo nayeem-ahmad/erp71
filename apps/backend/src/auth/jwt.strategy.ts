@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { DatabaseService } from '../database/database.service';
-import { AUTH_SCOPE_STOREFRONT, resolveAuthScope } from './token-scope';
+import { AUTH_SCOPE_APPLICANT, AUTH_SCOPE_STOREFRONT, resolveAuthScope } from './token-scope';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -23,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 email: true,
                 token_version: true,
                 storefront_token_version: true,
+                applicant_token_version: true,
                 is_platform_admin: true,
             },
         });
@@ -31,11 +32,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
         const scope = resolveAuthScope(payload.scope);
 
-        // Reject tokens issued before a password change or logout. The two
+        // Reject tokens issued before a password change or logout. The three
         // surfaces revoke independently: `tv` tracks the ERP app, `stv` the
-        // storefront customer portal.
+        // storefront customer portal, `atv` the careers portal.
         if (scope === AUTH_SCOPE_STOREFRONT) {
             if (payload.stv !== undefined && payload.stv !== user.storefront_token_version) {
+                throw new UnauthorizedException('Session invalidated');
+            }
+        } else if (scope === AUTH_SCOPE_APPLICANT) {
+            if (payload.atv !== undefined && payload.atv !== user.applicant_token_version) {
                 throw new UnauthorizedException('Session invalidated');
             }
         } else if (payload.tv !== undefined && payload.tv !== user.token_version) {

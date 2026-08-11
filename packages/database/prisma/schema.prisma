@@ -320,6 +320,11 @@ model User {
   // from) the ERP app does not silently drop the same person's storefront
   // customer sessions, and vice versa. A password change bumps both.
   storefront_token_version Int       @default(0)
+  // Third independently-revocable surface, for the same reason `stv` exists:
+  // a job seeker who signs out of the careers portal should not lose an ERP
+  // session, and a workspace member signing out of ERP should not lose a job
+  // application in progress. A password change bumps all three.
+  applicant_token_version  Int       @default(0)
   is_platform_admin        Boolean   @default(false)
   /// Last time this person opened the in-app "What's new" feed. The unread dot
   /// is a comparison against the newest published post, which is why there is
@@ -360,6 +365,8 @@ model User {
   storefrontCustomers               Customer[]
   storefrontOrders                  StorefrontOrder[]
   employee                          Employee?
+  jobSeeker                         JobSeeker?
+  applicantRecords                  Applicant[]                 @relation("ApplicantUser")
   approvedLeaves                    LeaveRequest[]              @relation("LeaveApprover")
   approvedVouchers                  Voucher[]                   @relation("VoucherApprover")
   createdInteractions               CustomerInteraction[]       @relation("InteractionCreator")
@@ -4427,6 +4434,14 @@ model JobPost {
   description       String?
   requirements      String?
   status            JobPostStatus     @default(DRAFT)
+  /// Whether this vacancy is listed on the public, cross-tenant careers board.
+  ///
+  /// Separate from `status` and defaulting to false on purpose. OPEN already
+  /// meant "we are hiring for this internally", and letting the careers board
+  /// reuse it would have retroactively published every existing OPEN post the
+  /// moment this shipped. Advertising to the open internet is a decision a
+  /// workspace makes per post, so it gets its own switch.
+  publish_to_board  Boolean           @default(false)
   /// When the post went live. Null while it is a draft.
   opened_at         DateTime?         @db.Date
   closing_date      DateTime?         @db.Date
@@ -4478,16 +4493,65 @@ model Applicant {
   notes               String?
   address             String?
 
+  /// Set when this candidate record belongs to a careers-portal login.
+  ///
+  /// Null is the normal case and stays the normal case: most candidates are
+  /// typed in by HR and never sign in. It is filled either because the person
+  /// applied through the public board, or because they later signed up and
+  /// *claimed* an existing record — see `CareersService.resolveApplicant`, and
+  /// note the claim needs a verified email or mobile, because `@@unique([tenant_id, phone])`
+  /// means an unverified match would otherwise hand somebody another person's
+  /// interview history.
+  user_id String?
+
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
   tenant       Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user         User?            @relation("ApplicantUser", fields: [user_id], references: [id])
   applications JobApplication[]
 
   @@unique([tenant_id, phone])
+  /// One candidate record per login per company. The portal reads a person's
+  /// applications by walking these, so a second row would split their history.
+  @@unique([tenant_id, user_id])
   @@index([tenant_id, deleted_at])
+  @@index([user_id])
   @@map("applicants")
+}
+
+/// One person's platform-wide candidate profile — the careers-portal login.
+///
+/// Deliberately global where `Applicant` is tenant-scoped, and that difference
+/// is the whole feature: somebody fills this in once and applies to any number
+/// of companies, and `Applicant` is the per-company copy each hiring workspace
+/// actually works with. Applying snapshots this profile into the tenant's
+/// `Applicant` row rather than the workspace reading across the boundary.
+model JobSeeker {
+  id            String    @id @default(uuid())
+  user_id       String    @unique
+  full_name     String
+  /// Required before applying, because `Applicant.phone` is non-null and is the
+  /// key a hiring workspace de-duplicates candidates on.
+  phone         String?
+  /// One-line "Senior Accountant, 6 years" self-description.
+  headline      String?
+  location      String?
+  summary       String?
+  /// The default CV, copied onto the tenant's `Applicant` at apply time so a
+  /// later profile edit does not silently rewrite what a company reviewed.
+  resume_url    String?
+  resume_name   String?
+  linkedin_url  String?
+  portfolio_url String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("job_seekers")
 }
 
 /// One candidate against one vacancy — the row that actually moves.
@@ -4508,6 +4572,11 @@ model JobApplication {
   rating            Int?
   source            String?
   notes             String?
+  /// The candidate's own note, written when they applied through the public
+  /// careers board. Kept apart from `notes` — which is the workspace's
+  /// editable field — so an interviewer cannot overwrite what the applicant
+  /// said, and so the application screen can attribute it correctly.
+  cover_letter      String?
   /// Why they were rejected, in the tenant's words. Only meaningful on REJECTED.
   rejection_reason  String?
   /// Set when the application ends in a hire. The link is what makes "how long

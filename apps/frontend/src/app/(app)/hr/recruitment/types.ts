@@ -39,6 +39,8 @@ export interface JobPost {
     code: string;
     title: string;
     status: JobPostStatus;
+    /** Listed on the public careers board at /careers. */
+    publish_to_board?: boolean;
     employment_type: EmploymentType;
     location?: string | null;
     openings: number;
@@ -79,6 +81,8 @@ export interface JobApplication {
     rating?: number | null;
     source?: string | null;
     notes?: string | null;
+    /** The candidate's own note, written when they applied through /careers. Read-only to the workspace. */
+    cover_letter?: string | null;
     rejection_reason?: string | null;
     hired_employee_id?: string | null;
     applicant?: Partial<Applicant> & { id: string; name: string; phone: string };
