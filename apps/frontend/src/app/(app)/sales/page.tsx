@@ -2,7 +2,9 @@
 
 import { useMemo } from 'react';
 import {
+    AlertTriangle,
     ArrowLeftRight,
+    BadgePercent,
     BarChart3,
     BookOpen,
     Clock,
@@ -11,6 +13,7 @@ import {
     FolderTree,
     Gift,
     Globe,
+    HandCoins,
     MapPin,
     Package,
     Settings,
@@ -54,6 +57,10 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.reports.products, key: 'salesByProduct', icon: Package, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
             { href: routes.sales.reports.consolidated, key: 'consolidated', icon: BarChart3, accent: 'bg-primary-light text-primary border-primary-border', advancedOnly: true },
             { href: routes.sales.reports.branchReport, key: 'branchReport', icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100', advancedOnly: true },
+            { href: routes.sales.reports.grossProfit, key: 'grossProfitByProduct', icon: HandCoins, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },
+            { href: routes.sales.reports.grossProfitSalespeople, key: 'grossProfitBySalesperson', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100', advancedOnly: true },
+            { href: routes.sales.reports.grossProfitExceptions, key: 'marginExceptions', icon: AlertTriangle, accent: 'bg-danger-light text-danger-text border-red-100', advancedOnly: true },
+            { href: routes.sales.reports.grossProfitBridge, key: 'marginBridge', icon: BadgePercent, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
             { href: routes.sales.customerLedger, key: 'customerLedger', icon: BookOpen, accent: 'bg-primary-light text-primary border-primary-border' },
             { href: routes.sales.customerDueAging, key: 'dueAging', icon: Clock, accent: 'bg-danger-light text-danger-text border-red-100' },
             { href: routes.sales.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-pink-50 text-pink-700 border-pink-100' },
