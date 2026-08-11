@@ -7,5 +7,8 @@ import { DatabaseModule } from '../database/database.module';
     imports: [DatabaseModule],
     controllers: [EmployeesController],
     providers: [EmployeesService],
+    // Recruitment creates employees at the point of hire and goes through this
+    // service so employee codes and payroll visibility stay in one place.
+    exports: [EmployeesService],
 })
 export class EmployeesModule {}

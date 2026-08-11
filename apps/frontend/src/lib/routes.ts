@@ -189,6 +189,10 @@ export const routes = {
         attendancePunches: '/hr/attendance/punches',
         leaves: '/hr/leaves',
         salaryPayments: '/hr/salary-payments',
+        jobPosts: '/hr/recruitment/job-posts',
+        jobPostDetail: (id: string) => `/hr/recruitment/job-posts/${id}` as const,
+        applicants: '/hr/recruitment/applicants',
+        applications: '/hr/recruitment/applications',
     },
 
     storefront: {

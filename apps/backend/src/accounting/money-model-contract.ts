@@ -138,6 +138,17 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     // gap.
     { model: 'ExpenseClaim', exempt: 'Reimbursement request; settles through PayrollAdjustment→PayrollLine or through the existing ExpenseEntry flow, both of which post.' },
     { model: 'ExpenseClaimLine', exempt: 'Line item of ExpenseClaim, which carries the total.' },
+
+    // ── Recruitment: pre-employment figures, none of them owed ───────────────
+    // Every amount here is a number somebody hopes for, not one the business
+    // owes: an advertised band, a candidate's expectation, the figure discussed
+    // for one application. Nothing is payable until a hire, and a hire writes an
+    // Employee whose basic_salary posts monthly through SalaryAccrual — the same
+    // route the Employee entry above describes. There is no event in between for
+    // a voucher to attach to, which is why these are exempt and not gaps.
+    { model: 'JobPost', exempt: 'Advertised salary band (config on a vacancy); nothing is owed until a hire, and the resulting Employee.basic_salary posts via SalaryAccrual.' },
+    { model: 'Applicant', exempt: "Candidate's expected salary — a pre-employment expectation, never an obligation." },
+    { model: 'JobApplication', exempt: 'Expected salary for one application; same category as Applicant. The hire it may lead to posts through Employee/SalaryAccrual.' },
     { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
     { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
 
