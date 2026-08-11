@@ -583,6 +583,7 @@ model Tenant {
   employees                  Employee[]
   leaveTypes                 LeaveType[]
   attendanceRecords          AttendanceRecord[]
+  attendancePunches          AttendancePunch[]
   leaveBalances              LeaveBalance[]
   leaveRequests              LeaveRequest[]
   holidays                   Holiday[]
@@ -960,6 +961,7 @@ model Store {
   userStoreAccess          UserStoreAccess[]
   userStorePermissions     UserStorePermission[]
   attendanceRecords        AttendanceRecord[]
+  attendancePunches        AttendancePunch[]
   productPrices            ProductPrice[]
   fundTransfersSource      FundTransfer[]           @relation("FundTransferSourceStore")
   fundTransfersDestination FundTransfer[]           @relation("FundTransferDestinationStore")
@@ -3411,6 +3413,7 @@ model Employee {
   designation             Designation?              @relation(fields: [designation_id], references: [id])
   user                    User?                     @relation(fields: [user_id], references: [id])
   attendanceRecords       AttendanceRecord[]
+  attendancePunches       AttendancePunch[]
   leaveBalances           LeaveBalance[]
   leaveRequests           LeaveRequest[]
   salaryPayments          SalaryPayment[]
@@ -3547,6 +3550,54 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// One in or out event for an employee — a single tap of the clock.
+///
+/// `AttendanceRecord` holds one row per employee per day and can therefore only
+/// remember one arrival and one departure. That is a lie on any day with a
+/// midday errand, a split shift or a forgotten tap corrected later, and it left
+/// nowhere to record *why* a time changed. This table is the raw log; the day
+/// row is derived from it — **first IN of the day becomes `clock_in`, last OUT
+/// becomes `clock_out`** — so the summary can always be rebuilt from evidence
+/// rather than being the only copy of it.
+///
+/// Deliberately not an enum for `direction`: `AttendanceRecord.source` is a
+/// plain string for the same reason, and a two-value enum costs a migration the
+/// first time a tenant wants BREAK_START.
+model AttendancePunch {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  /// Local midnight of the day this punch is counted against, matching
+  /// `AttendanceRecord.date`. Stored rather than derived on read because it is
+  /// the grouping key for the rebuild and every query filters on it.
+  date        DateTime @db.Date
+  punched_at  DateTime
+  /// IN | OUT
+  direction   String
+  /// Where the punch came from: ADMIN (typed by staff), SELF (the employee's
+  /// own check-in) or IMPORT. Carried up onto the day row it produces.
+  source      String   @default("ADMIN")
+  /// Why an admin typed or corrected this one. The question every attendance
+  /// dispute ends at.
+  notes       String?
+
+  /// Captured only when geofencing is on, mirroring `AttendanceRecord`.
+  latitude  Float?
+  longitude Float?
+  store_id  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  store    Store?   @relation(fields: [store_id], references: [id])
+
+  @@index([tenant_id, employee_id, date])
+  @@index([tenant_id, date])
+  @@map("attendance_punches")
 }
 
 /// A reusable onboarding or offboarding step for the tenant.

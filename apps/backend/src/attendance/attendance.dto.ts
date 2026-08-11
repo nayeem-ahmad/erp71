@@ -38,6 +38,82 @@ export class UpsertAttendanceDto {
     notes?: string;
 }
 
+export enum PunchDirectionDto {
+    IN = 'IN',
+    OUT = 'OUT',
+}
+
+export class CreatePunchDto {
+    @IsUUID()
+    employee_id: string;
+
+    /**
+     * Local wall-clock moment of the punch, e.g. `2026-08-11T09:04:00`. Sent
+     * without a zone on purpose: attendance is judged against a schedule kept
+     * in minutes from local midnight, so the server's local reading is the one
+     * that must match what the employee experienced.
+     */
+    @IsDateString()
+    punched_at: string;
+
+    @IsEnum(PunchDirectionDto)
+    direction: PunchDirectionDto;
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
+
+    /** ADMIN unless an importer says otherwise. `SELF` is written server-side. */
+    @IsOptional()
+    @IsEnum(['ADMIN', 'IMPORT'] as any)
+    source?: 'ADMIN' | 'IMPORT';
+}
+
+export class UpdatePunchDto {
+    @IsOptional()
+    @IsDateString()
+    punched_at?: string;
+
+    @IsOptional()
+    @IsEnum(PunchDirectionDto)
+    direction?: PunchDirectionDto;
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
+}
+
+export class PunchQueryDto {
+    @IsOptional()
+    @IsUUID()
+    employeeId?: string;
+
+    @IsOptional()
+    @IsDateString()
+    startDate?: string;
+
+    @IsOptional()
+    @IsDateString()
+    endDate?: string;
+
+    @IsOptional()
+    @IsEnum(PunchDirectionDto)
+    direction?: PunchDirectionDto;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Type(() => Number)
+    page?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(200)
+    @Type(() => Number)
+    limit?: number;
+}
+
 export class MonthQueryDto {
     @IsInt()
     @Min(2000)
