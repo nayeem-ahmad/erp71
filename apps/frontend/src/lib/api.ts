@@ -2824,6 +2824,78 @@ export const api = {
     getEmployeeSchedules: (employeeId: string) =>
         fetchWithAuth(`/hr/employees/${employeeId}/schedules`),
 
+    // Recruitment — job posts, applicants, and the applications between them.
+    getRecruitmentSummary: () => fetchWithAuth('/hr/recruitment/summary'),
+
+    getJobPosts: (params?: { search?: string; status?: string; department_id?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.department_id) query.set('department_id', params.department_id);
+        const suffix = query.toString();
+        return fetchWithAuth(`/hr/recruitment/job-posts${suffix ? `?${suffix}` : ''}`);
+    },
+    getJobPost: (id: string) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`),
+    createJobPost: (data: any) => fetchWithAuth('/hr/recruitment/job-posts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateJobPost: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteJobPost: (id: string) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`, { method: 'DELETE' }),
+
+    getApplicants: (search?: string) =>
+        fetchWithAuth(`/hr/recruitment/applicants${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    getApplicant: (id: string) => fetchWithAuth(`/hr/recruitment/applicants/${id}`),
+    createApplicant: (data: any) => fetchWithAuth('/hr/recruitment/applicants', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateApplicant: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applicants/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteApplicant: (id: string) => fetchWithAuth(`/hr/recruitment/applicants/${id}`, { method: 'DELETE' }),
+
+    getJobApplications: (params?: { job_post_id?: string; applicant_id?: string; stage?: string; stages?: string; search?: string }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value) query.set(key, value);
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/hr/recruitment/applications${suffix ? `?${suffix}` : ''}`);
+    },
+    getJobApplication: (id: string) => fetchWithAuth(`/hr/recruitment/applications/${id}`),
+    createJobApplication: (data: any) => fetchWithAuth('/hr/recruitment/applications', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateJobApplication: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applications/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    changeJobApplicationStage: (id: string, data: { stage: string; note?: string; rejection_reason?: string }) =>
+        fetchWithAuth(`/hr/recruitment/applications/${id}/stage`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    hireJobApplicant: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applications/${id}/hire`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteJobApplication: (id: string) =>
+        fetchWithAuth(`/hr/recruitment/applications/${id}`, { method: 'DELETE' }),
+
     // Employee self-service portal. Every endpoint resolves the employee from
     // the token, so none of these take an employee id.
     getMyProfile: () => fetchWithAuth('/employee-portal/me'),

@@ -4,9 +4,12 @@ import { useMemo } from 'react';
 import {
     BadgeCheck,
     Banknote,
+    Briefcase,
     CalendarOff,
+    ClipboardList,
     Clock,
     Layers,
+    UserSearch,
     Users,
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
@@ -38,6 +41,14 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.hr.salaryPayments, key: 'salaryPayments', icon: Banknote, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         ],
     },
+    {
+        sectionKey: 'recruitment',
+        links: [
+            { href: routes.hr.jobPosts, key: 'jobPosts', icon: Briefcase, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.applicants, key: 'applicants', icon: UserSearch, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.applications, key: 'applications', icon: ClipboardList, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+        ],
+    },
 ];
 
 /**
@@ -53,6 +64,7 @@ export default function HrHubPage() {
         dailyOperations: hub.dailyOperations,
         organization: hub.organization,
         operations: hub.operations,
+        recruitment: hub.recruitment,
     }), [hub]);
 
     return (
