@@ -99,6 +99,30 @@ export function formatDate(
     });
 }
 
+/**
+ * Date plus time of day, for timelines where "12/08/2026" twice in a row reads
+ * as a bug rather than as two updates on the same day.
+ */
+export function formatDateTime(
+    date: string | Date | null | undefined,
+    locale?: SupportedLocaleCode | string | null
+): string {
+    if (!date) return '—';
+
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '—';
+
+    const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
+
+    return d.toLocaleString(localeConfig.dateLocale, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
 export function formatNumber(
     n: number,
     locale?: SupportedLocaleCode | string | null

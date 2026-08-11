@@ -11,6 +11,7 @@ import {
     BookOpen,
     Bot,
     Boxes,
+    Briefcase,
     Building2,
     Calculator,
     CalendarOff,
@@ -70,6 +71,7 @@ import {
     Upload,
     UserCog,
     UserPlus,
+    UserSearch,
     Users,
     Wallet,
     Waves,
@@ -159,6 +161,8 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Factory,
     Timer,
     Warehouse,
+    Briefcase,
+    UserSearch,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {

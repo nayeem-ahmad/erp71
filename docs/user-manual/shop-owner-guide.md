@@ -625,6 +625,53 @@ View the monthly attendance summary for payroll preparation.
 
 **Leave balance** is tracked automatically — days taken are deducted from the annual entitlement.
 
+### 9.4 Recruitment: Job Posts, Applicants & Applications
+
+Hiring lives under **HR → Recruitment** and has three screens.
+
+**Job posts** (**HR → Job Posts**) are the vacancies you are hiring for. Each one
+gets a code (`JOB-00001`) that you can quote to candidates:
+
+| Field | Description |
+|-------|-------------|
+| Job Title | e.g. Sales Executive. |
+| Department / Designation | Optional — used as the default when you hire someone. |
+| Hiring Manager | The employee who owns the hire. |
+| Employment Type | Full-time, part-time, contract, internship, or temporary. |
+| Openings | How many people this post is hiring. |
+| Salary From / To | The band you are advertising. |
+| Status | Draft → Open → On Hold / Filled / Closed. |
+| Closing Date | Last date for applications. |
+
+A post stays a **Draft** until you set it to **Open**, which is also when its
+opening date is stamped.
+
+**Applicants** (**HR → Applicants**) is your candidate list — one row per person,
+identified by phone number. Somebody who applies for three roles over two years
+stays one applicant with a history, so an interviewer can see the earlier rounds.
+Record their CV link, current employer, experience, expected salary and skills.
+
+**Applications** (**HR → Applications**) is the pipeline: who is at which stage,
+across every post. The list opens on live candidates only — tick off *In pipeline
+only* to include rejected and withdrawn ones.
+
+**Moving a candidate along:** use **Move Stage** on the application. Stages run
+Applied → Screening → Interview → Offer, and end in Hired, Rejected or Withdrawn.
+Every move is recorded with the note you enter, so a rejection can be explained
+later.
+
+**Hiring a candidate:** use **Hire**. Enter the joining date (plus department,
+designation and basic salary if they differ from the post) and ERP71 creates the
+employee record for you, links it to the application, and marks the post
+**Filled** once the hires reach its headcount. A hired application cannot be
+deleted — it is the record of how that employee joined.
+
+Opening a job post shows the same pipeline as columns, so you can see at a glance
+where everyone on that vacancy is.
+
+Recruitment uses the same permissions as the rest of HR: *View HR* to look,
+*Manage HR* to create, move and hire.
+
 ---
 
 ## 10. Delivery & Fulfillment

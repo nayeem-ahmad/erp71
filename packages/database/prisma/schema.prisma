@@ -187,6 +187,44 @@ enum EmployeeStatus {
   INACTIVE
 }
 
+/// Where a vacancy is in its own life, independent of the candidates on it.
+enum JobPostStatus {
+  /// Being written. Never counted as a live opening.
+  DRAFT
+  /// Live and accepting applications.
+  OPEN
+  /// Paused — the role still exists but nobody is being moved through it.
+  ON_HOLD
+  /// Every opening has an accepted offer. Distinct from CLOSED so "we stopped
+  /// hiring" and "we hired" are not the same row.
+  FILLED
+  /// Withdrawn or abandoned.
+  CLOSED
+}
+
+enum JobEmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+/// One candidate's position in the pipeline for one vacancy.
+///
+/// Ordered as the pipeline is walked, so a report can compare stages by
+/// declaration order. HIRED and REJECTED are terminal; WITHDRAWN is terminal
+/// too but records that the candidate left, which a rejection would misstate.
+enum JobApplicationStage {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -282,6 +320,11 @@ model User {
   // from) the ERP app does not silently drop the same person's storefront
   // customer sessions, and vice versa. A password change bumps both.
   storefront_token_version Int       @default(0)
+  // Third independently-revocable surface, for the same reason `stv` exists:
+  // a job seeker who signs out of the careers portal should not lose an ERP
+  // session, and a workspace member signing out of ERP should not lose a job
+  // application in progress. A password change bumps all three.
+  applicant_token_version  Int       @default(0)
   is_platform_admin        Boolean   @default(false)
   /// Last time this person opened the in-app "What's new" feed. The unread dot
   /// is a comparison against the newest published post, which is why there is
@@ -322,6 +365,8 @@ model User {
   storefrontCustomers               Customer[]
   storefrontOrders                  StorefrontOrder[]
   employee                          Employee?
+  jobSeeker                         JobSeeker?
+  applicantRecords                  Applicant[]                 @relation("ApplicantUser")
   approvedLeaves                    LeaveRequest[]              @relation("LeaveApprover")
   approvedVouchers                  Voucher[]                   @relation("VoucherApprover")
   createdInteractions               CustomerInteraction[]       @relation("InteractionCreator")
@@ -354,6 +399,7 @@ model User {
   createdBoards                     Board[]                     @relation("BoardCreator")
   addedBoardCards                   BoardTask[]                 @relation("BoardTaskAdder")
   authoredSocialMediaPosts          SocialMediaPost[]           @relation("SocialMediaPostAuthor")
+  jobApplicationEvents              JobApplicationEvent[]       @relation("JobApplicationEventAuthor")
 
   // Mobile sign-in looks an account up by number on every SMS code entered.
   // Deliberately not unique: one person may own several workspaces under the
@@ -583,6 +629,7 @@ model Tenant {
   employees                  Employee[]
   leaveTypes                 LeaveType[]
   attendanceRecords          AttendanceRecord[]
+  attendancePunches          AttendancePunch[]
   leaveBalances              LeaveBalance[]
   leaveRequests              LeaveRequest[]
   holidays                   Holiday[]
@@ -668,6 +715,10 @@ model Tenant {
   LeaveRequestAttachment     LeaveRequestAttachment[]
   ChecklistTemplate          ChecklistTemplate[]
   EmployeeChecklistItem      EmployeeChecklistItem[]
+  jobPosts                   JobPost[]
+  applicants                 Applicant[]
+  jobApplications            JobApplication[]
+  jobApplicationEvents       JobApplicationEvent[]
   messagingIdentity          TenantMessagingIdentity?
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
@@ -960,6 +1011,7 @@ model Store {
   userStoreAccess          UserStoreAccess[]
   userStorePermissions     UserStorePermission[]
   attendanceRecords        AttendanceRecord[]
+  attendancePunches        AttendancePunch[]
   productPrices            ProductPrice[]
   fundTransfersSource      FundTransfer[]           @relation("FundTransferSourceStore")
   fundTransfersDestination FundTransfer[]           @relation("FundTransferDestinationStore")
@@ -3356,6 +3408,7 @@ model Department {
 
   tenant    Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   employees Employee[]
+  jobPosts  JobPost[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id, deleted_at])
@@ -3370,6 +3423,7 @@ model Designation {
 
   tenant    Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   employees Employee[]
+  jobPosts  JobPost[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id, deleted_at])
@@ -3411,6 +3465,7 @@ model Employee {
   designation             Designation?              @relation(fields: [designation_id], references: [id])
   user                    User?                     @relation(fields: [user_id], references: [id])
   attendanceRecords       AttendanceRecord[]
+  attendancePunches       AttendancePunch[]
   leaveBalances           LeaveBalance[]
   leaveRequests           LeaveRequest[]
   salaryPayments          SalaryPayment[]
@@ -3430,6 +3485,8 @@ model Employee {
   PolicyAcknowledgement   PolicyAcknowledgement[]
   EmployeeDocument        EmployeeDocument[]
   EmployeeChecklistItem   EmployeeChecklistItem[]
+  jobPostsManaged         JobPost[]                 @relation("JobPostHiringManager")
+  hiredFromApplication    JobApplication?           @relation("JobApplicationHire")
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3547,6 +3604,54 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// One in or out event for an employee — a single tap of the clock.
+///
+/// `AttendanceRecord` holds one row per employee per day and can therefore only
+/// remember one arrival and one departure. That is a lie on any day with a
+/// midday errand, a split shift or a forgotten tap corrected later, and it left
+/// nowhere to record *why* a time changed. This table is the raw log; the day
+/// row is derived from it — **first IN of the day becomes `clock_in`, last OUT
+/// becomes `clock_out`** — so the summary can always be rebuilt from evidence
+/// rather than being the only copy of it.
+///
+/// Deliberately not an enum for `direction`: `AttendanceRecord.source` is a
+/// plain string for the same reason, and a two-value enum costs a migration the
+/// first time a tenant wants BREAK_START.
+model AttendancePunch {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  /// Local midnight of the day this punch is counted against, matching
+  /// `AttendanceRecord.date`. Stored rather than derived on read because it is
+  /// the grouping key for the rebuild and every query filters on it.
+  date        DateTime @db.Date
+  punched_at  DateTime
+  /// IN | OUT
+  direction   String
+  /// Where the punch came from: ADMIN (typed by staff), SELF (the employee's
+  /// own check-in) or IMPORT. Carried up onto the day row it produces.
+  source      String   @default("ADMIN")
+  /// Why an admin typed or corrected this one. The question every attendance
+  /// dispute ends at.
+  notes       String?
+
+  /// Captured only when geofencing is on, mirroring `AttendanceRecord`.
+  latitude  Float?
+  longitude Float?
+  store_id  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  store    Store?   @relation(fields: [store_id], references: [id])
+
+  @@index([tenant_id, employee_id, date])
+  @@index([tenant_id, date])
+  @@map("attendance_punches")
 }
 
 /// A reusable onboarding or offboarding step for the tenant.
@@ -4301,6 +4406,224 @@ model EmployeeSchedule {
   @@unique([tenant_id, employee_id, effective_from])
   @@index([tenant_id, employee_id])
   @@map("employee_schedules")
+}
+
+/// A vacancy the tenant is hiring for.
+///
+/// Deliberately separate from `Designation`: a designation is a title the org
+/// chart uses forever, a job post is one round of hiring for it, with its own
+/// headcount, salary band and closing date. Two posts can name the same
+/// designation a year apart and neither should overwrite the other.
+model JobPost {
+  id                String            @id @default(uuid())
+  tenant_id         String
+  /// Per-tenant human reference (`JOB-00001`), generated on create. Candidates
+  /// and interviewers quote this; the uuid is not something anyone can read out
+  /// over the phone.
+  code              String
+  title             String
+  department_id     String?
+  designation_id    String?
+  employment_type   JobEmploymentType @default(FULL_TIME)
+  location          String?
+  /// How many people this post is hiring. Drives "filled" — one post can take
+  /// three hires before it is done.
+  openings          Int               @default(1)
+  salary_min        Decimal?          @db.Decimal(12, 2)
+  salary_max        Decimal?          @db.Decimal(12, 2)
+  description       String?
+  requirements      String?
+  status            JobPostStatus     @default(DRAFT)
+  /// Whether this vacancy is listed on the public, cross-tenant careers board.
+  ///
+  /// Separate from `status` and defaulting to false on purpose. OPEN already
+  /// meant "we are hiring for this internally", and letting the careers board
+  /// reuse it would have retroactively published every existing OPEN post the
+  /// moment this shipped. Advertising to the open internet is a decision a
+  /// workspace makes per post, so it gets its own switch.
+  publish_to_board  Boolean           @default(false)
+  /// When the post went live. Null while it is a draft.
+  opened_at         DateTime?         @db.Date
+  closing_date      DateTime?         @db.Date
+  /// Who owns the hire. An employee rather than a user, because the manager
+  /// asking for the headcount often has no ERP login.
+  hiring_manager_id String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant        Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  department    Department?      @relation(fields: [department_id], references: [id])
+  designation   Designation?     @relation(fields: [designation_id], references: [id])
+  hiringManager Employee?        @relation("JobPostHiringManager", fields: [hiring_manager_id], references: [id])
+  applications  JobApplication[]
+
+  @@unique([tenant_id, code])
+  @@index([tenant_id, status, deleted_at])
+  @@index([tenant_id, department_id])
+  @@map("job_posts")
+}
+
+/// A person who has applied, once, for the whole tenant.
+///
+/// Kept apart from `JobApplication` so somebody who applies for three roles
+/// over two years is one candidate with a history, not three unlinked rows —
+/// which is the difference between "we have spoken to them before" and finding
+/// out in the interview. Not an `Employee`: most applicants never become one,
+/// and the ones who do get an employee record at the point of hire.
+model Applicant {
+  id                  String   @id @default(uuid())
+  tenant_id           String
+  name                String
+  phone               String
+  email               String?
+  /// Where they came from — referral, Facebook, walk-in. Free text because
+  /// every tenant's channel list is different and none of it drives logic.
+  source              String?
+  current_company     String?
+  current_designation String?
+  experience_years    Decimal? @db.Decimal(4, 1)
+  expected_salary     Decimal? @db.Decimal(12, 2)
+  /// Uploaded CV. A URL, not a blob — file storage already goes to Cloudinary.
+  resume_url          String?
+  /// Comma-separated, entered by hand. A tag table would be the right shape if
+  /// anything searched on it structurally; nothing does yet.
+  skills              String?
+  notes               String?
+  address             String?
+
+  /// Set when this candidate record belongs to a careers-portal login.
+  ///
+  /// Null is the normal case and stays the normal case: most candidates are
+  /// typed in by HR and never sign in. It is filled either because the person
+  /// applied through the public board, or because they later signed up and
+  /// *claimed* an existing record — see `CareersService.resolveApplicant`, and
+  /// note the claim needs a verified email or mobile, because `@@unique([tenant_id, phone])`
+  /// means an unverified match would otherwise hand somebody another person's
+  /// interview history.
+  user_id String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant       Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user         User?            @relation("ApplicantUser", fields: [user_id], references: [id])
+  applications JobApplication[]
+
+  @@unique([tenant_id, phone])
+  /// One candidate record per login per company. The portal reads a person's
+  /// applications by walking these, so a second row would split their history.
+  @@unique([tenant_id, user_id])
+  @@index([tenant_id, deleted_at])
+  @@index([user_id])
+  @@map("applicants")
+}
+
+/// One person's platform-wide candidate profile — the careers-portal login.
+///
+/// Deliberately global where `Applicant` is tenant-scoped, and that difference
+/// is the whole feature: somebody fills this in once and applies to any number
+/// of companies, and `Applicant` is the per-company copy each hiring workspace
+/// actually works with. Applying snapshots this profile into the tenant's
+/// `Applicant` row rather than the workspace reading across the boundary.
+model JobSeeker {
+  id            String    @id @default(uuid())
+  user_id       String    @unique
+  full_name     String
+  /// Required before applying, because `Applicant.phone` is non-null and is the
+  /// key a hiring workspace de-duplicates candidates on.
+  phone         String?
+  /// One-line "Senior Accountant, 6 years" self-description.
+  headline      String?
+  location      String?
+  summary       String?
+  /// The default CV, copied onto the tenant's `Applicant` at apply time so a
+  /// later profile edit does not silently rewrite what a company reviewed.
+  resume_url    String?
+  resume_name   String?
+  linkedin_url  String?
+  portfolio_url String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("job_seekers")
+}
+
+/// One candidate against one vacancy — the row that actually moves.
+model JobApplication {
+  id                String              @id @default(uuid())
+  tenant_id         String
+  job_post_id       String
+  applicant_id      String
+  stage             JobApplicationStage @default(APPLIED)
+  applied_at        DateTime            @default(now())
+  /// When the stage last changed, so "sitting in screening for three weeks" is
+  /// answerable without walking the event log.
+  stage_changed_at  DateTime            @default(now())
+  /// Overrides the applicant's general expectation when they name a figure for
+  /// this specific role.
+  expected_salary   Decimal?            @db.Decimal(12, 2)
+  /// Interviewer's score, 1–5. Null until somebody has met them.
+  rating            Int?
+  source            String?
+  notes             String?
+  /// The candidate's own note, written when they applied through the public
+  /// careers board. Kept apart from `notes` — which is the workspace's
+  /// editable field — so an interviewer cannot overwrite what the applicant
+  /// said, and so the application screen can attribute it correctly.
+  cover_letter      String?
+  /// Why they were rejected, in the tenant's words. Only meaningful on REJECTED.
+  rejection_reason  String?
+  /// Set when the application ends in a hire. The link is what makes "how long
+  /// from application to joining" and "which channel produced staff who stayed"
+  /// answerable at all.
+  hired_employee_id String?             @unique
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant        Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  jobPost       JobPost               @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  applicant     Applicant             @relation(fields: [applicant_id], references: [id], onDelete: Cascade)
+  hiredEmployee Employee?             @relation("JobApplicationHire", fields: [hired_employee_id], references: [id])
+  events        JobApplicationEvent[]
+
+  /// One application per candidate per post. Re-applying to the same post is a
+  /// duplicate, not a second chance — the stage on the existing row is the
+  /// second chance.
+  @@unique([job_post_id, applicant_id])
+  @@index([tenant_id, stage, deleted_at])
+  @@index([tenant_id, job_post_id])
+  @@index([tenant_id, applicant_id])
+  @@map("job_applications")
+}
+
+/// Every stage move and note on an application, in order.
+///
+/// Append-only. `JobApplication.stage` is where it is now; this is how it got
+/// there, which is what an unsuccessful candidate asking "why" needs answered.
+model JobApplicationEvent {
+  id                 String               @id @default(uuid())
+  tenant_id          String
+  application_id     String
+  from_stage         JobApplicationStage?
+  to_stage           JobApplicationStage
+  note               String?
+  created_by_user_id String?
+  created_at         DateTime             @default(now())
+
+  tenant      Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  application JobApplication @relation(fields: [application_id], references: [id], onDelete: Cascade)
+  createdBy   User?          @relation("JobApplicationEventAuthor", fields: [created_by_user_id], references: [id])
+
+  @@index([tenant_id, application_id, created_at])
+  @@map("job_application_events")
 }
 
 model FiscalPeriod {
@@ -5921,7 +6244,7 @@ model SocialMediaPost {
 
   /// Appended to the copy by most networks as a link preview. Kept separate
   /// from `content` so it can be swapped without re-editing the text.
-  link_url String?
+  link_url  String?
   /// Must be a public URL: Buffer fetches the asset itself and has no upload.
   image_url String?
 

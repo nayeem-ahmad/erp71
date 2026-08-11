@@ -82,6 +82,7 @@ const APP_PAGES: AppPage[] = [
 
     // HR
     { path: '/hr/attendance', label: 'Attendance', description: 'staff attendance and workforce figures', modules: ['hr'] },
+    { path: '/hr/attendance/punches', label: 'In/Out Records', description: 'individual clock-in and clock-out times behind the daily attendance', modules: ['hr'] },
 ];
 
 /** The pages this tenant's plan actually has, given its resolved modules. */

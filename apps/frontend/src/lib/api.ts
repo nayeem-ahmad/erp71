@@ -2802,6 +2802,23 @@ export const api = {
         }),
     deleteHoliday: (id: string) => fetchWithAuth(`/hr/holidays/${id}`, { method: 'DELETE' }),
 
+    // Whole-year holiday management
+    getHolidaySuggestions: (year: number) => fetchWithAuth(`/hr/holidays/suggestions?year=${year}`),
+    bulkCreateHolidays: (data: { items: { date: string; name: string }[]; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/bulk', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    copyHolidayYear: (data: { from_year: number; to_year: number; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/copy-year', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    clearHolidayYear: (year: number) =>
+        fetchWithAuth(`/hr/holidays/year/${year}`, { method: 'DELETE' }),
+
     getWorkSchedules: () => fetchWithAuth('/hr/work-schedules'),
     getWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`),
     createWorkSchedule: (data: any) => fetchWithAuth('/hr/work-schedules', {
@@ -2823,6 +2840,78 @@ export const api = {
         }),
     getEmployeeSchedules: (employeeId: string) =>
         fetchWithAuth(`/hr/employees/${employeeId}/schedules`),
+
+    // Recruitment — job posts, applicants, and the applications between them.
+    getRecruitmentSummary: () => fetchWithAuth('/hr/recruitment/summary'),
+
+    getJobPosts: (params?: { search?: string; status?: string; department_id?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.department_id) query.set('department_id', params.department_id);
+        const suffix = query.toString();
+        return fetchWithAuth(`/hr/recruitment/job-posts${suffix ? `?${suffix}` : ''}`);
+    },
+    getJobPost: (id: string) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`),
+    createJobPost: (data: any) => fetchWithAuth('/hr/recruitment/job-posts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateJobPost: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteJobPost: (id: string) => fetchWithAuth(`/hr/recruitment/job-posts/${id}`, { method: 'DELETE' }),
+
+    getApplicants: (search?: string) =>
+        fetchWithAuth(`/hr/recruitment/applicants${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    getApplicant: (id: string) => fetchWithAuth(`/hr/recruitment/applicants/${id}`),
+    createApplicant: (data: any) => fetchWithAuth('/hr/recruitment/applicants', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateApplicant: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applicants/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteApplicant: (id: string) => fetchWithAuth(`/hr/recruitment/applicants/${id}`, { method: 'DELETE' }),
+
+    getJobApplications: (params?: { job_post_id?: string; applicant_id?: string; stage?: string; stages?: string; search?: string }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value) query.set(key, value);
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/hr/recruitment/applications${suffix ? `?${suffix}` : ''}`);
+    },
+    getJobApplication: (id: string) => fetchWithAuth(`/hr/recruitment/applications/${id}`),
+    createJobApplication: (data: any) => fetchWithAuth('/hr/recruitment/applications', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateJobApplication: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applications/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    changeJobApplicationStage: (id: string, data: { stage: string; note?: string; rejection_reason?: string }) =>
+        fetchWithAuth(`/hr/recruitment/applications/${id}/stage`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    hireJobApplicant: (id: string, data: any) => fetchWithAuth(`/hr/recruitment/applications/${id}/hire`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteJobApplication: (id: string) =>
+        fetchWithAuth(`/hr/recruitment/applications/${id}`, { method: 'DELETE' }),
 
     // Employee self-service portal. Every endpoint resolves the employee from
     // the token, so none of these take an employee id.
@@ -2927,6 +3016,32 @@ export const api = {
     deleteAttendance: (id: string) => fetchWithAuth(`/attendance/${id}`, { method: 'DELETE' }),
     getAttendanceSummary: (employeeId: string, year: number, month: number) =>
         fetchWithAuth(`/attendance/summary/${employeeId}?year=${year}&month=${month}`),
+    // In/out records — the raw punch log the day rows above are derived from.
+    getAttendancePunches: (params?: {
+        employeeId?: string;
+        startDate?: string;
+        endDate?: string;
+        direction?: 'IN' | 'OUT';
+    }) => {
+        const q = new URLSearchParams();
+        if (params?.employeeId) q.set('employeeId', params.employeeId);
+        if (params?.startDate) q.set('startDate', params.startDate);
+        if (params?.endDate) q.set('endDate', params.endDate);
+        if (params?.direction) q.set('direction', params.direction);
+        return fetchAllPages(`/attendance/punches${q.toString() ? `?${q}` : ''}`);
+    },
+    getAttendancePunchDay: (employeeId: string, date: string) =>
+        fetchWithAuth(`/attendance/punches/day?employeeId=${employeeId}&date=${date}`),
+    createAttendancePunch: (data: {
+        employee_id: string;
+        punched_at: string;
+        direction: 'IN' | 'OUT';
+        notes?: string;
+    }) => fetchWithAuth('/attendance/punches', { method: 'POST', body: JSON.stringify(data) }),
+    updateAttendancePunch: (id: string, data: { punched_at?: string; direction?: 'IN' | 'OUT'; notes?: string }) =>
+        fetchWithAuth(`/attendance/punches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteAttendancePunch: (id: string) =>
+        fetchWithAuth(`/attendance/punches/${id}`, { method: 'DELETE' }),
     // Leave Types
     getLeaveTypes: () => fetchWithAuth('/attendance/leave-types'),
     createLeaveType: (data: any) => fetchWithAuth('/attendance/leave-types', { method: 'POST', body: JSON.stringify(data) }),

@@ -597,14 +597,15 @@ describe('AuthService', () => {
         it('increments both token versions alongside the password hash on a successful change', async () => {
             await service.changePassword(userId, { currentPassword, newPassword });
 
-            // Storefront customer login accepts the same password, so its sessions
-            // must die with the app's.
+            // Storefront customer and careers-portal logins accept the same
+            // password, so their sessions must die with the app's.
             expect(db.user.update).toHaveBeenCalledWith({
                 where: { id: userId },
                 data: {
                     passwordHash: 'hashed-password',
                     token_version: { increment: 1 },
                     storefront_token_version: { increment: 1 },
+                    applicant_token_version: { increment: 1 },
                 },
             });
         });

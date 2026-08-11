@@ -799,14 +799,16 @@ export class AuthService {
         }
 
         const newHash = await bcrypt.hash(dto.newPassword, 10);
-        // A password change revokes every session on both surfaces — the storefront
-        // login accepts the same password, so leaving those tokens alive would defeat it.
+        // A password change revokes every session on every surface — the storefront
+        // and careers logins accept the same password, so leaving those tokens
+        // alive would defeat it.
         await this.db.user.update({
             where: { id: userId },
             data: {
                 passwordHash: newHash,
                 token_version: { increment: 1 },
                 storefront_token_version: { increment: 1 },
+                applicant_token_version: { increment: 1 },
             },
         });
         this.audit
