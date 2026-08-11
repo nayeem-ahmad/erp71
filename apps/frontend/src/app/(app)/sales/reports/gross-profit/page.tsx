@@ -125,10 +125,6 @@ export default function GrossProfitByProductPage() {
                 <Link href={routes.sales.reports.grossProfitBridge} className="text-blue-600 hover:underline">
                     {gp.bridgeTitle}
                 </Link>
-                <span className="text-gray-300">·</span>
-                <Link href={routes.sales.reports.grossProfitCoverage} className="text-blue-600 hover:underline">
-                    {gp.coverageTitle}
-                </Link>
             </div>
 
             <div className="grid md:grid-cols-4 gap-4">

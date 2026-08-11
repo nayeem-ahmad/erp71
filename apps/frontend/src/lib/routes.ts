@@ -53,7 +53,6 @@ export const routes = {
             grossProfitExceptions: '/sales/reports/gross-profit/exceptions',
             grossProfitSalespeople: '/sales/reports/gross-profit/salespeople',
             grossProfitBridge: '/sales/reports/gross-profit/bridge',
-            grossProfitCoverage: '/sales/reports/gross-profit/coverage',
         },
     },
 
