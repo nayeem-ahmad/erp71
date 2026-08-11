@@ -1990,6 +1990,11 @@ model Lead {
   fb_url                String?
   x_url                 String?
   website_url           String?
+  photo_url             String?
+  /// Cloudinary's public_id for `photo_url`. A secure_url cannot be turned back
+  /// into one, so without this a replaced photo is stranded and billed forever —
+  /// the trap VoucherAttachment and ProjectAttachment are still in.
+  photo_storage_key     String?
   next_step             String?
   next_step_date        DateTime?
   next_step_assigned_to String?
@@ -2110,6 +2115,9 @@ model CrmContact {
   address        String?
   website_url    String?
   linkedin_url   String?
+  photo_url      String?
+  /// Cloudinary's public_id for `photo_url` — see the same field on `Lead`.
+  photo_storage_key String?
   notes          String?
   capture_source CrmContactCaptureSource @default(MANUAL)
   assigned_to    String?
