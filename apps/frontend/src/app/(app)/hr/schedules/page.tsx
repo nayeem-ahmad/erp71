@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Clock, Plus, Pencil, Trash2 } from 'lucide-react';
+import { CalendarCog, CalendarDays, Clock, Plus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button, Field, Input, Select, FormFooter, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import HolidayYearModal from './HolidayYearModal';
 
 /**
  * Calendar & schedules — HRIS Phase 2.
@@ -71,6 +72,7 @@ export default function SchedulesPage() {
 
     const [holidayModal, setHolidayModal] = useState<{ open: boolean; editing: Holiday | null }>({ open: false, editing: null });
     const [holidayForm, setHolidayForm] = useState({ date: '', name: '' });
+    const [yearModal, setYearModal] = useState(false);
     const [scheduleModal, setScheduleModal] = useState<{ open: boolean; editing: WorkSchedule | null }>({ open: false, editing: null });
     const [scheduleForm, setScheduleForm] = useState<{ name: string; is_default: boolean; days: ScheduleDay[] }>({
         name: '', is_default: false, days: blankDays(),
@@ -82,6 +84,17 @@ export default function SchedulesPage() {
         copy.weekdays.sunday, copy.weekdays.monday, copy.weekdays.tuesday, copy.weekdays.wednesday,
         copy.weekdays.thursday, copy.weekdays.friday, copy.weekdays.saturday,
     ], [copy.weekdays]);
+
+    /**
+     * Anchored on today, not on the selected year: a window that slides with the
+     * selection lets the user walk to 1997 one click at a time and never find
+     * their way back.
+     */
+    const yearOptions = useMemo(() => {
+        const thisYear = new Date().getFullYear();
+        const nearby = [thisYear - 2, thisYear - 1, thisYear, thisYear + 1, thisYear + 2];
+        return nearby.includes(year) ? nearby : [...nearby, year].sort((a, b) => a - b);
+    }, [year]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -251,19 +264,33 @@ export default function SchedulesPage() {
             ) : tab === 'holidays' ? (
                 <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Select
-                            value={String(year)}
-                            onChange={(e) => setYear(Number(e.target.value))}
-                            className="w-32"
-                        >
-                            {[year - 1, year, year + 1].map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                            ))}
-                        </Select>
-                        <Button onClick={() => openHoliday(null)}>
-                            <Plus className="h-4 w-4" />
-                            {copy.holidays.add}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Select
+                                value={String(year)}
+                                onChange={(e) => setYear(Number(e.target.value))}
+                                className="w-32"
+                                aria-label={copy.holidays.year.picker}
+                            >
+                                {yearOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </Select>
+                            <span className="text-xs text-gray-500">
+                                {copy.holidays.year.count
+                                    .replace('{count}', String(holidays.length))
+                                    .replace('{year}', String(year))}
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" onClick={() => setYearModal(true)}>
+                                <CalendarCog className="h-4 w-4" />
+                                {copy.holidays.year.manage}
+                            </Button>
+                            <Button onClick={() => openHoliday(null)}>
+                                <Plus className="h-4 w-4" />
+                                {copy.holidays.add}
+                            </Button>
+                        </div>
                     </div>
 
                     <p className="text-xs text-gray-500">{copy.holidays.hint}</p>
@@ -364,6 +391,15 @@ export default function SchedulesPage() {
                         </div>
                     )}
                 </div>
+            )}
+
+            {yearModal && (
+                <HolidayYearModal
+                    year={year}
+                    holidayCount={holidays.length}
+                    onClose={() => setYearModal(false)}
+                    onApplied={load}
+                />
             )}
 
             {holidayModal.open && (

@@ -1,5 +1,6 @@
 import {
-    IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateNested,
+    ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional,
+    IsString, IsUUID, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -85,6 +86,54 @@ export class UpdateHolidayDto {
     name?: string;
 }
 
+export class HolidayItemDto {
+    @IsDateString()
+    date: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(120)
+    name: string;
+}
+
+/**
+ * A year's worth of holidays in one request.
+ *
+ * Capped at 366 because that is the most dates a year can hold — a larger
+ * payload is a bug or an attack, not a calendar.
+ */
+export class BulkHolidayDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(366)
+    @ValidateNested({ each: true })
+    @Type(() => HolidayItemDto)
+    items: HolidayItemDto[];
+
+    /** Rename a date that already has a holiday, instead of leaving it alone. */
+    @IsOptional()
+    @IsBoolean()
+    overwrite?: boolean;
+}
+
+export class CopyHolidayYearDto {
+    @IsInt()
+    @Min(2000)
+    @Max(2200)
+    @Type(() => Number)
+    from_year: number;
+
+    @IsInt()
+    @Min(2000)
+    @Max(2200)
+    @Type(() => Number)
+    to_year: number;
+
+    @IsOptional()
+    @IsBoolean()
+    overwrite?: boolean;
+}
+
 export class AssignScheduleDto {
     @IsUUID()
     employee_id: string;
@@ -103,4 +152,13 @@ export class HolidayQueryDto {
     @Max(2200)
     @Type(() => Number)
     year?: number;
+}
+
+/** `year` as a required query parameter, for the suggestion list. */
+export class HolidayYearQueryDto {
+    @IsInt()
+    @Min(2000)
+    @Max(2200)
+    @Type(() => Number)
+    year: number;
 }
