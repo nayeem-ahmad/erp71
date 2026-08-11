@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeftRight, Clock, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { useI18n } from '@/lib/i18n';
@@ -228,9 +230,17 @@ export default function AttendancePage() {
                         'hr',
                     )}
                     actions={(
-                        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
-                            {t.attendance.logAttendance}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            {/* The raw in/out log the rows below are derived from. */}
+                            <Link href={routes.hr.attendancePunches}>
+                                <Button variant="secondary" icon={<ArrowLeftRight className="w-4 h-4" />}>
+                                    {t.attendance.punchesLink}
+                                </Button>
+                            </Link>
+                            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+                                {t.attendance.logAttendance}
+                            </Button>
+                        </div>
                     )}
                 />
 

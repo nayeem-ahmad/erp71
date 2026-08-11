@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { AttendancePunchService } from './attendance-punch.service';
 import { OvertimeService } from './overtime.service';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -27,11 +28,20 @@ describe('AttendanceController — subscription guard', () => {
         cancelLeaveRequest: jest.fn().mockResolvedValue({}),
         upsertAttendance: jest.fn().mockResolvedValue({}),
         getAttendanceSummary: jest.fn().mockResolvedValue({}),
+        deleteAttendance: jest.fn().mockResolvedValue({}),
     } as any;
 
     const captureService = {
         getSettings: jest.fn().mockResolvedValue({}),
         updateSettings: jest.fn().mockResolvedValue({}),
+    } as any;
+
+    const punchService = {
+        list: jest.fn().mockResolvedValue({ items: [] }),
+        listDay: jest.fn().mockResolvedValue({ punches: [] }),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        remove: jest.fn().mockResolvedValue({}),
     } as any;
 
     const overtimeService = {
@@ -58,7 +68,13 @@ describe('AttendanceController — subscription guard', () => {
     }
 
     class MockTenantInterceptor {
-        intercept(_ctx: ExecutionContext, next: CallHandler) { return next.handle(); }
+        intercept(ctx: ExecutionContext, next: CallHandler) {
+            // The real interceptor resolves this from the membership row. The
+            // `@Tenant()` decorator rejects a request without it, so a handler
+            // is never reached unless it is set.
+            ctx.switchToHttp().getRequest().tenantId = 'tenant-1';
+            return next.handle();
+        }
     }
 
     const buildApp = async () => {
@@ -67,6 +83,7 @@ describe('AttendanceController — subscription guard', () => {
             providers: [
                 { provide: AttendanceService, useValue: attendanceService },
                 { provide: AttendanceCaptureService, useValue: captureService },
+                { provide: AttendancePunchService, useValue: punchService },
                 { provide: OvertimeService, useValue: overtimeService },
                 { provide: DatabaseService, useValue: db },
                 Reflector,
@@ -142,6 +159,25 @@ describe('AttendanceController — subscription guard', () => {
             .set('x-tenant-id', 'tenant-1');
 
         expect(res.status).toBe(403);
+    });
+
+    it('routes a punch delete to the punch service, not the day-record one', async () => {
+        // `DELETE /attendance/:id` is declared on the same controller, so if the
+        // punch routes ever move below it Nest reads `punches` as a record id
+        // and silently deletes the wrong thing.
+        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'ACTIVE',
+            plan: { code: 'STANDARD', features_json: {} },
+        });
+        await buildApp();
+
+        await request(app.getHttpServer())
+            .delete('/attendance/punches/p-1')
+            .set('x-tenant-id', 'tenant-1');
+
+        expect(punchService.remove).toHaveBeenCalledWith('tenant-1', 'p-1');
+        expect(attendanceService.deleteAttendance).not.toHaveBeenCalled();
     });
 
     it('blocks a user who is not a member of the requested tenant with 401', async () => {

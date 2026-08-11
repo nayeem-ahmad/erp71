@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { WorkSchedulesService } from '../work-schedules/work-schedules.service';
 import { assessDay, deriveStatus, type ScheduleDay } from '../work-schedules/schedule.util';
 import { isValidPoint, matchStore, type GeofenceMatch } from './geofence.util';
+import { AttendancePunchService } from './attendance-punch.service';
 
 /**
  * Turning a clock-in into an attendance row — HRIS Phase 3.
@@ -17,6 +18,12 @@ export class AttendanceCaptureService {
     constructor(
         private readonly db: DatabaseService,
         private readonly schedules: WorkSchedulesService,
+        /**
+         * A portal check-in is a punch like any other and belongs in the same
+         * log, so an admin looking at an employee's day sees every tap rather
+         * than only the two the summary kept.
+         */
+        private readonly punches: AttendancePunchService,
     ) {}
 
     /** Local midnight for a moment, as a `@db.Date` value. */
@@ -167,6 +174,15 @@ export class AttendanceCaptureService {
             } : {}),
         };
 
+        // Log first, summarise second. A stray punch with no day row is
+        // recoverable — the next rebuild produces the row from it — whereas a
+        // day row with no punch behind it is a figure with no evidence.
+        await this.punches.recordSelfPunch(tenantId, employeeId, 'IN', at, match ? {
+            latitude: opts.latitude ?? null,
+            longitude: opts.longitude ?? null,
+            storeId: match.store?.id ?? null,
+        } : undefined);
+
         return this.db.attendanceRecord.upsert({
             where: {
                 tenant_id_employee_id_date: { tenant_id: tenantId, employee_id: employeeId, date },
@@ -215,6 +231,12 @@ export class AttendanceCaptureService {
         const isHoliday = holidayKeys.has(this.dateKey(at));
         const assessment = assessDay(day, record.clock_in, at, settings.grace_minutes);
         const status = deriveStatus(day, assessment, { isHoliday, hasClockIn: true });
+
+        await this.punches.recordSelfPunch(tenantId, employeeId, 'OUT', at, match ? {
+            latitude: opts.latitude ?? null,
+            longitude: opts.longitude ?? null,
+            storeId: match.store?.id ?? null,
+        } : undefined);
 
         return this.db.attendanceRecord.update({
             where: { id: record.id },
