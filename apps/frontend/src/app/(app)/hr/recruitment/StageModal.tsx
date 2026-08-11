@@ -68,6 +68,18 @@ export default function StageModal({
             <form onSubmit={submit} className="space-y-3 p-4">
                 {error && <Alert tone="danger">{error}</Alert>}
 
+                {/* The candidate's own words, from the public careers board. Shown
+                    here because this is the screen where somebody decides whether
+                    to advance them. Read-only and separate from the note below,
+                    which is the workspace's — the two must not be confusable. */}
+                {application.cover_letter ? (
+                    <Field label={copy.stageForm.coverLetter}>
+                        <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-gray-200 bg-gray-50 p-2.5 text-sm leading-relaxed text-gray-700">
+                            {application.cover_letter}
+                        </p>
+                    </Field>
+                ) : null}
+
                 <Field label={copy.stageForm.stage} htmlFor="application-stage" required>
                     <Select
                         id="application-stage"

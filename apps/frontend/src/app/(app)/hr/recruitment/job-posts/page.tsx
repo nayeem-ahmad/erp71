@@ -10,7 +10,7 @@ import { useToastStore } from '@/lib/toast';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
-    Alert, Button, CompactStat, Field, FormFooter, FormGrid, Input, PageHeader, PageShell,
+    Alert, Button, Checkbox, CompactStat, Field, FormFooter, FormGrid, Input, PageHeader, PageShell,
     Select, StatusBadge, Textarea,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
@@ -35,6 +35,7 @@ const blankForm = () => ({
     requirements: '',
     status: 'DRAFT' as JobPostStatus,
     closing_date: '',
+    publish_to_board: false,
 });
 
 /**
@@ -112,6 +113,7 @@ export default function JobPostsPage() {
                 requirements: editing.requirements ?? '',
                 status: editing.status,
                 closing_date: editing.closing_date ? editing.closing_date.slice(0, 10) : '',
+                publish_to_board: Boolean(editing.publish_to_board),
             }
             : blankForm());
         setModal({ open: true, editing });
@@ -144,6 +146,7 @@ export default function JobPostsPage() {
                 requirements: form.requirements || null,
                 status: form.status,
                 closing_date: form.closing_date || null,
+                publish_to_board: form.publish_to_board,
             };
             if (modal.editing) {
                 await api.updateJobPost(modal.editing.id, payload);
@@ -431,6 +434,19 @@ export default function JobPostsPage() {
                                         <option key={status} value={status}>{copy.status[status]}</option>
                                     ))}
                                 </Select>
+                            </Field>
+
+                            <Field label={copy.form.publishToBoard} htmlFor="post-publish">
+                                <label className="inline-flex items-start gap-2 text-sm text-gray-700">
+                                    <Checkbox
+                                        id="post-publish"
+                                        checked={form.publish_to_board}
+                                        onChange={(event) => setForm((prev) => ({
+                                            ...prev, publish_to_board: event.target.checked,
+                                        }))}
+                                    />
+                                    <span>{copy.form.publishToBoardHint}</span>
+                                </label>
                             </Field>
 
                             <Field label={copy.form.closingDate} htmlFor="post-closing">

@@ -444,6 +444,8 @@ export const crmHrMessages = {
                 requirementsPlaceholder: 'Experience, education, and skills expected.',
                 status: 'Status',
                 closingDate: 'Closing Date',
+                publishToBoard: 'Public careers board',
+                publishToBoardHint: 'List this vacancy on the ERP71 careers board so anyone can find and apply to it. Leave off to keep it internal.',
                 none: '— none —',
                 salaryBandError: 'The minimum salary cannot be greater than the maximum.',
             },
@@ -573,6 +575,7 @@ export const crmHrMessages = {
                 notePlaceholder: 'What happened — interview outcome, call summary…',
                 rejectionReason: 'Rejection Reason',
                 rejectionPlaceholder: 'Why this candidate was not taken forward.',
+                coverLetter: "Candidate's note",
                 hiredHint: 'Use the Hire action so the employee record is created with the hire.',
             },
             hireForm: {

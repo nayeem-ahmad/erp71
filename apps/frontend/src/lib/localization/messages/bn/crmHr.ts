@@ -444,6 +444,8 @@ export const crmHrMessages = {
                 requirementsPlaceholder: "অভিজ্ঞতা, শিক্ষাগত যোগ্যতা ও দক্ষতা।",
                 status: "অবস্থা",
                 closingDate: "আবেদনের শেষ তারিখ",
+                publishToBoard: "পাবলিক ক্যারিয়ার বোর্ড",
+                publishToBoardHint: "ERP71 ক্যারিয়ার বোর্ডে এই পদটি প্রকাশ করুন, যাতে যে কেউ খুঁজে পেয়ে আবেদন করতে পারেন। বন্ধ রাখলে এটি শুধু অভ্যন্তরীণ থাকবে।",
                 none: "— কিছু নয় —",
                 salaryBandError: "সর্বনিম্ন বেতন সর্বোচ্চের চেয়ে বেশি হতে পারে না।",
             },
@@ -573,6 +575,7 @@ export const crmHrMessages = {
                 notePlaceholder: "কী হয়েছে — সাক্ষাৎকারের ফল, কলের সারসংক্ষেপ…",
                 rejectionReason: "বাতিলের কারণ",
                 rejectionPlaceholder: "কেন এই প্রার্থীকে এগিয়ে নেওয়া হয়নি।",
+                coverLetter: "প্রার্থীর নিজের বক্তব্য",
                 hiredHint: "নিয়োগ বাটন ব্যবহার করুন, যাতে নিয়োগের সঙ্গেই কর্মী রেকর্ড তৈরি হয়।",
             },
             hireForm: {

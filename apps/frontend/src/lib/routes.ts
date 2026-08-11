@@ -195,6 +195,21 @@ export const routes = {
         applications: '/hr/recruitment/applications',
     },
 
+    /**
+     * The careers surface. Outside `(app)` — these pages are served to job
+     * seekers who hold no ERP session, so they must not depend on the app
+     * shell, the tenant header, or `access_token`.
+     */
+    careers: {
+        root: '/careers',
+        jobDetail: (id: string) => `/careers/jobs/${id}` as const,
+        login: '/careers/login',
+        register: '/careers/register',
+        portal: '/careers/portal',
+        profile: '/careers/portal/profile',
+        applicationDetail: (id: string) => `/careers/portal/applications/${id}` as const,
+    },
+
     storefront: {
         root: '/storefront',
         settings: '/storefront/settings',

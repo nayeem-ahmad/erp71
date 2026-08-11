@@ -187,6 +187,10 @@ export class RecruitmentService {
                 description: dto.description ?? null,
                 requirements: dto.requirements ?? null,
                 status: status as any,
+                // Advertising on the public careers board is opt-in, so a post
+                // created OPEN is visible to the workspace and nobody else until
+                // somebody ticks the box.
+                publish_to_board: dto.publish_to_board ?? false,
                 // A post that goes straight to OPEN was opened today; a draft has
                 // not been opened at all, and dating it would overstate it.
                 opened_at: status === 'OPEN' ? new Date() : null,
@@ -222,6 +226,7 @@ export class RecruitmentService {
         }
         if (dto.employment_type !== undefined) patch.employment_type = dto.employment_type;
         if (dto.openings !== undefined) patch.openings = dto.openings;
+        if (dto.publish_to_board !== undefined) patch.publish_to_board = dto.publish_to_board;
         if (dto.salary_min !== undefined) patch.salary_min = dto.salary_min;
         if (dto.salary_max !== undefined) patch.salary_max = dto.salary_max;
         if (dto.closing_date !== undefined) {
