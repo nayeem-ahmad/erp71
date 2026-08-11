@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
-    AssignScheduleDto, CreateHolidayDto, CreateWorkScheduleDto, UpdateHolidayDto, UpdateWorkScheduleDto,
+    AssignScheduleDto, BulkHolidayDto, CopyHolidayYearDto, CreateHolidayDto, CreateWorkScheduleDto,
+    UpdateHolidayDto, UpdateWorkScheduleDto,
 } from './work-schedules.dto';
 import {
     DEFAULT_SCHEDULE_NAME,
@@ -9,6 +10,7 @@ import {
     buildDefaultScheduleDays,
     scheduleInForce,
 } from './schedule.util';
+import { buildPresetHolidays, isLeapYear } from './holiday-presets';
 
 /**
  * Holidays and work schedules — the baseline attendance is measured against.
@@ -27,16 +29,24 @@ export class WorkSchedulesService {
         return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     }
 
+    /** `YYYY-MM-DD` — the key a date is compared and de-duplicated by. */
+    private dateKey(value: Date): string {
+        return value.toISOString().slice(0, 10);
+    }
+
+    /** The first and last instant of a calendar year, as stored dates. */
+    private yearBounds(year: number): { gte: Date; lte: Date } {
+        if (!Number.isInteger(year) || year < 2000 || year > 2200) {
+            throw new BadRequestException('Year must be between 2000 and 2200.');
+        }
+        return { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) };
+    }
+
     // ── Holidays ──────────────────────────────────────────────────────────────
 
     async listHolidays(tenantId: string, year?: number) {
         const where: any = { tenant_id: tenantId };
-        if (year) {
-            where.date = {
-                gte: new Date(Date.UTC(year, 0, 1)),
-                lte: new Date(Date.UTC(year, 11, 31)),
-            };
-        }
+        if (year) where.date = this.yearBounds(year);
         return this.db.holiday.findMany({ where, orderBy: { date: 'asc' } });
     }
 
@@ -72,6 +82,125 @@ export class WorkSchedulesService {
         const holiday = await this.db.holiday.findFirst({ where: { id, tenant_id: tenantId } });
         if (!holiday) throw new NotFoundException('Holiday not found.');
         return this.db.holiday.delete({ where: { id } });
+    }
+
+    // ── Holidays: the whole year at once ──────────────────────────────────────
+
+    /**
+     * Add many holidays in one request.
+     *
+     * A date that already has a holiday is skipped rather than rejected, so
+     * running the same import twice is safe and a single clash does not throw
+     * away the other 40 rows. `overwrite` turns those skips into renames.
+     */
+    async bulkCreateHolidays(tenantId: string, dto: BulkHolidayDto) {
+        // Later wins on a duplicate date within the payload itself: the unique
+        // index would reject the second row, and the caller meant both.
+        const wanted = new Map<string, { date: Date; name: string }>();
+        for (const item of dto.items) {
+            const date = this.toDateOnly(item.date);
+            if (Number.isNaN(date.getTime())) {
+                throw new BadRequestException(`"${item.date}" is not a date.`);
+            }
+            this.yearBounds(date.getUTCFullYear());
+            wanted.set(this.dateKey(date), { date, name: item.name.trim() });
+        }
+
+        const existing = await this.db.holiday.findMany({
+            where: { tenant_id: tenantId, date: { in: [...wanted.values()].map((item) => item.date) } },
+            select: { id: true, date: true, name: true },
+        });
+        const byDate = new Map(existing.map((holiday) => [this.dateKey(holiday.date), holiday] as const));
+
+        const toCreate = [...wanted.values()].filter((item) => !byDate.has(this.dateKey(item.date)));
+        const toRename = dto.overwrite
+            ? [...wanted.values()]
+                .map((item) => ({ item, current: byDate.get(this.dateKey(item.date)) }))
+                .filter((pair) => pair.current && pair.current.name !== pair.item.name)
+            : [];
+
+        await this.db.$transaction(async (tx) => {
+            if (toCreate.length) {
+                await tx.holiday.createMany({
+                    data: toCreate.map((item) => ({
+                        tenant_id: tenantId, date: item.date, name: item.name,
+                    })),
+                });
+            }
+            for (const pair of toRename) {
+                await tx.holiday.update({ where: { id: pair.current!.id }, data: { name: pair.item.name } });
+            }
+        });
+
+        return {
+            created: toCreate.length,
+            updated: toRename.length,
+            skipped: wanted.size - toCreate.length - toRename.length,
+        };
+    }
+
+    /**
+     * Copy one year's holidays onto the same calendar dates of another year.
+     *
+     * Same day of the month, not same weekday: 16 December is 16 December. The
+     * lunar holidays that make up most of the Bangladeshi calendar do move, and
+     * this cannot know where to — the copies land on last year's dates and are
+     * meant to be corrected, which is still less work than typing them again.
+     */
+    async copyHolidaysToYear(tenantId: string, dto: CopyHolidayYearDto) {
+        if (dto.from_year === dto.to_year) {
+            throw new BadRequestException('Pick a different year to copy from.');
+        }
+        this.yearBounds(dto.from_year);
+        this.yearBounds(dto.to_year);
+
+        const source = await this.listHolidays(tenantId, dto.from_year);
+        if (!source.length) {
+            throw new BadRequestException(`No holidays are set for ${dto.from_year}.`);
+        }
+
+        const items: { date: string; name: string }[] = [];
+        let unmapped = 0;
+        for (const holiday of source) {
+            const month = holiday.date.getUTCMonth();
+            const day = holiday.date.getUTCDate();
+            // 29 February has no counterpart in a common year. Sliding it to the
+            // 28th would invent a holiday the tenant never declared, so it is
+            // reported back instead of guessed at.
+            if (month === 1 && day === 29 && !isLeapYear(dto.to_year)) {
+                unmapped += 1;
+                continue;
+            }
+            items.push({
+                date: `${dto.to_year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                name: holiday.name,
+            });
+        }
+
+        const result = await this.bulkCreateHolidays(tenantId, { items, overwrite: dto.overwrite });
+        return { ...result, unmapped };
+    }
+
+    /** Delete every holiday in a year. Returns how many rows went. */
+    async clearHolidayYear(tenantId: string, year: number) {
+        const { count } = await this.db.holiday.deleteMany({
+            where: { tenant_id: tenantId, date: this.yearBounds(year) },
+        });
+        return { deleted: count };
+    }
+
+    /**
+     * The fixed-date national holidays for a year, each flagged with whether the
+     * tenant already has that date — so the UI can offer the missing ones
+     * without the user comparing two lists by eye.
+     */
+    async suggestHolidays(tenantId: string, year: number) {
+        const bounds = this.yearBounds(year);
+        const taken = await this.holidayKeysBetween(tenantId, bounds.gte, bounds.lte);
+        return buildPresetHolidays(year).map((preset) => ({
+            ...preset,
+            exists: taken.has(preset.date),
+        }));
     }
 
     /** The holiday dates in a range, as `YYYY-MM-DD` keys for O(1) lookup. */

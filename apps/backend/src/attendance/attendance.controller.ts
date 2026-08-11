@@ -19,12 +19,16 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { AttendancePunchService } from './attendance-punch.service';
 import { OvertimeService } from './overtime.service';
 import {
+    CreatePunchDto,
     MonthQueryDto,
     OvertimeQueryDto,
+    PunchQueryDto,
     ReviewOvertimeDto,
     UpdateAttendanceSettingsDto,
+    UpdatePunchDto,
     UpsertAttendanceDto,
     CreateLeaveTypeDto,
     UpdateLeaveTypeDto,
@@ -41,8 +45,50 @@ export class AttendanceController {
     constructor(
         private svc: AttendanceService,
         private capture: AttendanceCaptureService,
+        private punches: AttendancePunchService,
         private overtime: OvertimeService,
     ) {}
+
+    // ── In/out records ────────────────────────────────────────────────────────
+    //
+    // Declared above the bare `:id` routes below: Nest matches in declaration
+    // order, so `DELETE /attendance/punches/x` would otherwise be read as a
+    // delete of the attendance record with id `punches`.
+
+    @Get('punches')
+    listPunches(@Tenant() tenant: TenantContext, @Query() query: PunchQueryDto) {
+        return this.punches.list(tenant.tenantId, query);
+    }
+
+    /** One employee's punches for one day, with the summary they produce. */
+    @Get('punches/day')
+    listPunchDay(
+        @Tenant() tenant: TenantContext,
+        @Query('employeeId') employeeId: string,
+        @Query('date') date: string,
+    ) {
+        return this.punches.listDay(tenant.tenantId, employeeId, date);
+    }
+
+    @Post('punches')
+    createPunch(@Tenant() tenant: TenantContext, @Body() dto: CreatePunchDto) {
+        return this.punches.create(tenant.tenantId, dto);
+    }
+
+    @Patch('punches/:id')
+    updatePunch(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdatePunchDto,
+    ) {
+        return this.punches.update(tenant.tenantId, id, dto);
+    }
+
+    @Delete('punches/:id')
+    @HttpCode(HttpStatus.OK)
+    deletePunch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.punches.remove(tenant.tenantId, id);
+    }
 
     // ── Overtime & monthly snapshot ───────────────────────────────────────────
 

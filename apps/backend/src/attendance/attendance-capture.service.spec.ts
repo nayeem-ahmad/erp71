@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { AttendancePunchService } from './attendance-punch.service';
 import { WorkSchedulesService } from '../work-schedules/work-schedules.service';
 import { DatabaseService } from '../database/database.service';
 
@@ -21,6 +22,7 @@ describe('AttendanceCaptureService', () => {
     let service: AttendanceCaptureService;
     let db: any;
     let schedules: any;
+    let punches: any;
 
     beforeEach(async () => {
         db = {
@@ -44,12 +46,14 @@ describe('AttendanceCaptureService', () => {
             resolveScheduleDays: jest.fn().mockResolvedValue(WEEK),
             holidayKeysBetween: jest.fn().mockResolvedValue(new Set<string>()),
         };
+        punches = { recordSelfPunch: jest.fn().mockResolvedValue({}) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 AttendanceCaptureService,
                 { provide: DatabaseService, useValue: db },
                 { provide: WorkSchedulesService, useValue: schedules },
+                { provide: AttendancePunchService, useValue: punches },
             ],
         }).compile();
         service = module.get(AttendanceCaptureService);
@@ -115,6 +119,16 @@ describe('AttendanceCaptureService', () => {
             schedules.holidayKeysBetween.mockResolvedValue(new Set(['2026-08-10']));
             await service.checkIn('t1', 'emp-1', { at: at(9) });
             expect(db.attendanceRecord.upsert.mock.calls[0][0].create.status).toBe('HOLIDAY');
+        });
+
+        it('writes an IN punch so the log carries the portal tap too', async () => {
+            // Without this the in/out screen would show nothing for an employee
+            // who only ever checks in from the portal.
+            await service.checkIn('t1', 'emp-1', { at: at(9) });
+
+            expect(punches.recordSelfPunch).toHaveBeenCalledWith(
+                't1', 'emp-1', 'IN', at(9), undefined,
+            );
         });
 
         it('refuses a second check-in on the same day', async () => {
@@ -204,6 +218,21 @@ describe('AttendanceCaptureService', () => {
         it('records raw overtime past the scheduled end', async () => {
             await service.checkOut('t1', 'emp-1', { at: at(20) });
             expect(db.attendanceRecord.update.mock.calls[0][0].data.overtime_minutes).toBe(120);
+        });
+
+        it('writes an OUT punch', async () => {
+            await service.checkOut('t1', 'emp-1', { at: at(18) });
+            expect(punches.recordSelfPunch).toHaveBeenCalledWith(
+                't1', 'emp-1', 'OUT', at(18), undefined,
+            );
+        });
+
+        it('logs no punch when the check-out is refused', async () => {
+            // The rules run before the log is touched, so a rejected tap leaves
+            // nothing behind for the rebuild to pick up.
+            db.attendanceRecord.findFirst.mockResolvedValue(null);
+            await expect(service.checkOut('t1', 'emp-1', { at: at(18) })).rejects.toThrow();
+            expect(punches.recordSelfPunch).not.toHaveBeenCalled();
         });
 
         it('refuses a check-out with no check-in', async () => {

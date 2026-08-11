@@ -354,6 +354,7 @@ export const crmHrMessages = {
                 departments: { title: 'Departments', description: 'Company departments for organizing staff.' },
                 designations: { title: 'Designations', description: 'Job titles and role classifications.' },
                 attendance: { title: 'Attendance', description: 'Track daily check-in and check-out records.' },
+                attendancePunches: { title: 'In/Out Records', description: 'Every clock-in and clock-out behind the daily attendance.' },
                 leaves: { title: 'Leaves', description: 'Leave requests, approvals, and balances.' },
                 salaryPayments: { title: 'Salary Payments', description: 'Record and review monthly salary disbursements.' },
                 jobPosts: { title: 'Job Posts', description: 'Vacancies you are hiring for, with headcount and salary band.' },
@@ -883,6 +884,55 @@ export const crmHrMessages = {
             "notesPlaceholder": "Optional notes…",
             "submitting": "Saving...",
             "submit": "Save Record"
+        },
+        "punchesLink": "In/Out Records"
+    },
+    "attendancePunches": {
+        "title": "In/Out Records",
+        "subtitle": "Every clock-in and clock-out, before it becomes a day's attendance",
+        "derivationNote": "A day's attendance is rebuilt from these records: the first IN becomes the clock-in and the last OUT becomes the clock-out. Adding, editing or deleting a record here updates that day's attendance straight away.",
+        "addPunch": "Add In/Out",
+        "recordsTitle": "In/Out Records",
+        "emptyMessage": "No in/out records for this period",
+        "searchPlaceholder": "Search by employee name...",
+        "loadFailed": "Failed to load in/out records",
+        "saveFailed": "Failed to save the in/out record",
+        "deleteFailed": "Failed to delete the in/out record",
+        "created": "In/out record added.",
+        "updated": "In/out record updated.",
+        "deleted": "In/out record deleted.",
+        "deleteTitle": "Delete in/out record",
+        "deleteConfirm": "Delete this in/out record? The day's attendance will be rebuilt from whatever records remain.",
+        "filters": {
+            "from": "From",
+            "to": "To",
+            "allEmployees": "All Employees",
+            "allDirections": "In and out"
+        },
+        "columns": {
+            "employee": "Employee",
+            "date": "Date",
+            "time": "Time",
+            "direction": "In / Out",
+            "source": "Recorded by",
+            "notes": "Notes",
+            "actions": "Actions"
+        },
+        "directions": {
+            "in": "In",
+            "out": "Out"
+        },
+        "sources": {
+            "admin": "Staff",
+            "self": "Employee",
+            "import": "Import"
+        },
+        "form": {
+            "addTitle": "Add In/Out Record",
+            "editTitle": "Edit In/Out Record",
+            "selectEmployee": "Select employee…",
+            "notesPlaceholder": "Why this was added or corrected…",
+            "timeRequired": "Enter both a date and a time for this record."
         }
     },
     "leaves": {

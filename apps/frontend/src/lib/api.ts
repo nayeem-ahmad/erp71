@@ -2802,6 +2802,23 @@ export const api = {
         }),
     deleteHoliday: (id: string) => fetchWithAuth(`/hr/holidays/${id}`, { method: 'DELETE' }),
 
+    // Whole-year holiday management
+    getHolidaySuggestions: (year: number) => fetchWithAuth(`/hr/holidays/suggestions?year=${year}`),
+    bulkCreateHolidays: (data: { items: { date: string; name: string }[]; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/bulk', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    copyHolidayYear: (data: { from_year: number; to_year: number; overwrite?: boolean }) =>
+        fetchWithAuth('/hr/holidays/copy-year', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    clearHolidayYear: (year: number) =>
+        fetchWithAuth(`/hr/holidays/year/${year}`, { method: 'DELETE' }),
+
     getWorkSchedules: () => fetchWithAuth('/hr/work-schedules'),
     getWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`),
     createWorkSchedule: (data: any) => fetchWithAuth('/hr/work-schedules', {
@@ -2999,6 +3016,32 @@ export const api = {
     deleteAttendance: (id: string) => fetchWithAuth(`/attendance/${id}`, { method: 'DELETE' }),
     getAttendanceSummary: (employeeId: string, year: number, month: number) =>
         fetchWithAuth(`/attendance/summary/${employeeId}?year=${year}&month=${month}`),
+    // In/out records — the raw punch log the day rows above are derived from.
+    getAttendancePunches: (params?: {
+        employeeId?: string;
+        startDate?: string;
+        endDate?: string;
+        direction?: 'IN' | 'OUT';
+    }) => {
+        const q = new URLSearchParams();
+        if (params?.employeeId) q.set('employeeId', params.employeeId);
+        if (params?.startDate) q.set('startDate', params.startDate);
+        if (params?.endDate) q.set('endDate', params.endDate);
+        if (params?.direction) q.set('direction', params.direction);
+        return fetchAllPages(`/attendance/punches${q.toString() ? `?${q}` : ''}`);
+    },
+    getAttendancePunchDay: (employeeId: string, date: string) =>
+        fetchWithAuth(`/attendance/punches/day?employeeId=${employeeId}&date=${date}`),
+    createAttendancePunch: (data: {
+        employee_id: string;
+        punched_at: string;
+        direction: 'IN' | 'OUT';
+        notes?: string;
+    }) => fetchWithAuth('/attendance/punches', { method: 'POST', body: JSON.stringify(data) }),
+    updateAttendancePunch: (id: string, data: { punched_at?: string; direction?: 'IN' | 'OUT'; notes?: string }) =>
+        fetchWithAuth(`/attendance/punches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteAttendancePunch: (id: string) =>
+        fetchWithAuth(`/attendance/punches/${id}`, { method: 'DELETE' }),
     // Leave Types
     getLeaveTypes: () => fetchWithAuth('/attendance/leave-types'),
     createLeaveType: (data: any) => fetchWithAuth('/attendance/leave-types', { method: 'POST', body: JSON.stringify(data) }),

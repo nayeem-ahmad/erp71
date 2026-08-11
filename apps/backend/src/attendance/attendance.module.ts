@@ -4,14 +4,15 @@ import { WorkSchedulesModule } from '../work-schedules/work-schedules.module';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { AttendancePunchService } from './attendance-punch.service';
 import { OvertimeService } from './overtime.service';
 
 @Module({
     imports: [DatabaseModule, WorkSchedulesModule],
     controllers: [AttendanceController],
-    providers: [AttendanceService, AttendanceCaptureService, OvertimeService],
+    providers: [AttendanceService, AttendanceCaptureService, AttendancePunchService, OvertimeService],
     // Exported so the employee portal can apply for and cancel leave through
     // the same validation the admin screens use.
-    exports: [AttendanceService, AttendanceCaptureService, OvertimeService],
+    exports: [AttendanceService, AttendanceCaptureService, AttendancePunchService, OvertimeService],
 })
 export class AttendanceModule {}

@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import {
+    ArrowLeftRight,
     BadgeCheck,
     Banknote,
     Briefcase,
@@ -37,6 +38,7 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
         sectionKey: 'operations',
         links: [
             { href: routes.hr.attendance, key: 'attendance', icon: Clock, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+            { href: routes.hr.attendancePunches, key: 'attendancePunches', icon: ArrowLeftRight, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.hr.leaves, key: 'leaves', icon: CalendarOff, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
             { href: routes.hr.salaryPayments, key: 'salaryPayments', icon: Banknote, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         ],

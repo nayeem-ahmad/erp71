@@ -186,6 +186,7 @@ export const routes = {
         departments: '/hr/employees/departments',
         designations: '/hr/employees/designations',
         attendance: '/hr/attendance',
+        attendancePunches: '/hr/attendance/punches',
         leaves: '/hr/leaves',
         salaryPayments: '/hr/salary-payments',
         jobPosts: '/hr/recruitment/job-posts',

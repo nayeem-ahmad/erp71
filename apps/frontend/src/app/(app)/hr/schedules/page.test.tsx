@@ -7,6 +7,10 @@ jest.mock('@/lib/api', () => ({
         createHoliday: jest.fn(),
         updateHoliday: jest.fn(),
         deleteHoliday: jest.fn(),
+        getHolidaySuggestions: jest.fn(),
+        bulkCreateHolidays: jest.fn(),
+        copyHolidayYear: jest.fn(),
+        clearHolidayYear: jest.fn(),
         getWorkSchedules: jest.fn(),
         createWorkSchedule: jest.fn(),
         updateWorkSchedule: jest.fn(),
@@ -33,9 +37,16 @@ const STANDARD = {
     })),
 };
 
+const SUGGESTIONS = [
+    { date: '2026-02-21', name: 'Shaheed Day', exists: false },
+    { date: '2026-03-26', name: 'Independence Day', exists: false },
+    { date: '2026-12-16', name: 'Victory Day', exists: true },
+];
+
 const seed = (holidays: any[] = [], schedules: any[] = []) => {
     api.getHolidays.mockResolvedValue(holidays);
     api.getWorkSchedules.mockResolvedValue(schedules);
+    api.getHolidaySuggestions.mockResolvedValue(SUGGESTIONS);
 };
 
 describe('SchedulesPage', () => {
@@ -74,6 +85,101 @@ describe('SchedulesPage', () => {
         api.getWorkSchedules.mockResolvedValue([]);
         render(<SchedulesPage />);
         await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    });
+
+    describe('managing the whole year', () => {
+        const openYearModal = async () => {
+            render(<SchedulesPage />);
+            // The toolbar does not exist while the page is still loading.
+            const manage = await screen.findByRole('button', { name: /manage year/i });
+            fireEvent.click(manage);
+            await waitFor(() => expect(api.getHolidaySuggestions).toHaveBeenCalled());
+            await screen.findByText(/shaheed day/i);
+        };
+
+        it('counts the year’s holidays next to the picker', async () => {
+            seed([
+                { id: 'h-1', date: '2026-04-14', name: 'Pohela Boishakh' },
+                { id: 'h-2', date: '2026-12-16', name: 'Victory Day' },
+            ]);
+            render(<SchedulesPage />);
+            await waitFor(() => expect(screen.getByText(/^2 set for /)).toBeInTheDocument());
+        });
+
+        it('pre-ticks only the suggestions the year is missing', async () => {
+            // The already-set one is shown so the list is the whole calendar,
+            // but it must not be re-sent — that would be a guaranteed conflict.
+            seed([]);
+            await openYearModal();
+
+            const victoryDay = screen.getByLabelText(/victory day/i) as HTMLInputElement;
+            expect(victoryDay.disabled).toBe(true);
+            expect(screen.getByRole('button', { name: /add 2 holidays/i })).toBeInTheDocument();
+        });
+
+        it('sends only the ticked suggestions and reloads', async () => {
+            seed([]);
+            api.bulkCreateHolidays.mockResolvedValue({ created: 1, updated: 0, skipped: 0 });
+            await openYearModal();
+
+            fireEvent.click(screen.getByLabelText(/independence day/i));
+            fireEvent.click(screen.getByRole('button', { name: /add 1 holidays/i }));
+
+            await waitFor(() => expect(api.bulkCreateHolidays).toHaveBeenCalled());
+            expect(api.bulkCreateHolidays.mock.calls[0][0].items).toEqual([
+                { date: '2026-02-21', name: 'Shaheed Day' },
+            ]);
+            await waitFor(() => expect(api.getHolidays).toHaveBeenCalledTimes(2));
+        });
+
+        it('copies another year into the selected one', async () => {
+            seed([]);
+            api.copyHolidayYear.mockResolvedValue({ created: 5, updated: 0, skipped: 0, unmapped: 0 });
+            await openYearModal();
+
+            fireEvent.click(screen.getByRole('button', { name: /copy a year/i }));
+            fireEvent.click(screen.getByRole('button', { name: /^copy \d{4} into \d{4}$/i }));
+
+            await waitFor(() => expect(api.copyHolidayYear).toHaveBeenCalled());
+            const sent = api.copyHolidayYear.mock.calls[0][0];
+            expect(sent.to_year).toBe(new Date().getFullYear());
+            expect(sent.from_year).toBe(new Date().getFullYear() - 1);
+        });
+
+        it('clears the year only after the confirm', async () => {
+            seed([{ id: 'h-1', date: '2026-04-14', name: 'Pohela Boishakh' }]);
+            api.clearHolidayYear.mockResolvedValue({ deleted: 1 });
+            window.confirm = jest.fn(() => false);
+            await openYearModal();
+
+            fireEvent.click(screen.getByRole('button', { name: /clear year/i }));
+            fireEvent.click(screen.getByRole('button', { name: /delete all \d{4} holidays/i }));
+            expect(api.clearHolidayYear).not.toHaveBeenCalled();
+
+            (window.confirm as jest.Mock).mockReturnValue(true);
+            fireEvent.click(screen.getByRole('button', { name: /delete all \d{4} holidays/i }));
+            await waitFor(() => expect(api.clearHolidayYear).toHaveBeenCalledWith(new Date().getFullYear()));
+        });
+
+        it('offers nothing to clear on an empty year', async () => {
+            seed([]);
+            await openYearModal();
+            fireEvent.click(screen.getByRole('button', { name: /clear year/i }));
+
+            expect(screen.getByText(/no holidays in \d{4} to clear/i)).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /delete all/i })).not.toBeInTheDocument();
+        });
+
+        it('surfaces a failed batch in the modal instead of closing it', async () => {
+            seed([]);
+            api.bulkCreateHolidays.mockRejectedValue(new Error('server said no'));
+            await openYearModal();
+
+            fireEvent.click(screen.getByRole('button', { name: /add 2 holidays/i }));
+
+            await waitFor(() => expect(screen.getByText('server said no')).toBeInTheDocument());
+            expect(screen.getByRole('button', { name: /add 2 holidays/i })).toBeInTheDocument();
+        });
     });
 
     describe('schedules tab', () => {
