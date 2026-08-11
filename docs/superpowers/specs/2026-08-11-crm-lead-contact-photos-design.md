@@ -86,6 +86,10 @@ work before either record exists.
   `TenantInterceptor`.
 - `@Throttle({ default: { limit: 20, ttl: 60_000 } })` — matching
   `addAttachment`, because the body carries an image.
+- Reuses `parseImageUpload()`, which already validates MIME type and size and
+  accepts either a `data:` URL or a bare base64 string. It is currently exported
+  from `crm-contacts.service.ts`; it moves to `common/image-upload.util.ts` so
+  the photo module does not have to import the contacts service to get at it.
 - Body DTO mirrors `AddContactAttachmentDto`'s shape and conventions:
   `{ imageBase64: string; mimeType?: string; fileName?: string }`. Base64 JSON
   rather than multipart for consistency with the rest of the CRM module; the
@@ -123,9 +127,13 @@ photo service, and is covered by a test.
   written. A failed delete is logged, not thrown — the update has succeeded.
 - **On remove:** delete the record's asset before the row goes, the same shape
   as the existing contact-attachment cleanup in `crm-contacts.service.ts`.
-- **On `findAll`:** `photo_url` is included in the selected fields so the list
-  can render it. `photo_storage_key` is *not* returned by list endpoints; only
-  `findOne` returns it, because only the edit form needs it.
+- **Read paths need no change.** Both services fetch with Prisma `include`
+  (`leadIncludes` / `contactIncludes`) rather than an enumerated `select`, so
+  every scalar column — including both new ones — is returned by `findAll` and
+  `findOne` already. Withholding `photo_storage_key` from list responses would
+  mean converting `include` to a hand-listed `select` of ~30 lead columns, which
+  is ongoing maintenance and a regression risk for no benefit: the key is
+  tenant-scoped, validated on write, and the edit form needs it anyway.
 
 ## Frontend
 
