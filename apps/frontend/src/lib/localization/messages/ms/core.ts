@@ -376,6 +376,8 @@ export const coreMessages = {
                 departments: "Jabatan",
                 designations: "Jawatan",
                 attendance: "Kehadiran",
+                attendanceRecords: "Rekod Kehadiran",
+                attendancePunches: "Rekod Masuk/Keluar",
                 leaves: "Cuti",
                 salaryPayments: "Pembayaran Gaji",
                 schedules: "Kalendar & Jadual",

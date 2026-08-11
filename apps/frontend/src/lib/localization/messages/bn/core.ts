@@ -376,6 +376,8 @@ export const coreMessages = {
                 departments: "বিভাগ",
                 designations: "পদবী",
                 attendance: "উপস্থিতি",
+                attendanceRecords: "উপস্থিতির রেকর্ড",
+                attendancePunches: "ইন/আউট রেকর্ড",
                 leaves: "ছুটি",
                 salaryPayments: "বেতন প্রদান",
                 schedules: "ক্যালেন্ডার ও সময়সূচি",
