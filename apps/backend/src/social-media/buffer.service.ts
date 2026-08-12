@@ -55,8 +55,13 @@ export interface BufferCreatePostResult {
     status: string | null;
 }
 
+/**
+ * `OrganizationId` is a custom scalar in Buffer's schema, not `String`. GraphQL
+ * validates variable declarations by exact type, so declaring `String!` here is
+ * rejected before execution even though the value sent is an ordinary string.
+ */
 const CHANNELS_QUERY = `
-  query Channels($organizationId: String!) {
+  query Channels($organizationId: OrganizationId!) {
     channels(input: { organizationId: $organizationId }) {
       id
       name
@@ -243,14 +248,21 @@ export class BufferService {
             );
         }
 
+        // Validation fails once per bad position, so reporting only the first
+        // error hides the rest — and each hidden one costs another round trip
+        // to discover.
+        const errors: string[] = Array.isArray(body?.errors)
+            ? body.errors.map((e: any) => e?.message).filter(Boolean)
+            : [];
+
         // GraphQL answers 200 with an `errors` array for most failures, so the
         // status code alone is not enough to decide this call succeeded.
         if (!response.ok) {
-            const message = body?.errors?.[0]?.message ?? `HTTP ${response.status}`;
+            const message = errors.length > 0 ? errors.join(' | ') : `HTTP ${response.status}`;
             throw new BadRequestException(`Buffer request failed: ${message}`);
         }
-        if (Array.isArray(body?.errors) && body.errors.length > 0) {
-            throw new BadRequestException(`Buffer request failed: ${body.errors[0]?.message}`);
+        if (errors.length > 0) {
+            throw new BadRequestException(`Buffer request failed: ${errors.join(' | ')}`);
         }
         if (!body?.data) {
             throw new BadRequestException('Buffer returned no data.');

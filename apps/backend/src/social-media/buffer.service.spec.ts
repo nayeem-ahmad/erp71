@@ -70,6 +70,20 @@ describe('BufferService', () => {
             expect(JSON.parse(init.body).variables).toEqual({ organizationId: 'org-1' });
         });
 
+        it('declares the organisation id as Buffer types it, not as String', async () => {
+            // Buffer's schema types this argument as the custom scalar
+            // `OrganizationId!`. GraphQL does not coerce between distinct
+            // scalars, so declaring `String!` fails validation before the
+            // query ever runs: "Variable "$organizationId" of type "String!"
+            // used in position expecting type "OrganizationId!"".
+            respond({ data: { channels: [] } });
+
+            await service.listChannels();
+
+            const [, init] = fetchMock.mock.calls[0];
+            expect(JSON.parse(init.body).query).toContain('$organizationId: OrganizationId!');
+        });
+
         it('filters by service without a second round trip', async () => {
             respond({
                 data: {
@@ -93,6 +107,22 @@ describe('BufferService', () => {
 
             await expect(service.listChannels()).rejects.toBeInstanceOf(BadRequestException);
             expect(fetchMock).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('error reporting', () => {
+        it('surfaces every GraphQL error, not just the first', async () => {
+            // A malformed document fails validation once per bad position, so
+            // reporting only errors[0] hides the rest and costs a deploy per
+            // mismatch to discover them.
+            respond({
+                errors: [
+                    { message: 'Variable "$a" of type "String!" used in position expecting type "OrganizationId!".' },
+                    { message: 'Variable "$b" of type "String!" used in position expecting type "ChannelId!".' },
+                ],
+            });
+
+            await expect(service.listChannels()).rejects.toThrow(/OrganizationId!.*ChannelId!/s);
         });
     });
 
