@@ -188,6 +188,11 @@ Platform-admin-only importer that pulls a tenant's sales/purchase history out of
 
 ## IMPORTANT — First month after launch
 
+### CRM activity unification
+
+- [ ] **Implement the `CrmActivity` merge** — spec written 2026-08-12 at `docs/superpowers/specs/2026-08-12-crm-activity-unification-design.md`. Merges `LeadConversation`, `CustomerInteraction`, `CrmFollowUp` and the three `Lead.next_step_*` columns into one activity table where a `status` field, not a table, separates planned from logged. Ships as expand → backfill → contract in three releases, because production applies `schema.prisma` via `prisma db push` and a naive table merge emits `DROP TABLE`. Needs an implementation plan next.
+- [ ] **Four bugs the spec documents but does not fix until it ships** — converting or losing a lead leaves its `PENDING` follow-ups counted as overdue forever; an overdue `next_step` notifies nobody and is invisible to the dashboard's due/overdue cards; completing a follow-up records no outcome and does not stamp `last_contacted_at`, so the reorder cron re-fires at customers the team already called; manual follow-up creation never notifies the assignee. All are absorbed by the merge, but any of them could be fixed standalone first if the merge slips.
+
 ### Referral system — robustness and product gaps
 
 - [ ] **Bangladesh payout realities are unmodelled** — commission to individuals attracts AIT withholding, and `RefereePayment.method` is free text rather than a real bKash/Nagad payout. Worth a gross/withheld/net split before this scales past a handful of partners.
