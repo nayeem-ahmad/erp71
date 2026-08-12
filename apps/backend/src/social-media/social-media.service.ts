@@ -252,6 +252,9 @@ export class SocialMediaService {
                     mode,
                     dueAt,
                     imageUrl: post.image_url,
+                    // Facebook rejects a post that does not declare its type,
+                    // and only the channel knows which network it is.
+                    service: channel?.service ?? null,
                 });
                 const resolvedDueAt = created.dueAt ? new Date(created.dueAt) : dueAt ? new Date(dueAt) : null;
                 await this.db.socialMediaPostPush.create({

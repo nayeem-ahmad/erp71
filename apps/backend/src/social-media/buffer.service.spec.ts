@@ -246,6 +246,54 @@ describe('BufferService', () => {
             expect(JSON.parse(fetchMock.mock.calls[1][1].body).variables.input.mode).toBe('customScheduled');
         });
 
+        it('gives a Facebook post the type Buffer requires', async () => {
+            // "Invalid post: Facebook posts require a type (post, story, or
+            // reel)." — FacebookPostMetadataInput.type is PostTypeFacebook!,
+            // so a Facebook channel is rejected without it. `post` is the
+            // ordinary feed post; reel and story are the other two and would
+            // need composer support, since their asset rules differ.
+            respond({ data: { createPost: { post: { id: 'p1' } } } });
+
+            await service.createPost({
+                channelId: 'chan-fb',
+                text: 'Hi',
+                mode: BufferPostMode.NOW,
+                service: 'facebook',
+            });
+
+            expect(JSON.parse(fetchMock.mock.calls[0][1].body).variables.input.metadata).toEqual({
+                facebook: { type: 'post' },
+            });
+        });
+
+        it('matches the service case-insensitively, as Buffer spells it how it likes', async () => {
+            respond({ data: { createPost: { post: { id: 'p1' } } } });
+
+            await service.createPost({
+                channelId: 'chan-fb',
+                text: 'Hi',
+                mode: BufferPostMode.NOW,
+                service: 'FaceBook',
+            });
+
+            expect(JSON.parse(fetchMock.mock.calls[0][1].body).variables.input.metadata).toEqual({
+                facebook: { type: 'post' },
+            });
+        });
+
+        it('sends no metadata for services that do not require a type', async () => {
+            // LinkedIn and Twitter have no required `type`, and sending a key
+            // Buffer did not ask for is a new way to be rejected.
+            respond({ data: { createPost: { post: { id: 'p1' } } } });
+            respond({ data: { createPost: { post: { id: 'p2' } } } });
+
+            await service.createPost({ channelId: 'c1', text: 'Hi', mode: BufferPostMode.NOW, service: 'linkedin' });
+            await service.createPost({ channelId: 'c2', text: 'Hi', mode: BufferPostMode.NOW, service: 'twitter' });
+
+            expect(JSON.parse(fetchMock.mock.calls[0][1].body).variables.input).not.toHaveProperty('metadata');
+            expect(JSON.parse(fetchMock.mock.calls[1][1].body).variables.input).not.toHaveProperty('metadata');
+        });
+
         it('reports a network failure as a reachability problem, not a rejection', async () => {
             fetchMock.mockRejectedValueOnce(new Error('socket hang up'));
 

@@ -55,6 +55,24 @@ const SHARE_MODE: Record<BufferPostMode, string> = {
     [BufferPostMode.CUSTOM_SCHEDULED]: 'customScheduled',
 };
 
+/**
+ * Networks whose metadata carries a required post type, and the type to send.
+ *
+ * Facebook rejects a post without one — "Invalid post: Facebook posts require a
+ * type (post, story, or reel)" — because `FacebookPostMetadataInput.type` is
+ * `PostTypeFacebook!`. `post` is the ordinary feed post; `reel` and `story` are
+ * the other two and would need composer support, as their asset rules differ.
+ *
+ * LinkedIn and Twitter have no required type, and sending metadata Buffer did
+ * not ask for is its own way to be rejected, so they are absent here rather
+ * than mapped to a default. Instagram is missing on purpose: its metadata needs
+ * `shouldShareToFeed` as well, which changes where the post appears, so it is
+ * left to whoever connects an Instagram channel and can test it.
+ */
+const REQUIRED_POST_TYPE: Record<string, string> = {
+    facebook: 'post',
+};
+
 export interface BufferChannel {
     id: string;
     name: string | null;
@@ -71,6 +89,11 @@ export interface BufferCreatePostInput {
     dueAt?: string | null;
     /** Public URL — Buffer fetches the file itself, there is no upload API. */
     imageUrl?: string | null;
+    /**
+     * The channel's network, as `listChannels` reports it. Some networks reject
+     * a post that does not declare a type — see `REQUIRED_POST_TYPE`.
+     */
+    service?: string | null;
 }
 
 export interface BufferCreatePostResult {
@@ -196,6 +219,12 @@ export class BufferService {
         }
         if (input.imageUrl) {
             payload.assets = [{ image: { url: input.imageUrl } }];
+        }
+
+        const service = input.service?.toLowerCase();
+        const postType = service ? REQUIRED_POST_TYPE[service] : undefined;
+        if (postType) {
+            payload.metadata = { [service as string]: { type: postType } };
         }
 
         const data = await this.request<{
