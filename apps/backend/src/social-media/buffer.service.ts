@@ -16,7 +16,11 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 
 export const BUFFER_DEFAULT_API_URL = 'https://api.buffer.com';
 
-/** Buffer's `mode` enum, as accepted by `createPost`. */
+/**
+ * Posting modes as this API accepts them — these are the values validated by
+ * the DTO and stored on `socialMediaPostPush.mode`, not Buffer's wire values.
+ * See `SHARE_MODE` for the translation.
+ */
 export const BufferPostMode = {
     /** Next free slot in the channel's posting schedule. */
     ADD_TO_QUEUE: 'addToQueue',
@@ -30,6 +34,26 @@ export const BufferPostMode = {
 export type BufferPostMode = (typeof BufferPostMode)[keyof typeof BufferPostMode];
 
 export const BUFFER_POST_MODES = Object.values(BufferPostMode);
+
+/**
+ * Buffer's `ShareMode` enum: `addToQueue | shareNext | shareNow |
+ * customScheduled`. Two of the four differ from the values above, and sending
+ * ours got the whole mutation rejected at validation:
+ *
+ *   Variable "$input" got invalid value "now" at "input.mode";
+ *   Value "now" does not exist in "ShareMode" enum.
+ *
+ * Translating here rather than renaming `BufferPostMode` keeps the mode out of
+ * Buffer's vocabulary everywhere else — the DTO's accepted values, the pushes
+ * already recorded on `socialMediaPostPush.mode`, and the i18n keys the
+ * composer's dropdown is built from all stay as they are.
+ */
+const SHARE_MODE: Record<BufferPostMode, string> = {
+    [BufferPostMode.ADD_TO_QUEUE]: 'addToQueue',
+    [BufferPostMode.NOW]: 'shareNow',
+    [BufferPostMode.NEXT]: 'shareNext',
+    [BufferPostMode.CUSTOM_SCHEDULED]: 'customScheduled',
+};
 
 export interface BufferChannel {
     id: string;
@@ -165,7 +189,7 @@ export class BufferService {
             // publish by hand; `notification` is the other value and would make
             // this feature pointless.
             schedulingType: 'automatic',
-            mode: input.mode,
+            mode: SHARE_MODE[input.mode],
         };
         if (input.mode === BufferPostMode.CUSTOM_SCHEDULED && input.dueAt) {
             payload.dueAt = input.dueAt;

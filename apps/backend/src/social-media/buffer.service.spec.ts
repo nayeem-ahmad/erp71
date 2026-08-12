@@ -214,6 +214,38 @@ describe('BufferService', () => {
             ]);
         });
 
+        it('sends Buffer its own ShareMode spelling, not the mode this API accepts', async () => {
+            // Buffer's ShareMode enum is addToQueue | shareNext | shareNow |
+            // customScheduled. Two of them differ from the values stored on
+            // socialMediaPostPush.mode and accepted by the DTO, so the wire
+            // value is translated at this boundary rather than renaming the
+            // API contract and orphaning the modes on existing rows.
+            respond({ data: { createPost: { post: { id: 'p1' } } } });
+            respond({ data: { createPost: { post: { id: 'p2' } } } });
+
+            await service.createPost({ channelId: 'chan-fb', text: 'Hi', mode: BufferPostMode.NOW });
+            await service.createPost({ channelId: 'chan-fb', text: 'Hi', mode: BufferPostMode.NEXT });
+
+            expect(JSON.parse(fetchMock.mock.calls[0][1].body).variables.input.mode).toBe('shareNow');
+            expect(JSON.parse(fetchMock.mock.calls[1][1].body).variables.input.mode).toBe('shareNext');
+        });
+
+        it('passes the two modes Buffer spells the same way straight through', async () => {
+            respond({ data: { createPost: { post: { id: 'p1' } } } });
+            respond({ data: { createPost: { post: { id: 'p2' } } } });
+
+            await service.createPost({ channelId: 'chan-fb', text: 'Hi', mode: BufferPostMode.ADD_TO_QUEUE });
+            await service.createPost({
+                channelId: 'chan-fb',
+                text: 'Hi',
+                mode: BufferPostMode.CUSTOM_SCHEDULED,
+                dueAt: '2026-08-09T10:00:00.000Z',
+            });
+
+            expect(JSON.parse(fetchMock.mock.calls[0][1].body).variables.input.mode).toBe('addToQueue');
+            expect(JSON.parse(fetchMock.mock.calls[1][1].body).variables.input.mode).toBe('customScheduled');
+        });
+
         it('reports a network failure as a reachability problem, not a rejection', async () => {
             fetchMock.mockRejectedValueOnce(new Error('socket hang up'));
 
