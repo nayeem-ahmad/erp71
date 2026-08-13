@@ -65,17 +65,36 @@ export default function ShortLinkManager({
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     /**
-     * The table shows the bare `/s/<code>` path, so the clipboard is the only
-     * route to a pasteable link from this screen. Copy the origin-qualified URL
-     * rather than what's rendered.
+     * Origin the short links live on, resolved after mount.
      *
+     * The table used to render the bare `/s/<code>` path, which made the copy
+     * button the only way to get a usable link off this screen — reading a code
+     * out to someone, or selecting it by hand, produced something that goes
+     * nowhere. So the full URL is shown.
+     *
+     * It comes from `window.location.origin` rather than an env var because that
+     * is by definition the domain the user reached these links through, and it is
+     * the same value the clipboard has always copied — one source of truth for
+     * both. Held in state and set in an effect because `window` does not exist
+     * during the server render; until it resolves the row falls back to the bare
+     * path, so nothing flashes a wrong domain.
+     */
+    const [origin, setOrigin] = useState('');
+
+    useEffect(() => {
+        setOrigin(window.location.origin);
+    }, []);
+
+    const shortLinkUrl = (row: ShortLinkRow) => `${origin}/s/${row.code}`;
+
+    /**
      * `navigator.clipboard` is undefined in an insecure context and can be
      * refused outright, so the failure is surfaced instead of leaving the user
      * believing they hold a link they don't.
      */
     const copyLink = async (row: ShortLinkRow) => {
         try {
-            await navigator.clipboard.writeText(`${window.location.origin}/s/${row.code}`);
+            await navigator.clipboard.writeText(shortLinkUrl(row));
         } catch {
             toast.error(m.copyError);
             return;
@@ -194,7 +213,7 @@ export default function ShortLinkManager({
                             <tr key={row.id} className="border-t border-gray-100">
                                 <td className="p-3 font-medium text-gray-900">
                                     <span className="inline-flex items-center gap-1.5">
-                                        <span>/s/{row.code}</span>
+                                        <span className="break-all">{shortLinkUrl(row)}</span>
                                         {!row.revoked_at && (
                                             <button
                                                 type="button"

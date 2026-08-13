@@ -11,6 +11,15 @@ jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
+/**
+ * The short-link column renders the origin-qualified URL, not the bare
+ * `/s/<code>` path, so that reading or selecting a row yields something that
+ * actually resolves. In jsdom that origin is `http://localhost`; deriving it
+ * from `window.location` rather than hardcoding keeps this honest if the test
+ * environment's URL ever changes.
+ */
+const shortUrl = `${window.location.origin}/s/aB3xK9m`;
+
 const link = (overrides = {}) => ({
     id: 'link-1',
     code: 'aB3xK9m',
@@ -32,7 +41,7 @@ describe('ShortLinkManager', () => {
             />,
         );
 
-        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(await screen.findByText(shortUrl)).toBeInTheDocument();
         expect(screen.getByText('4')).toBeInTheDocument();
     });
 
@@ -45,7 +54,7 @@ describe('ShortLinkManager', () => {
             />,
         );
 
-        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(await screen.findByText(shortUrl)).toBeInTheDocument();
     });
 
     it('shows an empty state when there are no links', async () => {
@@ -76,7 +85,7 @@ describe('ShortLinkManager', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /try again/i }));
 
-        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(await screen.findByText(shortUrl)).toBeInTheDocument();
         expect(screen.queryByText('Network error, please try again.')).not.toBeInTheDocument();
         expect(fetchLinks).toHaveBeenCalledTimes(2);
     });
@@ -91,7 +100,7 @@ describe('ShortLinkManager', () => {
             .mockRejectedValueOnce(new Error('Could not load your short links.'));
 
         render(<ShortLinkManager fetchLinks={fetchLinks} createLink={createLink} revokeLink={jest.fn()} />);
-        await screen.findByText('/s/aB3xK9m');
+        await screen.findByText(shortUrl);
 
         fireEvent.change(screen.getByPlaceholderText(/https/i), {
             target: { value: 'https://example.com/new' },
@@ -102,7 +111,7 @@ describe('ShortLinkManager', () => {
         expect(await screen.findByText('Could not load your short links.')).toBeInTheDocument();
         // The row from the first successful load is still there, not wiped out by
         // the failed reload.
-        expect(screen.getByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(screen.getByText(shortUrl)).toBeInTheDocument();
     });
 
     it('creates a link and reloads the list', async () => {
@@ -121,7 +130,7 @@ describe('ShortLinkManager', () => {
         fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
 
         await waitFor(() => expect(createLink).toHaveBeenCalledWith({ target_url: 'https://example.com' }));
-        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(await screen.findByText(shortUrl)).toBeInTheDocument();
     });
 
     it('shows the rejection reason inline when the target is refused', async () => {
@@ -154,7 +163,7 @@ describe('ShortLinkManager', () => {
             .mockResolvedValueOnce([link({ revoked_at: '2026-08-05T00:00:00.000Z' })]);
 
         render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={revokeLink} />);
-        await screen.findByText('/s/aB3xK9m');
+        await screen.findByText(shortUrl);
 
         fireEvent.click(screen.getByRole('button', { name: /revoke/i }));
 
@@ -171,7 +180,7 @@ describe('ShortLinkManager', () => {
         const fetchLinks = jest.fn().mockResolvedValue([link()]);
 
         render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={revokeLink} />);
-        await screen.findByText('/s/aB3xK9m');
+        await screen.findByText(shortUrl);
 
         fireEvent.click(screen.getByRole('button', { name: /revoke/i }));
 
@@ -179,7 +188,7 @@ describe('ShortLinkManager', () => {
             expect(toast.error).toHaveBeenCalledWith('That link belongs to another tenant.'),
         );
         // The row must still read as active — not silently dropped, not marked revoked.
-        expect(screen.getByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(screen.getByText(shortUrl)).toBeInTheDocument();
         expect(screen.queryByText(/revoked/i)).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /revoke/i })).toBeInTheDocument();
         expect(fetchLinks).toHaveBeenCalledTimes(1);
@@ -193,15 +202,15 @@ describe('ShortLinkManager', () => {
                 revokeLink={jest.fn()}
             />,
         );
-        await screen.findByText('/s/aB3xK9m');
+        await screen.findByText(shortUrl);
 
         expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
     });
 
     /**
-     * The row shows the bare path, so without this button there is no way to get
-     * a pasteable link off this screen at all — selecting the text by hand still
-     * yields `/s/<code>` with no domain.
+     * The row shows the full URL, so this button is a convenience rather than the
+     * only way out — but it is still the only one-tap way, and its failure mode
+     * (a clipboard write silently refused) is the one worth pinning.
      */
     describe('copy link', () => {
         const writeText = jest.fn();
@@ -225,17 +234,17 @@ describe('ShortLinkManager', () => {
 
         it('copies the full URL including the origin, not the bare path', async () => {
             renderOne();
-            await screen.findByText('/s/aB3xK9m');
+            await screen.findByText(shortUrl);
 
             fireEvent.click(screen.getByRole('button', { name: /copy/i }));
 
             await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-            expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/aB3xK9m`);
+            expect(writeText).toHaveBeenCalledWith(shortUrl);
         });
 
         it('confirms the copy so the user knows it landed', async () => {
             renderOne();
-            await screen.findByText('/s/aB3xK9m');
+            await screen.findByText(shortUrl);
 
             fireEvent.click(screen.getByRole('button', { name: /copy/i }));
 
@@ -246,7 +255,7 @@ describe('ShortLinkManager', () => {
             // A revoked link 404s — handing someone a dead URL is worse than
             // making them retype one.
             renderOne({ revoked_at: '2026-08-05T00:00:00.000Z' });
-            await screen.findByText('/s/aB3xK9m');
+            await screen.findByText(shortUrl);
 
             expect(screen.queryByRole('button', { name: /copy/i })).not.toBeInTheDocument();
         });
@@ -258,7 +267,7 @@ describe('ShortLinkManager', () => {
             writeText.mockRejectedValueOnce(new Error('Denied'));
 
             renderOne();
-            await screen.findByText('/s/aB3xK9m');
+            await screen.findByText(shortUrl);
 
             fireEvent.click(screen.getByRole('button', { name: /copy/i }));
 
