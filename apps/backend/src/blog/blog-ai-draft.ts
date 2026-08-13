@@ -1,4 +1,4 @@
-import { InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { extractJson } from '../ai/extract-json';
 import { slugify } from './blog-slug';
 import { BLOG_AUDIENCES, BlogAudience } from './blog-status';
@@ -16,21 +16,40 @@ import { BLOG_AUDIENCES, BlogAudience } from './blog-status';
 
 export type BlogAiDraftCategory = { id: string; name: string };
 
-export type BlogAiDraft = {
+/**
+ * One language's copy.
+ *
+ * The unit both halves of the feature deal in: a generation returns one per
+ * requested language, a translation returns one per target language, and the
+ * editor patches its locale tabs from either without caring which produced it.
+ */
+export type BlogAiTranslation = {
+    locale: string;
     title: string;
     body_md: string;
-    /** null rather than undefined: the editor clears a stale category with it. */
-    category_id: string | null;
-    featured: boolean;
     excerpt?: string;
     seo_title?: string;
     seo_description?: string;
+};
+
+export type BlogAiDraft = {
+    /** In requested order — the first is the one written from the brief. */
+    translations: BlogAiTranslation[];
+    /** null rather than undefined: the editor clears a stale category with it. */
+    category_id: string | null;
+    featured: boolean;
     slug?: string;
     cover_alt?: string;
     author_name?: string;
     author_title?: string;
     /** Platform blog only. */
     audience?: string;
+    /**
+     * Extra languages whose round-trip failed. Present only when something was
+     * lost, so the editor can name them rather than quietly returning fewer
+     * languages than were asked for.
+     */
+    failed_locales?: string[];
 };
 
 /**
@@ -40,11 +59,71 @@ export type BlogAiDraft = {
  */
 export const BLOG_DRAFT_MAX_TOKENS = 3000;
 
-const LANGUAGE_NAMES: Record<string, string> = {
+/**
+ * Higher than the generation cap because a translation's length is set by its
+ * source, not by an instruction the model follows: the author may be
+ * translating a hand-written 2000-word post, and Bangla and Malay both use more
+ * tokens than the English they came from. A truncated reply is unparseable, so
+ * the ceiling is the cheapest thing to be generous with.
+ */
+export const BLOG_TRANSLATION_MAX_TOKENS = 6000;
+
+/**
+ * The languages the assistant can write in, and what to call them in a prompt.
+ *
+ * Doubles as the locale registry for this module — `resolveDraftLocales` and
+ * `resolveTranslationTargets` accept exactly these keys. A spec pins it against
+ * `BLOG_LOCALES` so the two cannot drift.
+ */
+export const BLOG_AI_LANGUAGES: Record<string, string> = {
     en: 'English',
     bn: 'Bangla (Bengali)',
     ms: 'Malay (Bahasa Melayu)',
 };
+
+const DEFAULT_LOCALE = 'en';
+
+function languageName(locale: string): string {
+    return BLOG_AI_LANGUAGES[locale] ?? BLOG_AI_LANGUAGES[DEFAULT_LOCALE];
+}
+
+function clean(locales: string[]): string[] {
+    const known = locales
+        .map((locale) => (typeof locale === 'string' ? locale.trim().toLowerCase() : ''))
+        .filter((locale) => locale in BLOG_AI_LANGUAGES);
+    return [...new Set(known)];
+}
+
+/**
+ * The languages one generate request should fill, in order.
+ *
+ * The first is written from the brief and the rest are translated from it, so
+ * order is meaningful: it decides which language the model composes in and
+ * which ones inherit that structure. `locales` wins when it carries anything —
+ * `locale` is the single-language field the tenant editor still sends.
+ */
+export function resolveDraftLocales(input: { locale?: string; locales?: string[] }): string[] {
+    const requested = input.locales?.length ? input.locales : input.locale ? [input.locale] : [];
+    const resolved = clean(requested);
+    return resolved.length ? resolved : [DEFAULT_LOCALE];
+}
+
+/**
+ * The languages a translate request should produce.
+ *
+ * The source is dropped rather than translated into itself — the editor does
+ * not offer it, but a request that asks for it would otherwise spend a
+ * round-trip to overwrite the author's own words with a paraphrase of them.
+ */
+export function resolveTranslationTargets(sourceLocale: string, targets: string[]): string[] {
+    const source = typeof sourceLocale === 'string' ? sourceLocale.trim().toLowerCase() : '';
+    const resolved = clean(targets ?? []).filter((locale) => locale !== source);
+
+    if (!resolved.length) {
+        throw new BadRequestException('Choose at least one other language to translate into.');
+    }
+    return resolved;
+}
 
 export function buildBlogDraftPrompt(options: {
     prompt: string;
@@ -52,7 +131,7 @@ export function buildBlogDraftPrompt(options: {
     categories: BlogAiDraftCategory[];
     includeAudience: boolean;
 }): { systemPrompt: string; userMessage: string } {
-    const language = LANGUAGE_NAMES[options.locale] ?? LANGUAGE_NAMES.en;
+    const language = languageName(options.locale);
     const categoryNames = options.categories.map((row) => row.name).join(', ');
 
     const audienceRule = options.includeAudience
@@ -97,17 +176,66 @@ export function buildBlogDraftPrompt(options: {
     return { systemPrompt, userMessage: `Brief:\n${options.prompt}` };
 }
 
+/**
+ * Ask for the same post in another language rather than a second post on the
+ * same subject.
+ *
+ * The distinction is the whole point of this path: a post's translations sit
+ * under one slug and one cover, so a Bangla tab that argues something the
+ * English tab does not is a bug the reader sees. Nothing post-level is asked
+ * for here either — slug, category, audience and cover belong to the post, and
+ * a translation that renamed them would fight the tab the author came from.
+ */
+export function buildBlogTranslationPrompt(options: {
+    source: BlogAiTranslation;
+    targetLocale: string;
+}): { systemPrompt: string; userMessage: string } {
+    const from = languageName(options.source.locale);
+    const to = languageName(options.targetLocale);
+
+    const systemPrompt = [
+        'You are a translator for ERP71, a retail management platform used by small and medium retailers in Bangladesh.',
+        `Translate one blog post from ${from} into ${to}.`,
+        'Translate it — do not rewrite it, summarise it, expand it or add anything of your own.',
+        '',
+        'Rules:',
+        '- Keep the Markdown structure of "body_md" exactly: the same headings, lists, links, emphasis and paragraph breaks, in the same order.',
+        '- Translate for a shopkeeper reading it, not word by word — idioms should read naturally in the target language.',
+        '- Leave URLs, code, numbers and product names as they are. ERP71 stays ERP71.',
+        '- Money stays in Bangladeshi taka — keep amounts as ৳1,200.',
+        '- "seo_title" is at most 60 characters; "seo_description" at most 155.',
+        '- Return a field only if the source carries it. Never invent an excerpt or an SEO field the source does not have.',
+        '',
+        'Reply with JSON and nothing else — no explanation, no code fence. Use exactly this shape:',
+        '{',
+        '  "title": string,',
+        '  "excerpt": string,',
+        '  "body_md": string,',
+        '  "seo_title": string,',
+        '  "seo_description": string',
+        '}',
+    ].join('\n');
+
+    // JSON rather than labelled sections: a body that itself contains a line
+    // like "Title: ..." would otherwise be ambiguous about where a field ends.
+    const source: Record<string, string> = {
+        title: options.source.title,
+        body_md: options.source.body_md,
+    };
+    for (const key of ['excerpt', 'seo_title', 'seo_description'] as const) {
+        const value = text(options.source[key]);
+        if (value) source[key] = value;
+    }
+
+    return { systemPrompt, userMessage: `Post to translate:\n${JSON.stringify(source, null, 2)}` };
+}
+
 export function normalizeBlogDraft(
     raw: string,
-    options: { categories: BlogAiDraftCategory[]; includeAudience: boolean },
+    options: { categories: BlogAiDraftCategory[]; includeAudience: boolean; locale?: string },
 ): BlogAiDraft {
     const parsed = extractJson<Record<string, unknown>>(raw);
-
     const title = text(parsed.title);
-    const body = text(parsed.body_md);
-    if (!title || !body) {
-        throw new InternalServerErrorException('AI returned an invalid response. Please try again.');
-    }
 
     const categoryName = text(parsed.category).toLowerCase();
     const category = categoryName
@@ -115,15 +243,11 @@ export function normalizeBlogDraft(
         : undefined;
 
     const draft: BlogAiDraft = {
-        title,
-        body_md: body,
+        translations: [toTranslation(parsed, options.locale ?? DEFAULT_LOCALE)],
         category_id: category?.id ?? null,
         featured: parsed.featured === true,
     };
 
-    assign(draft, 'excerpt', text(parsed.excerpt));
-    assign(draft, 'seo_title', text(parsed.seo_title));
-    assign(draft, 'seo_description', text(parsed.seo_description));
     assign(draft, 'cover_alt', text(parsed.cover_alt));
     assign(draft, 'author_name', text(parsed.author_name));
     assign(draft, 'author_title', text(parsed.author_title));
@@ -141,10 +265,35 @@ export function normalizeBlogDraft(
     return draft;
 }
 
+export function normalizeBlogTranslation(raw: string, locale: string): BlogAiTranslation {
+    const parsed = extractJson<Record<string, unknown>>(raw);
+    return toTranslation(parsed, locale);
+}
+
+/**
+ * A draft with no title or no body is not a post. Failing here leaves the
+ * editor untouched, which is better than half-filling it — and on a
+ * multi-language request it costs only the one language, since the caller
+ * settles each translation separately.
+ */
+function toTranslation(parsed: Record<string, unknown>, locale: string): BlogAiTranslation {
+    const title = text(parsed.title);
+    const body = text(parsed.body_md);
+    if (!title || !body) {
+        throw new InternalServerErrorException('AI returned an invalid response. Please try again.');
+    }
+
+    const translation: BlogAiTranslation = { locale, title, body_md: body };
+    assign(translation, 'excerpt', text(parsed.excerpt));
+    assign(translation, 'seo_title', text(parsed.seo_title));
+    assign(translation, 'seo_description', text(parsed.seo_description));
+    return translation;
+}
+
 function text(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';
 }
 
-function assign(draft: BlogAiDraft, key: keyof BlogAiDraft, value: string): void {
-    if (value) (draft as Record<string, unknown>)[key] = value;
+function assign<T extends object>(target: T, key: keyof T, value: string): void {
+    if (value) (target as Record<string, unknown>)[key as string] = value;
 }

@@ -16,7 +16,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { BlogService } from './blog.service';
-import { BlogAiDraftDto, PublishBlogPostDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
+import {
+    BlogAiDraftDto,
+    BlogAiTranslateDto,
+    PublishBlogPostDto,
+    UpsertBlogCategoryDto,
+    UpsertBlogPostDto,
+} from './blog.dto';
 
 /**
  * Authoring surface for the platform blog. Platform staff only — these posts
@@ -69,6 +75,16 @@ export class BlogAdminController {
     @Post('ai-draft')
     draftWithAi(@Body() dto: BlogAiDraftDto) {
         return this.service.draftWithAi(dto);
+    }
+
+    /**
+     * Separate from `ai-draft` rather than a mode on it: it takes the author's
+     * own copy instead of a brief, writes no post-level fields, and is the one
+     * an author reaches for precisely because they do not want a new article.
+     */
+    @Post('ai-translate')
+    translateWithAi(@Body() dto: BlogAiTranslateDto) {
+        return this.service.translateWithAi(dto);
     }
 
     @Get('posts/:id')
