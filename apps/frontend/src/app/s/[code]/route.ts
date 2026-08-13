@@ -8,12 +8,16 @@ import { publicApiBase } from '@/lib/api-base';
  * the referral route it mirrors: the redirect does not depend on JavaScript, and
  * a visitor who bounces immediately still counts.
  *
- * Internal targets redirect straight through, so a customer opening a shared
- * quotation sees no extra click. Off-domain targets go via an interstitial —
- * app.erp71.com must never silently bounce someone to a third-party site.
+ * Both internal and external targets redirect straight through. There used to be
+ * an "you are leaving ERP71" interstitial on off-domain targets; it was removed
+ * because a shortener that stops to ask is not a shortener — every link pasted
+ * into WhatsApp or an ad cost the recipient an extra tap on a page they did not
+ * ask for. What keeps that safe is upstream, not here: only a signed-in user
+ * holding MANAGE_SHORT_LINKS can mint a link at all, and `isSafeTarget` on the
+ * backend refuses private hosts, non-http(s) schemes and our own auth pages.
  *
  * Resolution is not best-effort (there is nowhere to go without it), but the
- * click count is: a tracking failure must never cost someone their destination.
+ * click record is: a tracking failure must never cost someone their destination.
  */
 export const dynamic = 'force-dynamic';
 
@@ -61,16 +65,79 @@ function isSameOriginPath(path: unknown): path is string {
     return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\');
 }
 
+/**
+ * True only for an absolute http(s) URL.
+ *
+ * The mirror of `isSameOriginPath` for the off-domain case, and the reason a
+ * `kind: 'external'` claim is not enough on its own: `Location: javascript:...`
+ * or a `data:` URL would be a script-execution vector handed out under our own
+ * domain. The backend already enforces this in `isSafeTarget`, and this route
+ * re-checks it locally for the same reason it re-checks internal paths — the
+ * contract lives in another module.
+ */
+function isExternalHttpUrl(value: unknown): value is string {
+    if (typeof value !== 'string') return false;
+    try {
+        const { protocol } = new URL(value);
+        return protocol === 'http:' || protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * What this request can tell us about the visitor, forwarded to the API so the
+ * click can be recorded with context rather than as a bare +1.
+ *
+ * It has to travel explicitly: the call below is a server-to-server fetch, so
+ * none of the visitor's own headers reach the API on their own. `x-forwarded-for`
+ * is passed through as a header rather than a body field so the API can read the
+ * address the same way it does for every other request.
+ *
+ * The geo headers are read opportunistically — Caddy does not set them today, so
+ * they are normally absent, and `country`/`city` stay null for a later geo-IP
+ * backfill to fill in. Reading them costs nothing and means putting a CDN in
+ * front later starts populating geo with no code change.
+ */
+function visitorContext(request: NextRequest) {
+    const header = (name: string) => request.headers.get(name) ?? undefined;
+
+    return {
+        body: {
+            referrer: header('referer'),
+            user_agent: header('user-agent'),
+            // The query string of the /s/ URL itself, which is where utm tags on
+            // a shared link arrive.
+            query: request.nextUrl.search || undefined,
+            language: header('accept-language'),
+            country:
+                header('cf-ipcountry') ??
+                header('x-vercel-ip-country') ??
+                header('cloudfront-viewer-country') ??
+                header('x-geo-country'),
+            city: header('x-vercel-ip-city') ?? header('cf-ipcity') ?? header('x-geo-city'),
+        },
+        forwardedFor: header('x-forwarded-for') ?? header('x-real-ip'),
+    };
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ code: string }> }) {
     const { code } = await context.params;
 
     if (!code) return redirectToPath('/not-found');
+
+    const visitor = visitorContext(request);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
     try {
         const response = await fetch(`${publicApiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(visitor.forwardedFor ? { 'x-forwarded-for': visitor.forwardedFor } : {}),
+            },
+            body: JSON.stringify(visitor.body),
             signal: controller.signal,
             cache: 'no-store',
         });
@@ -86,15 +153,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cod
         }
 
         if (data?.kind === 'external') {
-            // The interstitial re-resolves the code itself rather than taking the
-            // destination from a query param — otherwise anyone could craft an
-            // erp71.com URL that displays one host and sends you to another.
-            return redirectToPath(`/s/${encodeURIComponent(code)}/leaving`);
+            if (!isExternalHttpUrl(data.target_url)) return redirectToPath('/not-found');
+            return new NextResponse(null, { status: 302, headers: { Location: data.target_url } });
         }
 
         // Anything else — unknown/missing `kind`, malformed body — fails closed
-        // to not-found rather than guessing. Never route an unrecognized kind
-        // through the interstitial, which is reserved for confirmed `external`.
+        // to not-found rather than guessing. An unrecognized kind is never
+        // treated as a destination.
         return redirectToPath('/not-found');
     } catch {
         return redirectToPath('/not-found');

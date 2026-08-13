@@ -16,6 +16,9 @@ describe('ShortLinksService', () => {
             update: jest.fn(),
             updateMany: jest.fn(),
         },
+        shortLinkClick: {
+            create: jest.fn(),
+        },
     } as any;
 
     let service: ShortLinksService;
@@ -170,6 +173,67 @@ describe('ShortLinksService', () => {
         it('404s an unknown code', async () => {
             db.shortLink.findUnique.mockResolvedValue(null);
             await expect(service.resolve('nope123', true)).rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('records the click context alongside the counter', async () => {
+            db.shortLink.findUnique.mockResolvedValue(row());
+
+            await service.resolve('aB3xK9m', true, {
+                referrer: 'https://l.facebook.com/somewhere',
+                userAgent:
+                    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+                query: '?utm_source=fb&utm_medium=cpc&utm_campaign=eid',
+                language: 'bn-BD,bn;q=0.9,en;q=0.8',
+                ipAddress: '203.0.113.9',
+            });
+
+            expect(db.shortLinkClick.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    short_link_id: 'link-1',
+                    // Copied off the link, not the request — the caller is an
+                    // anonymous visitor with no tenant of their own.
+                    tenant_id: 'tenant-1',
+                    code: 'aB3xK9m',
+                    referrer_host: 'l.facebook.com',
+                    // The referrer host outranks utm_medium=cpc: this is a paid
+                    // Facebook placement, not a search one.
+                    channel: 'SOCIAL',
+                    utm_source: 'fb',
+                    utm_campaign: 'eid',
+                    device_type: 'MOBILE',
+                    os: 'iOS',
+                    language: 'bn-BD',
+                    ip_address: '203.0.113.9',
+                }),
+            });
+        });
+
+        it('does not record a click when only peeking', async () => {
+            db.shortLink.findUnique.mockResolvedValue(row());
+            await service.resolve('aB3xK9m', false, { referrer: 'https://example.com/' });
+            expect(db.shortLinkClick.create).not.toHaveBeenCalled();
+        });
+
+        it('still returns the destination when the click write fails', async () => {
+            // The visitor is mid-redirect. Losing a row of analytics is a cost we
+            // accept; losing their destination to a tracking error is not.
+            db.shortLink.findUnique.mockResolvedValue(row({ target_url: '/q/token-1' }));
+            db.shortLinkClick.create.mockRejectedValueOnce(new Error('relation does not exist'));
+
+            await expect(service.resolve('aB3xK9m', true)).resolves.toEqual({
+                target_url: '/q/token-1',
+                kind: 'internal',
+            });
+        });
+
+        it('still returns the destination when the counter update fails', async () => {
+            db.shortLink.findUnique.mockResolvedValue(row({ target_url: '/q/token-1' }));
+            db.shortLink.update.mockRejectedValueOnce(new Error('deadlock detected'));
+
+            await expect(service.resolve('aB3xK9m', true)).resolves.toEqual({
+                target_url: '/q/token-1',
+                kind: 'internal',
+            });
         });
 
         it('404s a stored target that no longer validates', async () => {
