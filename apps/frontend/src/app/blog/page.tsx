@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
+import BlogSubscribeBand from '@/components/blog/BlogSubscribeBand';
+import FeaturedPost from '@/components/blog/FeaturedPost';
 import PostCard from '@/components/blog/PostCard';
 import { fetchCategories, fetchPosts, siteOrigin } from '@/lib/blog/api';
 
@@ -54,12 +56,19 @@ export default async function BlogIndexPage({
 
     const lastPage = Math.max(Math.ceil(list.total / PAGE_SIZE), 1);
 
+    // The lead story belongs to page 1 only — deeper pages are an archive, and
+    // promoting a post there would just re-promote whatever fell to the top.
+    // The backend sorts `featured` ahead of `published_at`, so this is the
+    // editor's pick when there is one and the newest post otherwise.
+    const lead = page === 1 ? list.rows[0] : undefined;
+    const rest = lead ? list.rows.slice(1) : list.rows;
+
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav active="blog" />
 
             <main className="mx-auto max-w-5xl px-6 pb-16 pt-28">
-                <header className="border-b border-gray-100 pb-8">
+                <header>
                     <h1 className="text-5xl font-black leading-none tracking-tighter text-gray-900 md:text-6xl">
                         The ERP71 blog
                     </h1>
@@ -85,14 +94,39 @@ export default async function BlogIndexPage({
                     </nav>
                 )}
 
-                {list.rows.length === 0 ? (
-                    <p className="mt-12 text-base text-gray-500">No posts yet. Check back soon.</p>
-                ) : (
-                    <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {list.rows.map((post) => (
-                            <PostCard key={post.id} post={post} />
-                        ))}
+                {lead && (
+                    <div className="mt-10 border-t border-gray-100 pt-10">
+                        <FeaturedPost post={lead} />
                     </div>
+                )}
+
+                {list.rows.length === 0 && (
+                    <p className="mt-12 text-base text-gray-500">No posts yet. Check back soon.</p>
+                )}
+
+                {rest.length > 0 && (
+                    <section className="mt-14 border-t border-gray-100 pt-8">
+                        <div className="flex items-baseline justify-between gap-4">
+                            {/* Deeper pages are already labelled by the pager below,
+                                so they get the neutral heading rather than a second
+                                "page N" the reader has to reconcile. */}
+                            <h2 className="text-lg font-bold tracking-tight text-gray-900">
+                                {lead ? 'Latest posts' : 'More posts'}
+                            </h2>
+                            <Link
+                                href="/blog/rss.xml"
+                                className="text-xs font-semibold text-blue-600 hover:underline"
+                            >
+                                RSS feed →
+                            </Link>
+                        </div>
+
+                        <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                            {rest.map((post) => (
+                                <PostCard key={post.id} post={post} />
+                            ))}
+                        </div>
+                    </section>
                 )}
 
                 {lastPage > 1 && (
@@ -119,6 +153,8 @@ export default async function BlogIndexPage({
                         )}
                     </nav>
                 )}
+
+                <BlogSubscribeBand />
             </main>
 
             <MarketingFooter />
