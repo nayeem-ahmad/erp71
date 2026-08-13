@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    InternalServerErrorException,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { buildClickContext, ClickInput } from './click-context';
 import { isSafeTarget } from './is-safe-target';
 import { generateShortCode } from './short-link-code';
 
@@ -16,10 +23,19 @@ export type ShortLinkView = {
 
 type EntityType = 'QUOTATION' | 'STOREFRONT_PRODUCT';
 
+/**
+ * What the redirect handler observed about the visitor. Every field is optional:
+ * the click is recorded with whatever survived, never withheld for want of a
+ * header.
+ */
+export type ClickMeta = ClickInput;
+
 const MAX_CODE_ATTEMPTS = 5;
 
 @Injectable()
 export class ShortLinksService {
+    private readonly logger = new Logger(ShortLinksService.name);
+
     constructor(private readonly db: DatabaseService) {}
 
     async createManual(
@@ -73,7 +89,11 @@ export class ShortLinksService {
         });
     }
 
-    async resolve(code: string, countClick: boolean): Promise<{ target_url: string; kind: 'internal' | 'external' }> {
+    async resolve(
+        code: string,
+        countClick: boolean,
+        meta: ClickMeta = {},
+    ): Promise<{ target_url: string; kind: 'internal' | 'external' }> {
         const link = await this.db.shortLink.findUnique({ where: { code } });
         if (!link || link.revoked_at) throw new NotFoundException('Link not found');
 
@@ -82,14 +102,50 @@ export class ShortLinksService {
         const checked = isSafeTarget(link.target_url);
         if (!checked.ok) throw new NotFoundException('Link not found');
 
-        if (countClick) {
-            await this.db.shortLink.update({
-                where: { id: link.id },
-                data: { click_count: { increment: 1 }, last_click_at: new Date() },
-            });
-        }
+        if (countClick) await this.recordClick(link, meta);
 
         return { target_url: checked.url, kind: checked.kind };
+    }
+
+    /**
+     * Bump the counter and store the click's full context.
+     *
+     * Two writes rather than one because they answer different questions:
+     * `click_count` is what the shortener list renders on every row and must stay
+     * cheap to read, while `ShortLinkClick` is the per-click detail that a report
+     * groups by. Keeping the counter denormalised means the list never has to
+     * COUNT(*) over a table that grows without bound.
+     *
+     * The whole thing is swallowed on failure, on purpose. Someone is mid-redirect
+     * waiting on this; a tracking write that fails — a full disk, a lock, a schema
+     * not yet pushed — must cost us a row of analytics, never their destination.
+     * It is logged rather than silently dropped so a persistent failure is still
+     * discoverable.
+     */
+    private async recordClick(link: { id: string; tenant_id: string | null; code: string }, meta: ClickMeta) {
+        try {
+            const context = buildClickContext(meta);
+            await Promise.all([
+                this.db.shortLink.update({
+                    where: { id: link.id },
+                    data: { click_count: { increment: 1 }, last_click_at: new Date() },
+                }),
+                this.db.shortLinkClick.create({
+                    data: {
+                        short_link_id: link.id,
+                        // Denormalised off the link, not taken from the request:
+                        // the caller here is an anonymous visitor with no tenant.
+                        tenant_id: link.tenant_id,
+                        code: link.code,
+                        ...context,
+                    },
+                }),
+            ]);
+        } catch (error) {
+            this.logger.warn(
+                `Could not record click for short link ${link.code}: ${(error as Error)?.message ?? error}`,
+            );
+        }
     }
 
     /**
