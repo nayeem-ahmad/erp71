@@ -91,14 +91,85 @@ describe('ShortLinksController', () => {
     });
 
     describe('click counting', () => {
+        const req = (headers: Record<string, string> = {}) => ({ headers, socket: {} }) as any;
+
         it('GET resolve does not count a click', async () => {
             await controller.peek('aB3xK9m');
             expect(service.resolve).toHaveBeenCalledWith('aB3xK9m', false);
         });
 
         it('POST resolve counts the click', async () => {
-            await controller.resolve('aB3xK9m');
-            expect(service.resolve).toHaveBeenCalledWith('aB3xK9m', true);
+            await controller.resolve('aB3xK9m', {}, req());
+            expect(service.resolve).toHaveBeenCalledWith('aB3xK9m', true, expect.anything());
+        });
+    });
+
+    describe('click context', () => {
+        const req = (headers: Record<string, string> = {}) => ({ headers, socket: {} }) as any;
+
+        it('passes the visitor context from the body through to the service', async () => {
+            await controller.resolve(
+                'aB3xK9m',
+                {
+                    referrer: 'https://l.facebook.com/',
+                    user_agent: 'Mozilla/5.0 (iPhone)',
+                    query: '?utm_source=fb',
+                    language: 'bn-BD,bn;q=0.9',
+                    country: 'BD',
+                    city: 'Dhaka',
+                },
+                req(),
+            );
+
+            expect(service.resolve).toHaveBeenCalledWith(
+                'aB3xK9m',
+                true,
+                expect.objectContaining({
+                    referrer: 'https://l.facebook.com/',
+                    userAgent: 'Mozilla/5.0 (iPhone)',
+                    query: '?utm_source=fb',
+                    language: 'bn-BD,bn;q=0.9',
+                    country: 'BD',
+                    city: 'Dhaka',
+                }),
+            );
+        });
+
+        it('takes the IP off X-Forwarded-For, never from the body', async () => {
+            // This endpoint is public, so a body field claiming an address would
+            // be worth exactly nothing. The header is at least the one the proxy
+            // in front of us wrote.
+            await controller.resolve('aB3xK9m', {} as any, req({ 'x-forwarded-for': '203.0.113.9, 10.0.0.1' }));
+
+            expect(service.resolve).toHaveBeenCalledWith(
+                'aB3xK9m',
+                true,
+                expect.objectContaining({ ipAddress: '203.0.113.9' }),
+            );
+        });
+
+        it('falls back to the request user agent when the body carries none', async () => {
+            // Covers anything calling the endpoint directly rather than through
+            // the /s/ handler, which would otherwise record a device-less click.
+            await controller.resolve('aB3xK9m', {} as any, req({ 'user-agent': 'curl/8.4.0' }));
+
+            expect(service.resolve).toHaveBeenCalledWith(
+                'aB3xK9m',
+                true,
+                expect.objectContaining({ userAgent: 'curl/8.4.0' }),
+            );
+        });
+
+        it('still resolves when there is no body at all', () => {
+            // A POST with no JSON body leaves the dto undefined. Reading fields
+            // off it unguarded would turn a resolvable link into a 500, i.e. a
+            // dead short link, over missing telemetry.
+            expect(() => controller.resolve('aB3xK9m', undefined as any, req())).not.toThrow();
+            expect(service.resolve).toHaveBeenCalledWith(
+                'aB3xK9m',
+                true,
+                expect.objectContaining({ referrer: undefined }),
+            );
         });
     });
 

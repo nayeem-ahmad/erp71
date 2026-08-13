@@ -6000,9 +6000,89 @@ model ShortLink {
   revoked_at    DateTime?
 
   tenant Tenant? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  clicks ShortLinkClick[]
 
   @@index([tenant_id, created_at])
   @@index([entity_type, entity_id])
+}
+
+/// One recorded click on a short link (`/s/<code>`), kept as the raw material for
+/// link analytics: `ShortLink.click_count` answers "how many", this answers
+/// "who, from where, on what".
+///
+/// Everything here is captured at redirect time and stored rather than
+/// aggregated, because the questions worth asking later (which campaign, which
+/// channel, which country, mobile vs desktop) cannot be reconstructed from a
+/// counter. Columns are deliberately wide and denormalised for the same reason:
+/// `referrer_host`, `channel`, `browser`/`os`/`device_type` and the utm_* fields
+/// are all derived from `referrer`/`user_agent`/`query` on write, so a report can
+/// GROUP BY them without re-parsing every row, while the raw values stay for
+/// re-derivation when the parsing improves.
+///
+/// Trust boundary: `/s/<code>` is public and unauthenticated, so every value here
+/// is ultimately visitor-supplied and none of it is evidence of anything. It is
+/// analytics, not audit — do not use it for access decisions.
+///
+/// Unlike ReferralClick, this table *does* keep `ip_address`, because geo and
+/// unique-visitor analysis are the point of it. That makes these rows personal
+/// data: anything built on top should treat retention as a policy question, not
+/// keep them forever by default.
+model ShortLinkClick {
+  id            String @id @default(uuid())
+  short_link_id String
+  /// Copied off the link so tenant-scoped reporting never needs the join, and so
+  /// a click survives in aggregate form if the link row is ever reshaped.
+  /// Null for platform-owned links, matching ShortLink.tenant_id.
+  tenant_id     String?
+  /// Snapshot of the code as requested, so a later code change does not
+  /// retro-attribute old clicks.
+  code          String
+
+  occurred_at DateTime @default(now())
+
+  /// Full `Referer` header, and just its host — the host is what almost every
+  /// report groups by, and pulling it out of a 2KB URL per row is wasteful.
+  referrer      String?
+  referrer_host String?
+  /// Coarse bucket derived from referrer + utm_medium:
+  /// DIRECT | SEARCH | SOCIAL | EMAIL | INTERNAL | REFERRAL.
+  channel       String?
+
+  /// Campaign tags read off the `/s/<code>?utm_...` request itself, not the
+  /// target. Shortened links are what get pasted into ads and WhatsApp, so this
+  /// is where campaign attribution actually lands.
+  utm_source   String?
+  utm_medium   String?
+  utm_campaign String?
+  utm_term     String?
+  utm_content  String?
+  /// Raw query string as received, so a tag we do not parse today is not lost.
+  query        String?
+
+  user_agent  String?
+  /// Parsed from user_agent on write. `device_type` is MOBILE | TABLET | DESKTOP | BOT.
+  browser     String?
+  os          String?
+  device_type String?
+  /// Known crawler/preview-fetcher. Kept rather than dropped: a WhatsApp or
+  /// Facebook link preview is a real signal, it just is not a human visit.
+  is_bot      Boolean @default(false)
+
+  /// Left-most `X-Forwarded-For` entry as seen by the API. Spoofable — see the
+  /// trust note above.
+  ip_address String?
+  /// Filled from a CDN/proxy geo header when one is present; null otherwise, so
+  /// a later geo-IP backfill has somewhere to write.
+  country    String?
+  city       String?
+  /// Primary tag of `Accept-Language`, e.g. `bn` or `en-GB`.
+  language   String?
+
+  short_link ShortLink @relation(fields: [short_link_id], references: [id], onDelete: Cascade)
+
+  @@index([short_link_id, occurred_at])
+  @@index([tenant_id, occurred_at])
+  @@index([code, occurred_at])
 }
 
 // ---------------------------------------------------------------------------

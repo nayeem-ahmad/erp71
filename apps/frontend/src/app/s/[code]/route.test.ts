@@ -61,6 +61,15 @@ function malformedJson() {
     });
 }
 
+/** Body the handler POSTed to the API, parsed back out of the fetch call. */
+function sentBody(call = 0) {
+    return JSON.parse(String(mockFetch.mock.calls[call][1].body));
+}
+
+function sentHeaders(call = 0): Record<string, string> {
+    return mockFetch.mock.calls[call][1].headers ?? {};
+}
+
 /**
  * Drive the handler from the origin the standalone server actually reports.
  *
@@ -71,8 +80,14 @@ function malformedJson() {
  * condition that matters, which is how every `/s/` link shipped emitting
  * `https://0.0.0.0:3000/...` while the suite stayed green.
  */
-async function callGet(code: string, origin = 'http://0.0.0.0:3000') {
-    const request = new NextRequest(`${origin}/s/${code}`);
+async function callGet(
+    code: string,
+    origin = 'http://0.0.0.0:3000',
+    init?: { headers?: Record<string, string>; search?: string },
+) {
+    const request = new NextRequest(`${origin}/s/${code}${init?.search ?? ''}`, {
+        headers: init?.headers,
+    });
     return GET(request, { params: Promise.resolve({ code }) });
 }
 
@@ -86,25 +101,32 @@ describe('GET /s/[code]', () => {
         expect(response.headers.get('location')).toBe('/q/abc123');
     });
 
-    it('redirects an external target to the interstitial with no query string', async () => {
+    // The "you are leaving ERP71" interstitial was removed: a shortener that
+    // stops to ask costs every recipient an extra tap. The safety it used to
+    // provide lives upstream — only MANAGE_SHORT_LINKS mints a link, and
+    // isSafeTarget vets the target — so the redirect goes straight through.
+    it('redirects an external target straight to the destination', async () => {
         mockFetch.mockReturnValueOnce(
-            okJson({ data: { kind: 'external', target_url: 'https://evil.example.com/phish' } }),
+            okJson({ data: { kind: 'external', target_url: 'https://example.com/promo' } }),
         );
 
         const response = await callGet('ext123');
 
         expect(response.status).toBe(302);
-        const location = response.headers.get('location')!;
-        expect(location).toBe('/s/ext123/leaving');
-        // The anti-phishing property under test: the destination must never
-        // travel in the URL the browser is handed. If it did, anyone could
-        // craft an app.erp71.com link that displays one host and sends the
-        // visitor to another.
-        expect(new URL(location, 'https://app.erp71.com').search).toBe('');
-        expect(location).not.toContain('evil.example.com');
+        expect(response.headers.get('location')).toBe('https://example.com/promo');
     });
 
-    it('falls back to not-found for an unknown kind rather than the interstitial or the target', async () => {
+    it('sends no visitor through an interstitial path any more', async () => {
+        mockFetch.mockReturnValueOnce(
+            okJson({ data: { kind: 'external', target_url: 'https://example.com/promo' } }),
+        );
+
+        const response = await callGet('ext123');
+
+        expect(response.headers.get('location')).not.toContain('/leaving');
+    });
+
+    it('falls back to not-found for an unknown kind rather than the target', async () => {
         mockFetch.mockReturnValueOnce(
             okJson({ data: { kind: 'weird', target_url: 'https://evil.example.com/' } }),
         );
@@ -115,7 +137,23 @@ describe('GET /s/[code]', () => {
         const location = response.headers.get('location')!;
         expect(location).toBe('/not-found');
         expect(location).not.toContain('evil.example.com');
-        expect(location).not.toContain('/leaving');
+    });
+
+    // `kind: 'external'` is a claim from another service, not a licence to emit
+    // any string as a Location. A javascript:/data: URL handed out under our own
+    // domain is script execution, so the scheme is re-checked here.
+    it.each([
+        ['javascript:', 'javascript:alert(1)'],
+        ['data:', 'data:text/html,<script>alert(1)</script>'],
+        ['a bare path', '/q/not-external'],
+        ['protocol-relative', '//evil.example.com/phish'],
+    ])('falls back to not-found when an external target_url is %s', async (_label, target) => {
+        mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'external', target_url: target } }));
+
+        const response = await callGet('badext');
+
+        expect(response.status).toBe(302);
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('falls back to not-found when the backend responds non-ok', async () => {
@@ -284,6 +322,78 @@ describe('GET /s/[code]', () => {
     });
 
     /**
+     * The click is recorded by the API, but everything worth knowing about the
+     * visitor is only visible *here* — this handler is a server-to-server fetch,
+     * so none of the original request's headers reach the API on their own. If
+     * this forwarding regresses, clicks keep counting and every analytics column
+     * silently goes null, which is exactly the failure a counter cannot show.
+     */
+    describe('visitor context forwarded for analytics', () => {
+        it('forwards referrer, user agent, language and the /s/ query string', async () => {
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            await callGet('abc123', 'http://0.0.0.0:3000', {
+                search: '?utm_source=facebook&utm_medium=cpc',
+                headers: {
+                    referer: 'https://l.facebook.com/',
+                    'user-agent': 'Mozilla/5.0 (iPhone)',
+                    'accept-language': 'bn-BD,bn;q=0.9',
+                },
+            });
+
+            expect(sentBody()).toEqual(
+                expect.objectContaining({
+                    referrer: 'https://l.facebook.com/',
+                    user_agent: 'Mozilla/5.0 (iPhone)',
+                    language: 'bn-BD,bn;q=0.9',
+                    query: '?utm_source=facebook&utm_medium=cpc',
+                }),
+            );
+        });
+
+        it('passes the visitor IP as X-Forwarded-For rather than a body field', async () => {
+            // The API reads the address off the header the same way it does for
+            // every other request; putting it in the body would mean trusting a
+            // public caller's claim about its own IP.
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            await callGet('abc123', 'http://0.0.0.0:3000', {
+                headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1' },
+            });
+
+            expect(sentHeaders()['x-forwarded-for']).toBe('203.0.113.9, 10.0.0.1');
+            expect(sentBody()).not.toHaveProperty('ip_address');
+        });
+
+        it('picks up an edge geo header when one is present', async () => {
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            await callGet('abc123', 'http://0.0.0.0:3000', { headers: { 'cf-ipcountry': 'BD' } });
+
+            expect(sentBody().country).toBe('BD');
+        });
+
+        it('still redirects when the visitor sends none of those headers', async () => {
+            // A bare request must not be a special case — a click with no context
+            // is still a click, and the redirect is what the visitor is waiting on.
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            const response = await callGet('abc123');
+
+            expect(response.headers.get('location')).toBe('/q/abc');
+            expect(sentBody()).toEqual({});
+        });
+
+        it('sends JSON so the API parses the body at all', async () => {
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            await callGet('abc123', 'http://0.0.0.0:3000', { headers: { referer: 'https://example.com/' } });
+
+            expect(sentHeaders()['Content-Type']).toBe('application/json');
+        });
+    });
+
+    /**
      * Regression: every `/s/` link in production emitted
      * `https://0.0.0.0:3000/...`, which no browser can reach
      * (ERR_SSL_PROTOCOL_ERROR). The handler had built absolute URLs from
@@ -297,7 +407,6 @@ describe('GET /s/[code]', () => {
     describe('Location is origin-independent', () => {
         it.each([
             ['internal', { kind: 'internal', target_url: '/q/abc123' }, '/q/abc123'],
-            ['external', { kind: 'external', target_url: 'https://example.com/x' }, '/s/code99/leaving'],
             ['unknown kind', { kind: 'nope' }, '/not-found'],
         ])('emits a host-less Location for a %s target', async (_label, payload, expected) => {
             mockFetch.mockReturnValueOnce(okJson({ data: payload }));
