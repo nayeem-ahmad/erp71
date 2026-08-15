@@ -372,6 +372,8 @@ model User {
   createdInteractions               CustomerInteraction[]       @relation("InteractionCreator")
   assignedCrmFollowUps              CrmFollowUp[]               @relation("CrmFollowUpAssignee")
   createdCrmFollowUps               CrmFollowUp[]               @relation("CrmFollowUpCreator")
+  crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
+  crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
   refereeProfile                    Referee?
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
@@ -645,6 +647,8 @@ model Tenant {
   bankReconciliations        BankReconciliation[]
   customerInteractions       CustomerInteraction[]
   crmFollowUps               CrmFollowUp[]
+  crmActivities              CrmActivity[]
+  crmActivityPurposes        CrmActivityPurpose[]
   leads                      Lead[]
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
@@ -1836,6 +1840,11 @@ model Customer {
   due_balance          Decimal      @default(0) @db.Decimal(12, 2)
   credit_enabled       Boolean      @default(false)
   last_contacted_at    DateTime?
+  /// Read-only rollup, as Lead.next_activity_id. `last_contacted_at` above is
+  /// the customer-side last-touched column and is reused rather than paired
+  /// with a new one. Written ONLY by CrmActivitiesService.recalculateRollup().
+  next_activity_id     String?
+  next_activity_date   DateTime?
   preferred_channel    String       @default("PHONE")
   birthday             DateTime?
   anniversary          DateTime?
@@ -1857,6 +1866,7 @@ model Customer {
   loyaltyTransactions LoyaltyTransaction[]
   interactions        CustomerInteraction[]
   crmFollowUps        CrmFollowUp[]
+  crmActivities       CrmActivity[]
   creditTransactions  CustomerCreditTransaction[]
   campaignRecipients  CrmCampaignRecipient[]
   convertedFromLeads  Lead[]                      @relation("LeadConvertedCustomer")
@@ -1998,6 +2008,17 @@ model Lead {
   next_step             String?
   next_step_date        DateTime?
   next_step_assigned_to String?
+  /// Read-only rollup of the earliest PLANNED CrmActivity. Written ONLY by
+  /// CrmActivitiesService.recalculateRollup(). next_step / next_step_date /
+  /// next_step_assigned_to above are the same rollup and are equally read-only
+  /// from R1 onward — they keep their names so the leads list, sort allowlist,
+  /// myActionsToday filter, CSV importer, lead scoring and ai/chat-data.service
+  /// need no changes.
+  ///
+  /// Deliberately a plain column, not a relation — a FK back to CrmActivity while
+  /// CrmActivity has a FK to Lead creates a cycle Prisma requires extra annotation
+  /// to resolve, and the rollup only ever needs the id.
+  next_activity_id      String?
   assigned_to           String?
   last_contacted_at     DateTime?
   /// When the lead reached a terminal status (CONVERTED or LOST); null while it is
@@ -2019,6 +2040,7 @@ model Lead {
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
   conversations      LeadConversation[]
   crmFollowUps       CrmFollowUp[]
+  crmActivities      CrmActivity[]
   projects           Project[]
   campaignRecipients CrmCampaignRecipient[]
 
@@ -2220,6 +2242,7 @@ model ConversationChannel {
 
   tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   conversations LeadConversation[]
+  activities    CrmActivity[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2290,6 +2313,94 @@ model CrmFollowUp {
   @@index([tenant_id, status, due_at])
   @@index([tenant_id, customer_id])
   @@index([tenant_id, lead_id])
+}
+
+model CrmActivityPurpose {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  code       String
+  name       String
+  icon       String?
+  sort_order Int      @default(0)
+  is_system  Boolean  @default(false)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  activities CrmActivity[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+}
+
+/// One row per planned OR logged CRM touch. `status` separates the two — a
+/// PLANNED row is a task, a DONE row is history. Replaces LeadConversation,
+/// CustomerInteraction and CrmFollowUp, which survive read-only through R2 and
+/// are dropped in R3. See docs/superpowers/specs/2026-08-12-crm-activity-unification-design.md
+model CrmActivity {
+  id           String  @id @default(uuid())
+  tenant_id    String
+  store_id     String?
+
+  /// Exactly one of lead_id / customer_id is set — enforced in the service, the
+  /// same rule CrmFollowUp.validateFollowUpTarget already applies.
+  lead_id     String?
+  customer_id String?
+
+  purpose_id   String?
+  /// Nullable while PLANNED: a rep scheduling "chase the invoice" often does not
+  /// yet know whether it will be a call or a WhatsApp. Required on completion.
+  channel_id   String?
+  /// The channel's `code`, denormalised — exactly as LeadConversation.type is.
+  /// Every filter and groupBy reads it and the composite index serves those.
+  channel_code String?
+
+  /// The planned title. Null on an activity logged directly with no prior plan,
+  /// which genuinely has no separate title — the UI renders `subject ?? summary`.
+  subject      String?
+  status       String    @default("PLANNED")
+  due_at       DateTime?
+  completed_at DateTime?
+
+  /// What happened. Null while PLANNED, required on completion.
+  summary   String?
+  outcome   String?
+  /// Written before the activity; `summary` is written after.
+  notes     String?
+  direction String  @default("OUTBOUND")
+
+  assigned_to String?
+  created_by  String?
+  origin      String  @default("MANUAL")
+
+  /// Backfill provenance. Both are null on user-created rows, and Postgres
+  /// treats NULLs as distinct, so the unique index below constrains only
+  /// backfilled rows — which is what makes sync-crm-activities re-runnable.
+  /// Dropped in R3.
+  legacy_source String?
+  legacy_id     String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lead     Lead?                @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  customer Customer?            @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  purpose  CrmActivityPurpose?  @relation(fields: [purpose_id], references: [id], onDelete: Restrict)
+  channel  ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: Restrict)
+  assignee User?                @relation("CrmActivityAssignee", fields: [assigned_to], references: [id])
+  creator  User?                @relation("CrmActivityCreator", fields: [created_by], references: [id])
+
+  @@unique([tenant_id, legacy_source, legacy_id])
+  @@index([tenant_id, status, due_at])
+  @@index([tenant_id, assigned_to, status, due_at])
+  @@index([tenant_id, lead_id, status, due_at])
+  @@index([tenant_id, customer_id, status, due_at])
+  @@index([tenant_id, status, completed_at])
+  @@index([tenant_id, channel_id])
+  @@index([tenant_id, purpose_id])
 }
 
 model CustomerCreditTransaction {
