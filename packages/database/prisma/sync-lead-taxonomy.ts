@@ -47,6 +47,7 @@ config({ path: resolve(__dirname, '../../../.env') });
 
 import { PrismaClient } from '@prisma/client';
 import {
+    DEFAULT_ACTIVITY_PURPOSES,
     DEFAULT_CONVERSATION_CHANNELS,
     DEFAULT_LEAD_CATEGORIES,
     DEFAULT_LEAD_SOURCES,
@@ -68,6 +69,7 @@ type Delta = {
     sourcesCreated: string[];
     categoriesCreated: string[];
     channelsCreated: string[];
+    purposesCreated: string[];
     leadsSourceBackfilled: number;
     leadsCategoryBackfilled: number;
     conversationsChannelBackfilled: number;
@@ -121,6 +123,7 @@ async function syncTenant(
         sourcesCreated: [],
         categoriesCreated: [],
         channelsCreated: [],
+        purposesCreated: [],
         leadsSourceBackfilled: 0,
         leadsCategoryBackfilled: 0,
         conversationsChannelBackfilled: 0,
@@ -196,6 +199,32 @@ async function syncTenant(
         });
         delta.channelsCreated.push(...missingChannels.map((c) => c.code));
         missingChannels.forEach((c) => haveChannel.add(c.code));
+    }
+
+    // Activity purposes. sync-crm-activities runs after this script in the
+    // container start chain and resolves backfilled CrmFollowUp.type values to a
+    // purpose by `code`, so these rows must exist for every tenant first.
+    const existingPurposes = await tx.crmActivityPurpose.findMany({
+        where: { tenant_id: tenantId },
+        select: { code: true },
+    });
+    const havePurpose = new Set(existingPurposes.map((p: { code: string }) => p.code));
+    const missingPurposes = DEFAULT_ACTIVITY_PURPOSES.filter((p) => !havePurpose.has(p.code));
+    if (missingPurposes.length) {
+        await tx.crmActivityPurpose.createMany({
+            data: missingPurposes.map((p) => ({
+                tenant_id: tenantId,
+                code: p.code,
+                name: p.name,
+                icon: p.icon,
+                sort_order: p.sort_order,
+                is_system: true,
+                is_active: true,
+            })),
+            skipDuplicates: true,
+        });
+        delta.purposesCreated.push(...missingPurposes.map((p) => p.code));
+        missingPurposes.forEach((p) => havePurpose.add(p.code));
     }
 
     // --- 2. Reconcile codes actually in use -------------------------------
@@ -364,6 +393,7 @@ function isNoop(d: Delta) {
         d.sourcesCreated.length === 0 &&
         d.categoriesCreated.length === 0 &&
         d.channelsCreated.length === 0 &&
+        d.purposesCreated.length === 0 &&
         d.leadsSourceBackfilled === 0 &&
         d.leadsCategoryBackfilled === 0 &&
         d.conversationsChannelBackfilled === 0 &&
@@ -379,6 +409,7 @@ function reportTenant(d: Delta, dryRun: boolean) {
     if (d.sourcesCreated.length) console.log(`    ${verb} sources: ${d.sourcesCreated.join(', ')}`);
     if (d.categoriesCreated.length) console.log(`    ${verb} categories: ${d.categoriesCreated.join(', ')}`);
     if (d.channelsCreated.length) console.log(`    ${verb} channels: ${d.channelsCreated.join(', ')}`);
+    if (d.purposesCreated.length) console.log(`    ${verb} activity purposes: ${d.purposesCreated.join(', ')}`);
     if (d.leadsSourceBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} source_id on ${d.leadsSourceBackfilled} lead(s)`);
     if (d.leadsCategoryBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} category_id on ${d.leadsCategoryBackfilled} lead(s)`);
     if (d.conversationsChannelBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} channel_id on ${d.conversationsChannelBackfilled} conversation(s)`);
@@ -423,16 +454,18 @@ async function main() {
             sources: acc.sources + d.sourcesCreated.length,
             categories: acc.categories + d.categoriesCreated.length,
             channels: acc.channels + d.channelsCreated.length,
+            purposes: acc.purposes + d.purposesCreated.length,
             leads: acc.leads + d.leadsSourceBackfilled + d.leadsCategoryBackfilled,
             conversations: acc.conversations + d.conversationsChannelBackfilled,
             unresolved: acc.unresolved + d.unresolvedSources + d.unresolvedCategories,
         }),
-        { sources: 0, categories: 0, channels: 0, leads: 0, conversations: 0, unresolved: 0 },
+        { sources: 0, categories: 0, channels: 0, purposes: 0, leads: 0, conversations: 0, unresolved: 0 },
     );
 
     console.log(
         `\n${dryRun ? 'Would sync' : 'Synced'} ${changed.length} of ${tenants.length} tenant(s): ` +
         `${totals.sources} source(s), ${totals.categories} category(ies), ${totals.channels} channel(s), ` +
+        `${totals.purposes} activity purpose(s), ` +
         `${totals.leads} lead backfill(s), ${totals.conversations} conversation backfill(s).`,
     );
 

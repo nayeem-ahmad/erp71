@@ -47,6 +47,16 @@ const DEFAULT_CONVERSATION_CHANNELS = [
     { code: 'NOTE', name: 'Note', icon: '📝', sort_order: 7 },
 ];
 
+// Why an activity exists, as opposed to how it is delivered (that is
+// ConversationChannel). The four codes mirror the members of CrmFollowUp.type,
+// so backfilled follow-ups resolve to a purpose by `code`.
+const DEFAULT_ACTIVITY_PURPOSES = [
+    { code: 'GENERAL', name: 'General', icon: '📌', sort_order: 1 },
+    { code: 'COLLECTION', name: 'Collection', icon: '💰', sort_order: 2 },
+    { code: 'BIRTHDAY', name: 'Birthday', icon: '🎂', sort_order: 3 },
+    { code: 'REORDER_REMINDER', name: 'Reorder Reminder', icon: '🔁', sort_order: 4 },
+];
+
 // Idempotent: `skipDuplicates` honours @@unique([tenant_id, code]), so a tenant
 // that renamed a default keeps its label instead of gaining a second row.
 async function seedDefaultLeadTaxonomy(tx, tenantId) {
@@ -87,6 +97,19 @@ async function seedDefaultLeadTaxonomy(tx, tenantId) {
         })),
         skipDuplicates: true,
     });
+
+    await tx.crmActivityPurpose.createMany({
+        data: DEFAULT_ACTIVITY_PURPOSES.map((p) => ({
+            tenant_id: tenantId,
+            code: p.code,
+            name: p.name,
+            icon: p.icon,
+            sort_order: p.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
 }
 
 module.exports = {
@@ -94,6 +117,7 @@ module.exports = {
     DEFAULT_LEAD_SOURCES,
     DEFAULT_LEAD_CATEGORIES,
     DEFAULT_CONVERSATION_CHANNELS,
+    DEFAULT_ACTIVITY_PURPOSES,
     LEGACY_LEAD_SOURCE_CODES,
     LEGACY_LEAD_CATEGORY_CODES,
     FALLBACK_SOURCE_CODE,
