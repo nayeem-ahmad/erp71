@@ -6,6 +6,7 @@ import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.s
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import {
     CompleteCrmActivityDto,
     CreateCrmActivityDto,
@@ -220,12 +221,32 @@ export class CrmActivitiesService {
         return activity;
     }
 
-    /* ---------------------------------------------------------------- */
-    /*  Stubs replaced in Tasks 4-6                                      */
-    /* ---------------------------------------------------------------- */
+    async update(tenantId: string, id: string, dto: UpdateCrmActivityDto) {
+        const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Activity not found');
+        if (existing.status !== 'PLANNED') {
+            throw new BadRequestException('Only a planned activity can be edited.');
+        }
 
-    async update(_tenantId: string, _id: string, _dto: UpdateCrmActivityDto): Promise<any> {
-        return Promise.reject(new Error('not implemented'));
+        const purpose = await this.resolvePurpose(tenantId, dto.purpose);
+        const data: any = {};
+        if (dto.subject !== undefined) data.subject = dto.subject;
+        if (dto.due_at !== undefined) data.due_at = dto.due_at ? new Date(dto.due_at) : null;
+        if (dto.notes !== undefined) data.notes = dto.notes;
+        if (dto.assigned_to !== undefined) data.assigned_to = dto.assigned_to;
+        if (purpose) data.purpose_id = purpose.id;
+
+        const updated = await this.db.crmActivity.update({
+            where: { id },
+            data,
+            include: ACTIVITY_INCLUDES,
+        });
+
+        const target = existing.lead_id
+            ? { lead_id: existing.lead_id }
+            : { customer_id: existing.customer_id };
+        await this.recalculateRollup(this.db, tenantId, target);
+        return updated;
     }
 
     /**
@@ -319,18 +340,90 @@ export class CrmActivitiesService {
         });
     }
 
-    private async rescoreLead(_tx: any, _tenantId: string, _leadId?: string | null) {}
+    /**
+     * Completion rescores the lead. computeLeadScore is unchanged — only the
+     * source of its conversationCount moves, from LeadConversation rows to DONE
+     * activities. After the backfill those counts are identical, so no lead is
+     * rescored on migration day.
+     */
+    private async rescoreLead(tx: any, tenantId: string, leadId?: string | null) {
+        if (!leadId) return;
 
-    async cancel(_tenantId: string, _id: string): Promise<any> {
-        return Promise.reject(new Error('not implemented'));
+        const lead = await tx.lead.findFirst({
+            where: { id: leadId, tenant_id: tenantId },
+            include: { sourceOption: { select: { score_weight: true } } },
+        });
+        if (!lead) return;
+
+        const doneCount = await tx.crmActivity.count({
+            where: { tenant_id: tenantId, lead_id: leadId, status: 'DONE' },
+        });
+
+        const score = computeLeadScore(
+            {
+                status: lead.status,
+                sourceWeight: lead.sourceOption?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
+                priority: lead.priority,
+                last_contacted_at: lead.last_contacted_at,
+                next_step_date: lead.next_step_date,
+            },
+            doneCount,
+        );
+
+        await tx.lead.update({ where: { id: leadId }, data: { score } });
     }
 
-    async remove(_tenantId: string, _id: string): Promise<any> {
-        return Promise.reject(new Error('not implemented'));
+    /** Cancels rather than deletes: the fact that it was planned is history. */
+    async cancel(tenantId: string, id: string) {
+        const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Activity not found');
+
+        const updated = await this.db.crmActivity.update({
+            where: { id },
+            data: { status: 'CANCELLED' },
+            include: ACTIVITY_INCLUDES,
+        });
+
+        const target = existing.lead_id
+            ? { lead_id: existing.lead_id }
+            : { customer_id: existing.customer_id };
+        await this.recalculateRollup(this.db, tenantId, target);
+        return updated;
     }
 
-    async summary(_tenantId: string): Promise<any> {
-        return Promise.reject(new Error('not implemented'));
+    async remove(tenantId: string, id: string) {
+        const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Activity not found');
+
+        await this.db.crmActivity.delete({ where: { id } });
+
+        const target = existing.lead_id
+            ? { lead_id: existing.lead_id }
+            : { customer_id: existing.customer_id };
+        await this.recalculateRollup(this.db, tenantId, target);
+        return { success: true };
+    }
+
+    async summary(tenantId: string) {
+        const today = startOfToday();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const [dueToday, overdue, total] = await Promise.all([
+            this.db.crmActivity.count({
+                where: {
+                    tenant_id: tenantId,
+                    status: 'PLANNED',
+                    due_at: { gte: today, lt: tomorrow },
+                },
+            }),
+            this.db.crmActivity.count({
+                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { lt: today } },
+            }),
+            this.db.crmActivity.count({ where: { tenant_id: tenantId, status: 'PLANNED' } }),
+        ]);
+
+        return { dueToday, overdue, total };
     }
 
     /**

@@ -379,6 +379,144 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('update()', () => {
+        it('recalculates the rollup after a reschedule', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({ id: 'a1', tenant_id: 't1', lead_id: 'l1', status: 'PLANNED' })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+
+            await service.update('t1', 'a1', { due_at: '2026-09-01T00:00:00Z' } as any);
+
+            expect(db.crmActivity.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ due_at: new Date('2026-09-01T00:00:00Z') }),
+                }),
+            );
+            expect(db.lead.update).toHaveBeenCalled();
+        });
+
+        it('refuses to edit a completed activity', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'DONE' });
+            await expect(service.update('t1', 'a1', { subject: 'x' } as any)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+
+        it('404s an unknown id', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            await expect(service.update('t1', 'nope', { subject: 'x' } as any)).rejects.toThrow(
+                NotFoundException,
+            );
+        });
+    });
+
+    describe('cancel()', () => {
+        it('marks CANCELLED and clears the rollup when nothing planned remains', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({ id: 'a1', tenant_id: 't1', lead_id: 'l1', status: 'PLANNED' })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+
+            await service.cancel('t1', 'a1');
+
+            expect(db.crmActivity.update).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'a1' }, data: { status: 'CANCELLED' } }),
+            );
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'l1' },
+                data: {
+                    next_step: null,
+                    next_step_date: null,
+                    next_step_assigned_to: null,
+                    next_activity_id: null,
+                },
+            });
+        });
+    });
+
+    describe('remove()', () => {
+        it('deletes and recalculates the rollup', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({ id: 'a1', tenant_id: 't1', customer_id: 'c1', status: 'PLANNED' })
+                .mockResolvedValue(null);
+
+            await expect(service.remove('t1', 'a1')).resolves.toEqual({ success: true });
+
+            expect(db.crmActivity.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'c1' },
+                data: { next_activity_id: null, next_activity_date: null },
+            });
+        });
+    });
+
+    describe('summary()', () => {
+        it('counts due today, overdue and total planned', async () => {
+            db.crmActivity.count
+                .mockResolvedValueOnce(3)
+                .mockResolvedValueOnce(5)
+                .mockResolvedValueOnce(11);
+            const res = await service.summary('t1');
+            expect(res).toEqual({ dueToday: 3, overdue: 5, total: 11 });
+        });
+    });
+
+    describe('rescoreLead()', () => {
+        it('counts DONE activities as the conversation count', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({
+                    id: 'a1',
+                    tenant_id: 't1',
+                    lead_id: 'l1',
+                    status: 'PLANNED',
+                    purpose_id: null,
+                })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ status: 'DONE' });
+            db.crmActivity.count.mockResolvedValue(4);
+            db.lead.findFirst.mockResolvedValue({
+                id: 'l1',
+                status: 'CONTACTED',
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                sourceOption: { score_weight: 20 },
+            });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch1',
+                code: 'CALL',
+                name: 'Call',
+                is_active: true,
+            });
+
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+
+            expect(db.crmActivity.count).toHaveBeenCalledWith({
+                where: { tenant_id: 't1', lead_id: 'l1', status: 'DONE' },
+            });
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ score: expect.any(Number) }) }),
+            );
+        });
+
+        it('does not rescore a customer activity — customers have no score', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({
+                    id: 'a1', tenant_id: 't1', lead_id: null, customer_id: 'c1', status: 'PLANNED',
+                })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ status: 'DONE' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch1', code: 'CALL', name: 'Call', is_active: true,
+            });
+
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+
+            expect(db.lead.findFirst).not.toHaveBeenCalled();
+        });
+    });
+
     describe('notifyAssignee()', () => {
         it('notifies an assignee who is not the acting user', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
