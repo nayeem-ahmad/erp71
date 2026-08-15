@@ -1,0 +1,255 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { DatabaseService } from '../database/database.service';
+import { AppLogger } from '../common/app-logger.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
+import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
+import { paginate } from '../common/pagination.dto';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import {
+    CompleteCrmActivityDto,
+    CreateCrmActivityDto,
+    UpdateCrmActivityDto,
+} from './crm-activities.dto';
+
+export const ACTIVITY_INCLUDES = {
+    lead: { select: { id: true, name: true, mobile: true } },
+    customer: { select: { id: true, name: true, phone: true } },
+    purpose: { select: { id: true, code: true, name: true, icon: true } },
+    channel: { select: { id: true, code: true, name: true, icon: true } },
+    assignee: { select: { id: true, name: true, email: true } },
+    creator: { select: { id: true, name: true, email: true } },
+};
+
+const ACTIVITY_SORTABLE: SortableMap = {
+    due_at: (dir) => ({ due_at: dir }),
+    completed_at: (dir) => ({ completed_at: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    status: (dir) => ({ status: dir }),
+    subject: (dir) => ({ subject: dir }),
+};
+
+const ACTIVITY_DEFAULT_ORDER = [{ due_at: 'asc' as const }, { created_at: 'desc' as const }];
+
+export type ListActivityOpts = {
+    leadId?: string;
+    customerId?: string;
+    target?: 'lead' | 'customer';
+    status?: string;
+    assignedTo?: string;
+    purposeId?: string;
+    channelId?: string;
+    dueToday?: boolean;
+    overdue?: boolean;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: string;
+};
+
+function startOfToday(): Date {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+@Injectable()
+export class CrmActivitiesService {
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly taxonomy: CrmLeadTaxonomyService,
+        private readonly logger: AppLogger,
+        private readonly notifications: NotificationsService,
+    ) {}
+
+    /**
+     * Exactly one of lead_id / customer_id, and it must exist in this tenant.
+     * Lifted verbatim from CrmFollowUpsService.validateFollowUpTarget so the
+     * rule does not fork.
+     */
+    private async resolveTarget(tenantId: string, leadId?: string, customerId?: string) {
+        const hasLead = Boolean(leadId);
+        const hasCustomer = Boolean(customerId);
+        if (hasLead === hasCustomer) {
+            throw new BadRequestException('Provide exactly one of lead_id or customer_id.');
+        }
+
+        if (leadId) {
+            const lead = await this.db.lead.findFirst({
+                where: { id: leadId, tenant_id: tenantId },
+                select: { id: true, status: true },
+            });
+            if (!lead) throw new NotFoundException('Lead not found');
+            if (lead.status === 'LOST' || lead.status === 'CONVERTED') {
+                throw new BadRequestException(
+                    'Activities cannot be created for lost or converted leads.',
+                );
+            }
+            return { lead_id: leadId };
+        }
+
+        const customer = await this.db.customer.findFirst({
+            where: { id: customerId, tenant_id: tenantId, deleted_at: null },
+            select: { id: true },
+        });
+        if (!customer) throw new NotFoundException('Customer not found');
+        return { customer_id: customerId };
+    }
+
+    private async resolveChannel(tenantId: string, value: string) {
+        const channel = await this.taxonomy.resolveByIdOrCode(
+            tenantId,
+            LeadTaxonomyKind.CHANNEL,
+            value,
+        );
+        if (!channel) throw new BadRequestException(`Unknown conversation channel "${value}".`);
+        if (!channel.is_active) {
+            throw new BadRequestException(`Conversation channel "${channel.name}" is retired.`);
+        }
+        return channel;
+    }
+
+    private async resolvePurpose(tenantId: string, value?: string) {
+        if (!value) return null;
+        const purpose = await this.taxonomy.resolveByIdOrCode(
+            tenantId,
+            LeadTaxonomyKind.PURPOSE,
+            value,
+        );
+        if (!purpose) throw new BadRequestException(`Unknown activity purpose "${value}".`);
+        return purpose;
+    }
+
+    async create(tenantId: string, userId: string, dto: CreateCrmActivityDto) {
+        const target = await this.resolveTarget(tenantId, dto.lead_id, dto.customer_id);
+        const status = dto.status ?? 'PLANNED';
+
+        if (status === 'PLANNED' && !dto.subject) {
+            throw new BadRequestException('subject is required when planning an activity.');
+        }
+        if (status === 'DONE' && (!dto.summary || !dto.channel)) {
+            throw new BadRequestException(
+                'summary and channel are required when logging a completed activity.',
+            );
+        }
+
+        const purpose = await this.resolvePurpose(tenantId, dto.purpose);
+        const channel = dto.channel ? await this.resolveChannel(tenantId, dto.channel) : null;
+        const now = new Date();
+
+        const activity = await this.db.crmActivity.create({
+            data: {
+                tenant_id: tenantId,
+                ...target,
+                subject: dto.subject ?? null,
+                status,
+                due_at: dto.due_at ? new Date(dto.due_at) : null,
+                completed_at: status === 'DONE' ? now : null,
+                purpose_id: purpose?.id ?? null,
+                channel_id: channel?.id ?? null,
+                channel_code: channel?.code ?? null,
+                summary: dto.summary ?? null,
+                outcome: dto.outcome ?? null,
+                notes: dto.notes ?? null,
+                direction: dto.direction ?? 'OUTBOUND',
+                assigned_to: dto.assigned_to ?? null,
+                store_id: dto.store_id ?? null,
+                created_by: userId,
+                origin: 'MANUAL',
+            },
+            include: ACTIVITY_INCLUDES,
+        });
+
+        await this.recalculateRollup(this.db, tenantId, target);
+        await this.notifyAssignee(tenantId, userId, activity);
+        return activity;
+    }
+
+    async findAll(tenantId: string, opts: ListActivityOpts) {
+        const page = opts.page ?? 1;
+        const limit = Math.min(opts.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where: any = { tenant_id: tenantId };
+        if (opts.leadId) where.lead_id = opts.leadId;
+        if (opts.customerId) where.customer_id = opts.customerId;
+        if (opts.target === 'lead') where.lead_id = { not: null };
+        if (opts.target === 'customer') where.customer_id = { not: null };
+        if (opts.status) where.status = opts.status;
+        if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        if (opts.purposeId) where.purpose_id = opts.purposeId;
+        if (opts.channelId) where.channel_id = opts.channelId;
+
+        if (opts.dueToday) {
+            const today = startOfToday();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            where.status = 'PLANNED';
+            where.due_at = { gte: today, lt: tomorrow };
+        }
+        if (opts.overdue) {
+            where.status = 'PLANNED';
+            where.due_at = { lt: startOfToday() };
+        }
+
+        const [items, total] = await Promise.all([
+            this.db.crmActivity.findMany({
+                where,
+                include: ACTIVITY_INCLUDES,
+                orderBy: resolveOrderBy(
+                    opts.sortBy,
+                    opts.sortDir,
+                    ACTIVITY_SORTABLE,
+                    ACTIVITY_DEFAULT_ORDER,
+                ) as any,
+                skip,
+                take: limit,
+            }),
+            this.db.crmActivity.count({ where }),
+        ]);
+
+        return paginate(items, total, page, limit);
+    }
+
+    async findOne(tenantId: string, id: string) {
+        const activity = await this.db.crmActivity.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: ACTIVITY_INCLUDES,
+        });
+        if (!activity) throw new NotFoundException('Activity not found');
+        return activity;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Stubs replaced in Tasks 4-6                                      */
+    /* ---------------------------------------------------------------- */
+
+    async update(_tenantId: string, _id: string, _dto: UpdateCrmActivityDto): Promise<any> {
+        return Promise.reject(new Error('not implemented'));
+    }
+
+    async complete(
+        _tenantId: string,
+        _userId: string,
+        _id: string,
+        _dto: CompleteCrmActivityDto,
+    ): Promise<any> {
+        return Promise.reject(new Error('not implemented'));
+    }
+
+    async cancel(_tenantId: string, _id: string): Promise<any> {
+        return Promise.reject(new Error('not implemented'));
+    }
+
+    async remove(_tenantId: string, _id: string): Promise<any> {
+        return Promise.reject(new Error('not implemented'));
+    }
+
+    async summary(_tenantId: string): Promise<any> {
+        return Promise.reject(new Error('not implemented'));
+    }
+
+    private async recalculateRollup(_tx: any, _tenantId: string, _target: any) {}
+
+    private async notifyAssignee(_tenantId: string, _userId: string, _activity: any) {}
+}
