@@ -183,6 +183,35 @@ describe('CrmLeadsService', () => {
             expect(data.next_activity_id).toBeNull();
         });
 
+        // next_step* became a read-only rollup of the earliest PLANNED activity
+        // in R1. A hand-typed value reaching the column would drift from the
+        // activity list it is supposed to cache.
+        it('ignores next_step on lead update', async () => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.NEW,
+                lost_reason: null,
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                source_id: 'src-other',
+            });
+            db.lead.update.mockResolvedValue({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', {
+                name: 'Karim',
+                next_step: 'hand-typed',
+                next_step_date: '2026-09-01',
+                next_step_assigned_to: 'user-9',
+            } as any);
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data.next_step).toBeUndefined();
+            expect(data.next_step_date).toBeUndefined();
+            expect(data.next_step_assigned_to).toBeUndefined();
+        });
+
         it('leaves activities alone on an ordinary edit', async () => {
             db.lead.findFirst.mockResolvedValue({
                 id: 'lead-1',
@@ -199,6 +228,63 @@ describe('CrmLeadsService', () => {
             await service.update('tenant-1', 'lead-1', { name: 'Renamed' } as any);
 
             expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('create() — opening next step', () => {
+        it('seeds a PLANNED activity and derives the rollup from it', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Karim',
+                mobile: '01722222222',
+                next_step: 'Call back Thursday',
+                next_step_date: '2026-09-01T00:00:00Z',
+                next_step_assigned_to: 'user-2',
+            } as any);
+
+            // The columns are a rollup now — create() must not write them directly.
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.next_step).toBeUndefined();
+            expect(created.next_step_date).toBeUndefined();
+            expect(created.next_step_assigned_to).toBeUndefined();
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        tenant_id: 'tenant-1',
+                        lead_id: 'lead-9',
+                        subject: 'Call back Thursday',
+                        status: 'PLANNED',
+                        origin: 'MANUAL',
+                        assigned_to: 'user-2',
+                    }),
+                }),
+            );
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'lead-9' },
+                data: {
+                    next_step: 'Call back Thursday',
+                    next_step_date: new Date('2026-09-01T00:00:00Z'),
+                    next_step_assigned_to: 'user-2',
+                    next_activity_id: 'act-1',
+                },
+                include: expect.anything(),
+            });
+        });
+
+        it('creates no activity when no next step is given', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Karim',
+                mobile: '01722222222',
+            } as any);
+
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+            expect(db.lead.update).not.toHaveBeenCalled();
         });
     });
 
@@ -438,6 +524,69 @@ describe('CrmLeadsService', () => {
                     }),
                 }),
             );
+        });
+
+        // A lead filed with an opening next step is the common path, and there is
+        // no activity to attach it to yet — so create() makes one rather than
+        // writing the rollup columns by hand.
+        it('creates an activity rather than writing next_step on CSV import', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-10' });
+
+            await service.importRows(
+                'tenant-1',
+                [{ name: 'Alice', mobile: '01800000001', next_step: 'Call back', next_step_date: '2026-09-01' }],
+                'skip',
+            );
+
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.next_step).toBeUndefined();
+            expect(created.next_step_date).toBeUndefined();
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        lead_id: 'lead-10',
+                        subject: 'Call back',
+                        origin: 'IMPORT',
+                        status: 'PLANNED',
+                    }),
+                }),
+            );
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'lead-10' },
+                    data: expect.objectContaining({
+                        next_step: 'Call back',
+                        next_activity_id: 'act-1',
+                    }),
+                }),
+            );
+        });
+
+        it('imports a row with no next_step without creating an activity', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-11' });
+
+            await service.importRows('tenant-1', [{ name: 'Bob', mobile: '01800000003' }], 'skip');
+
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+        });
+
+        // An upsert import is a bulk sync that re-runs over unchanged rows.
+        // Seeding unconditionally would pile up one duplicate activity per run.
+        it('does not re-seed an activity that already matches on a re-import', async () => {
+            db.lead.findUnique.mockResolvedValueOnce({ id: 'lead-existing' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+            db.crmActivity.count.mockResolvedValueOnce(1);
+
+            await service.importRows(
+                'tenant-1',
+                [{ name: 'Bob', mobile: '01800000002', next_step: 'Call back', next_step_date: '2026-09-01' }],
+                'upsert',
+            );
+
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
         });
 
         it('skips a duplicate mobile in skip mode', async () => {

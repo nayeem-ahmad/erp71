@@ -224,6 +224,28 @@ describe('CrmLeadConversationsService', () => {
                 }),
             ).rejects.toThrow(BadRequestException);
         });
+
+        // next_step* became a rollup of the earliest PLANNED CrmActivity in R1.
+        // Logging a conversation still counts as contact and still rescores, but
+        // it no longer writes the rollup — CrmActivitiesService owns that.
+        it('no longer writes next_step when logging a conversation', async () => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue(callChannel);
+
+            await service.create('tenant-1', 'user-1', {
+                lead_id: 'lead-1',
+                type: 'CALL',
+                summary: 's',
+                next_step: 'hand-typed',
+                next_step_date: '2026-09-01',
+            } as any);
+
+            const leadUpdate = db.lead.update.mock.calls[0][0].data;
+            expect(leadUpdate.next_step).toBeUndefined();
+            expect(leadUpdate.next_step_date).toBeUndefined();
+            expect(leadUpdate.next_step_assigned_to).toBeUndefined();
+            expect(leadUpdate.last_contacted_at).toBeInstanceOf(Date);
+            expect(leadUpdate.score).toEqual(expect.any(Number));
+        });
     });
 
     describe('getSummary()', () => {

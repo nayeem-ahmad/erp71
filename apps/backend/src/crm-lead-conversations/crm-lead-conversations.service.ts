@@ -122,14 +122,11 @@ export class CrmLeadConversationsService {
         const channel = await this.resolveChannel(tenantId, dto.type);
 
         const now = new Date();
+        // Contact and score only. `next_step*` became a read-only rollup of the
+        // earliest PLANNED CrmActivity in R1 — CrmActivitiesService.recalculateRollup
+        // is its sole writer, and a hand-typed value here would drift from the
+        // activity list the columns are supposed to cache.
         const leadUpdate: Record<string, unknown> = { last_contacted_at: now };
-        if (dto.next_step !== undefined) leadUpdate.next_step = dto.next_step;
-        if (dto.next_step_date !== undefined) {
-            leadUpdate.next_step_date = dto.next_step_date ? new Date(dto.next_step_date) : null;
-        }
-        if (dto.next_step_assigned_to !== undefined) {
-            leadUpdate.next_step_assigned_to = dto.next_step_assigned_to;
-        }
 
         const conversationCount = await this.db.leadConversation.count({ where: { lead_id: dto.lead_id } });
         leadUpdate.score = computeLeadScore(
@@ -138,10 +135,7 @@ export class CrmLeadConversationsService {
                 sourceWeight: lead.sourceOption?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
                 priority: lead.priority,
                 last_contacted_at: now,
-                next_step_date:
-                    'next_step_date' in leadUpdate
-                        ? (leadUpdate.next_step_date as Date | null)
-                        : lead.next_step_date,
+                next_step_date: lead.next_step_date,
             },
             conversationCount + 1,
         );

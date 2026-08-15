@@ -190,19 +190,12 @@ export class UpdateLeadDto {
     @IsString()
     website_url?: string;
 
-    @IsOptional()
-    @IsString()
-    next_step?: string;
-
-    @IsOptional()
-    @Transform(emptyToUndefined)
-    @IsDateString()
-    next_step_date?: string;
-
-    @IsOptional()
-    @Transform(emptyToUndefined)
-    @IsUUID()
-    next_step_assigned_to?: string;
+    // `next_step` / `next_step_date` / `next_step_assigned_to` were dropped from
+    // the update DTO in R1. They are a read-only rollup of the earliest PLANNED
+    // CrmActivity now, written only by CrmActivitiesService.recalculateRollup —
+    // reschedule through PATCH /crm/activities/:id instead. They survive on
+    // CreateLeadDto only because a lead filed with an opening next step has no
+    // activity to attach to yet, and create() materialises one from them.
 
     @IsOptional()
     @Transform(emptyToUndefined)

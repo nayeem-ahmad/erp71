@@ -84,20 +84,23 @@ export class CrmLeadsService {
         // `source`/`category` are stripped: they name a taxonomy row rather than
         // holding a column value, and are resolved into source_id/category_id
         // (plus the dual-written legacy enum) by the caller.
+        //
+        // The three `next_step*` keys are stripped for a different reason: since
+        // R1 they are a read-only rollup of the earliest PLANNED CrmActivity,
+        // written only by CrmActivitiesService.recalculateRollup. They are gone
+        // from UpdateLeadDto, but a stale client can still send them, and
+        // `forbidNonWhitelisted` strips unknown keys before the DTO — not after
+        // it — so this is what actually keeps them out of the column.
         const {
             custom_fields: _ignoredCustomFields,
             source: _ignoredSource,
             category: _ignoredCategory,
+            next_step: _ignoredNextStep,
+            next_step_date: _ignoredNextStepDate,
+            next_step_assigned_to: _ignoredNextStepAssignee,
             ...rest
         } = dto as any;
-        const data: Record<string, unknown> = { ...rest };
-        if ('next_step_date' in dto && dto.next_step_date) {
-            data.next_step_date = new Date(dto.next_step_date);
-        }
-        if ('next_step_date' in dto && dto.next_step_date === null) {
-            data.next_step_date = null;
-        }
-        return data;
+        return { ...rest } as Record<string, unknown>;
     }
 
     /**
@@ -201,7 +204,7 @@ export class CrmLeadsService {
             dto.custom_fields,
         );
 
-        return this.db.lead.create({
+        const lead = await this.db.lead.create({
             data: {
                 tenant_id: tenantId,
                 name: dto.name,
@@ -224,13 +227,77 @@ export class CrmLeadsService {
                 fb_url: dto.fb_url,
                 x_url: dto.x_url,
                 website_url: dto.website_url,
-                next_step: dto.next_step,
-                next_step_date: nextStepDate ?? undefined,
-                next_step_assigned_to: dto.next_step_assigned_to,
                 assigned_to: dto.assigned_to,
                 store_id: dto.store_id,
                 created_by: userId,
                 custom_fields: customFields ?? undefined,
+            },
+            include: leadIncludes,
+        });
+
+        // The opening next step becomes a PLANNED activity, and the rollup
+        // columns are derived from it rather than written by hand.
+        const withRollup = await this.seedOpeningActivity(
+            tenantId,
+            lead.id,
+            userId,
+            {
+                next_step: dto.next_step,
+                next_step_date: nextStepDate,
+                next_step_assigned_to: dto.next_step_assigned_to,
+            },
+            'MANUAL',
+        );
+        return withRollup ?? lead;
+    }
+
+    /**
+     * Materialise an opening `next_step` as a PLANNED activity, then derive the
+     * rollup from it.
+     *
+     * Inline rather than via CrmActivitiesService: injecting it here would close
+     * an import cycle (CrmActivitiesModule -> CrmLeadsModule -> CrmActivitiesModule).
+     * The rollup rule is duplicated in exactly these two places and nowhere else;
+     * both are covered by tests that assert the same four columns.
+     *
+     * Returns the updated lead when it acted, so the caller can hand back a row
+     * whose rollup columns match what was just written; null when there was no
+     * next step to materialise.
+     */
+    private async seedOpeningActivity(
+        tenantId: string,
+        leadId: string,
+        userId: string | null,
+        opening: {
+            next_step?: string | null;
+            next_step_date?: Date | null;
+            next_step_assigned_to?: string | null;
+        },
+        origin: 'MANUAL' | 'IMPORT',
+    ) {
+        if (!opening.next_step) return null;
+
+        const activity = await this.db.crmActivity.create({
+            data: {
+                tenant_id: tenantId,
+                lead_id: leadId,
+                subject: opening.next_step,
+                status: 'PLANNED',
+                due_at: opening.next_step_date ?? null,
+                assigned_to: opening.next_step_assigned_to ?? null,
+                created_by: userId,
+                origin,
+            },
+            select: { id: true },
+        });
+
+        return this.db.lead.update({
+            where: { id: leadId },
+            data: {
+                next_step: opening.next_step,
+                next_step_date: opening.next_step_date ?? null,
+                next_step_assigned_to: opening.next_step_assigned_to ?? null,
+                next_activity_id: activity.id,
             },
             include: leadIncludes,
         });
@@ -568,7 +635,7 @@ export class CrmLeadsService {
                     },
                     0,
                 );
-                await this.db.lead.create({
+                const created = await this.db.lead.create({
                     data: {
                         tenant_id: tenantId,
                         name: row.name,
@@ -589,14 +656,24 @@ export class CrmLeadsService {
                         fb_url: row.fb_url ?? undefined,
                         x_url: row.x_url ?? undefined,
                         website_url: row.website_url ?? undefined,
-                        next_step: row.next_step ?? undefined,
-                        next_step_date: row.next_step_date ?? undefined,
                         score,
                         custom_fields: Object.keys(row.custom_fields ?? {}).length
                             ? row.custom_fields
                             : undefined,
                     } as any,
+                    select: { id: true },
                 });
+
+                await this.seedOpeningActivity(
+                    tenantId,
+                    created.id,
+                    null,
+                    {
+                        next_step: row.next_step,
+                        next_step_date: row.next_step_date,
+                    },
+                    'IMPORT',
+                );
             },
             update: async (id, row) => {
                 await this.db.lead.update({
@@ -631,13 +708,37 @@ export class CrmLeadsService {
                         ...(row.fb_url       !== null ? { fb_url: row.fb_url }             : {}),
                         ...(row.x_url        !== null ? { x_url: row.x_url }               : {}),
                         ...(row.website_url  !== null ? { website_url: row.website_url }   : {}),
-                        ...(row.next_step    !== null ? { next_step: row.next_step }       : {}),
-                        ...(row.next_step_date !== null ? { next_step_date: row.next_step_date } : {}),
+                        // next_step* are not written here: they are a rollup of
+                        // the earliest PLANNED activity now, seeded below.
                         ...(Object.keys(row.custom_fields ?? {}).length
                             ? { custom_fields: row.custom_fields }
                             : {}),
                     } as any,
                 });
+
+                // An upsert import is a bulk sync that re-runs over unchanged
+                // rows. Seeding unconditionally would add one duplicate activity
+                // per run, so an equivalent open one short-circuits it.
+                if (row.next_step) {
+                    const alreadyPlanned = await this.db.crmActivity.count({
+                        where: {
+                            tenant_id: tenantId,
+                            lead_id: id,
+                            status: 'PLANNED',
+                            subject: row.next_step,
+                            due_at: row.next_step_date ?? null,
+                        },
+                    });
+                    if (alreadyPlanned === 0) {
+                        await this.seedOpeningActivity(
+                            tenantId,
+                            id,
+                            null,
+                            { next_step: row.next_step, next_step_date: row.next_step_date },
+                            'IMPORT',
+                        );
+                    }
+                }
             },
         });
     }
