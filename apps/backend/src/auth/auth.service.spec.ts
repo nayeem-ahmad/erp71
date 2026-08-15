@@ -61,6 +61,7 @@ describe('AuthService', () => {
         leadSourceOption: { createMany: jest.fn() },
         leadCategoryOption: { createMany: jest.fn() },
         conversationChannel: { createMany: jest.fn() },
+        crmActivityPurpose: { createMany: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -279,6 +280,19 @@ describe('AuthService', () => {
                 data: expect.arrayContaining([
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'CALL', name: 'Call', icon: '📞', is_system: true }),
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'WHATSAPP', name: 'WhatsApp' }),
+                ]),
+            }),
+        );
+        // The backfill resolves legacy CrmFollowUp.type values to a purpose by
+        // `code`, so a tenant without these rows cannot have activities created.
+        expect(db.crmActivityPurpose.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'GENERAL', name: 'General', is_system: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'COLLECTION', name: 'Collection' }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'BIRTHDAY', name: 'Birthday' }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'REORDER_REMINDER', name: 'Reorder Reminder' }),
                 ]),
             }),
         );
