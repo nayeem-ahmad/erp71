@@ -517,6 +517,113 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('crons', () => {
+        it('creates a birthday activity with the BIRTHDAY purpose and cron origin', async () => {
+            db.$queryRaw.mockResolvedValue([{ id: 'c1', tenant_id: 't1', name: 'Karim' }]);
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', customer_id: 'c1' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'p-bday',
+                code: 'BIRTHDAY',
+                name: 'Birthday',
+                is_active: true,
+            });
+
+            await service.autoCreateBirthdayActivities();
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        customer_id: 'c1',
+                        status: 'PLANNED',
+                        origin: 'BIRTHDAY_CRON',
+                        purpose_id: 'p-bday',
+                    }),
+                }),
+            );
+        });
+
+        it('does not duplicate an existing planned birthday activity', async () => {
+            db.$queryRaw.mockResolvedValue([{ id: 'c1', tenant_id: 't1', name: 'Karim' }]);
+            db.crmActivity.findFirst.mockResolvedValue({ id: 'existing' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'p-bday',
+                code: 'BIRTHDAY',
+                name: 'Birthday',
+                is_active: true,
+            });
+
+            await service.autoCreateBirthdayActivities();
+
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+        });
+
+        // One taxonomy round-trip per tenant, not per customer: the birthday
+        // sweep runs over every tenant's whole customer base.
+        it('resolves the purpose once per tenant, not once per customer', async () => {
+            db.$queryRaw.mockResolvedValue([
+                { id: 'c1', tenant_id: 't1', name: 'Karim' },
+                { id: 'c2', tenant_id: 't1', name: 'Rahim' },
+                { id: 'c3', tenant_id: 't2', name: 'Salma' },
+            ]);
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.create.mockResolvedValue({ id: 'a1' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'p-bday', code: 'BIRTHDAY', name: 'Birthday', is_active: true,
+            });
+
+            await service.autoCreateBirthdayActivities();
+
+            expect(taxonomy.resolveByIdOrCode).toHaveBeenCalledTimes(2);
+            expect(db.crmActivity.create).toHaveBeenCalledTimes(3);
+        });
+
+        it('treats a null last_contacted_at as dormant', async () => {
+            db.customer.findMany.mockResolvedValue([]);
+            await service.autoCreateReorderActivities();
+            const where = db.customer.findMany.mock.calls[0][0].where;
+            expect(where.OR).toEqual([
+                { last_contacted_at: { lt: expect.any(Date) } },
+                { last_contacted_at: null, created_at: { lt: expect.any(Date) } },
+            ]);
+        });
+
+        it('creates a reorder activity with the REORDER_REMINDER purpose', async () => {
+            db.customer.findMany.mockResolvedValue([{ id: 'c1', tenant_id: 't1', name: 'Karim' }]);
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', customer_id: 'c1' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'p-reorder', code: 'REORDER_REMINDER', name: 'Reorder Reminder', is_active: true,
+            });
+
+            await service.autoCreateReorderActivities();
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        customer_id: 'c1',
+                        status: 'PLANNED',
+                        origin: 'REORDER_CRON',
+                        purpose_id: 'p-reorder',
+                    }),
+                }),
+            );
+            // The cron is the sole writer of the customer's next_* rollup too.
+            expect(db.customer.update).toHaveBeenCalled();
+        });
+
+        // A tenant whose purposes were never seeded must not take the whole
+        // sweep down — it runs across every tenant on the platform.
+        it('skips a tenant whose BIRTHDAY purpose is missing rather than throwing', async () => {
+            db.$queryRaw.mockResolvedValue([{ id: 'c1', tenant_id: 't1', name: 'Karim' }]);
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            taxonomy.resolveByIdOrCode.mockResolvedValue(null);
+
+            await expect(service.autoCreateBirthdayActivities()).resolves.toBeUndefined();
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+        });
+    });
+
     describe('notifyAssignee()', () => {
         it('notifies an assignee who is not the acting user', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });

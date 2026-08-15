@@ -1,23 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
-import { AppLogger } from '../common/app-logger.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { CreateCrmFollowUpDto, UpdateCrmFollowUpDto } from './crm-follow-ups.dto';
 import { paginate } from '../common/pagination.dto';
-import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
-import { JOB_NAMES } from '../system-health/jobs/job-names';
 
-const REORDER_DORMANT_DAYS = 60;
-
+/**
+ * Legacy CRM follow-ups. The birthday and reorder crons that used to live here
+ * moved onto CrmActivity in R1 — see CrmActivitiesService. Everything below is
+ * read/write against the old table and stays registered through R2 so existing
+ * clients keep working; the module is deleted in R3.
+ */
 @Injectable()
 export class CrmFollowUpsService {
-    constructor(
-        private db: DatabaseService,
-        private readonly logger: AppLogger,
-        private readonly jobTracker: JobTrackerService,
-        private readonly notifications: NotificationsService,
-    ) {}
+    constructor(private db: DatabaseService) {}
 
     private async validateFollowUpTarget(
         tenantId: string,
@@ -191,152 +185,4 @@ export class CrmFollowUpsService {
         return { dueToday, overdue, total };
     }
 
-    /**
-     * Birthday follow-ups. Was `customer.findMany({ where: { deleted_at: null } })`
-     * with the month/day match done in JavaScript — every customer on the
-     * platform, every day, forever. The month/day comparison can't be pushed into
-     * a WHERE clause portably (Prisma has no date-part filter), so it goes
-     * through $queryRaw instead: EXTRACT is one index-free scan of Customer
-     * filtered down to today's ~1/365th up front, rather than the whole table
-     * pulled into Node to be filtered there.
-     */
-    @Cron(CronExpression.EVERY_DAY_AT_8AM)
-    async autoCreateBirthdayFollowUps() {
-        return this.jobTracker.track(
-            JOB_NAMES.CRM_BIRTHDAY_FOLLOWUPS,
-            () => this.autoCreateBirthdayFollowUpsImpl(),
-        );
-    }
-
-    private async autoCreateBirthdayFollowUpsImpl() {
-        const today = new Date();
-
-        const birthdayCustomers = await this.db.$queryRaw<
-            { id: string; tenant_id: string; name: string }[]
-        >`
-            SELECT id, tenant_id, name FROM "Customer"
-            WHERE deleted_at IS NULL
-              AND birthday IS NOT NULL
-              AND EXTRACT(MONTH FROM birthday) = ${today.getMonth() + 1}
-              AND EXTRACT(DAY FROM birthday) = ${today.getDate()}
-        `;
-
-        let created = 0;
-        for (const c of birthdayCustomers) {
-            const existingToday = await this.db.crmFollowUp.findFirst({
-                where: {
-                    tenant_id: c.tenant_id,
-                    customer_id: c.id,
-                    type: 'BIRTHDAY',
-                    due_at: { gte: today },
-                },
-            });
-            if (existingToday) continue;
-
-            const followUp = await this.db.crmFollowUp.create({
-                data: {
-                    tenant_id: c.tenant_id,
-                    customer_id: c.id,
-                    type: 'BIRTHDAY',
-                    title: `Birthday greeting for ${c.name}`,
-                    due_at: today,
-                    status: 'PENDING',
-                },
-            });
-            await this.notifyOwner(followUp.tenant_id, followUp.id, followUp.title);
-            created++;
-        }
-
-        this.logger.debug(`Birthday follow-ups created: ${created}`);
-    }
-
-    /**
-     * Reorder-reminder follow-ups, for customers who have gone quiet.
-     *
-     * Was `last_contacted_at: { lt: sixtyDaysAgo }`, which in SQL EXCLUDES NULL —
-     * so a customer nobody has ever logged contact with, the single strongest
-     * "reach out" signal there is, was invisible to this check. Reworked as
-     * `(last_contacted_at IS NULL OR last_contacted_at < cutoff)`, falling back to
-     * `created_at` for the "how long has this been true" comparison so a
-     * newly-created customer isn't immediately flagged as dormant on day one.
-     */
-    @Cron(CronExpression.EVERY_DAY_AT_8AM)
-    async autoCreateReorderReminders() {
-        return this.jobTracker.track(
-            JOB_NAMES.CRM_REORDER_FOLLOWUPS,
-            () => this.autoCreateReorderRemindersImpl(),
-        );
-    }
-
-    private async autoCreateReorderRemindersImpl() {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - REORDER_DORMANT_DAYS);
-
-        const atRiskCustomers = await this.db.customer.findMany({
-            where: {
-                deleted_at: null,
-                OR: [
-                    { last_contacted_at: { lt: cutoff } },
-                    { last_contacted_at: null, created_at: { lt: cutoff } },
-                ],
-            },
-            select: { id: true, tenant_id: true, name: true },
-        });
-
-        let created = 0;
-        for (const c of atRiskCustomers) {
-            const existing = await this.db.crmFollowUp.findFirst({
-                where: {
-                    tenant_id: c.tenant_id,
-                    customer_id: c.id,
-                    type: 'REORDER_REMINDER',
-                    status: 'PENDING',
-                },
-            });
-            if (existing) continue;
-
-            const followUp = await this.db.crmFollowUp.create({
-                data: {
-                    tenant_id: c.tenant_id,
-                    customer_id: c.id,
-                    type: 'REORDER_REMINDER',
-                    title: `Follow up with ${c.name} — no contact in ${REORDER_DORMANT_DAYS}+ days`,
-                    due_at: new Date(),
-                    status: 'PENDING',
-                },
-            });
-            await this.notifyOwner(followUp.tenant_id, followUp.id, followUp.title);
-            created++;
-        }
-
-        this.logger.debug(`Reorder reminders created: ${created}`);
-    }
-
-    /**
-     * A follow-up that only appears if someone happens to open the CRM hub is
-     * not much of a reminder. Auto-generated ones (created_by is null — a human
-     * creating one is already looking at the form) notify in-app: the assignee
-     * if the follow-up has one, otherwise the tenant owner, so it is never
-     * created into a void.
-     */
-    private async notifyOwner(tenantId: string, followUpId: string, title: string) {
-        const tenant = await this.db.tenant.findUnique({
-            where: { id: tenantId },
-            select: { owner_id: true },
-        });
-        if (!tenant) return;
-
-        try {
-            await this.notifications.create(
-                tenantId,
-                tenant.owner_id,
-                'CRM_FOLLOW_UP',
-                title,
-                'A follow-up was created for you in CRM.',
-                '/crm/follow-ups',
-            );
-        } catch (err) {
-            this.logger.error(`Failed to notify owner of follow-up ${followUpId}: ${err}`);
-        }
-    }
 }

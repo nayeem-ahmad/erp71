@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { AppLogger } from '../common/app-logger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
@@ -32,6 +35,9 @@ const ACTIVITY_SORTABLE: SortableMap = {
 
 const ACTIVITY_DEFAULT_ORDER = [{ due_at: 'asc' as const }, { created_at: 'desc' as const }];
 
+/** How long a customer must go untouched before the reorder cron flags them. */
+const REORDER_DORMANT_DAYS = 60;
+
 export type ListActivityOpts = {
     leadId?: string;
     customerId?: string;
@@ -61,6 +67,7 @@ export class CrmActivitiesService {
         private readonly taxonomy: CrmLeadTaxonomyService,
         private readonly logger: AppLogger,
         private readonly notifications: NotificationsService,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     /**
@@ -424,6 +431,212 @@ export class CrmActivitiesService {
         ]);
 
         return { dueToday, overdue, total };
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Scheduled sweeps — moved off CrmFollowUp in R1                   */
+    /* ---------------------------------------------------------------- */
+
+    /**
+     * Birthday activities. Was `customer.findMany({ where: { deleted_at: null } })`
+     * with the month/day match done in JavaScript — every customer on the
+     * platform, every day, forever. The month/day comparison can't be pushed into
+     * a WHERE clause portably (Prisma has no date-part filter), so it goes
+     * through $queryRaw instead: EXTRACT is one index-free scan of Customer
+     * filtered down to today's ~1/365th up front, rather than the whole table
+     * pulled into Node to be filtered there.
+     */
+    @Cron(CronExpression.EVERY_DAY_AT_8AM)
+    async autoCreateBirthdayActivities() {
+        return this.jobTracker.track(JOB_NAMES.CRM_BIRTHDAY_FOLLOWUPS, () =>
+            this.autoCreateBirthdayActivitiesImpl(),
+        );
+    }
+
+    private async autoCreateBirthdayActivitiesImpl() {
+        const today = new Date();
+
+        const birthdayCustomers = await this.db.$queryRaw<
+            { id: string; tenant_id: string; name: string }[]
+        >`
+            SELECT id, tenant_id, name FROM "Customer"
+            WHERE deleted_at IS NULL
+              AND birthday IS NOT NULL
+              AND EXTRACT(MONTH FROM birthday) = ${today.getMonth() + 1}
+              AND EXTRACT(DAY FROM birthday) = ${today.getDate()}
+        `;
+
+        let created = 0;
+        for (const [tenantId, customers] of this.groupByTenant(birthdayCustomers)) {
+            // Resolved once per tenant, not once per customer — this sweep runs
+            // over every tenant's whole customer base.
+            const purposeId = await this.cronPurposeId(tenantId, 'BIRTHDAY');
+            if (!purposeId) continue;
+
+            for (const c of customers) {
+                const existing = await this.db.crmActivity.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        customer_id: c.id,
+                        purpose_id: purposeId,
+                        status: 'PLANNED',
+                        // Scoped to today onward, as the follow-up cron was: a
+                        // birthday task left open from last year must not
+                        // suppress this year's greeting.
+                        due_at: { gte: today },
+                    },
+                });
+                if (existing) continue;
+
+                const activity = await this.db.crmActivity.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: c.id,
+                        purpose_id: purposeId,
+                        subject: `Birthday greeting for ${c.name}`,
+                        status: 'PLANNED',
+                        due_at: today,
+                        origin: 'BIRTHDAY_CRON',
+                    },
+                });
+                await this.recalculateRollup(this.db, tenantId, { customer_id: c.id });
+                await this.notifyCronActivity(tenantId, activity);
+                created++;
+            }
+        }
+
+        this.logger.debug(`Birthday activities created: ${created}`);
+    }
+
+    /**
+     * Reorder-reminder activities, for customers who have gone quiet.
+     *
+     * Was `last_contacted_at: { lt: sixtyDaysAgo }`, which in SQL EXCLUDES NULL —
+     * so a customer nobody has ever logged contact with, the single strongest
+     * "reach out" signal there is, was invisible to this check. Reworked as
+     * `(last_contacted_at IS NULL OR last_contacted_at < cutoff)`, falling back to
+     * `created_at` for the "how long has this been true" comparison so a
+     * newly-created customer isn't immediately flagged as dormant on day one.
+     */
+    @Cron(CronExpression.EVERY_DAY_AT_8AM)
+    async autoCreateReorderActivities() {
+        return this.jobTracker.track(JOB_NAMES.CRM_REORDER_FOLLOWUPS, () =>
+            this.autoCreateReorderActivitiesImpl(),
+        );
+    }
+
+    private async autoCreateReorderActivitiesImpl() {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - REORDER_DORMANT_DAYS);
+
+        const atRiskCustomers = await this.db.customer.findMany({
+            where: {
+                deleted_at: null,
+                OR: [
+                    { last_contacted_at: { lt: cutoff } },
+                    { last_contacted_at: null, created_at: { lt: cutoff } },
+                ],
+            },
+            select: { id: true, tenant_id: true, name: true },
+        });
+
+        let created = 0;
+        for (const [tenantId, customers] of this.groupByTenant(atRiskCustomers)) {
+            const purposeId = await this.cronPurposeId(tenantId, 'REORDER_REMINDER');
+            if (!purposeId) continue;
+
+            for (const c of customers) {
+                const existing = await this.db.crmActivity.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        customer_id: c.id,
+                        purpose_id: purposeId,
+                        status: 'PLANNED',
+                    },
+                });
+                if (existing) continue;
+
+                const activity = await this.db.crmActivity.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: c.id,
+                        purpose_id: purposeId,
+                        subject: `Follow up with ${c.name} — no contact in ${REORDER_DORMANT_DAYS}+ days`,
+                        status: 'PLANNED',
+                        due_at: new Date(),
+                        origin: 'REORDER_CRON',
+                    },
+                });
+                await this.recalculateRollup(this.db, tenantId, { customer_id: c.id });
+                await this.notifyCronActivity(tenantId, activity);
+                created++;
+            }
+        }
+
+        this.logger.debug(`Reorder activities created: ${created}`);
+    }
+
+    private groupByTenant<T extends { tenant_id: string }>(rows: T[]): Map<string, T[]> {
+        const byTenant = new Map<string, T[]>();
+        for (const row of rows) {
+            const bucket = byTenant.get(row.tenant_id);
+            if (bucket) bucket.push(row);
+            else byTenant.set(row.tenant_id, [row]);
+        }
+        return byTenant;
+    }
+
+    /**
+     * Purpose lookup for the crons. Returns null instead of throwing the way
+     * `resolvePurpose` does: these sweeps run across every tenant on the
+     * platform, so one whose purposes were never seeded must be skipped, not
+     * allowed to take the whole run down.
+     */
+    private async cronPurposeId(tenantId: string, code: string): Promise<string | null> {
+        const purpose = await this.taxonomy.resolveByIdOrCode(
+            tenantId,
+            LeadTaxonomyKind.PURPOSE,
+            code,
+        );
+        if (!purpose) {
+            this.logger.warn(
+                `Tenant ${tenantId} has no "${code}" activity purpose — skipping its sweep. ` +
+                    'Run sync:lead-taxonomy to seed it.',
+            );
+            return null;
+        }
+        return purpose.id;
+    }
+
+    /**
+     * An activity that only appears if someone happens to open the CRM hub is
+     * not much of a reminder. Cron-created rows notify in-app: the assignee if
+     * there is one, otherwise the tenant owner, so one is never created into a
+     * void. Carried over from CrmFollowUpsService.notifyOwner.
+     */
+    private async notifyCronActivity(tenantId: string, activity: any) {
+        let recipientId = activity.assigned_to as string | null;
+        if (!recipientId) {
+            const tenant = await this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: { owner_id: true },
+            });
+            recipientId = tenant?.owner_id ?? null;
+        }
+        if (!recipientId) return;
+
+        try {
+            await this.notifications.create(
+                tenantId,
+                recipientId,
+                'CRM_ACTIVITY_ASSIGNED',
+                activity.subject ?? 'CRM activity created',
+                'A CRM activity was created for you.',
+                `/crm/activities?highlight=${activity.id}`,
+            );
+        } catch (err) {
+            this.logger.error(`Failed to notify owner of activity ${activity.id}: ${err}`);
+        }
     }
 
     /**
