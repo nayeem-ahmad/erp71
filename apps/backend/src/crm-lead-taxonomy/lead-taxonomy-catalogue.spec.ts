@@ -21,6 +21,7 @@ const pkg = require('@erp71/database');
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 const {
+    DEFAULT_ACTIVITY_PURPOSES,
     DEFAULT_CONVERSATION_CHANNELS,
     DEFAULT_LEAD_CATEGORIES,
     DEFAULT_LEAD_SOURCES,
@@ -28,6 +29,7 @@ const {
     LEGACY_LEAD_CATEGORY_CODES,
     LEGACY_LEAD_SOURCE_CODES,
 } = source as {
+    DEFAULT_ACTIVITY_PURPOSES: { code: string; name: string; icon: string; sort_order: number }[];
     DEFAULT_CONVERSATION_CHANNELS: { code: string; name: string; icon: string; sort_order: number }[];
     DEFAULT_LEAD_CATEGORIES: { code: string; name: string; sort_order: number }[];
     DEFAULT_LEAD_SOURCES: { code: string; name: string; score_weight: number; sort_order: number }[];
@@ -93,11 +95,33 @@ describe('lead taxonomy catalogue', () => {
     });
 
     it('has unique codes and names within each list', () => {
-        for (const list of [DEFAULT_LEAD_SOURCES, DEFAULT_LEAD_CATEGORIES, DEFAULT_CONVERSATION_CHANNELS]) {
+        for (const list of [
+            DEFAULT_LEAD_SOURCES,
+            DEFAULT_LEAD_CATEGORIES,
+            DEFAULT_CONVERSATION_CHANNELS,
+            DEFAULT_ACTIVITY_PURPOSES,
+        ]) {
             const codes = list.map((r) => r.code);
             const names = list.map((r) => r.name.toLowerCase());
             expect(new Set(codes).size).toBe(codes.length);
             expect(new Set(names).size).toBe(names.length);
         }
+    });
+});
+
+describe('activity purpose catalogue', () => {
+    it('seeds the four codes CrmFollowUp.type carries today', () => {
+        expect(DEFAULT_ACTIVITY_PURPOSES.map((p) => p.code).sort()).toEqual([
+            'BIRTHDAY',
+            'COLLECTION',
+            'GENERAL',
+            'REORDER_REMINDER',
+        ]);
+    });
+
+    // The .ts is typechecked and the .js is what actually loads at runtime —
+    // a .ts-only edit compiles clean and is undefined in production.
+    it('keeps the .ts and .js mirrors in step', () => {
+        expect(pkg.DEFAULT_ACTIVITY_PURPOSES).toEqual(DEFAULT_ACTIVITY_PURPOSES);
     });
 });

@@ -106,6 +106,23 @@ export const DEFAULT_CONVERSATION_CHANNELS: {
 ];
 
 /**
+ * Why an activity exists, as opposed to how it is delivered (that is
+ * ConversationChannel). The four codes mirror the members of CrmFollowUp.type,
+ * so backfilled follow-ups resolve to a purpose by `code`.
+ */
+export const DEFAULT_ACTIVITY_PURPOSES: {
+    code: string;
+    name: string;
+    icon: string;
+    sort_order: number;
+}[] = [
+    { code: 'GENERAL', name: 'General', icon: '📌', sort_order: 1 },
+    { code: 'COLLECTION', name: 'Collection', icon: '💰', sort_order: 2 },
+    { code: 'BIRTHDAY', name: 'Birthday', icon: '🎂', sort_order: 3 },
+    { code: 'REORDER_REMINDER', name: 'Reorder Reminder', icon: '🔁', sort_order: 4 },
+];
+
+/**
  * Idempotent: safe to call for an existing tenant. `skipDuplicates` honours
  * @@unique([tenant_id, code]), so a tenant that renamed "Facebook" to
  * "Meta Ads" keeps its label instead of having a second row created.
@@ -148,6 +165,19 @@ export async function seedDefaultLeadTaxonomy(tx: any, tenantId: string) {
             name: c.name,
             icon: c.icon,
             sort_order: c.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
+
+    await tx.crmActivityPurpose.createMany({
+        data: DEFAULT_ACTIVITY_PURPOSES.map((p) => ({
+            tenant_id: tenantId,
+            code: p.code,
+            name: p.name,
+            icon: p.icon,
+            sort_order: p.sort_order,
             is_system: true,
             is_active: true,
         })),
