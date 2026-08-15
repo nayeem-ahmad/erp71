@@ -38,20 +38,10 @@ export class CreateLeadConversationDto {
     @IsString()
     store_id?: string;
 
-    @IsOptional()
-    @Transform(emptyToUndefined)
-    @IsString()
-    next_step?: string;
-
-    @IsOptional()
-    @Transform(emptyToUndefined)
-    @IsDateString()
-    next_step_date?: string;
-
-    @IsOptional()
-    @Transform(emptyToUndefined)
-    @IsUUID()
-    next_step_assigned_to?: string;
+    // `next_step` / `next_step_date` / `next_step_assigned_to` were dropped in
+    // R1. They are now a read-only rollup of the earliest PLANNED CrmActivity,
+    // written only by CrmActivitiesService.recalculateRollup — schedule the next
+    // touch through POST /crm/activities instead.
 }
 
 /** Mirrors CONVERSATION_SORTABLE in the service — keep the two in step. */

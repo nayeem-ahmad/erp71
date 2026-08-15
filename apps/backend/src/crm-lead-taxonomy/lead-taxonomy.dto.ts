@@ -12,7 +12,7 @@ import {
 /**
  * Which CRM lookup list a request targets.
  *
- * All three are the same shape — code / name / sort_order / is_system /
+ * All four are the same shape — code / name / sort_order / is_system /
  * is_active, edited from the one CRM Setup screen — so they share a controller
  * and a service rather than each getting a near-identical module. What differs
  * is only which table a row is counted against when it is deleted.
@@ -21,6 +21,8 @@ export enum LeadTaxonomyKind {
     SOURCE = 'sources',
     CATEGORY = 'categories',
     CHANNEL = 'channels',
+    /** Why an activity exists (Collection, Birthday …), as opposed to how it is delivered. */
+    PURPOSE = 'purposes',
 }
 
 export const MAX_TAXONOMY_NAME_LENGTH = 60;

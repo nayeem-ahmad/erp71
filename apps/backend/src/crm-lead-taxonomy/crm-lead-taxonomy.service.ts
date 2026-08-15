@@ -31,9 +31,9 @@ export type TaxonomyOption = {
  */
 type Consumer = {
     /** Prisma delegate name on DatabaseService. */
-    table: 'lead' | 'leadConversation';
+    table: 'lead' | 'leadConversation' | 'crmActivity';
     /** FK column on that table pointing back at the list. */
-    fk: 'source_id' | 'category_id' | 'channel_id';
+    fk: 'source_id' | 'category_id' | 'channel_id' | 'purpose_id';
     /** Human noun used in "in use by N …" messages. */
     noun: string;
 };
@@ -41,17 +41,21 @@ type Consumer = {
 const CONSUMERS: Record<LeadTaxonomyKind, Consumer> = {
     [LeadTaxonomyKind.SOURCE]: { table: 'lead', fk: 'source_id', noun: 'lead' },
     [LeadTaxonomyKind.CATEGORY]: { table: 'lead', fk: 'category_id', noun: 'lead' },
-    [LeadTaxonomyKind.CHANNEL]: {
-        table: 'leadConversation',
-        fk: 'channel_id',
-        noun: 'conversation',
-    },
+    // Repointed from leadConversation to crmActivity in R1. sync-crm-activities
+    // runs ahead of the API in the container start chain and mirrors every
+    // conversation into an activity, so crmActivity is a superset — counting it
+    // alone is complete. Counting the old table instead would let a channel used
+    // only by new activities be deleted, and onDelete: Restrict would surface
+    // that as a raw Prisma error rather than the friendly reassign flow.
+    [LeadTaxonomyKind.CHANNEL]: { table: 'crmActivity', fk: 'channel_id', noun: 'activity' },
+    [LeadTaxonomyKind.PURPOSE]: { table: 'crmActivity', fk: 'purpose_id', noun: 'activity' },
 };
 
 const LABELS: Record<LeadTaxonomyKind, string> = {
     [LeadTaxonomyKind.SOURCE]: 'Lead source',
     [LeadTaxonomyKind.CATEGORY]: 'Lead category',
     [LeadTaxonomyKind.CHANNEL]: 'Conversation channel',
+    [LeadTaxonomyKind.PURPOSE]: 'Activity purpose',
 };
 
 @Injectable()
@@ -59,15 +63,16 @@ export class CrmLeadTaxonomyService {
     constructor(private readonly db: DatabaseService) {}
 
     /**
-     * The three lists are structurally identical apart from `score_weight`
-     * (sources) and `icon` (channels), so the Prisma delegate is selected once
-     * here rather than branching in every method. `as any` is confined to this
-     * one place: the delegates have different generated types that no shared
-     * interface unifies.
+     * The four lists are structurally identical apart from `score_weight`
+     * (sources) and `icon` (channels and purposes), so the Prisma delegate is
+     * selected once here rather than branching in every method. `as any` is
+     * confined to this one place: the delegates have different generated types
+     * that no shared interface unifies.
      */
     private model(kind: LeadTaxonomyKind) {
         if (kind === LeadTaxonomyKind.SOURCE) return this.db.leadSourceOption as any;
         if (kind === LeadTaxonomyKind.CATEGORY) return this.db.leadCategoryOption as any;
+        if (kind === LeadTaxonomyKind.PURPOSE) return this.db.crmActivityPurpose as any;
         return this.db.conversationChannel as any;
     }
 
@@ -170,7 +175,9 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.SOURCE
                     ? { score_weight: dto.score_weight ?? 5 }
                     : {}),
-                ...(kind === LeadTaxonomyKind.CHANNEL ? { icon: dto.icon || null } : {}),
+                ...(kind === LeadTaxonomyKind.CHANNEL || kind === LeadTaxonomyKind.PURPOSE
+                    ? { icon: dto.icon || null }
+                    : {}),
             },
         });
     }
@@ -218,7 +225,8 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.SOURCE && dto.score_weight !== undefined
                     ? { score_weight: dto.score_weight }
                     : {}),
-                ...(kind === LeadTaxonomyKind.CHANNEL && dto.icon !== undefined
+                ...((kind === LeadTaxonomyKind.CHANNEL || kind === LeadTaxonomyKind.PURPOSE) &&
+                dto.icon !== undefined
                     ? { icon: dto.icon || null }
                     : {}),
             },
@@ -282,13 +290,28 @@ export class CrmLeadTaxonomyService {
             where: { tenant_id: tenantId, [fk]: id } as any,
         });
 
-        if (inUse > 0) {
+        // A channel is also referenced by the legacy LeadConversation rows the
+        // backfill mirrored into activities. R1 keeps those rows, and their
+        // channel_id FK is onDelete: Restrict, so they have to move too or the
+        // delete below fails with a raw foreign-key error. Normally the mirror
+        // makes this count a subset of `inUse`; it is queried separately so a
+        // partially-backfilled tenant still gets the friendly reassign prompt
+        // instead of a 500.
+        const legacyInUse =
+            kind === LeadTaxonomyKind.CHANNEL
+                ? await this.db.leadConversation.count({
+                      where: { tenant_id: tenantId, channel_id: id },
+                  })
+                : 0;
+        const blocking = Math.max(inUse, legacyInUse);
+
+        if (blocking > 0) {
             if (!reassignTo) {
                 throw new ConflictException({
                     message:
-                        `${this.label(kind)} "${row.name}" is used by ${inUse} ${noun}(s). ` +
+                        `${this.label(kind)} "${row.name}" is used by ${blocking} ${noun}(s). ` +
                         'Choose a replacement to move them to.',
-                    inUse,
+                    inUse: blocking,
                     requiresReassign: true,
                 });
             }
@@ -298,14 +321,23 @@ export class CrmLeadTaxonomyService {
             const target = await this.findOwned(tenantId, kind, reassignTo);
             await consumerModel.updateMany({
                 where: { tenant_id: tenantId, [fk]: id } as any,
-                // `LeadConversation.type` mirrors the channel's code and is what every
+                // `CrmActivity.channel_code` mirrors the channel's code and is what every
                 // filter and groupBy reads, so it has to move with the FK or the
                 // reassigned rows keep reporting under a channel that no longer exists.
                 data: {
                     [fk]: target.id,
-                    ...(kind === LeadTaxonomyKind.CHANNEL ? { type: target.code } : {}),
+                    ...(kind === LeadTaxonomyKind.CHANNEL ? { channel_code: target.code } : {}),
                 } as any,
             });
+
+            if (kind === LeadTaxonomyKind.CHANNEL) {
+                // `LeadConversation.type` is the same denormalised code, so it
+                // moves with the FK for exactly the same reason.
+                await this.db.leadConversation.updateMany({
+                    where: { tenant_id: tenantId, channel_id: id },
+                    data: { channel_id: target.id, type: target.code },
+                });
+            }
         }
 
         if (row.is_system) {
@@ -313,7 +345,7 @@ export class CrmLeadTaxonomyService {
         }
 
         await this.model(kind).delete({ where: { id } });
-        return { success: true, reassigned: inUse };
+        return { success: true, reassigned: blocking };
     }
 
     /**

@@ -88,6 +88,7 @@ import { CareersModule } from './careers/careers.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
+import { CrmActivitiesModule } from './crm-activities/crm-activities.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmContactsModule } from './crm-contacts/crm-contacts.module';
@@ -206,6 +207,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         BrandsModule,
         CrmInteractionsModule,
         CrmFollowUpsModule,
+        CrmActivitiesModule,
         ProjectsModule,
         CrmCampaignsModule,
         CrmContactsModule,

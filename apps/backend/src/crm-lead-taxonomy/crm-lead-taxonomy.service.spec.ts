@@ -55,12 +55,26 @@ describe('CrmLeadTaxonomyService', () => {
                 count: jest.fn().mockResolvedValue(5),
                 aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
             },
+            crmActivityPurpose: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
+                create: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn(),
+                count: jest.fn().mockResolvedValue(5),
+                aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
+            },
             lead: {
                 count: jest.fn().mockResolvedValue(0),
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
             },
             leadConversation: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
+            },
+            crmActivity: {
                 count: jest.fn().mockResolvedValue(0),
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
@@ -236,8 +250,11 @@ describe('CrmLeadTaxonomyService', () => {
             });
         });
 
-        it('counts channels against conversations, not leads', async () => {
-            db.leadConversation.groupBy.mockResolvedValue([
+        // Repointed at CrmActivity in R1: the backfill mirrors every conversation
+        // into an activity, so activities are the superset and counting the old
+        // table would under-report a channel used only by new activities.
+        it('counts channels against activities, not leads', async () => {
+            db.crmActivity.groupBy.mockResolvedValue([
                 { channel_id: 'ch-call', _count: { _all: 12 } },
             ]);
 
@@ -245,6 +262,72 @@ describe('CrmLeadTaxonomyService', () => {
                 'ch-call': 12,
             });
             expect(db.lead.groupBy).not.toHaveBeenCalled();
+        });
+
+        it('counts purposes against activities', async () => {
+            db.crmActivity.groupBy.mockResolvedValue([
+                { purpose_id: 'p-col', _count: { _all: 4 } },
+            ]);
+
+            await expect(service.usage('tenant-1', LeadTaxonomyKind.PURPOSE)).resolves.toEqual({
+                'p-col': 4,
+            });
+        });
+    });
+
+    describe('purposes', () => {
+        it('refuses to delete an activity purpose that is in use without a reassign target', async () => {
+            // is_active false so assertNotLastActiveChannel short-circuits — this
+            // test is about the in-use guard, not the last-active-row guard.
+            db.crmActivityPurpose.findFirst.mockResolvedValue({
+                id: 'p1',
+                tenant_id: 'tenant-1',
+                code: 'COLLECTION',
+                name: 'Collection',
+                is_system: false,
+                is_active: false,
+            });
+            db.crmActivity.count.mockResolvedValue(4);
+
+            // remove(tenantId, kind, id, reassignTo?) — a bare string, not an object.
+            await expect(
+                service.remove('tenant-1', LeadTaxonomyKind.PURPOSE, 'p1'),
+            ).rejects.toThrow(ConflictException);
+            expect(db.crmActivityPurpose.delete).not.toHaveBeenCalled();
+        });
+
+        it('stores the icon on create, as channels do', async () => {
+            await service.create('tenant-1', LeadTaxonomyKind.PURPOSE, {
+                name: 'Renewal',
+                icon: '🔄',
+            });
+
+            expect(db.crmActivityPurpose.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'RENEWAL', icon: '🔄' }),
+                }),
+            );
+        });
+
+        it('moves activities onto the replacement before deleting', async () => {
+            db.crmActivityPurpose.findFirst
+                .mockResolvedValueOnce({
+                    id: 'p1', tenant_id: 'tenant-1', code: 'COLLECTION', name: 'Collection',
+                    is_system: false, is_active: false,
+                })
+                .mockResolvedValueOnce({
+                    id: 'p2', tenant_id: 'tenant-1', code: 'GENERAL', name: 'General',
+                    is_system: true, is_active: true,
+                });
+            db.crmActivity.count.mockResolvedValue(4);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.PURPOSE, 'p1', 'p2');
+
+            expect(db.crmActivity.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', purpose_id: 'p1' },
+                data: { purpose_id: 'p2' },
+            });
+            expect(db.crmActivityPurpose.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
         });
     });
 
@@ -270,13 +353,31 @@ describe('CrmLeadTaxonomyService', () => {
             );
         });
 
-        // `type` is what every filter and groupBy on LeadConversation reads, so a
+        // `channel_code` / `type` are what every filter and groupBy read, so a
         // reassignment that moved only the FK would leave the rows reporting under a
         // channel that no longer exists.
         it('moves both the FK and the denormalised code when reassigning', async () => {
             db.conversationChannel.findFirst
                 .mockResolvedValueOnce(telegram)
                 .mockResolvedValueOnce(call);
+            db.crmActivity.count.mockResolvedValue(4);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id, call.id);
+
+            expect(db.crmActivity.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', channel_id: telegram.id },
+                data: { channel_id: call.id, channel_code: 'CALL' },
+            });
+        });
+
+        // LeadConversation.channel_id is onDelete: Restrict and R1 keeps those
+        // rows, so skipping them would turn the friendly reassign into a raw
+        // foreign-key error on the delete that follows.
+        it('moves the legacy conversations too, or the FK blocks the delete', async () => {
+            db.conversationChannel.findFirst
+                .mockResolvedValueOnce(telegram)
+                .mockResolvedValueOnce(call);
+            db.crmActivity.count.mockResolvedValue(4);
             db.leadConversation.count.mockResolvedValue(4);
 
             await service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id, call.id);
@@ -285,6 +386,18 @@ describe('CrmLeadTaxonomyService', () => {
                 where: { tenant_id: 'tenant-1', channel_id: telegram.id },
                 data: { channel_id: call.id, type: 'CALL' },
             });
+        });
+
+        // A tenant whose backfill has not run yet has conversations but no
+        // activities; the prompt must still appear rather than a 500.
+        it('prompts for a replacement when only legacy conversations reference it', async () => {
+            db.conversationChannel.findFirst.mockResolvedValue({ ...telegram, is_active: false });
+            db.crmActivity.count.mockResolvedValue(0);
+            db.leadConversation.count.mockResolvedValue(3);
+
+            await expect(
+                service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id),
+            ).rejects.toThrow(ConflictException);
         });
 
         it('refuses to remove the last active channel', async () => {
