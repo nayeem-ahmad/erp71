@@ -82,6 +82,15 @@ ENV GIT_SHA=$GIT_SHA
 # only" once those columns are dropped (it checks information_schema rather than
 # assuming they exist) — so it cannot become the reason the backend stops booting.
 #
+# sync:crm-activities mirrors LeadConversation / CustomerInteraction / CrmFollowUp
+# into the unified CrmActivity table and materialises Lead.next_step as a planned
+# activity where it is not already a duplicate. It runs AFTER sync:lead-taxonomy
+# because it resolves legacy type strings against the activity purposes that
+# script seeds. Idempotent via @@unique([tenant_id, legacy_source, legacy_id]) +
+# skipDuplicates, guarded on information_schema so it degrades to a no-op once
+# R3 drops the legacy tables, and it catches its own errors rather than exiting
+# non-zero — a failed backfill must not be a full outage.
+#
 # sync:role-permissions is the same idea for the permission matrix:
 # ROLE_DEFAULT_PERMISSIONS is read only at tenant creation and role assignment,
 # so a permission added later reaches nobody who already exists — and the OWNER
@@ -102,4 +111,4 @@ ENV GIT_SHA=$GIT_SHA
 # per-employee structures — resolveStructure already falls back to
 # Employee.basic_salary, and stamping a structure nobody chose would silently
 # stop that field affecting pay. See prisma/sync-salary-components.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
