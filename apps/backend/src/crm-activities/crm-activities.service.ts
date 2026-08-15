@@ -249,7 +249,80 @@ export class CrmActivitiesService {
         return Promise.reject(new Error('not implemented'));
     }
 
-    private async recalculateRollup(_tx: any, _tenantId: string, _target: any) {}
+    /**
+     * The parent's next_* columns are a cache of its earliest PLANNED activity.
+     * This is the ONLY writer of those five columns — nothing else may set them,
+     * or they drift back into the hand-maintained field this design replaced.
+     *
+     * `tx` is the transaction client when called inside one, so the rollup and
+     * the mutation that caused it commit together.
+     */
+    private async recalculateRollup(
+        tx: any,
+        tenantId: string,
+        target: { lead_id?: string | null; customer_id?: string | null },
+    ) {
+        const where = target.lead_id
+            ? { tenant_id: tenantId, lead_id: target.lead_id, status: 'PLANNED' }
+            : { tenant_id: tenantId, customer_id: target.customer_id, status: 'PLANNED' };
 
-    private async notifyAssignee(_tenantId: string, _userId: string, _activity: any) {}
+        // NULLS LAST is not expressible in a Prisma orderBy shorthand, but an
+        // undated activity sorting first would make it the "next step" ahead of
+        // a dated one. Fetch dated rows first; fall back to any planned row.
+        const next =
+            (await tx.crmActivity.findFirst({
+                where: { ...where, due_at: { not: null } },
+                orderBy: [{ due_at: 'asc' }, { created_at: 'asc' }],
+                select: { id: true, subject: true, due_at: true, assigned_to: true },
+            })) ??
+            (await tx.crmActivity.findFirst({
+                where,
+                orderBy: [{ due_at: 'asc' }, { created_at: 'asc' }],
+                select: { id: true, subject: true, due_at: true, assigned_to: true },
+            }));
+
+        if (target.lead_id) {
+            await tx.lead.update({
+                where: { id: target.lead_id },
+                data: {
+                    next_step: next?.subject ?? null,
+                    next_step_date: next?.due_at ?? null,
+                    next_step_assigned_to: next?.assigned_to ?? null,
+                    next_activity_id: next?.id ?? null,
+                },
+            });
+            return;
+        }
+
+        await tx.customer.update({
+            where: { id: target.customer_id },
+            data: {
+                next_activity_id: next?.id ?? null,
+                next_activity_date: next?.due_at ?? null,
+            },
+        });
+    }
+
+    /**
+     * In-app notification for the assignee. Skipped when they are the person who
+     * just created the row — they are already looking at it — matching the guard
+     * CrmFollowUpsService.notifyOwner already applies to cron-created rows.
+     * Failure is logged, never thrown: a notification outage must not fail the
+     * write it describes.
+     */
+    private async notifyAssignee(tenantId: string, actingUserId: string, activity: any) {
+        if (!activity.assigned_to || activity.assigned_to === actingUserId) return;
+        try {
+            await this.notifications.create(
+                tenantId,
+                activity.assigned_to,
+                'CRM_ACTIVITY_ASSIGNED',
+                activity.subject ?? 'CRM activity assigned',
+                'A CRM activity was assigned to you.',
+                `/crm/activities?highlight=${activity.id}`,
+            );
+        } catch (err) {
+            this.logger.error(`Failed to notify assignee of activity ${activity.id}: ${err}`);
+        }
+    }
 }

@@ -85,8 +85,7 @@ describe('CrmActivitiesService', () => {
             ).rejects.toThrow(BadRequestException);
         });
 
-        // unskipped in Task 4, where recalculateRollup stops being a stub
-        it.skip('creates a planned activity and recalculates the rollup', async () => {
+        it('creates a planned activity and recalculates the rollup', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
             db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
             db.crmActivity.findFirst.mockResolvedValue({
@@ -155,6 +154,154 @@ describe('CrmActivitiesService', () => {
         it('404s a cross-tenant id', async () => {
             db.crmActivity.findFirst.mockResolvedValue(null);
             await expect(service.findOne('t1', 'other')).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('recalculateRollup()', () => {
+        it('nulls every rollup column when no planned activity remains', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any);
+
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'l1' },
+                data: {
+                    next_step: null,
+                    next_step_date: null,
+                    next_step_assigned_to: null,
+                    next_activity_id: null,
+                },
+            });
+        });
+
+        // NULLS LAST is not expressible in a Prisma orderBy shorthand, so the
+        // dated rows are asked for first. An undated activity sorting ahead of a
+        // dated one would become the "next step" and misreport the whole list.
+        it('asks for the earliest dated planned activity first', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a2' });
+            db.crmActivity.findFirst.mockResolvedValue({
+                id: 'a2',
+                subject: 'Earliest',
+                due_at: new Date('2026-08-14'),
+                assigned_to: null,
+            });
+
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Earliest' } as any);
+
+            expect(db.crmActivity.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: 't1',
+                        lead_id: 'l1',
+                        status: 'PLANNED',
+                        due_at: { not: null },
+                    },
+                    orderBy: [{ due_at: 'asc' }, { created_at: 'asc' }],
+                }),
+            );
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'l1' },
+                data: {
+                    next_step: 'Earliest',
+                    next_step_date: new Date('2026-08-14'),
+                    next_step_assigned_to: null,
+                    next_activity_id: 'a2',
+                },
+            });
+        });
+
+        it('falls back to an undated planned activity when no dated one exists', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a3' });
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'a3', subject: 'Someday', due_at: null, assigned_to: null });
+
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Someday' } as any);
+
+            expect(db.crmActivity.findFirst).toHaveBeenCalledTimes(2);
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'l1' },
+                data: {
+                    next_step: 'Someday',
+                    next_step_date: null,
+                    next_step_assigned_to: null,
+                    next_activity_id: 'a3',
+                },
+            });
+        });
+
+        it('writes the customer rollup for a customer activity', async () => {
+            db.customer.findFirst.mockResolvedValue({ id: 'c1' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a3' });
+            db.crmActivity.findFirst.mockResolvedValue({
+                id: 'a3',
+                subject: 'Reorder call',
+                due_at: new Date('2026-09-01'),
+                assigned_to: null,
+            });
+
+            await service.create('t1', 'u1', { customer_id: 'c1', subject: 'Reorder call' } as any);
+
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'c1' },
+                data: { next_activity_id: 'a3', next_activity_date: new Date('2026-09-01') },
+            });
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('notifyAssignee()', () => {
+        it('notifies an assignee who is not the acting user', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', assigned_to: 'u2', subject: 'Call' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call',
+                assigned_to: 'u2',
+            } as any);
+
+            const notifications = (service as any).notifications;
+            expect(notifications.create).toHaveBeenCalledWith(
+                't1',
+                'u2',
+                'CRM_ACTIVITY_ASSIGNED',
+                'Call',
+                expect.any(String),
+                expect.stringContaining('a1'),
+            );
+        });
+
+        it('does not notify the person who just filled in the form', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', assigned_to: 'u1', subject: 'Call' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call',
+                assigned_to: 'u1',
+            } as any);
+
+            const notifications = (service as any).notifications;
+            expect(notifications.create).not.toHaveBeenCalled();
+        });
+
+        // A notification outage must not fail the write it describes.
+        it('swallows a notification failure', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', assigned_to: 'u2', subject: 'Call' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            (service as any).notifications.create.mockRejectedValue(new Error('smtp down'));
+
+            await expect(
+                service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call', assigned_to: 'u2' } as any),
+            ).resolves.toBeDefined();
         });
     });
 });
