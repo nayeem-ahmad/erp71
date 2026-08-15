@@ -254,6 +254,131 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('complete()', () => {
+        const planned = {
+            id: 'a1',
+            tenant_id: 't1',
+            lead_id: 'l1',
+            customer_id: null,
+            status: 'PLANNED',
+            purpose_id: 'p1',
+        };
+
+        beforeEach(() => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch1',
+                code: 'CALL',
+                name: 'Call',
+                is_active: true,
+            });
+        });
+
+        it('400s an already-completed activity', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ ...planned, status: 'DONE' });
+            await expect(
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('400s a cancelled activity', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ ...planned, status: 'CANCELLED' });
+            await expect(
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('404s an unknown id', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            await expect(
+                service.complete('t1', 'u1', 'nope', { channel: 'CALL', summary: 's' } as any),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('marks DONE, stamps the lead last_contacted_at and returns no next', async () => {
+            db.crmActivity.findFirst.mockResolvedValueOnce(planned).mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ ...planned, status: 'DONE' });
+
+            const res = await service.complete('t1', 'u1', 'a1', {
+                channel: 'CALL',
+                summary: 'Spoke to Karim',
+                outcome: 'Promised Thursday',
+            } as any);
+
+            expect(db.crmActivity.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'a1' },
+                    data: expect.objectContaining({
+                        status: 'DONE',
+                        summary: 'Spoke to Karim',
+                        outcome: 'Promised Thursday',
+                        channel_id: 'ch1',
+                        channel_code: 'CALL',
+                    }),
+                }),
+            );
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'l1' },
+                    data: expect.objectContaining({ last_contacted_at: expect.any(Date) }),
+                }),
+            );
+            expect(res.next).toBeNull();
+        });
+
+        it('creates the next activity in the same call, inheriting the purpose', async () => {
+            db.crmActivity.findFirst.mockResolvedValueOnce(planned).mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ ...planned, status: 'DONE' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a2', subject: 'Confirm payment' });
+
+            const res = await service.complete('t1', 'u1', 'a1', {
+                channel: 'CALL',
+                summary: 'Spoke to Karim',
+                next: { subject: 'Confirm payment', due_at: '2026-08-15T10:00:00Z' },
+            } as any);
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        subject: 'Confirm payment',
+                        status: 'PLANNED',
+                        lead_id: 'l1',
+                        purpose_id: 'p1',
+                    }),
+                }),
+            );
+            expect(res.next).toEqual({ id: 'a2', subject: 'Confirm payment' });
+        });
+
+        it('stamps last_contacted_at on a customer activity too', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({ ...planned, lead_id: null, customer_id: 'c1' })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ status: 'DONE' });
+
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+
+            expect(db.customer.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ last_contacted_at: expect.any(Date) }),
+                }),
+            );
+        });
+
+        it('rejects a retired channel', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(planned);
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch1',
+                code: 'CALL',
+                name: 'Call',
+                is_active: false,
+            });
+
+            await expect(
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
     describe('notifyAssignee()', () => {
         it('notifies an assignee who is not the acting user', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });

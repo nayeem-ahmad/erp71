@@ -228,14 +228,98 @@ export class CrmActivitiesService {
         return Promise.reject(new Error('not implemented'));
     }
 
-    async complete(
-        _tenantId: string,
-        _userId: string,
-        _id: string,
-        _dto: CompleteCrmActivityDto,
-    ): Promise<any> {
-        return Promise.reject(new Error('not implemented'));
+    /**
+     * Mark done, record what happened, and optionally schedule the next one —
+     * in a single transaction. This endpoint is why the merge exists: before it,
+     * completing a follow-up and logging the call it produced were two writes to
+     * two tables with nothing linking them.
+     */
+    async complete(tenantId: string, userId: string, id: string, dto: CompleteCrmActivityDto) {
+        const existing = await this.db.crmActivity.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+        if (!existing) throw new NotFoundException('Activity not found');
+        if (existing.status !== 'PLANNED') {
+            // Not a no-op: a double-submitted form would otherwise create a
+            // second "next" activity for one completion.
+            throw new BadRequestException(`Activity is already ${existing.status.toLowerCase()}.`);
+        }
+
+        const channel = await this.resolveChannel(tenantId, dto.channel);
+        const nextPurpose = dto.next?.purpose
+            ? await this.resolvePurpose(tenantId, dto.next.purpose)
+            : null;
+
+        // Typed as both-optional rather than a union: rescoreLead and
+        // recalculateRollup both read `.lead_id` off it, which a
+        // `{lead_id} | {customer_id}` union rejects at compile time.
+        const target: { lead_id?: string | null; customer_id?: string | null } = existing.lead_id
+            ? { lead_id: existing.lead_id }
+            : { customer_id: existing.customer_id };
+        const now = new Date();
+
+        return this.db.$transaction(async (tx: any) => {
+            const completed = await tx.crmActivity.update({
+                where: { id },
+                data: {
+                    status: 'DONE',
+                    completed_at: now,
+                    channel_id: channel.id,
+                    channel_code: channel.code,
+                    summary: dto.summary,
+                    outcome: dto.outcome ?? null,
+                    direction: dto.direction ?? existing.direction,
+                },
+                include: ACTIVITY_INCLUDES,
+            });
+
+            let next = null;
+            if (dto.next) {
+                next = await tx.crmActivity.create({
+                    data: {
+                        tenant_id: tenantId,
+                        ...target,
+                        subject: dto.next.subject,
+                        status: 'PLANNED',
+                        due_at: new Date(dto.next.due_at),
+                        // Inherit the purpose and assignee of the activity being
+                        // closed unless the caller overrode them — chasing the
+                        // same invoice is still a COLLECTION.
+                        purpose_id: nextPurpose?.id ?? existing.purpose_id,
+                        assigned_to: dto.next.assigned_to ?? existing.assigned_to,
+                        store_id: existing.store_id,
+                        created_by: userId,
+                        origin: 'MANUAL',
+                    },
+                    include: ACTIVITY_INCLUDES,
+                });
+            }
+
+            await this.stampLastContacted(tx, target, now);
+            await this.recalculateRollup(tx, tenantId, target);
+            await this.rescoreLead(tx, tenantId, target.lead_id);
+
+            return { completed, next };
+        });
     }
+
+    /**
+     * Completion now counts as contact. Before the merge only logging a
+     * conversation did, so the reorder cron re-fired at customers the team had
+     * called and marked done.
+     */
+    private async stampLastContacted(tx: any, target: any, at: Date) {
+        if (target.lead_id) {
+            await tx.lead.update({ where: { id: target.lead_id }, data: { last_contacted_at: at } });
+            return;
+        }
+        await tx.customer.update({
+            where: { id: target.customer_id },
+            data: { last_contacted_at: at },
+        });
+    }
+
+    private async rescoreLead(_tx: any, _tenantId: string, _leadId?: string | null) {}
 
     async cancel(_tenantId: string, _id: string): Promise<any> {
         return Promise.reject(new Error('not implemented'));
