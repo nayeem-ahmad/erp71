@@ -32,6 +32,22 @@ import {
 
 const taxonomySelect = { select: { id: true, code: true, name: true } } as const;
 
+/**
+ * The four rollup columns, blanked. A closed lead has no next step, and its
+ * planned activities are cancelled alongside — leaving the cache populated
+ * would keep a dead lead in every "due today" and "overdue" list.
+ *
+ * These columns are otherwise written only by CrmActivitiesService.recalculateRollup;
+ * clearing them on close is the one exception, and it is inline for the same
+ * import-cycle reason closeOutPlannedActivities is.
+ */
+const CLEARED_ROLLUP = {
+    next_step: null,
+    next_step_date: null,
+    next_step_assigned_to: null,
+    next_activity_id: null,
+} as const;
+
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
     nextStepAssignee: { select: { id: true, name: true, email: true } },
@@ -356,6 +372,13 @@ export class CrmLeadsService {
         const nextStatus = dto.status ?? existing.status;
         this.applyStatusTransition(existing, dto, data);
 
+        // Same rule convert() applies, on the other way a lead closes.
+        const closing = nextStatus !== existing.status && isClosedStatus(nextStatus);
+        if (closing) {
+            await this.closeOutPlannedActivities(tenantId, id);
+            Object.assign(data, CLEARED_ROLLUP);
+        }
+
         // Weight comes from the lead's (possibly just-changed) source row; an
         // unbackfilled lead has no row yet and scores at the default.
         const effectiveSourceId = (data.source_id as string | null | undefined) ?? existing.source_id;
@@ -619,6 +642,22 @@ export class CrmLeadsService {
         });
     }
 
+    /**
+     * A closed lead is done being worked. Leaving its planned activities open
+     * kept them in the overdue count forever, while CrmActivitiesService refused
+     * to add new ones to a closed lead — the two halves disagreed.
+     *
+     * Written straight to `crmActivity` rather than through CrmActivitiesService:
+     * injecting that here would close an import cycle
+     * (CrmActivitiesModule -> CrmLeadsModule -> CrmActivitiesModule).
+     */
+    private async closeOutPlannedActivities(tenantId: string, leadId: string) {
+        await this.db.crmActivity.updateMany({
+            where: { tenant_id: tenantId, lead_id: leadId, status: 'PLANNED' },
+            data: { status: 'CANCELLED' },
+        });
+    }
+
     async convert(tenantId: string, id: string) {
         const lead = await this.db.lead.findFirst({ where: { id, tenant_id: tenantId } });
         if (!lead) throw new NotFoundException('Lead not found');
@@ -644,6 +683,8 @@ export class CrmLeadsService {
             address: lead.address ?? undefined,
         });
 
+        await this.closeOutPlannedActivities(tenantId, id);
+
         const updatedLead = await this.db.lead.update({
             where: { id },
             data: {
@@ -651,6 +692,7 @@ export class CrmLeadsService {
                 converted_customer_id: customer.id,
                 closed_at: new Date(),
                 score: 100,
+                ...CLEARED_ROLLUP,
             },
             include: leadIncludes,
         });

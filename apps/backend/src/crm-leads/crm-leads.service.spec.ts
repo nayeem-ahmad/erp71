@@ -37,6 +37,11 @@ describe('CrmLeadsService', () => {
             leadConversation: {
                 count: jest.fn().mockResolvedValue(0),
             },
+            crmActivity: {
+                create: jest.fn().mockResolvedValue({ id: 'act-1' }),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+                count: jest.fn().mockResolvedValue(0),
+            },
             leadSourceOption: {
                 findFirst: jest.fn().mockResolvedValue(OTHER_SOURCE),
             },
@@ -102,10 +107,31 @@ describe('CrmLeadsService', () => {
                     converted_customer_id: 'cust-1',
                     closed_at: expect.any(Date),
                     score: 100,
+                    next_step: null,
+                    next_step_date: null,
+                    next_step_assigned_to: null,
+                    next_activity_id: null,
                 },
                 include: expect.anything(),
             });
             expect(result.customer.id).toBe('cust-1');
+        });
+
+        // A converted lead is done being worked. Leaving its planned activities
+        // open kept them in the overdue count forever, while the create path
+        // refused to add new ones — the two halves disagreed.
+        it('cancels planned activities and clears the rollup', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(lead);
+            db.customer.findFirst.mockResolvedValueOnce(null);
+            customersService.create.mockResolvedValueOnce({ id: 'cust-1' });
+            db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED });
+
+            await service.convert('tenant-1', 'lead-1');
+
+            expect(db.crmActivity.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', lead_id: 'lead-1', status: 'PLANNED' },
+                data: { status: 'CANCELLED' },
+            });
         });
 
         it('throws NotFoundException when the lead does not exist', async () => {
@@ -124,6 +150,55 @@ describe('CrmLeadsService', () => {
 
             await expect(service.convert('tenant-1', 'lead-1')).rejects.toThrow(ConflictException);
             expect(customersService.create).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('update() lifecycle', () => {
+        it('cancels planned activities and clears the rollup when a lead is marked LOST', async () => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.QUALIFIED,
+                lost_reason: null,
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                source_id: 'src-other',
+            });
+            db.lead.update.mockResolvedValue({ id: 'lead-1', status: LeadStatus.LOST });
+
+            await service.update('tenant-1', 'lead-1', {
+                status: LeadStatus.LOST,
+                lost_reason: 'Bought elsewhere',
+            } as any);
+
+            expect(db.crmActivity.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', lead_id: 'lead-1', status: 'PLANNED' },
+                data: { status: 'CANCELLED' },
+            });
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data.next_step).toBeNull();
+            expect(data.next_step_date).toBeNull();
+            expect(data.next_step_assigned_to).toBeNull();
+            expect(data.next_activity_id).toBeNull();
+        });
+
+        it('leaves activities alone on an ordinary edit', async () => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.QUALIFIED,
+                lost_reason: null,
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                source_id: 'src-other',
+            });
+            db.lead.update.mockResolvedValue({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { name: 'Renamed' } as any);
+
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
         });
     });
 
