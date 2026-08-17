@@ -7,6 +7,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { AiService, type BusinessCardScanResult } from '../ai/ai.service';
 import { AssetsService } from '../assets/assets.service';
+import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import {
     AddContactAttachmentDto,
     BulkContactActionDto,
@@ -55,6 +56,7 @@ const OPTIONAL_TEXT_FIELDS = [
     'website_url',
     'linkedin_url',
     'notes',
+    'photo_url',
 ] as const;
 
 type OptionalTextField = (typeof OPTIONAL_TEXT_FIELDS)[number];
@@ -65,6 +67,7 @@ export class CrmContactsService {
         private db: DatabaseService,
         private ai: AiService,
         private assets: AssetsService,
+        private photos: CrmPhotosService,
     ) {}
 
     /**
@@ -107,6 +110,8 @@ export class CrmContactsService {
         const mobile = this.normalizeMobile(dto.mobile);
         if (mobile) await this.assertMobileFree(tenantId, mobile);
 
+        const photoKey = this.resolvePhotoKey(tenantId, dto.photo_storage_key);
+
         return this.db.crmContact.create({
             data: {
                 tenant_id: tenantId,
@@ -118,6 +123,7 @@ export class CrmContactsService {
                 // "unassigned", and an empty string in an FK column is a
                 // constraint violation rather than an absent owner.
                 assigned_to: dto.assigned_to || null,
+                photo_storage_key: photoKey ?? null,
                 created_by: userId,
             },
             include: contactIncludes,
@@ -276,10 +282,45 @@ export class CrmContactsService {
         );
     }
 
+    /**
+     * Normalise the photo key and refuse one that is not this tenant's.
+     *
+     * Returns `undefined` when the field was absent (leave it alone), `null`
+     * when it was explicitly cleared, and the key otherwise.
+     */
+    private resolvePhotoKey(
+        tenantId: string,
+        key: string | undefined,
+    ): string | null | undefined {
+        if (key === undefined) return undefined;
+        const trimmed = key.trim();
+        if (!trimmed) return null;
+        this.photos.assertTenantPhotoKey(tenantId, trimmed);
+        return trimmed;
+    }
+
+    /**
+     * Drop the Cloudinary photos for contacts about to be deleted. The rows go
+     * on their own via cascade, but Cloudinary knows nothing about that.
+     */
+    private async purgePhotoAssets(tenantId: string, contactIds: string[]) {
+        if (!contactIds.length) return;
+        const rows = await this.db.crmContact.findMany({
+            where: { tenant_id: tenantId, id: { in: contactIds } },
+            select: { photo_storage_key: true },
+        });
+        await Promise.all(
+            rows
+                .map((row) => row.photo_storage_key)
+                .filter((key): key is string => !!key)
+                .map((key) => this.assets.deleteFile(key)),
+        );
+    }
+
     async update(tenantId: string, id: string, dto: UpdateContactDto) {
         const existing = await this.db.crmContact.findFirst({
             where: { id, tenant_id: tenantId },
-            select: { id: true },
+            select: { id: true, photo_storage_key: true },
         });
         if (!existing) throw new NotFoundException('Contact not found');
 
@@ -301,11 +342,28 @@ export class CrmContactsService {
             data.assigned_to = dto.assigned_to || null;
         }
 
-        return this.db.crmContact.update({
+        const photoKey = this.resolvePhotoKey(tenantId, dto.photo_storage_key);
+        if (photoKey !== undefined) data.photo_storage_key = photoKey;
+
+        const updated = await this.db.crmContact.update({
             where: { id },
             data,
             include: contactIncludes,
         });
+
+        // After the row, not before: a failed delete here leaves a stray file,
+        // while a failed delete the other way round leaves a row pointing at
+        // nothing. Only when the key actually changed — re-saving a form with
+        // an untouched photo must not delete the photo it is still using.
+        if (
+            photoKey !== undefined &&
+            existing.photo_storage_key &&
+            existing.photo_storage_key !== photoKey
+        ) {
+            await this.assets.deleteFile(existing.photo_storage_key);
+        }
+
+        return updated;
     }
 
     async remove(tenantId: string, id: string) {
@@ -315,6 +373,7 @@ export class CrmContactsService {
         });
         if (!existing) throw new NotFoundException('Contact not found');
         await this.purgeAttachmentAssets(tenantId, [id]);
+        await this.purgePhotoAssets(tenantId, [id]);
         await this.db.crmContact.delete({ where: { id } });
         return { success: true };
     }
@@ -324,6 +383,7 @@ export class CrmContactsService {
 
         if (dto.action === ContactBulkAction.DELETE) {
             await this.purgeAttachmentAssets(tenantId, dto.ids);
+            await this.purgePhotoAssets(tenantId, dto.ids);
             const res = await this.db.crmContact.deleteMany({ where });
             return { count: res.count };
         }

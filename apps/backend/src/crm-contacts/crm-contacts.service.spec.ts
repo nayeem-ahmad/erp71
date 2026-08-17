@@ -4,6 +4,7 @@ import { CrmContactsService } from './crm-contacts.service';
 import { DatabaseService } from '../database/database.service';
 import { AiService } from '../ai/ai.service';
 import { AssetsService } from '../assets/assets.service';
+import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { ContactBulkAction, CrmContactCaptureSource } from './crm-contacts.dto';
 
 describe('CrmContactsService', () => {
@@ -52,6 +53,7 @@ describe('CrmContactsService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: AiService, useValue: ai },
                 { provide: AssetsService, useValue: assets },
+                { provide: CrmPhotosService, useValue: new CrmPhotosService(assets as any) },
             ],
         }).compile();
 
@@ -423,6 +425,100 @@ describe('CrmContactsService', () => {
 
             expect(result.created).toBe(0);
             expect(result.errors[0]).toContain('name');
+        });
+    });
+
+    describe('photos', () => {
+        const KEY = 'retail/tenant-1/crm-photos/rahim';
+        const OTHER_KEY = 'retail/tenant-1/crm-photos/newer';
+
+        it('stores the photo url and key on create', async () => {
+            const created = await service.create(TENANT, USER, {
+                name: 'Rahim',
+                photo_url: 'https://cdn.example/rahim.jpg',
+                photo_storage_key: KEY,
+            } as any);
+
+            expect(created.photo_url).toBe('https://cdn.example/rahim.jpg');
+            expect(created.photo_storage_key).toBe(KEY);
+        });
+
+        it("refuses a storage key from another tenant's folder", async () => {
+            await expect(
+                service.create(TENANT, USER, {
+                    name: 'Rahim',
+                    photo_url: 'https://cdn.example/rahim.jpg',
+                    photo_storage_key: 'retail/tenant-2/crm-photos/rahim',
+                } as any),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
+
+        it('deletes the previous asset when the photo is replaced', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1', photo_storage_key: KEY });
+
+            await service.update(TENANT, 'contact-1', {
+                photo_url: 'https://cdn.example/newer.jpg',
+                photo_storage_key: OTHER_KEY,
+            } as any);
+
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+        });
+
+        it('deletes the previous asset when the photo is cleared', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1', photo_storage_key: KEY });
+
+            const updated = await service.update(TENANT, 'contact-1', {
+                photo_url: '',
+                photo_storage_key: '',
+            } as any);
+
+            expect(updated.photo_url).toBeNull();
+            expect(updated.photo_storage_key).toBeNull();
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+        });
+
+        it('deletes nothing when an update does not touch the photo', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1', photo_storage_key: KEY });
+
+            await service.update(TENANT, 'contact-1', { name: 'Rahim Uddin' } as any);
+
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('deletes nothing when the same photo is sent back unchanged', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1', photo_storage_key: KEY });
+
+            await service.update(TENANT, 'contact-1', {
+                photo_url: 'https://cdn.example/rahim.jpg',
+                photo_storage_key: KEY,
+            } as any);
+
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('reclaims the photo when the contact is deleted', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+            db.crmContact.findMany.mockResolvedValue([{ photo_storage_key: KEY }]);
+
+            await service.remove(TENANT, 'contact-1');
+
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+        });
+
+        it('reclaims photos on a bulk delete', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                { photo_storage_key: KEY },
+                { photo_storage_key: OTHER_KEY },
+            ]);
+
+            await service.bulkAction(TENANT, {
+                ids: ['contact-1', 'contact-2'],
+                action: ContactBulkAction.DELETE,
+            } as any);
+
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+            expect(assets.deleteFile).toHaveBeenCalledWith(OTHER_KEY);
         });
     });
 });
