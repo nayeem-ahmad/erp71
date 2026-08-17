@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { useI18n } from '@/lib/i18n';
 
 type MarketingNavProps = {
@@ -19,9 +20,7 @@ export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
     return (
         <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
             <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                <Link href="/" className="text-xl font-black tracking-tight text-blue-600">
-                    {m.brand}
-                </Link>
+                <BrandLogo href="/" height={30} priority />
 
                 {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">

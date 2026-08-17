@@ -1,6 +1,5 @@
 export const componentsMessages = {
     marketingNav: {
-        brand: 'ERP71',
         features: 'Features',
         pricing: 'Pricing',
         reviews: 'Reviews',
@@ -10,7 +9,6 @@ export const componentsMessages = {
         startFreeTrial: 'Get started',
     },
     marketingFooter: {
-        brand: 'ERP71',
         terms: 'Terms of Service',
         privacy: 'Privacy Policy',
         refund: 'Refund Policy',

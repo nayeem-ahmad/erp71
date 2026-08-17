@@ -3,7 +3,8 @@ import { cookies } from 'next/headers';
 import { Inter, Noto_Sans_Bengali } from 'next/font/google';
 
 import './globals.css';
-import { BRAND_NAME } from '../lib/brand';
+import { siteOrigin } from '../lib/blog/api';
+import { BRAND_FULL_NAME, BRAND_NAME } from '../lib/brand';
 import { I18nProvider } from '../lib/i18n';
 import { DEFAULT_LOCALE, LOCALE_COOKIE_NAME, getLocaleConfig, resolveLocale } from '../lib/localization/config';
 
@@ -26,14 +27,35 @@ export const viewport: Viewport = {
     themeColor: '#2563eb',
 };
 
+const SITE_DESCRIPTION =
+    'All-in-one business management platform with sales, inventory, accounting, and integrated BDT payments.';
+
 export const metadata: Metadata = {
-    title: 'ERP71 — Business management for Bangladeshi SMEs',
-    description: 'All-in-one business management platform with sales, inventory, accounting, and integrated BDT payments.',
-    manifest: '/manifest.json',
+    // Without this, og:image resolves against http://localhost:3000 and every
+    // shared link points at a card no crawler can fetch. Same origin the
+    // sitemap and robots.txt already use.
+    metadataBase: new URL(siteOrigin()),
+    title: BRAND_FULL_NAME,
+    description: SITE_DESCRIPTION,
+    // `manifest` is deliberately absent: app/manifest.ts already emits the link
+    // tag pointing at /manifest.webmanifest. Naming it here produced a /manifest.json 404.
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',
         title: BRAND_NAME,
+    },
+    // Inherited by every page that doesn't set its own — without this, links
+    // shared to Facebook and WhatsApp render with no image at all.
+    openGraph: {
+        type: 'website',
+        siteName: BRAND_NAME,
+        title: BRAND_FULL_NAME,
+        description: SITE_DESCRIPTION,
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: BRAND_FULL_NAME,
+        description: SITE_DESCRIPTION,
     },
 };
 

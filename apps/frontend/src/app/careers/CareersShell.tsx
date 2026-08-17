@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Briefcase, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { routes } from '@/lib/routes';
 import {
     careersApi,
@@ -51,8 +52,10 @@ export default function CareersShell({ children }: { children: ReactNode }) {
                         href={routes.careers.root}
                         className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-gray-950"
                     >
-                        <Briefcase className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                        ERP71 Careers
+                        {/* Not decorative: the alt text supplies the "ERP71" half
+                            of the link's accessible name, which now reads "ERP71 Careers". */}
+                        <BrandLogo height={22} />
+                        Careers
                     </Link>
 
                     <nav className="flex items-center gap-1.5 text-xs">

@@ -1,6 +1,5 @@
 export const componentsMessages = {
         marketingNav: {
-            brand: 'ERP71',
             features: 'Ciri',
             pricing: 'Harga',
             reviews: 'Ulasan',
@@ -10,7 +9,6 @@ export const componentsMessages = {
             startFreeTrial: 'Mulakan',
         },
         marketingFooter: {
-            brand: 'ERP71',
             terms: 'Terma Perkhidmatan',
             privacy: 'Dasar Privasi',
             refund: 'Dasar Bayaran Balik',

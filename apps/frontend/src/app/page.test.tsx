@@ -17,9 +17,10 @@ jest.mock('next/navigation', () => ({
 import HomePage from './HomeClient';
 
 describe('HomePage', () => {
-    it('renders the brand name in the nav', () => {
+    it('renders the brand mark in the nav', () => {
         render(<HomePage />);
-        expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
+        // The wordmark is the logo artwork now, labelled with the brand name.
+        expect(screen.getAllByAltText('ERP71').length).toBeGreaterThan(0);
     });
 
     it('renders the hero tagline badge', () => {
