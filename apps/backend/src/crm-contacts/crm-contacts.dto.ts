@@ -76,6 +76,20 @@ export class CreateContactDto {
     notes?: string;
 
     /**
+     * Set from the photo picker, which uploads to `POST /crm/photos` first.
+     * `''` clears the photo — deliberately not run through `emptyToUndefined`,
+     * which the service would read as "leave it alone" and make a photo
+     * impossible to remove once set.
+     */
+    @IsOptional()
+    @IsString()
+    photo_url?: string;
+
+    @IsOptional()
+    @IsString()
+    photo_storage_key?: string;
+
+    /**
      * Set by the client only when the row came off a scanned card. Everything
      * else is left to the column default, so an ordinary create cannot dress
      * itself up as OCR output by accident.
@@ -132,6 +146,20 @@ export class UpdateContactDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * Set from the photo picker, which uploads to `POST /crm/photos` first.
+     * `''` clears the photo — deliberately not run through `emptyToUndefined`,
+     * which the service would read as "leave it alone" and make a photo
+     * impossible to remove once set.
+     */
+    @IsOptional()
+    @IsString()
+    photo_url?: string;
+
+    @IsOptional()
+    @IsString()
+    photo_storage_key?: string;
 
     @IsOptional()
     @ValidateIf((o) => skipWhenBlank(o, 'assigned_to'))
