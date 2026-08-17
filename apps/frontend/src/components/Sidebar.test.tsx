@@ -2,6 +2,7 @@
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Sidebar from './Sidebar';
+import { useBranding } from '@/lib/branding';
 
 jest.mock('next/link', () => {
     return ({ children, href, className, title }: { children: React.ReactNode; href: string; className?: string; title?: string }) => (
@@ -79,14 +80,24 @@ jest.mock('lucide-react', () => {
     };
 });
 
+// No `virtual: true` here — that registers the mock under the literal specifier
+// and leaves Sidebar importing the real hook, which silently made this a no-op.
 jest.mock('@/lib/branding', () => ({
-    useBranding: () => ({
+    useBranding: jest.fn(),
+}));
+
+const mockUseBranding = useBranding as jest.Mock;
+
+/** Resets branding to an un-customised tenant; pass overrides for the branded cases. */
+function setBranding(overrides: { logoUrl?: string | null; businessName?: string | null } = {}) {
+    mockUseBranding.mockReturnValue({
         logoUrl: null,
         faviconUrl: null,
         businessName: null,
         primaryColor: '#2563eb',
-    }),
-}), { virtual: true });
+        ...overrides,
+    });
+}
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('../lib/localization/messages/en');
@@ -116,9 +127,40 @@ jest.mock('@/contexts/NavLayoutContext', () => {
     };
 });
 
+describe('Sidebar — brand mark', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    it('falls back to the ERP71 mark when the tenant has uploaded no logo', () => {
+        const { container } = render(<Sidebar canAccessAccounting />);
+
+        const mark = container.querySelector('img[src*="/logo/icon.svg"]');
+        expect(mark).toBeInTheDocument();
+    });
+
+    it('shows the tenant logo instead of the ERP71 mark once one is uploaded', () => {
+        setBranding({ logoUrl: 'https://cdn.example.com/tenant-logo.png' });
+        const { container } = render(<Sidebar canAccessAccounting />);
+
+        expect(container.querySelector('img[src="https://cdn.example.com/tenant-logo.png"]')).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/icon.svg"]')).not.toBeInTheDocument();
+    });
+
+    it('shows the tenant business name over the platform brand name', () => {
+        setBranding({ businessName: 'Karim Traders' });
+        render(<Sidebar canAccessAccounting />);
+
+        expect(screen.getByText('Karim Traders')).toBeInTheDocument();
+        expect(screen.queryByText('ERP71')).not.toBeInTheDocument();
+    });
+});
+
 describe('Sidebar — Story 30.1', () => {
     beforeEach(() => {
         localStorage.clear();
+        setBranding();
     });
 
     it('shows accounting navigation when access is allowed', () => {

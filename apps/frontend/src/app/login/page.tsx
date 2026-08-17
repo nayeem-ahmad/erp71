@@ -7,6 +7,7 @@ import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { useI18n } from '@/lib/i18n';
+import BrandLogo from '@/components/BrandLogo';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { routes } from '@/lib/routes';
@@ -159,9 +160,9 @@ function LoginPageContent() {
             <div className="w-full max-w-md">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10">
                     <div className="flex flex-col items-center mb-8">
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-blue-200">
-                            <Lock className="text-white w-6 h-6" />
-                        </div>
+                        {/* The full lockup rather than the mark on a tile: the mark's
+                            outline cubes lose all definition below ~40px. */}
+                        <BrandLogo height={40} className="mb-5" priority />
                         <h1 className="text-2xl font-bold tracking-tight">{t.auth.login.title}</h1>
                         <p className="text-gray-500 mt-2 text-sm">{t.auth.login.description}</p>
                     </div>

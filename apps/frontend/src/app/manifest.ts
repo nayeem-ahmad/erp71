@@ -13,8 +13,12 @@ export default function manifest(): MetadataRoute.Manifest {
         theme_color: '#2563eb',
         orientation: 'portrait-primary',
         icons: [
-            { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-            { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+            { src: '/logo/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/logo/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            // Android crops any icon without a maskable entry into a circle and
+            // clips the mark; declaring the 512 as maskable keeps it inside the
+            // safe zone instead.
+            { src: '/logo/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         // The employee self-service portal is the screen most people who
         // install this on a phone are actually here for — a long-press shortcut

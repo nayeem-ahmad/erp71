@@ -303,7 +303,7 @@ describe('ContactPage', () => {
         });
 
         it('renders ERP71 brand link', () => {
-            expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
+            expect(screen.getAllByRole('link', { name: 'ERP71' }).length).toBeGreaterThan(0);
         });
 
         it('renders Sign in nav link', () => {

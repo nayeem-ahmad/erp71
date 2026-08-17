@@ -1,6 +1,5 @@
 export const componentsMessages = {
         marketingNav: {
-            brand: "ERP71",
             features: "ফিচার",
             pricing: "মূল্য",
             reviews: "রিভিউ",
@@ -10,7 +9,6 @@ export const componentsMessages = {
             startFreeTrial: "শুরু করুন",
         },
         marketingFooter: {
-            brand: "ERP71",
             terms: "সেবার শর্তাবলী",
             privacy: "গোপনীয়তা নীতি",
             refund: "রিফান্ড নীতি",

@@ -9,7 +9,6 @@ import {
     ChevronDown,
     Gift,
     LayoutDashboard,
-    Package,
     Search,
     UserRound,
     Users,
@@ -17,7 +16,9 @@ import {
     X,
     type LucideIcon,
 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { BRAND_NAME } from '@/lib/brand';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
@@ -659,17 +660,20 @@ export default function Sidebar({
                 {/* Logo — height matches app header (layout.tsx) */}
                 <div className={`flex items-center ${compactNav ? 'min-h-[3.25rem]' : 'h-14'} border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
                     <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3'}`}>
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
-                            {logoUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
+                        {logoUrl ? (
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                            ) : (
-                                <Package className="text-white w-5 h-5" />
-                            )}
-                        </div>
+                            </div>
+                        ) : (
+                            // No tenant logo uploaded — fall back to the ERP71 mark, and
+                            // drop the coloured tile with it: the mark is outline artwork
+                            // that turns to mush reversed out at 20px.
+                            <BrandLogo variant="mark" height={28} decorative />
+                        )}
                         {!collapsed && (
                             <span className="min-w-0 truncate text-[15px] font-extrabold text-gray-950 tracking-tight leading-tight">
-                                {businessName || 'ERP71'}
+                                {businessName || BRAND_NAME}
                             </span>
                         )}
                     </div>

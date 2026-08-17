@@ -190,8 +190,8 @@ describe('PricingPage', () => {
 
     it('renders the footer brand', () => {
         render(<PricingPage />);
-        // ERP71 appears in both nav and footer
-        expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
+        // The brand mark appears in both nav and footer
+        expect(screen.getAllByAltText('ERP71').length).toBeGreaterThan(0);
     });
 
     it('renders the paid-plans-only note under plan cards', () => {
