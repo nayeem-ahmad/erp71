@@ -2630,7 +2630,12 @@ export const api = {
     rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
     getSupportThreads: () => fetchWithAuth('/support/threads'),
-    createSupportThread: (data: { subject: string; body: string }) =>
+    createSupportThread: (data: {
+        category?: 'support' | 'bug' | 'feature' | 'general';
+        subject?: string;
+        body: string;
+        page?: string;
+    }) =>
         fetchWithAuth('/support/threads', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -2644,10 +2649,19 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     // Support chat (admin)
-    getAdminSupportThreads: (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
+    getAdminSupportThreads: (params?: {
+        status?: string;
+        search?: string;
+        category?: string;
+        kind?: string;
+        page?: number;
+        limit?: number;
+    }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.search) query.set('search', params.search);
+        if (params?.category) query.set('category', params.category);
+        if (params?.kind) query.set('kind', params.kind);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/admin/support/threads${query.toString() ? `?${query.toString()}` : ''}`);

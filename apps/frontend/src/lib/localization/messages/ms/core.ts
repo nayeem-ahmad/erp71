@@ -355,7 +355,7 @@ export const coreMessages = {
                 referrals: "Rujukan",
                 feedback: "Maklum Balas",
                 support: "Sokongan",
-                adminSupport: "Sembang Sokongan",
+                adminSupport: "Sokongan",
                 systemHealth: "Kesihatan Sistem",
                 platformStatus: "Status awam",
                 platformSettingsSms: "SMS Gateway",

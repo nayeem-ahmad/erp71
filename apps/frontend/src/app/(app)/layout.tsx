@@ -389,13 +389,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!platformFeatures.help && pathname.startsWith(routes.help)) {
             router.replace(routes.home);
         }
-        if (!platformFeatures.support && pathname === routes.support) {
+        if (!platformFeatures.support && !platformFeatures.feedback && pathname === routes.support) {
             router.replace(routes.home);
         }
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -439,7 +439,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 refereeMode={inRefereeMode}
                 employeeMode={inEmployeeMode}
                 helpEnabled={platformFeatures.help}
-                supportEnabled={platformFeatures.support}
+                supportEnabled={platformFeatures.support || platformFeatures.feedback}
                 activePlanCode={activePlanCode}
                 accountingOnlyMode={accountingOnlyMode}
                 posEnabled={posEnabled}
@@ -495,7 +495,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <LanguageSwitcher />
                         </div>
                         <AppHeaderMobileMenu />
-                        {platformFeatures.feedback ? <FeedbackWidget /> : null}
+                        {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                         {canAccessAiChat ? <AiChatWidget /> : null}
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />

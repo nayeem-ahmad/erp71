@@ -583,9 +583,11 @@ Nine of the ten landed on 2026-08-07 (see COMPLETED). The tie-out is the one lef
 
 ### Support
 - [x] Set up support chat between platform admin and shop owners — bidirectional thread-based chat with 10s polling; SupportThread/SupportMessage Prisma models; backend SupportModule (shop owner + admin controllers); shop owner page at /dashboard/support; admin page at /dashboard/admin/support; en/bn/ms i18n — done 2026-06-16
+- [x] Unify tenant Support Chat + Feedback into one composer / one thread per knock — shop users pick Help / Bug / Feature / Other from `/support` or the header button; help is conversation-only; feedback types still create a `Feedback` row (automation unchanged) and get the same chat; admin inbox at `/admin/support` with type filter + Actions on feedback threads; `/admin/feedback` redirects — done 2026-08-18
 - [ ] Set up support email or ticket system before first paying customer
 - [x] Status page — platform-admin `/status` with live dependency checks, cron jobs, and link to full system-health dashboard; public marketing links removed — done 2026-07-01
 - [x] In-app feedback mechanism — `FeedbackWidget.tsx` (bug/feature/general) + `/admin/feedback` review list already existed from an earlier session but was never checked off here — done (pre-existing, confirmed 2026-07-05)
+- [ ] Consider collapsing the separate `support` and `feedback` platform feature flags now that they share one tenant surface — today the inbox shows if either is on, and type chips follow the matching flag. Surfaced 2026-08-18.
 - [ ] Basic documentation / help center (Notion, GitBook, or Docs)
 
 ### Feedback automation follow-ups (2026-07-05)
@@ -593,7 +595,7 @@ Nine of the ten landed on 2026-08-07 (see COMPLETED). The tie-out is the one lef
 - [ ] Add bn/ms i18n for the new Feedback Automation UI — shipped English-only, following the same (pre-existing) precedent as `admin/platform-settings/ai/page.tsx`
 - [ ] Frontend tests for `FeedbackAutomationPanel` and the new settings page — backend got 15 new unit tests, frontend did not
 - [ ] Dedicated tests for `FeedbackAgentRunnerService`'s tool-call loop (currently only exercised indirectly via mocks in `feedback-automation.service.spec.ts`) — needs fetch/OpenRouter mocking
-- [ ] Confirm GitHub webhook or a cheap polling cron for PR merge detection instead of relying on the admin clicking "Refresh status" on `/admin/feedback`
+- [ ] Confirm GitHub webhook or a cheap polling cron for PR merge detection instead of relying on the admin clicking "Refresh status" on `/admin/support` (Actions panel)
 - [x] Audit `admin/platform-settings/ai/page.tsx` (and the sibling settings pages) for the `fetchWithAuth().then(r => r.json())` misuse — fixed across all affected pages (see 2026-07-07 entry in COMPLETED); `navigation`/`plans`/`addons` use the correct contract already, so no change needed there — done 2026-07-07
 
 ### DevOps & Reliability
@@ -844,6 +846,7 @@ Spec: `docs/superpowers/specs/2026-08-09-cross-project-boards-design.md`. The fe
 
 ## COMPLETED
 
+- [x] Unify tenant Support Chat + Feedback into one composer and one thread per knock — shop users send Help / Bug / Feature / Other from `/support` or the header button; help stays conversation-only; feedback types still create a `Feedback` row so automation is unchanged, and admins can reply in the same chat. Admin inbox is `/admin/support` (type filter + Actions panel); `/admin/feedback` redirects. Feature flags stay separate: the surface shows if either is on. Tests: support.util/service 19, SupportComposer 8, Sidebar/catalog/nav-resolver green. Local DB was empty/drifted so the authenticated UI was not browser-driven this session — done 2026-08-18
 - [x] **CRM activity unification R2 — cutover** — every screen moves onto `CrmActivity`; legacy tables and endpoints are untouched and merely unreferenced, which is what starts R3's seven-day clock. **No schema change in this release.**
 
   **It fixes a live production bug R1 shipped.** The lead detail conversation form still sent `next_step` / `next_step_date` / `next_step_assigned_to`, which R1 removed from `CreateLeadConversationDto`; the global `ValidationPipe` runs `forbidNonWhitelisted: true`, so since the #499 deploy **logging a conversation with a next step filled in returned 400** (surfaced as a raw `alert`). Without a next step it still worked, which is why nobody noticed. R2 deletes that form. It also closes the other R1 gap: the in-app notification for cron-created activities linked to `/crm/activities`, a route that did not exist until now.

@@ -3258,6 +3258,7 @@ model Feedback {
   tenant Tenant         @relation(fields: [tenantId], references: [id])
   user   User           @relation(fields: [userId], references: [id])
   plans  FeedbackPlan[]
+  thread SupportThread?
 
   @@map("feedbacks")
 }
@@ -5320,17 +5321,23 @@ model AiMessage {
 // ── Support Chat ──────────────────────────────────────────────────────────────
 
 model SupportThread {
-  id        String   @id @default(cuid())
-  tenantId  String
-  subject   String
-  status    String   @default("open") // open | resolved
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  tenantId   String
+  subject    String
+  status     String   @default("open") // open | resolved
+  /// support | bug | feature | general
+  category   String   @default("support")
+  page       String?
+  feedbackId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feedback Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)
   messages SupportMessage[]
 
   @@index([tenantId, status])
+  @@index([tenantId, category])
   @@map("support_threads")
 }
 
