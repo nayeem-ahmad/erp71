@@ -138,7 +138,21 @@ export function validateLeadFormErrors(
     return errors;
 }
 
-export function leadFormToPayload(form: LeadFormState) {
+export type LeadFormPayloadMode = 'create' | 'update';
+
+/**
+ * Build the body for POST /crm/leads or PATCH /crm/leads/:id.
+ *
+ * `mode: 'update'` must omit `next_step*`. Those columns are a read-only
+ * rollup of the earliest PLANNED CrmActivity and were dropped from
+ * UpdateLeadDto; the global ValidationPipe runs with `forbidNonWhitelisted`,
+ * so sending them 400s the entire save — including when the user only
+ * changed name or status on a lead that already had a next step.
+ */
+export function leadFormToPayload(
+    form: LeadFormState,
+    opts: { mode?: LeadFormPayloadMode } = {},
+) {
     const payload: Record<string, string> = {
         name: form.name.trim(),
     };
@@ -163,12 +177,16 @@ export function leadFormToPayload(form: LeadFormState) {
     if (x) payload.x_url = x;
     const website = form.website_url.trim();
     if (website) payload.website_url = website;
-    const nextStep = form.next_step.trim();
-    if (nextStep) payload.next_step = nextStep;
-    if (form.next_step_date) {
-        payload.next_step_date = new Date(form.next_step_date).toISOString();
+    // Create only: the opening next step is materialised as a PLANNED activity.
+    // Reschedule an existing one through PATCH /crm/activities/:id.
+    if (opts.mode !== 'update') {
+        const nextStep = form.next_step.trim();
+        if (nextStep) payload.next_step = nextStep;
+        if (form.next_step_date) {
+            payload.next_step_date = new Date(form.next_step_date).toISOString();
+        }
+        if (form.next_step_assigned_to) payload.next_step_assigned_to = form.next_step_assigned_to;
     }
-    if (form.next_step_assigned_to) payload.next_step_assigned_to = form.next_step_assigned_to;
     const customFields = Object.entries(form.custom_fields ?? {}).reduce<Record<string, string>>((acc, [k, v]) => {
         const val = String(v ?? '').trim();
         if (val) acc[k] = val;
@@ -208,6 +226,12 @@ type LeadFormFieldsProps = {
     /** Active rows from CRM → Settings → Lead Sources & Categories. */
     sourceOptions?: LeadTaxonomyOption[];
     categoryOptions?: LeadTaxonomyOption[];
+    /**
+     * Next-step fields belong on create only. On edit they are a read-only
+     * rollup of the earliest PLANNED activity — shown on the detail card,
+     * rescheduled from the activity panel.
+     */
+    showNextStep?: boolean;
 };
 
 export function LeadFormFields({
@@ -219,6 +243,7 @@ export function LeadFormFields({
     errors = {},
     sourceOptions = [],
     categoryOptions = [],
+    showNextStep = true,
 }: Readonly<LeadFormFieldsProps>) {
     const { t } = useI18n();
     const m = t.crm.leads;
@@ -298,11 +323,13 @@ export function LeadFormFields({
             <Field label={m.fields.websiteUrl}>
                 <Input value={form.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://..." />
             </Field>
-            <NextStepFields
-                state={{ next_step: form.next_step, next_step_date: form.next_step_date, next_step_assigned_to: form.next_step_assigned_to }}
-                onChange={(next) => onChange({ ...form, ...next })}
-                teamMembers={teamMembers}
-            />
+            {showNextStep && (
+                <NextStepFields
+                    state={{ next_step: form.next_step, next_step_date: form.next_step_date, next_step_assigned_to: form.next_step_assigned_to }}
+                    onChange={(next) => onChange({ ...form, ...next })}
+                    teamMembers={teamMembers}
+                />
+            )}
             {customFieldDefs.map((def) => (
                 <Field label={def.label} key={def.key}>
                     <Input
