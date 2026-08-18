@@ -174,7 +174,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             },
             {
                 q: 'How do I create and work a lead?',
-                a: 'Go to CRM → Leads → "New Lead" and enter at least a name (mobile, email, source, category, priority, social links, and a next step are optional). A lead moves through fixed stages — New, Contacted, Qualified, Lost, Converted — and you assign it with the "Next Step Assigned To" person; the list also supports bulk assign and status changes. When you\'re ready, "Convert to Customer" creates or links the customer in Sales.',
+                a: 'Go to CRM → Leads → "New Lead" and enter at least a name (mobile, email, source, category, priority, status, social links, and a next step are optional). A lead moves through fixed stages — New, Contacted, Qualified, Lost, Converted — and you assign it with the "Next Step Assigned To" person; the list also supports bulk assign and status changes. When you\'re ready, "Convert to Customer" creates or links the customer in Sales.',
             },
             {
                 q: 'Where do the Source and Category lists come from?',
