@@ -13,10 +13,12 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell } from '@/components/ui';
-import FollowUpPanel from '@/components/crm/FollowUpPanel';
+import { PageShell, Button, Select } from '@/components/ui';
+import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import CrmActivityPanel from '@/components/crm/CrmActivityPanel';
+import { toast } from '@/lib/toast';
 
-type Tab = 'history' | 'interactions' | 'credit' | 'followUps';
+type Tab = 'history' | 'activities' | 'credit';
 
 const INTERACTION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'NOTE'] as const;
 const typeIcons: Record<string, string> = {
@@ -35,17 +37,16 @@ export default function CustomerProfile() {
     const [historyPage, setHistoryPage] = useState(1);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    // Interactions state
-    const [interactions, setInteractions] = useState<any[]>([]);
-    const [interactionsLoading, setInteractionsLoading] = useState(false);
-    const [showInteractionForm, setShowInteractionForm] = useState(false);
-    const [newInteraction, setNewInteraction] = useState({ type: 'CALL', summary: '', outcome: '' });
-    const [savingInteraction, setSavingInteraction] = useState(false);
 
     // AI message drafting state
     const [draftingMessage, setDraftingMessage] = useState(false);
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
     const [draftChannel, setDraftChannel] = useState('WHATSAPP');
+    const { options: channels } = useLeadTaxonomy('channels');
+    // Handed to CrmActivityPanel, which opens its "Log activity" dialog pre-filled.
+    const [activityDraft, setActivityDraft] =
+        useState<{ channelCode?: string; summary: string } | null>(null);
+    const clearActivityDraft = useCallback(() => setActivityDraft(null), []);
     const [showDraftPanel, setShowDraftPanel] = useState(false);
 
     // Credit state
@@ -65,7 +66,6 @@ export default function CustomerProfile() {
     }, [id, historyPage]);
 
     useEffect(() => {
-        if (id && activeTab === 'interactions') void loadInteractions();
         if (id && activeTab === 'credit') void loadCredit();
     }, [id, activeTab]);
 
@@ -88,46 +88,8 @@ export default function CustomerProfile() {
         }
     }, [id]);
 
-    const loadInteractions = async () => {
-        setInteractionsLoading(true);
-        try {
-            const data = await api.getCrmInteractions({ customerId: id as string, limit: 50 });
-            setInteractions(data?.items ?? data ?? []);
-        } finally {
-            setInteractionsLoading(false);
-        }
-    };
 
-    const loadCredit = async () => {
-        setCreditLoading(true);
-        try {
-            const data = await api.getCustomerCreditLedger(id as string);
-            setCreditLedger(data);
-        } finally {
-            setCreditLoading(false);
-        }
-    };
-
-    const saveInteraction = async () => {
-        if (!newInteraction.summary.trim()) return;
-        setSavingInteraction(true);
-        try {
-            await api.createCrmInteraction({ ...newInteraction, customer_id: id });
-            setNewInteraction({ type: 'CALL', summary: '', outcome: '' });
-            setShowInteractionForm(false);
-            await loadInteractions();
-        } finally {
-            setSavingInteraction(false);
-        }
-    };
-
-    const deleteInteraction = async (interactionId: string) => {
-        if (!confirm(t.customers.profile.deleteInteractionConfirm)) return;
-        await api.deleteCrmInteraction(interactionId);
-        await loadInteractions();
-    };
-
-    const handleDraftMessage = async () => {
+    const draftMessage = async () => {
         if (!customer) return;
         setDraftingMessage(true);
         try {
@@ -143,15 +105,27 @@ export default function CustomerProfile() {
                     last_contacted_at: customer.last_contacted_at,
                 },
             });
-            setNewInteraction((n) => ({ ...n, type: draftChannel as any, summary: result.draft }));
+            setActivityDraft({ channelCode: draftChannel, summary: result.draft });
             setShowDraftPanel(false);
-            setShowInteractionForm(true);
-        } catch (err: any) {
-            alert(err.message ?? 'AI drafting failed.');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : t.crm.activities.toast.failed);
         } finally {
             setDraftingMessage(false);
         }
     };
+
+    const loadCredit = async () => {
+        setCreditLoading(true);
+        try {
+            const data = await api.getCustomerCreditLedger(id as string);
+            setCreditLedger(data);
+        } finally {
+            setCreditLoading(false);
+        }
+    };
+
+
+
 
     const savePayment = async () => {
         const amt = parseFloat(paymentAmount);
@@ -247,9 +221,8 @@ export default function CustomerProfile() {
                 <div className="border-b border-gray-100 flex">
                     {([
                         { key: 'history', label: t.customers.profile.tabs.history, icon: <ShoppingBag className="w-4 h-4" /> },
-                        { key: 'interactions', label: t.customers.profile.tabs.interactions, icon: <MessageSquare className="w-4 h-4" /> },
+                        { key: 'activities', label: t.crm.activities.title, icon: <MessageSquare className="w-4 h-4" /> },
                         { key: 'credit', label: t.customers.profile.tabs.credit, icon: <Wallet className="w-4 h-4" /> },
-                        { key: 'followUps', label: t.customers.profile.tabs.followUps, icon: <ClipboardList className="w-4 h-4" /> },
                     ] as const).map(({ key, label, icon }) => (
                         <button
                             key={key}
@@ -323,160 +296,54 @@ export default function CustomerProfile() {
                     </div>
                 )}
 
-                {/* Tab: Interactions */}
-                {activeTab === 'interactions' && (
+                {/* Tab: Activities — the merged replacement for the separate
+                    Interactions and Follow-ups tabs, which read two tables that
+                    could not refer to each other. */}
+                {activeTab === 'activities' && (
                     <div className="p-6 space-y-4">
-                        <div className="flex justify-end gap-2 flex-wrap">
-                            <button
-                                onClick={() => { setShowDraftPanel((v) => !v); setShowInteractionForm(false); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={() => setShowDraftPanel((v) => !v)}
+                                leftIcon={<Sparkles className="w-4 h-4" />}
                             >
-                                <Sparkles className="w-4 h-4" /> AI Draft
-                            </button>
-                            <button
-                                onClick={() => { setShowInteractionForm((v) => !v); setShowDraftPanel(false); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-                            >
-                                <Plus className="w-4 h-4" /> {t.customers.profile.logInteraction}
-                            </button>
+                                {t.crm.leads.detail.aiDraft}
+                            </Button>
                         </div>
 
                         {showDraftPanel && (
-                            <div className="bg-purple-50 rounded-xl p-4 space-y-3 border border-purple-200">
-                                <p className="text-xs font-semibold text-purple-400">AI Message Drafter</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Channel</label>
-                                        <select
-                                            value={draftChannel}
-                                            onChange={(e) => setDraftChannel(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                                        >
-                                            <option value="WHATSAPP">WhatsApp</option>
-                                            <option value="SMS">SMS</option>
-                                            <option value="EMAIL">Email</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Purpose</label>
-                                        <select
-                                            value={draftPurpose}
-                                            onChange={(e) => setDraftPurpose(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                                        >
-                                            <option value="follow_up">Follow-up</option>
-                                            <option value="payment_reminder">Payment reminder</option>
-                                            <option value="promotion">Promotion</option>
-                                            <option value="birthday">Birthday</option>
-                                            <option value="reorder_reminder">Reorder reminder</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                    AI will draft a ready-to-send message using {customer?.name}&apos;s profile. The draft will pre-fill the interaction form below.
+                            <div className="space-y-3 rounded-lg border border-primary-border bg-primary-light p-4">
+                                <p className="text-xs font-semibold text-blue-700">
+                                    {t.crm.leads.detail.aiDrafter}
                                 </p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)}>
+                                        {channels.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
+                                    </Select>
+                                    <Select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)}>
+                                        <option value="follow_up">{t.crm.leads.detail.draftPurposeFollowUp}</option>
+                                        <option value="collection">{t.crm.leads.detail.draftPurposeCollection}</option>
+                                    </Select>
+                                </div>
                                 <div className="flex gap-2">
-                                    <button
-                                        onClick={handleDraftMessage}
-                                        disabled={draftingMessage}
-                                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                                    >
-                                        {draftingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                        {draftingMessage ? 'Drafting…' : 'Generate draft'}
-                                    </button>
-                                    <button onClick={() => setShowDraftPanel(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">
-                                        Cancel
-                                    </button>
+                                    <Button onClick={draftMessage} loading={draftingMessage} leftIcon={<Sparkles className="w-4 h-4" />}>
+                                        {t.crm.leads.detail.generateDraft}
+                                    </Button>
+                                    <Button variant="secondary" onClick={() => setShowDraftPanel(false)}>
+                                        {t.common.cancel}
+                                    </Button>
                                 </div>
                             </div>
                         )}
 
-                        {showInteractionForm && (
-                            <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
-                                <div className="flex gap-2 flex-wrap">
-                                    {INTERACTION_TYPES.map((t) => (
-                                        <button
-                                            key={t}
-                                            onClick={() => setNewInteraction((n) => ({ ...n, type: t }))}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                                                newInteraction.type === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-                                            }`}
-                                        >
-                                            {typeIcons[t]} {t}
-                                        </button>
-                                    ))}
-                                </div>
-                                <textarea
-                                    placeholder={t.customers.profile.summary}
-                                    value={newInteraction.summary}
-                                    onChange={(e) => setNewInteraction((n) => ({ ...n, summary: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none"
-                                    rows={3}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder={t.customers.profile.outcome}
-                                    value={newInteraction.outcome}
-                                    onChange={(e) => setNewInteraction((n) => ({ ...n, outcome: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                                />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={saveInteraction}
-                                        disabled={savingInteraction || !newInteraction.summary.trim()}
-                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                                    >
-                                        <Send className="w-4 h-4" /> Save
-                                    </button>
-                                    <button onClick={() => setShowInteractionForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {interactionsLoading ? (
-                            <div className="py-8 text-center text-gray-400 text-sm">{t.common.loading}</div>
-                        ) : interactions.length === 0 ? (
-                            <div className="py-12 text-center text-gray-400">
-                                <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                                <p className="text-sm">{t.customers.profile.noInteractions}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {interactions.map((interaction: any) => (
-                                    <div key={interaction.id} className="flex gap-3 group">
-                                        <div className="text-xl mt-0.5">{typeIcons[interaction.type] ?? '💬'}</div>
-                                        <div className="flex-1 bg-white border border-gray-100 rounded-xl p-4">
-                                            <div className="flex items-start justify-between">
-                                                <div>
-                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{interaction.type}</span>
-                                                    <span className="text-xs text-gray-400 ml-2">{interaction.direction}</span>
-                                                    <p className="text-sm text-gray-800 mt-1">{interaction.summary}</p>
-                                                    {interaction.outcome && (
-                                                        <p className="text-xs text-gray-500 mt-1">→ {interaction.outcome}</p>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => deleteInteraction(interaction.id)}
-                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-danger transition-opacity ml-2"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                                                <span>{formatDate(interaction.created_at)}</span>
-                                                {interaction.creator && <span>{t.customers.profile.by} {interaction.creator.name || interaction.creator.email}</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        <CrmActivityPanel
+                            customerId={id as string}
+                            draft={activityDraft}
+                            onDraftConsumed={clearActivityDraft}
+                        />
                     </div>
                 )}
 
-                {/* Tab: Credit / Due */}
                 {activeTab === 'credit' && (
                     <div className="p-6 space-y-4">
                         {creditLoading ? (
@@ -594,12 +461,6 @@ export default function CustomerProfile() {
                     </div>
                 )}
 
-                {/* Tab: Follow-ups */}
-                {activeTab === 'followUps' && (
-                    <div className="p-6">
-                        <FollowUpPanel customerId={id as string} />
-                    </div>
-                )}
             </div>
         </PageShell>
     );

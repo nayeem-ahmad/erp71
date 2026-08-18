@@ -16,12 +16,16 @@ jest.mock('./useTablePreferences', () => ({
     }),
 }));
 
-jest.mock('./export-utils', () => ({
-    exportToCSV: jest.fn(),
-    exportToExcel: jest.fn(),
-    exportToPDF: jest.fn(),
-    printTable: jest.fn(),
-}));
+jest.mock('./export-utils', () => {
+    const actual = jest.requireActual('./export-utils');
+    return {
+        ...actual,
+        exportToCSV: jest.fn(),
+        exportToExcel: jest.fn(),
+        exportToPDF: jest.fn(),
+        printTable: jest.fn(),
+    };
+});
 
 // DnD kit needs pointer sensor support in jsdom — mock the whole context
 jest.mock('@dnd-kit/core', () => ({
@@ -79,6 +83,14 @@ const defaultProps = {
 // ── Tests ─────────────────────────────────────────────────────────
 
 describe('DataTable', () => {
+    beforeEach(() => {
+        const { exportToCSV, exportToExcel, exportToPDF, printTable } = require('./export-utils');
+        exportToCSV.mockClear();
+        exportToExcel.mockClear();
+        exportToPDF.mockClear();
+        printTable.mockClear();
+    });
+
     it('renders column headers', () => {
         render(<DataTable {...defaultProps} />);
         expect(screen.getByText('Name')).toBeInTheDocument();
@@ -195,40 +207,121 @@ describe('DataTable', () => {
         expect(screen.getAllByText(/name/i).length).toBeGreaterThan(0);
     });
 
-    it('shows export menu when Export button is clicked', () => {
+    it('opens the export dialog when Export is clicked', () => {
         render(<DataTable {...defaultProps} />);
-        const exportBtn = screen.getByRole('button', { name: /export/i });
-        fireEvent.click(exportBtn);
-        expect(screen.getByText(/export csv/i)).toBeInTheDocument();
-        expect(screen.getByText(/export excel/i)).toBeInTheDocument();
-        expect(screen.getByText(/export pdf/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /export/i }));
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getByRole('radio', { name: /complete list/i })).toBeChecked();
+        expect(screen.getByRole('radio', { name: /csv/i })).toBeChecked();
     });
 
-    it('calls exportToCSV when Export CSV is clicked', async () => {
+    it('exports the complete filtered list with visible columns by default', async () => {
         const { exportToCSV } = require('./export-utils');
         render(<DataTable {...defaultProps} />);
         fireEvent.click(screen.getByRole('button', { name: /export/i }));
-        await waitFor(() => screen.getByText(/export csv/i));
-        fireEvent.click(screen.getByText(/export csv/i));
-        expect(exportToCSV).toHaveBeenCalledWith(expect.anything(), 'Test Table');
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await waitFor(() => {
+            expect(exportToCSV).toHaveBeenCalledWith(
+                'Test Table',
+                ['Name', 'Amount'],
+                [
+                    ['Alpha Product', '100'],
+                    ['Beta Product', '200'],
+                    ['Gamma Product', '300'],
+                ],
+            );
+        });
     });
 
-    it('calls exportToExcel when Export Excel is clicked', async () => {
+    it('exports only the current page when that option is chosen', async () => {
+        const { exportToCSV } = require('./export-utils');
+        const manyRows: Row[] = Array.from({ length: 25 }, (_, i) => ({
+            id: String(i + 1),
+            name: `Row ${i + 1}`,
+            amount: i,
+        }));
+        render(<DataTable {...defaultProps} data={manyRows} />);
+        fireEvent.click(screen.getByRole('button', { name: /export/i }));
+        fireEvent.click(screen.getByRole('radio', { name: /current page \(10\)/i }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await waitFor(() => expect(exportToCSV).toHaveBeenCalled());
+        const [, , rows] = (exportToCSV as jest.Mock).mock.calls[0];
+        expect(rows).toHaveLength(10);
+        expect(rows[0][0]).toBe('Row 1');
+        expect(rows[9][0]).toBe('Row 10');
+    });
+
+    it('calls exportToExcel when Excel is chosen', async () => {
         const { exportToExcel } = require('./export-utils');
         render(<DataTable {...defaultProps} />);
         fireEvent.click(screen.getByRole('button', { name: /export/i }));
-        await waitFor(() => screen.getByText(/export excel/i));
-        fireEvent.click(screen.getByText(/export excel/i));
-        expect(exportToExcel).toHaveBeenCalledWith(expect.anything(), 'Test Table');
+        fireEvent.click(screen.getByRole('radio', { name: /excel/i }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await waitFor(() => {
+            expect(exportToExcel).toHaveBeenCalledWith(
+                'Test Table',
+                ['Name', 'Amount'],
+                expect.any(Array),
+            );
+        });
     });
 
-    it('calls exportToPDF when Export PDF is clicked', async () => {
+    it('calls exportToPDF when PDF is chosen', async () => {
         const { exportToPDF } = require('./export-utils');
         render(<DataTable {...defaultProps} />);
         fireEvent.click(screen.getByRole('button', { name: /export/i }));
-        await waitFor(() => screen.getByText(/export pdf/i));
-        fireEvent.click(screen.getByText(/export pdf/i));
-        expect(exportToPDF).toHaveBeenCalledWith(expect.anything(), 'Test Table');
+        fireEvent.click(screen.getByRole('radio', { name: /pdf/i }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await waitFor(() => {
+            expect(exportToPDF).toHaveBeenCalledWith(
+                'Test Table',
+                ['Name', 'Amount'],
+                expect.any(Array),
+            );
+        });
+    });
+
+    it('fetches every matching row in server mode when Complete list is chosen', async () => {
+        const { exportToCSV } = require('./export-utils');
+        const fetchAllRows = jest.fn().mockResolvedValue({
+            items: [
+                { id: '1', name: 'Alpha Product', amount: 100 },
+                { id: '2', name: 'Beta Product', amount: 200 },
+                { id: '9', name: 'Off-page Product', amount: 900 },
+            ],
+            truncated: false,
+            total: 3,
+        });
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{
+                    total: 3,
+                    page: 1,
+                    pageSize: 10,
+                    onPageChange: jest.fn(),
+                    onPageSizeChange: jest.fn(),
+                    sort: null,
+                    onSortChange: jest.fn(),
+                    fetchAllRows,
+                }}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /export/i }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await waitFor(() => expect(fetchAllRows).toHaveBeenCalled());
+        await waitFor(() => {
+            expect(exportToCSV).toHaveBeenCalledWith(
+                'Test Table',
+                ['Name', 'Amount'],
+                [
+                    ['Alpha Product', '100'],
+                    ['Beta Product', '200'],
+                    ['Off-page Product', '900'],
+                ],
+            );
+        });
     });
 
     it('calls printTable with the resolved header when Print is clicked', async () => {

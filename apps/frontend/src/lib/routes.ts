@@ -153,6 +153,9 @@ export const routes = {
         contacts: '/crm/contacts',
         contactNew: '/crm/contacts/new' as const,
         contactDetail: (id: string) => `/crm/contacts/${id}` as const,
+        activities: '/crm/activities',
+        // Both superseded by `activities` in R2; the pages redirect there and the
+        // routes stay so old bookmarks and saved sidebar layouts keep resolving.
         conversations: '/crm/conversations',
         followUps: '/crm/follow-ups',
         campaigns: '/crm/campaigns',

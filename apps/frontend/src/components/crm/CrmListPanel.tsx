@@ -48,9 +48,19 @@ export default function CrmListPanel({
 
     const isSources = kind === 'sources';
     const isChannels = kind === 'channels';
-    const addLabel = isSources ? m.addSource : isChannels ? m.addChannel : m.addCategory;
-    // Channels are counted against conversations, the two lead lists against leads.
-    const usageTemplate = isChannels ? m.conversationsUsing : m.leadsUsing;
+    const isPurposes = kind === 'purposes';
+    // Channels and purposes both carry an emoji; the two lead lists do not.
+    const hasIcon = isChannels || isPurposes;
+    const addLabel = isSources
+        ? m.addSource
+        : isChannels
+            ? m.addChannel
+            : isPurposes
+                ? m.addPurpose
+                : m.addCategory;
+    // Channels and purposes are counted against activities, the two lead lists
+    // against leads.
+    const usageTemplate = hasIcon ? m.activitiesUsing : m.leadsUsing;
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -113,7 +123,7 @@ export default function CrmListPanel({
             const payload = {
                 name,
                 ...(isSources ? { score_weight: weight } : {}),
-                ...(isChannels ? { icon: editor.icon.trim() } : {}),
+                ...(hasIcon ? { icon: editor.icon.trim() } : {}),
             };
             if (editor.id) {
                 await api.updateLeadTaxonomy(kind, editor.id, payload);
@@ -184,9 +194,9 @@ export default function CrmListPanel({
                             <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        {isChannels && (
+                                        {hasIcon && (
                                             <span aria-hidden="true" className="text-base">
-                                                {row.icon || '💬'}
+                                                {row.icon || (isPurposes ? '📌' : '💬')}
                                             </span>
                                         )}
                                         <span className="truncate text-sm font-medium text-gray-800">
@@ -265,7 +275,7 @@ export default function CrmListPanel({
                                 />
                             </Field>
                         )}
-                        {isChannels && (
+                        {hasIcon && (
                             <Field label={m.fields.icon} hint={m.fields.iconHint}>
                                 <Input
                                     value={editor.icon}
@@ -292,7 +302,7 @@ export default function CrmListPanel({
                         {inUseCount > 0 && (
                             <>
                                 <p className="text-sm text-gray-700">
-                                    {(isChannels ? m.delete.inUseConversations : m.delete.inUse)
+                                    {(hasIcon ? m.delete.inUseActivities : m.delete.inUse)
                                         .replace('{count}', String(inUseCount))}
                                 </p>
                                 <Field label={m.delete.reassignLabel} required>
