@@ -160,7 +160,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Bagaimana saya mencipta dan mengendalikan prospek?',
-                    a: 'Pergi ke CRM → Prospek → "New Lead" dan masukkan sekurang-kurangnya nama (mudah alih, e-mel, sumber, kategori, keutamaan, pautan sosial, dan langkah seterusnya adalah pilihan). Prospek bergerak melalui peringkat tetap — New, Contacted, Qualified, Lost, Converted — dan anda menetapkannya kepada orang di "Next Step Assigned To"; senarai juga menyokong penetapan pukal dan perubahan status. Apabila anda bersedia, "Convert to Customer" mencipta atau memautkan pelanggan dalam Jualan.',
+                    a: 'Pergi ke CRM → Prospek → "New Lead" dan masukkan sekurang-kurangnya nama (mudah alih, e-mel, sumber, kategori, keutamaan, status, pautan sosial, dan langkah seterusnya adalah pilihan). Prospek bergerak melalui peringkat tetap — New, Contacted, Qualified, Lost, Converted — dan anda menetapkannya kepada orang di "Next Step Assigned To"; senarai juga menyokong penetapan pukal dan perubahan status. Apabila anda bersedia, "Convert to Customer" mencipta atau memautkan pelanggan dalam Jualan.',
                 },
                 {
                     q: 'Dari mana senarai Sumber dan Kategori datang?',

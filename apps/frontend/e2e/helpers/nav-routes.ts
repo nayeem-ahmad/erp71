@@ -145,6 +145,10 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/admin/platform-settings/ai', label: 'Platform Settings AI' },
     { path: '/admin/platform-settings/navigation', label: 'Platform Settings Navigation' },
     { path: '/admin/platform-settings/plans', label: 'Platform Settings Plans' },
+    { path: '/admin/platform-settings/addons', label: 'Platform Settings Add-ons' },
+    { path: '/admin/platform-settings/buffer', label: 'Platform Settings Buffer' },
+    { path: '/admin/platform-settings/feedback-automation', label: 'Platform Settings Feedback Automation' },
+    { path: '/admin/platform-settings/deploy', label: 'Production Deploy' },
     { path: '/admin/system-health', label: 'System Health' },
-    { path: '/status', label: 'System Status' },
+    { path: '/status', label: 'Public Status' },
 ];

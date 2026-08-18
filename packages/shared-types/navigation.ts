@@ -257,9 +257,14 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.tenant-management.tenants': { id: 'admin.tenant-management.tenants', kind: 'link', icon: 'Building2', labelKey: 'sidebar.items.tenants', href: '/admin/tenants' },
   'admin.tenant-management.ledger': { id: 'admin.tenant-management.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.tenantLedger', href: '/admin/tenants/ledger' },
   'admin.tenant-management.reminders': { id: 'admin.tenant-management.reminders', kind: 'link', icon: 'BellRing', labelKey: 'sidebar.items.tenantReminders', href: '/admin/tenants/reminders' },
-  'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.users', href: '/admin/users' },
+  'admin.inbox': { id: 'admin.inbox', kind: 'subgroup', icon: 'Inbox', labelKey: 'sidebar.sections.adminInbox' },
+  'admin.growth': { id: 'admin.growth', kind: 'subgroup', icon: 'Megaphone', labelKey: 'sidebar.sections.adminGrowth' },
+  'admin.plans-billing': { id: 'admin.plans-billing', kind: 'subgroup', icon: 'BadgePercent', labelKey: 'sidebar.sections.adminPlansBilling' },
+  'admin.channels': { id: 'admin.channels', kind: 'subgroup', icon: 'MessageSquare', labelKey: 'sidebar.sections.adminChannels' },
+  'admin.platform': { id: 'admin.platform', kind: 'subgroup', icon: 'Settings', labelKey: 'sidebar.sections.adminPlatform' },
+  'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.platformStaff', href: '/admin/users' },
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
-  'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/admin/url-shortener' },
+  'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.shortLinks', href: '/admin/url-shortener' },
   'admin.blog': { id: 'admin.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.blog', href: '/admin/blog' },
   'admin.social-media': { id: 'admin.social-media', kind: 'link', icon: 'Share2', labelKey: 'sidebar.items.socialMedia', href: '/admin/social-media' },
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
@@ -279,6 +284,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.platform-settings.addons': { id: 'admin.platform-settings.addons', kind: 'link', icon: 'PackagePlus', labelKey: 'sidebar.items.platformSettingsAddons', href: '/admin/platform-settings/addons' },
   'admin.platform-settings.feedback-automation': { id: 'admin.platform-settings.feedback-automation', kind: 'link', icon: 'Bot', labelKey: 'sidebar.items.platformSettingsFeedbackAutomation', href: '/admin/platform-settings/feedback-automation' },
   'admin.platform-settings.buffer': { id: 'admin.platform-settings.buffer', kind: 'link', icon: 'Share2', labelKey: 'sidebar.items.platformSettingsBuffer', href: '/admin/platform-settings/buffer' },
+  'admin.platform-settings.deploy': { id: 'admin.platform-settings.deploy', kind: 'link', icon: 'Rocket', labelKey: 'sidebar.items.platformSettingsDeploy', href: '/admin/platform-settings/deploy' },
 
   help: { id: 'help', kind: 'module', icon: 'HelpCircle', labelKey: 'sidebar.modules.help', href: '/help', moduleKey: 'help', platformFeature: 'help' },
 };
@@ -456,23 +462,66 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('help', null, 14),
 ];
 
-/** Platform-admin console sidebar (admin module only). */
+/**
+ * Platform-admin console sidebar (admin module only).
+ *
+ * Grouped by job (tenants, inbox, growth, plans, channels, platform) so the
+ * settings hub is no longer the only path to those screens. New node ids from
+ * the 2026-08-18 grouping, for `sync-nav-layout.ts --nodes=...`:
+ * admin.inbox, admin.growth, admin.plans-billing, admin.channels, admin.platform,
+ * admin.feedback, admin.platform-settings.plans, admin.platform-settings.addons,
+ * admin.platform-settings.payments, admin.platform-settings.sms,
+ * admin.platform-settings.email, admin.platform-settings.whatsapp,
+ * admin.platform-settings.buffer, admin.platform-settings.deploy,
+ * admin.platform-settings.general, admin.platform-settings.tenant-features,
+ * admin.platform-settings.navigation, admin.platform-settings.ai,
+ * admin.platform-settings.feedback-automation.
+ *
+ * `addNavNodesToLayout` will not reparent items already on a saved layout.
+ * If a custom `platform_admin_layout` exists, reset it from Navigation settings
+ * to pick up the new tree; an unset layout already uses this default.
+ */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
   layoutNode('admin.overview', 'admin', 0),
+
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
   layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
-  layoutNode('admin.users', 'admin', 2),
-  layoutNode('admin.support', 'admin', 3),
-  layoutNode('admin.system-health', 'admin', 4),
-  layoutNode('admin.status', 'admin', 5),
-  layoutNode('admin.referrals', 'admin', 6),
-  layoutNode('admin.url-shortener', 'admin', 7),
-  layoutNode('admin.blog', 'admin', 8),
-  layoutNode('admin.social-media', 'admin', 9),
-  layoutNode('admin.platform-settings', 'admin', 10),
+
+  layoutNode('admin.inbox', 'admin', 2),
+  layoutNode('admin.support', 'admin.inbox', 0),
+  layoutNode('admin.feedback', 'admin.inbox', 1),
+
+  layoutNode('admin.growth', 'admin', 3),
+  layoutNode('admin.referrals', 'admin.growth', 0),
+  layoutNode('admin.blog', 'admin.growth', 1),
+  layoutNode('admin.social-media', 'admin.growth', 2),
+  layoutNode('admin.url-shortener', 'admin.growth', 3),
+
+  layoutNode('admin.plans-billing', 'admin', 4),
+  layoutNode('admin.platform-settings.plans', 'admin.plans-billing', 0),
+  layoutNode('admin.platform-settings.addons', 'admin.plans-billing', 1),
+  layoutNode('admin.platform-settings.payments', 'admin.plans-billing', 2),
+
+  layoutNode('admin.channels', 'admin', 5),
+  layoutNode('admin.platform-settings.sms', 'admin.channels', 0),
+  layoutNode('admin.platform-settings.email', 'admin.channels', 1),
+  layoutNode('admin.platform-settings.whatsapp', 'admin.channels', 2),
+  layoutNode('admin.platform-settings.buffer', 'admin.channels', 3),
+
+  layoutNode('admin.platform', 'admin', 6),
+  layoutNode('admin.system-health', 'admin.platform', 0),
+  layoutNode('admin.status', 'admin.platform', 1),
+  layoutNode('admin.platform-settings.deploy', 'admin.platform', 2),
+  layoutNode('admin.users', 'admin.platform', 3),
+  layoutNode('admin.platform-settings.general', 'admin.platform', 4),
+  layoutNode('admin.platform-settings.tenant-features', 'admin.platform', 5),
+  layoutNode('admin.platform-settings.navigation', 'admin.platform', 6),
+  layoutNode('admin.platform-settings.ai', 'admin.platform', 7),
+  layoutNode('admin.platform-settings.feedback-automation', 'admin.platform', 8),
+
   layoutNode('whats-new', null, 1),
   layoutNode('help', null, 2),
 ];

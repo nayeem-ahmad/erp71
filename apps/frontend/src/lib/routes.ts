@@ -262,7 +262,10 @@ export const routes = {
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
             plans: '/admin/platform-settings/plans',
+            addons: '/admin/platform-settings/addons',
             buffer: '/admin/platform-settings/buffer',
+            feedbackAutomation: '/admin/platform-settings/feedback-automation',
+            deploy: '/admin/platform-settings/deploy',
         },
     },
 

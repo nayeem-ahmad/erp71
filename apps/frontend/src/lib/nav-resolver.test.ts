@@ -99,26 +99,88 @@ describe('nav-resolver', () => {
         expect(records?.exact).toBe(true);
     });
 
-    it('builds platform admin sidebar with platform settings link', () => {
+    it('groups the platform admin console by job, with settings pages in the sidebar', () => {
         const modules = buildNavModulesFromLayout(
             DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
             enMessages as Record<string, unknown>,
         );
 
         const admin = modules.find((mod) => mod.key === 'admin');
-        expect(admin?.children?.length).toBeGreaterThan(0);
+        expect((admin?.children ?? []).map((child) => child.label)).toEqual([
+            'Overview',
+            'Tenant Management',
+            'Inbox',
+            'Growth',
+            'Plans & billing',
+            'Channels',
+            'Platform',
+        ]);
 
-        const labels = (admin?.children ?? []).flatMap((child) => {
-            if ('type' in child && child.type === 'subgroup') {
-                return [child.label, ...child.children.map((link) => link.label)];
-            }
-            return [child.label];
-        });
+        const subgroup = (label: string) => (admin?.children ?? [])
+            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === label);
 
-        expect(labels).toContain('System Health');
-        expect(labels).toContain('Tenant Management');
-        expect(labels).not.toContain('Tenant Payments');
-        expect(labels).toContain('Platform Settings');
-        expect(labels).not.toContain('SMS Gateway');
+        const hrefsUnder = (label: string) => {
+            const group = subgroup(label);
+            return group && 'children' in group ? group.children.map((link) => link.href) : [];
+        };
+
+        expect(hrefsUnder('Tenant Management')).toEqual([
+            '/admin/tenants',
+            '/admin/tenants/ledger',
+            '/admin/tenants/reminders',
+        ]);
+        expect(hrefsUnder('Inbox')).toEqual([
+            '/admin/support',
+            '/admin/feedback',
+        ]);
+        expect(hrefsUnder('Growth')).toEqual([
+            '/admin/referrals',
+            '/admin/blog',
+            '/admin/social-media',
+            '/admin/url-shortener',
+        ]);
+        expect(hrefsUnder('Plans & billing')).toEqual([
+            '/admin/platform-settings/plans',
+            '/admin/platform-settings/addons',
+            '/admin/platform-settings/payments',
+        ]);
+        expect(hrefsUnder('Channels')).toEqual([
+            '/admin/platform-settings/sms',
+            '/admin/platform-settings/email',
+            '/admin/platform-settings/whatsapp',
+            '/admin/platform-settings/buffer',
+        ]);
+        expect(hrefsUnder('Platform')).toEqual([
+            '/admin/system-health',
+            '/status',
+            '/admin/platform-settings/deploy',
+            '/admin/users',
+            '/admin/platform-settings/general',
+            '/admin/platform-settings/tenant-features',
+            '/admin/platform-settings/navigation',
+            '/admin/platform-settings/ai',
+            '/admin/platform-settings/feedback-automation',
+        ]);
+
+        const platform = subgroup('Platform');
+        const staff = platform && 'children' in platform
+            ? platform.children.find((link) => link.href === '/admin/users')
+            : undefined;
+        const publicStatus = platform && 'children' in platform
+            ? platform.children.find((link) => link.href === '/status')
+            : undefined;
+        expect(staff?.label).toBe('Staff');
+        expect(publicStatus?.label).toBe('Public status');
+
+        const growth = subgroup('Growth');
+        const shortLinks = growth && 'children' in growth
+            ? growth.children.find((link) => link.href === '/admin/url-shortener')
+            : undefined;
+        expect(shortLinks?.label).toBe('Short links');
+
+        const topLevelHrefs = (admin?.children ?? [])
+            .filter((child) => !('type' in child))
+            .map((child) => ('href' in child ? child.href : undefined));
+        expect(topLevelHrefs).not.toContain('/admin/platform-settings');
     });
 });

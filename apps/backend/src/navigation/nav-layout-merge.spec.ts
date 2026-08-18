@@ -97,11 +97,11 @@ describe('addNavNodesToLayout', () => {
      * admin referral screens were reachable only through a card on
      * /admin/platform-settings — registered, rendered, and effectively hidden.
      */
-    it('ships admin.referrals in the platform admin layout under the admin module', () => {
+    it('ships admin.referrals in the platform admin layout under Growth', () => {
         const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
         const node = defaults.find((n) => n.id === 'admin.referrals');
 
-        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin.growth', visible: true }));
         expect(validateNavLayout(defaults)).toEqual({ valid: true });
     });
 
@@ -121,11 +121,24 @@ describe('addNavNodesToLayout', () => {
      * sort-order-collision property for this same layout's admin block is already
      * covered by the preceding test — no need to duplicate it here.)
      */
-    it('ships admin.url-shortener in the platform admin layout under the admin module', () => {
+    it('ships admin.url-shortener in the platform admin layout under Growth', () => {
         const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
         const node = defaults.find((n) => n.id === 'admin.url-shortener');
 
-        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin.growth', visible: true }));
+        expect(validateNavLayout(defaults)).toEqual({ valid: true });
+    });
+
+    it('ships inbox, deploy, and feedback on the platform admin default layout', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const byId = Object.fromEntries(defaults.map((n) => [n.id, n]));
+
+        expect(byId['admin.inbox']).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(byId['admin.feedback']).toEqual(expect.objectContaining({ parentId: 'admin.inbox', visible: true }));
+        expect(byId['admin.platform-settings.deploy']).toEqual(
+            expect.objectContaining({ parentId: 'admin.platform', visible: true }),
+        );
+        expect(byId['admin.platform-settings']).toBeUndefined();
         expect(validateNavLayout(defaults)).toEqual({ valid: true });
     });
 
