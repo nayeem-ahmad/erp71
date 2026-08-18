@@ -28,9 +28,9 @@ describe('BrandLogo', () => {
     it('scales width from the asset aspect ratio so the lockup never squashes', () => {
         render(<BrandLogo height={32} />);
         const img = screen.getByAltText(BRAND_NAME);
-        // Lockup artwork is 2600x1024, so 32px tall is 81px wide.
+        // Lockup artwork is 2200x860, so 32px tall is 82px wide.
         expect(img).toHaveAttribute('height', '32');
-        expect(img).toHaveAttribute('width', '81');
+        expect(img).toHaveAttribute('width', '82');
     });
 
     it('keeps the mark square', () => {
