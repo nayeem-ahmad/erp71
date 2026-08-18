@@ -236,24 +236,33 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Branding')).not.toBeInTheDocument();
     });
 
-    it('shows full platform admin navigation in platform admin mode', () => {
+    it('shows grouped platform admin navigation in platform admin mode', () => {
         render(<Sidebar platformAdminMode helpEnabled />);
 
         fireEvent.click(screen.getByText('Platform Admin'));
         expect(screen.getByText('Tenant Management')).toBeInTheDocument();
+        expect(screen.getByText('Inbox')).toBeInTheDocument();
+        expect(screen.getByText('Growth')).toBeInTheDocument();
+        expect(screen.getByText('Plans & billing')).toBeInTheDocument();
+        expect(screen.getByText('Channels')).toBeInTheDocument();
+        expect(screen.getByText('Platform')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Inbox'));
+        expect(screen.getByText('Support Chat')).toBeInTheDocument();
+        expect(screen.getByText('Feedback')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Channels'));
+        expect(screen.getByText('SMS Gateway')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Platform'));
         expect(screen.getByText('System Health')).toBeInTheDocument();
-        expect(screen.getByText('Platform Settings')).toBeInTheDocument();
+        expect(screen.getByText('Deploy')).toBeInTheDocument();
+        expect(screen.getByText('Staff')).toBeInTheDocument();
+        expect(screen.getByText('Public status')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByText('Tenant Management'));
-        expect(screen.getByText('Tenant Ledger')).toBeInTheDocument();
-
-        // Platform Settings is now a single leaf link to the platform-settings hub
-        // (the former SMS Gateway / Subscription Plans children live on that hub page).
-        expect(screen.getByText('Platform Settings').closest('a')).toHaveAttribute(
-            'href',
-            '/admin/platform-settings',
-        );
-        expect(screen.queryByText('SMS Gateway')).not.toBeInTheDocument();
+        // The settings hub stays a page; it is no longer the only sidebar entry
+        // for fifteen buried screens.
+        expect(screen.queryByText('Platform Settings')).not.toBeInTheDocument();
     });
 
     it('shows platform admin and billing items when enabled', () => {
