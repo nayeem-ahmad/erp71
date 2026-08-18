@@ -22,7 +22,8 @@
  * 2. mirror LeadConversation / CustomerInteraction / CrmFollowUp in batches
  * 3. materialise `Lead.next_step` — but only where it is not already a
  *    duplicate of a follow-up mirrored in step 2, which it very often is
- * 4. recalculate every touched parent's rollup with the same earliest-planned
+ * 4. cancel any planned activity on a lead that is already CONVERTED or LOST
+ * 5. recalculate every touched parent's rollup with the same earliest-planned
  *    rule CrmActivitiesService.recalculateRollup applies
  *
  * Step 3 runs after step 2 on purpose: the same-day check needs the follow-ups
@@ -171,6 +172,7 @@ type Delta = {
     followUps: number;
     nextSteps: number;
     nextStepsSkipped: number;
+    staleCancelled: number;
     unresolvedChannels: number;
     rollupsRecalculated: number;
 };
@@ -184,6 +186,7 @@ function emptyDelta(tenantId: string, tenantName: string): Delta {
         followUps: 0,
         nextSteps: 0,
         nextStepsSkipped: 0,
+        staleCancelled: 0,
         unresolvedChannels: 0,
         rollupsRecalculated: 0,
     };
@@ -471,14 +474,44 @@ async function syncTenant(
         delta.nextSteps += res.count;
     }
 
-    // Only when something was actually mirrored. This script runs on every
-    // container start, and recalculating a settled tenant's whole lead and
-    // customer base each time would be thousands of pointless writes — from
-    // the first run onward CrmActivitiesService.recalculateRollup keeps the
-    // columns current.
+    // --- Correction: a planned activity on a lead that is already closed ------
+    // The spec requires a PENDING follow-up on a CONVERTED or LOST lead to
+    // land as CANCELLED, not PLANNED — otherwise the merge re-imports the
+    // stale-overdue bug it exists to fix. R1 shipped without this, and
+    // `skipDuplicates` means an already-mirrored row is never revisited, so it
+    // runs as a correction pass rather than a branch inside mapLegacyRow. That
+    // also makes it self-healing: it repairs rows R1 already wrote, and is a
+    // no-op once they are right.
+    //
+    // Two queries rather than a relation filter: Prisma's updateMany does not
+    // accept one.
+    if (!dryRun) {
+        const closedLeads = await prisma.lead.findMany({
+            where: { tenant_id: tenantId, status: { in: ['CONVERTED', 'LOST'] } },
+            select: { id: true },
+        });
+        if (closedLeads.length) {
+            const res = await prisma.crmActivity.updateMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: 'PLANNED',
+                    lead_id: { in: closedLeads.map((l) => l.id) },
+                },
+                data: { status: 'CANCELLED' },
+            });
+            delta.staleCancelled = res.count;
+        }
+    }
+
+    // Only when something actually changed. This script runs on every container
+    // start, and recalculating a settled tenant's whole lead and customer base
+    // each time would be thousands of pointless writes — from the first run
+    // onward CrmActivitiesService.recalculateRollup keeps the columns current.
+    // The cancellation pass counts too: it clears rollups that pointed at an
+    // activity which is no longer planned.
     const mirrored =
         delta.conversations + delta.interactions + delta.followUps + delta.nextSteps;
-    if (mirrored > 0) {
+    if (mirrored > 0 || delta.staleCancelled > 0) {
         delta.rollupsRecalculated = await recalculateRollups(tenantId, dryRun);
     }
 
@@ -491,6 +524,7 @@ function isNoop(d: Delta) {
         d.interactions === 0 &&
         d.followUps === 0 &&
         d.nextSteps === 0 &&
+        d.staleCancelled === 0 &&
         d.unresolvedChannels === 0
     );
 }
@@ -505,6 +539,11 @@ function reportTenant(d: Delta, dryRun: boolean) {
     if (d.nextStepsSkipped) {
         console.log(
             `    skipped ${d.nextStepsSkipped} next_step(s) already covered by a same-day planned activity`,
+        );
+    }
+    if (d.staleCancelled) {
+        console.log(
+            `    cancelled ${d.staleCancelled} planned activity(ies) on converted or lost leads`,
         );
     }
     if (d.rollupsRecalculated) console.log(`    recalculated ${d.rollupsRecalculated} rollup(s)`);

@@ -456,7 +456,13 @@ export class CrmLeadsService {
             })
             : null;
 
-        const conversationCount = await this.db.leadConversation.count({ where: { lead_id: id } });
+        // DONE activities, not LeadConversation rows, since R2 — the same source
+        // CrmActivitiesService.rescoreLead counts. The two must agree, or a lead's
+        // score would change depending on which path last touched it. After the
+        // backfill the counts are identical, so no lead is rescored by this move.
+        const conversationCount = await this.db.crmActivity.count({
+            where: { tenant_id: tenantId, lead_id: id, status: 'DONE' },
+        });
         data.score = computeLeadScore(
             {
                 status: nextStatus,

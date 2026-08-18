@@ -330,7 +330,7 @@ export type CustomFieldDef = { key: string; label: string; order: number };
  * The tenant-managed CRM lookup lists, all served by `/crm/lead-taxonomy/:kind`
  * and all edited from the CRM Setup screen.
  */
-export type CrmListKind = 'sources' | 'categories' | 'channels';
+export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes';
 
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
 
@@ -446,6 +446,36 @@ export type LeadConversationFilters = {
     sortBy?: string;
     sortDir?: string;
 };
+
+/** Filters shared by the activities list and its summary tiles. */
+export type CrmActivityFilters = {
+    leadId?: string;
+    customerId?: string;
+    target?: 'lead' | 'customer';
+    status?: string;
+    assignedTo?: string;
+    purposeId?: string;
+    channelId?: string;
+    dueToday?: boolean;
+    overdue?: boolean;
+    sortBy?: string;
+    sortDir?: string;
+};
+
+function crmActivityQuery(
+    params?: CrmActivityFilters & { page?: number; limit?: number },
+): string {
+    if (!params) return '';
+    const { dueToday, overdue, ...rest } = params;
+    // The API reads these two as the literal string 'true'; sending 'false' would
+    // still switch the filter on, so an unset flag has to be dropped entirely.
+    const query = buildReportQuery({
+        ...rest,
+        dueToday: dueToday ? 'true' : undefined,
+        overdue: overdue ? 'true' : undefined,
+    });
+    return query ? `?${query}` : '';
+}
 
 function leadConversationQuery(
     params?: LeadConversationFilters & { page?: number; limit?: number },
@@ -1191,6 +1221,35 @@ export const api = {
     }),
     deleteLeadConversation: (id: string) => fetchWithAuth(`/crm/lead-conversations/${id}`, { method: 'DELETE' }),
     // CRM Follow-ups (named to leave "Task" for the Project Management module)
+    // CRM activities — the merged table. `/crm/follow-ups` and
+    // `/crm/lead-conversations` below are the legacy pair it replaces; they stay
+    // until R3 drops them, but nothing in the UI calls them any more.
+    getCrmActivities: (params?: CrmActivityFilters & { page?: number; limit?: number }) =>
+        fetchPaginated(`/crm/activities${crmActivityQuery(params)}`),
+    getAllCrmActivities: (params?: CrmActivityFilters) =>
+        fetchAllPages(`/crm/activities${crmActivityQuery(params)}`),
+    getCrmActivitySummary: () => fetchWithAuth('/crm/activities/summary'),
+    createCrmActivity: (data: any) => fetchWithAuth('/crm/activities', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateCrmActivity: (id: string, data: any) => fetchWithAuth(`/crm/activities/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    /** Marks done, records what happened, and optionally schedules the next one. */
+    completeCrmActivity: (id: string, data: any) =>
+        fetchWithAuth(`/crm/activities/${id}/complete`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    cancelCrmActivity: (id: string) =>
+        fetchWithAuth(`/crm/activities/${id}/cancel`, { method: 'POST' }),
+    deleteCrmActivity: (id: string) => fetchWithAuth(`/crm/activities/${id}`, { method: 'DELETE' }),
+
     getCrmFollowUps: (params?: {
         customerId?: string;
         leadId?: string;

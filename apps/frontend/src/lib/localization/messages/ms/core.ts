@@ -260,6 +260,7 @@ export const coreMessages = {
                 newSalesEntry: "Entri Jualan Baharu",
                 dueAging: "Penuaan Hutang",
             crmFollowUps: "Susulan",
+            crmActivities: 'Aktiviti',
             projectsList: "Semua Projek",
             projectsBoards: "Papan",
             projectsTasks: "Tugasan",

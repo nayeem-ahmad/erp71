@@ -11,7 +11,7 @@ import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
-const TABS = ['channels', 'sources', 'categories', 'customFields'] as const;
+const TABS = ['channels', 'purposes', 'sources', 'categories', 'customFields'] as const;
 type Tab = (typeof TABS)[number];
 
 function isTab(value: string | null): value is Tab {

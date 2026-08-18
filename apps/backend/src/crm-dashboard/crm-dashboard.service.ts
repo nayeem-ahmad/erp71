@@ -126,17 +126,27 @@ export class CrmDashboardService {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
+        // Reads CrmActivity, not CrmFollowUp, since R2. That is the point of the
+        // merge for this card: a lead's `next_step` is a PLANNED activity now, so
+        // these counts finally include the next steps that were invisible here
+        // before — the fourth of the four bugs the design set out to fix.
+        //
+        // `subject: { not: null }` is what keeps "planned work" distinct from a
+        // bare logged touch: an activity that was scheduled always has a subject,
+        // and one logged straight from a call never does.
         const [dueToday, overdue, totalPending, completed] = await Promise.all([
-            this.db.crmFollowUp.count({
-                where: { tenant_id: tenantId, status: 'PENDING', due_at: { gte: today, lt: tomorrow } },
+            this.db.crmActivity.count({
+                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { gte: today, lt: tomorrow } },
             }),
-            this.db.crmFollowUp.count({
-                where: { tenant_id: tenantId, status: 'PENDING', due_at: { lt: today } },
+            this.db.crmActivity.count({
+                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { lt: today } },
             }),
-            this.db.crmFollowUp.count({ where: { tenant_id: tenantId, status: 'PENDING' } }),
-            this.db.crmFollowUp.count({
+            this.db.crmActivity.count({ where: { tenant_id: tenantId, status: 'PLANNED' } }),
+            this.db.crmActivity.count({
                 where: {
                     tenant_id: tenantId,
+                    status: 'DONE',
+                    subject: { not: null },
                     completed_at: { gte: window.fromDate, lte: window.toDate },
                 },
             }),
@@ -153,15 +163,27 @@ export class CrmDashboardService {
     private async getActivity(tenantId: string, window: DateWindow) {
         const created = { gte: window.fromDate, lte: window.toDate };
 
+        // A "logged touch" is a DONE activity that went out through a channel.
+        // `channel_id: { not: null }` is the counterpart to the `subject` filter in
+        // getFollowUps: together they keep the two cards measuring different
+        // things off one table. They deliberately overlap where a planned call was
+        // completed and logged — that is the closed loop, counted once in each.
+        const done = {
+            tenant_id: tenantId,
+            status: 'DONE',
+            channel_id: { not: null },
+            completed_at: created,
+        };
+
         const [logged, byType, touched] = await Promise.all([
-            this.db.leadConversation.count({ where: { tenant_id: tenantId, created_at: created } }),
-            this.db.leadConversation.groupBy({
-                by: ['type'],
-                where: { tenant_id: tenantId, created_at: created },
+            this.db.crmActivity.count({ where: done }),
+            this.db.crmActivity.groupBy({
+                by: ['channel_code'],
+                where: done,
                 _count: { _all: true },
             }),
-            this.db.leadConversation.findMany({
-                where: { tenant_id: tenantId, created_at: created },
+            this.db.crmActivity.findMany({
+                where: { ...done, lead_id: { not: null } },
                 select: { lead_id: true },
                 distinct: ['lead_id'],
             }),
@@ -169,7 +191,7 @@ export class CrmDashboardService {
 
         // `type` is the channel's code, denormalised onto the conversation. Resolve
         // it back to the tenant's editable label so a renamed channel reads right.
-        const codes = byType.map((row) => row.type);
+        const codes = byType.map((row) => row.channel_code).filter((c): c is string => Boolean(c));
         const channels = codes.length
             ? await this.db.conversationChannel.findMany({
                 where: { tenant_id: tenantId, code: { in: codes } },
@@ -182,9 +204,13 @@ export class CrmDashboardService {
             logged_in_period: logged,
             leads_touched: touched.length,
             by_type: byType
+                // A DONE activity always carries a channel here — the `done` filter
+                // requires channel_id — but channel_code is nullable in the schema,
+                // so the null is narrowed away rather than asserted.
+                .filter((row) => Boolean(row.channel_code))
                 .map((row) => ({
-                    code: row.type,
-                    name: nameByCode.get(row.type) ?? row.type,
+                    code: row.channel_code as string,
+                    name: nameByCode.get(row.channel_code as string) ?? (row.channel_code as string),
                     count: row._count._all,
                 }))
                 .sort((a, b) => b.count - a.count),
@@ -262,11 +288,11 @@ export class CrmDashboardService {
                 },
                 _count: { _all: true },
             }),
-            this.db.crmFollowUp.groupBy({
+            this.db.crmActivity.groupBy({
                 by: ['assigned_to'],
                 where: {
                     tenant_id: tenantId,
-                    status: 'PENDING',
+                    status: 'PLANNED',
                     due_at: { lt: today },
                     assigned_to: { not: null },
                 },
@@ -361,16 +387,26 @@ export class CrmDashboardService {
                 where: { tenant_id: tenantId, created_at: range },
                 select: { created_at: true },
             }),
-            this.db.leadConversation.findMany({
-                where: { tenant_id: tenantId, created_at: range },
-                select: { created_at: true },
+            this.db.crmActivity.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: 'DONE',
+                    channel_id: { not: null },
+                    completed_at: range,
+                },
+                select: { completed_at: true },
             }),
             this.db.lead.findMany({
                 where: { tenant_id: tenantId, status: LeadStatus.CONVERTED, closed_at: range },
                 select: { closed_at: true },
             }),
-            this.db.crmFollowUp.findMany({
-                where: { tenant_id: tenantId, completed_at: range },
+            this.db.crmActivity.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: 'DONE',
+                    subject: { not: null },
+                    completed_at: range,
+                },
                 select: { completed_at: true },
             }),
         ]);
@@ -406,7 +442,7 @@ export class CrmDashboardService {
         };
 
         for (const row of created) bucket(row.created_at, 'leads_created');
-        for (const row of conversations) bucket(row.created_at, 'conversations');
+        for (const row of conversations) bucket(row.completed_at, 'conversations');
         for (const row of converted) bucket(row.closed_at, 'leads_converted');
         for (const row of completedFollowUps) bucket(row.completed_at, 'follow_ups_completed');
 

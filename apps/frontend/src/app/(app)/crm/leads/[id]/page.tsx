@@ -4,30 +4,23 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    Phone, Mail, MessageSquare, Plus, UserCheck, Sparkles, Loader2,
-    Pencil, ExternalLink, Calendar, Trash2, Send, ClipboardList,
-} from 'lucide-react';
+    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Calendar, Trash2, } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { PageShell, PageHeader, Button, FormFooter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { PageShell, PageHeader, Button, FormFooter, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import FollowUpPanel from '@/components/crm/FollowUpPanel';
+import CrmActivityPanel from '@/components/crm/CrmActivityPanel';
 import {
     LeadFormFields,
-    NextStepFields,
-    emptyNextStep,
     leadFormToPayload,
     leadToFormState,
-    nextStepFromLead,
-    nextStepToPayload,
     validateLeadFormErrors,
     type LeadFormErrors,
     type LeadFormState,
-    type NextStepState,
 } from '../lead-form-fields';
-import { channelIcon, channelLabel, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { channelLabel, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 const leadStatusTone: Record<string, StatusBadgeTone> = {
     NEW: 'info',
@@ -50,23 +43,6 @@ function scoreBadgeColor(score: number): string {
     return 'bg-gray-100 text-gray-600';
 }
 
-type NewConversationState = {
-    type: string;
-    summary: string;
-    outcome: string;
-} & NextStepState;
-
-/**
- * `type` is a channel `code` from the tenant's own list, so there is no constant to
- * default to — the caller passes whichever channel is first in the tenant's order.
- */
-const emptyConversation = (channelCode = ''): NewConversationState => ({
-    type: channelCode,
-    summary: '',
-    outcome: '',
-    ...emptyNextStep(),
-});
-
 export default function LeadDetailPage() {
     const { id } = useParams();
     const leadId = id as string;
@@ -76,13 +52,12 @@ export default function LeadDetailPage() {
 
     const [lead, setLead] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [conversations, setConversations] = useState<any[]>([]);
-    const [conversationsLoading, setConversationsLoading] = useState(false);
-    const [showConvForm, setShowConvForm] = useState(false);
     const [showDraftPanel, setShowDraftPanel] = useState(false);
     const [showEditForm, setShowEditForm] = useState(false);
-    const [newConv, setNewConv] = useState<NewConversationState>(() => emptyConversation());
-    const [savingConv, setSavingConv] = useState(false);
+    // Handed to CrmActivityPanel, which opens its "Log activity" dialog pre-filled.
+    // Cleared as soon as it is taken, so re-rendering does not reopen the dialog.
+    const [activityDraft, setActivityDraft] =
+        useState<{ channelCode?: string; summary: string } | null>(null);
     const [converting, setConverting] = useState(false);
     const [draftingMessage, setDraftingMessage] = useState(false);
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
@@ -100,12 +75,11 @@ export default function LeadDetailPage() {
     // here rather than on a hardcoded 'CALL' that a tenant may have retired.
     const defaultChannel = channels[0]?.code ?? '';
 
-    // Runs once the channel list lands, and only while the pickers are untouched —
-    // the form mounts before the request resolves, so without this both selects sit
-    // on a blank option that submits nothing.
+    // Runs once the channel list lands, and only while the picker is untouched —
+    // the drafter mounts before the request resolves, so without this its select
+    // sits on a blank option.
     useEffect(() => {
         if (!defaultChannel) return;
-        setNewConv((prev) => (prev.type ? prev : { ...prev, type: defaultChannel }));
         setDraftChannel((prev) => prev || defaultChannel);
     }, [defaultChannel]);
 
@@ -131,53 +105,8 @@ export default function LeadDetailPage() {
         }
     }, [leadId]);
 
-    const loadConversations = useCallback(async () => {
-        setConversationsLoading(true);
-        try {
-            const data = await api.getLeadConversations({ leadId, limit: 50 });
-            // fetchPaginated always normalises to `{ items }`, so the bare-array fallback
-            // this used to carry is unreachable.
-            setConversations(data?.items ?? []);
-        } finally {
-            setConversationsLoading(false);
-        }
-    }, [leadId]);
 
     useEffect(() => { if (leadId) void loadLead(); }, [leadId, loadLead]);
-    useEffect(() => { if (leadId) void loadConversations(); }, [leadId, loadConversations]);
-
-    const refreshAll = async () => {
-        await Promise.all([loadLead(), loadConversations()]);
-    };
-
-    const openConversationForm = () => {
-        setNewConv({ ...emptyConversation(defaultChannel), ...nextStepFromLead(lead ?? {}) });
-        setShowConvForm(true);
-        setShowDraftPanel(false);
-    };
-
-    const saveConversation = async () => {
-        if (!newConv.summary.trim()) return;
-        setSavingConv(true);
-        try {
-            const payload: Record<string, string> = {
-                lead_id: leadId,
-                type: newConv.type,
-                summary: newConv.summary.trim(),
-                ...nextStepToPayload(newConv),
-            };
-            const outcome = newConv.outcome.trim();
-            if (outcome) payload.outcome = outcome;
-            await api.createLeadConversation(payload);
-            setNewConv(emptyConversation(defaultChannel));
-            setShowConvForm(false);
-            await refreshAll();
-        } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : m.detail.logConversation);
-        } finally {
-            setSavingConv(false);
-        }
-    };
 
     const convertLead = async () => {
         if (!confirm(m.convertConfirm)) return;
@@ -198,6 +127,8 @@ export default function LeadDetailPage() {
         }
     };
 
+    const clearActivityDraft = useCallback(() => setActivityDraft(null), []);
+
     const draftMessage = async () => {
         if (!lead) return;
         setDraftingMessage(true);
@@ -210,13 +141,11 @@ export default function LeadDetailPage() {
                 purpose: draftPurpose,
                 customerContext: { name: lead.name, phone: lead.mobile ?? lead.phone, type: 'lead' },
             });
-            setNewConv({
-                ...emptyConversation(draftChannel || defaultChannel),
+            setActivityDraft({
+                channelCode: draftChannel || defaultChannel,
                 summary: draft?.message ?? draft?.text ?? draft?.draft ?? '',
-                ...nextStepFromLead(lead),
             });
             setShowDraftPanel(false);
-            setShowConvForm(true);
         } finally {
             setDraftingMessage(false);
         }
@@ -417,129 +346,58 @@ export default function LeadDetailPage() {
                 </div>
             )}
 
+            {/* One panel where there used to be two: a conversations list and a
+                follow-ups list, over two tables that could not refer to each other.
+                Planning a call and recording it are one loop now. */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-primary" />
-                        <h2 className="text-sm font-semibold text-gray-900">{m.detail.conversations}</h2>
+                        <h2 className="text-sm font-semibold text-gray-900">{t.crm.activities.title}</h2>
                     </div>
                     {!isConverted && (
-                        <div className="flex gap-2 flex-wrap">
-                            <button
-                                type="button"
-                                onClick={() => { setShowDraftPanel((v) => !v); setShowConvForm(false); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
-                            >
-                                <Sparkles className="w-4 h-4" /> AI Draft
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => (showConvForm ? setShowConvForm(false) : openConversationForm())}
-                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
-                            >
-                                <Plus className="w-4 h-4" /> {m.detail.logConversation}
-                            </button>
-                        </div>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setShowDraftPanel((v) => !v)}
+                            leftIcon={<Sparkles className="w-4 h-4" />}
+                        >
+                            {m.detail.aiDraft}
+                        </Button>
                     )}
                 </div>
 
                 <div className="p-4 space-y-4">
                     {showDraftPanel && !isConverted && (
                         <div className="bg-primary-light rounded-lg p-4 space-y-3 border border-primary-border">
-                            <p className="text-xs font-semibold text-blue-700">AI Message Drafter</p>
+                            <p className="text-xs font-semibold text-blue-700">{m.detail.aiDrafter}</p>
                             <div className="grid grid-cols-2 gap-3">
-                                <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                <Select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)}>
                                     {channels.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
-                                </select>
-                                <select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                    <option value="follow_up">Follow up</option>
-                                    <option value="collection">Collection</option>
-                                </select>
+                                </Select>
+                                <Select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)}>
+                                    <option value="follow_up">{m.detail.draftPurposeFollowUp}</option>
+                                    <option value="collection">{m.detail.draftPurposeCollection}</option>
+                                </Select>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={draftMessage} disabled={draftingMessage} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
-                                    {draftingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                    {draftingMessage ? 'Drafting…' : 'Generate draft'}
-                                </button>
-                                <button onClick={() => setShowDraftPanel(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">
+                                <Button onClick={draftMessage} loading={draftingMessage} leftIcon={<Sparkles className="w-4 h-4" />}>
+                                    {m.detail.generateDraft}
+                                </Button>
+                                <Button variant="secondary" onClick={() => setShowDraftPanel(false)}>
                                     {t.common.cancel}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     )}
 
-                    {showConvForm && !isConverted && (
-                        <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
-                            <select value={newConv.type} onChange={(e) => setNewConv({ ...newConv, type: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                {channels.map((c) => (
-                                    <option key={c.id} value={c.code}>{c.name}</option>
-                                ))}
-                            </select>
-                            <textarea
-                                value={newConv.summary}
-                                onChange={(e) => setNewConv({ ...newConv, summary: e.target.value })}
-                                placeholder={m.detail.summaryPlaceholder}
-                                className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none bg-white"
-                                rows={4}
-                            />
-                            <input
-                                value={newConv.outcome}
-                                onChange={(e) => setNewConv({ ...newConv, outcome: e.target.value })}
-                                placeholder={m.detail.outcomePlaceholder}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                            />
-                            <NextStepFields state={newConv} onChange={(next) => setNewConv({ ...newConv, ...next })} teamMembers={teamMembers} />
-                            <div className="flex gap-2">
-                                <button onClick={saveConversation} disabled={savingConv || !newConv.summary.trim()} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
-                                    <Send className="w-4 h-4" /> {m.detail.logConversation}
-                                </button>
-                                <button onClick={() => setShowConvForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">
-                                    {t.common.cancel}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {conversationsLoading ? (
-                        <div className="py-8 text-center text-gray-400 text-sm">{t.common.loading}</div>
-                    ) : conversations.length === 0 ? (
-                        <div className="py-12 text-center text-gray-400">
-                            <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                            <p className="text-sm">{m.detail.noConversations}</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {conversations.map((conv) => (
-                                <div key={conv.id} className="flex gap-3">
-                                    <div className="text-xl mt-0.5">{channelIcon(channels, conv.type)}</div>
-                                    <div className="flex-1 bg-white border border-gray-100 rounded-xl p-4">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                                {channelLabel(channels, conv.type)}
-                                            </span>
-                                            <span className="text-xs text-gray-400">{formatDate(conv.created_at)}</span>
-                                        </div>
-                                        <p className="text-sm text-gray-800">{conv.summary}</p>
-                                        {conv.outcome && (
-                                            <p className="text-xs text-gray-500 mt-1">{m.workspace.outcome}: {conv.outcome}</p>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <CrmActivityPanel
+                        leadId={leadId}
+                        draft={activityDraft}
+                        onDraftConsumed={clearActivityDraft}
+                    />
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-primary" />
-                    <h2 className="text-sm font-semibold text-gray-900">{t.crmFollowUps.title}</h2>
-                </div>
-                <div className="p-4">
-                    <FollowUpPanel leadId={leadId} />
-                </div>
-            </div>
         </PageShell>
     );
 }

@@ -16,12 +16,9 @@ describe('CrmDashboardService', () => {
                 count: jest.fn().mockResolvedValue(0),
                 findMany: jest.fn().mockResolvedValue([]),
             },
-            crmFollowUp: {
-                count: jest.fn().mockResolvedValue(0),
-                groupBy: jest.fn().mockResolvedValue([]),
-                findMany: jest.fn().mockResolvedValue([]),
-            },
-            leadConversation: {
+            // Repointed from crmFollowUp + leadConversation onto the merged table
+            // in R2. Both dashboard blocks read CrmActivity now.
+            crmActivity: {
                 count: jest.fn().mockResolvedValue(0),
                 groupBy: jest.fn().mockResolvedValue([]),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -94,10 +91,43 @@ describe('CrmDashboardService', () => {
             expect(untouched.created_at.lt).toBeInstanceOf(Date);
         });
 
+        // The fourth of the four bugs the design set out to fix: a lead's
+        // next_step was a column nothing counted, so an overdue one was invisible
+        // here. It is a PLANNED activity now, and this card reads those.
+        it('counts planned activities, so materialised next steps reach the card', async () => {
+            db.crmActivity.count.mockResolvedValue(3);
+
+            const result = await service.getOverview(TENANT, {});
+
+            const plannedCalls = db.crmActivity.count.mock.calls.filter(
+                ([args]: [any]) => args?.where?.status === 'PLANNED',
+            );
+            // due today, overdue, total pending
+            expect(plannedCalls).toHaveLength(3);
+            expect(result.follow_ups.overdue).toBe(3);
+        });
+
+        // Both dashboard blocks read one table now, so they need filters that keep
+        // them measuring different things rather than printing the same number
+        // under two labels.
+        it('separates planned work from logged touches by subject and channel', async () => {
+            await service.getOverview(TENANT, {});
+
+            const completed = db.crmActivity.count.mock.calls.find(
+                ([args]: [any]) => args?.where?.status === 'DONE',
+            );
+            expect(completed[0].where.subject).toEqual({ not: null });
+
+            const logged = db.crmActivity.groupBy.mock.calls.find(
+                ([args]: [any]) => args?.by?.includes('channel_code'),
+            );
+            expect(logged[0].where.channel_id).toEqual({ not: null });
+        });
+
         it('resolves conversation channel codes to the tenant-renamed labels', async () => {
-            db.leadConversation.groupBy.mockResolvedValue([
-                { type: 'CALL', _count: { _all: 5 } },
-                { type: 'WHATSAPP', _count: { _all: 9 } },
+            db.crmActivity.groupBy.mockResolvedValue([
+                { channel_code: 'CALL', _count: { _all: 5 } },
+                { channel_code: 'WHATSAPP', _count: { _all: 9 } },
             ]);
             db.conversationChannel.findMany.mockResolvedValue([{ code: 'CALL', name: 'Phone call' }]);
 
