@@ -1166,11 +1166,10 @@ export const api = {
             method: 'PUT',
             body: JSON.stringify({ fields }),
         }),
-    // CRM Lead Conversations
-    // CRM Follow-ups (named to leave "Task" for the Project Management module)
-    // CRM activities — the merged table. `/crm/follow-ups` and
-    // `/crm/lead-conversations` below are the legacy pair it replaces; they stay
-    // until R3 drops them, but nothing in the UI calls them any more.
+    // CRM activities — the single table behind every CRM touch, planned or
+    // logged. The `/crm/follow-ups`, `/crm/lead-conversations` and
+    // `/crm/interactions` clients it replaced were removed in R3 along with
+    // their tables; the two page routes survive only as redirects.
     getCrmActivities: (params?: CrmActivityFilters & { page?: number; limit?: number }) =>
         fetchPaginated(`/crm/activities${crmActivityQuery(params)}`),
     getAllCrmActivities: (params?: CrmActivityFilters) =>
