@@ -260,6 +260,7 @@ export const coreMessages = {
                 newSalesEntry: "নতুন বিক্রয় এন্ট্রি",
                 dueAging: "বকেয়া বয়স",
                 crmFollowUps: "ফলো-আপ",
+                crmActivities: "কার্যক্রম",
                 projectsList: "সব প্রকল্প",
                 projectsBoards: "বোর্ড",
                 projectsTasks: "কাজ",

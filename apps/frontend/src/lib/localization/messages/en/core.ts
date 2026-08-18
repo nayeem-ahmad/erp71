@@ -260,6 +260,7 @@ export const coreMessages = {
             newSalesEntry: 'New Sales Entry',
             dueAging: 'Due Aging',
             crmFollowUps: 'Follow-ups',
+            crmActivities: 'Activities',
             projectsList: 'All Projects',
             projectsBoards: 'Boards',
             projectsTasks: 'Tasks',

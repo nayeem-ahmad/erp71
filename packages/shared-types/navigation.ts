@@ -188,8 +188,14 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
   'crm.contacts': { id: 'crm.contacts', kind: 'link', icon: 'Contact', labelKey: 'sidebar.items.crmContacts', href: '/crm/contacts', premiumOnly: true },
-  'crm.conversations': { id: 'crm.conversations', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.crmConversations', href: '/crm/conversations', premiumOnly: true },
-  'crm.follow-ups': { id: 'crm.follow-ups', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmFollowUps', href: '/crm/follow-ups', premiumOnly: true },
+  // Both of these pointed at the two lists R2 merged into /crm/activities. They
+  // are repointed rather than replaced by a new id: resolveTenantSidebarLayout
+  // returns a saved layout verbatim, so a tenant who customised their sidebar
+  // before the merge would have been left with no entry at all — the exact trap
+  // the crm.setup rename hit. 'crm.conversations' also leaves the default layout
+  // below, so a fresh tenant sees one Activities item instead of two.
+  'crm.conversations': { id: 'crm.conversations', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
+  'crm.follow-ups': { id: 'crm.follow-ups', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
@@ -395,7 +401,6 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.contacts', 'crm', 2),
-  layoutNode('crm.conversations', 'crm', 3),
   layoutNode('crm.follow-ups', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
   layoutNode('crm.customers', 'crm', 6),
