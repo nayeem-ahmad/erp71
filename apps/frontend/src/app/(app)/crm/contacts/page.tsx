@@ -11,6 +11,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, type BulkAction } from '@/components/data-table';
+import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -84,6 +85,24 @@ export default function ContactsPage() {
         const timer = setTimeout(() => setDebouncedSearch(search), 300);
         return () => clearTimeout(timer);
     }, [search]);
+
+    const fetchAllRows = useCallback(
+        (onProgress?: (loaded: number, total: number) => void) =>
+            fetchAllPages(
+                ({ page: p, limit, sortBy, sortDir }) =>
+                    api.getContacts({
+                        search: debouncedSearch || undefined,
+                        captureSource: captureSourceFilter || undefined,
+                        assignedTo: assignedFilter || undefined,
+                        page: p,
+                        limit,
+                        sortBy,
+                        sortDir,
+                    }),
+                { sort, onProgress },
+            ),
+        [debouncedSearch, captureSourceFilter, assignedFilter, sort],
+    );
 
     const loadContacts = useCallback(async () => {
         const seq = ++loadSeq.current;
@@ -346,6 +365,7 @@ export default function ContactsPage() {
                     onPageSizeChange: (size) => { setPageSize(size); setPage(1); },
                     sort,
                     onSortChange: setSort,
+                    fetchAllRows,
                 }}
                 enableRowSelection
                 onRowSelectionChange={setSelected}

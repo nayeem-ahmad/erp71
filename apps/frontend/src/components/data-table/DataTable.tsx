@@ -30,9 +30,6 @@ import {
     ChevronsRight,
     Columns3,
     X,
-    FileSpreadsheet,
-    FileText,
-    FileDown,
     GripVertical,
     Check,
 } from 'lucide-react';
@@ -56,10 +53,12 @@ import { useCompactUi } from '@/contexts/CompactUiContext';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { useTablePreferences } from './useTablePreferences';
-import { exportToCSV, exportToExcel, exportToPDF, printTable } from './export-utils';
+import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn } from './export-utils';
 import { renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import BulkActionBar, { type BulkAction } from './BulkActionBar';
+import ExportDialog, { type ExportFormat, type ExportRowScope } from './ExportDialog';
+import { toast } from '@/lib/toast';
 
 declare module '@tanstack/react-table' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -126,6 +125,12 @@ export interface DataTableProps<T> {
         onPageSizeChange: (size: number) => void;
         sort: { id: string; desc: boolean } | null;
         onSortChange: (sort: { id: string; desc: boolean } | null) => void;
+        /** Walk the current filtered list for a complete-list export. */
+        fetchAllRows?: (onProgress?: (loaded: number, total: number) => void) => Promise<{
+            items: T[];
+            truncated: boolean;
+            total: number;
+        }>;
     };
 }
 
@@ -289,13 +294,14 @@ export default function DataTable<T>({
 
     // UI toggles
     const [showColumnSelector, setShowColumnSelector] = useState(false);
-    const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showExportDialog, setShowExportDialog] = useState(false);
+    const [exportBusy, setExportBusy] = useState(false);
+    const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [activePreset, setActivePreset] = useState<string | null>(null);
 
     // Refs for click-outside
     const columnSelectorRef = useRef<HTMLDivElement>(null);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
     const tableScrollRef = useRef<HTMLDivElement>(null);
     const [tableCanScroll, setTableCanScroll] = useState(false);
 
@@ -476,9 +482,6 @@ export default function DataTable<T>({
             if (columnSelectorRef.current && !columnSelectorRef.current.contains(e.target as Node)) {
                 setShowColumnSelector(false);
             }
-            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-                setShowExportMenu(false);
-            }
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -545,6 +548,68 @@ export default function DataTable<T>({
         [rowSelection, data],
     );
     const clearSelection = useCallback(() => setRowSelection({}), []);
+
+    const exportColumns = useMemo(
+        () =>
+            table
+                .getAllLeafColumns()
+                .filter((c) => isExportableColumnId(c.id))
+                .map((c) => ({
+                    id: c.id,
+                    label: exportableColumnLabel(c),
+                    visible: c.getIsVisible(),
+                })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [columnVisibility, columnOrder, effectiveColumns, isMdUp],
+    );
+
+    const pageRowCount = table.getPaginationRowModel().rows.length;
+
+    const handleExport = async (opts: {
+        format: ExportFormat;
+        rowScope: ExportRowScope;
+        columnIds: string[];
+    }) => {
+        const specs = table
+            .getAllLeafColumns()
+            .filter((c) => opts.columnIds.includes(c.id))
+            .map((c) => ({
+                id: c.id,
+                header: exportableColumnLabel(c),
+                getValue: (record: T) => valueFromColumn(c, record),
+            }));
+
+        let records: T[];
+        try {
+            if (opts.rowScope === 'page') {
+                records = table.getPaginationRowModel().rows.map((r) => r.original);
+            } else if (isServer && serverPagination?.fetchAllRows) {
+                setExportBusy(true);
+                setExportProgress({ loaded: 0, total: serverPagination.total });
+                const result = await serverPagination.fetchAllRows((loaded, total) => {
+                    setExportProgress({ loaded, total });
+                });
+                records = result.items;
+            } else {
+                records = table.getFilteredRowModel().rows.map((r) => r.original);
+            }
+
+            const matrix = buildExportMatrix(records, specs);
+            if (opts.format === 'csv') {
+                exportToCSV(title, matrix.headers, matrix.rows);
+            } else if (opts.format === 'excel') {
+                await exportToExcel(title, matrix.headers, matrix.rows);
+            } else {
+                await exportToPDF(title, matrix.headers, matrix.rows);
+            }
+            setShowExportDialog(false);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : t.common.dataTable.exportFailed);
+        } finally {
+            setExportBusy(false);
+            setExportProgress(null);
+        }
+    };
 
     return (
         <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100 overflow-hidden`}>
@@ -637,42 +702,15 @@ export default function DataTable<T>({
                             )}
                         </div>
 
-                        {/* Export Menu */}
-                        <div className="relative" ref={exportMenuRef}>
-                            <button
-                                onClick={() => setShowExportMenu(!showExportMenu)}
-                                className={toolbarBtnBase}
-                                title={t.common.dataTable.export}
-                            >
-                                <Download className="w-3.5 h-3.5" />
-                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.export}</span>
-                            </button>
-                            {showExportMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
-                                    <button
-                                        onClick={() => { exportToCSV(table, title); setShowExportMenu(false); }}
-                                        className="flex items-center w-full px-3 py-2 hover:bg-gray-50 text-sm text-gray-700 font-medium"
-                                    >
-                                        <FileDown className="w-4 h-4 mr-2 text-green-600" />
-                                        {t.common.dataTable.exportCsv}
-                                    </button>
-                                    <button
-                                        onClick={() => { exportToExcel(table, title); setShowExportMenu(false); }}
-                                        className="flex items-center w-full px-3 py-2 hover:bg-gray-50 text-sm text-gray-700 font-medium"
-                                    >
-                                        <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" />
-                                        {t.common.dataTable.exportExcel}
-                                    </button>
-                                    <button
-                                        onClick={() => { exportToPDF(table, title); setShowExportMenu(false); }}
-                                        className="flex items-center w-full px-3 py-2 hover:bg-gray-50 text-sm text-gray-700 font-medium"
-                                    >
-                                        <FileText className="w-4 h-4 mr-2 text-red-600" />
-                                        {t.common.dataTable.exportPdf}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        {/* Export */}
+                        <button
+                            onClick={() => setShowExportDialog(true)}
+                            className={toolbarBtnBase}
+                            title={t.common.dataTable.export}
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.export}</span>
+                        </button>
 
                         {/* Print */}
                         <button
@@ -962,6 +1000,18 @@ export default function DataTable<T>({
                     </div>
                 </div>
             )}
+
+            <ExportDialog
+                open={showExportDialog}
+                title={title}
+                pageCount={pageRowCount}
+                totalCount={totalRows}
+                columns={exportColumns}
+                busy={exportBusy}
+                progress={exportProgress}
+                onClose={() => { if (!exportBusy) setShowExportDialog(false); }}
+                onConfirm={handleExport}
+            />
         </div>
     );
 }

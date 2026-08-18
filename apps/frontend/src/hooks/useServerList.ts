@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Paginated } from '@/lib/api';
 import { useTablePreferences } from '@/components/data-table/useTablePreferences';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
+import { fetchAllPages, type FetchAllPagesResult } from '@/components/data-table/fetch-all-pages';
 
 export interface ServerListParams {
     page: number;
@@ -13,7 +14,7 @@ export interface ServerListParams {
 }
 
 /** Shape consumed by `DataTable`'s `serverPagination` prop. */
-export interface ServerPaginationProps {
+export interface ServerPaginationProps<T = unknown> {
     total: number;
     page: number;
     pageSize: number;
@@ -21,6 +22,7 @@ export interface ServerPaginationProps {
     onPageSizeChange: (size: number) => void;
     sort: { id: string; desc: boolean } | null;
     onSortChange: (sort: { id: string; desc: boolean } | null) => void;
+    fetchAllRows?: (onProgress?: (loaded: number, total: number) => void) => Promise<FetchAllPagesResult<T>>;
 }
 
 export interface UseServerListResult<T> {
@@ -29,7 +31,7 @@ export interface UseServerListResult<T> {
     loading: boolean;
     error: unknown;
     /** Spread straight into `<DataTable serverPagination={...} />`. */
-    serverPagination: ServerPaginationProps;
+    serverPagination: ServerPaginationProps<T>;
     /** Re-runs the current query — call after create/update/delete. */
     reload: () => Promise<void>;
     /** Escape hatch for optimistic updates. */
@@ -135,7 +137,21 @@ export function useServerList<T>({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sort, ...deps]);
 
-    const serverPagination = useMemo<ServerPaginationProps>(() => ({
+    const fetchAllRows = useCallback(
+        (onProgress?: (loaded: number, total: number) => void) =>
+            fetchAllPages(
+                (params) => fetchRef.current({
+                    page: params.page,
+                    limit: params.limit,
+                    sortBy: params.sortBy,
+                    sortDir: params.sortDir,
+                }),
+                { sort, onProgress },
+            ),
+        [sort],
+    );
+
+    const serverPagination = useMemo<ServerPaginationProps<T>>(() => ({
         total,
         page,
         pageSize,
@@ -145,7 +161,8 @@ export function useServerList<T>({
         onPageSizeChange: (size: number) => { setPageSize(size); setPage(1); },
         sort,
         onSortChange: setSort,
-    }), [total, page, pageSize, sort]);
+        fetchAllRows,
+    }), [total, page, pageSize, sort, fetchAllRows]);
 
     return { items, total, loading, error, serverPagination, reload: load, setItems, page, pageSize, sort };
 }
