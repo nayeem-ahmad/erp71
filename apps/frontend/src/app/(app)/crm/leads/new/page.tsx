@@ -94,7 +94,6 @@ export default function NewLeadPage() {
                     form={form}
                     onChange={setForm}
                     teamMembers={teamMembers}
-                    showStatus={false}
                     customFieldDefs={customFieldDefs}
                     errors={errors}
                     sourceOptions={sourceOptions}
