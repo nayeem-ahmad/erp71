@@ -86,8 +86,6 @@ import { EmployeeLifecycleModule } from './employee-lifecycle/employee-lifecycle
 import { RecruitmentModule } from './recruitment/recruitment.module';
 import { CareersModule } from './careers/careers.module';
 import { BrandsModule } from './brands/brands.module';
-import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
-import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
 import { CrmActivitiesModule } from './crm-activities/crm-activities.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
@@ -100,7 +98,6 @@ import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
 import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
-import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -205,8 +202,6 @@ import { SocialMediaModule } from './social-media/social-media.module';
         RecruitmentModule,
         CareersModule,
         BrandsModule,
-        CrmInteractionsModule,
-        CrmFollowUpsModule,
         CrmActivitiesModule,
         ProjectsModule,
         CrmCampaignsModule,
@@ -219,7 +214,6 @@ import { SocialMediaModule } from './social-media/social-media.module';
         HrDashboardModule,
         AdminDashboardModule,
         CrmLeadsModule,
-        CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,
         CustomFieldsModule,
         ExpensesModule,

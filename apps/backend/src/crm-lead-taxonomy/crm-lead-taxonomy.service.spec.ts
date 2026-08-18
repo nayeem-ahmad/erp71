@@ -69,11 +69,6 @@ describe('CrmLeadTaxonomyService', () => {
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
             },
-            leadConversation: {
-                count: jest.fn().mockResolvedValue(0),
-                updateMany: jest.fn(),
-                groupBy: jest.fn().mockResolvedValue([]),
-            },
             crmActivity: {
                 count: jest.fn().mockResolvedValue(0),
                 updateMany: jest.fn(),
@@ -368,36 +363,6 @@ describe('CrmLeadTaxonomyService', () => {
                 where: { tenant_id: 'tenant-1', channel_id: telegram.id },
                 data: { channel_id: call.id, channel_code: 'CALL' },
             });
-        });
-
-        // LeadConversation.channel_id is onDelete: Restrict and R1 keeps those
-        // rows, so skipping them would turn the friendly reassign into a raw
-        // foreign-key error on the delete that follows.
-        it('moves the legacy conversations too, or the FK blocks the delete', async () => {
-            db.conversationChannel.findFirst
-                .mockResolvedValueOnce(telegram)
-                .mockResolvedValueOnce(call);
-            db.crmActivity.count.mockResolvedValue(4);
-            db.leadConversation.count.mockResolvedValue(4);
-
-            await service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id, call.id);
-
-            expect(db.leadConversation.updateMany).toHaveBeenCalledWith({
-                where: { tenant_id: 'tenant-1', channel_id: telegram.id },
-                data: { channel_id: call.id, type: 'CALL' },
-            });
-        });
-
-        // A tenant whose backfill has not run yet has conversations but no
-        // activities; the prompt must still appear rather than a 500.
-        it('prompts for a replacement when only legacy conversations reference it', async () => {
-            db.conversationChannel.findFirst.mockResolvedValue({ ...telegram, is_active: false });
-            db.crmActivity.count.mockResolvedValue(0);
-            db.leadConversation.count.mockResolvedValue(3);
-
-            await expect(
-                service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id),
-            ).rejects.toThrow(ConflictException);
         });
 
         it('refuses to remove the last active channel', async () => {

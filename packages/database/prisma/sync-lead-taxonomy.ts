@@ -2,7 +2,8 @@
  * Brings every existing tenant's CRM lookup lists — lead sources, lead
  * categories and conversation channels — up to the current defaults, and
  * backfills `Lead.source_id` / `Lead.category_id` from the legacy enum columns
- * plus `LeadConversation.channel_id` from the code held in `type`.
+ * (The conversation-channel backfill this used to carry went with
+ * LeadConversation, dropped in R3.)
  *
  * Why this exists
  * ---------------
@@ -72,10 +73,8 @@ type Delta = {
     purposesCreated: string[];
     leadsSourceBackfilled: number;
     leadsCategoryBackfilled: number;
-    conversationsChannelBackfilled: number;
     unresolvedSources: number;
     unresolvedCategories: number;
-    unresolvedChannels: number;
 };
 
 /** Thrown to abort the dry-run transaction. Never escapes previewTenant. */
@@ -126,10 +125,8 @@ async function syncTenant(
         purposesCreated: [],
         leadsSourceBackfilled: 0,
         leadsCategoryBackfilled: 0,
-        conversationsChannelBackfilled: 0,
         unresolvedSources: 0,
         unresolvedCategories: 0,
-        unresolvedChannels: 0,
     };
 
     // --- 1. Seed the shipped defaults -------------------------------------
@@ -278,31 +275,11 @@ async function syncTenant(
         }
     }
 
-    // `LeadConversation.type` is a plain string, so unlike the two lists above it has
-    // no legacy enum column to guard on — a value here can be anything a past client
-    // wrote. Same treatment: give it a row rather than letting the backfill drop it.
-    {
-        const inUse = await tx.$queryRaw<{ code: string }[]>`
-            SELECT DISTINCT "type" AS code
-            FROM "LeadConversation"
-            WHERE tenant_id = ${tenantId} AND channel_id IS NULL AND "type" <> ''
-        `;
-        const orphanCodes = inUse.map((r) => r.code).filter((c) => c && !haveChannel.has(c));
-        if (orphanCodes.length) {
-            await tx.conversationChannel.createMany({
-                data: orphanCodes.map((code, i) => ({
-                    tenant_id: tenantId,
-                    code,
-                    name: code,
-                    sort_order: 100 + i,
-                    is_system: false,
-                    is_active: true,
-                })),
-                skipDuplicates: true,
-            });
-            delta.channelsCreated.push(...orphanCodes);
-        }
-    }
+    // The channel reconcile pass that used to live here read LeadConversation,
+    // which R3 dropped. CrmActivity.channel_code is its successor, but it needs no
+    // equivalent pass: every activity is written through CrmActivitiesService,
+    // which resolves the channel against this tenant's own rows before saving, so
+    // an unresolvable code cannot be created in the first place.
 
     // --- 3. Backfill ------------------------------------------------------
     // Joins on the immutable `code`, never `name`, so a tenant renaming
@@ -332,16 +309,6 @@ async function syncTenant(
         `;
     }
 
-    delta.conversationsChannelBackfilled = await tx.$executeRaw`
-        UPDATE "LeadConversation" c
-        SET channel_id = ch.id
-        FROM "ConversationChannel" ch
-        WHERE ch.tenant_id = c.tenant_id
-          AND ch.code = c."type"
-          AND c.tenant_id = ${tenantId}
-          AND c.channel_id IS NULL
-    `;
-
     // --- 4. Verify --------------------------------------------------------
     // Reported, never silently absorbed: this count is the gate the contract
     // release (dropping the enum columns) must see at zero.
@@ -359,14 +326,6 @@ async function syncTenant(
         `;
         delta.unresolvedCategories = Number(count);
     }
-    {
-        const [{ count }] = await tx.$queryRaw<{ count: bigint }[]>`
-            SELECT count(*) AS count FROM "LeadConversation"
-            WHERE tenant_id = ${tenantId} AND channel_id IS NULL
-        `;
-        delta.unresolvedChannels = Number(count);
-    }
-
     return delta;
 }
 
@@ -396,10 +355,8 @@ function isNoop(d: Delta) {
         d.purposesCreated.length === 0 &&
         d.leadsSourceBackfilled === 0 &&
         d.leadsCategoryBackfilled === 0 &&
-        d.conversationsChannelBackfilled === 0 &&
         d.unresolvedSources === 0 &&
-        d.unresolvedCategories === 0 &&
-        d.unresolvedChannels === 0
+        d.unresolvedCategories === 0
     );
 }
 
@@ -412,10 +369,8 @@ function reportTenant(d: Delta, dryRun: boolean) {
     if (d.purposesCreated.length) console.log(`    ${verb} activity purposes: ${d.purposesCreated.join(', ')}`);
     if (d.leadsSourceBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} source_id on ${d.leadsSourceBackfilled} lead(s)`);
     if (d.leadsCategoryBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} category_id on ${d.leadsCategoryBackfilled} lead(s)`);
-    if (d.conversationsChannelBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} channel_id on ${d.conversationsChannelBackfilled} conversation(s)`);
     if (d.unresolvedSources) console.log(`    !! ${d.unresolvedSources} lead(s) still have no source_id`);
     if (d.unresolvedCategories) console.log(`    !! ${d.unresolvedCategories} lead(s) still have no category_id`);
-    if (d.unresolvedChannels) console.log(`    !! ${d.unresolvedChannels} conversation(s) still have no channel_id`);
 }
 
 async function main() {
@@ -456,17 +411,16 @@ async function main() {
             channels: acc.channels + d.channelsCreated.length,
             purposes: acc.purposes + d.purposesCreated.length,
             leads: acc.leads + d.leadsSourceBackfilled + d.leadsCategoryBackfilled,
-            conversations: acc.conversations + d.conversationsChannelBackfilled,
             unresolved: acc.unresolved + d.unresolvedSources + d.unresolvedCategories,
         }),
-        { sources: 0, categories: 0, channels: 0, purposes: 0, leads: 0, conversations: 0, unresolved: 0 },
+        { sources: 0, categories: 0, channels: 0, purposes: 0, leads: 0, unresolved: 0 },
     );
 
     console.log(
         `\n${dryRun ? 'Would sync' : 'Synced'} ${changed.length} of ${tenants.length} tenant(s): ` +
         `${totals.sources} source(s), ${totals.categories} category(ies), ${totals.channels} channel(s), ` +
         `${totals.purposes} activity purpose(s), ` +
-        `${totals.leads} lead backfill(s), ${totals.conversations} conversation backfill(s).`,
+        `${totals.leads} lead backfill(s).`,
     );
 
     if (totals.unresolved > 0) {
