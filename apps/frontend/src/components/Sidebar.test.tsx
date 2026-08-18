@@ -248,7 +248,7 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.getByText('Platform')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Inbox'));
-        expect(screen.getByText('Support Chat')).toBeInTheDocument();
+        expect(screen.getByText('Support')).toBeInTheDocument();
         expect(screen.getByText('Feedback')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Channels'));

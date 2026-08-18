@@ -14,6 +14,7 @@ import { IsString, MinLength, IsIn, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { DatabaseService } from '../database/database.service';
+import { threadCategoryWhere } from './support.util';
 
 class AdminSendMessageDto {
     @IsString()
@@ -37,13 +38,17 @@ export class AdminSupportController {
     async listThreads(
         @Query('status') status?: string,
         @Query('search') search?: string,
+        @Query('category') category?: string,
+        @Query('kind') kind?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
     ) {
         const take = Math.min(Number(limit) || 50, 100);
         const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
-        const where: any = {};
+        const where: any = {
+            ...threadCategoryWhere(category, kind),
+        };
         if (status && ['open', 'resolved'].includes(status)) where.status = status;
         if (search) where.subject = { contains: search, mode: 'insensitive' };
 
@@ -71,6 +76,9 @@ export class AdminSupportController {
                 id: t.id,
                 subject: t.subject,
                 status: t.status,
+                category: t.category,
+                page: t.page,
+                feedbackId: t.feedbackId,
                 tenant: t.tenant.name,
                 createdAt: t.createdAt,
                 updatedAt: t.updatedAt,
@@ -102,6 +110,9 @@ export class AdminSupportController {
                 id: thread.id,
                 subject: thread.subject,
                 status: thread.status,
+                category: thread.category,
+                page: thread.page,
+                feedbackId: thread.feedbackId,
                 tenant: thread.tenant.name,
             },
             messages: messages.map((m) => ({

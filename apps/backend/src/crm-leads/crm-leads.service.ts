@@ -88,9 +88,9 @@ export class CrmLeadsService {
         // The three `next_step*` keys are stripped for a different reason: since
         // R1 they are a read-only rollup of the earliest PLANNED CrmActivity,
         // written only by CrmActivitiesService.recalculateRollup. They are gone
-        // from UpdateLeadDto, but a stale client can still send them, and
-        // `forbidNonWhitelisted` strips unknown keys before the DTO — not after
-        // it — so this is what actually keeps them out of the column.
+        // from UpdateLeadDto. The global pipe (`forbidNonWhitelisted`) 400s a
+        // client that still sends them; this strip is the belt-and-braces for
+        // callers that reach the service without going through the pipe.
         const {
             custom_fields: _ignoredCustomFields,
             source: _ignoredSource,

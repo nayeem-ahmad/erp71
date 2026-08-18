@@ -148,7 +148,7 @@ export default function PlatformSettingsIndexPage() {
                     bg: 'bg-pink-50',
                 },
                 {
-                    href: '/admin/feedback',
+                    href: '/admin/support?kind=feedback',
                     icon: Lightbulb,
                     label: m.sections.feedback.label,
                     description: m.sections.feedback.description,

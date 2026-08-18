@@ -1,20 +1,9 @@
-import {
-    Controller,
-    Post,
-    Body,
-    UseGuards,
-    UseInterceptors,
-    BadRequestException,
-    ForbiddenException,
-    Logger,
-} from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, UseInterceptors } from '@nestjs/common';
 import { IsEnum, IsString, IsOptional, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { DatabaseService } from '../database/database.service';
-import { EmailService } from '../email/email.service';
-import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { SupportService } from '../support/support.service';
 
 enum FeedbackType {
     bug = 'bug',
@@ -39,42 +28,17 @@ class CreateFeedbackDto {
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TenantInterceptor)
 export class FeedbackController {
-    private readonly logger = new Logger(FeedbackController.name);
-
-    constructor(
-        private readonly db: DatabaseService,
-        private readonly emailService: EmailService,
-        private readonly platformSettings: PlatformSettingsService,
-    ) {}
+    constructor(private readonly support: SupportService) {}
 
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateFeedbackDto) {
-        // Per-tenant override wins over the platform default — see ChatService.assertEnabled.
-        if (!await this.platformSettings.isFeatureEnabledForTenant('feedback', tenant.tenantId)) {
-            throw new ForbiddenException('Feedback is not available');
-        }
-
-        if (!['bug', 'feature', 'general'].includes(dto.type)) {
-            throw new BadRequestException('type must be one of: bug, feature, general');
-        }
-
-        const feedback = await this.db.feedback.create({
-            data: {
-                tenantId: tenant.tenantId,
-                userId: tenant.userId,
-                type: dto.type,
-                message: dto.message,
-                page: dto.page ?? null,
-            },
+        const knock = await this.support.createKnock({
+            tenantId: tenant.tenantId,
+            userId: tenant.userId,
+            category: dto.type,
+            body: dto.message,
+            page: dto.page,
         });
-
-        const feedbackEmail = process.env.FEEDBACK_EMAIL;
-        if (feedbackEmail) {
-            this.emailService
-                .sendFeedbackNotification(feedbackEmail, feedback.id, dto.type, dto.message, dto.page ?? undefined)
-                .catch((err) => this.logger.error(`Failed to send feedback email: ${err}`));
-        }
-
-        return { id: feedback.id };
+        return { id: knock.feedbackId ?? knock.id, threadId: knock.id };
     }
 }

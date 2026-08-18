@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import { MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2 } from 'lucide-react';
+import { MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { StatusBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
 
 type Thread = {
     id: string;
     subject: string;
     status: string;
+    category: string;
+    page: string | null;
+    feedbackId: string | null;
     tenant: string;
     createdAt: string;
     updatedAt: string;
@@ -35,12 +39,21 @@ export default function AdminSupportPage() {
     const [total, setTotal] = useState(0);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [threadInfo, setThreadInfo] = useState<{ subject: string; status: string; tenant: string } | null>(null);
+    const [threadInfo, setThreadInfo] = useState<{
+        subject: string;
+        status: string;
+        tenant: string;
+        category?: string;
+        page?: string | null;
+        feedbackId?: string | null;
+    } | null>(null);
+    const [automationId, setAutomationId] = useState<string | null>(null);
     const [replyBody, setReplyBody] = useState('');
     const [sending, setSending] = useState(false);
     const [loadingMessages, setLoadingMessages] = useState(false);
@@ -49,12 +62,22 @@ export default function AdminSupportPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const loadThreads = async (opts?: { search?: string; status?: string }) => {
+    const categoryLabel = (category: string) => {
+        if (category === 'support') return m.types.support;
+        if (category === 'bug') return m.types.bug;
+        if (category === 'feature') return m.types.feature;
+        return m.types.general;
+    };
+
+    const loadThreads = async (opts?: { search?: string; status?: string; category?: string }) => {
         setIsLoading(true);
         try {
+            const nextCategory = opts?.category ?? categoryFilter;
             const res: any = await api.getAdminSupportThreads({
                 search: (opts?.search ?? search) || undefined,
                 status: (opts?.status ?? statusFilter) || undefined,
+                category: nextCategory && nextCategory !== 'feedback' ? nextCategory : undefined,
+                kind: nextCategory === 'feedback' ? 'feedback' : undefined,
                 limit: 50,
             });
             setThreads(res.data ?? []);
@@ -80,7 +103,10 @@ export default function AdminSupportPage() {
     };
 
     useEffect(() => {
-        void loadThreads();
+        const params = new URLSearchParams(window.location.search);
+        const kind = params.get('kind') || params.get('category') || '';
+        if (kind) setCategoryFilter(kind);
+        void loadThreads({ category: kind || undefined });
     }, []);
 
     useEffect(() => {
@@ -104,12 +130,17 @@ export default function AdminSupportPage() {
 
     const handleSearch = (value: string) => {
         setSearch(value);
-        void loadThreads({ search: value, status: statusFilter });
+        void loadThreads({ search: value, status: statusFilter, category: categoryFilter });
     };
 
     const handleStatusFilter = (value: string) => {
         setStatusFilter(value);
-        void loadThreads({ search, status: value });
+        void loadThreads({ search, status: value, category: categoryFilter });
+    };
+
+    const handleCategoryFilter = (value: string) => {
+        setCategoryFilter(value);
+        void loadThreads({ search, status: statusFilter, category: value });
     };
 
     const selectThread = (id: string) => {
@@ -182,15 +213,29 @@ export default function AdminSupportPage() {
                                 className="w-full bg-transparent outline-none text-sm"
                             />
                         </label>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => handleStatusFilter(e.target.value)}
-                            className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
-                        >
-                            <option value="">{m.allStatuses}</option>
-                            <option value="open">{m.statusOpen}</option>
-                            <option value="resolved">{m.statusResolved}</option>
-                        </select>
+                        <div className="grid grid-cols-2 gap-2">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => handleStatusFilter(e.target.value)}
+                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            >
+                                <option value="">{m.allStatuses}</option>
+                                <option value="open">{m.statusOpen}</option>
+                                <option value="resolved">{m.statusResolved}</option>
+                            </select>
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => handleCategoryFilter(e.target.value)}
+                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            >
+                                <option value="">{m.allTypes}</option>
+                                <option value="support">{m.types.support}</option>
+                                <option value="feedback">{m.kindFeedback}</option>
+                                <option value="bug">{m.types.bug}</option>
+                                <option value="feature">{m.types.feature}</option>
+                                <option value="general">{m.types.general}</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-100">
@@ -214,7 +259,12 @@ export default function AdminSupportPage() {
                                             {thread.status}
                                         </StatusBadge>
                                     </div>
-                                    <p className="text-xs text-gray-500 font-semibold truncate">{thread.tenant}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-xs text-gray-500 font-semibold truncate">{thread.tenant}</p>
+                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                                            {categoryLabel(thread.category)}
+                                        </span>
+                                    </div>
                                     {thread.lastMessage && (
                                         <p className="text-xs text-gray-400 truncate mt-0.5">{thread.lastMessage.body}</p>
                                     )}
@@ -243,12 +293,26 @@ export default function AdminSupportPage() {
                                     {threadInfo?.tenant && (
                                         <p className="text-xs text-gray-500 font-semibold">{threadInfo.tenant}</p>
                                     )}
+                                    {threadInfo?.page && (
+                                        <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
+                                    )}
                                 </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                {threadInfo?.feedbackId && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setAutomationId(threadInfo.feedbackId!)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 min-h-touch"
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                        {m.automate}
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={toggleResolve}
                                     disabled={resolving}
-                                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors min-h-touch ${
                                         threadInfo?.status === 'resolved'
                                             ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                             : 'bg-green-50 text-green-700 hover:bg-green-100'
@@ -262,6 +326,7 @@ export default function AdminSupportPage() {
                                         <><CheckCircle className="w-3 h-3" />{m.resolve}</>
                                     )}
                                 </button>
+                                </div>
                             </div>
 
                             {/* Messages */}
@@ -323,6 +388,10 @@ export default function AdminSupportPage() {
                     )}
                 </div>
             </div>
+
+            {automationId && (
+                <FeedbackAutomationPanel feedbackId={automationId} onClose={() => setAutomationId(null)} />
+            )}
         </div>
     );
 }

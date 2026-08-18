@@ -355,7 +355,7 @@ export const coreMessages = {
                 referrals: "রেফারেল",
                 feedback: "ফিডব্যাক",
                 support: "সাপোর্ট",
-                adminSupport: "সাপোর্ট চ্যাট",
+                adminSupport: "সাপোর্ট",
                 systemHealth: "সিস্টেম হেলথ",
                 platformStatus: "পাবলিক স্ট্যাটাস",
                 platformSettingsSms: "SMS Gateway",

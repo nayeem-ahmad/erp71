@@ -165,7 +165,7 @@ export default function LeadDetailPage() {
         setSaveLeadError(null);
         setSavingLead(true);
         try {
-            const updated = await api.updateLead(leadId, leadFormToPayload(editForm));
+            const updated = await api.updateLead(leadId, leadFormToPayload(editForm, { mode: 'update' }));
             setLead(updated);
             setShowEditForm(false);
             setEditForm(null);
@@ -333,6 +333,7 @@ export default function LeadDetailPage() {
                         errors={editFormErrors}
                         sourceOptions={sourceOptions}
                         categoryOptions={categoryOptions}
+                        showNextStep={false}
                     />
                     {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}
                     <FormFooter className="border-t-0 pt-0">
