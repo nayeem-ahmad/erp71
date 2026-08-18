@@ -36,7 +36,7 @@ export default async function OpengraphImage() {
                 }}
             >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoSrc} alt="" width={660} height={260} />
+                <img src={logoSrc} alt="" width={660} height={258} />
                 <div style={{ display: 'flex', fontSize: 38, color: '#4b5563', letterSpacing: -0.5 }}>
                     {BRAND_TAGLINE}
                 </div>

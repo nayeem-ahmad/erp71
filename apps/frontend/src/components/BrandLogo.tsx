@@ -21,7 +21,8 @@ const ASSETS: Record<BrandVariant, Record<BrandTone, string>> = {
 };
 
 const RATIOS: Record<BrandVariant, number> = {
-    lockup: 2600 / 1024,
+    // SVG viewBox is 2200×860; PNG export is 2201×861 (Illustrator +1px).
+    lockup: 2200 / 860,
     mark: 1,
 };
 
