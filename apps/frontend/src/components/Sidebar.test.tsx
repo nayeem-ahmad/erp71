@@ -133,18 +133,30 @@ describe('Sidebar — brand mark', () => {
         setBranding();
     });
 
-    it('falls back to the ERP71 mark when the tenant has uploaded no logo', () => {
+    it('falls back to the ERP71 lockup when the tenant has uploaded no logo', () => {
         const { container } = render(<Sidebar canAccessAccounting />);
 
-        const mark = container.querySelector('img[src*="/logo/icon.svg"]');
-        expect(mark).toBeInTheDocument();
+        const lockup = container.querySelector('img[src*="/logo/logo.svg"]');
+        expect(lockup).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/icon.svg"]')).not.toBeInTheDocument();
+        expect(screen.queryByText('ERP71')).not.toBeInTheDocument();
     });
 
-    it('shows the tenant logo instead of the ERP71 mark once one is uploaded', () => {
+    it('uses the square mark when the sidebar is collapsed', () => {
+        const { container } = render(<Sidebar canAccessAccounting />);
+
+        fireEvent.click(screen.getByTitle('Collapse sidebar'));
+
+        expect(container.querySelector('img[src*="/logo/icon.svg"]')).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).not.toBeInTheDocument();
+    });
+
+    it('shows the tenant logo instead of the ERP71 lockup once one is uploaded', () => {
         setBranding({ logoUrl: 'https://cdn.example.com/tenant-logo.png' });
         const { container } = render(<Sidebar canAccessAccounting />);
 
         expect(container.querySelector('img[src="https://cdn.example.com/tenant-logo.png"]')).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).not.toBeInTheDocument();
         expect(container.querySelector('img[src*="/logo/icon.svg"]')).not.toBeInTheDocument();
     });
 

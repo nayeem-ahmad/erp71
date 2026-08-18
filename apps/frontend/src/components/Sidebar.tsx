@@ -666,12 +666,15 @@ export default function Sidebar({
                                 <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
                             </div>
                         ) : (
-                            // No tenant logo uploaded — fall back to the ERP71 mark, and
-                            // drop the coloured tile with it: the mark is outline artwork
-                            // that turns to mush reversed out at 20px.
-                            <BrandLogo variant="mark" height={28} decorative />
+                            // No tenant logo — the full lockup on the expanded rail, the
+                            // square mark when collapsed (64px cannot fit 2200×860).
+                            <BrandLogo
+                                variant={collapsed ? 'mark' : 'lockup'}
+                                height={collapsed ? 28 : 32}
+                                decorative={Boolean(!collapsed && businessName)}
+                            />
                         )}
-                        {!collapsed && (
+                        {!collapsed && (logoUrl || businessName) && (
                             <span className="min-w-0 truncate text-[15px] font-extrabold text-gray-950 tracking-tight leading-tight">
                                 {businessName || BRAND_NAME}
                             </span>
