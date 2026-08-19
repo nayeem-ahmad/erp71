@@ -139,6 +139,11 @@ export const projectsMessages = {
         details: 'Butiran',
         unassigned: 'Tiada penerima tugas',
         saveFailed: 'Tugasan tidak dapat dikemas kini',
+        selectProject: 'Pilih projek',
+        projectRequired: 'Pilih projek yang memiliki tugasan ini.',
+        titleRequired: 'Berikan tugasan ini tajuk.',
+        noProjects: 'Cipta projek dahulu — setiap tugasan milik sebuah projek.',
+        createFailed: 'Tugasan tidak dapat dicipta',
     },
 
     description: {
@@ -353,6 +358,12 @@ export const projectsMessages = {
         emptySprint: "Belum ada tugasan dalam sprint ini.",
         noProjects: "Belum ada projek",
         tenantHint: "Satu sprint merentas seluruh ruang kerja. Hanya satu boleh berjalan pada satu masa.",
+        searchPlaceholder: 'Cari nama atau matlamat sprint',
+        emptyFiltered: 'Tiada sprint sepadan dengan penapis ini.',
+        anyStatus: 'Sebarang status',
+        allProjects: 'Semua projek',
+        dates: 'Tarikh',
+        projects: 'Projek',
     },
 
     burndown: {
@@ -396,7 +407,6 @@ export const projectsMessages = {
         nameRequired: 'Berikan papan ini nama.',
         description: 'Penerangan',
         empty: 'Tiada papan lagi. Cipta satu dan tambah tugasan daripada mana-mana projek.',
-        cardCount: '{count} kad',
         addTasks: 'Tambah tugasan',
         addTasksTitle: 'Tambah tugasan ke papan ini',
         removeCard: 'Keluarkan daripada papan',
@@ -426,6 +436,12 @@ export const projectsMessages = {
         loadFailed: 'Lajur tidak dapat dimuatkan.',
         deleteColumn: 'Padam lajur',
         deleteColumnConfirm: 'Padam "{name}"? Kadnya akan kembali ke Tidak disusun, dan pemetaan statusnya turut dipadam.',
+        searchPlaceholder: 'Cari nama atau penerangan papan',
+        emptyFiltered: 'Tiada papan sepadan dengan penapis ini.',
+        cards: 'Kad',
+        allBoards: 'Semua papan',
+        withCards: 'Ada kad',
+        emptyOnly: 'Papan kosong',
     },
 
 } as const;

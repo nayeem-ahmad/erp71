@@ -1,9 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Textarea, Field, ConfirmDialog } from '@/components/ui';
+import {
+    PageShell,
+    PageHeader,
+    Button,
+    Input,
+    Select,
+    Textarea,
+    Field,
+    ConfirmDialog,
+} from '@/components/ui';
+import DataTable from '@/components/data-table/DataTable';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -18,12 +28,17 @@ interface BoardSummary {
     card_count: number;
 }
 
+/** `''` is every board; the other two split on whether the board holds cards. */
+type CardsFilter = '' | 'with' | 'empty';
+
 export default function BoardsPage() {
     const { t } = useI18n();
     const m = t.projects.boards;
 
     const [boards, setBoards] = useState<BoardSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [cardsFilter, setCardsFilter] = useState<CardsFilter>('');
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [name, setName] = useState('');
@@ -47,6 +62,21 @@ export default function BoardsPage() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    // The boards endpoint returns the whole list, so the filters run here rather
+    // than as another round trip.
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return boards.filter((board) => {
+            if (cardsFilter === 'with' && board.card_count === 0) return false;
+            if (cardsFilter === 'empty' && board.card_count > 0) return false;
+            if (!term) return true;
+            return (
+                board.name.toLowerCase().includes(term)
+                || (board.description ?? '').toLowerCase().includes(term)
+            );
+        });
+    }, [boards, search, cardsFilter]);
 
     const closeModal = () => {
         setCreating(false);
@@ -92,6 +122,56 @@ export default function BoardsPage() {
         }
     };
 
+    const columns = useMemo(
+        () => [
+            {
+                id: 'name',
+                header: m.name,
+                accessorKey: 'name',
+                cell: ({ row }: { row: { original: BoardSummary } }) => (
+                    <Link
+                        href={routes.projects.boardDetail(row.original.id)}
+                        className="font-medium text-blue-600 hover:underline"
+                    >
+                        {row.original.name}
+                    </Link>
+                ),
+            },
+            {
+                id: 'description',
+                header: m.description,
+                accessorKey: 'description',
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: BoardSummary } }) =>
+                    row.original.description || '—',
+            },
+            {
+                id: 'card_count',
+                header: m.cards,
+                accessorKey: 'card_count',
+                cell: ({ row }: { row: { original: BoardSummary } }) => row.original.card_count,
+            },
+            {
+                id: 'actions',
+                header: t.projects.fields.actions,
+                cell: ({ row }: { row: { original: BoardSummary } }) => (
+                    <div className="flex items-center justify-end">
+                        <button
+                            type="button"
+                            aria-label={t.common.delete}
+                            title={m.deleteBoard}
+                            onClick={() => setPendingDelete(row.original)}
+                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
+                        >
+                            <Trash2 className="mx-auto h-4 w-4" />
+                        </button>
+                    </div>
+                ),
+            },
+        ],
+        [m, t.common.delete, t.projects.fields.actions],
+    );
+
     return (
         <PageShell>
             <PageHeader
@@ -111,38 +191,35 @@ export default function BoardsPage() {
                 }
             />
 
-            {loading ? (
-                <p className="text-sm text-gray-500">{t.common.loading}</p>
-            ) : boards.length === 0 ? (
-                <p className="text-sm text-gray-500">{m.empty}</p>
-            ) : (
-                <div className="space-y-4">
-                    {boards.map((board) => (
-                        <div
-                            key={board.id}
-                            className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 md:p-4"
-                        >
-                            <Link href={routes.projects.boardDetail(board.id)} className="min-h-touch flex-1">
-                                <span className="block text-sm font-medium text-blue-600">{board.name}</span>
-                                {board.description ? (
-                                    <span className="block text-xs text-gray-500">{board.description}</span>
-                                ) : null}
-                                <span className="block text-xs text-gray-500">
-                                    {m.cardCount.replace('{count}', String(board.card_count))}
-                                </span>
-                            </Link>
-                            <button
-                                type="button"
-                                aria-label={t.common.delete}
-                                onClick={() => setPendingDelete(board)}
-                                className="min-h-touch min-w-touch rounded-lg text-gray-400 hover:text-red-600"
-                            >
-                                <Trash2 className="mx-auto h-4 w-4" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={m.searchPlaceholder}
+                    className="md:max-w-xs"
+                />
+                <Select
+                    value={cardsFilter}
+                    onChange={(event) => setCardsFilter(event.target.value as CardsFilter)}
+                    className="md:w-44"
+                >
+                    <option value="">{m.allBoards}</option>
+                    <option value="with">{m.withCards}</option>
+                    <option value="empty">{m.emptyOnly}</option>
+                </Select>
+            </div>
+
+            {/* The table stays on screen with nothing in it: an empty workspace still
+                shows the columns, the filters and the toolbar rather than one line of grey text. */}
+            <DataTable
+                title={m.title}
+                tableId="project-boards"
+                columns={columns as never}
+                data={filtered}
+                isLoading={loading}
+                showSearch={false}
+                emptyMessage={search.trim() || cardsFilter ? m.emptyFiltered : m.empty}
+            />
 
             {creating ? (
                 <ModalShell onBackdropClick={closeModal}>

@@ -139,6 +139,11 @@ export const projectsMessages = {
         details: 'বিস্তারিত',
         unassigned: 'দায়িত্বপ্রাপ্ত কেউ নেই',
         saveFailed: 'টাস্ক হালনাগাদ করা যায়নি',
+        selectProject: 'একটি প্রকল্প বেছে নিন',
+        projectRequired: 'কোন প্রকল্পের কাজ, সেটি বেছে নিন।',
+        titleRequired: 'টাস্কের একটি শিরোনাম দিন।',
+        noProjects: 'আগে একটি প্রকল্প তৈরি করুন — প্রতিটি টাস্ক কোনো না কোনো প্রকল্পের।',
+        createFailed: 'টাস্ক তৈরি করা যায়নি',
     },
 
     description: {
@@ -353,6 +358,12 @@ export const projectsMessages = {
         emptySprint: "এই স্প্রিন্টে এখনো কোনো কাজ নেই।",
         noProjects: "এখনো কোনো প্রকল্প নেই",
         tenantHint: "একটি স্প্রিন্ট পুরো ওয়ার্কস্পেস জুড়ে চলে। একসাথে একটিই চালু থাকতে পারে।",
+        searchPlaceholder: 'স্প্রিন্টের নাম বা লক্ষ্য খুঁজুন',
+        emptyFiltered: 'এই ফিল্টারে কোনো স্প্রিন্ট নেই।',
+        anyStatus: 'যেকোনো অবস্থা',
+        allProjects: 'সব প্রকল্প',
+        dates: 'তারিখ',
+        projects: 'প্রকল্প',
     },
 
     burndown: {
@@ -396,7 +407,6 @@ export const projectsMessages = {
         nameRequired: 'বোর্ডের একটি নাম দিন।',
         description: 'বিবরণ',
         empty: 'এখনও কোনো বোর্ড নেই। একটি তৈরি করে যেকোনো প্রকল্প থেকে টাস্ক যোগ করুন।',
-        cardCount: '{count}টি কার্ড',
         addTasks: 'টাস্ক যোগ করুন',
         addTasksTitle: 'এই বোর্ডে টাস্ক যোগ করুন',
         removeCard: 'বোর্ড থেকে সরান',
@@ -426,6 +436,12 @@ export const projectsMessages = {
         loadFailed: 'কলামগুলো লোড করা যায়নি।',
         deleteColumn: 'কলাম মুছুন',
         deleteColumnConfirm: '"{name}" মুছবেন? এর কার্ডগুলো অবিন্যস্তে ফিরে যাবে, এবং এর স্ট্যাটাস ম্যাপিংও মুছে যাবে।',
+        searchPlaceholder: 'বোর্ডের নাম বা বিবরণ খুঁজুন',
+        emptyFiltered: 'এই ফিল্টারে কোনো বোর্ড নেই।',
+        cards: 'কার্ড',
+        allBoards: 'সব বোর্ড',
+        withCards: 'কার্ড আছে এমন',
+        emptyOnly: 'খালি বোর্ড',
     },
 
 } as const;
