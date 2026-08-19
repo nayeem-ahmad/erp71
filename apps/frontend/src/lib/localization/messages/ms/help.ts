@@ -224,6 +224,10 @@ export const helpMessages = {
                     q: 'Apakah kredit AI dan bagaimana saya mendapatkan lebih banyak?',
                     a: 'Kredit AI ialah elaun bulanan yang disertakan dengan pelan anda (1 kredit = 1,000 token), digunakan oleh pembantu dan ciri AI lain; lihatnya di bawah Kredit AI. Ia ditetapkan semula setiap tempoh pengebilan dan tidak boleh dibeli secara berasingan — anda mendapat elaun lebih besar dengan menaik taraf (BASIC menyertakan 100/bulan, STANDARD 500). Ini berbeza daripada kredit SMS, yang prabayar dan boleh dibeli.',
                 },
+                {
+                    q: 'Bolehkah saya menyebut soalan dan bukannya menaip?',
+                    a: 'Ya — jika pelayar anda menyokongnya (Chrome, Edge atau Safari pada HTTPS), mikrofon muncul di sebelah Hantar. Ketiknya, sebut soalan anda, sunting teks jika perlu, kemudian hantar. Pembantu belum membaca jawapan dengan kuat.',
+                },
             ],
         },
         billing: {

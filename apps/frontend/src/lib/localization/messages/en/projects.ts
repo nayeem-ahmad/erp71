@@ -139,6 +139,11 @@ export const projectsMessages = {
         details: 'Details',
         unassigned: 'Unassigned',
         saveFailed: 'Could not update the task',
+        selectProject: 'Select a project',
+        projectRequired: 'Pick the project this task belongs to.',
+        titleRequired: 'Give the task a title.',
+        noProjects: 'Create a project first — every task belongs to one.',
+        createFailed: 'Could not create the task',
     },
 
     description: {
@@ -353,6 +358,12 @@ export const projectsMessages = {
         emptySprint: 'No tasks in this sprint yet.',
         noProjects: 'No projects yet',
         tenantHint: 'A sprint spans the whole workspace. Only one can run at a time.',
+        searchPlaceholder: 'Search sprint name or goal',
+        emptyFiltered: 'No sprints match these filters.',
+        anyStatus: 'Any status',
+        allProjects: 'All projects',
+        dates: 'Dates',
+        projects: 'Projects',
     },
 
     burndown: {
@@ -396,7 +407,6 @@ export const projectsMessages = {
         nameRequired: 'Give the board a name.',
         description: 'Description',
         empty: 'No boards yet. Create one and add tasks from any project.',
-        cardCount: '{count} cards',
         addTasks: 'Add tasks',
         addTasksTitle: 'Add tasks to this board',
         removeCard: 'Remove from board',
@@ -426,6 +436,12 @@ export const projectsMessages = {
         loadFailed: 'Could not load the columns.',
         deleteColumn: 'Delete column',
         deleteColumnConfirm: 'Delete "{name}"? Its cards fall back to Unsorted, and its status mappings go too.',
+        searchPlaceholder: 'Search board name or description',
+        emptyFiltered: 'No boards match these filters.',
+        cards: 'Cards',
+        allBoards: 'All boards',
+        withCards: 'With cards',
+        emptyOnly: 'Empty boards',
     },
 
 } as const;

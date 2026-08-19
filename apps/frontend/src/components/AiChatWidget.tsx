@@ -2,10 +2,11 @@
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bot, ChevronDown, History, Loader2, MessageSquare, Send, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Bot, ChevronDown, History, Loader2, MessageSquare, Mic, MicOff, Send, Trash2, X } from 'lucide-react';
 import type { AiChatConversationSummary, AiChatMessage, AiChatToolCall } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import { useBrowserSpeechToText } from '@/hooks/useBrowserSpeechToText';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 
@@ -79,6 +80,24 @@ export default function AiChatWidget() {
     const [hasWebSearch, setHasWebSearch] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const speech = useBrowserSpeechToText({
+        locale,
+        enabled: open && !sending && !showHistory,
+        onTranscript: (text) => {
+            setInput(text);
+            // The box is what they send from — put the caret back so they can edit.
+            requestAnimationFrame(() => inputRef.current?.focus());
+        },
+        messages: {
+            unsupported: m.voiceUnsupported,
+            micDenied: m.voiceMicDenied,
+            listenError: m.voiceListenError,
+            networkError: m.voiceNetworkError,
+            serviceUnreachable: m.voiceServiceUnreachable,
+            audioCaptureError: m.voiceAudioCaptureError,
+            insecureContext: m.voiceInsecureContext,
+        },
+    });
 
     useEffect(() => {
         if (open && !showHistory) inputRef.current?.focus();
@@ -342,9 +361,26 @@ export default function AiChatWidget() {
                                             }}
                                             rows={2}
                                             maxLength={2000}
-                                            placeholder={m.placeholder}
+                                            placeholder={speech.listening ? m.voiceListeningPlaceholder : m.placeholder}
                                             className="min-h-touch flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
                                         />
+                                        {speech.supported ? (
+                                            <button
+                                                type="button"
+                                                onClick={speech.toggle}
+                                                disabled={sending}
+                                                aria-pressed={speech.listening}
+                                                className={`flex min-h-touch min-w-touch items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white ${
+                                                    speech.listening
+                                                        ? 'bg-blue-50 text-blue-600'
+                                                        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                                                }`}
+                                                aria-label={speech.listening ? m.voiceStopAria : m.voiceStartAria}
+                                                title={speech.listening ? m.voiceStopAria : m.voiceStartAria}
+                                            >
+                                                {speech.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                                            </button>
+                                        ) : null}
                                         <button
                                             type="button"
                                             onClick={() => void send(input)}
