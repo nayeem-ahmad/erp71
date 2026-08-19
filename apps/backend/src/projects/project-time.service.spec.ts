@@ -142,4 +142,183 @@ describe('ProjectTimeService', () => {
             }),
         );
     });
+
+    it('filters the listing by person and date range', async () => {
+        await service.list('tenant-1', {
+            userId: 'user-9',
+            from: '2026-08-01',
+            to: '2026-08-31',
+        } as never);
+
+        expect(db.projectTimeEntry.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    user_id: 'user-9',
+                    work_date: { gte: new Date('2026-08-01'), lte: new Date('2026-08-31') },
+                }),
+            }),
+        );
+    });
+
+    it('falls back to the work date when the table sorts on a column the server cannot order by', async () => {
+        await service.list('tenant-1', { sortBy: 'actions', sortDir: 'asc' } as never);
+
+        expect(db.projectTimeEntry.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                orderBy: [{ work_date: 'asc' }, { created_at: 'desc' }],
+            }),
+        );
+    });
+
+    it('orders by the task title when the table sorts on the task column', async () => {
+        await service.list('tenant-1', { sortBy: 'task', sortDir: 'asc' } as never);
+
+        expect(db.projectTimeEntry.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                orderBy: [{ task: { title: 'asc' } }, { created_at: 'desc' }],
+            }),
+        );
+    });
+
+    describe('report', () => {
+        const range = { from: '2026-08-01', to: '2026-08-31' };
+
+        /**
+         * `report` fires one groupBy per dimension in a fixed order —
+         * task, user, project, date — so the mock answers positionally.
+         */
+        const groupings = (rows: { task: any[]; user: any[]; project: any[]; date: any[] }) => {
+            db.projectTimeEntry.groupBy
+                .mockResolvedValueOnce(rows.task)
+                .mockResolvedValueOnce(rows.user)
+                .mockResolvedValueOnce(rows.project)
+                .mockResolvedValueOnce(rows.date);
+        };
+
+        const sum = (hours: number, count: number) => ({
+            _sum: { hours },
+            _count: { _all: count },
+        });
+
+        beforeEach(() => {
+            db.projectTask.findMany = jest.fn().mockResolvedValue([]);
+            db.project = { findMany: jest.fn().mockResolvedValue([]) };
+            db.user = { findMany: jest.fn().mockResolvedValue([]) };
+        });
+
+        it('totals hours over the range and counts every dimension', async () => {
+            groupings({
+                task: [
+                    { task_id: 't1', ...sum(6, 2) },
+                    { task_id: 't2', ...sum(4, 1) },
+                ],
+                user: [{ user_id: 'u1', ...sum(10, 3) }],
+                project: [{ project_id: 'p1', ...sum(10, 3) }],
+                date: [
+                    { work_date: new Date('2026-08-03'), ...sum(6, 2) },
+                    { work_date: new Date('2026-08-04'), ...sum(4, 1) },
+                ],
+            });
+
+            const result = await service.report('tenant-1', { ...range } as never);
+
+            expect(result.summary).toEqual(
+                expect.objectContaining({
+                    totalHours: 10,
+                    entries: 3,
+                    days: 2,
+                    people: 1,
+                    tasks: 2,
+                    projects: 1,
+                    avgHoursPerDay: 5,
+                }),
+            );
+        });
+
+        it('defaults to grouping by task, biggest first, with shares of the range total', async () => {
+            groupings({
+                task: [
+                    { task_id: 't1', ...sum(2, 1) },
+                    { task_id: 't2', ...sum(6, 2) },
+                ],
+                user: [],
+                project: [],
+                date: [{ work_date: new Date('2026-08-03'), ...sum(8, 3) }],
+            });
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 't1', title: 'Wiring', project: { code: 'P-1', name: 'Fitout' } },
+                { id: 't2', title: 'Painting', project: { code: 'P-1', name: 'Fitout' } },
+            ]);
+
+            const result = await service.report('tenant-1', { ...range } as never);
+
+            expect(result.groupBy).toBe('task');
+            expect(result.rows.map((row: any) => [row.label, row.hours, row.share])).toEqual([
+                ['Painting', 6, 75],
+                ['Wiring', 2, 25],
+            ]);
+            expect(result.rows[0].sublabel).toBe('P-1 · Fitout');
+        });
+
+        it('folds days into ISO weeks that agree with the days they are made of', async () => {
+            groupings({
+                task: [],
+                user: [],
+                project: [],
+                date: [
+                    // Mon 3 Aug and Fri 7 Aug 2026 are the same ISO week...
+                    { work_date: new Date('2026-08-03'), ...sum(3, 1) },
+                    { work_date: new Date('2026-08-07'), ...sum(2, 1) },
+                    // ...and the following Monday is the next one.
+                    { work_date: new Date('2026-08-10'), ...sum(4, 1) },
+                ],
+            });
+
+            const result = await service.report('tenant-1', {
+                ...range,
+                groupBy: 'week',
+            } as never);
+
+            expect(result.rows).toHaveLength(2);
+            expect(result.rows[0]).toEqual(
+                expect.objectContaining({ hours: 5, entries: 2, sublabel: '2026-08-03 — 2026-08-09' }),
+            );
+            expect(result.rows[1]).toEqual(expect.objectContaining({ hours: 4, entries: 1 }));
+        });
+
+        it('labels hours whose author is gone rather than dropping them', async () => {
+            groupings({
+                task: [],
+                user: [{ user_id: null, ...sum(5, 2) }],
+                project: [],
+                date: [{ work_date: new Date('2026-08-03'), ...sum(5, 2) }],
+            });
+
+            const result = await service.report('tenant-1', {
+                ...range,
+                groupBy: 'user',
+            } as never);
+
+            expect(result.rows).toEqual([
+                expect.objectContaining({ key: 'unassigned', label: 'Unattributed', hours: 5 }),
+            ]);
+        });
+
+        it('scopes every aggregate to the tenant and the range', async () => {
+            groupings({ task: [], user: [], project: [], date: [] });
+
+            await service.report('tenant-1', { ...range, projectId: 'p1' } as never);
+
+            for (const call of db.projectTimeEntry.groupBy.mock.calls) {
+                expect(call[0].where).toEqual(
+                    expect.objectContaining({
+                        tenant_id: 'tenant-1',
+                        project_id: 'p1',
+                        work_date: { gte: new Date('2026-08-01'), lte: new Date('2026-08-31') },
+                    }),
+                );
+            }
+        });
+    });
 });
