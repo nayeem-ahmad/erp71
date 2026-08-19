@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { CreateWarehouseTransferDto, ListWarehouseTransfersQueryDto, ReceiveWarehouseTransferDto } from './warehouse-transfer.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { VoucherAttribution } from '../accounting/accounting.constants';
 
@@ -276,17 +277,6 @@ export class WarehouseTransfersService {
 }
 
 function buildTransferDateRange(from?: string, to?: string) {
-    const where: Record<string, any> = {};
-    if (from || to) {
-        where.created_at = {};
-        if (from) {
-            const date = new Date(from);
-            if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
-        }
-        if (to) {
-            const date = new Date(to);
-            if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
-        }
-    }
-    return where;
+    const created = createdAtRange(from, to);
+    return created ? { created_at: created } : {};
 }

@@ -8,6 +8,7 @@ import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 
 const CACHE_TTL = 60; // seconds
 
@@ -111,6 +112,8 @@ export class ProductsService {
             limit?: number;
             sortBy?: string;
             sortDir?: string;
+            createdFrom?: string;
+            createdTo?: string;
         },
     ): Promise<PaginatedResult<any>> {
         const page = filters?.page ?? 1;
@@ -325,11 +328,15 @@ export class ProductsService {
             uncategorized?: boolean;
             search?: string;
             stockStatus?: string;
+            createdFrom?: string;
+            createdTo?: string;
         },
     ) {
+        const created = createdAtRange(filters?.createdFrom, filters?.createdTo);
         return {
             tenant_id: tenantId,
             deleted_at: null,
+            ...(created ? { created_at: created } : {}),
             ...(filters?.uncategorized
                 ? { group_id: null, subgroup_id: null }
                 : {

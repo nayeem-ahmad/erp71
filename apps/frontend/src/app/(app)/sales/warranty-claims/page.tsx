@@ -5,7 +5,8 @@ import { ShieldCheck, Plus, Search, CheckCircle, XCircle, Clock, Wrench, Refresh
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { createColumnHelper } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import type { WarrantyClaim } from '@erp71/shared-types';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -59,6 +60,7 @@ export default function WarrantyClaimsPage() {
     const { t, locale } = useI18n();
     const [claims, setClaims] = useState<WarrantyClaim[]>([]);
     const [loading, setLoading] = useState(true);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [statusModalClaim, setStatusModalClaim] = useState<WarrantyClaim | null>(null);
 
@@ -81,11 +83,12 @@ export default function WarrantyClaimsPage() {
 
     useEffect(() => {
         loadClaims();
-    }, []);
+    }, [createdRange]);
 
     const loadClaims = async () => {
+        setLoading(true);
         try {
-            const data = await api.getWarrantyClaims();
+            const data = await api.getWarrantyClaims(applyCreatedRangeQuery(createdRange));
             setClaims(data);
         } catch (err) {
             console.error('Failed to load warranty claims', err);
@@ -226,14 +229,7 @@ export default function WarrantyClaimsPage() {
                     );
                 },
             }),
-            columnHelper.accessor('created_at', {
-                header: t.shared.columns.date,
-                cell: (info) => (
-                    <span className="text-sm text-gray-500">
-                        {formatDate(info.getValue(), locale)}
-                    </span>
-                ),
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'actions',
                 header: '',
@@ -286,7 +282,12 @@ export default function WarrantyClaimsPage() {
             {loading ? (
                 <div className="text-center py-16 text-gray-400">{t.warrantyClaims.loadingClaims}</div>
             ) : (
-                <DataTable tableId="warranty-claims" title={t.warrantyClaims.title} columns={columns} data={claims} />
+                <>
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                    </div>
+                    <DataTable tableId="warranty-claims" title={t.warrantyClaims.title} columns={columns} data={claims} />
+                </>
             )}
 
             {/* {t.warrantyClaims.newClaim} Modal */}

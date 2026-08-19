@@ -239,6 +239,24 @@ describe('ProductsService', () => {
         expect.objectContaining({ orderBy: { name: 'asc' } }),
       );
     });
+
+    it('should filter created_at to the inclusive Dhaka day range', async () => {
+      db.product.findMany.mockResolvedValue([]);
+      db.product.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            created_at: {
+              gte: new Date('2026-08-18T18:00:00.000Z'),
+              lte: new Date('2026-08-19T17:59:59.999Z'),
+            },
+          }),
+        }),
+      );
+    });
   });
 
   describe('findOne()', () => {

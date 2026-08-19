@@ -47,6 +47,8 @@ export class CustomersController {
         @Query('customerType') customerType?: string,
         @Query('sortBy') sortBy?: string,
         @Query('sortDir') sortDir?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
     ) {
         return this.customersService.findAll(tenant.tenantId, {
             page: page ? parseInt(page, 10) : undefined,
@@ -56,6 +58,8 @@ export class CustomersController {
             customerType,
             sortBy,
             sortDir,
+            createdFrom,
+            createdTo,
         });
     }
 

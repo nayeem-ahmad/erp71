@@ -82,6 +82,7 @@ export const salesMessages = {
                 returnNumber: "ফেরত #",
                 claimNumber: "দাবি #",
                 date: "তারিখ",
+                saleDate: "বিক্রয় তারিখ",
                 customer: "গ্রাহক",
                 phone: "ফোন",
                 code: "Code",
@@ -298,6 +299,7 @@ export const salesMessages = {
             columns: {
                 serialNumber: "সিরিয়াল #",
                 date: "তারিখ",
+                saleDate: "বিক্রয় তারিখ",
                 customer: "গ্রাহক",
                 items: "আইটেম",
                 total: "মোট",

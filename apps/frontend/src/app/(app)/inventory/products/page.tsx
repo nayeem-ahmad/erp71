@@ -8,7 +8,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import AddProductModal from '../AddProductModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import CreatePurchaseModal from '../../purchases/CreatePurchaseModal';
 import ProductImage from '@/components/ProductImage';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -34,6 +35,7 @@ interface Product {
     stocks?: { quantity: number | string }[];
     description?: string | null;
     images_gallery?: string[] | null;
+    created_at: string;
 }
 
 const columnHelper = createColumnHelper<Product>();
@@ -43,7 +45,7 @@ function pluralize(count: number, singular: string, plural: string) {
 }
 
 export default function InventoryPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -60,6 +62,7 @@ export default function InventoryPage() {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [stockStatus, setStockStatus] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // Debounce typing so each keystroke doesn't fire a query
     useEffect(() => {
@@ -81,9 +84,10 @@ export default function InventoryPage() {
             uncategorized: showUncategorized,
             search: debouncedSearch || undefined,
             stockStatus: stockStatus || undefined,
+            ...applyCreatedRangeQuery(createdRange),
             ...p,
         }),
-        deps: [selectedGroupId, selectedSubgroupId, showUncategorized, debouncedSearch, stockStatus],
+        deps: [selectedGroupId, selectedSubgroupId, showUncategorized, debouncedSearch, stockStatus, createdRange],
         initialSort: { id: 'name', desc: false },
     });
 
@@ -316,6 +320,7 @@ export default function InventoryPage() {
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'actions',
                 header: t.inventory.columns.actions,
@@ -357,7 +362,7 @@ export default function InventoryPage() {
                 size: 90,
             }),
         ],
-        [t],
+        [t, locale],
     );
 
     // Server-side equivalents of the old client-side filter presets. They must be sent to
@@ -516,6 +521,9 @@ export default function InventoryPage() {
                         />
                         {t.inventory.filters.showUncategorized}
                     </label>
+                    <div className="pb-0.5">
+                        <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                    </div>
                 </div>
 
                 <AddProductModal

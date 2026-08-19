@@ -4,7 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -52,17 +53,6 @@ interface OpenBill {
 
 const columnHelper = createColumnHelper<SupplierCreditPayment>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 5);
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 function formatDateTime(value: string, locale: string) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '—';
@@ -91,8 +81,7 @@ function SupplierPaymentsContent() {
     const [payments, setPayments] = useState<SupplierCreditPayment[]>([]);
     const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
     const [loading, setLoading] = useState(true);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [supplierFilter, setSupplierFilter] = useState(preselectedSupplierId ?? '');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -122,8 +111,8 @@ function SupplierPaymentsContent() {
         try {
             const [paymentsData, suppliersData] = await Promise.all([
                 api.getSupplierCreditPayments({
-                    from: fromDate || undefined,
-                    to: toDate || undefined,
+                    from: applyCreatedRangeQuery(createdRange).createdFrom,
+                    to: applyCreatedRangeQuery(createdRange).createdTo,
                     supplierId: supplierFilter || undefined,
                 }),
                 api.getSuppliers(),
@@ -141,7 +130,7 @@ function SupplierPaymentsContent() {
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromDate, toDate, supplierFilter]);
+    }, [createdRange, supplierFilter]);
 
     useEffect(() => {
         if (preselectedSupplierId) {
@@ -360,14 +349,7 @@ function SupplierPaymentsContent() {
                 },
                 size: 110,
             }),
-            columnHelper.accessor('created_at', {
-                header: copy.columns.dateTime,
-                cell: (info) => (
-                    <span className="text-sm text-gray-700">{formatDateTime(info.getValue(), locale)}</span>
-                ),
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.supplier?.name ?? '—', {
                 id: 'supplier',
                 header: copy.columns.supplier,
@@ -509,14 +491,10 @@ function SupplierPaymentsContent() {
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
-                                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
-                                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
+                            <div className="space-y-1 sm:col-span-2">
+                                <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
+                                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                            </div>
                             <label className="space-y-1">
                                 <span className="text-xs font-medium text-gray-500">{copy.filterSupplier}</span>
                                 <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">

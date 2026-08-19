@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { FileText, Plus, Printer } from 'lucide-react';
 import Link from 'next/link';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import CreatePurchaseOrderModal from './CreatePurchaseOrderModal';
@@ -45,13 +46,14 @@ export default function PurchaseOrdersPage() {
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
-    useEffect(() => { void load(); }, []);
+    useEffect(() => { void load(); }, [createdRange]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchaseOrders();
+            const data = await api.getPurchaseOrders(applyCreatedRangeQuery(createdRange));
             setOrders(data);
         } catch (err) {
             console.error('Failed to load purchase orders', err);
@@ -112,12 +114,7 @@ export default function PurchaseOrdersPage() {
             ),
             size: 120,
         }),
-        columnHelper.accessor('created_at', {
-            header: t.purchaseOrders.columns.created,
-            cell: (info) => <span className="text-sm text-gray-500">{formatDate(info.getValue(), locale)}</span>,
-            sortingFn: 'datetime',
-            size: 120,
-        }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
         columnHelper.display({
             id: 'actions',
             header: '',
@@ -165,6 +162,9 @@ export default function PurchaseOrdersPage() {
 
                 <CreatePurchaseOrderModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={load} />
 
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
                 <DataTable<PurchaseOrder>
                     tableId="purchase-orders"
                     columns={columns}

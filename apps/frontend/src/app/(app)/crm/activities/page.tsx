@@ -8,7 +8,8 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import {
     PageShell,
     PageHeader,
@@ -31,6 +32,7 @@ interface CrmActivityRow {
     customer: { id: string; name: string; phone: string | null } | null;
     lead: { id: string; name: string; mobile: string | null } | null;
     assignee: { id: string; name: string; email: string } | null;
+    created_at: string;
 }
 
 interface ActivitySummary {
@@ -71,6 +73,7 @@ export default function CrmActivitiesPage() {
     const [purposeFilter, setPurposeFilter] = useState('');
     const [channelFilter, setChannelFilter] = useState('');
     const [overdueOnly, setOverdueOnly] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -82,6 +85,7 @@ export default function CrmActivitiesPage() {
                 purposeId: purposeFilter || undefined,
                 channelId: channelFilter || undefined,
                 overdue: overdueOnly || undefined,
+                ...applyCreatedRangeQuery(createdRange),
             });
             setRows(Array.isArray(data) ? data : []);
         } catch {
@@ -90,7 +94,7 @@ export default function CrmActivitiesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [statusFilter, targetFilter, purposeFilter, channelFilter, overdueOnly, m.loadFailed]);
+    }, [statusFilter, targetFilter, purposeFilter, channelFilter, overdueOnly, createdRange, m.loadFailed]);
 
     const loadSummary = useCallback(() => {
         api.getCrmActivitySummary().then(setSummary).catch(() => null);
@@ -143,6 +147,7 @@ export default function CrmActivitiesPage() {
                 );
             },
         }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt }),
         columnHelper.accessor('status', {
             header: m.columns.status,
             cell: (info) => (
@@ -169,7 +174,7 @@ export default function CrmActivitiesPage() {
                 );
             },
         }),
-    ], [m]);
+    ], [m, t.common.createdAt]);
 
     return (
         <PageShell>
@@ -225,6 +230,7 @@ export default function CrmActivitiesPage() {
                     <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} className="h-4 w-4" />
                     {m.filters.overdueOnly}
                 </label>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             {error && (

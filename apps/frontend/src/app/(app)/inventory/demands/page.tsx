@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ClipboardList, Plus, Trash2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import {
@@ -83,7 +84,7 @@ const columnHelper = createColumnHelper<ProductDemand>();
  * list, and hiding the approve action is what differs.
  */
 export default function ProductDemandsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const copy = t.inventoryDemands;
     const toast = useToastStore((state) => state.show);
     const { permissions, role, ready: permissionsReady } = useTenantPlanFeatures();
@@ -101,6 +102,7 @@ export default function ProductDemandsPage() {
     const [priorityFilter, setPriorityFilter] = useState('');
     const [warehouseFilter, setWarehouseFilter] = useState('');
     const [mineOnly, setMineOnly] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<ProductDemand | null>(null);
@@ -129,6 +131,8 @@ export default function ProductDemandsPage() {
                 priority: priorityFilter || undefined,
                 warehouseId: warehouseFilter || undefined,
                 mine: mineOnly || undefined,
+                from: applyCreatedRangeQuery(createdRange).createdFrom,
+                to: applyCreatedRangeQuery(createdRange).createdTo,
             });
             setDemands(data ?? []);
         } catch (err: any) {
@@ -136,7 +140,7 @@ export default function ProductDemandsPage() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, priorityFilter, warehouseFilter, mineOnly, copy.loadFailed]);
+    }, [statusFilter, priorityFilter, warehouseFilter, mineOnly, createdRange, copy.loadFailed]);
 
     useEffect(() => { void loadDemands(); }, [loadDemands]);
 
@@ -358,12 +362,7 @@ export default function ProductDemandsPage() {
             size: 130,
             meta: { hideOnMobile: true },
         }),
-        columnHelper.accessor('created_at', {
-            header: copy.columns.created,
-            cell: (info) => <span className="text-sm">{formatDate(info.getValue())}</span>,
-            size: 130,
-            meta: { hideOnMobile: true },
-        }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
         columnHelper.display({
             id: 'actions',
             header: t.common.actions,
@@ -378,7 +377,7 @@ export default function ProductDemandsPage() {
             ),
             size: 90,
         }),
-    ], [copy, t, productName, statusLabel, priorityLabel]);
+    ], [copy, t, locale, productName, statusLabel, priorityLabel]);
 
     return (
         <PageShell>
@@ -423,6 +422,7 @@ export default function ProductDemandsPage() {
                     <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
                     {copy.filters.mineOnly}
                 </label>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             <DataTable<ProductDemand>

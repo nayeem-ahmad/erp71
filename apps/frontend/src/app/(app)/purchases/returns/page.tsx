@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Eye, Pencil, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -40,14 +41,16 @@ export default function PurchaseReturnsPage() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [initialPurchaseId, setInitialPurchaseId] = useState<string | null>(null);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         loadPurchaseReturns();
-    }, []);
+    }, [createdRange]);
 
     const loadPurchaseReturns = async () => {
+        setLoading(true);
         try {
-            const data = await api.getPurchaseReturns();
+            const data = await api.getPurchaseReturns(applyCreatedRangeQuery(createdRange));
             setPurchaseReturns(data);
         } catch (error) {
             console.error('Failed to load purchase returns', error);
@@ -118,20 +121,7 @@ export default function PurchaseReturnsPage() {
                 sortingFn: (a, b) => Number(a.getValue('total_amount') || 0) - Number(b.getValue('total_amount') || 0),
                 size: 120,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.purchaseReturns.columns.created,
-                cell: (info) => {
-                    const date = new Date(info.getValue());
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
-                            <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'posting',
                 header: t.purchaseReturns.columns.voucher,
@@ -226,6 +216,9 @@ export default function PurchaseReturnsPage() {
                     initialPurchaseId={initialPurchaseId}
                 />
 
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
                 <DataTable<PurchaseReturnRecord>
                     tableId="purchase-returns"
                     columns={columns}

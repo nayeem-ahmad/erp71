@@ -26,6 +26,8 @@ export class SalesController {
         @Query('status') status?: string,
         @Query('sortBy') sortBy?: string,
         @Query('sortDir') sortDir?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
         return this.salesService.findAll(tenant.tenantId, {
@@ -36,6 +38,8 @@ export class SalesController {
             status: status || undefined,
             sortBy: sortBy || undefined,
             sortDir: sortDir || undefined,
+            createdFrom: createdFrom || undefined,
+            createdTo: createdTo || undefined,
         });
     }
 

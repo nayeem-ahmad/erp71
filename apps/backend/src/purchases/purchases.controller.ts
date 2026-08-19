@@ -18,8 +18,20 @@ export class PurchasesController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: PaginationDto) {
-        return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit);
+    findAll(
+        @Tenant() tenant: TenantContext,
+        @Query() query: PaginationDto,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
+    ) {
+        return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit, {
+            createdFrom,
+            createdTo,
+            sortBy,
+            sortDir,
+        });
     }
 
     @Get(':id/invoice')

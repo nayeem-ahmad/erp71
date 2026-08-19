@@ -171,6 +171,24 @@ describe('SalesOrdersService', () => {
     expect(result.total).toBe(1);
   });
 
+  it('findAll() should filter created_at to the inclusive Dhaka day range', async () => {
+    db.salesOrder.findMany.mockResolvedValue([]);
+    db.salesOrder.count.mockResolvedValue(0);
+
+    await service.findAll('tenant-1', 1, 20, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+
+    expect(db.salesOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          created_at: {
+            gte: new Date('2026-08-18T18:00:00.000Z'),
+            lte: new Date('2026-08-19T17:59:59.999Z'),
+          },
+        }),
+      }),
+    );
+  });
+
   it('findOne() should return a single order with details', async () => {
     db.salesOrder.findFirst.mockResolvedValue({ id: 'order-1' });
     const result = await service.findOne('tenant-1', 'order-1');

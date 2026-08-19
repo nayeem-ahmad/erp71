@@ -67,6 +67,8 @@ jest.mock('@/components/data-table', () => ({
             <div data-testid="row-count">{data.length}</div>
         </div>
     ),
+    createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
+    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
 }));
 
 jest.mock('@/components/ProductImage', () => ({

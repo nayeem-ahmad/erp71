@@ -6,7 +6,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ClipboardCheck, Plus } from 'lucide-react';
 import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -32,15 +33,16 @@ export default function StockTakesPage() {
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState<any>({ warehouseId: '', notes: '', startImmediately: true });
     const [message, setMessage] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         void Promise.all([loadSessions(), loadWarehouses()]);
-    }, []);
+    }, [createdRange]);
 
     const loadSessions = async () => {
         setLoading(true);
         try {
-            const data = await api.getStockTakes();
+            const data = await api.getStockTakes(applyCreatedRangeQuery(createdRange));
             setSessions(data);
         } catch (error) {
             console.error('Failed to load stock takes', error);
@@ -77,11 +79,7 @@ export default function StockTakesPage() {
             columnHelper.accessor('status', { header: t.inventoryStockTakes.columns.status, size: 140 }),
             columnHelper.accessor((row) => `${row.summary?.countedLines ?? 0}/${row.summary?.totalLines ?? 0}`, { id: 'progress', header: t.inventoryStockTakes.columns.progress, size: 120 }),
             columnHelper.accessor((row) => row.summary?.discrepantLines ?? 0, { id: 'discrepancies', header: t.inventoryStockTakes.columns.discrepancies, size: 120 }),
-            columnHelper.accessor('created_at', {
-                header: t.inventoryStockTakes.columns.created,
-                cell: (info) => new Date(info.getValue()).toLocaleString(),
-                size: 170,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
                 id: 'actions',
                 header: t.inventoryStockTakes.columns.actions,
@@ -143,6 +141,9 @@ export default function StockTakesPage() {
                     </button>
                 </form>
 
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
                 <DataTable<StockTakeSession>
                     tableId="inventory-stock-takes"
                     columns={columns}

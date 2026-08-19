@@ -1,15 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { createdAtRange } from '../common/created-range.util';
 import { CreateDeliveryDto, UpdateDeliveryDto } from './delivery.dto';
 
 @Injectable()
 export class DeliveryService {
     constructor(private readonly db: DatabaseService) {}
 
-    async listDeliveries(tenantId: string, page: number, limit: number, status?: string) {
+    async listDeliveries(
+        tenantId: string,
+        page: number,
+        limit: number,
+        opts?: { status?: string; createdFrom?: string; createdTo?: string } | string,
+    ) {
         const skip = (page - 1) * limit;
+        const filters = typeof opts === 'string' ? { status: opts } : (opts ?? {});
         const where: any = { tenantId };
-        if (status) where.status = status;
+        if (filters.status) where.status = filters.status;
+        const created = createdAtRange(filters.createdFrom, filters.createdTo);
+        if (created) where.created_at = created;
 
         const [items, total] = await Promise.all([
             this.db.deliveryOrder.findMany({

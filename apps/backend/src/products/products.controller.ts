@@ -149,6 +149,8 @@ export class ProductsController {
         @Query('limit') limit?: string,
         @Query('sortBy') sortBy?: string,
         @Query('sortDir') sortDir?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
     ) {
         const parsedLimit = limit ? parseInt(limit, 10) : undefined;
         if (cursor !== undefined) {
@@ -170,6 +172,8 @@ export class ProductsController {
             limit: parsedLimit,
             sortBy,
             sortDir,
+            createdFrom,
+            createdTo,
         });
     }
 

@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Eye, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import AddCustomerModal from './AddCustomerModal';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
@@ -62,7 +63,7 @@ const segmentColors: Record<string, string> = {
 const columnHelper = createColumnHelper<Customer>();
 
 export default function CustomersPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
@@ -80,6 +81,7 @@ export default function CustomersPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [segment, setSegment] = useState('');
     const [customerType, setCustomerType] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -97,9 +99,10 @@ export default function CustomersPage() {
             search: debouncedSearch || undefined,
             segment: segment || undefined,
             customerType: customerType || undefined,
+            ...applyCreatedRangeQuery(createdRange),
             ...p,
         }),
-        deps: [debouncedSearch, segment, customerType],
+        deps: [debouncedSearch, segment, customerType, createdRange],
     });
 
     useEffect(() => {
@@ -251,17 +254,7 @@ export default function CustomersPage() {
                 size: 130,
                 meta: { hideOnMobile: true },
             }),
-            columnHelper.accessor('created_at', {
-                header: t.customers.columns.registered,
-                cell: (info) => (
-                    <span className="text-sm text-gray-600">
-                        {formatDate(info.getValue())}
-                    </span>
-                ),
-                sortingFn: 'datetime',
-                size: 130,
-                meta: { hideOnMobile: true },
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
@@ -282,7 +275,7 @@ export default function CustomersPage() {
                 size: 90,
             }),
         ],
-        [t],
+        [t, locale],
     );
 
     // Server-side equivalents of the old client-side presets: filtering the loaded rows
@@ -390,6 +383,7 @@ export default function CustomersPage() {
                         placeholder={t.customers.searchPlaceholder}
                         className="max-w-xs"
                     />
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                     {filterPresets.map((preset) => (
                         <button
                             key={preset.key}

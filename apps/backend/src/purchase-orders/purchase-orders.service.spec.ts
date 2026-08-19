@@ -294,6 +294,24 @@ describe('PurchaseOrdersService', () => {
             expect(result.items).toEqual([]);
             expect(result.total).toBe(0);
         });
+
+        it('filters created_at to the inclusive Dhaka day range', async () => {
+            db.purchaseOrder.findMany.mockResolvedValue([]);
+            db.purchaseOrder.count.mockResolvedValue(0);
+
+            await service.findAll(tenantId, 1, 20, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+
+            expect(db.purchaseOrder.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        created_at: {
+                            gte: new Date('2026-08-18T18:00:00.000Z'),
+                            lte: new Date('2026-08-19T17:59:59.999Z'),
+                        },
+                    }),
+                }),
+            );
+        });
     });
 
     // ─── findOne ──────────────────────────────────────────────────────────────

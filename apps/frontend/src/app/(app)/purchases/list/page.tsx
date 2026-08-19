@@ -5,15 +5,16 @@ import { useSearchParams } from 'next/navigation';
 import { ClipboardList, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT } from '@/lib/format';
 import CreatePurchaseModal from '../CreatePurchaseModal';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 
 interface PurchaseItem {
     id: string;
@@ -47,10 +48,11 @@ export default function PurchasesPage() {
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         loadPurchases();
-    }, []);
+    }, [createdRange]);
 
     useEffect(() => {
         if (searchParams.get('new') === '1') {
@@ -59,8 +61,9 @@ export default function PurchasesPage() {
     }, [searchParams]);
 
     const loadPurchases = async () => {
+        setLoading(true);
         try {
-            const data = await api.getPurchases();
+            const data = await api.getPurchases(applyCreatedRangeQuery(createdRange));
             setPurchases(data);
         } catch (error) {
             console.error('Failed to load purchases', error);
@@ -117,21 +120,7 @@ export default function PurchasesPage() {
                     Number(a.getValue('total_amount') || 0) - Number(b.getValue('total_amount') || 0),
                 size: 120,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.purchases.columns.received,
-                cell: (info) => {
-                    const date = new Date(info.getValue());
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
-                            <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
-                meta: { hideOnMobile: true },
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'posting',
                 header: t.purchases.columns.voucher,
@@ -191,6 +180,10 @@ export default function PurchasesPage() {
                     onClose={() => setIsModalOpen(false)}
                     onSuccess={loadPurchases}
                 />
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
 
                 <DataTable<Purchase>
                     tableId="purchases"

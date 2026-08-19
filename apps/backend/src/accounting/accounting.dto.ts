@@ -303,6 +303,14 @@ export class ListVouchersQueryDto {
     @IsDateString()
     to?: string;
 
+    @IsOptional()
+    @IsDateString()
+    createdFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    createdTo?: string;
+
     /** Drives the approval queue: `?approvalStatus=PENDING`. */
     @IsOptional()
     @IsString()

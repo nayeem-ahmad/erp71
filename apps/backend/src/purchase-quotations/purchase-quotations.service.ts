@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseQuotationDto, UpdatePurchaseQuotationStatusDto } from './purchase-quotation.dto';
 
@@ -51,7 +52,13 @@ export class PurchaseQuotationsService {
         });
     }
 
-    async findAll(tenantId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {
+    async findAll(
+        tenantId: string,
+        page = 1,
+        limit = 20,
+        opts?: { createdFrom?: string; createdTo?: string },
+    ): Promise<PaginatedResult<unknown>> {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseQuotation.findMany({
@@ -59,7 +66,7 @@ export class PurchaseQuotationsService {
                     include: INCLUDE,
                 }),
             count: (args) => this.db.purchaseQuotation.count(args as any),
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

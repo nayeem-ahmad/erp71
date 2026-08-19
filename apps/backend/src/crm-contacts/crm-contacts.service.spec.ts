@@ -152,6 +152,14 @@ describe('CrmContactsService', () => {
             await service.findAll(TENANT, { sortBy: 'DROP TABLE', sortDir: 'desc' });
             expect(db.crmContact.findMany.mock.calls[0][0].orderBy).toEqual([{ name: 'asc' }]);
         });
+
+        it('filters created_at to the inclusive Dhaka day range', async () => {
+            await service.findAll(TENANT, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+            expect(db.crmContact.findMany.mock.calls[0][0].where.created_at).toEqual({
+                gte: new Date('2026-08-18T18:00:00.000Z'),
+                lte: new Date('2026-08-19T17:59:59.999Z'),
+            });
+        });
     });
 
     describe('update', () => {

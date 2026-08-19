@@ -209,6 +209,16 @@ export class ListContactsDto {
     @Transform(emptyToUndefined)
     @IsString()
     sortDir?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    createdFrom?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    createdTo?: string;
 }
 
 export enum ContactBulkAction {

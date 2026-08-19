@@ -6,7 +6,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { PostingBadge } from '@/components/PostingBadge';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -48,6 +49,7 @@ export default function SalesPage() {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // Typing must not fire a request per keystroke against a table this large.
     useEffect(() => {
@@ -67,12 +69,13 @@ export default function SalesPage() {
     } = useServerList<Sale>({
         tableId: 'sales',
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, statusFilter],
+        deps: [debouncedSearch, statusFilter, createdRange],
         fetch: (params) =>
             api.getSalesList({
                 ...params,
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
+                ...applyCreatedRangeQuery(createdRange),
             }),
     });
 
@@ -102,23 +105,15 @@ export default function SalesPage() {
                 ),
                 size: 140,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.sales.columns.date,
-                cell: (info) => {
-                    // Display the (possibly back-dated) sale_date to agree with reports;
-                    // ordering stays on created_at for cursor-pagination stability.
-                    const displayDate = info.row.original.sale_date ?? info.getValue();
-                    const d = new Date(displayDate);
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(displayDate, locale)}</span>
-                            <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
+            columnHelper.accessor((row) => row.sale_date ?? row.created_at, {
+                id: 'sale_date',
+                header: t.sales.columns.saleDate,
+                cell: (info) => (
+                    <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
+                ),
+                size: 130,
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.sales.columns.customer,
@@ -295,6 +290,7 @@ export default function SalesPage() {
                             className="pl-9"
                         />
                     </div>
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                     <Select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}

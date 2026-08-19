@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, Plus, Settings2, BarChart3, Trash2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import {
     AccountingPageShell,
     CompactSection,
@@ -29,6 +30,7 @@ interface ExpenseEntry {
     id: string;
     amount: string | number;
     expense_date: string;
+    created_at: string;
     description?: string | null;
     payment_method: string;
     category?: ExpenseCategory;
@@ -57,6 +59,7 @@ function ExpensesPageContent() {
     const [loading, setLoading] = useState(true);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [categoryFilter, setCategoryFilter] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -76,6 +79,7 @@ function ExpensesPageContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     categoryId: categoryFilter || undefined,
+                    ...applyCreatedRangeQuery(createdRange),
                 }),
                 api.getExpenseCategories(),
             ]);
@@ -90,7 +94,7 @@ function ExpensesPageContent() {
 
     useEffect(() => {
         void loadData();
-    }, [fromDate, toDate, categoryFilter]);
+    }, [fromDate, toDate, categoryFilter, createdRange]);
 
     useEffect(() => {
         if (searchParams.get('new') === '1') {
@@ -158,6 +162,7 @@ function ExpensesPageContent() {
                 sortingFn: 'datetime',
                 size: 120,
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.accessor((row) => row.category?.name ?? '—', {
                 id: 'category',
                 header: t.expenses.category,
@@ -265,6 +270,7 @@ function ExpensesPageContent() {
                                 ))}
                             </select>
                         </label>
+                        <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                     </div>
                 </CompactSection>
             </div>

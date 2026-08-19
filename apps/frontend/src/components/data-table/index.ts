@@ -1,5 +1,7 @@
 export { default as DataTable } from './DataTable';
 export type { DataTableProps } from './DataTable';
+export { createdAtColumn } from './created-at-column';
+export { default as CreatedRangeFilter } from './CreatedRangeFilter';
 export { default as BulkActionBar } from './BulkActionBar';
 export type { BulkAction, BulkActionBarProps } from './BulkActionBar';
 export { useTablePreferences } from './useTablePreferences';

@@ -393,7 +393,10 @@ describe('ProductDemandsService', () => {
                     warehouse_id: 'wh-1',
                     priority: 'URGENT',
                     items: { some: { product_id: 'prod-1' } },
-                    created_at: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31') },
+                    created_at: {
+                        gte: new Date('2025-12-31T18:00:00.000Z'),
+                        lte: new Date('2026-01-31T17:59:59.999Z'),
+                    },
                 }),
             }),
         );

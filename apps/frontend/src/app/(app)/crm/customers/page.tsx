@@ -7,7 +7,8 @@ import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button } from '@/components/ui/compact';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -25,15 +26,16 @@ interface Customer {
 const columnHelper = createColumnHelper<Customer>();
 
 export default function CrmCustomersPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.crm.leads.customers;
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     const loadCustomers = async () => {
         setLoading(true);
         try {
-            setCustomers(await api.getCustomers());
+            setCustomers(await api.getCustomers(applyCreatedRangeQuery(createdRange)));
         } catch (error) {
             console.error('Failed to load customers', error);
         } finally {
@@ -43,7 +45,7 @@ export default function CrmCustomersPage() {
 
     useEffect(() => {
         void loadCustomers();
-    }, []);
+    }, [createdRange]);
 
     const columns: ColumnDef<Customer, any>[] = useMemo(
         () => [
@@ -67,6 +69,7 @@ export default function CrmCustomersPage() {
                 header: t.crm.leads.columns.lastContact,
                 cell: (info) => info.getValue() ? formatDate(info.getValue() as string) : '—',
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'actions',
                 header: '',
@@ -81,7 +84,7 @@ export default function CrmCustomersPage() {
                 ),
             }),
         ],
-        [t, m.openInSales],
+        [t, locale, m.openInSales],
     );
 
     return (
@@ -102,6 +105,9 @@ export default function CrmCustomersPage() {
                 }
             />
 
+            <div className="flex flex-wrap items-center gap-2">
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+            </div>
             <DataTable<Customer>
                 tableId="crm-customers"
                 title={m.title}

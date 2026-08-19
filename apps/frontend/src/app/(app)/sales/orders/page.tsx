@@ -7,7 +7,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
@@ -58,6 +59,7 @@ export default function OrdersPage() {
     const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     const setActiveTab = useCallback((tab: OrdersTab) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -74,11 +76,12 @@ export default function OrdersPage() {
         if (activeTab === 'sales') {
             loadOrders();
         }
-    }, [activeTab]);
+    }, [activeTab, createdRange]);
 
     const loadOrders = async () => {
+        setLoading(true);
         try {
-            const data = await api.getOrders();
+            const data = await api.getOrders(applyCreatedRangeQuery(createdRange));
             setOrders(data);
         } catch (error) {
             console.error('Failed to load orders', error);
@@ -143,20 +146,7 @@ export default function OrdersPage() {
                 ),
                 size: 140,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.orders.columns.date,
-                cell: (info) => {
-                    const d = new Date(info.getValue());
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
-                            <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.orders.columns.customer,
@@ -312,17 +302,22 @@ export default function OrdersPage() {
                 {activeTab === 'online' ? (
                     <StorefrontOrdersPanel />
                 ) : (
-                <DataTable<SalesOrder>
-                    tableId="sales-orders"
-                    columns={columns}
-                    data={orders}
-                    title={t.orders.dataTable.title}
-                    isLoading={loading}
-                    emptyMessage={t.orders.dataTable.emptyMessage}
-                    emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.orders.dataTable.searchPlaceholder}
-                    filterPresets={filterPresets}
-                />
+                    <>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                        </div>
+                        <DataTable<SalesOrder>
+                            tableId="sales-orders"
+                            columns={columns}
+                            data={orders}
+                            title={t.orders.dataTable.title}
+                            isLoading={loading}
+                            emptyMessage={t.orders.dataTable.emptyMessage}
+                            emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
+                            searchPlaceholder={t.orders.dataTable.searchPlaceholder}
+                            filterPresets={filterPresets}
+                        />
+                    </>
                 )}
             
         </PageShell>

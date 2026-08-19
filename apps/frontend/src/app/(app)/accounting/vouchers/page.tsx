@@ -10,7 +10,8 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { VoucherType } from '@erp71/shared-types';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -29,6 +30,7 @@ type VoucherRow = {
     reference_number?: string | null;
     description?: string | null;
     date: string;
+    created_at: string;
     total_amount: number;
     approval_status?: string | null;
     source?: { module: string | null; type: string | null; id: string | null };
@@ -78,6 +80,7 @@ function AccountingVouchersListPageContent() {
     const [voucherType, setVoucherType] = useState('');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [page, setPage] = useState(1);
     // `?approvalStatus=PENDING` turns this page into the approval queue, which is
     // what the sidebar/settings copy points at rather than a second list page.
@@ -105,6 +108,7 @@ function AccountingVouchersListPageContent() {
                 voucherType: voucherType || undefined,
                 from: from || undefined,
                 to: to || undefined,
+                ...applyCreatedRangeQuery(createdRange),
                 approvalStatus: approvalStatus || undefined,
                 page,
                 limit: 20,
@@ -117,7 +121,7 @@ function AccountingVouchersListPageContent() {
         } finally {
             setLoading(false);
         }
-    }, [voucherType, from, to, approvalStatus, page]);
+    }, [voucherType, from, to, createdRange, approvalStatus, page]);
 
     useEffect(() => {
         void loadVouchers();
@@ -262,6 +266,7 @@ function AccountingVouchersListPageContent() {
                 cell: (info) => <span className="text-sm text-gray-700">{formatDate(info.getValue(), locale)}</span>,
                 size: 110,
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor('voucher_type', {
                 header: t.accountingShared.type,
                 cell: (info) => (
@@ -400,6 +405,10 @@ function AccountingVouchersListPageContent() {
                 value={to}
                 onChange={(e) => { setTo(e.target.value); setPage(1); }}
                 className="px-1.5 py-0.5 border rounded text-xs"
+            />
+            <CreatedRangeFilter
+                value={createdRange}
+                onChange={(next) => { setCreatedRange(next); setPage(1); }}
             />
             <select
                 aria-label={t.vouchers.approval.status}

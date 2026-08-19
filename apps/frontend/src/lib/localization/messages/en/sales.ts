@@ -82,6 +82,7 @@ export const salesMessages = {
             returnNumber: 'Return #',
             claimNumber: 'Claim #',
             date: 'Date',
+            saleDate: 'Sale date',
             customer: 'Customer',
             phone: 'Phone',
             code: 'Code',
@@ -298,6 +299,7 @@ export const salesMessages = {
         columns: {
             serialNumber: 'Serial #',
             date: 'Date',
+            saleDate: 'Sale date',
             customer: 'Customer',
             items: 'Items',
             total: 'Total',

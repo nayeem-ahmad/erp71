@@ -10,7 +10,8 @@ import { DEFAULT_PAGE_SIZE, compactDensity } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, type BulkAction } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
@@ -32,6 +33,7 @@ interface Contact {
     email: string | null;
     capture_source: string;
     assignee: { id: string; name: string } | null;
+    created_at: string;
 }
 
 const columnHelper = createColumnHelper<Contact>();
@@ -50,7 +52,7 @@ const CONTACT_IMPORT_FIELDS: ImportField[] = [
 ];
 
 export default function ContactsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.crm.contacts;
     const c = t.common;
     const router = useRouter();
@@ -61,6 +63,7 @@ export default function ContactsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [captureSourceFilter, setCaptureSourceFilter] = useState('');
     const [assignedFilter, setAssignedFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -98,10 +101,11 @@ export default function ContactsPage() {
                         limit,
                         sortBy,
                         sortDir,
+                        ...applyCreatedRangeQuery(createdRange),
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, captureSourceFilter, assignedFilter, sort],
+        [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, sort],
     );
 
     const loadContacts = useCallback(async () => {
@@ -116,6 +120,7 @@ export default function ContactsPage() {
                 limit: pageSize,
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+                ...applyCreatedRangeQuery(createdRange),
             });
             if (seq !== loadSeq.current) return;
             setContacts(data?.items ?? []);
@@ -127,13 +132,13 @@ export default function ContactsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, page, pageSize, sort]);
+    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadContacts(); }, [loadContacts]);
 
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, sort]);
+    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, sort]);
 
     const clearSelection = useCallback(() => {
         setSelected([]);
@@ -242,6 +247,7 @@ export default function ContactsPage() {
             enableSorting: false,
             meta: { hideOnMobile: true },
         }),
+        createdAtColumn(columnHelper, { header: c.createdAt, locale }),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
@@ -272,7 +278,7 @@ export default function ContactsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, captureSourceLabel]);
+    ], [m, c, locale, captureSourceLabel]);
 
     const bulkActions: BulkAction<Contact>[] = useMemo(
         () => [
@@ -348,6 +354,7 @@ export default function ContactsPage() {
                         return id ? <option key={id} value={id}>{label}</option> : null;
                     })}
                 </Select>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             <DataTable<Contact>

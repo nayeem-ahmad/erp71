@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateLoanDto,
@@ -259,6 +260,8 @@ export class LoansService {
         if (query.search?.trim()) {
             where.counterparty = { contains: query.search.trim(), mode: 'insensitive' };
         }
+        const created = createdAtRange(query.createdFrom, query.createdTo);
+        if (created) where.created_at = created;
         return where;
     }
 

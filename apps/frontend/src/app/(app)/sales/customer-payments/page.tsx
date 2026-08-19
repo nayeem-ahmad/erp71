@@ -4,7 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Eye, Loader2, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -42,17 +43,6 @@ interface CustomerCreditPayment {
 
 const columnHelper = createColumnHelper<CustomerCreditPayment>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 5);
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 function formatDateTime(value: string, locale: string) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '—';
@@ -81,8 +71,7 @@ function CustomerPaymentsContent() {
     const [payments, setPayments] = useState<CustomerCreditPayment[]>([]);
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
     const [loading, setLoading] = useState(true);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [customerFilter, setCustomerFilter] = useState(preselectedCustomerId ?? '');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -104,8 +93,8 @@ function CustomerPaymentsContent() {
         try {
             const [paymentsData, customersData] = await Promise.all([
                 api.getCustomerCreditPayments({
-                    from: fromDate || undefined,
-                    to: toDate || undefined,
+                    from: applyCreatedRangeQuery(createdRange).createdFrom,
+                    to: applyCreatedRangeQuery(createdRange).createdTo,
                     customerId: customerFilter || undefined,
                 }),
                 api.getCustomers(),
@@ -123,7 +112,7 @@ function CustomerPaymentsContent() {
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromDate, toDate, customerFilter]);
+    }, [createdRange, customerFilter]);
 
     useEffect(() => {
         if (preselectedCustomerId) {
@@ -287,14 +276,7 @@ function CustomerPaymentsContent() {
                 },
                 size: 110,
             }),
-            columnHelper.accessor('created_at', {
-                header: copy.columns.dateTime,
-                cell: (info) => (
-                    <span className="text-sm text-gray-700">{formatDateTime(info.getValue(), locale)}</span>
-                ),
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '—', {
                 id: 'customer',
                 header: copy.columns.customer,
@@ -430,14 +412,10 @@ function CustomerPaymentsContent() {
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
-                                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
-                                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
+                            <div className="space-y-1 sm:col-span-2">
+                                <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
+                                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                            </div>
                             <label className="space-y-1">
                                 <span className="text-xs font-medium text-gray-500">{copy.filterCustomer}</span>
                                 <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">

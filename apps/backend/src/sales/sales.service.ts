@@ -10,6 +10,7 @@ import { resolvePaymentMethodAccountId } from '../accounting/payment-account.uti
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
@@ -642,6 +643,8 @@ export class SalesService {
             status?: string;
             sortBy?: string;
             sortDir?: string;
+            createdFrom?: string;
+            createdTo?: string;
         },
     ): Promise<PaginatedResult<any>> {
         const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
@@ -652,8 +655,10 @@ export class SalesService {
             .map((value) => value.trim())
             .filter(Boolean);
 
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         const where: any = {
             tenant_id: tenantId,
+            ...(created ? { created_at: created } : {}),
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
             // Accepts one status or a comma-separated set, so a caller can ask
             // for a count across several (the dashboard's delivery-pending tile)
