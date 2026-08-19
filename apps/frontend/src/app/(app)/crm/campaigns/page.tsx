@@ -7,7 +7,8 @@ import type { CampaignRowIssue, ValidCampaignRow } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { PageShell, PageHeader, Button, Input, Select, Textarea, Field, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
@@ -70,13 +71,14 @@ const recipientStatusTone: Record<string, StatusBadgeTone> = {
 };
 
 export default function CrmCampaignsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.crmCampaigns;
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [channelFilter, setChannelFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // Create modal state
     const [showCreate, setShowCreate] = useState(false);
@@ -107,11 +109,11 @@ export default function CrmCampaignsPage() {
     const loadCampaigns = useCallback(async () => {
         setLoading(true);
         try {
-            setCampaigns(await api.getCrmCampaigns());
+            setCampaigns(await api.getCrmCampaigns(applyCreatedRangeQuery(createdRange)));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [createdRange]);
 
     useEffect(() => { void loadCampaigns(); }, [loadCampaigns]);
 
@@ -333,10 +335,7 @@ export default function CrmCampaignsPage() {
                 );
             },
         }),
-        columnHelper.accessor('created_at', {
-            header: m.columns.created,
-            cell: (info) => <span className="text-sm text-gray-500">{formatDate(info.getValue())}</span>,
-        }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
         columnHelper.display({
             id: 'actions',
             header: t.common.actions,
@@ -369,7 +368,7 @@ export default function CrmCampaignsPage() {
             size: 90,
         }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [m, t.common]);
+    ], [m, t.common, locale]);
 
     return (
         <PageShell>
@@ -411,6 +410,7 @@ export default function CrmCampaignsPage() {
                     <option value="">{m.allChannels}</option>
                     {CHANNELS.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
                 </Select>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             <DataTable<Campaign>

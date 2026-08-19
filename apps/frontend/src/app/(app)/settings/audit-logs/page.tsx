@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, ScrollText } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { formatDate } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -32,16 +32,6 @@ interface AuditLogRow {
 
 const columnHelper = createColumnHelper<AuditLogRow>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 export default function AuditLogsPage() {
     const { t } = useI18n();
     const [rows, setRows] = useState<AuditLogRow[]>([]);
@@ -50,8 +40,7 @@ export default function AuditLogsPage() {
     const [forbidden, setForbidden] = useState(false);
     const [entity, setEntity] = useState('');
     const [action, setAction] = useState('');
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [offset, setOffset] = useState(0);
     const limit = 50;
 
@@ -61,8 +50,8 @@ export default function AuditLogsPage() {
             const data = await api.getAuditLogs({
                 entity: entity.trim() || undefined,
                 action: action.trim() || undefined,
-                from: fromDate ? `${fromDate}T00:00:00.000Z` : undefined,
-                to: toDate ? `${toDate}T23:59:59.999Z` : undefined,
+                from: createdRange?.from,
+                to: createdRange?.to,
                 limit,
                 offset,
             });
@@ -80,7 +69,7 @@ export default function AuditLogsPage() {
         } finally {
             setLoading(false);
         }
-    }, [action, entity, fromDate, offset, toDate]);
+    }, [action, entity, createdRange, offset]);
 
     useEffect(() => {
         void loadLogs();
@@ -88,19 +77,7 @@ export default function AuditLogsPage() {
 
     const columns: ColumnDef<AuditLogRow, any>[] = useMemo(
         () => [
-            columnHelper.accessor('created_at', {
-                header: t.settings.audit.columns.when,
-                cell: (info) => (
-                    <div>
-                        <span className="text-sm text-gray-700">{formatDate(info.getValue())}</span>
-                        <span className="text-xs text-gray-400 block">
-                            {new Date(info.getValue()).toLocaleTimeString()}
-                        </span>
-                    </div>
-                ),
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.settings.audit.columns.when }),
             columnHelper.accessor('action', {
                 header: t.settings.audit.columns.action,
                 cell: (info) => (
@@ -202,22 +179,12 @@ export default function AuditLogsPage() {
                         placeholder="CREATE, UPDATE…"
                     />
                 </label>
-                <label className="space-y-1">
-                    <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
-                    <Input
-                        type="date"
-                        value={fromDate}
-                        onChange={(e) => { setFromDate(e.target.value); setOffset(0); }}
+                <div className="flex items-end">
+                    <CreatedRangeFilter
+                        value={createdRange}
+                        onChange={(next) => { setCreatedRange(next); setOffset(0); }}
                     />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
-                    <Input
-                        type="date"
-                        value={toDate}
-                        onChange={(e) => { setToDate(e.target.value); setOffset(0); }}
-                    />
-                </label>
+                </div>
             </div>
 
             {loading ? (

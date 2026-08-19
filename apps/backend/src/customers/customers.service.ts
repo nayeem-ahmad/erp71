@@ -14,6 +14,7 @@ import {
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -243,6 +244,8 @@ export class CustomersService {
             customerType?: string;
             sortBy?: string;
             sortDir?: string;
+            createdFrom?: string;
+            createdTo?: string;
         },
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
@@ -250,6 +253,8 @@ export class CustomersService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId, deleted_at: null };
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        if (created) where.created_at = created;
         if (opts?.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
@@ -594,19 +599,8 @@ export class CustomersService {
             where.customer_id = query.customerId;
         }
 
-        if (query.from || query.to) {
-            where.created_at = {};
-            if (query.from) {
-                const from = new Date(query.from);
-                from.setUTCHours(0, 0, 0, 0);
-                where.created_at.gte = from;
-            }
-            if (query.to) {
-                const to = new Date(query.to);
-                to.setUTCHours(23, 59, 59, 999);
-                where.created_at.lte = to;
-            }
-        }
+        const created = createdAtRange(query.from, query.to);
+        if (created) where.created_at = created;
 
         if (query.search) {
             where.OR = [

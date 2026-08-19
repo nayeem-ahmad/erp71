@@ -48,14 +48,18 @@ export class AuditController {
             throw new ForbiddenException('You do not have permission to view audit logs');
         }
 
+        const fromDate = from ? new Date(from) : undefined;
+        const toDate = to ? new Date(to) : undefined;
         return this.auditService.query({
             tenantId: tenant.tenantId,
             entity,
             entityId,
             action,
             userId,
-            fromDate: from ? new Date(from) : undefined,
-            toDate: to ? new Date(to) : undefined,
+            from,
+            to,
+            fromDate: fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
+            toDate: toDate && !Number.isNaN(toDate.getTime()) ? toDate : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             offset: offset ? parseInt(offset, 10) : undefined,
         });

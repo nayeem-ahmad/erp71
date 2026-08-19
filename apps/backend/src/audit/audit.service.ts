@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { createdAtRange } from '../common/created-range.util';
 
 export interface AuditContext {
     userId?: string;
@@ -20,6 +21,8 @@ export interface AuditQueryOptions {
     entity?: string;
     entityId?: string;
     action?: string;
+    from?: string;
+    to?: string;
     fromDate?: Date;
     toDate?: Date;
     limit?: number;
@@ -99,7 +102,10 @@ export class AuditService {
         if (options.entity) where.entity = options.entity;
         if (options.entityId) where.entity_id = options.entityId;
         if (options.action) where.action = options.action;
-        if (options.fromDate || options.toDate) {
+        const created = createdAtRange(options.from, options.to);
+        if (created) {
+            where.created_at = created;
+        } else if (options.fromDate || options.toDate) {
             where.created_at = {};
             if (options.fromDate) where.created_at.gte = options.fromDate;
             if (options.toDate) where.created_at.lte = options.toDate;

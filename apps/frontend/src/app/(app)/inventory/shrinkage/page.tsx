@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Plus } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -32,6 +33,7 @@ export default function InventoryShrinkagePage() {
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [form, setForm] = useState<any>({
         warehouseId: '',
         reasonId: '',
@@ -41,12 +43,12 @@ export default function InventoryShrinkagePage() {
 
     useEffect(() => {
         void Promise.all([loadRecords(), loadOptions()]);
-    }, []);
+    }, [createdRange]);
 
     const loadRecords = async () => {
         setLoading(true);
         try {
-            const data = await api.getInventoryShrinkage();
+            const data = await api.getInventoryShrinkage(applyCreatedRangeQuery(createdRange));
             setRecords(data);
         } catch (error) {
             console.error('Failed to load shrinkage records', error);
@@ -93,11 +95,7 @@ export default function InventoryShrinkagePage() {
             columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: t.inventoryShrinkage.columns.warehouse, size: 180 }),
             columnHelper.accessor((row) => row.reason?.label || '-', { id: 'reason', header: t.inventoryShrinkage.columns.reason, size: 170 }),
             columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity, 0), { id: 'quantity', header: t.inventoryShrinkage.columns.totalQty, size: 110 }),
-            columnHelper.accessor('created_at', {
-                header: t.inventoryShrinkage.columns.created,
-                cell: (info) => new Date(info.getValue()).toLocaleString(),
-                size: 170,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
                 id: 'posting',
                 header: t.inventoryShrinkage.columns.voucher,
@@ -163,6 +161,9 @@ export default function InventoryShrinkagePage() {
                     </div>
                 </form>
 
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
                 <DataTable<ShrinkageRecord>
                     tableId="inventory-shrinkage"
                     columns={columns}

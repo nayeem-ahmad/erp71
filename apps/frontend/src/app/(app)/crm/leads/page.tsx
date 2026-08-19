@@ -9,7 +9,8 @@ import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, type BulkAction } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, StatusBadge, Input, type StatusBadgeTone } from '@/components/ui';
@@ -41,6 +42,7 @@ interface Lead {
     last_contacted_at: string | null;
     nextStepAssignee: { id: string; name: string } | null;
     custom_fields: Record<string, string> | null;
+    created_at: string;
 }
 
 const columnHelper = createColumnHelper<Lead>();
@@ -85,7 +87,7 @@ const LEAD_IMPORT_FIELDS: ImportField[] = [
 ];
 
 export default function LeadsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.crm.leads;
     const c = t.common;
 
@@ -98,6 +100,7 @@ export default function LeadsPage() {
     const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
@@ -141,10 +144,11 @@ export default function LeadsPage() {
                         limit,
                         sortBy,
                         sortDir,
+                        ...applyCreatedRangeQuery(createdRange),
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -162,6 +166,7 @@ export default function LeadsPage() {
                 limit: pageSize,
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+                ...applyCreatedRangeQuery(createdRange),
             });
             if (seq !== loadSeq.current) return;
             setLeads(data?.items ?? []);
@@ -173,14 +178,14 @@ export default function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -292,6 +297,7 @@ export default function LeadsPage() {
                 enableSorting: false,
             }),
         ),
+        createdAtColumn(columnHelper, { header: c.createdAt, locale }),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
@@ -322,7 +328,7 @@ export default function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, statusLabel, priorityLabel, deleteLead, customFieldDefs]);
+    ], [m, c, locale, statusLabel, priorityLabel, deleteLead, customFieldDefs]);
 
     const importFields: ImportField[] = useMemo(
         () => [
@@ -409,6 +415,7 @@ export default function LeadsPage() {
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </Select>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             <DataTable<Lead>

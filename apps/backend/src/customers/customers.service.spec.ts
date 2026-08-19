@@ -99,6 +99,24 @@ describe('CustomersService', () => {
     expect(res.total).toBe(1);
   });
 
+  it('findAll() should filter created_at to the inclusive Dhaka day range', async () => {
+    db.customer.findMany.mockResolvedValue([]);
+    db.customer.count.mockResolvedValue(0);
+
+    await service.findAll('t1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+
+    expect(db.customer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          created_at: {
+            gte: new Date('2026-08-18T18:00:00.000Z'),
+            lte: new Date('2026-08-19T17:59:59.999Z'),
+          },
+        }),
+      }),
+    );
+  });
+
   it('findOne() should return details', async () => {
     db.customer.findFirst.mockResolvedValue({ id: 'c1' });
     const res = await service.findOne('t1', 'c1');
@@ -304,10 +322,9 @@ describe('CustomersService', () => {
       });
 
       const call = db.customerCreditTransaction.findMany.mock.calls[0][0];
-      const lte: Date = call.where.created_at.lte;
-      expect(lte.getUTCHours()).toBe(23);
-      expect(lte.getUTCMinutes()).toBe(59);
-      expect(lte.getUTCDate()).toBe(24);
+      expect(call.where.created_at).toEqual({
+        lte: new Date('2026-06-24T17:59:59.999Z'),
+      });
     });
   });
 

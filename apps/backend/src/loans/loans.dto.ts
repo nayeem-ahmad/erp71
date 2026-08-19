@@ -117,6 +117,14 @@ export class ListLoansQueryDto extends PaginationDto {
     @IsOptional()
     @IsString()
     search?: string;
+
+    @IsOptional()
+    @IsDateString()
+    createdFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    createdTo?: string;
 }
 
 export class CreateLoanPaymentDto {

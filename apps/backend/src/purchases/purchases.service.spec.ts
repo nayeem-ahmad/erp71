@@ -193,4 +193,26 @@ describe('PurchasesService', () => {
 
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
+
+    it('filters created_at to the inclusive Dhaka day range', async () => {
+        db.purchase.findMany.mockResolvedValue([]);
+        db.purchase.count = jest.fn().mockResolvedValue(0);
+        db.voucher.findMany.mockResolvedValue([]);
+
+        await service.findAll('tenant-1', 1, 20, {
+            createdFrom: '2026-08-19',
+            createdTo: '2026-08-19',
+        });
+
+        expect(db.purchase.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    created_at: {
+                        gte: new Date('2026-08-18T18:00:00.000Z'),
+                        lte: new Date('2026-08-19T17:59:59.999Z'),
+                    },
+                }),
+            }),
+        );
+    });
 });

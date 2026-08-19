@@ -8,6 +8,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import { paginate } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import {
@@ -48,6 +49,8 @@ export type ListActivityOpts = {
     channelId?: string;
     dueToday?: boolean;
     overdue?: boolean;
+    createdFrom?: string;
+    createdTo?: string;
     page?: number;
     limit?: number;
     sortBy?: string;
@@ -199,6 +202,9 @@ export class CrmActivitiesService {
             where.status = 'PLANNED';
             where.due_at = { lt: startOfToday() };
         }
+
+        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        if (created) where.created_at = created;
 
         const [items, total] = await Promise.all([
             this.db.crmActivity.findMany({

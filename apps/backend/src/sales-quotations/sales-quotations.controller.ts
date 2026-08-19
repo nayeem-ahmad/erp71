@@ -18,8 +18,16 @@ export class SalesQuotationsController {
     }
 
     @Get()
-    async findAll(@Tenant() tenant: TenantContext, @Query() query: PaginationDto) {
-        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit);
+    async findAll(
+        @Tenant() tenant: TenantContext,
+        @Query() query: PaginationDto,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
+    ) {
+        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, {
+            createdFrom,
+            createdTo,
+        });
     }
 
     @Get(':id')

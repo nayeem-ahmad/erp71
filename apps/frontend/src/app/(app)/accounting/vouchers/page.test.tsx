@@ -12,6 +12,8 @@ jest.mock('next/link', () => {
 });
 
 jest.mock('@/components/data-table', () => ({
+    createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
+    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
     DataTable: ({ columns, data, enableRowSelection, onRowSelectionChange, bulkActions }: {
         columns: Array<{ id?: string; accessorKey?: string; header: unknown; cell: (info: unknown) => React.ReactNode }>;
         data: Array<Record<string, unknown>>;

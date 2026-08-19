@@ -6,6 +6,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 import {
     AllocateSupplierPaymentDto,
     CreateSupplierDto,
@@ -496,19 +497,8 @@ export class SuppliersService {
             where.supplier_id = query.supplierId;
         }
 
-        if (query.from || query.to) {
-            where.created_at = {};
-            if (query.from) {
-                const from = new Date(query.from);
-                from.setUTCHours(0, 0, 0, 0);
-                where.created_at.gte = from;
-            }
-            if (query.to) {
-                const to = new Date(query.to);
-                to.setUTCHours(23, 59, 59, 999);
-                where.created_at.lte = to;
-            }
-        }
+        const created = createdAtRange(query.from, query.to);
+        if (created) where.created_at = created;
 
         if (query.search) {
             where.OR = [

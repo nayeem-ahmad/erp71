@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ArrowRightLeft, Plus, Truck } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -38,8 +39,7 @@ export default function InventoryTransfersPage() {
     const [sourceWarehouseId, setSourceWarehouseId] = useState('');
     const [destinationWarehouseId, setDestinationWarehouseId] = useState('');
     const [productId, setProductId] = useState('');
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [form, setForm] = useState<any>({
         sourceWarehouseId: '',
         destinationWarehouseId: '',
@@ -55,7 +55,7 @@ export default function InventoryTransfersPage() {
 
     useEffect(() => {
         void loadTransfers();
-    }, [statusFilter, sourceWarehouseId, destinationWarehouseId, productId, fromDate, toDate]);
+    }, [statusFilter, sourceWarehouseId, destinationWarehouseId, productId, createdRange]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -74,8 +74,8 @@ export default function InventoryTransfersPage() {
                 sourceWarehouseId: sourceWarehouseId || undefined,
                 destinationWarehouseId: destinationWarehouseId || undefined,
                 productId: productId || undefined,
-                from: fromDate || undefined,
-                to: toDate || undefined,
+                from: applyCreatedRangeQuery(createdRange).createdFrom,
+                to: applyCreatedRangeQuery(createdRange).createdTo,
             });
             setTransfers(data);
         } catch (error) {
@@ -155,11 +155,7 @@ export default function InventoryTransfersPage() {
                 header: t.inventoryTransfers.columns.outstanding,
                 size: 110,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.inventoryTransfers.columns.created,
-                cell: (info) => new Date(info.getValue()).toLocaleString(),
-                size: 170,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
                 id: 'posting',
                 header: t.inventoryTransfers.columns.voucher,
@@ -220,8 +216,7 @@ export default function InventoryTransfersPage() {
                         <option value="">{t.inventoryTransfers.allProducts}</option>
                         {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                     </select>
-                    <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                    <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                 </div>
 
                 <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">

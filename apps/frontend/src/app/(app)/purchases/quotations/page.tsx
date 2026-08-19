@@ -5,7 +5,8 @@ import { FileSearch, Plus, Eye, Trash2, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import CreatePurchaseQuotationModal from './CreatePurchaseQuotationModal';
@@ -45,12 +46,14 @@ export default function PurchaseQuotationsPage() {
     const [rfqs, setRfqs] = useState<PurchaseQuotation[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
-    useEffect(() => { void load(); }, []);
+    useEffect(() => { void load(); }, [createdRange]);
 
     const load = async () => {
+        setLoading(true);
         try {
-            const data = await api.getPurchaseQuotations();
+            const data = await api.getPurchaseQuotations(applyCreatedRangeQuery(createdRange));
             setRfqs(data);
         } catch {
             // silent
@@ -87,12 +90,7 @@ export default function PurchaseQuotationsPage() {
             cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
             size: 130,
         }),
-        columnHelper.accessor('created_at', {
-            header: t.purchaseQuotations.columns.date,
-            cell: (info) => <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>,
-            sortingFn: 'datetime',
-            size: 120,
-        }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
         columnHelper.accessor((row) => row.supplier?.name ?? '', {
             id: 'supplier',
             header: t.purchaseQuotations.columns.supplier,
@@ -206,6 +204,9 @@ export default function PurchaseQuotationsPage() {
                     onSuccess={load}
                 />
 
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
                 <DataTable<PurchaseQuotation>
                     tableId="purchase-quotations"
                     columns={columns}

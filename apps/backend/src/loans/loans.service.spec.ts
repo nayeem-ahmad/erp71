@@ -170,3 +170,34 @@ describe('LoansService — automatic journal postings', () => {
         expect(autoPostFromRules).not.toHaveBeenCalled();
     });
 });
+
+describe('LoansService — list filters', () => {
+    it('filters created_at to the inclusive Dhaka day range', async () => {
+        const db = {
+            loan: {
+                findMany: jest.fn().mockResolvedValue([]),
+                count: jest.fn().mockResolvedValue(0),
+            },
+        };
+        const service = new LoansService(db as any);
+
+        await service.listLoans('tenant-1', {
+            page: 1,
+            limit: 20,
+            createdFrom: '2026-08-19',
+            createdTo: '2026-08-19',
+        });
+
+        expect(db.loan.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    created_at: {
+                        gte: new Date('2026-08-18T18:00:00.000Z'),
+                        lte: new Date('2026-08-19T17:59:59.999Z'),
+                    },
+                }),
+            }),
+        );
+    });
+});

@@ -77,6 +77,28 @@ describe('DeliveryService', () => {
       );
     });
 
+    it('filters created_at to the inclusive Dhaka day range', async () => {
+      db.deliveryOrder.findMany.mockResolvedValue([]);
+      db.deliveryOrder.count.mockResolvedValue(0);
+
+      await service.listDeliveries('t-1', 1, 10, {
+        createdFrom: '2026-08-19',
+        createdTo: '2026-08-19',
+      });
+
+      expect(db.deliveryOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            tenantId: 't-1',
+            created_at: {
+              gte: new Date('2026-08-18T18:00:00.000Z'),
+              lte: new Date('2026-08-19T17:59:59.999Z'),
+            },
+          },
+        }),
+      );
+    });
+
     it('does NOT add status filter when status is undefined', async () => {
       db.deliveryOrder.findMany.mockResolvedValue([]);
       db.deliveryOrder.count.mockResolvedValue(0);

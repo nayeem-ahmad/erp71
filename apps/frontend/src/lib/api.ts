@@ -268,6 +268,16 @@ const MAX_PAGES_FETCHED = 100;
  * Do NOT use this to populate a table. Tables should page against the server via
  * `fetchPaginated` + `useServerList`; pulling every row to count them defeats the point.
  */
+type CreatedRangeParams = { createdFrom?: string; createdTo?: string };
+
+function withCreatedRange(endpoint: string, params?: CreatedRangeParams): string {
+    const query = new URLSearchParams();
+    if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params?.createdTo) query.set('createdTo', params.createdTo);
+    const qs = query.toString();
+    return qs ? `${endpoint}?${qs}` : endpoint;
+}
+
 export async function fetchAllPages<T = any>(endpoint: string): Promise<T[]> {
     const join = endpoint.includes('?') ? '&' : '?';
     const first = await fetchPaginated<T>(`${endpoint}${join}page=1&limit=${MAX_PAGE_SIZE}`);
@@ -458,6 +468,8 @@ export type CrmActivityFilters = {
     channelId?: string;
     dueToday?: boolean;
     overdue?: boolean;
+    createdFrom?: string;
+    createdTo?: string;
     sortBy?: string;
     sortDir?: string;
 };
@@ -521,6 +533,8 @@ export const api = {
         limit?: number;
         sortBy?: string;
         sortDir?: string;
+        createdFrom?: string;
+        createdTo?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.groupId) query.set('groupId', params.groupId);
@@ -532,6 +546,8 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/products${query.toString() ? `?${query.toString()}` : ''}`);
     },
     createProduct: (data: any) => fetchWithAuth('/products', {
@@ -724,14 +740,15 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getInventoryShrinkage: () => fetchWithAuth('/inventory-shrinkage'),
+    getInventoryShrinkage: (params?: CreatedRangeParams) =>
+        fetchWithAuth(withCreatedRange('/inventory-shrinkage', params)),
     getInventoryShrinkageRecord: (id: string) => fetchWithAuth(`/inventory-shrinkage/${id}`),
     createInventoryShrinkage: (data: any) => fetchWithAuth('/inventory-shrinkage', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getStockTakes: () => fetchAllPages('/stock-takes'),
+    getStockTakes: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
     getStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}`),
     createStockTake: (data: any) => fetchWithAuth('/stock-takes', {
         method: 'POST',
@@ -919,6 +936,8 @@ export const api = {
         sortBy?: string;
         sortDir?: 'asc' | 'desc';
         mine?: boolean;
+        createdFrom?: string;
+        createdTo?: string;
     }) => {
         const query = new URLSearchParams();
         if (params.page) query.set('page', String(params.page));
@@ -928,6 +947,8 @@ export const api = {
         if (params.sortBy) query.set('sortBy', params.sortBy);
         if (params.sortDir) query.set('sortDir', params.sortDir);
         if (params.mine) query.set('mine', 'true');
+        if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/sales?${query.toString()}`);
     },
     /** The most recent few sales — callers that do not need the whole history. */
@@ -942,9 +963,11 @@ export const api = {
         return fetchPaginated(`/sales${qs ? `?${qs}` : ''}`);
     },
     /** Every customer as a flat array — for pickers and id→customer maps. */
-    getCustomers: (params?: { search?: string }) => {
+    getCustomers: (params?: { search?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchAllPages(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     /** Bounded typeahead lookup — deliberately capped, unlike `getCustomers`. */
@@ -958,6 +981,8 @@ export const api = {
         customerType?: string;
         sortBy?: string;
         sortDir?: string;
+        createdFrom?: string;
+        createdTo?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
@@ -967,6 +992,8 @@ export const api = {
         if (params?.customerType) query.set('customerType', params.customerType);
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomer: (id: string) => fetchWithAuth(`/customers/${id}`),
@@ -1072,7 +1099,7 @@ export const api = {
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string }) => {
+    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.source) query.set('source', params.source);
@@ -1085,6 +1112,8 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
@@ -1114,7 +1143,7 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     // CRM Contacts
-    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string }) => {
+    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.company) query.set('company', params.company);
@@ -1124,6 +1153,8 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/crm/contacts${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getContact: (id: string) => fetchWithAuth(`/crm/contacts/${id}`),
@@ -1293,7 +1324,7 @@ export const api = {
     getAdminDashboardOverview: dashboardWindowFetcher('/admin/dashboard/overview'),
     getAdminDashboardTrends: dashboardWindowFetcher('/admin/dashboard/trends'),
     // CRM Campaigns
-    getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
+    getCrmCampaigns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/crm/campaigns', params)),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
     previewCampaignRecipients: (id: string) => fetchWithAuth(`/crm/campaigns/${id}/preview`),
     createCrmCampaign: (data: any) => fetchWithAuth('/crm/campaigns', {
@@ -1446,11 +1477,13 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; approvalStatus?: string; page?: number; limit?: number }) => {
+    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.voucherType) query.set('voucherType', params.voucherType);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
         if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
@@ -1681,7 +1714,7 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchBlobWithAuth(`/accounting/export?${query.toString()}`);
     },
-    getReturns: () => fetchAllPages('/sales-returns'),
+    getReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
     getReturn: (id: string) => fetchWithAuth(`/sales-returns/${id}`),
     createReturn: (data: any) => fetchWithAuth('/sales-returns', {
         method: 'POST',
@@ -1696,7 +1729,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getOrders: () => fetchAllPages('/sales-orders'),
+    getOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
     getOrder: (id: string) => fetchWithAuth(`/sales-orders/${id}`),
     createOrder: (data: any) => fetchWithAuth('/sales-orders', {
         method: 'POST',
@@ -1857,25 +1890,30 @@ export const api = {
     updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
-    getPurchaseOrders: () => fetchAllPages('/purchase-orders'),
+    getPurchaseOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
     getPurchaseOrder: (id: string) => fetchWithAuth(`/purchase-orders/${id}`),
     createPurchaseOrder: (data: any) => fetchWithAuth('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseOrderStatus: (id: string, status: string) => fetchWithAuth(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     getPurchaseOrderInvoice: (id: string) => fetchWithAuth(`/purchase-orders/${id}/invoice`),
-    getPurchaseQuotations: () => fetchAllPages('/purchase-quotations'),
+    getPurchaseQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
     getPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`),
     createPurchaseQuotation: (data: any) => fetchWithAuth('/purchase-quotations', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     convertPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}/convert`, { method: 'POST' }),
     deletePurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`, { method: 'DELETE' }),
-    getPurchases: () => fetchAllPages('/purchases'),
+    getPurchases: (params?: { createdFrom?: string; createdTo?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) query.set('createdTo', params.createdTo);
+        return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPurchaseReturns: () => fetchAllPages('/purchase-returns'),
+    getPurchaseReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
         method: 'POST',
@@ -1890,7 +1928,7 @@ export const api = {
     deletePurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`, {
         method: 'DELETE',
     }),
-    getQuotations: () => fetchAllPages('/sales-quotations'),
+    getQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
         method: 'POST',
@@ -2821,7 +2859,7 @@ export const api = {
     // Warranty Claims
     lookupWarrantySerial: (serialNumber: string) =>
         fetchWithAuth(`/warranty-claims/lookup?serialNumber=${encodeURIComponent(serialNumber)}`),
-    getWarrantyClaims: () => fetchAllPages('/warranty-claims'),
+    getWarrantyClaims: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
     getWarrantyClaim: (id: string) => fetchWithAuth(`/warranty-claims/${id}`),
     createWarrantyClaim: (data: any) => fetchWithAuth('/warranty-claims', {
         method: 'POST',
@@ -3159,11 +3197,13 @@ export const api = {
         appendReportScopeParams(q, params);
         return fetchWithAuth(`/accounting/reports/trial-balance${q.toString() ? `?${q}` : ''}`);
     },
-    listFundTransfers: (params?: { status?: string; sourceStoreId?: string; destinationStoreId?: string }) => {
+    listFundTransfers: (params?: { status?: string; sourceStoreId?: string; destinationStoreId?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
         if (params?.status) q.set('status', params.status);
         if (params?.sourceStoreId) q.set('sourceStoreId', params.sourceStoreId);
         if (params?.destinationStoreId) q.set('destinationStoreId', params.destinationStoreId);
+        if (params?.from) q.set('from', params.from);
+        if (params?.to) q.set('to', params.to);
         return fetchWithAuth(`/fund-transfers${q.toString() ? `?${q}` : ''}`);
     },
     getFundTransfer: (id: string) => fetchWithAuth(`/fund-transfers/${id}`),
@@ -3357,11 +3397,13 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseCategory: (id: string) => fetchWithAuth(`/expenses/categories/${id}`, { method: 'DELETE' }),
-    getExpenseEntries: (params?: { from?: string; to?: string; categoryId?: string }) => {
+    getExpenseEntries: (params?: { from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
         const q = new URLSearchParams();
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         if (params?.categoryId) q.set('categoryId', params.categoryId);
+        if (params?.createdFrom) q.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) q.set('createdTo', params.createdTo);
         return fetchAllPages(`/expenses/entries${q.toString() ? `?${q}` : ''}`);
     },
     createExpenseEntry: (data: any) => fetchWithAuth('/expenses/entries', {
@@ -3382,12 +3424,14 @@ export const api = {
         return fetchWithAuth(`/expenses/summary?${q}`);
     },
     // Loans
-    getLoans: (params?: { direction?: string; status?: string; storeId?: string; search?: string }) => {
+    getLoans: (params?: { direction?: string; status?: string; storeId?: string; search?: string; createdFrom?: string; createdTo?: string }) => {
         const q = new URLSearchParams();
         if (params?.direction) q.set('direction', params.direction);
         if (params?.status) q.set('status', params.status);
         if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.search) q.set('search', params.search);
+        if (params?.createdFrom) q.set('createdFrom', params.createdFrom);
+        if (params?.createdTo) q.set('createdTo', params.createdTo);
         return fetchAllPages(`/loans${q.toString() ? `?${q}` : ''}`);
     },
     getLoanSummary: () => fetchWithAuth('/loans/summary'),

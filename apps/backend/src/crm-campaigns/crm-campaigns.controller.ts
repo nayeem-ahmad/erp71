@@ -24,10 +24,14 @@ export class CrmCampaignsController {
         @Tenant() tenant: TenantContext,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
     ) {
         return this.service.findAll(tenant.tenantId, {
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
+            createdFrom,
+            createdTo,
         });
     }
 

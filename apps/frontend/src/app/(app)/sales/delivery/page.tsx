@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Truck, Plus, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { CreatedRangeFilter } from '@/components/data-table';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button } from '@/components/ui';
@@ -53,6 +55,7 @@ export default function DeliveryPage() {
     const [page, setPage] = useState(1);
     const [pages, setPages] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -68,6 +71,9 @@ export default function DeliveryPage() {
         try {
             const params = new URLSearchParams({ page: String(page), limit: '20' });
             if (statusFilter) params.set('status', statusFilter);
+            const created = applyCreatedRangeQuery(createdRange);
+            if (created.createdFrom) params.set('createdFrom', created.createdFrom);
+            if (created.createdTo) params.set('createdTo', created.createdTo);
             const data = await fetchWithAuth(`/delivery?${params}`);
             setOrders(data.items ?? []);
             setTotal(data.total ?? 0);
@@ -77,7 +83,7 @@ export default function DeliveryPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, statusFilter]);
+    }, [page, statusFilter, createdRange]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -191,6 +197,13 @@ export default function DeliveryPage() {
                     </>
                 }
             />
+
+            <div className="mb-3">
+                <CreatedRangeFilter
+                    value={createdRange}
+                    onChange={(next) => { setCreatedRange(next); setPage(1); }}
+                />
+            </div>
 
             {/* Status filter tabs */}
             <div className="flex gap-1 border-b border-gray-200">

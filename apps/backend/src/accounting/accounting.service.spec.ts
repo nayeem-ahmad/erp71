@@ -539,6 +539,28 @@ describe('AccountingService — Story 30.2', () => {
         expect(result.data[0].total_amount).toBe(125);
     });
 
+    it('lists vouchers filtered by created_at Dhaka day range', async () => {
+        db.voucher.count.mockResolvedValue(0);
+        db.voucher.findMany.mockResolvedValue([]);
+
+        await service.findVouchers('tenant-1', {
+            createdFrom: '2026-08-19',
+            createdTo: '2026-08-19',
+        });
+
+        expect(db.voucher.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    created_at: {
+                        gte: new Date('2026-08-18T18:00:00.000Z'),
+                        lte: new Date('2026-08-19T17:59:59.999Z'),
+                    },
+                }),
+            }),
+        );
+    });
+
     it('returns a single voucher with all detail rows', async () => {
         db.voucher.findFirst.mockResolvedValue({
             id: 'voucher-1',

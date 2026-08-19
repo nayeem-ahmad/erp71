@@ -1,11 +1,20 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseDto } from './purchase.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+
+const PURCHASE_SORTABLE: SortableMap = {
+    purchase_number: (dir) => ({ purchase_number: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+};
+const PURCHASE_DEFAULT_ORDER = { created_at: 'desc' as const };
 
 @Injectable()
 export class PurchasesService {
@@ -181,7 +190,13 @@ export class PurchasesService {
         });
     }
 
-    async findAll(tenantId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {
+    async findAll(
+        tenantId: string,
+        page = 1,
+        limit = 20,
+        opts?: { createdFrom?: string; createdTo?: string; sortBy?: string; sortDir?: string },
+    ): Promise<PaginatedResult<unknown>> {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchase.findMany({
@@ -194,8 +209,8 @@ export class PurchasesService {
                     },
                 }),
             count: (args) => this.db.purchase.count(args as any),
-            where: { tenant_id: tenantId },
-            orderBy: { created_at: 'desc' },
+            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_SORTABLE, PURCHASE_DEFAULT_ORDER),
             page,
             limit,
         });

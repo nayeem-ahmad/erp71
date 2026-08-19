@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -17,8 +17,12 @@ export class InventoryShrinkageController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext) {
-        return this.service.findAll(tenant.tenantId);
+    findAll(
+        @Tenant() tenant: TenantContext,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
+    ) {
+        return this.service.findAll(tenant.tenantId, { createdFrom, createdTo });
     }
 
     @Get(':id')

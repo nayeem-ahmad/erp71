@@ -32,8 +32,14 @@ export class DeliveryController {
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
         @Query('status') status?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
     ) {
-        return this.deliveryService.listDeliveries(tenant.tenantId, page, Math.min(limit, 100), status);
+        return this.deliveryService.listDeliveries(tenant.tenantId, page, Math.min(limit, 100), {
+            status,
+            createdFrom,
+            createdTo,
+        });
     }
 
     @Get(':id')

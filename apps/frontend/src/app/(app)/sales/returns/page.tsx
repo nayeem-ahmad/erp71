@@ -5,7 +5,8 @@ import { RotateCcw, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
@@ -43,14 +44,16 @@ export default function ReturnsPage() {
     const printHeader = usePrintHeader('SALES_RETURN');
     const [returns, setReturns] = useState<SalesReturn[]>([]);
     const [loading, setLoading] = useState(true);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         loadReturns();
-    }, []);
+    }, [createdRange]);
 
     const loadReturns = async () => {
+        setLoading(true);
         try {
-            const data = await api.getReturns();
+            const data = await api.getReturns(applyCreatedRangeQuery(createdRange));
             setReturns(data);
         } catch (error) {
             console.error('Failed to load returns', error);
@@ -142,20 +145,7 @@ export default function ReturnsPage() {
                 ),
                 size: 90,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.returns.columns.date,
-                cell: (info) => {
-                    const d = new Date(info.getValue());
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
-                            <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.status ?? 'COMPLETED', {
                 id: 'status',
                 header: t.returns.columns.status,
@@ -258,6 +248,10 @@ export default function ReturnsPage() {
                     }
                 />
 
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
 
                 <DataTable<SalesReturn>
                     tableId="sales-returns"

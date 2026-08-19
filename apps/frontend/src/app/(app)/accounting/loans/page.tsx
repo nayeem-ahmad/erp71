@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, Plus, Trash2, Wallet } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import {
     AccountingPageShell,
     CompactStat,
@@ -38,6 +39,7 @@ interface Loan {
     notes?: string | null;
     total_paid: number;
     outstanding: number;
+    created_at: string;
     payments?: LoanPayment[];
     store?: { id: string; name: string } | null;
 }
@@ -62,6 +64,7 @@ export default function LoansPage() {
     const [loading, setLoading] = useState(true);
     const [directionFilter, setDirectionFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [showForm, setShowForm] = useState(false);
@@ -89,6 +92,7 @@ export default function LoansPage() {
                 api.getLoans({
                     direction: directionFilter || undefined,
                     status: statusFilter || undefined,
+                    ...applyCreatedRangeQuery(createdRange),
                 }),
                 api.getLoanSummary(),
             ]);
@@ -103,7 +107,7 @@ export default function LoansPage() {
 
     useEffect(() => {
         void loadData();
-    }, [directionFilter, statusFilter]);
+    }, [directionFilter, statusFilter, createdRange]);
 
     const openCreate = () => {
         setEditingId(null);
@@ -279,6 +283,7 @@ export default function LoansPage() {
                 cell: (info) => <span className="text-sm text-gray-500">{info.getValue() ? formatDate(info.getValue() as string) : '—'}</span>,
                 size: 110,
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.accessor('status', {
                 header: t.loans.status,
                 cell: (info) => (
@@ -364,6 +369,7 @@ export default function LoansPage() {
                         <option value="CLOSED">{t.loans.closed}</option>
                     </select>
                 </label>
+                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
             {loading ? (

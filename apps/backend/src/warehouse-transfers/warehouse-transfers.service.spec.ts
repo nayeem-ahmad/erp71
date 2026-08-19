@@ -156,10 +156,10 @@ describe('WarehouseTransfersService', () => {
                     source_warehouse_id: 'wh-source',
                     destination_warehouse_id: 'wh-dest',
                     items: { some: { product_id: 'prod-1' } },
-                    created_at: expect.objectContaining({
-                        gte: new Date('2024-01-01'),
-                        lte: new Date('2024-01-31'),
-                    }),
+                    created_at: {
+                        gte: new Date('2023-12-31T18:00:00.000Z'),
+                        lte: new Date('2024-01-31T17:59:59.999Z'),
+                    },
                 }),
             }),
         );

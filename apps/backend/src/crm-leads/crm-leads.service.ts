@@ -21,6 +21,7 @@ import { paginate } from '../common/pagination.dto';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import {
@@ -318,6 +319,8 @@ export class CrmLeadsService {
             limit?: number;
             sortBy?: string;
             sortDir?: string;
+            createdFrom?: string;
+            createdTo?: string;
         },
     ) {
         const page = opts.page ?? 1;
@@ -325,6 +328,8 @@ export class CrmLeadsService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId };
+        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        if (created) where.created_at = created;
         if (opts.status) where.status = opts.status;
         // Filters carry a taxonomy row id. A stale bookmarked filter naming a
         // deleted row simply matches nothing, rather than erroring.

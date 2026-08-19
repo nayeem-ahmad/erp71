@@ -46,4 +46,12 @@ export class ListFundTransfersQueryDto {
     @IsOptional()
     @IsUUID()
     destinationStoreId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
 }

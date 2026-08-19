@@ -6,7 +6,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -46,14 +47,16 @@ export default function QuotesPage() {
     const printHeader = usePrintHeader('QUOTE');
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         loadQuotes();
-    }, []);
+    }, [createdRange]);
 
     const loadQuotes = async () => {
+        setLoading(true);
         try {
-            const data = await api.getQuotations();
+            const data = await api.getQuotations(applyCreatedRangeQuery(createdRange));
             setQuotes(data);
         } catch (error) {
             console.error('Failed to load quotes', error);
@@ -123,20 +126,7 @@ export default function QuotesPage() {
                 ),
                 size: 180,
             }),
-            columnHelper.accessor('created_at', {
-                header: t.quotes.columns.date,
-                cell: (info) => {
-                    const date = new Date(info.getValue());
-                    return (
-                        <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
-                            <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
-                        </div>
-                    );
-                },
-                sortingFn: 'datetime',
-                size: 150,
-            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.quotes.columns.customer,
@@ -265,6 +255,10 @@ export default function QuotesPage() {
                     }
                 />
 
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                </div>
 
                 <DataTable<Quotation>
                     tableId="sales-quotations"

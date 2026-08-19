@@ -94,6 +94,14 @@ export class ListExpenseEntriesQueryDto extends PaginationDto {
     @IsOptional()
     @IsDateString()
     to?: string;
+
+    @IsOptional()
+    @IsDateString()
+    createdFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    createdTo?: string;
 }
 
 export class ExpenseReportQueryDto {

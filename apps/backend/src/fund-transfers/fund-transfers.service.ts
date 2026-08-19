@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { VoucherAttribution } from '../accounting/accounting.constants';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { InitiateFundTransferDto, ListFundTransfersQueryDto } from './fund-transfers.dto';
+import { createdAtRange } from '../common/created-range.util';
 
 @Injectable()
 export class FundTransfersService {
@@ -121,12 +122,14 @@ export class FundTransfersService {
     }
 
     async list(tenantId: string, query: ListFundTransfersQueryDto = {}) {
+        const created = createdAtRange(query.from, query.to);
         return this.db.fundTransfer.findMany({
             where: {
                 tenant_id: tenantId,
                 ...(query.status ? { status: query.status } : {}),
                 ...(query.sourceStoreId ? { source_store_id: query.sourceStoreId } : {}),
                 ...(query.destinationStoreId ? { destination_store_id: query.destinationStoreId } : {}),
+                ...(created ? { created_at: created } : {}),
             },
             include: this.transferInclude(),
             orderBy: [{ created_at: 'desc' }, { id: 'desc' }],

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { createdAtRange } from '../common/created-range.util';
 import { assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import {
     CreateProductDemandDto,
@@ -346,17 +347,6 @@ export class ProductDemandsService {
 }
 
 function buildDemandDateRange(from?: string, to?: string) {
-    const where: Record<string, any> = {};
-    if (from || to) {
-        where.created_at = {};
-        if (from) {
-            const date = new Date(from);
-            if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
-        }
-        if (to) {
-            const date = new Date(to);
-            if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
-        }
-    }
-    return where;
+    const created = createdAtRange(from, to);
+    return created ? { created_at: created } : {};
 }

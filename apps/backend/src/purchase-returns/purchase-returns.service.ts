@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
@@ -145,7 +146,13 @@ export class PurchaseReturnsService {
         });
     }
 
-    async findAll(tenantId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {
+    async findAll(
+        tenantId: string,
+        page = 1,
+        limit = 20,
+        opts?: { createdFrom?: string; createdTo?: string },
+    ): Promise<PaginatedResult<unknown>> {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseReturn.findMany({
@@ -153,7 +160,7 @@ export class PurchaseReturnsService {
                     include: this.returnInclude(),
                 }),
             count: (args) => this.db.purchaseReturn.count(args as any),
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

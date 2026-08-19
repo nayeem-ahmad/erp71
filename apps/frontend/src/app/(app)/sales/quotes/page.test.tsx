@@ -45,6 +45,8 @@ jest.mock('@/lib/format', () => ({
 }));
 
 jest.mock('@/components/data-table', () => ({
+    createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
+    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
     DataTable: ({ data, isLoading, emptyMessage, toolbarActions }: any) => (
         <div data-testid="data-table">
             {isLoading && <span>Loading...</span>}

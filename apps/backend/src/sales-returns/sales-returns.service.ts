@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
@@ -223,7 +224,13 @@ export class SalesReturnsService {
         });
     }
 
-    async findAll(tenantId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {
+    async findAll(
+        tenantId: string,
+        page = 1,
+        limit = 20,
+        opts?: { createdFrom?: string; createdTo?: string },
+    ): Promise<PaginatedResult<unknown>> {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.salesReturn.findMany({
@@ -231,7 +238,7 @@ export class SalesReturnsService {
                     include: { sale: true, items: { include: { product: true } } },
                 }),
             count: (args) => this.db.salesReturn.count(args as any),
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

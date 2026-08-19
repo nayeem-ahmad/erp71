@@ -18,8 +18,16 @@ export class PurchaseOrdersController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: PaginationDto) {
-        return this.service.findAll(tenant.tenantId, query.page, query.limit);
+    findAll(
+        @Tenant() tenant: TenantContext,
+        @Query() query: PaginationDto,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
+    ) {
+        return this.service.findAll(tenant.tenantId, query.page, query.limit, {
+            createdFrom,
+            createdTo,
+        });
     }
 
     @Get(':id')

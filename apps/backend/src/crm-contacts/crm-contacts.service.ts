@@ -21,6 +21,7 @@ import {
 import { paginate } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { createdAtRange } from '../common/created-range.util';
 import { parseImageUpload } from '../common/image-upload.util';
 
 const attachmentIncludes = {
@@ -136,6 +137,8 @@ export class CrmContactsService {
         const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = { tenant_id: tenantId };
+        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        if (created) where.created_at = created;
         if (opts.company) where.company = { contains: opts.company, mode: 'insensitive' };
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;
         if (opts.captureSource) where.capture_source = opts.captureSource;

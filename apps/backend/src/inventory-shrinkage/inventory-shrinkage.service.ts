@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { createdAtRange } from '../common/created-range.util';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { CreateInventoryShrinkageDto } from './inventory-shrinkage.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -94,9 +95,10 @@ export class InventoryShrinkageService {
         });
     }
 
-    async findAll(tenantId: string) {
+    async findAll(tenantId: string, opts?: { createdFrom?: string; createdTo?: string }) {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
         return this.db.inventoryShrinkage.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
             include: this.shrinkageInclude(),
             orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
         });

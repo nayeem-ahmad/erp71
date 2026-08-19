@@ -277,6 +277,24 @@ describe('SalesQuotationsService', () => {
     expect(res.total).toBe(1);
   });
 
+  it('findAll() should filter created_at to the inclusive Dhaka day range', async () => {
+    db.quotation.findMany.mockResolvedValue([]);
+    db.quotation.count.mockResolvedValue(0);
+
+    await service.findAll('tenant-1', 1, 20, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+
+    expect(db.quotation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          created_at: {
+            gte: new Date('2026-08-18T18:00:00.000Z'),
+            lte: new Date('2026-08-19T17:59:59.999Z'),
+          },
+        }),
+      }),
+    );
+  });
+
   it('findOne() should return a single quote with details', async () => {
     db.quotation.findFirst.mockResolvedValue({ id: 'q-1' });
     const res = await service.findOne('tenant-1', 'q-1');

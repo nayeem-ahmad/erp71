@@ -98,5 +98,17 @@ describe('AuditService', () => {
                 created_at: { gte: from, lte: to },
             });
         });
+
+        it('maps YYYY-MM-DD from/to through the inclusive Dhaka day range', async () => {
+            await service.query({ tenantId: 't1', from: '2026-08-19', to: '2026-08-19' });
+
+            expect(db.auditLog.findMany.mock.calls[0][0].where).toEqual({
+                tenant_id: 't1',
+                created_at: {
+                    gte: new Date('2026-08-18T18:00:00.000Z'),
+                    lte: new Date('2026-08-19T17:59:59.999Z'),
+                },
+            });
+        });
     });
 });

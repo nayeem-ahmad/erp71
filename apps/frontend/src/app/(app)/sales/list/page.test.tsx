@@ -15,7 +15,7 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SalesListPage from './page';
 
 jest.mock('next/link', () => {
@@ -29,6 +29,13 @@ jest.mock('@/lib/api', () => ({
         getSalesList: jest.fn(),
         getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
     },
+}));
+
+// DataTable hides hideOnMobile columns (Created) when matchMedia reports a
+// narrow viewport. The global mock always reports non-matching.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
 }));
 
 const mockSales = [
@@ -168,12 +175,31 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
-    it('displays the sale_date (not created_at) in the Date column', async () => {
+    it('shows sale_date as Sale date and created_at as Created', async () => {
         render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+        expect(screen.getByRole('columnheader', { name: /sale date/i })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /^created$/i })).toBeInTheDocument();
+        expect(screen.getByText('05/01/2026')).toBeInTheDocument();
+        expect(screen.getByText('20/03/2026')).toBeInTheDocument();
+    });
+
+    it('sends createdFrom/createdTo when a Created range is chosen', async () => {
+        const { api } = require('@/lib/api');
+        render(<SalesListPage />);
+        await waitFor(() => expect(api.getSalesList).toHaveBeenCalled());
+        api.getSalesList.mockClear();
+
+        fireEvent.click(screen.getByRole('button', { name: /created · any time/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+
         await waitFor(() => {
-            // sale_date is 2026-01-05; created_at is 2026-03-20 — the list must show the sale_date.
-            expect(screen.getByText('05/01/2026')).toBeInTheDocument();
-            expect(screen.queryByText('20/03/2026')).not.toBeInTheDocument();
+            expect(api.getSalesList).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    createdFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                    createdTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                }),
+            );
         });
     });
 

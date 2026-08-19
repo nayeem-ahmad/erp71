@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { GitMerge, Loader2, Plus } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import {
     AccountingPageShell,
     AccountingToolbar,
@@ -13,7 +14,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useReportStores } from '@/lib/accounting-report-scope';
 import { Button } from '@/components/ui';
@@ -37,12 +38,13 @@ const columnHelper = createColumnHelper<FundTransfer>();
 const METHODS = ['CASH', 'CHECK', 'BANK_TRANSFER'] as const;
 
 export default function FundTransfersPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.accounting.reports.fundTransfers;
     const { stores } = useReportStores();
     const [transfers, setTransfers] = useState<FundTransfer[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState('');
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -63,6 +65,8 @@ export default function FundTransfersPage() {
         try {
             const data = await api.listFundTransfers({
                 status: statusFilter || undefined,
+                from: applyCreatedRangeQuery(createdRange).createdFrom,
+                to: applyCreatedRangeQuery(createdRange).createdTo,
             });
             setTransfers(Array.isArray(data) ? data : []);
         } catch (err: any) {
@@ -70,7 +74,7 @@ export default function FundTransfersPage() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, m.loadFailed]);
+    }, [statusFilter, createdRange, m.loadFailed]);
 
     useEffect(() => {
         void loadTransfers();
@@ -134,11 +138,7 @@ export default function FundTransfersPage() {
     };
 
     const columns = useMemo<ColumnDef<FundTransfer, any>[]>(() => [
-        columnHelper.accessor((row) => row.created_at, {
-            id: 'created_at',
-            header: t.accountingShared.date,
-            cell: (info) => formatDate(info.getValue()),
-        }),
+        createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
         columnHelper.display({
             id: 'route',
             header: `${m.fromBranch} → ${m.toBranch}`,
@@ -202,7 +202,7 @@ export default function FundTransfersPage() {
                 ) : null
             ),
         }),
-    ], [t.accountingShared.date, m, receivingId]);
+    ], [t.common.createdAt, locale, m, receivingId]);
 
     return (
         <AccountingPageShell maxWidth="full">
@@ -242,6 +242,7 @@ export default function FundTransfersPage() {
                             ))}
                         </select>
                     </div>
+                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                 </div>
             </AccountingToolbar>
 

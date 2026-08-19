@@ -82,6 +82,7 @@ export const salesMessages = {
                 returnNumber: "Pulangan #",
                 claimNumber: "Tuntutan #",
                 date: "Tarikh",
+                saleDate: "Tarikh jualan",
                 customer: "Pelanggan",
                 phone: "Telefon",
                 code: "Code",
@@ -298,6 +299,7 @@ export const salesMessages = {
             columns: {
                 serialNumber: "Siri #",
                 date: "Tarikh",
+                saleDate: "Tarikh jualan",
                 customer: "Pelanggan",
                 items: "Item",
                 total: "Jumlah",

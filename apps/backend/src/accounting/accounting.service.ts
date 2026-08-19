@@ -46,6 +46,7 @@ import {
     type AccountCodeLevel,
 } from '@erp71/database';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
+import { createdAtRange } from '../common/created-range.util';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -845,11 +846,13 @@ export class AccountingService {
         const page = Math.max(1, Number(query.page ?? 1));
         const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
         this.validateDateRange(query.from, query.to);
+        const created = createdAtRange(query.createdFrom, query.createdTo);
         const where = {
             tenant_id: tenantId,
             ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
             ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),
+            ...(created ? { created_at: created } : {}),
         };
 
         const [total, vouchers] = await Promise.all([

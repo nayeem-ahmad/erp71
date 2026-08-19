@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
 import { CreateCampaignDto, UpdateCampaignDto } from './crm-campaigns.dto';
 import { paginate } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { CampaignRecipientsService } from './campaign-recipients.service';
 import { CampaignDispatchService } from './campaign-dispatch.service';
 
@@ -108,14 +109,16 @@ export class CrmCampaignsService {
         return { ...campaign, recipient_count: written };
     }
 
-    async findAll(tenantId: string, opts?: { page?: number; limit?: number }) {
+    async findAll(tenantId: string, opts?: { page?: number; limit?: number; createdFrom?: string; createdTo?: string }) {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const where = { tenant_id: tenantId, ...(created ? { created_at: created } : {}) };
 
         const [items, total] = await Promise.all([
             this.db.crmCampaign.findMany({
-                where: { tenant_id: tenantId },
+                where,
                 include: {
                     creator: { select: { id: true, name: true } },
                     _count: { select: { recipients: true } },
@@ -124,7 +127,7 @@ export class CrmCampaignsService {
                 skip,
                 take: limit,
             }),
-            this.db.crmCampaign.count({ where: { tenant_id: tenantId } }),
+            this.db.crmCampaign.count({ where }),
         ]);
 
         return paginate(items, total, page, limit);

@@ -18,6 +18,12 @@ jest.mock('next/link', () => ({
 
 jest.mock('@/components/data-table', () => ({
     DataTable: ({ data }: any) => <div data-testid="data-table">{data?.length} rows</div>,
+    createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
+    CreatedRangeFilter: ({ onChange }: { onChange: (next: { from: string; to: string }) => void }) => (
+        <button type="button" onClick={() => onChange({ from: '2024-01-01', to: '2024-01-01' })}>
+            Created · Any time
+        </button>
+    ),
 }));
 
 jest.mock('@/components/PostingBadge', () => ({
@@ -346,12 +352,8 @@ describe('InventoryTransfersPage', () => {
     it('changes from date filter', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
-        const dateInputs = screen.getAllByDisplayValue('');
-        const fromDateInput = dateInputs.find(
-            (el) => (el as HTMLInputElement).type === 'date'
-        )!;
         await act(async () => {
-            fireEvent.change(fromDateInput, { target: { value: '2024-01-01' } });
+            fireEvent.click(screen.getByRole('button', { name: /created · any time/i }));
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
