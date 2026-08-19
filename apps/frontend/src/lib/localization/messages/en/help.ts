@@ -224,6 +224,10 @@ export const helpMessages = {
                     q: 'What are AI credits and how do I get more?',
                     a: 'AI credits are a monthly allowance included with your plan (1 credit = 1,000 tokens), used by the assistant and other AI features; view them under AI Credits. They reset each billing period and can\'t be bought separately — you get a larger allowance by upgrading (BASIC includes 100/month, STANDARD 500). These are different from SMS credits, which are prepaid and purchasable.',
                 },
+                {
+                    q: 'Can I speak a question instead of typing?',
+                    a: 'Yes — if your browser supports it (Chrome, Edge or Safari on HTTPS), a microphone appears next to Send. Tap it, speak your question, then edit the text if needed and send. The assistant does not read answers aloud yet.',
+                },
             ],
         },
         billing: {

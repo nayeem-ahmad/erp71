@@ -11,6 +11,10 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
 const { api } = jest.requireMock('@/lib/api') as {
     api: {
         aiChat: jest.Mock;
@@ -328,4 +332,107 @@ describe('AiChatWidget', () => {
             expect(await screen.findByText('Could not load your conversations.')).toBeInTheDocument();
         });
     });
+
+    /**
+     * Voice input is "type with the mic": the transcript lands in the box so the
+     * user can edit it. Sending is a separate click — a bad transcription must
+     * not burn an AI credit on its own.
+     */
+    describe('voice input', () => {
+        afterEach(() => {
+            uninstallSpeechRecognition();
+        });
+
+        it('hides the mic when the browser cannot recognise speech', async () => {
+            await openPanel();
+            expect(screen.getByPlaceholderText(/Ask about your sales/i)).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Speak a question' })).not.toBeInTheDocument();
+        });
+
+        it('shows a mic once speech recognition is available', async () => {
+            installSpeechRecognition();
+            await openPanel();
+            expect(await screen.findByRole('button', { name: 'Speak a question' })).toBeInTheDocument();
+        });
+
+        it('fills the question box from speech without sending', async () => {
+            const rec = installSpeechRecognition();
+            await openPanel();
+            fireEvent.click(await screen.findByRole('button', { name: 'Speak a question' }));
+
+            await waitFor(() => expect(rec.instances[0]?.start).toHaveBeenCalled());
+            await act(async () => {
+                rec.instances[0].emitFinal('How much did we sell last month?');
+            });
+
+            expect(screen.getByPlaceholderText(/Ask about your sales/i)).toHaveValue(
+                'How much did we sell last month?',
+            );
+            expect(api.aiChat).not.toHaveBeenCalled();
+        });
+    });
 });
+
+type FakeRecognition = {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    maxAlternatives: number;
+    onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null;
+    onerror: ((event: { error: string }) => void) | null;
+    onend: (() => void) | null;
+    start: jest.Mock;
+    stop: jest.Mock;
+    abort: jest.Mock;
+    emitFinal: (transcript: string) => void;
+};
+
+function installSpeechRecognition() {
+    const instances: FakeRecognition[] = [];
+
+    class FakeSpeechRecognition {
+        continuous = false;
+        interimResults = false;
+        lang = '';
+        maxAlternatives = 1;
+        onresult: FakeRecognition['onresult'] = null;
+        onerror: FakeRecognition['onerror'] = null;
+        onend: FakeRecognition['onend'] = null;
+        start = jest.fn();
+        stop = jest.fn(() => {
+            this.onend?.();
+        });
+        abort = jest.fn();
+        emitFinal(transcript: string) {
+            this.onresult?.({
+                results: [{ 0: { transcript }, isFinal: true }],
+            });
+        }
+
+        constructor() {
+            instances.push(this as unknown as FakeRecognition);
+        }
+    }
+
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition = FakeSpeechRecognition;
+    Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+            getUserMedia: jest.fn().mockResolvedValue({
+                getTracks: () => [{ stop: jest.fn() }],
+            }),
+        },
+    });
+
+    return { instances };
+}
+
+function uninstallSpeechRecognition() {
+    delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false });
+    Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: undefined,
+    });
+}
