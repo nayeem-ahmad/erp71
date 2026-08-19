@@ -183,6 +183,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'projects.boards': { id: 'projects.boards', kind: 'link', icon: 'KanbanSquare', labelKey: 'sidebar.items.projectsBoards', href: '/projects/boards' },
   'projects.tasks': { id: 'projects.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsTasks', href: '/projects/tasks' },
   'projects.sprints': { id: 'projects.sprints', kind: 'link', icon: 'Timer', labelKey: 'sidebar.items.projectsSprints', href: '/projects/sprints' },
+  // `exact` because the report sits under /projects/hour-logs; without it both entries light up at once.
+  'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
+  'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
@@ -417,7 +420,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
   layoutNode('projects.sprints', 'projects', 3),
-  layoutNode('projects.setup', 'projects', 4),
+  layoutNode('projects.hour-logs', 'projects', 4),
+  layoutNode('projects.hour-log-report', 'projects', 5),
+  layoutNode('projects.setup', 'projects', 6),
 
   layoutNode('manufacturing', null, 8),
 

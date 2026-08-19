@@ -4,6 +4,7 @@ import {
     IsBoolean,
     IsDateString,
     IsEnum,
+    IsIn,
     IsInt,
     IsNumber,
     IsOptional,
@@ -441,17 +442,77 @@ export class ListTimeEntriesDto {
     @IsOptional() @IsUUID()
     taskId?: string;
 
+    /**
+     * Whose hours to show. `me` is resolved against the caller in the
+     * controller so the client never has to know its own user id.
+     */
+    @IsOptional() @IsString()
+    userId?: string;
+
     @IsOptional() @IsDateString()
     from?: string;
 
     @IsOptional() @IsDateString()
     to?: string;
 
+    /** Matches the task title or the entry's note. */
+    @IsOptional() @IsString() @MaxLength(200)
+    search?: string;
+
+    /**
+     * A table column id. Unknown ones fall back to the work date rather than
+     * 400ing — the client sends whatever header was clicked, and a sort is
+     * never worth failing a page load over.
+     */
+    @IsOptional() @IsString()
+    sortBy?: string;
+
+    @IsOptional() @IsString()
+    sortDir?: string;
+
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;
 
     @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
     limit?: number;
+}
+
+/**
+ * The dimension an hour-log report collapses to. `week` and `month` are date
+ * buckets rather than columns — they are folded from `work_date` in the
+ * service, which keeps every grouping on the same indexed query.
+ */
+export enum TimeReportGroupByDto {
+    TASK = 'task',
+    DATE = 'date',
+    WEEK = 'week',
+    MONTH = 'month',
+    USER = 'user',
+    PROJECT = 'project',
+}
+
+export class TimeReportQueryDto {
+    @IsOptional() @IsEnum(TimeReportGroupByDto)
+    groupBy?: TimeReportGroupByDto;
+
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    @IsOptional() @IsUUID()
+    taskId?: string;
+
+    @IsOptional() @IsString()
+    userId?: string;
+
+    /** Same match as the list: the task title or the entry's note. */
+    @IsOptional() @IsString() @MaxLength(200)
+    search?: string;
+
+    @IsDateString()
+    from!: string;
+
+    @IsDateString()
+    to!: string;
 }
 
 export class CreateSprintDto {

@@ -17,7 +17,12 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ProjectTimeService } from './project-time.service';
-import { CreateTimeEntryDto, ListTimeEntriesDto, UpdateTimeEntryDto } from './project.dto';
+import {
+    CreateTimeEntryDto,
+    ListTimeEntriesDto,
+    TimeReportQueryDto,
+    UpdateTimeEntryDto,
+} from './project.dto';
 
 @Controller('project-time')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
@@ -28,7 +33,24 @@ export class ProjectTimeController {
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext, @Query() query: ListTimeEntriesDto) {
-        return this.time.list(tenant.tenantId, query);
+        return this.time.list(tenant.tenantId, resolveMe(query, tenant.userId));
+    }
+
+    /**
+     * Declared before any parameterised GET so `/project-time/report` is never
+     * read as an entry id.
+     */
+    @Get('report')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    report(@Tenant() tenant: TenantContext, @Query() query: TimeReportQueryDto) {
+        return this.time.report(tenant.tenantId, resolveMe(query, tenant.userId));
+    }
+
+    /** Options for the "person" filter — everyone with hours in the range. */
+    @Get('people')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    people(@Tenant() tenant: TenantContext, @Query() query: TimeReportQueryDto) {
+        return this.time.people(tenant.tenantId, query);
     }
 
     @Post()
@@ -52,4 +74,12 @@ export class ProjectTimeController {
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.time.remove(tenant.tenantId, tenant.userId, id);
     }
+}
+
+/**
+ * `userId=me` saves the client a round trip to learn its own id, and keeps the
+ * "my hours" filter working when the page is opened from a bookmark.
+ */
+function resolveMe<T extends { userId?: string }>(query: T, userId: string): T {
+    return query.userId === 'me' ? { ...query, userId } : query;
 }

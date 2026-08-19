@@ -178,6 +178,8 @@ export const routes = {
         tasks: '/projects/tasks',
         sprints: '/projects/sprints',
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
+        hourLogs: '/projects/hour-logs',
+        hourLogReport: '/projects/hour-logs/report',
         settings: '/projects/settings',
     },
 

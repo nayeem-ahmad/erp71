@@ -3945,7 +3945,45 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    updateProjectTimeEntry: (
+        id: string,
+        data: { workDate?: string; hours?: number; note?: string },
+    ) =>
+        fetchWithAuth(`/project-time/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     deleteProjectTimeEntry: (id: string) => fetchWithAuth(`/project-time/${id}`, { method: 'DELETE' }),
+
+    /**
+     * Hours in a date range collapsed to one dimension. `userId: 'me'` is
+     * resolved server-side, so the caller never has to know its own id.
+     */
+    getProjectTimeReport: (params: {
+        from: string;
+        to: string;
+        groupBy?: 'task' | 'date' | 'week' | 'month' | 'user' | 'project';
+        projectId?: string;
+        taskId?: string;
+        userId?: string;
+        search?: string;
+    }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/project-time/report?${query}`);
+    },
+
+    /** Options for the hour-log "person" filter — everyone with hours in the range. */
+    getProjectTimePeople: (params: { from: string; to: string; projectId?: string }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/project-time/people?${query}`);
+    },
 
     /** Omit projectId for every sprint in the tenant; pass one to filter by participation. */
     getSprints: (projectId?: string) =>
