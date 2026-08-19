@@ -1,9 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Field, StatusBadge, ConfirmDialog } from '@/components/ui';
+import {
+    PageShell,
+    PageHeader,
+    Button,
+    Input,
+    Select,
+    Field,
+    StatusBadge,
+    ConfirmDialog,
+} from '@/components/ui';
+import DataTable from '@/components/data-table/DataTable';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -37,6 +47,10 @@ export default function SprintsPage() {
 
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [status, setStatus] = useState('');
+    const [projectId, setProjectId] = useState('');
+    const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<Sprint | null>(null);
@@ -45,18 +59,40 @@ export default function SprintsPage() {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const list = await api.getSprints();
+            // The endpoint filters by participation, so the project filter is the
+            // one that has to go to the server.
+            const list = await api.getSprints(projectId || undefined);
             setSprints(Array.isArray(list) ? list : []);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [m.sprint.loadFailed]);
+    }, [m.sprint.loadFailed, projectId]);
 
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        api.getProjects({ limit: 100 })
+            .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
+            .catch(() => setProjects([]));
+    }, []);
+
+    // Name, goal and status come back with the list, so those two filters need no
+    // second round trip.
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return sprints.filter((sprint) => {
+            if (status && sprint.status !== status) return false;
+            if (!term) return true;
+            return (
+                sprint.name.toLowerCase().includes(term)
+                || (sprint.goal ?? '').toLowerCase().includes(term)
+            );
+        });
+    }, [sprints, search, status]);
 
     const create = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,23 +116,135 @@ export default function SprintsPage() {
         }
     };
 
-    const act = async (fn: () => Promise<unknown>, success: string) => {
-        try {
-            await fn();
-            toast.success(success);
-            await load();
-        } catch (error) {
-            // The one-active-per-tenant rule surfaces here as a 409; show the
-            // server's sentence rather than a generic failure.
-            toast.error(error instanceof Error ? error.message : m.sprint.saveFailed);
-        }
-    };
+    const act = useCallback(
+        async (fn: () => Promise<unknown>, success: string) => {
+            try {
+                await fn();
+                toast.success(success);
+                await load();
+            } catch (error) {
+                // The one-active-per-tenant rule surfaces here as a 409; show the
+                // server's sentence rather than a generic failure.
+                toast.error(error instanceof Error ? error.message : m.sprint.saveFailed);
+            }
+        },
+        [load, m.sprint.saveFailed],
+    );
 
     const confirmDelete = async () => {
         if (!pendingDelete) return;
         await act(() => api.deleteSprint(pendingDelete.id), m.sprint.deleted);
         setPendingDelete(null);
     };
+
+    const columns = useMemo(
+        () => [
+            {
+                id: 'name',
+                header: m.sprint.name,
+                accessorKey: 'name',
+                cell: ({ row }: { row: { original: Sprint } }) => (
+                    <div className="min-w-0">
+                        <Link
+                            href={routes.projects.sprintDetail(row.original.id)}
+                            className="font-medium text-blue-600 hover:underline"
+                        >
+                            {row.original.name}
+                        </Link>
+                        {row.original.goal ? (
+                            <span className="block truncate text-xs text-gray-500">{row.original.goal}</span>
+                        ) : null}
+                    </div>
+                ),
+            },
+            {
+                id: 'status',
+                header: m.fields.status,
+                accessorKey: 'status',
+                cell: ({ row }: { row: { original: Sprint } }) => (
+                    <StatusBadge tone={TONE[row.original.status] ?? 'neutral'}>
+                        {(m.sprint[row.original.status.toLowerCase() as keyof typeof m.sprint] as string)
+                            ?? row.original.status}
+                    </StatusBadge>
+                ),
+            },
+            {
+                id: 'dates',
+                header: m.sprint.dates,
+                // Sorts on the start date — the order a sprint list is read in.
+                accessorFn: (row: Sprint) => row.start_date,
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: Sprint } }) =>
+                    `${new Date(row.original.start_date).toLocaleDateString()} — ${new Date(
+                        row.original.end_date,
+                    ).toLocaleDateString()}`,
+            },
+            {
+                id: 'projects',
+                header: m.sprint.projects,
+                accessorFn: (row: Sprint) => row.projects.map((project) => project.code).join(', '),
+                meta: { hideOnMobile: true },
+                // A sprint spans whatever projects its tasks came from.
+                cell: ({ row }: { row: { original: Sprint } }) =>
+                    row.original.projects.length === 0
+                        ? m.sprint.noProjects
+                        : row.original.projects.map((project) => project.code).join(', '),
+            },
+            {
+                id: 'tasks',
+                header: m.fields.tasks,
+                accessorFn: (row: Sprint) => row._count?.tasks ?? 0,
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: Sprint } }) => row.original._count?.tasks ?? 0,
+            },
+            {
+                id: 'remaining',
+                header: m.overview.remaining,
+                accessorFn: (row: Sprint) => row.remaining_hours,
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: Sprint } }) => `${row.original.remaining_hours}h`,
+            },
+            {
+                id: 'actions',
+                header: m.fields.actions,
+                cell: ({ row }: { row: { original: Sprint } }) => (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        {row.original.status === 'PLANNED' && (
+                            <Button
+                                variant="secondary"
+                                className="min-h-touch"
+                                onClick={() => act(() => api.startSprint(row.original.id), m.sprint.started)}
+                            >
+                                {m.sprint.start}
+                            </Button>
+                        )}
+                        {row.original.status === 'ACTIVE' && (
+                            <Button
+                                variant="secondary"
+                                className="min-h-touch"
+                                onClick={() =>
+                                    act(() => api.completeSprint(row.original.id), m.sprint.completedMsg)
+                                }
+                            >
+                                {m.sprint.complete}
+                            </Button>
+                        )}
+                        <button
+                            type="button"
+                            aria-label={t.common.delete}
+                            title={m.sprint.deleteSprint}
+                            onClick={() => setPendingDelete(row.original)}
+                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
+                        >
+                            <Trash2 className="mx-auto h-4 w-4" />
+                        </button>
+                    </div>
+                ),
+            },
+        ],
+        // `act` closes over `load`, which changes with the project filter.
+        [m, t.common.delete, act],
+    );
 
     return (
         <PageShell>
@@ -117,107 +265,77 @@ export default function SprintsPage() {
                 }
             />
 
-            {loading ? (
-                <p className="text-sm text-gray-500">{t.common.loading}</p>
-            ) : sprints.length === 0 ? (
-                <p className="text-sm text-gray-500">{m.sprint.empty}</p>
-            ) : (
-                <div className="space-y-3">
-                    {sprints.map((sprint) => (
-                        <div key={sprint.id} className="rounded-md border border-gray-200 bg-white p-3">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <Link
-                                            href={routes.projects.sprintDetail(sprint.id)}
-                                            className="font-medium text-blue-600 hover:underline"
-                                        >
-                                            {sprint.name}
-                                        </Link>
-                                        <StatusBadge tone={TONE[sprint.status] ?? 'neutral'}>
-                                            {(m.sprint[sprint.status.toLowerCase() as keyof typeof m.sprint] as string)
-                                                ?? sprint.status}
-                                        </StatusBadge>
-                                    </div>
-                                    <p className="mt-0.5 text-xs text-gray-500">
-                                        {new Date(sprint.start_date).toLocaleDateString()} —{' '}
-                                        {new Date(sprint.end_date).toLocaleDateString()}
-                                        {sprint.goal ? ` · ${sprint.goal}` : ''}
-                                    </p>
-                                    {/* A sprint spans whatever projects its tasks came from. */}
-                                    <p className="mt-1 text-xs text-gray-600">
-                                        {sprint.projects.length === 0
-                                            ? m.sprint.noProjects
-                                            : sprint.projects.map((p) => p.code).join(', ')}
-                                    </p>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-gray-500">
-                                        {sprint._count?.tasks ?? 0} {m.fields.tasks} · {sprint.remaining_hours}h{' '}
-                                        {m.overview.remaining.toLowerCase()}
-                                    </span>
-                                    {sprint.status === 'PLANNED' && (
-                                        <Button
-                                            variant="secondary"
-                                            className="min-h-touch"
-                                            onClick={() => act(() => api.startSprint(sprint.id), m.sprint.started)}
-                                        >
-                                            {m.sprint.start}
-                                        </Button>
-                                    )}
-                                    {sprint.status === 'ACTIVE' && (
-                                        <Button
-                                            variant="secondary"
-                                            className="min-h-touch"
-                                            onClick={() => act(() => api.completeSprint(sprint.id), m.sprint.completedMsg)}
-                                        >
-                                            {m.sprint.complete}
-                                        </Button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => setPendingDelete(sprint)}
-                                        title={m.sprint.deleteSprint}
-                                        className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={m.sprint.searchPlaceholder}
+                    className="md:max-w-xs"
+                />
+                <Select value={status} onChange={(e) => setStatus(e.target.value)} className="md:w-44">
+                    <option value="">{m.sprint.anyStatus}</option>
+                    <option value="PLANNED">{m.sprint.planned}</option>
+                    <option value="ACTIVE">{m.sprint.active}</option>
+                    <option value="COMPLETED">{m.sprint.completed}</option>
+                </Select>
+                <Select
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="md:w-52"
+                >
+                    <option value="">{m.sprint.allProjects}</option>
+                    {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                            {project.code} · {project.name}
+                        </option>
                     ))}
-                </div>
-            )}
+                </Select>
+            </div>
+
+            {/* Empty stays a table: the columns, filters and toolbar are what tell a
+                first-time viewer what a sprint list holds. */}
+            <DataTable
+                title={m.sprint.sprints}
+                tableId="project-sprints"
+                columns={columns as never}
+                data={filtered}
+                isLoading={loading}
+                showSearch={false}
+                emptyMessage={search.trim() || status || projectId ? m.sprint.emptyFiltered : m.sprint.empty}
+            />
 
             {creating && (
             <ModalShell onBackdropClick={() => setCreating(false)}>
                 <ModalHeader title={m.sprint.newSprint} onClose={() => setCreating(false)} />
                 <form onSubmit={create}>
                     <div className="space-y-3 p-4">
-                        <Field label={m.sprint.name} required>
+                        <Field label={m.sprint.name} required htmlFor="sprint-name">
                             <Input
+                                id="sprint-name"
                                 value={form.name}
                                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                                 autoFocus
                             />
                         </Field>
-                        <Field label={m.sprint.goal}>
+                        <Field label={m.sprint.goal} htmlFor="sprint-goal">
                             <Input
+                                id="sprint-goal"
                                 value={form.goal}
                                 onChange={(e) => setForm((f) => ({ ...f, goal: e.target.value }))}
                             />
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                            <Field label={m.sprint.startDate} required>
+                            <Field label={m.sprint.startDate} required htmlFor="sprint-start">
                                 <Input
+                                    id="sprint-start"
                                     type="date"
                                     value={form.startDate}
                                     onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
                                 />
                             </Field>
-                            <Field label={m.sprint.endDate} required>
+                            <Field label={m.sprint.endDate} required htmlFor="sprint-end">
                                 <Input
+                                    id="sprint-end"
                                     type="date"
                                     value={form.endDate}
                                     onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
