@@ -1,7 +1,16 @@
 # HR Reports submenu — proposal
 
-**Status:** proposal, nothing implemented.
-**Asked as:** "For HR, propose some reports to go under an *HR Reports* submenu group."
+**Status:** the recommended first cut of eight is **built and merged**. Tier 3
+remains a proposal; the open questions below are tracked in `TODO.md`.
+**Asked as:** "For HR, propose some reports to go under an *HR Reports* submenu
+group", then "go for the recommended first cut of eight".
+
+**What shipped:** all five Tier-1 reports plus Attendance Summary, Leave Balance
+& Liability and Payroll Cost Summary, behind a flat `hr.reports` subgroup between
+Recruitment and HR Setup. Backend aggregates live in a new `hr-reports` module.
+Of the four open questions below, one was answered in the build — the money
+columns are gated **page-side** (the leave report drops them rather than 403ing)
+— and nav-level gating, export, and the Service Book's second home are all open.
 
 ---
 
