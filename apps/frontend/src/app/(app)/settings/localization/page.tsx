@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Globe, Loader2 } from 'lucide-react';
 
 import { api } from '@/lib/api';
-import { localeRegistry } from '@/lib/localization/config';
+import { localeRegistry, type SupportedLocaleCode } from '@/lib/localization/config';
 import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -12,7 +12,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
 import { Button, PageShell, Select } from '@/components/ui';
 
-type LocaleOption = 'en' | 'bn' | 'ms';
+type LocaleOption = SupportedLocaleCode;
 
 export default function LocalizationSettingsPage() {
     const { locale, setLocale, t } = useI18n();

@@ -10,9 +10,10 @@ import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { ENABLED_LOCALE_CODES, type SupportedLocaleCode } from '@erp71/shared-types';
 
-const LOCALES = ['en', 'bn', 'ms'] as const;
-type Locale = (typeof LOCALES)[number];
+const LOCALES = ENABLED_LOCALE_CODES;
+type Locale = SupportedLocaleCode;
 
 type Translation = {
     locale: string;
