@@ -293,6 +293,8 @@ export const coreMessages = {
             projectsBoards: "Papan",
             projectsTasks: "Tugasan",
             projectsSprints: "Sprint",
+            projectsHourLogs: "Log Jam",
+            projectsHourLogReport: "Laporan Log Jam",
             projectsSetup: "Tetapan Projek",
             crmCampaigns: "Kempen",
             crmLeads: "Prospek",

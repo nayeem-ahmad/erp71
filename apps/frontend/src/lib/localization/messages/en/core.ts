@@ -293,6 +293,8 @@ export const coreMessages = {
             projectsBoards: 'Boards',
             projectsTasks: 'Tasks',
             projectsSprints: 'Sprints',
+            projectsHourLogs: 'Hour Logs',
+            projectsHourLogReport: 'Hour Log Report',
             projectsSetup: 'Project Setup',
             crmCampaigns: 'Campaigns',
             crmLeads: 'Leads',

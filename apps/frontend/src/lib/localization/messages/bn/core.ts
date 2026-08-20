@@ -293,6 +293,8 @@ export const coreMessages = {
                 projectsBoards: "বোর্ড",
                 projectsTasks: "কাজ",
                 projectsSprints: "স্প্রিন্ট",
+                projectsHourLogs: "ঘণ্টা লগ",
+                projectsHourLogReport: "ঘণ্টা লগ রিপোর্ট",
                 projectsSetup: "প্রকল্প সেটআপ",
                 crmCampaigns: "ক্যাম্পেইন",
                 crmLeads: "লিড",
