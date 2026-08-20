@@ -5,14 +5,19 @@ import {
     ArrowLeftRight,
     BadgeCheck,
     Banknote,
+    BarChart3,
+    BookOpen,
     Briefcase,
     CalendarDays,
     CalendarOff,
     ClipboardList,
     Clock,
+    Landmark,
     Layers,
+    ScrollText,
     UserSearch,
     Users,
+    Wallet,
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import HrDashboard from '@/components/dashboard/HrDashboard';
@@ -52,6 +57,19 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
         ],
     },
     {
+        sectionKey: 'reports',
+        links: [
+            { href: routes.hr.reports.attendance, key: 'attendanceReport', icon: BarChart3, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.leaveBalance, key: 'leaveBalanceReport', icon: CalendarOff, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.payrollCost, key: 'payrollCostReport', icon: Banknote, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.wagesRegister, key: 'wagesRegister', icon: ScrollText, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.employeeRegister, key: 'employeeRegister', icon: Users, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.taxDeduction, key: 'taxDeduction', icon: Landmark, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.providentFund, key: 'providentFund', icon: Wallet, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.reports.serviceBook, key: 'serviceBook', icon: BookOpen, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+        ],
+    },
+    {
         sectionKey: 'setup',
         links: [
             { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-primary-light text-blue-700 border-primary-border' },
@@ -75,6 +93,7 @@ export default function HrHubPage() {
         attendanceLeave: hub.attendanceLeave,
         payroll: hub.payroll,
         recruitment: hub.recruitment,
+        reports: hub.reports,
         setup: hub.setup,
     }), [hub]);
 

@@ -4021,4 +4021,66 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteSprint: (id: string) => fetchWithAuth(`/sprints/${id}`, { method: 'DELETE' }),
+    // ── HR reports ────────────────────────────────────────────────────────────
+    // The three management reports plus the five statutory registers. The
+    // registers were built in HRIS Phase 13 and had no caller until now.
+
+    /** Attendance rolled up over a month range. `groupBy` collapses to one dimension. */
+    getHrAttendanceSummary: (params: {
+        fromYear: number;
+        fromMonth: number;
+        toYear: number;
+        toMonth: number;
+        groupBy?: 'employee' | 'department' | 'designation' | 'month';
+        departmentId?: string;
+        employeeId?: string;
+    }) => fetchWithAuth(`/hr-reports/attendance-summary?${hrReportQuery(params)}`),
+
+    /** Leave balances for one year; money columns come back null without VIEW_PAYROLL. */
+    getHrLeaveBalanceReport: (params: {
+        year: number;
+        departmentId?: string;
+        leaveTypeId?: string;
+        employeeId?: string;
+    }) => fetchWithAuth(`/hr-reports/leave-balance?${hrReportQuery(params)}`),
+
+    /** Settled payroll cost over a month range. */
+    getHrPayrollCost: (params: {
+        fromYear: number;
+        fromMonth: number;
+        toYear: number;
+        toMonth: number;
+        groupBy?: 'employee' | 'department' | 'designation' | 'month';
+        departmentId?: string;
+        employeeId?: string;
+    }) => fetchWithAuth(`/hr-reports/payroll-cost?${hrReportQuery(params)}`),
+
+    getWagesRegister: (params: { year: number; month: number }) =>
+        fetchWithAuth(`/payroll/statutory/wages-register?${hrReportQuery(params)}`),
+
+    getEmployeeRegister: () => fetchWithAuth('/payroll/statutory/employee-register'),
+
+    /** `startYear` is the July the Bangladeshi income year opens in — 2026 means 2026-27. */
+    getTaxDeductionStatement: (params: { startYear: number; employeeId?: string }) =>
+        fetchWithAuth(`/payroll/statutory/tax-deduction?${hrReportQuery(params)}`),
+
+    getProvidentFundRegister: (params: { startYear: number }) =>
+        fetchWithAuth(`/payroll/statutory/provident-fund?${hrReportQuery(params)}`),
+
+    getServiceBook: (employeeId: string) =>
+        fetchWithAuth(`/payroll/statutory/service-book/${employeeId}`),
 };
+
+/**
+ * Query-string builder for the HR report endpoints.
+ *
+ * Drops empty values rather than sending `departmentId=`, which the backend
+ * DTOs would reject as a malformed uuid instead of reading as "no filter".
+ */
+function hrReportQuery(params: Record<string, unknown>): string {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+    }
+    return query.toString();
+}

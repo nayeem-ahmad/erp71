@@ -49,7 +49,7 @@ describe('nav-resolver', () => {
         ]);
     });
 
-    it('groups HR under four subgroups, with only Overview and Employees at the top', () => {
+    it('groups HR under five subgroups, with only Overview and Employees at the top', () => {
         const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
             .find((mod) => mod.key === 'hr');
 
@@ -61,6 +61,7 @@ describe('nav-resolver', () => {
             'Attendance & Leave',
             'Payroll',
             'Recruitment',
+            'HR Reports',
             'HR Setup',
         ]);
 
@@ -83,6 +84,42 @@ describe('nav-resolver', () => {
             '/hr/employees/designations',
             '/hr/schedules',
         ]);
+    });
+
+    it('puts HR Reports above HR Setup with every report reachable', () => {
+        const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'hr');
+        const group = (hr?.children ?? [])
+            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === 'HR Reports');
+
+        expect(group && 'children' in group ? group.children.map((link) => link.href) : []).toEqual([
+            '/hr/reports/attendance',
+            '/hr/reports/leave-balance',
+            '/hr/reports/payroll-cost',
+            '/hr/reports/wages-register',
+            '/hr/reports/employee-register',
+            '/hr/reports/tax-deduction',
+            '/hr/reports/provident-fund',
+            '/hr/reports/service-book',
+        ]);
+
+        // Every label resolved rather than falling through to its raw key — a
+        // missing sidebar.items.* would show as "sidebar.items.hrWagesRegister".
+        const labels = group && 'children' in group ? group.children.map((link) => link.label) : [];
+        expect(labels.some((label) => label.includes('.'))).toBe(false);
+        expect(labels).toContain('Wages Register');
+    });
+
+    it('does not gate HR Reports behind the Advanced toggle', () => {
+        const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'hr');
+        const group = (hr?.children ?? [])
+            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === 'HR Reports');
+
+        // Sales reports are advancedOnly; these are not. The wages and employee
+        // registers are what a labour inspection asks for, so hiding them by
+        // default would put compliance behind a power-user switch.
+        expect(group && 'advancedOnly' in group ? group.advancedOnly : undefined).toBeFalsy();
     });
 
     it('marks the attendance records link exact so the punches page does not highlight both', () => {
