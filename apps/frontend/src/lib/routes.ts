@@ -198,6 +198,16 @@ export const routes = {
         jobPostDetail: (id: string) => `/hr/recruitment/job-posts/${id}` as const,
         applicants: '/hr/recruitment/applicants',
         applications: '/hr/recruitment/applications',
+        reports: {
+            attendance: '/hr/reports/attendance',
+            leaveBalance: '/hr/reports/leave-balance',
+            payrollCost: '/hr/reports/payroll-cost',
+            wagesRegister: '/hr/reports/wages-register',
+            employeeRegister: '/hr/reports/employee-register',
+            taxDeduction: '/hr/reports/tax-deduction',
+            providentFund: '/hr/reports/provident-fund',
+            serviceBook: '/hr/reports/service-book',
+        },
     },
 
     /**

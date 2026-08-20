@@ -83,6 +83,14 @@ const APP_PAGES: AppPage[] = [
     // HR
     { path: '/hr/attendance', label: 'Attendance', description: 'staff attendance and workforce figures', modules: ['hr'] },
     { path: '/hr/attendance/punches', label: 'In/Out Records', description: 'individual clock-in and clock-out times behind the daily attendance', modules: ['hr'] },
+    { path: '/hr/reports/attendance', label: 'Attendance Summary', description: 'present, absent, late and overtime rolled up by person, department or month', modules: ['hr'] },
+    { path: '/hr/reports/leave-balance', label: 'Leave Balance & Liability', description: 'leave days entitled, used and remaining, and what the unused encashable days are worth', modules: ['hr'] },
+    { path: '/hr/reports/payroll-cost', label: 'Payroll Cost Summary', description: 'what settled payroll cost, by department, designation or month', modules: ['hr'] },
+    { path: '/hr/reports/wages-register', label: 'Wages Register', description: 'the monthly salary sheet: every employee, gross, deductions and net', modules: ['hr'] },
+    { path: '/hr/reports/employee-register', label: 'Employee Register', description: 'the full staff roster including leavers, with joining dates and exit reasons', modules: ['hr'] },
+    { path: '/hr/reports/tax-deduction', label: 'Tax Deduction Statement', description: 'income tax withheld per employee across the July-June income year', modules: ['hr'] },
+    { path: '/hr/reports/provident-fund', label: 'Provident Fund Register', description: 'employee provident fund contributions across the income year', modules: ['hr'] },
+    { path: '/hr/reports/service-book', label: 'Service Book', description: 'one employee\'s record: joining, salary revisions, leave taken and exit', modules: ['hr'] },
 ];
 
 /** The pages this tenant's plan actually has, given its resolved modules. */
