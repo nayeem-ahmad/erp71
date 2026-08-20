@@ -238,8 +238,7 @@ export const inventoryExtrasMessages = {
         "copiesPerLabel": "Copias por etiqueta",
         "printSelected": "Imprimir selección ({count})",
         "previewEmpty": "Seleccione productos a la izquierda para previsualizar las etiquetas",
-        "previewTitle": "Vista previa — {count} etiqueta",
-        "previewTitlePlural": "Vista previa — {count} etiquetas",
+        previewTitle: "{count, plural, one {Vista previa — # etiqueta} other {Vista previa — # etiquetas}}",
         "upload": "Subir",
         "print": "Imprimir"
     },

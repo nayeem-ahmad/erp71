@@ -40,7 +40,7 @@ function defaultTo() {
 }
 
 export default function MonthlySalesPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const [data, setData] = useState<MonthlyData | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
@@ -136,9 +136,7 @@ export default function MonthlySalesPage() {
                                                     <div>
                                                         <div className="font-bold text-gray-900">{formatBDT(m.revenue, { locale })}</div>
                                                         <div className="text-xs text-gray-400">
-                                                            {m.orderCount === 1
-                                                                ? formatMessage(t.shared.orderCount, { count: m.orderCount })
-                                                                : formatMessage(t.shared.orderCountPlural, { count: m.orderCount })}
+                                                            {fmt(t.shared.orderCount, { count: m.orderCount })}
                                                         </div>
                                                     </div>
                                                 ) : (

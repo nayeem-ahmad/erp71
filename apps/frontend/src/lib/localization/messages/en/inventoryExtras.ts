@@ -238,8 +238,7 @@ export const inventoryExtrasMessages = {
         "copiesPerLabel": "Copies per label",
         "printSelected": "Print Selected ({count})",
         "previewEmpty": "Select products on the left to preview labels",
-        "previewTitle": "Preview — {count} label",
-        "previewTitlePlural": "Preview — {count} labels",
+        previewTitle: "{count, plural, one {Preview — # label} other {Preview — # labels}}",
         "upload": "Upload",
         "print": "Print"
     },

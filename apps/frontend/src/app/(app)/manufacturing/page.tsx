@@ -280,7 +280,7 @@ export default function ManufacturingPage() {
 // ------------------------------------------------------------------ //
 
 function BomTab() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const [boms, setBoms] = useState<BomRecipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -402,10 +402,7 @@ function BomTab() {
         }));
     }
 
-    const recipeCountLabel = formatMessage(
-        boms.length === 1 ? t.manufacturing.recipeCount : t.manufacturing.recipeCountPlural,
-        { count: boms.length },
-    );
+    const recipeCountLabel = fmt(t.manufacturing.recipeCount, { count: boms.length });
 
     return (
         <>
@@ -604,7 +601,7 @@ function BomTab() {
 // ------------------------------------------------------------------ //
 
 function JobsTab() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const [jobs, setJobs] = useState<ProductionJob[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -905,10 +902,7 @@ function JobsTab() {
         { label: t.manufacturing.jobStatuses.completed, value: 'COMPLETED' },
     ];
 
-    const jobCountLabel = formatMessage(
-        total === 1 ? t.manufacturing.jobCount : t.manufacturing.jobCountPlural,
-        { count: total },
-    );
+    const jobCountLabel = fmt(t.manufacturing.jobCount, { count: total });
 
     function getJobStatusLabel(status: string): string {
         const key = JOB_STATUS_LABEL_KEYS[status];

@@ -266,8 +266,7 @@ export const storefrontMessages = {
             sortBy: "Trier par",
             noProducts: "Aucun produit trouvé",
             noFilteredProducts: "Aucun produit ne correspond à vos filtres actuels.",
-            showingProducts: "{count} produit affiché",
-            showingProductsPlural: "{count} produits affichés",
+            showingProducts: "{count, plural, one {# produit affiché} other {# produits affichés}}",
             sort: {
                 newest: "Les plus récents",
                 priceAsc: "Prix : croissant",

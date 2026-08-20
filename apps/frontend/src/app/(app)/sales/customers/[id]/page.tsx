@@ -26,7 +26,7 @@ const typeIcons: Record<string, string> = {
 };
 
 export default function CustomerProfile() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const { id } = useParams();
     const [customer, setCustomer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -196,7 +196,7 @@ export default function CustomerProfile() {
                         <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.profile.lifetimeValue}</p>
                         <p className="text-4xl font-bold text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
                         {history && (
-                            <p className="text-xs text-gray-400 font-bold mt-1">{formatMessage(history.total !== 1 ? t.customers.profile.transactionsPlural : t.customers.profile.transactions, { count: history.total })}</p>
+                            <p className="text-xs text-gray-400 font-bold mt-1">{fmt(t.customers.profile.transactions, { count: history.total })}</p>
                         )}
                     </div>
                     {Number(customer.due_balance) > 0 && (

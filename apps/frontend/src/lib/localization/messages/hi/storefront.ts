@@ -266,8 +266,7 @@ export const storefrontMessages = {
             sortBy: "क्रमबद्ध करें",
             noProducts: "कोई उत्पाद नहीं मिला",
             noFilteredProducts: "आपके मौजूदा फ़िल्टर से कोई उत्पाद मेल नहीं खाता।",
-            showingProducts: "{count} उत्पाद दिखाया जा रहा है",
-            showingProductsPlural: "{count} उत्पाद दिखाए जा रहे हैं",
+            showingProducts: "{count, plural, one {# उत्पाद दिखाया जा रहा है} other {# उत्पाद दिखाए जा रहे हैं}}",
             sort: {
                 newest: "नवीनतम",
                 priceAsc: "मूल्य: कम से अधिक",

@@ -48,7 +48,7 @@ const PRINT_CSS = `
 `;
 
 export default function PrintLabelsPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const { businessName } = useBranding();
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
@@ -255,9 +255,7 @@ export default function PrintLabelsPage() {
                     <>
                         <div className="flex items-center justify-between mb-4 print:hidden">
                             <h2 className="text-sm font-semibold text-gray-600">
-                                {labelsToRender.length === 1
-                                    ? t.inventoryLabels.previewTitle.replace('{count}', String(labelsToRender.length))
-                                    : t.inventoryLabels.previewTitlePlural.replace('{count}', String(labelsToRender.length))}
+                                {fmt(t.inventoryLabels.previewTitle, { count: labelsToRender.length })}
                             </h2>
                             <button
                                 onClick={handlePrint}

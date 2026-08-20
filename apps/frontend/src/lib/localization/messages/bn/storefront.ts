@@ -266,8 +266,7 @@ export const storefrontMessages = {
                 sortBy: "সাজান",
                 noProducts: "কোনো পণ্য পাওয়া যায়নি",
                 noFilteredProducts: "বর্তমান ফিল্টারে কোনো পণ্য মেলেনি।",
-                showingProducts: "{count}টি পণ্য দেখানো হচ্ছে",
-                showingProductsPlural: "{count}টি পণ্য দেখানো হচ্ছে",
+                showingProducts: "{count, plural, one {#টি পণ্য দেখানো হচ্ছে} other {#টি পণ্য দেখানো হচ্ছে}}",
                 sort: {
                     newest: "নতুন",
                     priceAsc: "মূল্য: কম থেকে বেশি",

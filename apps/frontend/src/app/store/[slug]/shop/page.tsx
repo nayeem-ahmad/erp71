@@ -63,7 +63,7 @@ function formatOptionalPrice(value: string | number | null | undefined) {
 }
 
 export default function StorefrontShopPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.storefront.public;
     const shop = m.shop;
     const footer = m.footer;
@@ -532,7 +532,7 @@ export default function StorefrontShopPage() {
                                 <p className="text-sm text-gray-500">
                                     {visibleProducts.length === 1
                                         ? formatMessage(shop.showingProducts, { count: visibleProducts.length })
-                                        : formatMessage(shop.showingProductsPlural, { count: visibleProducts.length })}
+                                        : fmt(shop.showingProducts, { count: visibleProducts.length })}
                                 </p>
 
                                 <div className="flex flex-col sm:flex-row gap-3 sm:items-center">

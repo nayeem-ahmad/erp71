@@ -40,12 +40,8 @@ interface Product {
 
 const columnHelper = createColumnHelper<Product>();
 
-function pluralize(count: number, singular: string, plural: string) {
-    return count === 1 ? singular : plural;
-}
-
 export default function InventoryPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -168,26 +164,11 @@ export default function InventoryPage() {
                 body: formData,
             });
 
-            const productWord = pluralize(
-                result.created,
-                t.inventory.importProductSingular,
-                t.inventory.importProductPlural,
-            );
-            const imported = t.inventory.importSummaryImported
-                .replace('{count}', String(result.created))
-                .replace('{unit}', productWord);
-            const skipped = t.inventory.importSummarySkipped.replace('{count}', String(result.skipped));
-            let errorPart = '';
-            if (result.errors?.length) {
-                const errorWord = pluralize(
-                    result.errors.length,
-                    t.inventory.importErrorSingular,
-                    t.inventory.importErrorPlural,
-                );
-                errorPart = ` ${t.inventory.importSummaryErrors
-                    .replace('{count}', String(result.errors.length))
-                    .replace('{unit}', errorWord)}`;
-            }
+            const imported = fmt(t.inventory.importSummaryImported, { count: result.created });
+            const skipped = fmt(t.inventory.importSummarySkipped, { count: result.skipped });
+            const errorPart = result.errors?.length
+                ? ` ${fmt(t.inventory.importSummaryErrors, { count: result.errors.length })}`
+                : '';
             setImportStatus(`${imported}, ${skipped}${errorPart}.`);
             await loadProducts();
         } catch (error: any) {

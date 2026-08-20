@@ -9,6 +9,12 @@
  * `enabled: false` keeps a locale in the type system while hiding it from every
  * user-facing list, which is how a language ships incrementally: register it,
  * translate its catalog, then flip the flag.
+ *
+ * `dir` is consumed by `<html dir>` (server render) and by
+ * `persistLocalePreference` (client switch), so a locale registered `rtl` gets
+ * the mirrored layout for free — provided the UI uses logical Tailwind
+ * utilities (`ms-`/`me-`/`ps-`/`pe-`/`start-`/`end-`/`text-start`/`text-end`)
+ * rather than physical ones. See `docs/rtl-guidelines.md`.
  */
 
 export const localeRegistry = {
@@ -82,6 +88,32 @@ export const localeRegistry = {
         dir: 'ltr',
         numberLocale: 'es-ES',
         dateLocale: 'es-ES',
+        enabled: true,
+    },
+    ur: {
+        code: 'ur',
+        label: 'Urdu',
+        nativeLabel: 'اردو',
+        htmlLang: 'ur',
+        dir: 'rtl',
+        // ur-PK, not ur-IN: Pakistan uses Latin digits and the Gregorian
+        // calendar by default, which is what an accounting table needs.
+        numberLocale: 'ur-PK',
+        dateLocale: 'ur-PK',
+        enabled: true,
+    },
+    ar: {
+        code: 'ar',
+        label: 'Arabic',
+        nativeLabel: 'العربية',
+        htmlLang: 'ar',
+        dir: 'rtl',
+        // The `-u-nu-latn` extension pins Latin digits. Without it `ar` renders
+        // Eastern Arabic numerals (١٢٣), which are correct Arabic but make a
+        // ledger unreadable next to the Latin-digit amounts the API returns and
+        // break any copy-paste into a spreadsheet.
+        numberLocale: 'ar-EG-u-nu-latn',
+        dateLocale: 'ar-EG-u-nu-latn',
         enabled: true,
     },
 } as const;

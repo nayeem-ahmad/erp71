@@ -238,8 +238,7 @@ export const inventoryExtrasMessages = {
         "copiesPerLabel": "प्रति लेबल प्रतियाँ",
         "printSelected": "चयनित प्रिंट करें ({count})",
         "previewEmpty": "लेबल पूर्वावलोकन के लिए बाईं ओर उत्पाद चुनें",
-        "previewTitle": "पूर्वावलोकन — {count} लेबल",
-        "previewTitlePlural": "पूर्वावलोकन — {count} लेबल",
+        previewTitle: "{count, plural, one {पूर्वावलोकन — # लेबल} other {पूर्वावलोकन — # लेबल}}",
         "upload": "अपलोड करें",
         "print": "प्रिंट"
     },
