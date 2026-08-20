@@ -84,13 +84,13 @@ export default function StorefrontHeader({
                                     <span className="hidden sm:block">{session.customer.name.split(' ')[0]}</span>
                                 </button>
                                 {accountMenuOpen ? (
-                                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                                    <div className="absolute end-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                                         <p className="px-4 py-2 text-xs text-gray-400 truncate">{session.customer.email}</p>
                                         <hr className="border-gray-100" />
                                         <button
                                             type="button"
                                             onClick={onSignOut}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                            className="w-full text-start px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                         >
                                             {m.signOut}
                                         </button>
@@ -115,7 +115,7 @@ export default function StorefrontHeader({
                         >
                             <ShoppingCart className="w-6 h-6" />
                             {cartCount > 0 ? (
-                                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                                <span className="absolute -top-1 -end-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-bold text-white bg-blue-600 rounded-full">
                                     {cartCount}
                                 </span>
                             ) : null}

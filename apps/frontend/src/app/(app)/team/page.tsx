@@ -278,7 +278,7 @@ function RolesPanel({
 
             {loading ? (
                 <div className="rounded-lg border border-gray-200 bg-white p-8 flex items-center justify-center text-sm text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t.teamManagement.loading}
+                    <Loader2 className="w-4 h-4 animate-spin me-2" /> {t.teamManagement.loading}
                 </div>
             ) : roles.length === 0 ? (
                 <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">{tr.noRoles}</div>
@@ -820,7 +820,7 @@ export default function TeamPage() {
                                 </div>
                                 {loading ? (
                                     <div className="p-8 flex items-center justify-center text-sm text-gray-400">
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" /> {tm.loading}
+                                        <Loader2 className="w-4 h-4 animate-spin me-2" /> {tm.loading}
                                     </div>
                                 ) : members.length === 0 ? (
                                     <div className="p-8 text-center text-sm text-gray-400">{tm.noMembers}</div>
@@ -830,7 +830,7 @@ export default function TeamPage() {
                                             <button
                                                 key={m.userId}
                                                 onClick={() => setSelected(m.userId)}
-                                                className={`w-full px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-gray-50 transition ${selected === m.userId ? 'bg-blue-50/60' : ''}`}
+                                                className={`w-full px-5 py-3.5 flex items-center justify-between gap-3 text-start hover:bg-gray-50 transition ${selected === m.userId ? 'bg-blue-50/60' : ''}`}
                                             >
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-bold text-gray-900 truncate">{m.name || m.email}</p>

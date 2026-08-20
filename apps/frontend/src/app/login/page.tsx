@@ -183,7 +183,7 @@ function LoginPageContent() {
                     <form onSubmit={handleTwoFactor} className="space-y-6">
                         <p className="text-sm text-gray-600 text-center">Enter the 6-digit code from your authenticator app.</p>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">Authentication code</label>
+                            <label className="text-sm font-medium text-gray-700 ms-1">Authentication code</label>
                             <input
                                 type="text"
                                 inputMode="numeric"
@@ -210,39 +210,39 @@ function LoginPageContent() {
                     ) : (
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
-                            <label htmlFor="login-email" className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.emailLabel}</label>
+                            <label htmlFor="login-email" className="text-sm font-medium text-gray-700 ms-1">{t.auth.login.emailLabel}</label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
                                     id="login-email"
                                     type="email"
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                                     placeholder="name@company.com"
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor="login-password" className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.passwordLabel}</label>
+                            <label htmlFor="login-password" className="text-sm font-medium text-gray-700 ms-1">{t.auth.login.passwordLabel}</label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
                                     id="login-password"
                                     type="password"
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                                     placeholder="••••••••"
                                 />
                             </div>
                         </div>
 
                         <div className="flex items-center justify-between text-sm">
-                            <label className="flex items-center space-x-2 cursor-pointer group">
+                            <label className="flex items-center space-x-2 rtl:space-x-reverse cursor-pointer group">
                                 <input
                                     type="checkbox"
                                     checked={rememberMe}
@@ -257,14 +257,14 @@ function LoginPageContent() {
                         <button
                             type="submit"
                             disabled={isLoading || isDemoLoading || isGoogleLoading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group"
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group"
                         >
                             {isLoading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 <>
                                     <span>{t.auth.login.submit}</span>
-                                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" />
                                 </>
                             )}
                         </button>
@@ -308,7 +308,7 @@ function LoginPageContent() {
                         type="button"
                         onClick={handleDemoLogin}
                         disabled={isLoading || isDemoLoading || isGoogleLoading}
-                        className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isDemoLoading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />

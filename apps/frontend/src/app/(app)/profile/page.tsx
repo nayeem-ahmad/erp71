@@ -76,7 +76,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting}
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 text-left hover:border-blue-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 text-start hover:border-blue-300 transition-colors disabled:opacity-60"
                 >
                     <p className="text-sm font-bold text-gray-900">{t.settings.privacy.downloadData}</p>
                     <p className="mt-1 text-xs text-gray-500">{t.settings.privacy.downloadDesc}</p>
@@ -85,7 +85,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleDeletionRequest}
                     disabled={requestingDeletion}
-                    className="rounded-lg border border-red-200 bg-danger-light px-5 py-4 text-left hover:border-red-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-red-200 bg-danger-light px-5 py-4 text-start hover:border-red-300 transition-colors disabled:opacity-60"
                 >
                     <p className="text-sm font-bold text-danger-text">{t.settings.privacy.requestDeletion}</p>
                     <p className="mt-1 text-xs text-danger-text">{t.settings.privacy.deletionDesc}</p>
@@ -124,12 +124,12 @@ const PasswordInput = ({
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 pe-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
             />
             <button
                 type="button"
                 onClick={onToggle}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 tabIndex={-1}
             >
                 {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -416,13 +416,13 @@ function TwoFATab({
                     <button
                         onClick={handleGenerateQR}
                         disabled={loadingSetup}
-                        className="inline-flex items-center gap-2 ml-8 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        className="inline-flex items-center gap-2 ms-8 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                         {loadingSetup && <Loader2 className="w-4 h-4 animate-spin" />}
                         {loadingSetup ? t.settings.twoFactor.generating : t.settings.twoFactor.generateQr}
                     </button>
                 ) : (
-                    <div className="ml-8 space-y-4">
+                    <div className="ms-8 space-y-4">
                         {/* QR Code image */}
                         <div className="inline-block rounded-xl border-2 border-gray-200 p-3 bg-white">
                             {/* qrCodeDataUrl is a data URI from the backend */}
@@ -465,7 +465,7 @@ function TwoFATab({
                         <span className="text-sm font-semibold text-gray-700">{t.settings.twoFactor.step2}</span>
                     </div>
 
-                    <form onSubmit={handleEnable} className="ml-8 space-y-4">
+                    <form onSubmit={handleEnable} className="ms-8 space-y-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                                 {t.settings.twoFactor.codeLabel}
@@ -680,7 +680,7 @@ export default function ProfilePage() {
                             >
                                 {label}
                                 {activeTab === key && (
-                                    <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-blue-600" />
+                                    <span className="absolute bottom-0 start-0 end-0 h-0.5 rounded-t-full bg-blue-600" />
                                 )}
                             </button>
                         ))}

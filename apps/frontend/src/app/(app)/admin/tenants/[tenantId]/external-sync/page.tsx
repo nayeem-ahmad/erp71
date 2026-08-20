@@ -505,15 +505,15 @@ export default function TenantExternalSyncPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                             <thead>
-                                <tr className="text-left text-gray-500 border-b border-gray-100">
-                                    <th className="py-2 pr-3 font-medium">Started</th>
-                                    <th className="py-2 pr-3 font-medium">Status</th>
-                                    <th className="py-2 pr-3 font-medium">Window</th>
-                                    <th className="py-2 pr-3 font-medium">Sales</th>
-                                    <th className="py-2 pr-3 font-medium">Purchases</th>
-                                    <th className="py-2 pr-3 font-medium">Returns</th>
-                                    <th className="py-2 pr-3 font-medium">Payments</th>
-                                    <th className="py-2 pr-3 font-medium">Masters</th>
+                                <tr className="text-start text-gray-500 border-b border-gray-100">
+                                    <th className="py-2 pe-3 font-medium">Started</th>
+                                    <th className="py-2 pe-3 font-medium">Status</th>
+                                    <th className="py-2 pe-3 font-medium">Window</th>
+                                    <th className="py-2 pe-3 font-medium">Sales</th>
+                                    <th className="py-2 pe-3 font-medium">Purchases</th>
+                                    <th className="py-2 pe-3 font-medium">Returns</th>
+                                    <th className="py-2 pe-3 font-medium">Payments</th>
+                                    <th className="py-2 pe-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
                                 </tr>
                             </thead>
@@ -551,21 +551,21 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
     return (
         <>
             <tr className="border-b border-gray-50">
-                <td className="py-2 pr-3 whitespace-nowrap">
+                <td className="py-2 pe-3 whitespace-nowrap">
                     {formatDate(run.started_at)}
-                    {run.dry_run ? <span className="ml-1 text-gray-400">(dry run)</span> : null}
+                    {run.dry_run ? <span className="ms-1 text-gray-400">(dry run)</span> : null}
                 </td>
-                <td className="py-2 pr-3">
+                <td className="py-2 pe-3">
                     <StatusBadge tone={toneForStatus(run.status)}>{run.status}</StatusBadge>
                 </td>
-                <td className="py-2 pr-3 whitespace-nowrap text-gray-500">
+                <td className="py-2 pe-3 whitespace-nowrap text-gray-500">
                     {run.window_from.slice(0, 10)} → {run.window_to.slice(0, 10)}
                 </td>
-                <td className="py-2 pr-3">{formatTally(run, 'sales')}</td>
-                <td className="py-2 pr-3">{formatTally(run, 'purchases')}</td>
-                <td className="py-2 pr-3">{formatTally(run, 'saleReturns')}</td>
-                <td className="py-2 pr-3 text-gray-500">{formatPaymentTally(run)}</td>
-                <td className="py-2 pr-3 text-gray-500">
+                <td className="py-2 pe-3">{formatTally(run, 'sales')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'purchases')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'saleReturns')}</td>
+                <td className="py-2 pe-3 text-gray-500">{formatPaymentTally(run)}</td>
+                <td className="py-2 pe-3 text-gray-500">
                     {run.stats
                         ? `${run.stats.products.created + run.stats.products.updated}p / ${
                               run.stats.customers.created + run.stats.customers.updated

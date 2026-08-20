@@ -164,7 +164,7 @@ export default function PriceListsPage() {
                                 onClick={() => setImportOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import
                             </button>
                             <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors">

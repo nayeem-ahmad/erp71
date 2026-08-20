@@ -284,7 +284,7 @@ export default function PurchaseDashboard({
                                         <span className="min-w-0 truncate font-semibold text-gray-900">
                                             {row.supplier_name ?? pur.recentNoSupplier}
                                         </span>
-                                        <span className="ml-auto shrink-0 font-bold tabular-nums text-gray-900">
+                                        <span className="ms-auto shrink-0 font-bold tabular-nums text-gray-900">
                                             {money(row.total)}
                                         </span>
                                     </li>

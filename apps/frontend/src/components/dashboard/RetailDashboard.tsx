@@ -486,13 +486,13 @@ function initialsOf(name: string): string {
 
 function ActivityItem({ title, description, time }: { title: string; description: string; time: string }) {
     return (
-        <div className="flex items-start space-x-3 border-b border-gray-50 py-2 last:border-0">
+        <div className="flex items-start space-x-3 rtl:space-x-reverse border-b border-gray-50 py-2 last:border-0">
             <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-400" />
             <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold tracking-tight text-gray-900">{title}</p>
                 <p className="mt-0.5 text-[11px] text-gray-500">{description}</p>
             </div>
-            <div className="flex items-center space-x-1 self-center whitespace-nowrap text-[10px] font-medium text-gray-400">
+            <div className="flex items-center space-x-1 rtl:space-x-reverse self-center whitespace-nowrap text-[10px] font-medium text-gray-400">
                 <Clock className="h-3 w-3" />
                 <span>{time}</span>
             </div>

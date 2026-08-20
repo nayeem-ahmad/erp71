@@ -89,12 +89,12 @@ export default function DueAgingReportPage() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                             <tr>
-                                <th className="text-left px-4 py-3">Customer</th>
-                                <th className="text-right px-4 py-3">0–30 days</th>
-                                <th className="text-right px-4 py-3">31–60 days</th>
-                                <th className="text-right px-4 py-3">61–90 days</th>
-                                <th className="text-right px-4 py-3">90+ days</th>
-                                <th className="text-right px-4 py-3 text-gray-700">Total Due</th>
+                                <th className="text-start px-4 py-3">Customer</th>
+                                <th className="text-end px-4 py-3">0–30 days</th>
+                                <th className="text-end px-4 py-3">31–60 days</th>
+                                <th className="text-end px-4 py-3">61–90 days</th>
+                                <th className="text-end px-4 py-3">90+ days</th>
+                                <th className="text-end px-4 py-3 text-gray-700">Total Due</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -106,34 +106,34 @@ export default function DueAgingReportPage() {
                                             <div className="text-xs text-gray-400">{row.customer.phone}</div>
                                         </Link>
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td className="px-4 py-3 text-end">
                                         {row.bucket_0_30 > 0 ? <span className="text-emerald-700 font-medium">{formatBDT(row.bucket_0_30)}</span> : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td className="px-4 py-3 text-end">
                                         {row.bucket_31_60 > 0 ? <span className="text-yellow-700 font-medium">{formatBDT(row.bucket_31_60)}</span> : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td className="px-4 py-3 text-end">
                                         {row.bucket_61_90 > 0 ? <span className="text-orange-700 font-medium">{formatBDT(row.bucket_61_90)}</span> : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td className="px-4 py-3 text-end">
                                         {row.bucket_90_plus > 0 ? (
                                             <span className="flex items-center justify-end gap-1 text-danger font-bold">
                                                 <AlertTriangle className="w-3 h-3" />{formatBDT(row.bucket_90_plus)}
                                             </span>
                                         ) : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-4 py-3 text-right font-bold text-gray-900">{formatBDT(row.total)}</td>
+                                    <td className="px-4 py-3 text-end font-bold text-gray-900">{formatBDT(row.total)}</td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot className="bg-gray-50 border-t border-gray-200 font-bold text-gray-700">
                             <tr>
                                 <td className="px-4 py-3 text-xs uppercase tracking-wider">Total ({rows.length} customers)</td>
-                                <td className="px-4 py-3 text-right">{formatBDT(totals.b0_30)}</td>
-                                <td className="px-4 py-3 text-right">{formatBDT(totals.b31_60)}</td>
-                                <td className="px-4 py-3 text-right">{formatBDT(totals.b61_90)}</td>
-                                <td className="px-4 py-3 text-right text-danger">{formatBDT(totals.b90plus)}</td>
-                                <td className="px-4 py-3 text-right">{formatBDT(totals.total)}</td>
+                                <td className="px-4 py-3 text-end">{formatBDT(totals.b0_30)}</td>
+                                <td className="px-4 py-3 text-end">{formatBDT(totals.b31_60)}</td>
+                                <td className="px-4 py-3 text-end">{formatBDT(totals.b61_90)}</td>
+                                <td className="px-4 py-3 text-end text-danger">{formatBDT(totals.b90plus)}</td>
+                                <td className="px-4 py-3 text-end">{formatBDT(totals.total)}</td>
                             </tr>
                         </tfoot>
                     </table>

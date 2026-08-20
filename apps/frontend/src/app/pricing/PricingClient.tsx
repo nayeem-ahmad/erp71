@@ -42,7 +42,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         <div className="border border-gray-200 rounded-2xl overflow-hidden">
             <button
                 onClick={() => setOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between px-6 py-5 text-left font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between px-6 py-5 text-start font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
             >
                 <span>{q}</span>
                 {open ? (
@@ -241,7 +241,7 @@ export default function PricingClient() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left px-6 py-4 font-semibold text-gray-500 w-1/3">
+                                    <th className="text-start px-6 py-4 font-semibold text-gray-500 w-1/3">
                                         Feature
                                     </th>
                                     {MARKETING_PLANS.map((p) => (

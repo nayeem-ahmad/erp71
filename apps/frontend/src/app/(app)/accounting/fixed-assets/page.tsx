@@ -192,7 +192,7 @@ export default function FixedAssetsPage() {
                             <thead>
                                 <tr className="border-b border-gray-100">
                                     {['Code', 'Name', 'Purchase Date', 'Cost', 'Accum. Dep.', 'Net Book Value', 'Method'].map((h) => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-400">{h}</th>
+                                        <th key={h} className="text-start px-4 py-3 text-xs font-semibold text-gray-400">{h}</th>
                                     ))}
                                 </tr>
                             </thead>

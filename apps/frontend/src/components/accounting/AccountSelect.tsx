@@ -185,7 +185,7 @@ export default function AccountSelect({
                 title={title}
                 disabled={disabled}
                 onClick={() => (open ? close() : setOpen(true))}
-                className={`flex w-full items-center justify-between gap-1 text-left disabled:opacity-60 ${
+                className={`flex w-full items-center justify-between gap-1 text-start disabled:opacity-60 ${
                     invalid ? 'border-red-300' : ''
                 } ${className}`}
             >
@@ -223,7 +223,7 @@ export default function AccountSelect({
                                 <button
                                     type="button"
                                     onClick={() => commit('')}
-                                    className="min-h-touch flex w-full items-center px-2.5 py-1.5 text-left text-sm text-gray-500 hover:bg-gray-50"
+                                    className="min-h-touch flex w-full items-center px-2.5 py-1.5 text-start text-sm text-gray-500 hover:bg-gray-50"
                                 >
                                     {clearLabel ?? t.accountingShared.selectAccountPlaceholder}
                                 </button>
@@ -237,7 +237,7 @@ export default function AccountSelect({
                                     aria-selected={account.id === value}
                                     onClick={() => commit(account.id)}
                                     onMouseEnter={() => setHighlight(index)}
-                                    className={`min-h-touch flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm ${
+                                    className={`min-h-touch flex w-full items-center gap-2 px-2.5 py-1.5 text-start text-sm ${
                                         index === highlight ? 'bg-blue-50' : 'hover:bg-gray-50'
                                     }`}
                                 >

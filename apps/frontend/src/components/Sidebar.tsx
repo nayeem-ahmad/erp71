@@ -46,7 +46,7 @@ function NavCountBadge({ count, title }: { count: number; title: string }) {
     return (
         <span
             title={title}
-            className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+            className="ms-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
         >
             {count > 99 ? '99+' : count}
         </span>
@@ -599,7 +599,7 @@ export default function Sidebar({
         `flex items-center rounded-xl transition-all duration-150 group ${
             collapsed
                 ? `justify-center ${compactNav ? 'w-9 h-9' : 'w-10 h-10'} mx-auto`
-                : `space-x-2.5 px-2.5 ${navPad}`
+                : `space-x-2.5 rtl:space-x-reverse px-2.5 ${navPad}`
         } ${navText} ${
             active
                 ? compactNav
@@ -609,8 +609,8 @@ export default function Sidebar({
         }`;
 
     const childLinkCls = (active: boolean, nested = false) =>
-        `flex items-center rounded-lg transition-all duration-150 group space-x-2.5 px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${navText} ${
-            nested ? 'ml-8' : 'ml-4'
+        `flex items-center rounded-lg transition-all duration-150 group space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${navText} ${
+            nested ? 'ms-8' : 'ms-4'
         } ${
             active
                 ? 'bg-blue-50 text-blue-700'
@@ -618,7 +618,7 @@ export default function Sidebar({
         }`;
 
     const subgroupBtnCls = (active: boolean) =>
-        `flex items-center w-full rounded-lg transition-all duration-150 space-x-2.5 px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ml-4 ${navText} ${
+        `flex items-center w-full rounded-lg transition-all duration-150 space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ms-4 ${navText} ${
             active
                 ? 'text-blue-700 bg-blue-50/70'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -641,10 +641,10 @@ export default function Sidebar({
                 aria-label={onClose ? t.sidebar.navigation : undefined}
                 style={{ width: sidebarWidth }}
                 className={`
-                    fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 flex-shrink-0 pt-safe
+                    fixed inset-y-0 start-0 z-40 flex flex-col bg-white border-e border-gray-200 flex-shrink-0 pt-safe
                     ${isResizing ? '' : 'transition-[width] duration-300'}
-                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-                    md:relative md:inset-y-auto md:left-auto md:z-auto md:translate-x-0
+                    ${isOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'}
+                    md:relative md:inset-y-auto md:start-auto md:z-auto md:translate-x-0
                 `}
                 onTouchStart={(event) => {
                     touchStartXRef.current = event.touches[0]?.clientX ?? 0;
@@ -659,7 +659,7 @@ export default function Sidebar({
             >
                 {/* Logo — height matches app header (layout.tsx) */}
                 <div className={`flex items-center ${compactNav ? 'min-h-[3.25rem]' : 'h-14'} border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
-                    <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3'}`}>
+                    <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3 rtl:space-x-reverse'}`}>
                         {logoUrl ? (
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -783,14 +783,14 @@ export default function Sidebar({
                                     key={mod.key}
                                     title={collapsed ? `${mod.label} (coming soon)` : undefined}
                                     className={`flex items-center rounded-xl cursor-default ${
-                                        collapsed ? 'justify-center w-10 h-10 mx-auto' : 'space-x-3 px-3 py-2'
+                                        collapsed ? 'justify-center w-10 h-10 mx-auto' : 'space-x-3 rtl:space-x-reverse px-3 py-2'
                                     } text-gray-300`}
                                 >
                                     <Icon className="flex-shrink-0 w-5 h-5" />
                                     {!collapsed && (
                                         <>
                                             <span className={navLabelCls}>{mod.label}</span>
-                                            <span className="ml-auto text-[9px] font-bold uppercase tracking-widest bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">Soon</span>
+                                            <span className="ms-auto text-[9px] font-bold uppercase tracking-widest bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">Soon</span>
                                         </>
                                     )}
                                 </div>
@@ -820,7 +820,7 @@ export default function Sidebar({
                                         onClick={() => toggleGroup(mod.key)}
                                         disabled={isSearching}
                                         aria-expanded={groupOpen}
-                                        className={`flex items-center w-full rounded-xl transition-all duration-150 space-x-3 px-3 py-2 ${
+                                        className={`flex items-center w-full rounded-xl transition-all duration-150 space-x-3 rtl:space-x-reverse px-3 py-2 ${
                                             isSearching ? 'cursor-default' : ''
                                         } ${
                                             groupActive
@@ -831,7 +831,7 @@ export default function Sidebar({
                                         <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-blue-600' : ''}`} />
                                         <span className={navLabelCls}>{mod.label}</span>
                                         <ChevronDown
-                                            className={`ml-auto w-4 h-4 transition-transform duration-200 ${
+                                            className={`ms-auto w-4 h-4 transition-transform duration-200 ${
                                                 groupOpen ? 'rotate-180' : ''
                                             } ${groupActive ? 'text-blue-400' : 'text-gray-300'}`}
                                         />
@@ -860,7 +860,7 @@ export default function Sidebar({
                                                             <SubgroupIcon className={`flex-shrink-0 w-4 h-4 ${subgroupActive ? 'text-blue-600' : ''}`} />
                                                             <span className={navLabelCls}>{child.label}</span>
                                                             <ChevronDown
-                                                                className={`ml-auto w-3.5 h-3.5 transition-transform duration-200 ${
+                                                                className={`ms-auto w-3.5 h-3.5 transition-transform duration-200 ${
                                                                     subgroupOpen ? 'rotate-180' : ''
                                                                 } ${subgroupActive ? 'text-blue-400' : 'text-gray-300'}`}
                                                             />
@@ -889,9 +889,9 @@ export default function Sidebar({
                                             const { href, icon: ChildIcon, label, section, exact } = child;
                                             if (section) {
                                                 return (
-                                                    <div key={href} className="flex items-center ml-4 px-3 pt-3 pb-1">
+                                                    <div key={href} className="flex items-center ms-4 px-3 pt-3 pb-1">
                                                         <ChildIcon className="flex-shrink-0 w-3.5 h-3.5 text-gray-300" />
-                                                        <span className="ml-2 text-[10px] font-black uppercase tracking-widest text-gray-300">{label}</span>
+                                                        <span className="ms-2 text-[10px] font-black uppercase tracking-widest text-gray-300">{label}</span>
                                                     </div>
                                                 );
                                             }
@@ -924,7 +924,7 @@ export default function Sidebar({
                         aria-valuemin={SIDEBAR_MIN_WIDTH}
                         aria-valuemax={SIDEBAR_MAX_WIDTH}
                         onMouseDown={startResize}
-                        className={`absolute right-0 top-0 bottom-0 z-20 hidden w-1.5 cursor-col-resize select-none touch-none md:block hover:bg-blue-400/60 ${
+                        className={`absolute end-0 top-0 bottom-0 z-20 hidden w-1.5 cursor-col-resize select-none touch-none md:block hover:bg-blue-400/60 ${
                             isResizing ? 'bg-blue-500/70' : 'bg-transparent'
                         }`}
                     />
@@ -934,7 +934,7 @@ export default function Sidebar({
                 <button
                     type="button"
                     onClick={toggleSidebar}
-                    className={`absolute -right-3 z-10 mt-4 hidden h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:border-blue-300 hover:text-blue-600 hover:shadow-md md:flex ${
+                    className={`absolute -end-3 z-10 mt-4 hidden h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:border-blue-300 hover:text-blue-600 hover:shadow-md md:flex ${
                         collapsed ? 'top-[3.5rem]' : 'top-[6.75rem]'
                     }`}
                     title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

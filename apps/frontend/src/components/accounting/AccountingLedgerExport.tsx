@@ -86,20 +86,20 @@ export default function AccountingLedgerExport() {
                 </button>
                 {showExportMenu && (
                     <div
-                        className="absolute left-0 z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                        className="absolute start-0 z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
                         onMouseLeave={() => setShowExportMenu(false)}
                     >
                         <button
                             type="button"
                             onClick={() => openExportModal('tally')}
-                            className="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                            className="w-full px-3 py-1.5 text-start text-sm text-gray-700 hover:bg-gray-50"
                         >
                             {t.accounting.tallyXml}
                         </button>
                         <button
                             type="button"
                             onClick={() => openExportModal('quickbooks')}
-                            className="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                            className="w-full px-3 py-1.5 text-start text-sm text-gray-700 hover:bg-gray-50"
                         >
                             {t.accounting.quickbooksIif}
                         </button>

@@ -171,22 +171,22 @@ export default function AdminSocialMediaPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">
                                     {m.columns.post}
                                 </th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">
                                     {m.columns.status}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.columns.networks}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 lg:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 lg:table-cell">
                                     {m.columns.scheduled}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 lg:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 lg:table-cell">
                                     {m.columns.lastPush}
                                 </th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                                <th className="px-3 py-2 text-end text-xs font-semibold text-gray-600">
                                     {m.columns.actions}
                                 </th>
                             </tr>

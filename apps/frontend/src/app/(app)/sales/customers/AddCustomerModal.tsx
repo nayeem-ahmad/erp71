@@ -84,8 +84,8 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.customerCode} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="text" value={formData.customer_code} onChange={set('customer_code')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.customerCode} />
+                                <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="text" value={formData.customer_code} onChange={set('customer_code')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.customerCode} />
                             </div>
                             <p className="text-xs text-gray-400">{t.customers.modal.customerCodeHint}</p>
                         </div>
@@ -93,32 +93,32 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.fullName}</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
+                                <User className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.ownerName} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <UserCog className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="text" value={formData.owner_name} onChange={set('owner_name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.ownerName} />
+                                <UserCog className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="text" value={formData.owner_name} onChange={set('owner_name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.ownerName} />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.phoneNumber} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
+                                <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.email} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="email" value={formData.email} onChange={set('email')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.email} />
+                                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="email" value={formData.email} onChange={set('email')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.email} />
                             </div>
                         </div>
 
@@ -149,24 +149,24 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.creditLimit} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="number" min="0" step="0.01" value={formData.credit_limit} onChange={set('credit_limit')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder="0.00" />
+                                <CreditCard className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="number" min="0" step="0.01" value={formData.credit_limit} onChange={set('credit_limit')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder="0.00" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.discountPct} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="number" min="0" max="100" step="0.01" value={formData.default_discount_pct} onChange={set('default_discount_pct')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder="0.00" />
+                                <Percent className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="number" min="0" max="100" step="0.01" value={formData.default_discount_pct} onChange={set('default_discount_pct')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder="0.00" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.birthday} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <Cake className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="date" value={formData.birthday} onChange={set('birthday')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                <Cake className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="date" value={formData.birthday} onChange={set('birthday')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                             <p className="text-xs text-gray-400">{t.customers.modal.birthdayHint}</p>
                         </div>
@@ -174,8 +174,8 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.address} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
-                                <MapPin className="absolute left-3 top-4 w-4 h-4 text-gray-400" />
-                                <textarea value={formData.address} onChange={set('address')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm min-h-[60px]" placeholder={t.customers.modal.placeholders.address} />
+                                <MapPin className="absolute start-3 top-4 w-4 h-4 text-gray-400" />
+                                <textarea value={formData.address} onChange={set('address')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm min-h-[60px]" placeholder={t.customers.modal.placeholders.address} />
                             </div>
                         </div>
                     </div>

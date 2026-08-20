@@ -257,7 +257,7 @@ export default function InventoryCategoriesPage() {
                                 onClick={() => setImportGroupOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import Groups
                             </button>
                             <button
@@ -265,7 +265,7 @@ export default function InventoryCategoriesPage() {
                                 onClick={() => setImportSubgroupOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import Subgroups
                             </button>
                             <button
@@ -276,7 +276,7 @@ export default function InventoryCategoriesPage() {
                                 }}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center"
                             >
-                                <Tag className="w-4 h-4 mr-2" />
+                                <Tag className="w-4 h-4 me-2" />
                                 {t.inventoryCategories.newSubgroup}
                             </button>
                             <button

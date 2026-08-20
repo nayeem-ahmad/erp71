@@ -267,13 +267,13 @@ export default function PlatformAiSettingsPage() {
                                     />
                                     <span>Enable web search</span>
                                 </label>
-                                <p className="pl-6 text-xs text-gray-400">
+                                <p className="ps-6 text-xs text-gray-400">
                                     When off, both web tools are withheld from the model entirely.
                                 </p>
                             </div>
 
                             {settings.web_search_enabled === 'true' ? (
-                                <div className="space-y-4 pl-6">
+                                <div className="space-y-4 ps-6">
                                     <Field
                                         label="Search engine"
                                         hint="Which index OpenRouter searches, and what each search costs you."
@@ -347,18 +347,18 @@ export default function PlatformAiSettingsPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                                <th className="text-left pb-2">Model</th>
-                                <th className="text-right pb-2">Typical input /M</th>
-                                <th className="text-right pb-2">Typical output /M</th>
+                                <th className="text-start pb-2">Model</th>
+                                <th className="text-end pb-2">Typical input /M</th>
+                                <th className="text-end pb-2">Typical output /M</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            <tr><td className="py-2 font-medium">Claude Haiku 4.5</td><td className="text-right text-gray-600">~$1.00</td><td className="text-right text-gray-600">~$5.00</td></tr>
-                            <tr><td className="py-2 font-medium">Claude Sonnet 4.6</td><td className="text-right text-gray-600">~$3.00</td><td className="text-right text-gray-600">~$15.00</td></tr>
-                            <tr><td className="py-2 font-medium">Claude Opus 4.5</td><td className="text-right text-gray-600">~$5.00</td><td className="text-right text-gray-600">~$25.00</td></tr>
-                            <tr><td className="py-2 font-medium">Kimi K3</td><td className="text-right text-gray-600">~$3.00</td><td className="text-right text-gray-600">~$15.00</td></tr>
-                            <tr><td className="py-2 font-medium">Qwen3.7 Plus</td><td className="text-right text-gray-600">~$0.32</td><td className="text-right text-gray-600">~$1.28</td></tr>
-                            <tr><td className="py-2 font-medium">Free router</td><td className="text-right text-gray-600">$0.00</td><td className="text-right text-gray-600">$0.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Haiku 4.5</td><td className="text-end text-gray-600">~$1.00</td><td className="text-end text-gray-600">~$5.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Sonnet 4.6</td><td className="text-end text-gray-600">~$3.00</td><td className="text-end text-gray-600">~$15.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Opus 4.5</td><td className="text-end text-gray-600">~$5.00</td><td className="text-end text-gray-600">~$25.00</td></tr>
+                            <tr><td className="py-2 font-medium">Kimi K3</td><td className="text-end text-gray-600">~$3.00</td><td className="text-end text-gray-600">~$15.00</td></tr>
+                            <tr><td className="py-2 font-medium">Qwen3.7 Plus</td><td className="text-end text-gray-600">~$0.32</td><td className="text-end text-gray-600">~$1.28</td></tr>
+                            <tr><td className="py-2 font-medium">Free router</td><td className="text-end text-gray-600">$0.00</td><td className="text-end text-gray-600">$0.00</td></tr>
                         </tbody>
                     </table>
                     <p className="text-xs text-gray-400 mt-3">1 credit = 1,000 tokens. You charge tenants per credit; OpenRouter charges you per model usage.</p>

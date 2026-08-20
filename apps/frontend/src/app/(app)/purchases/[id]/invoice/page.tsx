@@ -169,7 +169,7 @@ export default function PurchaseInvoicePage() {
                                 ) : null}
                                 <h1 className="text-2xl font-bold text-white">{businessName}</h1>
                             </div>
-                            <div className="text-right">
+                            <div className="text-end">
                                 <div className="text-white/70 text-xs uppercase tracking-widest font-semibold mb-1">
                                     {t.purchases.invoice.purchaseReceipt}
                                 </div>
@@ -249,11 +249,11 @@ export default function PurchaseInvoicePage() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b-2 border-gray-200">
-                                        <th className="text-left py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchases.invoice.description}</th>
-                                        <th className="text-left py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchases.invoice.sku}</th>
+                                        <th className="text-start py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchases.invoice.description}</th>
+                                        <th className="text-start py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchases.invoice.sku}</th>
                                         <th className="text-center py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchaseShared.qty}</th>
-                                        <th className="text-right py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchaseShared.unitCost}</th>
-                                        <th className="text-right py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchaseShared.lineTotal}</th>
+                                        <th className="text-end py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchaseShared.unitCost}</th>
+                                        <th className="text-end py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.purchaseShared.lineTotal}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -262,8 +262,8 @@ export default function PurchaseInvoicePage() {
                                             <td className="py-3 font-medium text-gray-900">{item.product?.name ?? t.purchases.invoice.unknownProduct}</td>
                                             <td className="py-3 text-gray-400 font-mono text-xs">{item.product?.sku ?? '—'}</td>
                                             <td className="py-3 text-center text-gray-700">{item.quantity}</td>
-                                            <td className="py-3 text-right text-gray-700">{formatBDT(parseFloat(item.unit_cost), { locale })}</td>
-                                            <td className="py-3 text-right font-semibold text-gray-900">{formatBDT(parseFloat(item.line_total), { locale })}</td>
+                                            <td className="py-3 text-end text-gray-700">{formatBDT(parseFloat(item.unit_cost), { locale })}</td>
+                                            <td className="py-3 text-end font-semibold text-gray-900">{formatBDT(parseFloat(item.line_total), { locale })}</td>
                                         </tr>
                                     ))}
                                 </tbody>

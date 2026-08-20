@@ -254,27 +254,27 @@ export default function EmployeeDetailPage() {
                         <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.detail.fullName}</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <User className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input required type="text" value={form.name} onChange={set('name')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.phone}</label>
                             <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input required type="text" value={form.phone} onChange={set('phone')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.email}</label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input type="email" value={form.email} onChange={set('email')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
@@ -288,18 +288,18 @@ export default function EmployeeDetailPage() {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.detail.dateOfJoining}</label>
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input type="date" value={form.date_of_joining} onChange={set('date_of_joining')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.detail.department}</label>
                             <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Briefcase className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <select value={form.department_id} onChange={set('department_id')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none">
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none">
                                     <option value="">{t.common.none}</option>
                                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                 </select>

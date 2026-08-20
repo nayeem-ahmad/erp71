@@ -159,7 +159,7 @@ export default function AccountingJournalPage() {
                     disabled={response.meta.page <= 1}
                     className="inline-flex items-center px-3 py-1.5 border rounded text-xs font-medium disabled:opacity-40"
                 >
-                    <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+                    <ChevronLeft className="me-1 h-3.5 w-3.5" />
                     {t.common.prevPage}
                 </button>
                 <span className="text-xs text-gray-500">{response.meta.page} / {response.meta.totalPages}</span>
@@ -170,7 +170,7 @@ export default function AccountingJournalPage() {
                     className="inline-flex items-center px-3 py-1.5 border rounded text-xs font-medium disabled:opacity-40"
                 >
                     {t.common.nextPage}
-                    <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                    <ChevronRight className="ms-1 h-3.5 w-3.5" />
                 </button>
             </div>
         </AccountingPageShell>

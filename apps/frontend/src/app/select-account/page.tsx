@@ -118,7 +118,7 @@ function SelectAccountContent() {
                             <button
                                 type="button"
                                 onClick={chooseEmployee}
-                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-left group"
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-start group"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
                                     <UserRound className="w-5 h-5" />
@@ -135,7 +135,7 @@ function SelectAccountContent() {
                             <button
                                 type="button"
                                 onClick={chooseReferee}
-                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all duration-150 text-left group"
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all duration-150 text-start group"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
                                     <Gift className="w-5 h-5" />
@@ -152,7 +152,7 @@ function SelectAccountContent() {
                             <button
                                 type="button"
                                 onClick={chooseAdmin}
-                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all duration-150 text-left group"
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all duration-150 text-start group"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
                                     <ShieldCheck className="w-5 h-5" />
@@ -170,7 +170,7 @@ function SelectAccountContent() {
                                 key={tenant.id}
                                 type="button"
                                 onClick={() => chooseTenant(tenant)}
-                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-left group"
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-start group"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
                                     <Store className="w-5 h-5" />

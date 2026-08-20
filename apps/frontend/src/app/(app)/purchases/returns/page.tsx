@@ -139,7 +139,7 @@ export default function PurchaseReturnsPage() {
                 cell: (info) => {
                     const row = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1">
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <button
                                 onClick={() => openCreateModal(row.purchase?.id)}
                                 className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
@@ -203,7 +203,7 @@ export default function PurchaseReturnsPage() {
                             onClick={() => openCreateModal()}
                             className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
-                            <Plus className="w-4 h-4 mr-2" />
+                            <Plus className="w-4 h-4 me-2" />
                             New Return
                         </button>
                     )}

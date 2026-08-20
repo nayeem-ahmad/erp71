@@ -188,7 +188,7 @@ export default function NewSalesReturnPage() {
     const salePicker = (
         <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                     type="text"
                     value={serialNumber}
@@ -202,7 +202,7 @@ export default function NewSalesReturnPage() {
                     }}
                     disabled={!!sale}
                     placeholder="Sale serial number — e.g. S-00001"
-                    className="w-full pl-8 pr-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                    className="w-full ps-8 pe-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                 />
             </div>
             {sale ? (

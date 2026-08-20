@@ -335,11 +335,11 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
                                     }`}
                                 >
                                     {code.toUpperCase()}
-                                    {!filled && <span className="ml-1 text-gray-400">·</span>}
+                                    {!filled && <span className="ms-1 text-gray-400">·</span>}
                                 </button>
                             );
                         })}
-                        <span className="ml-auto flex items-center gap-1">
+                        <span className="ms-auto flex items-center gap-1">
                             <Button
                                 variant={tab === 'write' ? 'secondary' : 'ghost'}
                                 icon={<Pencil className="h-3.5 w-3.5" />}

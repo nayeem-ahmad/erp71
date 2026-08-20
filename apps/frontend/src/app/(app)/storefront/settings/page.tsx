@@ -118,7 +118,7 @@ export default function StorefrontSettingsPage() {
                             <button
                                 type="button"
                                 onClick={() => setEnabled((v) => !v)}
-                                className="flex items-center space-x-2 focus:outline-none"
+                                className="flex items-center space-x-2 rtl:space-x-reverse focus:outline-none"
                                 aria-label={m.enable.toggleAria}
                             >
                                 {enabled ? (
@@ -136,7 +136,7 @@ export default function StorefrontSettingsPage() {
                             <label htmlFor="store-slug" className="block text-sm font-semibold text-gray-700 mb-1.5">
                                 {m.slug.label}
                             </label>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
                                 <span className="text-sm text-gray-400 whitespace-nowrap">{m.slug.prefix}</span>
                                 <input
                                     id="store-slug"
@@ -156,7 +156,7 @@ export default function StorefrontSettingsPage() {
                         {/* Public URL display */}
                         {publicStoreUrl && (
                             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between">
-                                <div className="flex items-center space-x-2 min-w-0">
+                                <div className="flex items-center space-x-2 rtl:space-x-reverse min-w-0">
                                     <Globe className="w-4 h-4 text-blue-500 flex-shrink-0" />
                                     <span className="text-sm font-medium text-blue-700 truncate">
                                         {publicStoreUrl}
@@ -166,7 +166,7 @@ export default function StorefrontSettingsPage() {
                                     href={publicStoreUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex-shrink-0 ml-3 text-blue-600 hover:text-blue-800"
+                                    className="flex-shrink-0 ms-3 text-blue-600 hover:text-blue-800"
                                     title={m.publicUrl.open}
                                 >
                                     <ExternalLink className="w-4 h-4" />
@@ -245,7 +245,7 @@ export default function StorefrontSettingsPage() {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60"
+                                className="flex items-center space-x-2 rtl:space-x-reverse bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60"
                             >
                                 <Save className="w-4 h-4" />
                                 <span>{saving ? m.savingAlt : m.save}</span>

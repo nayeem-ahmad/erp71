@@ -148,7 +148,7 @@ export default function CareersApplicationDetailPage() {
                             type="button"
                             onClick={withdraw}
                             disabled={withdrawing}
-                            className="ml-auto inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 max-md:min-h-touch"
+                            className="ms-auto inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 max-md:min-h-touch"
                         >
                             {withdrawing ? 'Withdrawing…' : 'Withdraw application'}
                         </button>

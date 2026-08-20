@@ -227,9 +227,9 @@ export default function BankReconciliationPage() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100">
-                                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400">Date</th>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400">Description</th>
-                                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Amount</th>
+                                        <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400">Date</th>
+                                        <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400">Description</th>
+                                        <th className="text-end px-4 py-3 text-xs font-semibold text-gray-400">Amount</th>
                                         <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
                                         <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Status</th>
                                     </tr>
@@ -239,7 +239,7 @@ export default function BankReconciliationPage() {
                                         <tr key={e.id} className={`border-b border-gray-50 ${e.is_matched ? 'opacity-60' : ''}`}>
                                             <td className="px-4 py-3 text-gray-500">{new Date(e.entry_date).toLocaleDateString()}</td>
                                             <td className="px-4 py-3 text-gray-700">{e.description ?? '—'}</td>
-                                            <td className="px-4 py-3 text-right font-medium">{formatBDT(Number(e.amount), { locale })}</td>
+                                            <td className="px-4 py-3 text-end font-medium">{formatBDT(Number(e.amount), { locale })}</td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={`text-xs font-bold ${e.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-danger'}`}>
                                                     {e.entry_type}

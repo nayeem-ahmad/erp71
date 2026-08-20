@@ -115,7 +115,7 @@ export default function HelpPage() {
                         <div key={section.title} className="border border-gray-200 rounded-xl overflow-hidden">
                             <button
                                 onClick={() => toggleSection(section.title)}
-                                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors text-start"
                             >
                                 <div className="flex items-center gap-3">
                                     <span className="text-lg">{section.icon}</span>
@@ -140,9 +140,9 @@ export default function HelpPage() {
                                             <div key={key} className="bg-white">
                                                 <button
                                                     onClick={() => toggleFaq(key)}
-                                                    className="w-full flex items-start justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                                                    className="w-full flex items-start justify-between px-5 py-4 text-start hover:bg-gray-50 transition-colors"
                                                 >
-                                                    <span className="font-medium text-gray-800 text-sm pr-4">{faq.q}</span>
+                                                    <span className="font-medium text-gray-800 text-sm pe-4">{faq.q}</span>
                                                     {faqOpen ? (
                                                         <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
                                                     ) : (

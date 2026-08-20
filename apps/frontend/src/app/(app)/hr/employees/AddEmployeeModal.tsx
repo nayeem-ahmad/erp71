@@ -79,9 +79,9 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
                         <FormGrid.Full>
                             <Field label={t.employees.modal.fullName} required>
                                 <div className="relative">
-                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <User className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <Input required type="text" value={formData.name} onChange={set('name')}
-                                        className="pl-10"
+                                        className="ps-10"
                                         placeholder={t.employees.modal.placeholders.name} />
                                 </div>
                             </Field>
@@ -89,26 +89,26 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
 
                         <Field label={t.employees.modal.phone} required>
                             <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <Input required type="text" value={formData.phone} onChange={set('phone')}
-                                    className="pl-10"
+                                    className="ps-10"
                                     placeholder={t.employees.modal.placeholders.phone} />
                             </div>
                         </Field>
 
                         <Field label={t.employees.modal.email} hint={`(${t.common.optional})`}>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <Input type="email" value={formData.email} onChange={set('email')}
-                                    className="pl-10"
+                                    className="ps-10"
                                     placeholder={t.employees.modal.placeholders.email} />
                             </div>
                         </Field>
 
                         <Field label={t.employees.modal.dateOfJoining} hint={`(${t.common.optional})`}>
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input type="date" value={formData.date_of_joining} onChange={set('date_of_joining')} className="pl-10" />
+                                <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Input type="date" value={formData.date_of_joining} onChange={set('date_of_joining')} className="ps-10" />
                             </div>
                         </Field>
 
@@ -119,8 +119,8 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
 
                         <Field label={t.employees.modal.department} hint={`(${t.common.optional})`}>
                             <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Select value={formData.department_id} onChange={set('department_id')} className="pl-10">
+                                <Briefcase className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Select value={formData.department_id} onChange={set('department_id')} className="ps-10">
                                     <option value="">{t.common.none}</option>
                                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                 </Select>

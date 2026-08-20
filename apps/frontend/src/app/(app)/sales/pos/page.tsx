@@ -547,7 +547,7 @@ export default function POSPage() {
                         <WifiOff className="w-4 h-4 flex-shrink-0 text-yellow-600" />
                         <span>{t.pos.offline.banner}</span>
                         {pendingCount > 0 && (
-                            <span className="ml-1 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded-full text-xs font-semibold">
+                            <span className="ms-1 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded-full text-xs font-semibold">
                                 {interpolate(t.pos.offline.pending, { count: pendingCount })}
                             </span>
                         )}
@@ -573,11 +573,11 @@ export default function POSPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="relative flex-1 min-w-0 sm:flex-none sm:w-64">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                                 <input
                                     type="text"
                                     placeholder={t.pos.searchPlaceholder}
-                                    className="w-full bg-white border-none rounded-xl py-2.5 pl-10 pr-4 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
+                                    className="w-full bg-white border-none rounded-xl py-2.5 ps-10 pe-4 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
@@ -601,7 +601,7 @@ export default function POSPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto pr-2 pb-20 md:pb-0 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto pe-2 pb-20 md:pb-0 custom-scrollbar">
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase tracking-widest text-xs">{t.pos.loadingProducts}</div>
                         ) : viewMode === 'gallery' ? (
@@ -655,7 +655,7 @@ export default function POSPage() {
                                             <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-semibold text-gray-500">
                                                 {interpolate(t.pos.stockLeft, { count: getStockForSalesWarehouse(product) })}
                                             </span>
-                                            <span className="text-sm font-bold text-blue-600 w-20 text-right">{formatBDT(parseFloat(product.price))}</span>
+                                            <span className="text-sm font-bold text-blue-600 w-20 text-end">{formatBDT(parseFloat(product.price))}</span>
                                             <div className="w-7 h-7 rounded-lg bg-gray-100 group-hover:bg-blue-600 flex items-center justify-center transition-colors flex-shrink-0">
                                                 <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
                                             </div>
@@ -699,12 +699,12 @@ export default function POSPage() {
 
                 {/* Right Section: Cart & Checkout */}
                 <div className={`
-                    fixed bottom-0 left-0 right-0 z-40 h-[90vh] flex flex-col
+                    fixed bottom-0 start-0 end-0 z-40 h-[90vh] flex flex-col
                     bg-white rounded-t-xl shadow-2xl
                     transition-transform duration-300
                     ${showMobileCart ? 'translate-y-0' : 'translate-y-full'}
-                    md:relative md:h-auto md:bottom-auto md:left-auto md:right-auto md:z-auto
-                    md:translate-y-0 md:rounded-none md:w-[400px] md:border-l md:border-gray-100 md:shadow-2xl
+                    md:relative md:h-auto md:bottom-auto md:start-auto md:end-auto md:z-auto
+                    md:translate-y-0 md:rounded-none md:w-[400px] md:border-s md:border-gray-100 md:shadow-2xl
                 `}>
                     <div className="p-4 border-b border-gray-50 space-y-3">
                         <div className="flex items-center justify-between gap-2">
@@ -815,7 +815,7 @@ export default function POSPage() {
                                                     </p>
                                                 )}
                                             </div>
-                                            <div className="text-right flex-shrink-0">
+                                            <div className="text-end flex-shrink-0">
                                                 <p className="text-sm font-bold text-blue-600">
                                                     {formatBDT(parseFloat(sale.total_amount))}
                                                 </p>
@@ -838,7 +838,7 @@ export default function POSPage() {
                         ) : (
                             cart.map((item) => (
                                 <div key={item.id} className="bg-gray-50/50 p-4 rounded-lg group border border-transparent hover:border-blue-500/10 hover:bg-white hover:shadow-lg hover:shadow-sm/5 transition-all space-y-3">
-                                    <div className="flex items-center space-x-4">
+                                    <div className="flex items-center space-x-4 rtl:space-x-reverse">
                                         <div className="w-12 h-12 bg-white rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
                                             {item.image_url ? (
                                                 <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
@@ -917,9 +917,9 @@ export default function POSPage() {
                             disabled={cart.length === 0}
                             className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-xl font-semibold text-sm shadow-xl shadow-gray-200 flex items-center justify-center group transition-all hover:-translate-y-1 active:translate-y-0 disabled:opacity-20 disabled:grayscale disabled:translate-y-0"
                         >
-                            <CreditCard className="w-5 h-5 mr-3 group-hover:animate-bounce" />
+                            <CreditCard className="w-5 h-5 me-3 group-hover:animate-bounce" />
                             {isOnline ? t.pos.checkout.completeCheckout : t.pos.checkout.saveOffline}
-                            <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                            <ChevronRight className="w-5 h-5 ms-2 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" />
                         </button>
                     </div>
                     )}
@@ -930,7 +930,7 @@ export default function POSPage() {
             {lastSale && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-modal flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-[420px] rounded-xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 bg-green-50/50 flex items-center space-x-4">
+                        <div className="p-6 border-b border-gray-100 bg-green-50/50 flex items-center space-x-4 rtl:space-x-reverse">
                             <div className="p-3 bg-green-100 rounded-lg text-green-600">
                                 <CheckCircle className="w-7 h-7" />
                             </div>
@@ -956,7 +956,7 @@ export default function POSPage() {
                             </div>
                             <button
                                 onClick={() => handlePrintReceipt(lastSale)}
-                                className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 transition-all hover:-translate-y-0.5"
+                                className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 rtl:space-x-reverse transition-all hover:-translate-y-0.5"
                             >
                                 <Printer className="w-5 h-5" />
                                 <span>{t.pos.saleComplete.printReceipt}</span>
@@ -979,7 +979,7 @@ export default function POSPage() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4">
                     <div className="bg-white w-full sm:max-w-[500px] rounded-t-xl sm:rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                 <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                                     <Banknote className="w-6 h-6" />
                                 </div>
@@ -1020,7 +1020,7 @@ export default function POSPage() {
                                             <p className="text-xs text-gray-500">{selectedCustomer.phone}</p>
                                             {loyaltySettings?.loyalty_points_enabled && (
                                                 <p className="text-xs font-semibold text-primary mt-1">
-                                                    <Gift className="inline w-3.5 h-3.5 mr-1" />
+                                                    <Gift className="inline w-3.5 h-3.5 me-1" />
                                                     {interpolate(t.pos.payment.pointsAvailable, { count: selectedCustomer.loyalty_points ?? 0 })}
                                                 </p>
                                             )}
@@ -1035,13 +1035,13 @@ export default function POSPage() {
                                     </div>
                                 ) : (
                                     <div className="relative">
-                                        <User className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+                                        <User className="absolute start-3 top-3.5 w-4 h-4 text-gray-400" />
                                         <input
                                             type="text"
                                             value={customerSearch}
                                             onChange={(e) => searchCustomers(e.target.value)}
                                             placeholder={t.pos.payment.searchCustomer}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white"
+                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 ps-10 pe-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white"
                                         />
                                         {customerResults.length > 0 && (
                                             <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
@@ -1050,10 +1050,10 @@ export default function POSPage() {
                                                         key={customer.id}
                                                         type="button"
                                                         onClick={() => selectCustomer(customer)}
-                                                        className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm"
+                                                        className="w-full text-start px-4 py-2.5 hover:bg-blue-50 text-sm"
                                                     >
                                                         <span className="font-semibold text-gray-900">{customer.name || t.pos.payment.unnamed}</span>
-                                                        <span className="text-gray-500 ml-2">{customer.phone}</span>
+                                                        <span className="text-gray-500 ms-2">{customer.phone}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -1109,7 +1109,7 @@ export default function POSPage() {
                                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                                         <div>
                                             <span className="font-mono font-bold text-green-800">{appliedDiscount.code}</span>
-                                            <span className="text-xs text-green-600 ml-2">-{formatBDT(appliedDiscount.amount)}</span>
+                                            <span className="text-xs text-green-600 ms-2">-{formatBDT(appliedDiscount.amount)}</span>
                                         </div>
                                         <button onClick={handleRemoveDiscount} className="text-green-500 hover:text-red-500 transition-colors">
                                             <X className="w-4 h-4" />

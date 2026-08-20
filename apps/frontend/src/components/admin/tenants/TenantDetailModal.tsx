@@ -504,7 +504,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                         <>
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <p className="text-sm text-gray-500">{formatMessage(m.created, { date: formatDate(tenant.created_at) })}</p>
-                                <div className="rounded-lg bg-gray-50 px-4 py-3 text-right">
+                                <div className="rounded-lg bg-gray-50 px-4 py-3 text-end">
                                     <p className="text-xs font-medium text-gray-500">{m.owner}</p>
                                     <p className="mt-1 text-sm font-semibold text-gray-900">{tenant.owner?.name || m.unknownOwner}</p>
                                     <p className="text-xs text-gray-500">{tenant.owner?.email || m.noOwnerEmail}</p>
@@ -608,7 +608,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     disabled={isSaving}
                                     className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                 >
-                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                                     {m.subscriptionControls.save}
                                 </button>
                             </div>
@@ -654,7 +654,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     disabled={isSavingLocalization}
                                     className="inline-flex items-center rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-60"
                                 >
-                                    {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                                     {lc.save}
                                 </button>
                             </div>
@@ -698,7 +698,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     disabled={isSavingFeatures}
                                     className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                 >
-                                    {isSavingFeatures ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {isSavingFeatures ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                                     {fc.save}
                                 </button>
                             </div>
@@ -773,7 +773,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     disabled={isGrantingAddon || !selectedAddonCode}
                                     className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                 >
-                                    {isGrantingAddon ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {isGrantingAddon ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                                     {ac.grant}
                                 </button>
                             </div>
@@ -826,7 +826,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                         disabled={isSavingBusinessType || !businessTypeDraft || businessTypeDraft === (tenant.business_type ?? '')}
                                         className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                     >
-                                        {isSavingBusinessType ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                        {isSavingBusinessType ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                                         {bt.save}
                                     </button>
                                     <button
@@ -920,7 +920,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
                                         <table className="w-full text-xs">
                                             <thead>
-                                                <tr className="bg-gray-50 text-left">
+                                                <tr className="bg-gray-50 text-start">
                                                     <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.name}</th>
                                                     <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.email}</th>
                                                     <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.role}</th>

@@ -250,11 +250,11 @@ export default function LeadDetailPage() {
                         )}
                         <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
                             <div className="flex items-center">
-                                <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.mobile ?? lead.phone}
+                                <Phone className="w-3.5 h-3.5 me-1.5 text-gray-400" /> {lead.mobile ?? lead.phone}
                             </div>
                             {lead.email && (
                                 <div className="flex items-center">
-                                    <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.email}
+                                    <Mail className="w-3.5 h-3.5 me-1.5 text-gray-400" /> {lead.email}
                                 </div>
                             )}
                         </div>

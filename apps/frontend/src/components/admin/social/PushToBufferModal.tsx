@@ -127,7 +127,7 @@ export default function PushToBufferModal({ post, defaultChannelId, onClose, onP
                                         <span className="text-xs text-gray-400">{channel.service}</span>
                                     )}
                                     {channel.isQueuePaused && (
-                                        <span className="ml-auto text-xs text-amber-600">paused</span>
+                                        <span className="ms-auto text-xs text-amber-600">paused</span>
                                     )}
                                 </label>
                             ))

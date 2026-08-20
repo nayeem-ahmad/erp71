@@ -94,7 +94,7 @@ export default function StorefrontOrdersPanel() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b bg-gray-50 text-left">
+                                <tr className="border-b bg-gray-50 text-start">
                                     <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.orderId}</th>
                                     <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.customer}</th>
                                     <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.items}</th>
@@ -162,7 +162,7 @@ export default function StorefrontOrdersPanel() {
                             total: data.total,
                         })}
                     </p>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <button
                             type="button"
                             onClick={() => setPage((p) => Math.max(1, p - 1))}

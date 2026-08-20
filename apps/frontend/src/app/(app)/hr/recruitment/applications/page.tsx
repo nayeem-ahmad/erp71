@@ -154,12 +154,12 @@ export default function ApplicationsPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                             <tr>
-                                <th className="p-2 text-left font-medium">{copy.columns.candidate}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.jobPost}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.stage}</th>
-                                <th className="hidden p-2 text-left font-medium md:table-cell">{copy.columns.appliedAt}</th>
-                                <th className="hidden p-2 text-right font-medium lg:table-cell">{copy.columns.expectedSalary}</th>
-                                <th className="hidden p-2 text-left font-medium lg:table-cell">{copy.columns.source}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.candidate}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.jobPost}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.stage}</th>
+                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.appliedAt}</th>
+                                <th className="hidden p-2 text-end font-medium lg:table-cell">{copy.columns.expectedSalary}</th>
+                                <th className="hidden p-2 text-start font-medium lg:table-cell">{copy.columns.source}</th>
                                 <th className="p-2" />
                             </tr>
                         </thead>
@@ -211,13 +211,13 @@ export default function ApplicationsPage() {
                                             {copy.lastMoved}: {formatDate(application.stage_changed_at)}
                                         </p>
                                     </td>
-                                    <td className="hidden p-2 text-right text-gray-600 lg:table-cell">
+                                    <td className="hidden p-2 text-end text-gray-600 lg:table-cell">
                                         {application.expected_salary == null
                                             ? '—'
                                             : formatBDT(Number(application.expected_salary))}
                                     </td>
                                     <td className="hidden p-2 text-gray-600 lg:table-cell">{application.source || '—'}</td>
-                                    <td className="p-2 text-right">
+                                    <td className="p-2 text-end">
                                         <div className="flex justify-end gap-1">
                                             {application.stage !== 'HIRED' && (
                                                 <Button

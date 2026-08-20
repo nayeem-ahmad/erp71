@@ -103,14 +103,14 @@ export default function AdminBlogCategoriesPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{m.name}</th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{m.name}</th>
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.nameBn}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.nameMs}
                                 </th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600" />
+                                <th className="px-3 py-2 text-end text-xs font-semibold text-gray-600" />
                             </tr>
                         </thead>
                         <tbody>
@@ -129,7 +129,7 @@ export default function AdminBlogCategoriesPage() {
                                         </td>
                                         <td className="hidden px-3 py-2 text-xs text-gray-600 md:table-cell">{row.name_bn ?? '—'}</td>
                                         <td className="hidden px-3 py-2 text-xs text-gray-600 md:table-cell">{row.name_ms ?? '—'}</td>
-                                        <td className="px-3 py-2 text-right">
+                                        <td className="px-3 py-2 text-end">
                                             <Button
                                                 variant="ghost"
                                                 icon={<Trash2 className="h-4 w-4" />}

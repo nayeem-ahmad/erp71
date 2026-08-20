@@ -118,7 +118,7 @@ export default function SmsCreditsPage() {
 
                 {isLoading ? (
                     <div className="rounded-lg border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading SMS credits...
+                        <Loader2 className="w-5 h-5 animate-spin me-2" /> Loading SMS credits...
                     </div>
                 ) : summary && (
                     <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
@@ -189,7 +189,7 @@ export default function SmsCreditsPage() {
                                                         disabled={purchasingId !== null}
                                                         className="inline-flex items-center rounded-xl bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition hover:bg-primary-hover disabled:opacity-60"
                                                     >
-                                                        {purchasingId === pkg.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+                                                        {purchasingId === pkg.id ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <Plus className="w-4 h-4 me-1" />}
                                                         Buy
                                                     </button>
                                                 </div>

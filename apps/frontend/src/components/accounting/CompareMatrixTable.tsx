@@ -60,8 +60,8 @@ type CompareMatrixTableProps = {
     footerRows?: CompareFooterRow[];
 };
 
-const thClass = `text-right px-3 py-2 ${compactDensity.formLabel} whitespace-nowrap sticky top-0 bg-gray-50 z-10`;
-const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel} whitespace-nowrap sticky top-0 left-0 bg-gray-50 z-20`;
+const thClass = `text-end px-3 py-2 ${compactDensity.formLabel} whitespace-nowrap sticky top-0 bg-gray-50 z-10`;
+const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel} whitespace-nowrap sticky top-0 start-0 bg-gray-50 z-20`;
 
 function AmountCell({ value, locale }: { value: number; locale: string }) {
     if (!value) {
@@ -112,19 +112,19 @@ export function CompareMatrixTable({
                     <tbody>
                         {trialBalanceRows.map((row) => (
                             <tr key={row.account.id ?? row.account.name} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                <td className="px-3 py-2 sticky left-0 bg-white text-gray-800">
+                                <td className="px-3 py-2 sticky start-0 bg-white text-gray-800">
                                     <CodedLabel code={row.account.code} name={row.account.name} bold />
                                     {row.account.group?.name ? (
-                                        <div className="pl-16 text-xs text-gray-400">{row.account.group.name}</div>
+                                        <div className="ps-16 text-xs text-gray-400">{row.account.group.name}</div>
                                     ) : null}
                                 </td>
                                 {columns.map((column) => (
-                                    <td key={`${row.account.id}-dr-${column.key}`} className="px-3 py-2 text-right text-gray-700">
+                                    <td key={`${row.account.id}-dr-${column.key}`} className="px-3 py-2 text-end text-gray-700">
                                         <AmountCell value={row.debit_amounts[column.key] ?? 0} locale={locale} />
                                     </td>
                                 ))}
                                 {columns.map((column) => (
-                                    <td key={`${row.account.id}-cr-${column.key}`} className="px-3 py-2 text-right text-gray-700">
+                                    <td key={`${row.account.id}-cr-${column.key}`} className="px-3 py-2 text-end text-gray-700">
                                         <AmountCell value={row.credit_amounts[column.key] ?? 0} locale={locale} />
                                     </td>
                                 ))}
@@ -134,19 +134,19 @@ export function CompareMatrixTable({
                     {totals?.debit || totals?.credit ? (
                         <tfoot>
                             <tr className="bg-gray-50 font-semibold border-t border-gray-200">
-                                <td className="px-3 py-2 text-xs sticky left-0 bg-gray-50">Grand Totals (Dr)</td>
+                                <td className="px-3 py-2 text-xs sticky start-0 bg-gray-50">Grand Totals (Dr)</td>
                                 {columns.map((column) => (
-                                    <td key={`total-dr-${column.key}`} className="px-3 py-2 text-right text-gray-900">
+                                    <td key={`total-dr-${column.key}`} className="px-3 py-2 text-end text-gray-900">
                                         <AmountCell value={totals.debit?.[column.key] ?? 0} locale={locale} />
                                     </td>
                                 ))}
                                 <td className="px-3 py-2" colSpan={columns.length} />
                             </tr>
                             <tr className="bg-gray-50 font-semibold">
-                                <td className="px-3 py-2 text-xs sticky left-0 bg-gray-50">Grand Totals (Cr)</td>
+                                <td className="px-3 py-2 text-xs sticky start-0 bg-gray-50">Grand Totals (Cr)</td>
                                 <td className="px-3 py-2" colSpan={columns.length} />
                                 {columns.map((column) => (
-                                    <td key={`total-cr-${column.key}`} className="px-3 py-2 text-right text-gray-900">
+                                    <td key={`total-cr-${column.key}`} className="px-3 py-2 text-end text-gray-900">
                                         <AmountCell value={totals.credit?.[column.key] ?? 0} locale={locale} />
                                     </td>
                                 ))}
@@ -182,22 +182,22 @@ export function CompareMatrixTable({
                             {section.groups.map((group) => (
                                 <Fragment key={`group-${section.name}-${group.name}`}>
                                     <tr className="bg-gray-50">
-                                        <td className="px-3 py-1.5 text-gray-700 sticky left-0 bg-gray-50">
+                                        <td className="px-3 py-1.5 text-gray-700 sticky start-0 bg-gray-50">
                                             <CodedLabel code={group.code} name={group.name} bold />
                                         </td>
                                         {columns.map((column) => (
-                                            <td key={`${group.name}-${column.key}`} className="px-3 py-1.5 text-right font-semibold text-gray-700">
+                                            <td key={`${group.name}-${column.key}`} className="px-3 py-1.5 text-end font-semibold text-gray-700">
                                                 <AmountCell value={group.subtotals?.[column.key] ?? 0} locale={locale} />
                                             </td>
                                         ))}
                                     </tr>
                                     {group.rows.map((row) => (
                                         <tr key={row.account.id ?? `${group.name}-${row.account.name}`} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                            <td className="px-5 py-1 text-gray-600 sticky left-0 bg-white">
+                                            <td className="px-5 py-1 text-gray-600 sticky start-0 bg-white">
                                                 <CodedLabel code={row.account.code} name={row.account.name} />
                                             </td>
                                             {columns.map((column) => (
-                                                <td key={`${row.account.id}-${column.key}`} className="px-3 py-1 text-right text-gray-700">
+                                                <td key={`${row.account.id}-${column.key}`} className="px-3 py-1 text-end text-gray-700">
                                                     <AmountCell value={row.amounts[column.key] ?? 0} locale={locale} />
                                                 </td>
                                             ))}
@@ -207,9 +207,9 @@ export function CompareMatrixTable({
                             ))}
                             {section.subtotals ? (
                                 <tr className="bg-gray-50 font-semibold border-t border-gray-200">
-                                    <td className="px-3 py-2 text-gray-800 sticky left-0 bg-gray-50">Total {section.name}</td>
+                                    <td className="px-3 py-2 text-gray-800 sticky start-0 bg-gray-50">Total {section.name}</td>
                                     {columns.map((column) => (
-                                        <td key={`section-total-${section.name}-${column.key}`} className="px-3 py-2 text-right text-gray-900">
+                                        <td key={`section-total-${section.name}-${column.key}`} className="px-3 py-2 text-end text-gray-900">
                                             <AmountCell value={section.subtotals?.[column.key] ?? 0} locale={locale} />
                                         </td>
                                     ))}
@@ -219,9 +219,9 @@ export function CompareMatrixTable({
                     ))}
                     {footerRows.map((row) => (
                         <tr key={row.label} className={footerClass(row.emphasis)}>
-                            <td className="px-3 py-2 sticky left-0 bg-inherit">{row.label}</td>
+                            <td className="px-3 py-2 sticky start-0 bg-inherit">{row.label}</td>
                             {columns.map((column) => (
-                                <td key={`${row.label}-${column.key}`} className="px-3 py-2 text-right">
+                                <td key={`${row.label}-${column.key}`} className="px-3 py-2 text-end">
                                     <AmountCell value={row.amounts[column.key] ?? 0} locale={locale} />
                                 </td>
                             ))}
