@@ -6,6 +6,7 @@ import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseDto } from './purchase.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import { allocateLandedCost } from '../database/landed-cost.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 
@@ -98,7 +99,32 @@ export class PurchasesService {
                 },
             });
 
-            for (const item of dto.items) {
+            // Freight is a real part of what these goods cost, so it has to
+            // reach the weighted-average pool. Before this it was captured on
+            // the bill, folded into total_amount, and then dropped: the receipt
+            // passed the raw line cost, so avg_cost excluded freight and the
+            // gross margin on every later sale of the product was overstated by
+            // the freight share — silently, with a correct-looking bill.
+            //
+            // Allocated pro-rata on line value. `PurchaseItem.unit_cost` keeps
+            // the supplier's price, because that is what the bill says and what
+            // a purchase report must show; only the inventory movement carries
+            // the landed figure.
+            //
+            // Tax and discount stay out of it deliberately. Bangladeshi VAT on
+            // a local purchase is rebatable, so capitalising it would overstate
+            // COGS; a trade discount is already reflected in the line prices a
+            // supplier bills. Neither is a landed cost.
+            const landed = allocateLandedCost({
+                lines: dto.items.map((item, index) => ({
+                    key: String(index),
+                    quantity: item.quantity,
+                    baseAmount: item.quantity * item.unitCost,
+                })),
+                charges: [{ label: 'freight', amount: freightAmount }],
+            });
+
+            for (const [index, item] of dto.items.entries()) {
                 await tx.purchaseItem.create({
                     data: {
                         purchase_id: purchase.id,
@@ -117,7 +143,7 @@ export class PurchasesService {
                     movementType: 'PURCHASE_RECEIPT',
                     referenceType: 'PURCHASE',
                     referenceId: purchase.id,
-                    unitCost: item.unitCost,
+                    unitCost: landed.lines[index].landedUnitCost,
                 });
             }
 
