@@ -36,11 +36,16 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const DRAFT = {
-    title: 'Our shop is open late through Eid week',
-    excerpt: 'Extended hours for the Eid rush.',
-    body_md: '## Extended hours\n\nWe are open until midnight.',
-    seo_title: 'Extended Eid hours',
-    seo_description: 'Our shop stays open late through Eid week.',
+    translations: [
+        {
+            locale: 'en',
+            title: 'Our shop is open late through Eid week',
+            excerpt: 'Extended hours for the Eid rush.',
+            body_md: '## Extended hours\n\nWe are open until midnight.',
+            seo_title: 'Extended Eid hours',
+            seo_description: 'Our shop stays open late through Eid week.',
+        },
+    ],
     slug: 'extended-eid-hours',
     cover_alt: 'A lit-up shopfront at night',
     category_id: 'cat-1',
@@ -132,5 +137,35 @@ describe('TenantPostEditor — AI Assistant gating and locale', () => {
         await waitFor(() =>
             expect(api.draftTenantBlogPost).toHaveBeenCalledWith({ prompt: 'Eid hours', locale: 'bn' }),
         );
+    });
+
+    /**
+     * A shop's post stores one title and one body. Offering a language picker
+     * or a translate mode here would promise somewhere for a second language to
+     * go that does not exist — the modal only grows those when the editor
+     * hands it a language list, and this one does not.
+     */
+    it('offers no language picker, because a shop post holds one language', async () => {
+        entitled();
+
+        render(<TenantPostEditor />);
+        fireEvent.click(await screen.findByRole('button', { name: 'AI Assistant' }));
+
+        expect(screen.queryByText('Languages')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Translate existing' })).not.toBeInTheDocument();
+    });
+
+    it('fills the form from the one language the assistant wrote', async () => {
+        entitled();
+
+        render(<TenantPostEditor />);
+        fireEvent.click(await screen.findByRole('button', { name: 'AI Assistant' }));
+        fireEvent.change(screen.getByLabelText('What should this post be about?'), {
+            target: { value: 'Eid hours' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+        expect(await screen.findByDisplayValue(DRAFT.translations[0].title)).toBeInTheDocument();
+        expect(screen.getByDisplayValue(DRAFT.slug)).toBeInTheDocument();
     });
 });

@@ -8,12 +8,17 @@ import { Button, Field, Input, Select, Textarea, Checkbox, ConfirmDialog } from 
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
 import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { getLocaleConfig } from '@/lib/localization/config';
 import { toast } from '@/lib/toast';
 import { ENABLED_LOCALE_CODES, type SupportedLocaleCode } from '@erp71/shared-types';
 
 const LOCALES = ENABLED_LOCALE_CODES;
 type Locale = SupportedLocaleCode;
+
+function languageName(code: string): string {
+    return getLocaleConfig(code as Locale).nativeLabel;
+}
 
 type Translation = {
     locale: string;
@@ -71,7 +76,12 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
     const [aiOpen, setAiOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiLoading, setAiLoading] = useState(false);
-    const [aiDraft, setAiDraft] = useState<any>(null);
+    // What an overwrite confirm would apply. `kind` decides the wording as well
+    // as the handler: a generation also rewrites the post-level fields, a
+    // translation only touches the language tabs it was asked for.
+    const [aiPending, setAiPending] = useState<
+        { kind: 'draft'; draft: any } | { kind: 'translation'; rows: any[] } | null
+    >(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     const current = useMemo(
@@ -129,6 +139,76 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
             if (!existing) return [...rows, { ...blankTranslation(locale), ...patch }];
             return rows.map((row) => (row.locale === locale ? { ...row, ...patch } : row));
         });
+    }
+
+    /**
+     * Replace whole language tabs at once.
+     *
+     * Separate from patchCurrent because the assistant fills languages the
+     * author is not looking at, and one setState per locale would drop all but
+     * the last — they would each start from the same stale array.
+     */
+    function patchTranslations(rows: any[]) {
+        setTranslations((existing) => {
+            const next = [...existing];
+            for (const row of rows) {
+                const filled: Translation = {
+                    locale: row.locale,
+                    title: row.title ?? '',
+                    excerpt: row.excerpt ?? '',
+                    body_md: row.body_md ?? '',
+                    seo_title: row.seo_title ?? '',
+                    seo_description: row.seo_description ?? '',
+                };
+                const index = next.findIndex((item) => item.locale === row.locale);
+                if (index >= 0) next[index] = filled;
+                else next.push(filled);
+            }
+            return next;
+        });
+    }
+
+    /** Whether any of these language tabs would lose words if overwritten. */
+    function writtenIn(codes: string[]): boolean {
+        return translations.some(
+            (row) =>
+                codes.includes(row.locale) &&
+                (row.title.trim() || row.excerpt.trim() || row.body_md.trim()),
+        );
+    }
+
+    /**
+     * Post-level fields a generation rewrites regardless of which tab is open.
+     * Only meaningful on a saved post — on a new one they are still at their
+     * defaults and there is nothing to lose.
+     */
+    function postFieldsSet(): boolean {
+        return !!(
+            postId &&
+            (slug.trim() ||
+                categoryId ||
+                audience !== 'BOTH' ||
+                authorName.trim() ||
+                authorTitle.trim() ||
+                coverAlt.trim() ||
+                featured)
+        );
+    }
+
+    /** Open the tab that just changed, so the author sees what arrived. */
+    function focusFirst(rows: any[]) {
+        const first = rows.find((row) => (LOCALES as readonly string[]).includes(row.locale));
+        if (first) setLocale(first.locale as Locale);
+    }
+
+    /**
+     * Each extra language is its own round-trip, so one can fail while the
+     * others land. Naming the ones that failed is the difference between "retry
+     * Malay" and wondering why a tab is still empty.
+     */
+    function reportFailures(failed?: string[]) {
+        if (!failed?.length) return;
+        toast.error(formatMessage(e.ai.someFailed, { languages: failed.map(languageName).join(', ') }));
     }
 
     /**
@@ -211,19 +291,14 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
 
     /**
      * Fills the fields but writes nothing — the author reviews in the form and
-     * saves through the normal button. Only the open locale tab is patched,
-     * because the request asked for that language; the post-level fields
-     * (slug, category, audience, author, featured) belong to the post rather
-     * than to a language and are always applied.
+     * saves through the normal button. Every language the assistant returned is
+     * patched; the post-level fields (slug, category, audience, author,
+     * featured) belong to the post rather than to a language and are applied
+     * once.
      */
     function applyDraft(draft: any) {
-        patchCurrent({
-            title: draft.title ?? '',
-            excerpt: draft.excerpt ?? '',
-            body_md: draft.body_md ?? '',
-            seo_title: draft.seo_title ?? '',
-            seo_description: draft.seo_description ?? '',
-        });
+        const rows = draft.translations ?? [];
+        patchTranslations(rows);
 
         if (draft.slug) setSlug(draft.slug);
         setCategoryId(draft.category_id ?? '');
@@ -233,40 +308,88 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
         if (draft.cover_alt) setCoverAlt(draft.cover_alt);
         setFeatured(!!draft.featured);
 
+        focusFirst(rows);
         toast.success(e.ai.filled);
     }
 
-    async function generateDraft() {
+    /**
+     * A translation is copy and nothing else. The slug, category, audience and
+     * cover are the post's, shared by every language, so translating must leave
+     * them exactly as the author set them.
+     */
+    function applyTranslations(rows: any[]) {
+        patchTranslations(rows);
+        focusFirst(rows);
+        toast.success(e.ai.translated);
+    }
+
+    async function generateDraft(locales?: string[]) {
+        const targets = locales?.length ? locales : [locale];
         setAiLoading(true);
         try {
-            const draft = await api.draftAdminBlogPost({ prompt: aiPrompt, locale });
+            const draft = await api.draftAdminBlogPost({ prompt: aiPrompt, locales: targets });
             setAiOpen(false);
+            reportFailures(draft?.failed_locales);
 
             // Confirm only once there is something to apply — a cancelled
             // overwrite should not also have thrown the generation away.
             // For an existing post, applyDraft also overwrites the post-level
             // fields (slug, category, audience, author, featured) unconditionally,
             // so any of those already holding a value counts as content too —
-            // not just the open locale tab.
-            const hasContent = !!(
-                current.title.trim() ||
-                current.excerpt.trim() ||
-                current.body_md.trim() ||
-                (postId &&
-                    (slug.trim() ||
-                        categoryId ||
-                        audience !== 'BOTH' ||
-                        authorName.trim() ||
-                        authorTitle.trim() ||
-                        coverAlt.trim() ||
-                        featured))
-            );
-            if (hasContent) {
-                setAiDraft(draft);
+            // not just the language tabs being filled.
+            const rows = draft?.translations ?? [];
+            if (writtenIn(rows.map((row: any) => row.locale)) || postFieldsSet()) {
+                setAiPending({ kind: 'draft', draft });
                 return;
             }
 
             applyDraft(draft);
+        } catch (error) {
+            toast.error((error as Error).message);
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
+    /**
+     * Carry a language tab the author has already written into the others.
+     *
+     * The copy travels from the editor rather than from the saved post, so this
+     * works on an unsaved draft — which is when an author is most likely to
+     * want it.
+     */
+    async function translateDraft({ source, targets }: { source: string; targets: string[] }) {
+        const row = translations.find((item) => item.locale === source);
+        if (!row?.title.trim() || !row.body_md.trim()) {
+            toast.error(e.ai.sourceEmpty);
+            return;
+        }
+
+        setAiLoading(true);
+        try {
+            const result = await api.translateAdminBlogPost({
+                source_locale: source,
+                target_locales: targets,
+                title: row.title,
+                body_md: row.body_md,
+                excerpt: row.excerpt || undefined,
+                seo_title: row.seo_title || undefined,
+                seo_description: row.seo_description || undefined,
+            });
+            setAiOpen(false);
+            reportFailures(result?.failed_locales);
+
+            const rows = result?.translations ?? [];
+            if (!rows.length) return;
+
+            // Only the target tabs can be overwritten here — a translation
+            // never touches the post-level fields a generation rewrites.
+            if (writtenIn(rows.map((item: any) => item.locale))) {
+                setAiPending({ kind: 'translation', rows });
+                return;
+            }
+
+            applyTranslations(rows);
         } catch (error) {
             toast.error((error as Error).message);
         } finally {
@@ -528,24 +651,47 @@ export default function AdminPostEditor({ postId }: { postId?: string }) {
                     promptPlaceholder: e.ai.promptPlaceholder,
                     generate: e.ai.generate,
                     cancel: t.common.cancel,
+                    modeWrite: e.ai.modeWrite,
+                    modeTranslate: e.ai.modeTranslate,
+                    languages: e.ai.languages,
+                    languagesHint: e.ai.languagesHint,
+                    translateFrom: e.ai.translateFrom,
+                    translateInto: e.ai.translateInto,
+                    translateAction: e.ai.translateAction,
+                    translateHint: e.ai.translateHint,
+                    nothingToTranslate: e.ai.nothingToTranslate,
+                    alreadyWritten: e.ai.alreadyWritten,
+                }}
+                languages={{
+                    options: LOCALES.map((code) => ({
+                        code,
+                        label: languageName(code),
+                        filled: translations.some(
+                            (row) => row.locale === code && !!row.title.trim() && !!row.body_md.trim(),
+                        ),
+                    })),
+                    current: locale,
                 }}
                 onPromptChange={setAiPrompt}
                 onClose={() => setAiOpen(false)}
                 onGenerate={generateDraft}
+                onTranslate={translateDraft}
             />
 
             <ConfirmDialog
-                open={!!aiDraft}
+                open={!!aiPending}
                 title={e.ai.overwriteTitle}
-                prompt={e.ai.overwritePrompt}
+                prompt={aiPending?.kind === 'translation' ? e.ai.overwriteTranslationPrompt : e.ai.overwritePrompt}
                 confirmLabel={e.ai.replace}
                 cancelLabel={t.common.cancel}
                 danger
-                onCancel={() => setAiDraft(null)}
+                onCancel={() => setAiPending(null)}
                 onConfirm={() => {
-                    const draft = aiDraft;
-                    setAiDraft(null);
-                    applyDraft(draft);
+                    const pending = aiPending;
+                    setAiPending(null);
+                    if (!pending) return;
+                    if (pending.kind === 'translation') applyTranslations(pending.rows);
+                    else applyDraft(pending.draft);
                 }}
             />
         </div>
