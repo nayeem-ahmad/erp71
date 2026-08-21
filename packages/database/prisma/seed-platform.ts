@@ -329,6 +329,18 @@ export async function seedPlatformReferenceData(
     });
 
     await upsertAddon({
+        code: 'IMPORTS_LC',
+        name: 'Imports (LC)',
+        description:
+            'Letter-of-credit import files, landed-cost allocation, duty and VAT tracking, and the LC register — for retailers who import rather than buy locally.',
+        category: 'operations',
+        monthly_price: 999,
+        yearly_price: 9990,
+        sort_order: 15,
+        features_json: { premiumImports: true },
+    });
+
+    await upsertAddon({
         code: 'ADVANCED_ACCOUNTING',
         name: 'Advanced Accounting',
         description: 'Comparative P&L, budget vs actual, cash flow, and financial ratios for tenants on plans below PREMIUM.',

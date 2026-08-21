@@ -24,7 +24,12 @@ export type PostingEventType =
     | 'investor_contribution'
     | 'investor_withdrawal'
     | 'investor_profit_accrual'
-    | 'investor_profit_payout';
+    | 'investor_profit_payout'
+    // Imports under an LC. All three post through postMultiLeg rather than the
+    // rules engine, so they have no PostingRule rows and never will.
+    | 'import_cost'
+    | 'import_receipt'
+    | 'import_settlement';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;

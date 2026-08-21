@@ -28,6 +28,22 @@ describe('posting contract — callers vs default rules', () => {
         );
     });
 
+    describe('multi-leg tuples are never shadowed by a rule', () => {
+        const expectMultiLeg = POSTING_CONTRACT.filter((entry) => entry.expectation === 'multi-leg');
+
+        // postMultiLeg does not consult PostingRule, so a rule here would not be
+        // used — but its existence would mean somebody had wired the event into
+        // the two-legged engine as well, which for an import receipt posts a
+        // two-line voucher where five legs are required.
+        it.each(expectMultiLeg)(
+            '$eventType (from $emittedBy) has no default rule and no none-fallback',
+            (entry) => {
+                expect(ruleKeys.has(ruleKey(entry.eventType, entry.conditionKey, entry.conditionValue))).toBe(false);
+                expect(ruleKeys.has(ruleKey(entry.eventType, 'none', null))).toBe(false);
+            },
+        );
+    });
+
     describe('tuples that must post nothing have no rule and no none-fallback', () => {
         const expectSkip = POSTING_CONTRACT.filter((entry) => entry.expectation === 'skip');
 
