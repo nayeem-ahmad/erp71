@@ -27,11 +27,11 @@ export type TaxonomyOption = {
 /**
  * Where rows of a given list are consumed. `usage()` counts against it and
  * `remove()` reassigns through it, which is the only structural difference
- * between the three lists.
+ * between the four lists.
  */
 type Consumer = {
     /** Prisma delegate name on DatabaseService. */
-    table: 'lead' | 'leadConversation' | 'crmActivity';
+    table: 'lead' | 'crmActivity';
     /** FK column on that table pointing back at the list. */
     fk: 'source_id' | 'category_id' | 'channel_id' | 'purpose_id';
     /** Human noun used in "in use by N …" messages. */
@@ -41,12 +41,9 @@ type Consumer = {
 const CONSUMERS: Record<LeadTaxonomyKind, Consumer> = {
     [LeadTaxonomyKind.SOURCE]: { table: 'lead', fk: 'source_id', noun: 'lead' },
     [LeadTaxonomyKind.CATEGORY]: { table: 'lead', fk: 'category_id', noun: 'lead' },
-    // Repointed from leadConversation to crmActivity in R1. sync-crm-activities
-    // runs ahead of the API in the container start chain and mirrors every
-    // conversation into an activity, so crmActivity is a superset — counting it
-    // alone is complete. Counting the old table instead would let a channel used
-    // only by new activities be deleted, and onDelete: Restrict would surface
-    // that as a raw Prisma error rather than the friendly reassign flow.
+    // Channels and purposes are both counted against activities. They were
+    // counted against LeadConversation until R1 repointed them; that table was
+    // dropped in R3, so CrmActivity is now the only thing referencing either.
     [LeadTaxonomyKind.CHANNEL]: { table: 'crmActivity', fk: 'channel_id', noun: 'activity' },
     [LeadTaxonomyKind.PURPOSE]: { table: 'crmActivity', fk: 'purpose_id', noun: 'activity' },
 };
@@ -290,20 +287,7 @@ export class CrmLeadTaxonomyService {
             where: { tenant_id: tenantId, [fk]: id } as any,
         });
 
-        // A channel is also referenced by the legacy LeadConversation rows the
-        // backfill mirrored into activities. R1 keeps those rows, and their
-        // channel_id FK is onDelete: Restrict, so they have to move too or the
-        // delete below fails with a raw foreign-key error. Normally the mirror
-        // makes this count a subset of `inUse`; it is queried separately so a
-        // partially-backfilled tenant still gets the friendly reassign prompt
-        // instead of a 500.
-        const legacyInUse =
-            kind === LeadTaxonomyKind.CHANNEL
-                ? await this.db.leadConversation.count({
-                      where: { tenant_id: tenantId, channel_id: id },
-                  })
-                : 0;
-        const blocking = Math.max(inUse, legacyInUse);
+        const blocking = inUse;
 
         if (blocking > 0) {
             if (!reassignTo) {
@@ -329,15 +313,6 @@ export class CrmLeadTaxonomyService {
                     ...(kind === LeadTaxonomyKind.CHANNEL ? { channel_code: target.code } : {}),
                 } as any,
             });
-
-            if (kind === LeadTaxonomyKind.CHANNEL) {
-                // `LeadConversation.type` is the same denormalised code, so it
-                // moves with the FK for exactly the same reason.
-                await this.db.leadConversation.updateMany({
-                    where: { tenant_id: tenantId, channel_id: id },
-                    data: { channel_id: target.id, type: target.code },
-                });
-            }
         }
 
         if (row.is_system) {

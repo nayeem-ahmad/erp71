@@ -248,8 +248,7 @@ export class TenantsService {
 
             // CRM operational (before Customer)
             await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation
-            await tx.crmFollowUp.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.customerInteraction.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.crmActivity.deleteMany({ where: { tenant_id: tenantId } });
             await tx.crmCampaign.deleteMany({ where: { tenant_id: tenantId } }); // cascades CrmCampaignRecipient
 
             // Credit balances (before Customer / Supplier)

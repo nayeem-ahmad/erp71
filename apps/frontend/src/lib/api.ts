@@ -440,23 +440,6 @@ function buildReportQuery(params: Record<string, string | number | boolean | und
     return query.toString();
 }
 
-/** Filters shared by the conversations list and its summary tiles. */
-export type LeadConversationFilters = {
-    leadId?: string;
-    search?: string;
-    type?: string;
-    direction?: string;
-    createdBy?: string;
-    /** `true` narrows to the caller's own conversations; the server resolves the id. */
-    mine?: boolean;
-    dateFrom?: string;
-    dateTo?: string;
-    leadStatus?: string;
-    leadAssignedTo?: string;
-    sortBy?: string;
-    sortDir?: string;
-};
-
 /** Filters shared by the activities list and its summary tiles. */
 export type CrmActivityFilters = {
     leadId?: string;
@@ -486,15 +469,6 @@ function crmActivityQuery(
         dueToday: dueToday ? 'true' : undefined,
         overdue: overdue ? 'true' : undefined,
     });
-    return query ? `?${query}` : '';
-}
-
-function leadConversationQuery(
-    params?: LeadConversationFilters & { page?: number; limit?: number },
-): string {
-    if (!params) return '';
-    const { mine, ...rest } = params;
-    const query = buildReportQuery({ ...rest, mine: mine ? 'true' : undefined });
     return query ? `?${query}` : '';
 }
 
@@ -1085,19 +1059,6 @@ export const api = {
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, { method: 'DELETE' }),
     getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
     // CRM Interactions
-    getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {
-        const query = new URLSearchParams();
-        if (params?.customerId) query.set('customerId', params.customerId);
-        if (params?.page) query.set('page', String(params.page));
-        if (params?.limit) query.set('limit', String(params.limit));
-        return fetchWithAuth(`/crm/interactions${query.toString() ? `?${query.toString()}` : ''}`);
-    },
-    createCrmInteraction: (data: any) => fetchWithAuth('/crm/interactions', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-    }),
-    deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
     getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
@@ -1236,25 +1197,10 @@ export const api = {
             method: 'PUT',
             body: JSON.stringify({ fields }),
         }),
-    // CRM Lead Conversations
-    // Every key here must be declared on QueryLeadConversationsDto: the API runs
-    // ValidationPipe with `forbidNonWhitelisted`, so an undeclared param is a 400.
-    getLeadConversations: (params?: LeadConversationFilters & { page?: number; limit?: number }) =>
-        // fetchPaginated, not fetchWithAuth — the latter unwraps `.data` and drops `meta`,
-        // which loses `total` and leaves DataTable's server-mode footer at zero rows.
-        fetchPaginated(`/crm/lead-conversations${leadConversationQuery(params)}`),
-    getLeadConversationSummary: (params?: LeadConversationFilters) =>
-        fetchWithAuth(`/crm/lead-conversations/summary${leadConversationQuery(params)}`),
-    createLeadConversation: (data: any) => fetchWithAuth('/crm/lead-conversations', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-    }),
-    deleteLeadConversation: (id: string) => fetchWithAuth(`/crm/lead-conversations/${id}`, { method: 'DELETE' }),
-    // CRM Follow-ups (named to leave "Task" for the Project Management module)
-    // CRM activities — the merged table. `/crm/follow-ups` and
-    // `/crm/lead-conversations` below are the legacy pair it replaces; they stay
-    // until R3 drops them, but nothing in the UI calls them any more.
+    // CRM activities — the single table behind every CRM touch, planned or
+    // logged. The `/crm/follow-ups`, `/crm/lead-conversations` and
+    // `/crm/interactions` clients it replaced were removed in R3 along with
+    // their tables; the two page routes survive only as redirects.
     getCrmActivities: (params?: CrmActivityFilters & { page?: number; limit?: number }) =>
         fetchPaginated(`/crm/activities${crmActivityQuery(params)}`),
     getAllCrmActivities: (params?: CrmActivityFilters) =>
@@ -1281,33 +1227,6 @@ export const api = {
         fetchWithAuth(`/crm/activities/${id}/cancel`, { method: 'POST' }),
     deleteCrmActivity: (id: string) => fetchWithAuth(`/crm/activities/${id}`, { method: 'DELETE' }),
 
-    getCrmFollowUps: (params?: {
-        customerId?: string;
-        leadId?: string;
-        target?: 'customer' | 'lead';
-        status?: string;
-        dueToday?: boolean;
-    }) => {
-        const query = new URLSearchParams();
-        if (params?.customerId) query.set('customerId', params.customerId);
-        if (params?.leadId) query.set('leadId', params.leadId);
-        if (params?.target) query.set('target', params.target);
-        if (params?.status) query.set('status', params.status);
-        if (params?.dueToday) query.set('dueToday', 'true');
-        return fetchAllPages(`/crm/follow-ups${query.toString() ? `?${query.toString()}` : ''}`);
-    },
-    getCrmFollowUpSummary: () => fetchWithAuth('/crm/follow-ups/summary'),
-    createCrmFollowUp: (data: any) => fetchWithAuth('/crm/follow-ups', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-    }),
-    updateCrmFollowUp: (id: string, data: any) => fetchWithAuth(`/crm/follow-ups/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-    }),
-    deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
     // CRM dashboard — one aggregate per paint. The per-page summary endpoints
     // (`/crm/leads/summary` and friends) still serve their own list screens.
     getCrmDashboardOverview: dashboardWindowFetcher('/crm/dashboard/overview'),

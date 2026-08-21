@@ -369,9 +369,6 @@ model User {
   applicantRecords                  Applicant[]                 @relation("ApplicantUser")
   approvedLeaves                    LeaveRequest[]              @relation("LeaveApprover")
   approvedVouchers                  Voucher[]                   @relation("VoucherApprover")
-  createdInteractions               CustomerInteraction[]       @relation("InteractionCreator")
-  assignedCrmFollowUps              CrmFollowUp[]               @relation("CrmFollowUpAssignee")
-  createdCrmFollowUps               CrmFollowUp[]               @relation("CrmFollowUpCreator")
   crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
   crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
   refereeProfile                    Referee?
@@ -381,7 +378,6 @@ model User {
   assignedCrmContacts               CrmContact[]                @relation("CrmContactAssignee")
   createdCrmContacts                CrmContact[]                @relation("CrmContactCreator")
   crmContactAttachments             CrmContactAttachment[]      @relation("CrmContactAttachmentCreator")
-  createdLeadConversations          LeadConversation[]          @relation("LeadConversationCreator")
   createdCreditTransactions         CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdCampaigns                  CrmCampaign[]               @relation("CampaignCreator")
@@ -645,12 +641,9 @@ model Tenant {
   recurringVouchers          RecurringVoucher[]
   voucherTemplates           VoucherTemplate[]
   bankReconciliations        BankReconciliation[]
-  customerInteractions       CustomerInteraction[]
-  crmFollowUps               CrmFollowUp[]
   crmActivities              CrmActivity[]
   crmActivityPurposes        CrmActivityPurpose[]
   leads                      Lead[]
-  leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
   leadCategoryOptions        LeadCategoryOption[]
   conversationChannels       ConversationChannel[]
@@ -1864,8 +1857,6 @@ model Customer {
   quotations          Quotation[]
   warrantyClaims      WarrantyClaim[]
   loyaltyTransactions LoyaltyTransaction[]
-  interactions        CustomerInteraction[]
-  crmFollowUps        CrmFollowUp[]
   crmActivities       CrmActivity[]
   creditTransactions  CustomerCreditTransaction[]
   campaignRecipients  CrmCampaignRecipient[]
@@ -1953,26 +1944,6 @@ model Territory {
   @@unique([tenant_id, name, parent_id])
 }
 
-model CustomerInteraction {
-  id          String   @id @default(uuid())
-  tenant_id   String
-  store_id    String?
-  customer_id String
-  type        String // CALL | SMS | WHATSAPP | EMAIL | VISIT | NOTE
-  direction   String   @default("OUTBOUND")
-  summary     String
-  outcome     String?
-  created_by  String?
-  created_at  DateTime @default(now())
-
-  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  creator  User?    @relation("InteractionCreator", fields: [created_by], references: [id])
-
-  @@index([tenant_id, customer_id])
-  @@index([tenant_id, created_at])
-}
-
 model Lead {
   id                    String        @id @default(uuid())
   tenant_id             String
@@ -2038,8 +2009,6 @@ model Lead {
   convertedCustomer  Customer?              @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
   sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
-  conversations      LeadConversation[]
-  crmFollowUps       CrmFollowUp[]
   crmActivities      CrmActivity[]
   projects           Project[]
   campaignRecipients CrmCampaignRecipient[]
@@ -2241,78 +2210,11 @@ model ConversationChannel {
   updated_at DateTime @updatedAt
 
   tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  conversations LeadConversation[]
   activities    CrmActivity[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
   @@index([tenant_id, is_active, sort_order])
-}
-
-model LeadConversation {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  store_id   String?
-  lead_id    String
-  /// The channel's `code`, denormalised. Kept alongside `channel_id` because every
-  /// filter, sort and groupBy on this table reads it, and the composite index below
-  /// serves those directly — resolving a code to an id on every request would buy
-  /// nothing. Written only by the service, always from the resolved channel.
-  type       String
-  channel_id String?
-  direction  String   @default("OUTBOUND")
-  summary    String
-  outcome    String?
-  created_by String?
-  created_at DateTime @default(now())
-
-  tenant  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  lead    Lead                 @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  creator User?                @relation("LeadConversationCreator", fields: [created_by], references: [id])
-  channel ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: Restrict)
-
-  @@index([tenant_id, lead_id])
-  @@index([tenant_id, created_at])
-  // Serves the cross-lead conversations list, which filters by type across every lead.
-  // Without it a type filter degrades to a full tenant-partition scan.
-  @@index([tenant_id, type, created_at])
-  // Serves the per-channel usage counts on the CRM Setup screen.
-  @@index([tenant_id, channel_id])
-}
-
-/// A dated, assignable prompt to contact a customer or a lead — "call Rahim
-/// about his overdue invoice on Thursday". Distinct from LeadConversation /
-/// CustomerInteraction, which record contact that already happened.
-///
-/// Named FollowUp rather than Task because "Task" belongs to the Project
-/// Management module. The generic manual type is GENERAL for the same reason a
-/// FOLLOW_UP type inside a FollowUp table reads badly.
-model CrmFollowUp {
-  id           String    @id @default(uuid())
-  tenant_id    String
-  store_id     String?
-  customer_id  String?
-  lead_id      String?
-  type         String // GENERAL | COLLECTION | BIRTHDAY | REORDER_REMINDER
-  title        String
-  due_at       DateTime
-  completed_at DateTime?
-  assigned_to  String?
-  created_by   String?
-  notes        String?
-  status       String    @default("PENDING")
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-
-  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  lead     Lead?     @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  assignee User?     @relation("CrmFollowUpAssignee", fields: [assigned_to], references: [id])
-  creator  User?     @relation("CrmFollowUpCreator", fields: [created_by], references: [id])
-
-  @@index([tenant_id, status, due_at])
-  @@index([tenant_id, customer_id])
-  @@index([tenant_id, lead_id])
 }
 
 model CrmActivityPurpose {
@@ -2336,16 +2238,16 @@ model CrmActivityPurpose {
 }
 
 /// One row per planned OR logged CRM touch. `status` separates the two — a
-/// PLANNED row is a task, a DONE row is history. Replaces LeadConversation,
-/// CustomerInteraction and CrmFollowUp, which survive read-only through R2 and
-/// are dropped in R3. See docs/superpowers/specs/2026-08-12-crm-activity-unification-design.md
+/// PLANNED row is a task, a DONE row is history. Replaced LeadConversation,
+/// CustomerInteraction and CrmFollowUp, which were dropped in R3 once their rows
+/// had been mirrored here. See docs/superpowers/specs/2026-08-12-crm-activity-unification-design.md
 model CrmActivity {
   id           String  @id @default(uuid())
   tenant_id    String
   store_id     String?
 
   /// Exactly one of lead_id / customer_id is set — enforced in the service, the
-  /// same rule CrmFollowUp.validateFollowUpTarget already applies.
+  /// same rule the old CrmFollowUp write path applied.
   lead_id     String?
   customer_id String?
 
@@ -2375,13 +2277,6 @@ model CrmActivity {
   created_by  String?
   origin      String  @default("MANUAL")
 
-  /// Backfill provenance. Both are null on user-created rows, and Postgres
-  /// treats NULLs as distinct, so the unique index below constrains only
-  /// backfilled rows — which is what makes sync-crm-activities re-runnable.
-  /// Dropped in R3.
-  legacy_source String?
-  legacy_id     String?
-
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -2393,7 +2288,6 @@ model CrmActivity {
   assignee User?                @relation("CrmActivityAssignee", fields: [assigned_to], references: [id])
   creator  User?                @relation("CrmActivityCreator", fields: [created_by], references: [id])
 
-  @@unique([tenant_id, legacy_source, legacy_id])
   @@index([tenant_id, status, due_at])
   @@index([tenant_id, assigned_to, status, due_at])
   @@index([tenant_id, lead_id, status, due_at])

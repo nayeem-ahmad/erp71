@@ -13,7 +13,6 @@
     "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
     "sync:accounting": "tsx prisma/sync-accounting.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
-    "sync:crm-activities": "tsx prisma/sync-crm-activities.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:work-schedules": "tsx prisma/sync-work-schedules.ts",
     "sync:salary-components": "tsx prisma/sync-salary-components.ts",
