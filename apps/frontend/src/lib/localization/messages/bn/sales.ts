@@ -435,8 +435,10 @@ export const salesMessages = {
             title: "বিক্রয় Quotations",
             subtitle: "Build estimates and track expirations",
             newQuotation: "নতুন কোটেশন",
+            newProforma: "নতুন প্রোফর্মা ইনভয়েস",
             columns: {
                 quoteNumber: "কোট #",
+                docKind: "ধরন",
                 date: "তারিখ",
                 customer: "গ্রাহক",
                 items: "আইটেম",
@@ -450,6 +452,8 @@ export const salesMessages = {
                 sent: "প্রেরিত",
                 accepted: "গৃহীত",
                 converted: "রূপান্তরিত",
+                quotesOnly: "শুধু কোটেশন",
+                proformas: "প্রোফর্মা ইনভয়েস",
             },
             dataTable: {
                 title: "বিক্রয় Quotations",
@@ -486,6 +490,23 @@ export const salesMessages = {
                 saveChanges: "সংরক্ষণ Changes",
                 shareSubject: "কোটেশন {number}",
                 shareError: "শেয়ার লিংক তৈরি করা যায়নি। আবার চেষ্টা করুন।",
+                shareSubjectProforma: "প্রোফর্মা ইনভয়েস {number}",
+                docKind: {
+                    QUOTE: "কোটেশন",
+                    PROFORMA: "প্রোফর্মা",
+                },
+                terms: {
+                    heading: "বাণিজ্যিক শর্তাবলি",
+                    incoterm: "ইনকোটার্ম",
+                    portOfLoading: "লোডিং বন্দর",
+                    portOfDischarge: "খালাস বন্দর",
+                    paymentTerms: "পেমেন্ট শর্ত",
+                    deliveryLeadTime: "ডেলিভারি সময়",
+                    countryOfOrigin: "উৎপাদনের দেশ",
+                    currency: "মুদ্রা",
+                    advance: "অগ্রিম",
+                    days: "{count} দিন",
+                },
             },
         },
         returns: {

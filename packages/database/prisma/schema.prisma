@@ -601,6 +601,7 @@ model Tenant {
   accountSubgroups           AccountSubgroup[]
   accounts                   Account[]
   voucherSequences           VoucherSequence[]
+  documentSequences          DocumentSequence[]
   vouchers                   Voucher[]
   voucherAttachments         VoucherAttachment[]
   cashierSessions            CashierSession[]
@@ -929,6 +930,19 @@ model SalesSettings {
   paper_size              String   @default("A4") // A4, A5, Letter, Thermal80, Thermal58
   reference_number_format String   @default("YYMM-#") // Format template
   pos_enabled             Boolean  @default(true)
+
+  /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
+  /// buyer's bank opening an LC) knows where to remit. Held on the tenant
+  /// rather than per document because they are typed once and change rarely —
+  /// and because a wrong account number repeated across fifty PIs is a support
+  /// case, not a data-entry mistake.
+  bank_name               String?
+  bank_branch             String?
+  bank_account_name       String?
+  bank_account_number     String?
+  bank_routing_number     String?
+  bank_swift_code         String?
+
   created_at              DateTime @default(now())
   updated_at              DateTime @updatedAt
 
@@ -2633,6 +2647,39 @@ model AccountingSettings {
   @@map("accounting_settings")
 }
 
+/// A named, tenant-scoped, optionally year-resetting counter for human-readable
+/// document numbers (`PI-2526-00001`, `IMP-2526-00007`).
+///
+/// Deliberately NOT `VoucherSequence`, which it resembles: that table is keyed
+/// by `voucher_type` and read by the posting engine, and widening it to hold
+/// sales and import series would make an accounting table the source of truth
+/// for documents that never touch the ledger.
+///
+/// Counting rows (`count() + 1`, as PurchasesService does) is what this exists
+/// to avoid: quotations can be deleted, so a count-derived number reissues an
+/// identifier that a customer may already be holding on a printed document.
+model DocumentSequence {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT.
+  doc_type    String
+  /// Bangladeshi fiscal year the series resets on — "2526" means July 2025 to
+  /// June 2026. Empty string for a series that never resets, so the unique
+  /// constraint below stays usable either way (a nullable column would let two
+  /// never-resetting rows coexist, since NULL != NULL in Postgres).
+  period_key  String   @default("")
+  prefix      String
+  next_number Int      @default(1)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, doc_type, period_key])
+  @@index([tenant_id])
+  @@map("document_sequences")
+}
+
 model VoucherSequence {
   id           String   @id
   tenant_id    String
@@ -2913,6 +2960,42 @@ model Quotation {
   version           Int       @default(1)
   original_quote_id String?
   notes             String?
+
+  /// QUOTE | PROFORMA. A proforma invoice is a quotation with commercial terms
+  /// attached and a different name on the paper, so it is a document kind here
+  /// rather than a table of its own. Drives the number series, the print
+  /// template and what the public page calls itself.
+  ///
+  /// A quote can be promoted to a proforma; the reverse is deliberately not
+  /// allowed, because a PI may already have an advance receipted against it.
+  doc_kind          String    @default("QUOTE")
+
+  /// Commercial terms. All null on an ordinary quote — these are what make a
+  /// document a PI that a buyer's bank will accept against an LC application.
+  ///
+  /// `currency` is the one place a non-BDT amount is allowed to reach the
+  /// database outside platform billing, and it stops at this table: nothing
+  /// posts to the ledger until the PI becomes a sale, and `convertToOrder`
+  /// translates at `exchange_rate` on the way through. See
+  /// docs/lc-imports-and-proforma-invoice-plan.md §3.
+  currency          String    @default("BDT")
+  /// BDT per one unit of `currency`, fixed when the document was written.
+  /// Required when currency is not BDT, ignored when it is.
+  exchange_rate     Decimal?  @db.Decimal(12, 6)
+  incoterm          String? // FOB | CFR | CIF | EXW | DDP | DAP | FCA
+  port_of_loading   String?
+  port_of_discharge String?
+  payment_terms     String?
+  /// Percentage of the total requested up front. Drives the suggested deposit
+  /// when the PI is converted to a sales order.
+  advance_percent   Decimal?  @db.Decimal(5, 2)
+  /// Days from order to delivery, as promised to the buyer. Deliberately not
+  /// `lead_time_days`: `Product.lead_time_days` is the tenant's own
+  /// replenishment lead time — internal planning data that a customer-facing
+  /// document must never carry — and two fields a line apart in a join with the
+  /// same name eventually get copied into each other.
+  delivery_lead_time_days Int?
+  country_of_origin String?
   /// Unguessable secret authorizing the public view. Clearing it revokes every
   /// link ever shared for this quotation, short or long.
   share_token       String?   @unique
@@ -6093,6 +6176,12 @@ enum ShortLinkKind {
 
 enum ShortLinkEntity {
   QUOTATION
+  /// Distinct from QUOTATION even though both resolve to a Quotation row and to
+  /// the same /q/<token> page. "Did the buyer open the PI" is a materially
+  /// different sales signal from "did they open a quote", and ShortLinkClick
+  /// already captures everything needed to answer it — it just cannot separate
+  /// the two without this value.
+  PROFORMA_INVOICE
   STOREFRONT_PRODUCT
 }
 

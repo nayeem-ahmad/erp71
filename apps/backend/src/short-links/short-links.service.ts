@@ -9,6 +9,7 @@ import { DatabaseService } from '../database/database.service';
 import { buildClickContext, ClickInput } from './click-context';
 import { isSafeTarget } from './is-safe-target';
 import { generateShortCode } from './short-link-code';
+import { ShortLinkEntity } from '@prisma/client';
 
 export type ShortLinkView = {
     id: string;
@@ -21,7 +22,13 @@ export type ShortLinkView = {
     revoked_at: Date | null;
 };
 
-type EntityType = 'QUOTATION' | 'STOREFRONT_PRODUCT';
+/**
+ * Derived from the Prisma enum rather than restated as a union: this type was
+ * hand-written and had already fallen a value behind the schema, which failed
+ * as a type error at the call site rather than as anything a reader would spot
+ * here. Adding a ShortLinkEntity value now widens this automatically.
+ */
+type EntityType = ShortLinkEntity;
 
 /**
  * What the redirect handler observed about the visitor. Every field is optional:

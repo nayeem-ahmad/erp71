@@ -23,6 +23,10 @@ export enum PrintDocType {
     SALES_INVOICE = 'SALES_INVOICE',
     POS_RECEIPT = 'POS_RECEIPT',
     QUOTE = 'QUOTE',
+    /// Separate from QUOTE: a proforma carries commercial terms and beneficiary
+    /// bank details a quote does not, so a tenant will usually want a different
+    /// template assigned to it.
+    PROFORMA_INVOICE = 'PROFORMA_INVOICE',
     VOUCHER = 'VOUCHER',
     MONEY_RECEIPT = 'MONEY_RECEIPT',
     SALES_ORDER = 'SALES_ORDER',

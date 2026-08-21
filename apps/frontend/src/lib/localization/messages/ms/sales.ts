@@ -435,8 +435,10 @@ export const salesMessages = {
             title: "Jualan Quotations",
             subtitle: "Build estimates and track expirations",
             newQuotation: "Baharu Sebut Harga",
+            newProforma: "Invois Proforma Baharu",
             columns: {
                 quoteNumber: "Sebut Harga #",
+                docKind: "Jenis",
                 date: "Tarikh",
                 customer: "Pelanggan",
                 items: "Item",
@@ -450,6 +452,8 @@ export const salesMessages = {
                 sent: "Dihantar",
                 accepted: "Diterima",
                 converted: "Ditukar",
+                quotesOnly: "Sebut harga sahaja",
+                proformas: "Invois proforma",
             },
             dataTable: {
                 title: "Jualan Quotations",
@@ -486,6 +490,23 @@ export const salesMessages = {
                 saveChanges: "Simpan Changes",
                 shareSubject: "Sebut Harga {number}",
                 shareError: "Tidak dapat mencipta pautan kongsi. Sila cuba lagi.",
+                shareSubjectProforma: "Invois Proforma {number}",
+                docKind: {
+                    QUOTE: "Sebut harga",
+                    PROFORMA: "Proforma",
+                },
+                terms: {
+                    heading: "Terma Komersial",
+                    incoterm: "Incoterm",
+                    portOfLoading: "Pelabuhan muat",
+                    portOfDischarge: "Pelabuhan punca",
+                    paymentTerms: "Terma pembayaran",
+                    deliveryLeadTime: "Tempoh penghantaran",
+                    countryOfOrigin: "Negara asal",
+                    currency: "Mata wang",
+                    advance: "Pendahuluan",
+                    days: "{count} hari",
+                },
             },
         },
         returns: {
