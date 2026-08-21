@@ -1,6 +1,12 @@
 # LC imports and proforma invoices — implementation plan
 
-Status: **proposal, not yet built.** Written 2026-08-20.
+Status: **built, 2026-08-21.** Written 2026-08-20 as a proposal; all five phases
+shipped. Kept as the design record — what was decided and why — rather than
+rewritten as documentation of the result. Where the build diverged from the
+proposal, §7 says so.
+
+Open follow-ups are tracked in `TODO.md` under "Imports (LC) and proforma
+invoices"; the largest is that **none of this has been opened in a browser.**
 
 Two requests that sound like one feature and are not:
 
@@ -547,3 +553,52 @@ freight charge benefits from today.
    `SalesOrder` would carry a USD `total_amount` into a BDT ledger. Either
    restrict the sales side to BDT, or fix the rate at conversion. Recommend
    fixing the rate at conversion and storing it on the order.
+
+---
+
+## 7. What changed between the proposal and the build
+
+Four things, none of which alters the shape above.
+
+**`delivery_lead_time_days`, not `lead_time_days`.** §3.1 named the column
+`lead_time_days`. The public-quotation DTO spec — whose job is to fail when the
+customer-facing allow-list widens — caught the collision with
+`Product.lead_time_days`, which is the tenant's own replenishment lead time and
+must never reach a page a stranger can open. Two fields a join apart with the
+same name eventually get copied into each other.
+
+**A `DocumentSequence` table, which the plan did not mention.** §3.1 assumed the
+existing quotation numbering would do. It would not: `QT-${Date.now()}` is epoch
+millis, which tells a shop owner nothing, and the `count() + 1` pattern used
+elsewhere reissues a number when a row is deleted — which quotations can be. One
+small table serves both the PI series and the import series.
+
+**`ImportShipmentItem` carries snapshots.** Not in the proposal. A product's HS
+code can be corrected later, but the shipment was assessed under the old one, and
+a reclassification must not retroactively rewrite how past entries were assessed.
+Same argument for weight and CBM, which a particular shipment can legitimately
+differ on.
+
+**The posting contract gained a third expectation.** §4.5 said only that
+`postMultiLeg` was needed. In practice `posting-contract.ts` knew `'rule'` and
+`'skip'`, and an import event is neither: it posts, but through no rule at all.
+Left unclassified it would have been invisible to the guard; classified as
+`'rule'` it would have demanded a default rule that must not exist. The new
+`'multi-leg'` expectation asserts the thing that actually matters — that no rule,
+and in particular no `condition_key: 'none'` fallback, ever shadows one of these
+events. A fallback there would quietly post a two-line voucher for an entry that
+needs five.
+
+### One question the plan asked, now answered
+
+§6.4 asked whether a customer PI may be denominated in USD at all. It may.
+`convertToOrder` translates at the rate written on the document and returns
+`exchange_rate_applied` on the order. Fixing the rate at conversion rather than
+reading a live one is deliberate: the order total has to match the proforma the
+customer signed, which is the one number they will check.
+
+The other three — multi-store landing, partial shipments against one LC, and who
+may revise a landed cost after receipt — are still open, and are now entries in
+`TODO.md` rather than questions here. The third is the one that will bite first:
+`assertOpen` refuses any cost change after receipt, which is right in principle
+and wrong for the C&F bill that routinely arrives weeks after the goods.

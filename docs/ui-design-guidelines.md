@@ -180,6 +180,13 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 - Visible focus rings (`focus-visible:ring-2 ring-primary/40`) on all interactive elements.
 - All icon-only buttons get `aria-label`; modals get `role="dialog"` + focus trap (ModalShell already does).
 - **Taka everywhere:** all money through `formatBDT()`; no literal `$` (POS bug).
+  - **One exception, added 2026-08-21:** a document denominated in a foreign
+    currency uses `formatCurrency(value, { currency })` instead. Today that is
+    a proforma invoice — internal detail page and the public `/q/<token>` page —
+    and the import shipment screens, where the supplier's invoice is in USD or
+    CNY. Printing a ৳ against a USD figure misstates what the buyer owes rather
+    than merely looking wrong. Everything else, including every BDT-denominated
+    document, stays on `formatBDT()`.
 - Layouts must tolerate Bangla text expansion (~20% longer than English) — no fixed-width labels.
 
 ---
