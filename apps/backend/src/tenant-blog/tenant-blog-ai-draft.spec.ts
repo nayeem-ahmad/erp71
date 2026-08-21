@@ -47,11 +47,35 @@ describe('TenantBlogService.draftWithAi', () => {
     it('returns a normalized draft scoped to the tenant categories', async () => {
         const draft = await service.draftWithAi('tenant-1', { prompt: 'eid hours' });
 
-        expect(draft.title).toBe('Eid hours');
+        expect(draft.translations[0].title).toBe('Eid hours');
         expect(draft.category_id).toBe('cat-9');
         expect(db.tenantBlogCategory.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ where: { tenant_id: 'tenant-1', deleted_at: null } }),
         );
+    });
+
+    it('writes in the language the shop asked for', async () => {
+        await service.draftWithAi('tenant-1', { prompt: 'eid hours', locale: 'bn' });
+
+        const [, systemPrompt] = ai.completeUnbilled.mock.calls[0];
+        expect(systemPrompt).toContain('Bangla');
+        expect((await service.draftWithAi('tenant-1', { prompt: 'eid hours', locale: 'bn' })).translations[0].locale)
+            .toBe('bn');
+    });
+
+    /**
+     * A shop's post stores one title and one body, so there is nowhere for a
+     * second language to go. A request that asked for three would otherwise
+     * spend three times the tenant's credits to produce two posts it has to
+     * throw away.
+     */
+    it('writes one language even if the request asks for several', async () => {
+        const draft = await service.draftWithAi('tenant-1', { prompt: 'eid hours', locales: ['bn', 'en', 'ms'] });
+
+        expect(draft.translations).toHaveLength(1);
+        expect(draft.translations[0].locale).toBe('bn');
+        expect(ai.completeUnbilled).toHaveBeenCalledTimes(1);
+        expect(ai.logUsage).toHaveBeenCalledTimes(1);
     });
 
     // A shop has no audience switch — the field does not exist on its posts, so

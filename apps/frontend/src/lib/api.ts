@@ -2004,8 +2004,17 @@ export const api = {
     },
     removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
     getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
-    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+    draftAdminBlogPost: (data: { prompt: string; locale?: string; locales?: string[] }) =>
         fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    translateAdminBlogPost: (data: {
+        source_locale: string;
+        target_locales: string[];
+        title: string;
+        body_md: string;
+        excerpt?: string;
+        seo_title?: string;
+        seo_description?: string;
+    }) => fetchWithAuth('/admin/blog/ai-translate', { method: 'POST', body: JSON.stringify(data) }),
     createAdminBlogCategory: (data: any) =>
         fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateAdminBlogCategory: (id: string, data: any) =>
