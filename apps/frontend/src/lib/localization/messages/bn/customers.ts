@@ -49,6 +49,12 @@ export const customersMessages = {
                 adding: "যোগ করা হচ্ছে...",
                 addCustomer: "গ্রাহক যোগ করুন",
                 addFailed: "গ্রাহক যোগ করতে ব্যর্থ। ফোন নম্বর বা গ্রাহক কোড ইতিমধ্যে ব্যবহৃত হতে পারে।",
+                editTitle: "গ্রাহক সম্পাদনা",
+                editSubtitle: "গ্রাহকের তথ্য হালনাগাদ করুন",
+                customerCodeEditHint: "খালি রাখলে বর্তমান কোড অপরিবর্তিত থাকবে।",
+                saving: "সংরক্ষণ করা হচ্ছে...",
+                saveCustomer: "পরিবর্তন সংরক্ষণ করুন",
+                updateFailed: "গ্রাহক হালনাগাদ করতে ব্যর্থ। ফোন নম্বর বা গ্রাহক কোড ইতিমধ্যে ব্যবহৃত হতে পারে।",
                 placeholders: {
                     customerCode: "CUST-00001",
                     name: "রহিম উদ্দিন",
