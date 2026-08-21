@@ -132,9 +132,9 @@ export const adminMessages = {
         allPlans: "Todos los planes",
         allStatuses: "Todos los estados",
         plans: {
-            free: "Free",
-            basic: "Basic",
-            accounting: "Accounting",
+            free: "Gratis",
+            basic: "Básico",
+            accounting: "Contabilidad",
             standard: "Standard",
             premium: "Premium",
         },
