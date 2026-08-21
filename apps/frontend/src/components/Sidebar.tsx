@@ -645,6 +645,11 @@ export default function Sidebar({
                     ${isResizing ? '' : 'transition-[width] duration-300'}
                     ${isOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'}
                     md:relative md:inset-y-auto md:start-auto md:z-auto md:translate-x-0
+                    ${/* The drawer's hidden transform must be undone on desktop in BOTH
+                        directions. `md:translate-x-0` alone loses to `rtl:translate-x-full`
+                        in the cascade, which parked the whole sidebar off the right edge
+                        in Arabic and Urdu at desktop widths. */ ''}
+                    md:rtl:translate-x-0
                 `}
                 onTouchStart={(event) => {
                     touchStartXRef.current = event.touches[0]?.clientX ?? 0;

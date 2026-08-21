@@ -100,11 +100,22 @@ function placeholders(value) {
 function isLanguageNeutral(value) {
     const trimmed = value.trim();
     if (trimmed === '') return true;
-    // No lowercase run of 3+ letters: symbols, numbers, codes, CAPS enums, emoji.
-    if (!/[a-z]{3}/.test(trimmed)) return true;
     if (/^https?:\/\//.test(trimmed)) return true;
     if (/^[\w.+-]+@[\w.-]+$/.test(trimmed)) return true;
     if (/^\/[\w/-]*$/.test(trimmed)) return true;
+
+    // Judge the words, not the punctuation: `{count} · {share}%` is a layout
+    // string with nothing to translate, but `{count} orders` is prose.
+    const words = trimmed.replace(/\{[A-Za-z0-9_]+\}/g, ' ');
+
+    // Nothing alphabetic left — symbols, numbers, separators, emoji.
+    if (!/[A-Za-z]/.test(words)) return true;
+    // No lowercase anywhere: API enum literals (`PENDING`, `IN_TRANSIT`, `VIP`)
+    // and bare codes (`N/A`, `SKU`), which every locale renders identically.
+    // A short lowercase word like `or` or `Qty` is prose and must be counted:
+    // the previous `[a-z]{3}` rule silently excluded 103 such leaves.
+    if (!/[a-z]/.test(words)) return true;
+
     return false;
 }
 

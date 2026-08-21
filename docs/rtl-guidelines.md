@@ -143,3 +143,23 @@ The suite cannot see layout. Before shipping UI that matters in RTL:
    should align with their cells, and the horizontal scroll affordance should
    point the way the table actually scrolls.
 4. Check that directional icons point the way the reader is going.
+
+### What the first mirrored-viewport pass found
+
+Login, the app shell, the sales hub and a populated products table were driven
+under `ar` and `ur` in a real browser. Two defects that no test could see:
+
+- **The desktop sidebar was parked off-screen.** `md:translate-x-0` undoes the
+  mobile drawer's hidden transform, but it loses in the cascade to the drawer's
+  own `rtl:translate-x-full`, so at `md` and up the whole sidebar sat at
+  `translateX(100%)` — invisible in both RTL locales. Fixed by pairing it with
+  `md:rtl:translate-x-0`. **A responsive reset of a `translate-*` needs an
+  `rtl:` twin, or the `rtl:` rule wins at every breakpoint.**
+- **Hardcoded English in JSX.** The login divider and the whole
+  email-verification banner were literals, never catalog keys — so they
+  rendered English in all nine locales while every i18n check reported the
+  catalogs complete. In RTL they were doubly obvious: LTR sentences in a
+  mirrored layout, with trailing full stops bidi-flipped to the front.
+
+Neither the catalog parity test nor `scripts/i18n-report.js` can see a string
+that was never a key. Only opening the page finds those.
