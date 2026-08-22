@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SprintsService } from './sprints.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
+import { ProjectAccessService } from './project-access.service';
+import { OWNER, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('SprintsService', () => {
@@ -36,6 +38,7 @@ describe('SprintsService', () => {
 
         db = {
             project: { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) },
+            userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             sprint: {
                 findFirst: jest.fn().mockResolvedValue(sprint()),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -54,6 +57,7 @@ describe('SprintsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 SprintsService,
+                ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: SprintSnapshotService, useValue: snapshots },
             ],
@@ -206,7 +210,7 @@ describe('SprintsService', () => {
         // The point of a tenant-level sprint. Previously this filtered on the
         // sprint's own project_id, which silently dropped tasks from every other
         // project in the request.
-        await service.assignTasks('tenant-1', 'sprint-1', { taskIds: ['task-a', 'task-b'] } as never);
+        await service.assignTasks(OWNER, 'sprint-1', { taskIds: ['task-a', 'task-b'] } as never);
 
         const where = db.projectTask.updateMany.mock.calls[0][0].where;
         expect(where).toMatchObject({
@@ -215,5 +219,15 @@ describe('SprintsService', () => {
             id: { in: ['task-a', 'task-b'] },
         });
         expect(where).not.toHaveProperty('project_id');
+    });
+
+    it('will not pull a task from a project the viewer cannot reach into a sprint', async () => {
+        await service.assignTasks(staff('user-7'), 'sprint-1', { taskIds: ['task-a'] } as never);
+
+        // Filtered rather than refused: an id nobody can see simply does not
+        // match, which is the same answer a made-up id gets.
+        expect(db.projectTask.updateMany.mock.calls[0][0].where).toMatchObject({
+            AND: [{ project: { OR: visibilityOr('user-7') } }],
+        });
     });
 });

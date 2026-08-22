@@ -24,6 +24,7 @@ export const projectsMessages = {
         type: "قسم",
         status: "حالت",
         priority: "ترجیح",
+        visibility: "نمائش",
         manager: "منیجر",
         branch: "شاخ",
         startDate: "آغاز کی تاریخ",
@@ -45,6 +46,16 @@ export const projectsMessages = {
         ON_HOLD: "روکا گیا",
         COMPLETED: "مکمل",
         CANCELLED: "منسوخ",
+    },
+
+    visibility: {
+        PUBLIC: "عوامی",
+        PRIVATE: "نجی",
+    },
+
+    visibilityHelp: {
+        PUBLIC: "ورک اسپیس کے وہ تمام افراد جو منصوبے دیکھ سکتے ہیں۔",
+        PRIVATE: "صرف وہ افراد جنہیں منصوبے کی ٹیم میں شامل کیا گیا ہے۔",
     },
 
     priority: {
@@ -95,6 +106,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: "یہ فہرست طے کرتی ہے کہ اس منصوبے کو کون کھول سکتا ہے۔ کسی کو ہٹانے سے اس کی رسائی بھی ختم ہو جاتی ہے۔",
         add: "رکن شامل کریں",
         role: "کردار",
         MANAGER: "منیجر",

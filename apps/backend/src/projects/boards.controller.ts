@@ -40,7 +40,7 @@ export class BoardsController {
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext) {
-        return this.boards.list(tenant.tenantId);
+        return this.boards.list(tenant);
     }
 
     @Post()
@@ -52,7 +52,7 @@ export class BoardsController {
     @Get(':id')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.boards.findOne(tenant.tenantId, id);
+        return this.boards.findOne(tenant, id);
     }
 
     @Patch(':id')
@@ -74,7 +74,7 @@ export class BoardsController {
         @Param('id') id: string,
         @Body() dto: AddBoardTasksDto,
     ) {
-        return this.boards.addTasks(tenant.tenantId, tenant.userId, id, dto.taskIds);
+        return this.boards.addTasks(tenant, id, dto.taskIds);
     }
 
     @Delete(':id/tasks/:taskId')
@@ -84,7 +84,7 @@ export class BoardsController {
         @Param('id') id: string,
         @Param('taskId') taskId: string,
     ) {
-        return this.boards.removeTask(tenant.tenantId, id, taskId);
+        return this.boards.removeTask(tenant, id, taskId);
     }
 
     @Patch(':id/tasks/:taskId/move')
@@ -95,7 +95,7 @@ export class BoardsController {
         @Param('taskId') taskId: string,
         @Body() dto: MoveBoardCardDto,
     ) {
-        return this.boards.moveCard(tenant.tenantId, tenant.userId, id, taskId, dto);
+        return this.boards.moveCard(tenant, id, taskId, dto);
     }
 
     @Get(':id/columns')

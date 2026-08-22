@@ -110,11 +110,12 @@ export class ProjectsController {
     // tenant *template* — the default set a new project is seeded from.
     @Get(':projectId/columns')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    listProjectColumns(
+    async listProjectColumns(
         @Tenant() tenant: TenantContext,
         @Param('projectId') projectId: string,
         @Query('includeInactive') includeInactive?: string,
     ) {
+        await this.projects.assertProject(tenant, projectId);
         return this.settings.listTaskStatuses(
             tenant.tenantId,
             includeInactive === 'true',
@@ -124,11 +125,12 @@ export class ProjectsController {
 
     @Post(':projectId/columns')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
-    createProjectColumn(
+    async createProjectColumn(
         @Tenant() tenant: TenantContext,
         @Param('projectId') projectId: string,
         @Body() dto: CreateTaskStatusDto,
     ) {
+        await this.projects.assertProject(tenant, projectId);
         return this.settings.createTaskStatus(tenant.tenantId, dto, projectId);
     }
 
@@ -165,19 +167,19 @@ export class ProjectsController {
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext, @Query() query: ListProjectsDto) {
-        return this.projects.list(tenant.tenantId, query);
+        return this.projects.list(tenant, query);
     }
 
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateProjectDto) {
-        return this.projects.create(tenant.tenantId, tenant.userId, dto);
+        return this.projects.create(tenant, dto);
     }
 
     @Get(':id')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.projects.findOne(tenant.tenantId, id);
+        return this.projects.findOne(tenant, id);
     }
 
     @Patch(':id')
@@ -187,19 +189,19 @@ export class ProjectsController {
         @Param('id') id: string,
         @Body() dto: UpdateProjectDto,
     ) {
-        return this.projects.update(tenant.tenantId, id, dto);
+        return this.projects.update(tenant, id, dto);
     }
 
     @Delete(':id')
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.projects.remove(tenant.tenantId, id);
+        return this.projects.remove(tenant, id);
     }
 
     @Get(':id/time-summary')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     timeSummary(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.time.summary(tenant.tenantId, id);
+        return this.time.summary(tenant, id);
     }
 
     // ── Members ────────────────────────────────────────────────────────────
@@ -211,7 +213,7 @@ export class ProjectsController {
         @Param('id') id: string,
         @Body() dto: UpsertProjectMemberDto,
     ) {
-        return this.projects.addMember(tenant.tenantId, id, dto);
+        return this.projects.addMember(tenant, id, dto);
     }
 
     @Delete(':id/members/:memberId')
@@ -221,7 +223,7 @@ export class ProjectsController {
         @Param('id') id: string,
         @Param('memberId') memberId: string,
     ) {
-        return this.projects.removeMember(tenant.tenantId, id, memberId);
+        return this.projects.removeMember(tenant, id, memberId);
     }
 
     // ── Milestones ─────────────────────────────────────────────────────────
@@ -233,7 +235,7 @@ export class ProjectsController {
         @Param('id') id: string,
         @Body() dto: CreateMilestoneDto,
     ) {
-        return this.projects.createMilestone(tenant.tenantId, id, dto);
+        return this.projects.createMilestone(tenant, id, dto);
     }
 
     @Patch('milestones/:milestoneId')
@@ -243,7 +245,7 @@ export class ProjectsController {
         @Param('milestoneId') milestoneId: string,
         @Body() dto: UpdateMilestoneDto,
     ) {
-        return this.projects.updateMilestone(tenant.tenantId, milestoneId, dto);
+        return this.projects.updateMilestone(tenant, milestoneId, dto);
     }
 
     @Delete('milestones/:milestoneId')
@@ -252,6 +254,6 @@ export class ProjectsController {
         @Tenant() tenant: TenantContext,
         @Param('milestoneId') milestoneId: string,
     ) {
-        return this.projects.removeMilestone(tenant.tenantId, milestoneId);
+        return this.projects.removeMilestone(tenant, milestoneId);
     }
 }

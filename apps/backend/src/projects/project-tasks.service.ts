@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
@@ -41,9 +42,11 @@ export class ProjectTasksService {
         private readonly remaining: RemainingHoursService,
         private readonly settings: ProjectSettingsService,
         private readonly activity: ProjectActivityService,
+        private readonly access: ProjectAccessService,
     ) {}
 
-    async list(tenantId: string, query: ListTasksDto) {
+    async list(viewer: ProjectViewer, query: ListTasksDto) {
+        const tenantId = viewer.tenantId;
         const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
         const page = Math.max(query.page ?? 1, 1);
 
@@ -66,9 +69,16 @@ export class ProjectTasksService {
         const search = query.search?.trim();
         if (search) where.title = { contains: search, mode: 'insensitive' };
 
+        // The cross-project Tasks page reads every task in the tenant, so this
+        // is where a private project's work would otherwise leak in full —
+        // title, assignee, hours and all — to someone who cannot open it.
+        // Merged rather than spread so a filter added above can never be
+        // overwritten by, or overwrite, this one.
+        const scoped = ProjectAccessService.merge(where, await this.access.relatedFilter(viewer));
+
         const [items, total] = await Promise.all([
             this.db.projectTask.findMany({
-                where: where as never,
+                where: scoped as never,
                 orderBy: resolveOrderBy(query.sortBy, query.sortDir, TASK_SORTABLE, [
                     { sort_order: 'asc' },
                     { created_at: 'asc' },
@@ -77,16 +87,22 @@ export class ProjectTasksService {
                 take: limit,
                 include: TASK_INCLUDE as never,
             }),
-            this.db.projectTask.count({ where: where as never }),
+            this.db.projectTask.count({ where: scoped as never }),
         ]);
 
         const withLogged = await this.attachLoggedHours(tenantId, items as TaskRow[]);
         return paginate(withLogged, total, page, limit);
     }
 
-    async findOne(tenantId: string, taskId: string) {
+    async findOne(viewer: ProjectViewer, taskId: string) {
+        const tenantId = viewer.tenantId;
         const task = await this.db.projectTask.findFirst({
-            where: { id: taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: taskId,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             include: {
                 ...TASK_INCLUDE,
                 subtasks: {
@@ -104,14 +120,16 @@ export class ProjectTasksService {
         return withLogged;
     }
 
-    async create(tenantId: string, userId: string, dto: CreateTaskDto) {
-        await this.assertProject(tenantId, dto.projectId);
+    async create(viewer: ProjectViewer, dto: CreateTaskDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
+        await this.assertProject(viewer, dto.projectId);
         const statusId = dto.statusId
             ? (await this.assertStatus(tenantId, dto.statusId, dto.projectId)).id
             : (await this.settings.defaultTaskStatus(tenantId, dto.projectId)).id;
 
         if (dto.parentTaskId) {
-            const parent = await this.assertTask(tenantId, dto.parentTaskId);
+            const parent = await this.assertTask(viewer, dto.parentTaskId);
             // One level only: a subtask of a subtask makes rollups ambiguous
             // and the board has nowhere to draw it.
             if (parent.parent_task_id) {
@@ -175,11 +193,13 @@ export class ProjectTasksService {
             });
         }
 
-        return this.findOne(tenantId, task.id);
+        return this.findOne(viewer, task.id);
     }
 
-    async update(tenantId: string, userId: string, taskId: string, dto: UpdateTaskDto) {
-        const task = await this.assertTask(tenantId, taskId);
+    async update(viewer: ProjectViewer, taskId: string, dto: UpdateTaskDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
+        const task = await this.assertTask(viewer, taskId);
 
         let statusId = task.status_id;
         let completedAt = task.completed_at;
@@ -273,7 +293,7 @@ export class ProjectTasksService {
             });
         }
 
-        return this.findOne(tenantId, taskId);
+        return this.findOne(viewer, taskId);
     }
 
     /**
@@ -281,8 +301,10 @@ export class ProjectTasksService {
      * other card in the target column is renumbered so the order is stable
      * integers rather than ever-shrinking fractions.
      */
-    async move(tenantId: string, userId: string, taskId: string, dto: MoveTaskDto) {
-        const task = await this.assertTask(tenantId, taskId);
+    async move(viewer: ProjectViewer, taskId: string, dto: MoveTaskDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
+        const task = await this.assertTask(viewer, taskId);
         const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
         if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
@@ -372,11 +394,11 @@ export class ProjectTasksService {
             });
         }
 
-        return this.findOne(tenantId, taskId);
+        return this.findOne(viewer, taskId);
     }
 
-    async remove(tenantId: string, taskId: string) {
-        await this.assertTask(tenantId, taskId);
+    async remove(viewer: ProjectViewer, taskId: string) {
+        await this.assertTask(viewer, taskId);
         await this.db.projectTask.update({
             where: { id: taskId },
             data: { deleted_at: new Date() },
@@ -384,15 +406,17 @@ export class ProjectTasksService {
         return { success: true };
     }
 
-    async remainingHistory(tenantId: string, taskId: string) {
-        await this.assertTask(tenantId, taskId);
+    async remainingHistory(viewer: ProjectViewer, taskId: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertTask(viewer, taskId);
         return this.remaining.history(tenantId, taskId);
     }
 
     // ── Checklist ──────────────────────────────────────────────────────────
 
-    async addChecklistItem(tenantId: string, taskId: string, dto: CreateChecklistItemDto) {
-        await this.assertTask(tenantId, taskId);
+    async addChecklistItem(viewer: ProjectViewer, taskId: string, dto: CreateChecklistItemDto) {
+        const tenantId = viewer.tenantId;
+        await this.assertTask(viewer, taskId);
         const count = await this.db.projectTaskChecklistItem.count({ where: { task_id: taskId } });
         return this.db.projectTaskChecklistItem.create({
             data: {
@@ -404,12 +428,8 @@ export class ProjectTasksService {
         });
     }
 
-    async updateChecklistItem(tenantId: string, itemId: string, dto: UpdateChecklistItemDto) {
-        const item = await this.db.projectTaskChecklistItem.findFirst({
-            where: { id: itemId, tenant_id: tenantId },
-            select: { id: true },
-        });
-        if (!item) throw new NotFoundException('Checklist item not found');
+    async updateChecklistItem(viewer: ProjectViewer, itemId: string, dto: UpdateChecklistItemDto) {
+        await this.assertChecklistItem(viewer, itemId);
         return this.db.projectTaskChecklistItem.update({
             where: { id: itemId },
             data: {
@@ -584,8 +604,9 @@ export class ProjectTasksService {
      * rather than a moved pair so a partial write cannot leave two items sharing
      * a `sort_order`.
      */
-    async reorderChecklist(tenantId: string, taskId: string, itemIds: string[]) {
-        await this.assertTask(tenantId, taskId);
+    async reorderChecklist(viewer: ProjectViewer, taskId: string, itemIds: string[]) {
+        const tenantId = viewer.tenantId;
+        await this.assertTask(viewer, taskId);
 
         const existing = await this.db.projectTaskChecklistItem.findMany({
             where: { task_id: taskId, tenant_id: tenantId },
@@ -618,14 +639,29 @@ export class ProjectTasksService {
         });
     }
 
-    async removeChecklistItem(tenantId: string, itemId: string) {
+    async removeChecklistItem(viewer: ProjectViewer, itemId: string) {
+        await this.assertChecklistItem(viewer, itemId);
+        await this.db.projectTaskChecklistItem.delete({ where: { id: itemId } });
+        return { success: true };
+    }
+
+    /**
+     * A checklist item is addressed by its own id, with no task in the URL, so
+     * the visibility of the project it hangs off has to be resolved through two
+     * hops rather than assumed from the route.
+     */
+    private async assertChecklistItem(viewer: ProjectViewer, itemId: string) {
+        const filter = await this.access.relatedFilter(viewer);
         const item = await this.db.projectTaskChecklistItem.findFirst({
-            where: { id: itemId, tenant_id: tenantId },
+            where: {
+                id: itemId,
+                tenant_id: viewer.tenantId,
+                ...(Object.keys(filter).length ? { task: filter } : {}),
+            } as never,
             select: { id: true },
         });
         if (!item) throw new NotFoundException('Checklist item not found');
-        await this.db.projectTaskChecklistItem.delete({ where: { id: itemId } });
-        return { success: true };
+        return item;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -662,22 +698,28 @@ export class ProjectTasksService {
         return (last?.sort_order ?? -1) + 1;
     }
 
-    async assertTask(tenantId: string, taskId: string) {
+    /**
+     * The chokepoint every single-task route goes through, which is why the
+     * visibility filter lives here rather than being repeated per method: a
+     * task in a project the viewer cannot open is reported missing, not
+     * forbidden.
+     */
+    async assertTask(viewer: ProjectViewer, taskId: string) {
         const task = await this.db.projectTask.findFirst({
-            where: { id: taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: taskId,
+                tenant_id: viewer.tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             include: { status: { select: { id: true, name: true, category: true } } },
         });
         if (!task) throw new NotFoundException('Task not found');
         return task;
     }
 
-    private async assertProject(tenantId: string, projectId: string) {
-        const project = await this.db.project.findFirst({
-            where: { id: projectId, tenant_id: tenantId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new NotFoundException('Project not found');
-        return project;
+    private async assertProject(viewer: ProjectViewer, projectId: string) {
+        return this.access.assertProjectVisible(viewer, projectId);
     }
 
     /**

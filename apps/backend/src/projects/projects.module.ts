@@ -9,6 +9,7 @@ import { ProjectTimeController } from './project-time.controller';
 import { SprintsController } from './sprints.controller';
 import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
+import { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
@@ -33,6 +34,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         SprintsController,
     ],
     providers: [
+        ProjectAccessService,
         ProjectsService,
         BoardsService,
         BoardColumnsService,
@@ -47,6 +49,6 @@ import { ProjectsScheduler } from './projects.scheduler';
         SprintSnapshotService,
         ProjectsScheduler,
     ],
-    exports: [ProjectsService, RemainingHoursService],
+    exports: [ProjectsService, RemainingHoursService, ProjectAccessService],
 })
 export class ProjectsModule {}

@@ -34,10 +34,13 @@ export function memberName(member: ProjectMember): string {
 export default function ProjectTeamCard({
     projectId,
     members,
+    isPrivate = false,
     onChanged,
 }: {
     projectId: string;
     members: ProjectMember[];
+    /** On a private project this list *is* the access list — say so. */
+    isPrivate?: boolean;
     onChanged: () => void | Promise<void>;
 }) {
     const { t } = useI18n();
@@ -144,6 +147,8 @@ export default function ProjectTeamCard({
                     {m.team.add}
                 </button>
             </div>
+
+            {isPrivate && <p className="mb-2 text-xs text-gray-500">{m.team.accessNote}</p>}
 
             {members.length === 0 ? (
                 <p className="text-sm text-gray-500">{m.overview.noTeam}</p>

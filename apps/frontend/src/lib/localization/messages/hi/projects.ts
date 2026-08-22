@@ -24,6 +24,7 @@ export const projectsMessages = {
         type: "प्रकार",
         status: "स्थिति",
         priority: "प्राथमिकता",
+        visibility: "दृश्यता",
         manager: "प्रबंधक",
         branch: "शाखा",
         startDate: "आरंभ तिथि",
@@ -45,6 +46,16 @@ export const projectsMessages = {
         ON_HOLD: "रोका गया",
         COMPLETED: "पूर्ण",
         CANCELLED: "रद्द",
+    },
+
+    visibility: {
+        PUBLIC: "सार्वजनिक",
+        PRIVATE: "निजी",
+    },
+
+    visibilityHelp: {
+        PUBLIC: "कार्यक्षेत्र में परियोजनाएँ देख सकने वाले सभी लोग।",
+        PRIVATE: "केवल परियोजना टीम में जोड़े गए लोग।",
     },
 
     priority: {
@@ -95,6 +106,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: "यह सूची तय करती है कि परियोजना कौन खोल सकता है। किसी को हटाने पर उसकी पहुँच भी चली जाती है।",
         add: "सदस्य जोड़ें",
         role: "भूमिका",
         MANAGER: "प्रबंधक",

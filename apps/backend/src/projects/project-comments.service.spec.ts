@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ProjectCommentsService } from './project-comments.service';
 import { ProjectActivityService } from './project-activity.service';
+import { ProjectAccessService } from './project-access.service';
+import { OWNER, staff } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('ProjectCommentsService', () => {
@@ -16,6 +18,7 @@ describe('ProjectCommentsService', () => {
         };
 
         db = {
+            userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTask: {
                 findFirst: jest.fn().mockResolvedValue({
                     id: 'task-1',
@@ -35,6 +38,7 @@ describe('ProjectCommentsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectCommentsService,
+                ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: ProjectActivityService, useValue: activity },
             ],
@@ -45,7 +49,7 @@ describe('ProjectCommentsService', () => {
 
     describe('create', () => {
         it('stores the comment against the task and its project', async () => {
-            await service.create('tenant-1', 'user-1', 'task-1', { body: '  Looks done  ' } as never);
+            await service.create(OWNER, 'task-1', { body: '  Looks done  ' } as never);
 
             expect(db.projectComment.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -62,7 +66,7 @@ describe('ProjectCommentsService', () => {
         });
 
         it('notifies the watchers, naming the commenter as the actor', async () => {
-            await service.create('tenant-1', 'user-1', 'task-1', { body: 'Looks done' } as never);
+            await service.create(OWNER, 'task-1', { body: 'Looks done' } as never);
 
             expect(activity.notifyWatchers).toHaveBeenCalledWith(
                 expect.objectContaining({ taskId: 'task-1', actorId: 'user-1' }),
@@ -76,13 +80,13 @@ describe('ProjectCommentsService', () => {
             activity.notifyWatchers.mockImplementation(async () => order.push('notify'));
             activity.watch.mockImplementation(async () => order.push('watch'));
 
-            await service.create('tenant-1', 'user-1', 'task-1', { body: 'Looks done' } as never);
+            await service.create(OWNER, 'task-1', { body: 'Looks done' } as never);
 
             expect(order).toEqual(['notify', 'watch']);
         });
 
         it('subscribes the author so they hear the replies', async () => {
-            await service.create('tenant-1', 'user-1', 'task-1', { body: 'Looks done' } as never);
+            await service.create(OWNER, 'task-1', { body: 'Looks done' } as never);
             expect(activity.watch).toHaveBeenCalledWith('tenant-1', 'task-1', 'user-1');
         });
 
@@ -90,7 +94,7 @@ describe('ProjectCommentsService', () => {
             db.projectTask.findFirst.mockResolvedValue(null);
 
             await expect(
-                service.create('tenant-2', 'user-1', 'task-1', { body: 'Looks done' } as never),
+                service.create(staff('user-9', 'tenant-2'), 'task-1', { body: 'Looks done' } as never),
             ).rejects.toBeInstanceOf(NotFoundException);
             expect(db.projectComment.create).not.toHaveBeenCalled();
         });
@@ -150,7 +154,7 @@ describe('ProjectCommentsService', () => {
     });
 
     it('lists newest first, scoped to the task', async () => {
-        await service.list('tenant-1', 'task-1');
+        await service.list(OWNER, 'task-1');
 
         expect(db.projectComment.findMany).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -98,6 +98,7 @@ export const StorePermission = {
 
   // Projects
   VIEW_PROJECTS: "VIEW_PROJECTS",
+  VIEW_ALL_PROJECTS: "VIEW_ALL_PROJECTS",
   MANAGE_PROJECTS: "MANAGE_PROJECTS",
   MANAGE_PROJECT_TASKS: "MANAGE_PROJECT_TASKS",
   LOG_PROJECT_TIME: "LOG_PROJECT_TIME",
@@ -267,6 +268,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_INVESTORS]: "View investors & profit shares",
   [StorePermission.MANAGE_INVESTORS]: "Manage investors, capital & profit runs",
   [StorePermission.VIEW_PROJECTS]: "View projects",
+  [StorePermission.VIEW_ALL_PROJECTS]: "View private projects without being a member",
   [StorePermission.MANAGE_PROJECTS]: "Create & edit projects",
   [StorePermission.MANAGE_PROJECT_TASKS]: "Manage project tasks",
   [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
@@ -370,6 +372,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
     label: "Projects",
     permissions: [
       StorePermission.VIEW_PROJECTS,
+      StorePermission.VIEW_ALL_PROJECTS,
       StorePermission.MANAGE_PROJECTS,
       StorePermission.MANAGE_PROJECT_TASKS,
       StorePermission.LOG_PROJECT_TIME,

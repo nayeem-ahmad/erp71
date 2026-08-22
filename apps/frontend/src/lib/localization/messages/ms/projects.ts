@@ -24,6 +24,7 @@ export const projectsMessages = {
         type: 'Jenis',
         status: 'Status',
         priority: 'Keutamaan',
+        visibility: 'Keterlihatan',
         manager: 'Pengurus',
         branch: 'Cawangan',
         startDate: 'Tarikh mula',
@@ -45,6 +46,16 @@ export const projectsMessages = {
         ON_HOLD: 'Ditangguh',
         COMPLETED: 'Selesai',
         CANCELLED: 'Dibatalkan',
+    },
+
+    visibility: {
+        PUBLIC: 'Umum',
+        PRIVATE: 'Persendirian',
+    },
+
+    visibilityHelp: {
+        PUBLIC: 'Semua orang dalam ruang kerja yang boleh melihat projek.',
+        PRIVATE: 'Hanya orang yang ditambah ke pasukan projek.',
     },
 
     priority: {
@@ -95,6 +106,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: 'Senarai ini menentukan siapa boleh membuka projek ini. Mengeluarkan seseorang turut menarik balik aksesnya.',
         add: 'Tambah ahli',
         role: 'Peranan',
         MANAGER: 'Pengurus',

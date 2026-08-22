@@ -24,6 +24,7 @@ export const projectsMessages = {
         type: "النوع",
         status: "الحالة",
         priority: "الأولوية",
+        visibility: "الظهور",
         manager: "المدير",
         branch: "الفرع",
         startDate: "تاريخ البدء",
@@ -45,6 +46,16 @@ export const projectsMessages = {
         ON_HOLD: "معلّق",
         COMPLETED: "مكتمل",
         CANCELLED: "ملغى",
+    },
+
+    visibility: {
+        PUBLIC: "عام",
+        PRIVATE: "خاص",
+    },
+
+    visibilityHelp: {
+        PUBLIC: "كل من في مساحة العمل ممن يمكنهم رؤية المشاريع.",
+        PRIVATE: "فقط الأشخاص المضافون إلى فريق المشروع.",
     },
 
     priority: {
@@ -95,6 +106,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: "هذه القائمة تحدد من يمكنه فتح هذا المشروع. إزالة شخص ما تلغي وصوله أيضًا.",
         add: "إضافة عضو",
         role: "الدور",
         MANAGER: "مدير",

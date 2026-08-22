@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageShell, PageHeader, Button, Input, Select, StatusBadge, ConfirmDialog } from '@/components/ui';
 import DataTable from '@/components/data-table/DataTable';
 import { useServerList } from '@/hooks/useServerList';
@@ -18,6 +18,7 @@ interface ProjectRow {
     name: string;
     status: string;
     priority: string;
+    visibility?: string;
     start_date?: string | null;
     target_end_date?: string | null;
     budget_amount?: string | null;
@@ -42,6 +43,7 @@ export default function ProjectsPage() {
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('');
     const [typeId, setTypeId] = useState('');
+    const [visibility, setVisibility] = useState('');
     const [types, setTypes] = useState<{ id: string; name: string }[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [pendingDelete, setPendingDelete] = useState<ProjectRow | null>(null);
@@ -61,13 +63,14 @@ export default function ProjectsPage() {
     const { items, loading, serverPagination, reload } = useServerList<ProjectRow>({
         tableId: 'projects',
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, status, typeId],
+        deps: [debouncedSearch, status, typeId, visibility],
         fetch: (params) =>
             api.getProjects({
                 ...params,
                 search: debouncedSearch || undefined,
                 status: status || undefined,
                 projectTypeId: typeId || undefined,
+                visibility: visibility || undefined,
             }),
     });
 
@@ -103,7 +106,22 @@ export default function ProjectsPage() {
                     </Link>
                 ),
             },
-            { id: 'name', header: m.fields.name, accessorKey: 'name' },
+            {
+                id: 'name',
+                header: m.fields.name,
+                accessorKey: 'name',
+                cell: ({ row }: { row: { original: ProjectRow } }) => (
+                    <span className="inline-flex items-center gap-1.5">
+                        {row.original.name}
+                        {row.original.visibility === 'PRIVATE' && (
+                            <Lock
+                                className="h-3.5 w-3.5 shrink-0 text-gray-400"
+                                aria-label={m.visibility.PRIVATE}
+                            />
+                        )}
+                    </span>
+                ),
+            },
             {
                 id: 'customer',
                 header: m.fields.customer,
@@ -216,6 +234,18 @@ export default function ProjectsPage() {
                         </option>
                     ))}
                 </Select>
+                <Select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="md:w-40"
+                >
+                    <option value="">{m.fields.visibility}</option>
+                    {Object.entries(m.visibility).map(([key, label]) => (
+                        <option key={key} value={key}>
+                            {label}
+                        </option>
+                    ))}
+                </Select>
             </div>
 
             <DataTable
@@ -225,7 +255,9 @@ export default function ProjectsPage() {
                 data={items}
                 isLoading={loading}
                 serverPagination={serverPagination}
-                emptyMessage={debouncedSearch || status || typeId ? m.emptyFiltered : m.empty}
+                emptyMessage={
+                    debouncedSearch || status || typeId || visibility ? m.emptyFiltered : m.empty
+                }
             />
 
             <ConfirmDialog

@@ -24,6 +24,7 @@ export const projectsMessages = {
         type: "Tipo",
         status: "Estado",
         priority: "Prioridad",
+        visibility: "Visibilidad",
         manager: "Responsable",
         branch: "Sucursal",
         startDate: "Fecha de inicio",
@@ -45,6 +46,16 @@ export const projectsMessages = {
         ON_HOLD: "En pausa",
         COMPLETED: "Completado",
         CANCELLED: "Cancelado",
+    },
+
+    visibility: {
+        PUBLIC: "Público",
+        PRIVATE: "Privado",
+    },
+
+    visibilityHelp: {
+        PUBLIC: "Todas las personas del espacio de trabajo que pueden ver proyectos.",
+        PRIVATE: "Solo las personas añadidas al equipo del proyecto.",
     },
 
     priority: {
@@ -95,6 +106,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: "Esta lista determina quién puede abrir este proyecto. Quitar a alguien también le retira el acceso.",
         add: "Añadir miembro",
         role: "Rol",
         MANAGER: "Responsable",

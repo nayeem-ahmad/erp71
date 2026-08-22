@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { ProjectActivityService } from './project-activity.service';
 import { CreateCommentDto, UpdateCommentDto } from './project.dto';
 
@@ -19,10 +20,12 @@ export class ProjectCommentsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly activity: ProjectActivityService,
+        private readonly access: ProjectAccessService,
     ) {}
 
-    async list(tenantId: string, taskId: string) {
-        await this.assertTask(tenantId, taskId);
+    async list(viewer: ProjectViewer, taskId: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertTask(viewer, taskId);
         return this.db.projectComment.findMany({
             where: { tenant_id: tenantId, task_id: taskId },
             orderBy: { created_at: 'desc' },
@@ -30,8 +33,10 @@ export class ProjectCommentsService {
         });
     }
 
-    async create(tenantId: string, userId: string, taskId: string, dto: CreateCommentDto) {
-        const task = await this.assertTask(tenantId, taskId);
+    async create(viewer: ProjectViewer, taskId: string, dto: CreateCommentDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
+        const task = await this.assertTask(viewer, taskId);
 
         const comment = await this.db.projectComment.create({
             data: {
@@ -77,9 +82,15 @@ export class ProjectCommentsService {
         return { success: true };
     }
 
-    private async assertTask(tenantId: string, taskId: string) {
+    /** A task in a project the viewer cannot open is not a task they can discuss. */
+    private async assertTask(viewer: ProjectViewer, taskId: string) {
         const task = await this.db.projectTask.findFirst({
-            where: { id: taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: taskId,
+                tenant_id: viewer.tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: { id: true, project_id: true, title: true },
         });
         if (!task) throw new NotFoundException('Task not found');

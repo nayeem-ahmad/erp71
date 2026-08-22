@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
@@ -35,6 +36,7 @@ export class ProjectsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly settings: ProjectSettingsService,
+        private readonly access: ProjectAccessService,
     ) {}
 
     /**
@@ -54,7 +56,8 @@ export class ProjectsService {
         return date;
     }
 
-    async list(tenantId: string, query: ListProjectsDto) {
+    async list(viewer: ProjectViewer, query: ListProjectsDto) {
+        const tenantId = viewer.tenantId;
         const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
         const page = Math.max(query.page ?? 1, 1);
 
@@ -63,10 +66,11 @@ export class ProjectsService {
             .map((s) => s.trim().toUpperCase())
             .filter((s) => VALID_STATUSES.includes(s));
 
-        const where: Record<string, unknown> = {
+        const base: Record<string, unknown> = {
             tenant_id: tenantId,
             deleted_at: null,
             ...(statuses.length ? { status: { in: statuses } } : {}),
+            ...(query.visibility ? { visibility: query.visibility } : {}),
             ...(query.projectTypeId ? { project_type_id: query.projectTypeId } : {}),
             ...(query.managerId ? { manager_id: query.managerId } : {}),
             ...(query.customerId ? { customer_id: query.customerId } : {}),
@@ -74,13 +78,19 @@ export class ProjectsService {
 
         const search = query.search?.trim();
         if (search) {
-            where.OR = [
+            base.OR = [
                 { code: { contains: search, mode: 'insensitive' } },
                 { name: { contains: search, mode: 'insensitive' } },
                 { short_name: { contains: search, mode: 'insensitive' } },
                 { customer: { name: { contains: search, mode: 'insensitive' } } },
             ];
         }
+
+        // Merged rather than spread: the search filter above already owns `OR`,
+        // and the visibility filter is another one. Two `OR` keys on the same
+        // object would leave only the second, which would be a search that
+        // ignores visibility or a visibility filter that ignores the search.
+        const where = ProjectAccessService.merge(base, await this.access.projectFilter(viewer));
 
         const [items, total] = await Promise.all([
             this.db.project.findMany({
@@ -103,9 +113,15 @@ export class ProjectsService {
         return paginate(items, total, page, limit);
     }
 
-    async findOne(tenantId: string, id: string) {
+    async findOne(viewer: ProjectViewer, id: string) {
+        const tenantId = viewer.tenantId;
         const project = await this.db.project.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.projectFilter(viewer)),
+            } as never,
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
                 lead: { select: { id: true, name: true } },
@@ -171,7 +187,9 @@ export class ProjectsService {
         };
     }
 
-    async create(tenantId: string, userId: string, dto: CreateProjectDto) {
+    async create(viewer: ProjectViewer, dto: CreateProjectDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
         if (dto.customerId) await this.assertCustomer(tenantId, dto.customerId);
         if (dto.projectTypeId) await this.assertProjectType(tenantId, dto.projectTypeId);
 
@@ -192,6 +210,7 @@ export class ProjectsService {
                         project_type_id: dto.projectTypeId ?? null,
                         status: (dto.status ?? 'DRAFT') as never,
                         priority: (dto.priority ?? 'MEDIUM') as never,
+                        visibility: (dto.visibility ?? 'PUBLIC') as never,
                         manager_id: dto.managerId ?? userId,
                         start_date: this.toDate(dto.startDate) ?? null,
                         target_end_date: this.toDate(dto.targetEndDate) ?? null,
@@ -205,6 +224,17 @@ export class ProjectsService {
                 // also seeds lazily, so a failure at this point is recoverable
                 // rather than a permanently empty board.
                 await this.settings.seedProjectColumns(tenantId, project.id);
+
+                // A private project starts with its manager and its creator on
+                // the team, so the members panel is a truthful answer to "who
+                // can see this" from the first render rather than a blank list
+                // beside a project two people can already open.
+                if (project.visibility === 'PRIVATE') {
+                    await this.access.seedPrivateMembers(tenantId, project.id, [
+                        project.manager_id,
+                        userId,
+                    ]);
+                }
                 return project;
             } catch (error: unknown) {
                 const code = (error as { code?: string })?.code;
@@ -214,12 +244,13 @@ export class ProjectsService {
         throw new BadRequestException('Could not allocate a project code.');
     }
 
-    async update(tenantId: string, id: string, dto: UpdateProjectDto) {
-        await this.assertProject(tenantId, id);
+    async update(viewer: ProjectViewer, id: string, dto: UpdateProjectDto) {
+        const tenantId = viewer.tenantId;
+        const existing = await this.assertProject(viewer, id);
         if (dto.customerId) await this.assertCustomer(tenantId, dto.customerId);
         if (dto.projectTypeId) await this.assertProjectType(tenantId, dto.projectTypeId);
 
-        return this.db.project.update({
+        const updated = await this.db.project.update({
             where: { id },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
@@ -231,6 +262,7 @@ export class ProjectsService {
                 ...(dto.projectTypeId !== undefined ? { project_type_id: dto.projectTypeId || null } : {}),
                 ...(dto.status !== undefined ? { status: dto.status as never } : {}),
                 ...(dto.priority !== undefined ? { priority: dto.priority as never } : {}),
+                ...(dto.visibility !== undefined ? { visibility: dto.visibility as never } : {}),
                 ...(dto.managerId !== undefined ? { manager_id: dto.managerId || null } : {}),
                 ...(dto.startDate !== undefined ? { start_date: this.toDate(dto.startDate) ?? null } : {}),
                 ...(dto.targetEndDate !== undefined
@@ -242,6 +274,19 @@ export class ProjectsService {
                 ...(dto.budgetAmount !== undefined ? { budget_amount: dto.budgetAmount ?? null } : {}),
             },
         });
+
+        // Flipping a public project to private is where somebody loses access,
+        // so it is also where the manager has to be pinned onto the team — both
+        // the outgoing one, who may still be mid-handover, and the incoming one
+        // if this same call reassigned it.
+        if (updated.visibility === 'PRIVATE' && existing.visibility !== 'PRIVATE') {
+            await this.access.seedPrivateMembers(tenantId, id, [
+                updated.manager_id,
+                existing.manager_id,
+                viewer.userId,
+            ]);
+        }
+        return updated;
     }
 
     /**
@@ -253,8 +298,9 @@ export class ProjectsService {
      * inflating a live sprint's committed hours. Same reasoning as
      * `removeMilestone`, which detaches rather than cascades.
      */
-    async remove(tenantId: string, id: string) {
-        await this.assertProject(tenantId, id);
+    async remove(viewer: ProjectViewer, id: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertProject(viewer, id);
         await this.db.$transaction([
             this.db.projectTask.updateMany({
                 where: { tenant_id: tenantId, project_id: id, sprint_id: { not: null } },
@@ -272,8 +318,9 @@ export class ProjectsService {
      * cannot express "exactly one of", so it is enforced here — the alternative
      * is a row that belongs to nobody or to two people.
      */
-    async addMember(tenantId: string, projectId: string, dto: UpsertProjectMemberDto) {
-        await this.assertProject(tenantId, projectId);
+    async addMember(viewer: ProjectViewer, projectId: string, dto: UpsertProjectMemberDto) {
+        const tenantId = viewer.tenantId;
+        await this.assertProject(viewer, projectId);
         if (Boolean(dto.userId) === Boolean(dto.employeeId)) {
             throw new BadRequestException('Pick either a workspace user or an employee, not both.');
         }
@@ -316,8 +363,9 @@ export class ProjectsService {
     }
 
     /** Keyed on the member row, not the user — an employee member has no user id. */
-    async removeMember(tenantId: string, projectId: string, memberId: string) {
-        await this.assertProject(tenantId, projectId);
+    async removeMember(viewer: ProjectViewer, projectId: string, memberId: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertProject(viewer, projectId);
         await this.db.projectMember.deleteMany({
             where: { tenant_id: tenantId, project_id: projectId, id: memberId },
         });
@@ -326,8 +374,9 @@ export class ProjectsService {
 
     // ── Milestones ─────────────────────────────────────────────────────────
 
-    async createMilestone(tenantId: string, projectId: string, dto: CreateMilestoneDto) {
-        await this.assertProject(tenantId, projectId);
+    async createMilestone(viewer: ProjectViewer, projectId: string, dto: CreateMilestoneDto) {
+        const tenantId = viewer.tenantId;
+        await this.assertProject(viewer, projectId);
         return this.db.projectMilestone.create({
             data: {
                 tenant_id: tenantId,
@@ -339,12 +388,8 @@ export class ProjectsService {
         });
     }
 
-    async updateMilestone(tenantId: string, milestoneId: string, dto: UpdateMilestoneDto) {
-        const milestone = await this.db.projectMilestone.findFirst({
-            where: { id: milestoneId, tenant_id: tenantId },
-            select: { id: true, completed_at: true },
-        });
-        if (!milestone) throw new NotFoundException('Milestone not found');
+    async updateMilestone(viewer: ProjectViewer, milestoneId: string, dto: UpdateMilestoneDto) {
+        const milestone = await this.assertMilestone(viewer, milestoneId);
 
         return this.db.projectMilestone.update({
             where: { id: milestoneId },
@@ -361,12 +406,9 @@ export class ProjectsService {
         });
     }
 
-    async removeMilestone(tenantId: string, milestoneId: string) {
-        const milestone = await this.db.projectMilestone.findFirst({
-            where: { id: milestoneId, tenant_id: tenantId },
-            select: { id: true },
-        });
-        if (!milestone) throw new NotFoundException('Milestone not found');
+    async removeMilestone(viewer: ProjectViewer, milestoneId: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertMilestone(viewer, milestoneId);
         // Tasks keep existing, they just lose the grouping.
         await this.db.projectTask.updateMany({
             where: { tenant_id: tenantId, milestone_id: milestoneId },
@@ -378,13 +420,27 @@ export class ProjectsService {
 
     // ── Guards ─────────────────────────────────────────────────────────────
 
-    async assertProject(tenantId: string, projectId: string) {
-        const project = await this.db.project.findFirst({
-            where: { id: projectId, tenant_id: tenantId, deleted_at: null },
-            select: { id: true },
+    /**
+     * Exists, is in this tenant, and is visible to this viewer. The three are
+     * one check rather than three so a private project is indistinguishable
+     * from one that was never there.
+     */
+    async assertProject(viewer: ProjectViewer, projectId: string) {
+        return this.access.assertProjectVisible(viewer, projectId);
+    }
+
+    /** A milestone is only as visible as the project holding it. */
+    private async assertMilestone(viewer: ProjectViewer, milestoneId: string) {
+        const milestone = await this.db.projectMilestone.findFirst({
+            where: {
+                id: milestoneId,
+                tenant_id: viewer.tenantId,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
+            select: { id: true, completed_at: true },
         });
-        if (!project) throw new NotFoundException('Project not found');
-        return project;
+        if (!milestone) throw new NotFoundException('Milestone not found');
+        return milestone;
     }
 
     private async assertCustomer(tenantId: string, customerId: string) {
