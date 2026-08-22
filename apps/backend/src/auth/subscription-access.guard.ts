@@ -99,17 +99,26 @@ export class SubscriptionAccessGuard implements CanActivate {
         );
         // Add-ons only ever grant entitlements on top of the plan (see mergeAddonFeatures) —
         // they never affect plan rank, which stays plan-derived for @RequiresPlan checks.
-        const features = mergeAddonFeatures(
-            planFeatures,
-            activeAddons.map((row) => row.addon.features_json as Record<string, unknown>),
-        );
+        const addonFeaturesList = activeAddons.map((row) => row.addon.features_json as Record<string, unknown>);
+        const features = mergeAddonFeatures(planFeatures, addonFeaturesList);
+        // What the add-ons grant standing on their own, with no plan underneath.
+        // An add-on is billed separately from the plan, so a lapsed plan must not
+        // switch off a module the tenant is still paying for on its own invoice.
+        const addonOnlyFeatures = mergeAddonFeatures({}, addonFeaturesList);
         const currentRank = resolvePlanRank(planFeatures, currentPlan);
         const hasRequiredPlan = requiredPlan
             ? currentRank >= REQUIRED_PLAN_RANK[requiredPlan]
             : true;
         const hasActiveSubscription = activeStatuses.has(subscription?.status);
+        // PAST_DUE is dunning, not cancellation: a route whose every required
+        // entitlement comes from an active add-on stays open through it. Anything
+        // the *plan* grants still stops, and CANCELLED stops the add-ons too.
+        const addonsCoverRequest =
+            requiredFeatures.length > 0 &&
+            requiredFeatures.every((featureKey) => hasPlanEntitlement(addonOnlyFeatures, featureKey));
+        const pastDueOnAddonOnlyRequest = subscription?.status === 'PAST_DUE' && addonsCoverRequest;
 
-        if (!hasActiveSubscription) {
+        if (!hasActiveSubscription && !pastDueOnAddonOnlyRequest) {
             throw new ForbiddenException('This feature requires an active subscription.');
         }
 

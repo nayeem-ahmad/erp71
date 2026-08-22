@@ -102,6 +102,42 @@ describe('SubscriptionAccessGuard', () => {
         await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
     });
 
+    it('keeps an add-on-granted feature alive while the plan is PAST_DUE', async () => {
+        metadataFor(undefined, 'teamChat');
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'PAST_DUE',
+            plan: { code: 'PREMIUM', features_json: {} },
+        });
+        db.tenantAddonSubscription.findMany.mockResolvedValue([
+            { addon: { features_json: { teamChat: true } } },
+        ]);
+        await expect(guard.canActivate(makeContext())).resolves.toBe(true);
+    });
+
+    it('blocks a PAST_DUE tenant when only part of the request is add-on-granted', async () => {
+        metadataFor(undefined, 'teamChat', ['premiumCrm']);
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'PAST_DUE',
+            plan: { code: 'PREMIUM', features_json: { premiumCrm: true } },
+        });
+        db.tenantAddonSubscription.findMany.mockResolvedValue([
+            { addon: { features_json: { teamChat: true } } },
+        ]);
+        await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
+    });
+
+    it('does not let an add-on outlive a CANCELLED subscription', async () => {
+        metadataFor(undefined, 'teamChat');
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'CANCELLED',
+            plan: { code: 'PREMIUM', features_json: {} },
+        });
+        db.tenantAddonSubscription.findMany.mockResolvedValue([
+            { addon: { features_json: { teamChat: true } } },
+        ]);
+        await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
+    });
+
     it('throws UnauthorizedException when tenant context is missing', async () => {
         metadataFor(undefined, 'premiumManufacturing');
         const ctx = makeContext();
