@@ -49,6 +49,12 @@ export const customersMessages = {
             "adding": "Adding...",
             "addCustomer": "Add Customer",
             "addFailed": "Failed to add customer. The phone number or customer code might already be in use.",
+            "editTitle": "Edit Customer",
+            "editSubtitle": "Update customer details",
+            "customerCodeEditHint": "Leave blank to keep the current code.",
+            "saving": "Saving...",
+            "saveCustomer": "Save Changes",
+            "updateFailed": "Failed to update customer. The phone number or customer code might already be in use.",
             "placeholders": {
                 "customerCode": "CUST-00001",
                 "name": "John Doe",
