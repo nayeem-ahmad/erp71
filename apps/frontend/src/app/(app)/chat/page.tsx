@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BellOff, Info, Loader2, Plus, Users } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -11,11 +11,12 @@ import ConversationList from '@/components/chat/ConversationList';
 import MessageComposer from '@/components/chat/MessageComposer';
 import MessageThread from '@/components/chat/MessageThread';
 import NewConversationModal from '@/components/chat/NewConversationModal';
-import type {
-    ChatConversation,
-    ChatMessage,
-    ChatMessagePage,
-    PendingAttachment,
+import {
+    seenReceiptMessageId,
+    type ChatConversation,
+    type ChatMessage,
+    type ChatMessagePage,
+    type PendingAttachment,
 } from '@/components/chat/types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -49,6 +50,12 @@ export default function ChatPage() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [unavailable, setUnavailable] = useState(false);
 
+    // Read by `loadMessages`, which must not take these as dependencies: it is the
+    // poll callback, and a new identity for it tears down and restarts the
+    // interval — re-running the loud path and flashing the spinner.
+    const currentUserIdRef = useRef<string | null>(null);
+    const markedReadRef = useRef<{ conversationId: string; through: string } | null>(null);
+
     // Needed to tell my own messages from everyone else's, and to decide who the
     // "other person" in a DM is.
     useEffect(() => {
@@ -65,6 +72,10 @@ export default function ChatPage() {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        currentUserIdRef.current = currentUserId;
+    }, [currentUserId]);
 
     // Deep link from a chat notification: /chat?conversation=<id>
     useEffect(() => {
@@ -106,7 +117,24 @@ export default function ChatPage() {
                 setCursor(page.nextCursor ?? null);
                 setHasMore(Boolean(page.hasMore));
                 setActive(conversation);
-                await api.markChatConversationRead(conversationId);
+
+                // Only stamp the cursor when it would actually move. This runs on
+                // every 5s poll, so an unconditional call is one write per open
+                // client per poll — and since the stamp is now visible to the
+                // other side as a read receipt, a pointless write is not free.
+                // Sending already stamps it server-side, hence the sender check.
+                const newest = page.messages?.[page.messages.length - 1] ?? null;
+                const marked = markedReadRef.current;
+                const alreadyMarked =
+                    marked?.conversationId === conversationId &&
+                    marked.through >= (newest?.createdAt ?? '');
+                if (newest && newest.sender.id !== currentUserIdRef.current && !alreadyMarked) {
+                    await api.markChatConversationRead(conversationId);
+                    // Recorded as the message we read up to rather than the wall
+                    // clock: the server stamps now(), which is never earlier.
+                    markedReadRef.current = { conversationId, through: newest.createdAt };
+                }
+
                 // Zero this row locally so the badge clears immediately rather
                 // than on the next list poll.
                 setConversations((prev) =>
@@ -221,6 +249,11 @@ export default function ChatPage() {
         setActiveId(null);
         router.replace(routes.chat, { scroll: false });
     };
+
+    const seenMessageId = useMemo(
+        () => seenReceiptMessageId(messages, currentUserId, active),
+        [messages, currentUserId, active],
+    );
 
     const totalUnread = useMemo(
         () => conversations.reduce((sum, row) => sum + (row.unreadCount ?? 0), 0),
@@ -353,6 +386,7 @@ export default function ChatPage() {
                             <MessageThread
                                 messages={messages}
                                 currentUserId={currentUserId}
+                                seenMessageId={seenMessageId}
                                 loading={loadingThread}
                                 hasMore={hasMore}
                                 loadingMore={loadingMore}

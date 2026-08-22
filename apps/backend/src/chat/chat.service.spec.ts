@@ -616,3 +616,52 @@ describe('ChatService.updateConversation', () => {
         expect(db.chatParticipant.update.mock.calls[0][0].data.muted_until).toBeNull();
     });
 });
+
+describe('ChatService.getConversation read cursors', () => {
+    const READ_AT = new Date('2026-08-22T09:30:00.000Z');
+
+    function withParticipants() {
+        const { service, db } = makeService();
+        db.chatConversation.findUnique.mockResolvedValue({
+            id: 'conv-1',
+            kind: 'dm',
+            title: null,
+            archived_at: null,
+            created_at: NOW,
+            created_by: 'user-1',
+            last_message_at: NOW,
+            last_message_preview: 'hello',
+            participants: [
+                {
+                    user_id: 'user-1',
+                    role: 'member',
+                    last_read_at: NOW,
+                    user: { id: 'user-1', name: 'Karim', email: 'k@x.com', avatar_url: null },
+                },
+                {
+                    user_id: 'user-2',
+                    role: 'member',
+                    last_read_at: READ_AT,
+                    user: { id: 'user-2', name: 'Ayesha', email: 'a@x.com', avatar_url: null },
+                },
+            ],
+        });
+        return { service, db };
+    }
+
+    it("returns the other participant's read cursor so the sender can show a receipt", async () => {
+        const { service } = withParticipants();
+        const conversation = await service.getConversation(viewer, 'conv-1');
+        const peer = conversation.participants.find((p) => p.id === 'user-2');
+        expect(peer?.lastReadAt).toEqual(READ_AT);
+    });
+
+    it('withholds the viewer’s own cursor', async () => {
+        // Your own cursor says nothing about who has seen your messages, and
+        // handing it back invites the client to mark its own sends as seen.
+        const { service } = withParticipants();
+        const conversation = await service.getConversation(viewer, 'conv-1');
+        const me = conversation.participants.find((p) => p.id === 'user-1');
+        expect(me?.lastReadAt).toBeNull();
+    });
+});

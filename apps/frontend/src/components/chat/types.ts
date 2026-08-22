@@ -4,6 +4,12 @@ export interface ChatPerson {
     email: string;
     avatarUrl: string | null;
     role: string;
+    /**
+     * When this person last opened the conversation. Only `GET /chat/conversations/:id`
+     * fills it in, and never for the viewer's own row — it exists to answer
+     * "has the other side seen this yet", not to describe yourself.
+     */
+    lastReadAt?: string | null;
 }
 
 export interface ChatConversation {
@@ -68,6 +74,38 @@ export const CHAT_ACCEPTED_MIME_TYPES = [
 export const MAX_CHAT_ATTACHMENTS = 5;
 /** Mirrors the backend ceiling: ~7 MB of base64 ≈ a 5 MB file. */
 export const MAX_CHAT_FILE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * The newest message of mine the other side has already seen, or null.
+ *
+ * Read state is one cursor per participant rather than a row per message, so
+ * seen-ness is always a contiguous prefix of the thread: marking the single
+ * newest seen message is the whole truth, and a tick on every bubble would only
+ * repeat it. DMs only for now — a group would have to say *who*, and one label
+ * cannot.
+ */
+export function seenReceiptMessageId(
+    messages: ChatMessage[],
+    currentUserId: string | null,
+    conversation: ChatConversation | null,
+): string | null {
+    if (!currentUserId || conversation?.kind !== 'dm') return null;
+
+    const peer = conversation.participants.find((person) => person.id !== currentUserId);
+    const cursor = peer?.lastReadAt ? Date.parse(peer.lastReadAt) : NaN;
+    if (Number.isNaN(cursor)) return null;
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (message.kind !== 'text' || message.deleted) continue;
+        if (message.sender.id !== currentUserId) continue;
+        // Messages are oldest-first, so the first own message at or before the
+        // cursor walking backwards is the newest one they have seen.
+        if (Date.parse(message.createdAt) <= cursor) return message.id;
+    }
+
+    return null;
+}
 
 export function displayName(person: {
     name?: string | null;

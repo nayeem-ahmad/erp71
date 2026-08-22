@@ -12,6 +12,7 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000;
 export default function MessageThread({
     messages,
     currentUserId,
+    seenMessageId,
     loading,
     hasMore,
     loadingMore,
@@ -21,6 +22,8 @@ export default function MessageThread({
 }: {
     messages: ChatMessage[];
     currentUserId: string | null;
+    /** Newest own message the other side has seen — see `seenReceiptMessageId`. */
+    seenMessageId?: string | null;
     loading: boolean;
     hasMore: boolean;
     loadingMore: boolean;
@@ -180,6 +183,9 @@ export default function MessageThread({
                                     >
                                         <span>{timeLabel(message.createdAt)}</span>
                                         {message.editedAt && <span>{m.thread.edited}</span>}
+                                        {message.id === seenMessageId && (
+                                            <span className="text-blue-600">{m.thread.seen}</span>
+                                        )}
                                         {editable && (
                                             <button
                                                 type="button"

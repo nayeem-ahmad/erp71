@@ -309,7 +309,14 @@ export class ChatService {
                 last_message_preview: true,
                 participants: {
                     where: { left_at: null },
-                    select: { user_id: true, role: true, user: { select: USER_SELECT } },
+                    select: {
+                        user_id: true,
+                        role: true,
+                        // Read receipts: a message is seen by this participant
+                        // when its created_at is at or before their cursor.
+                        last_read_at: true,
+                        user: { select: USER_SELECT },
+                    },
                 },
             },
         });
@@ -335,6 +342,11 @@ export class ChatService {
                 email: participant.user.email,
                 avatarUrl: participant.user.avatar_url,
                 role: participant.role,
+                // Withheld for the viewer's own row: your own cursor says
+                // nothing about whether anyone else has seen your messages,
+                // and exposing it invites the client to mark its own sends.
+                lastReadAt:
+                    participant.user_id === viewer.userId ? null : participant.last_read_at,
             })),
         };
     }

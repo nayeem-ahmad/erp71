@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "Tiada mesej lagi. Katakan sesuatu.",
         deleted: "Mesej ini telah dipadam",
         edited: "disunting",
+        seen: "Dilihat",
         edit: "Sunting mesej",
         delete: "Padam mesej",
     },

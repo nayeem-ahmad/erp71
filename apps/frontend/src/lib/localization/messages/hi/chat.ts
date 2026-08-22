@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "अभी कोई संदेश नहीं। कुछ कहें।",
         deleted: "यह संदेश हटा दिया गया",
         edited: "संपादित",
+        seen: "देखा गया",
         edit: "संदेश संपादित करें",
         delete: "संदेश हटाएँ",
     },
