@@ -27,6 +27,12 @@ describe('SalesQuotationsService', () => {
       quotationItem: {
         deleteMany: jest.fn(),
       },
+      documentSequence: {
+        upsert: jest.fn().mockResolvedValue({}),
+        // The reserved number is one below what `update` returns, so this
+        // stands for "this tenant's first document in the series".
+        update: jest.fn().mockResolvedValue({ next_number: 2 }),
+      },
       shortLink: {
         updateMany: jest.fn(),
       },
@@ -208,7 +214,9 @@ describe('SalesQuotationsService', () => {
       expect(db.shortLink.updateMany).toHaveBeenCalledWith({
           where: {
               tenant_id: 'tenant-1',
-              entity_type: 'QUOTATION',
+              // Both kinds, because a document promoted to a proforma after its
+              // link was minted still carries a QUOTATION-typed link.
+              entity_type: { in: ['QUOTATION', 'PROFORMA_INVOICE'] },
               entity_id: 'quote-1',
               revoked_at: null,
           },
@@ -422,7 +430,7 @@ describe('SalesQuotationsService', () => {
       expect(db.shortLink.updateMany).toHaveBeenCalledWith({
         where: {
           tenant_id: 'tenant-1',
-          entity_type: 'QUOTATION',
+          entity_type: { in: ['QUOTATION', 'PROFORMA_INVOICE'] },
           entity_id: 'q-1',
           revoked_at: null,
         },

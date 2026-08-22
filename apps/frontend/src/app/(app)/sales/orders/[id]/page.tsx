@@ -242,22 +242,22 @@ function OrderDetailsPageContent() {
                 {/* Edit Mode Banner */}
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">{t.shared.editMode.order}</span>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
                                 disabled={saving || editItems.length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 <span>{saving ? t.orders.detail.saving : t.orders.detail.saveChanges}</span>
                             </button>
                             <button
                                 onClick={() => router.push(`/sales/orders/${id}`)}
-                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1"
+                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1 rtl:space-x-reverse"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 <span>{t.common.cancel}</span>
@@ -291,7 +291,7 @@ function OrderDetailsPageContent() {
                                 {canEdit && (
                                     <button
                                         onClick={() => router.push(`/sales/orders/${id}?edit=true`)}
-                                        className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all"
+                                        className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                     >
                                         <Pencil className="w-4 h-4" />
                                         <span>{t.common.edit}</span>
@@ -299,7 +299,7 @@ function OrderDetailsPageContent() {
                                 )}
                                 <button
                                     onClick={handlePrint}
-                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
+                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.common.print}</span>
@@ -315,7 +315,7 @@ function OrderDetailsPageContent() {
                                     </button>
                                 )}
                                 {order.status === 'PROCESSING' && (
-                                    <button onClick={() => handleUpdateStatus('DELIVERED')} disabled={statusUpdating} className="bg-primary text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 hover:bg-primary-hover transition-all">
+                                    <button onClick={() => handleUpdateStatus('DELIVERED')} disabled={statusUpdating} className="bg-primary text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse hover:bg-primary-hover transition-all">
                                         <PackageCheck className="w-4 h-4" />
                                         <span>{t.orders.detail.markDelivered}</span>
                                     </button>
@@ -431,7 +431,7 @@ function OrderDetailsPageContent() {
 
                 {/* {t.orders.detail.orderItems} Section */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
+                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3 rtl:space-x-reverse">
                         <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                             <Package className="w-5 h-5" />
                         </div>
@@ -442,7 +442,7 @@ function OrderDetailsPageContent() {
                         <div className="p-6 space-y-4">
                             {/* Product search */}
                             <div className="relative">
-                                <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                <div className="flex items-center space-x-2 rtl:space-x-reverse bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
                                     <Search className="w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
@@ -462,11 +462,11 @@ function OrderDetailsPageContent() {
                                             <button
                                                 key={p.id}
                                                 onClick={() => addItem(p)}
-                                                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
+                                                className="w-full text-start px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
                                             >
                                                 <div>
                                                     <span className="text-sm font-bold">{p.name}</span>
-                                                    <span className="text-xs text-gray-400 ml-2">{p.sku}</span>
+                                                    <span className="text-xs text-gray-400 ms-2">{p.sku}</span>
                                                 </div>
                                                 <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(p.price), { locale })}</span>
                                             </button>
@@ -484,10 +484,10 @@ function OrderDetailsPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                            <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.price}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.price}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -496,7 +496,7 @@ function OrderDetailsPageContent() {
                                             <tr key={idx}>
                                                 <td className="py-3">
                                                     <span className="text-sm font-bold">{item.productName}</span>
-                                                    <span className="text-xs text-gray-400 ml-2">{item.sku}</span>
+                                                    <span className="text-xs text-gray-400 ms-2">{item.sku}</span>
                                                 </td>
                                                 <td className="py-3">
                                                     <input
@@ -514,10 +514,10 @@ function OrderDetailsPageContent() {
                                                         step={0.01}
                                                         value={item.priceAtOrder}
                                                         onChange={(e) => updateItem(idx, 'priceAtOrder', parseFloat(e.target.value) || 0)}
-                                                        className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                                                        className="w-full text-end bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                                     />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-bold text-blue-600">
+                                                <td className="py-3 text-end text-sm font-bold text-blue-600">
                                                     {formatBDT(item.quantity * item.priceAtOrder, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -530,8 +530,8 @@ function OrderDetailsPageContent() {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
-                                            <td colSpan={3} className="pt-3 text-right text-sm font-semibold">{t.common.total}</td>
-                                            <td className="pt-3 text-right text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</td>
+                                            <td colSpan={3} className="pt-3 text-end text-sm font-semibold">{t.common.total}</td>
+                                            <td className="pt-3 text-end text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -542,17 +542,17 @@ function OrderDetailsPageContent() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                    <th className="text-start p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
                                     <th className="text-center p-4 text-xs font-medium text-gray-500">{t.shared.columns.qty}</th>
-                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.unitPrice}</th>
-                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.common.total}</th>
+                                    <th className="text-end p-4 text-xs font-medium text-gray-500">{t.shared.columns.unitPrice}</th>
+                                    <th className="text-end p-4 text-xs font-medium text-gray-500">{t.common.total}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {order.items?.map((item: any) => (
                                     <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="p-4">
-                                            <div className="flex items-center space-x-3">
+                                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                                 <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center">
                                                     <Package className="w-4 h-4 text-gray-200" />
                                                 </div>
@@ -560,15 +560,15 @@ function OrderDetailsPageContent() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-center text-sm font-bold">{item.quantity}</td>
-                                        <td className="p-4 text-right text-sm font-bold text-gray-500">{formatBDT(Number(item.price_at_order), { locale })}</td>
-                                        <td className="p-4 text-right text-sm font-bold text-blue-600">{formatBDT(Number(item.price_at_order) * item.quantity, { locale })}</td>
+                                        <td className="p-4 text-end text-sm font-bold text-gray-500">{formatBDT(Number(item.price_at_order), { locale })}</td>
+                                        <td className="p-4 text-end text-sm font-bold text-blue-600">{formatBDT(Number(item.price_at_order) * item.quantity, { locale })}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
-                                    <td colSpan={3} className="p-4 text-right text-sm font-semibold">{t.common.total}</td>
-                                    <td className="p-4 text-right text-xl font-bold text-blue-600">{formatBDT(totalAmount, { locale })}</td>
+                                    <td colSpan={3} className="p-4 text-end text-sm font-semibold">{t.common.total}</td>
+                                    <td className="p-4 text-end text-xl font-bold text-blue-600">{formatBDT(totalAmount, { locale })}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -651,7 +651,7 @@ function OrderDetailsPageContent() {
 
                 {/* Bottom Save Bar in edit mode */}
                 {isEditMode && (
-                    <div className="flex justify-end space-x-3 pb-6">
+                    <div className="flex justify-end space-x-3 rtl:space-x-reverse pb-6">
                         <button
                             onClick={() => router.push(`/sales/orders/${id}`)}
                             className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-all"
@@ -661,7 +661,7 @@ function OrderDetailsPageContent() {
                         <button
                             onClick={handleSave}
                             disabled={saving || editItems.length === 0}
-                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />
                             <span>{saving ? t.orders.detail.saving : t.orders.detail.saveChanges}</span>
@@ -681,13 +681,13 @@ function OrderDetailsPageContent() {
                         <div className="p-6 overflow-y-auto">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.orders.detail.amountToPay}</label>
                             <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <DollarSign className="absolute start-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
                                     type="number"
                                     max={amountDue}
                                     value={depositAmount}
                                     onChange={(e) => setDepositAmount(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 pl-10 pr-4 font-bold text-2xl focus:ring-2 focus:ring-primary/20"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 ps-10 pe-4 font-bold text-2xl focus:ring-2 focus:ring-primary/20"
                                     placeholder={t.shared.form.amountPlaceholder}
                                 />
                             </div>

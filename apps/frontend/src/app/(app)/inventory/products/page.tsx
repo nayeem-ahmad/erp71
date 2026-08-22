@@ -40,12 +40,8 @@ interface Product {
 
 const columnHelper = createColumnHelper<Product>();
 
-function pluralize(count: number, singular: string, plural: string) {
-    return count === 1 ? singular : plural;
-}
-
 export default function InventoryPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -168,26 +164,11 @@ export default function InventoryPage() {
                 body: formData,
             });
 
-            const productWord = pluralize(
-                result.created,
-                t.inventory.importProductSingular,
-                t.inventory.importProductPlural,
-            );
-            const imported = t.inventory.importSummaryImported
-                .replace('{count}', String(result.created))
-                .replace('{unit}', productWord);
-            const skipped = t.inventory.importSummarySkipped.replace('{count}', String(result.skipped));
-            let errorPart = '';
-            if (result.errors?.length) {
-                const errorWord = pluralize(
-                    result.errors.length,
-                    t.inventory.importErrorSingular,
-                    t.inventory.importErrorPlural,
-                );
-                errorPart = ` ${t.inventory.importSummaryErrors
-                    .replace('{count}', String(result.errors.length))
-                    .replace('{unit}', errorWord)}`;
-            }
+            const imported = fmt(t.inventory.importSummaryImported, { count: result.created });
+            const skipped = fmt(t.inventory.importSummarySkipped, { count: result.skipped });
+            const errorPart = result.errors?.length
+                ? ` ${fmt(t.inventory.importSummaryErrors, { count: result.errors.length })}`
+                : '';
             setImportStatus(`${imported}, ${skipped}${errorPart}.`);
             await loadProducts();
         } catch (error: any) {
@@ -204,7 +185,7 @@ export default function InventoryPage() {
                 cell: (info) => {
                     const product = info.row.original;
                     return (
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <div className="w-9 h-9 rounded-xl bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-bold text-gray-500 uppercase">
                                 {product.image_url ? (
                                     <ProductImage src={product.image_url} alt={product.name} fallbackClassName="w-full h-full flex items-center justify-center" />
@@ -325,7 +306,7 @@ export default function InventoryPage() {
                 id: 'actions',
                 header: t.inventory.columns.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1">
+                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                         <button
                             onClick={() => openEditProduct(info.row.original)}
                             className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
@@ -443,7 +424,7 @@ export default function InventoryPage() {
                         <span>{importStatus}</span>
                         <button
                             onClick={() => setImportStatus(null)}
-                            className="ml-4 text-current opacity-60 hover:opacity-100 font-bold text-base leading-none"
+                            className="ms-4 text-current opacity-60 hover:opacity-100 font-bold text-base leading-none"
                             aria-label={t.common.dismiss}
                         >
                             ×
@@ -453,7 +434,7 @@ export default function InventoryPage() {
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.common.search}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.search}</label>
                         <Input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -461,7 +442,7 @@ export default function InventoryPage() {
                         />
                     </div>
                     <div className="min-w-[180px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.columns.status}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.columns.status}</label>
                         <Select value={stockStatus} onChange={(e) => setStockStatus(e.target.value)}>
                             <option value="">{t.common.all}</option>
                             {stockStatusOptions.map((option) => (
@@ -470,7 +451,7 @@ export default function InventoryPage() {
                         </Select>
                     </div>
                     <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.groupFilter}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.filters.groupFilter}</label>
                         <select
                             value={selectedGroupId}
                             onChange={(e) => {
@@ -489,7 +470,7 @@ export default function InventoryPage() {
                         </select>
                     </div>
                     <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.subgroupFilter}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.filters.subgroupFilter}</label>
                         <select
                             value={selectedSubgroupId}
                             onChange={(e) => {

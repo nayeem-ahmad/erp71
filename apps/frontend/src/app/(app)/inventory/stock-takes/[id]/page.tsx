@@ -136,7 +136,7 @@ export default function StockTakeDetailPage() {
                     actions={(
                         <>
                             <button onClick={() => void handleSave()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                                <Save className="w-4 h-4 mr-2" /> {t.inventoryStockTakeDetail.saveCounts}
+                                <Save className="w-4 h-4 me-2" /> {t.inventoryStockTakeDetail.saveCounts}
                             </button>
                             {canMoveToReview ? (
                                 <button onClick={() => void handleMoveToReview()} className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">{t.inventoryStockTakeDetail.moveToReview}</button>
@@ -147,7 +147,7 @@ export default function StockTakeDetailPage() {
                                 </button>
                             ) : null}
                             <button disabled={!canPost} onClick={() => void handlePost()} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm disabled:shadow-none">
-                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                                <CheckCircle2 className="w-4 h-4 me-2" />
                                 <span className="inline-flex items-center gap-1.5">
                                     {t.inventoryStockTakeDetail.postSession}
                                     <HelpTooltip text={STOCK_TAKES_FIELD_HELP.post} side="left" />

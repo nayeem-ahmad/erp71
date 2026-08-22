@@ -150,6 +150,23 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.APPROVE_PRODUCT_DEMAND,
         ],
     },
+    {
+        // Imports (LC). A new group rather than joining an existing one: a
+        // group already reconciled onto a role is skipped forever, so a
+        // permission added after a group has landed always needs its own — see
+        // this file's header.
+        //
+        // All three together because they ship together and no role holds any
+        // of them. `ROLE_DEFAULT_PERMISSIONS` decides who gets what: Owner all
+        // three, Manager view and manage but not costs, since a landed-cost
+        // change moves COGS on every later sale.
+        key: 'imports-lc',
+        permissions: [
+            StorePermission.VIEW_IMPORTS,
+            StorePermission.MANAGE_IMPORTS,
+            StorePermission.MANAGE_IMPORT_COSTS,
+        ],
+    },
 ];
 
 export interface GroupResult {

@@ -297,7 +297,7 @@ export default function BalanceSheetPage() {
                                 ? <><CheckCircle className="w-4 h-4 text-emerald-500" /><span className="text-emerald-700">{t.accountingShared.balanced}</span></>
                                 : <><AlertCircle className="w-4 h-4 text-amber-500" /><span className="text-amber-700">{t.accountingShared.notBalanced}</span></>
                             }
-                            <span className="ml-2">{t.accounting.reports.balanceSheet.asOf} {data.as_of}</span>
+                            <span className="ms-2">{t.accounting.reports.balanceSheet.asOf} {data.as_of}</span>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-3">

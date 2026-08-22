@@ -144,7 +144,7 @@ export function ReportScopeBar({
                 </div>
 
                 {level && onLevelChange ? (
-                    <div className="flex flex-wrap items-center gap-3 md:ml-auto">
+                    <div className="flex flex-wrap items-center gap-3 md:ms-auto">
                         <span className={compactDensity.formLabel}>{levelLabels.detail}</span>
                         <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={levelLabels.detail}>
                             {REPORT_LEVEL_MODES.map((mode) => (

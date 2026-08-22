@@ -169,7 +169,7 @@ export default function SprintPlanningPage() {
                                     <span className="shrink-0 text-xs text-gray-500">
                                         {task.project?.code ?? '—'}
                                     </span>
-                                    <span className="w-12 shrink-0 text-right text-xs text-gray-500">
+                                    <span className="w-12 shrink-0 text-end text-xs text-gray-500">
                                         {num(task.remaining_hours)}h
                                     </span>
                                 </li>
@@ -211,7 +211,7 @@ export default function SprintPlanningPage() {
                                     <span className="shrink-0 text-xs text-gray-500">
                                         {task.project?.code ?? '—'}
                                     </span>
-                                    <span className="w-12 shrink-0 text-right text-xs text-gray-500">
+                                    <span className="w-12 shrink-0 text-end text-xs text-gray-500">
                                         {num(task.remaining_hours)}h
                                     </span>
                                     <button

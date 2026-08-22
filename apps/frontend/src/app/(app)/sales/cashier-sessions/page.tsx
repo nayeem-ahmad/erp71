@@ -139,7 +139,7 @@ export default function CashierSessionsPage() {
                         !session ? (
                             <button
                                 onClick={() => setShowOpenModal(true)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
+                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.openShift}</span>
@@ -147,7 +147,7 @@ export default function CashierSessionsPage() {
                         ) : (
                             <button
                                 onClick={() => setShowCloseModal(true)}
-                                className="bg-danger hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
+                                className="bg-danger hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.closeShift}</span>
@@ -161,7 +161,7 @@ export default function CashierSessionsPage() {
                     <>
                         <div className="bg-white rounded-lg shadow-sm p-6 border border-green-100">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                     <div className="p-2 bg-green-50 rounded-xl text-green-600">
                                         <CheckCircle className="w-6 h-6" />
                                     </div>
@@ -202,7 +202,7 @@ export default function CashierSessionsPage() {
                         <div className="flex justify-end">
                             <button
                                 onClick={() => setShowTxModal(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <DollarSign className="w-4 h-4" />
                                 <span>{t.cashierSessions.recordCashInOut}</span>
@@ -223,7 +223,7 @@ export default function CashierSessionsPage() {
                                 <div className="divide-y divide-gray-50">
                                     {transactions.map((tx) => (
                                         <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                                            <div className="flex items-center space-x-3">
+                                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                                 {parseFloat(tx.amount) > 0 ? (
                                                     <div className="p-2 bg-green-50 rounded-xl text-green-600">
                                                         <ArrowDownCircle className="w-5 h-5" />
@@ -238,7 +238,7 @@ export default function CashierSessionsPage() {
                                                     <span className="text-xs text-gray-400">{tx.description || t.shared.dash}</span>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-end">
                                                 <span className={`text-sm font-bold ${parseFloat(tx.amount) > 0 ? 'text-green-600' : 'text-danger'}`}>
                                                     {parseFloat(tx.amount) > 0 ? '+' : ''}{formatBDT(parseFloat(tx.amount), { locale })}
                                                 </span>

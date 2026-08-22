@@ -63,7 +63,7 @@ function formatOptionalPrice(value: string | number | null | undefined) {
 }
 
 export default function StorefrontShopPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.storefront.public;
     const shop = m.shop;
     const footer = m.footer;
@@ -430,7 +430,7 @@ export default function StorefrontShopPage() {
 
             {orderSuccess && (
                 <div className="max-w-7xl mx-auto mt-6 px-4 sm:px-6 lg:px-8">
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start space-x-3">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start space-x-3 rtl:space-x-reverse">
                         <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-green-800">{m.orderSuccess}</p>
@@ -492,7 +492,7 @@ export default function StorefrontShopPage() {
                                                     const matchedCategory = data.categories.find((item) => item.name === category);
                                                     updateQueryParams({ category: matchedCategory?.id || category });
                                                 }}
-                                                className="flex w-full items-center gap-2 text-left"
+                                                className="flex w-full items-center gap-2 text-start"
                                             >
                                                 <span className={`inline-flex w-4 h-4 rounded-full border ${isActive ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`} />
                                                 <span className={`text-sm ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
@@ -532,19 +532,19 @@ export default function StorefrontShopPage() {
                                 <p className="text-sm text-gray-500">
                                     {visibleProducts.length === 1
                                         ? formatMessage(shop.showingProducts, { count: visibleProducts.length })
-                                        : formatMessage(shop.showingProductsPlural, { count: visibleProducts.length })}
+                                        : fmt(shop.showingProducts, { count: visibleProducts.length })}
                                 </p>
 
                                 <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                                     <label htmlFor="shop-search" className="relative block">
-                                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Search className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                                         <input
                                             id="shop-search"
                                             type="search"
                                             placeholder={shop.searchPlaceholder}
                                             value={searchQuery}
                                             onChange={(event) => updateQueryParams({ q: event.target.value.trim() ? event.target.value : null })}
-                                            className="h-11 w-full sm:w-64 rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                            className="h-11 w-full sm:w-64 rounded-xl border border-gray-200 bg-white ps-9 pe-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                                         />
                                     </label>
 
@@ -585,7 +585,7 @@ export default function StorefrontShopPage() {
                                                     )}
 
                                                     {onSale && (
-                                                        <div className="absolute top-2 left-2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                                                        <div className="absolute top-2 start-2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
                                                             {m.sale}
                                                         </div>
                                                     )}
@@ -638,7 +638,7 @@ export default function StorefrontShopPage() {
                     />
                     <aside className="relative w-full max-w-md bg-white h-full flex flex-col shadow-2xl">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-bold flex items-center space-x-2">
+                            <h2 className="text-xl font-bold flex items-center space-x-2 rtl:space-x-reverse">
                                 <ShoppingCart className="w-5 h-5" />
                                 <span>{formatMessage(m.yourCart, { count: cartCount })}</span>
                             </h2>
@@ -663,7 +663,7 @@ export default function StorefrontShopPage() {
                             ) : (
                                 <ul className="space-y-6">
                                     {cart.map((item) => (
-                                        <li key={item.product.id} className="flex space-x-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                        <li key={item.product.id} className="flex space-x-4 rtl:space-x-reverse bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                                             {item.product.image_url ? (
                                                 <img src={item.product.image_url} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50" />
                                             ) : (
@@ -673,13 +673,13 @@ export default function StorefrontShopPage() {
                                             )}
                                             <div className="flex-1 flex flex-col">
                                                 <div className="flex justify-between items-start">
-                                                    <h3 className="font-semibold text-gray-900 leading-tight pr-4">{item.product.name}</h3>
+                                                    <h3 className="font-semibold text-gray-900 leading-tight pe-4">{item.product.name}</h3>
                                                     <button type="button" onClick={() => removeFromCart(item.product.id)} className="text-gray-400 hover:text-red-500 transition-colors">
                                                         <X className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                                 <p className="text-sm font-bold text-gray-900 mt-1">{formatBDT(toNumber(item.product.selling_price))}</p>
-                                                <div className="mt-auto pt-3 flex items-center space-x-3">
+                                                <div className="mt-auto pt-3 flex items-center space-x-3 rtl:space-x-reverse">
                                                     <button
                                                         type="button"
                                                         onClick={() => updateQty(item.product.id, -1)}
@@ -750,7 +750,7 @@ export default function StorefrontShopPage() {
                                     <div className="space-y-2">
                                         {cart.map((item) => (
                                             <div key={item.product.id} className="flex justify-between text-sm text-gray-700 gap-4">
-                                                <span className="flex-1 pr-4 truncate">
+                                                <span className="flex-1 pe-4 truncate">
                                                     {item.quantity} × {item.product.name}
                                                 </span>
                                                 <span className="font-semibold whitespace-nowrap">
@@ -855,7 +855,7 @@ export default function StorefrontShopPage() {
 
                         <div className="p-6 border-t border-gray-100 bg-white">
                             {orderError && (
-                                <p className="text-red-600 text-sm bg-red-50 rounded-lg px-4 py-3 mb-4 flex items-center space-x-2">
+                                <p className="text-red-600 text-sm bg-red-50 rounded-lg px-4 py-3 mb-4 flex items-center space-x-2 rtl:space-x-reverse">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                     <span>{orderError}</span>
                                 </p>

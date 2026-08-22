@@ -159,7 +159,7 @@ export default function ProjectTeamCard({
                             <span className="min-w-0 flex-1 truncate">
                                 {memberName(member)}
                                 {member.employee && (
-                                    <span className="ml-1 text-xs text-amber-600">{m.team.noLogin}</span>
+                                    <span className="ms-1 text-xs text-amber-600">{m.team.noLogin}</span>
                                 )}
                             </span>
                             <span className="shrink-0 text-xs text-gray-500">

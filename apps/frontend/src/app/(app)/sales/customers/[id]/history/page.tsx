@@ -113,7 +113,7 @@ export default function PurchaseHistoryPage() {
                     t.customers.history.title,
                 )}
                 actions={
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
                         <span className="font-mono text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
                             {customer.customer_code}
                         </span>
@@ -153,7 +153,7 @@ export default function PurchaseHistoryPage() {
             </div>
 
             {summary.firstPurchase && summary.lastPurchase && (
-                <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm flex items-center space-x-6">
+                <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm flex items-center space-x-6 rtl:space-x-reverse">
                     <Calendar className="w-5 h-5 text-gray-400 flex-shrink-0" />
                     <div>
                         <p className="text-xs font-medium text-gray-500">{t.customers.history.purchaseTimeline}</p>
@@ -170,7 +170,7 @@ export default function PurchaseHistoryPage() {
                     <p className="text-xs font-semibold text-gray-400 mb-5">{t.customers.history.monthlySpending}</p>
                     <div className="space-y-3">
                         {monthlyTotals.slice(-12).map(month => (
-                            <div key={month.month} className="flex items-center space-x-3">
+                            <div key={month.month} className="flex items-center space-x-3 rtl:space-x-reverse">
                                 <span className="text-xs font-mono text-gray-400 w-16 flex-shrink-0">{month.month}</span>
                                 <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
                                     <div
@@ -178,9 +178,9 @@ export default function PurchaseHistoryPage() {
                                         style={{ width: `${(month.spent / maxMonthlySpend) * 100}%` }}
                                     />
                                 </div>
-                                <div className="text-right flex-shrink-0 w-32">
+                                <div className="text-end flex-shrink-0 w-32">
                                     <span className="text-xs font-bold text-gray-900">৳{month.spent.toFixed(0)}</span>
-                                    <span className="text-[10px] text-gray-400 ml-1">{formatMessage(t.customers.history.ordersCount, { count: month.orders })}</span>
+                                    <span className="text-[10px] text-gray-400 ms-1">{formatMessage(t.customers.history.ordersCount, { count: month.orders })}</span>
                                 </div>
                             </div>
                         ))}
@@ -192,18 +192,18 @@ export default function PurchaseHistoryPage() {
             {topProducts.length > 0 && (
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <p className="text-xs font-semibold text-gray-400 mb-4 flex items-center">
-                        <Package className="w-4 h-4 mr-2" /> {t.customers.history.topProducts}
+                        <Package className="w-4 h-4 me-2" /> {t.customers.history.topProducts}
                     </p>
                     <div className="space-y-3">
                         {topProducts.map((item, i) => (
                             <div key={item.productId} className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                     <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center">
                                         {i + 1}
                                     </span>
                                     <span className="font-bold text-sm">{item.name}</span>
                                 </div>
-                                <div className="flex items-center space-x-4">
+                                <div className="flex items-center space-x-4 rtl:space-x-reverse">
                                     <span className="text-xs text-gray-500 font-medium">{formatMessage(t.customers.history.units, { count: item.quantity })}</span>
                                     <span className="font-bold text-sm">{formatBDT(item.totalValue)}</span>
                                 </div>
@@ -217,17 +217,17 @@ export default function PurchaseHistoryPage() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-lg font-bold flex items-center">
-                        <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" /> {t.customers.history.allTransactions}
-                        <span className="ml-2 text-xs font-bold text-gray-400">({filteredTransactions.length})</span>
+                        <ShoppingBag className="w-5 h-5 me-2 text-blue-600" /> {t.customers.history.allTransactions}
+                        <span className="ms-2 text-xs font-bold text-gray-400">({filteredTransactions.length})</span>
                     </h2>
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                             type="text"
                             placeholder={t.customers.history.searchPlaceholder}
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-72"
+                            className="ps-9 pe-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-72"
                         />
                     </div>
                 </div>
@@ -246,7 +246,7 @@ export default function PurchaseHistoryPage() {
                                             {new Date(sale.created_at).toLocaleString('en-BD')}
                                         </p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-end">
                                         <p className="font-bold">{formatBDT(Number(sale.amount_paid))}</p>
                                         <span className={`text-[10px] font-semibold ${
                                             sale.status === 'COMPLETED' ? 'text-emerald-500' :

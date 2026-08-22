@@ -245,13 +245,13 @@ export default function JobPostsPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                             <tr>
-                                <th className="p-2 text-left font-medium">{copy.columns.title}</th>
-                                <th className="hidden p-2 text-left font-medium md:table-cell">{copy.columns.department}</th>
-                                <th className="hidden p-2 text-left font-medium md:table-cell">{copy.columns.employmentType}</th>
-                                <th className="p-2 text-right font-medium">{copy.columns.openings}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.applications}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.status}</th>
-                                <th className="hidden p-2 text-left font-medium lg:table-cell">{copy.columns.closingDate}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.title}</th>
+                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.department}</th>
+                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.employmentType}</th>
+                                <th className="p-2 text-end font-medium">{copy.columns.openings}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.applications}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.status}</th>
+                                <th className="hidden p-2 text-start font-medium lg:table-cell">{copy.columns.closingDate}</th>
                                 <th className="p-2" />
                             </tr>
                         </thead>
@@ -275,7 +275,7 @@ export default function JobPostsPage() {
                                     <td className="hidden p-2 text-gray-600 md:table-cell">
                                         {copy.employmentType[post.employment_type]}
                                     </td>
-                                    <td className="p-2 text-right text-gray-600">{post.openings}</td>
+                                    <td className="p-2 text-end text-gray-600">{post.openings}</td>
                                     <td className="p-2">
                                         <span className="text-gray-900">{post.application_count ?? 0}</span>
                                         <p className="text-xs text-gray-500">
@@ -288,7 +288,7 @@ export default function JobPostsPage() {
                                     <td className="hidden p-2 text-gray-600 lg:table-cell">
                                         {post.closing_date ? formatDate(post.closing_date) : '—'}
                                     </td>
-                                    <td className="p-2 text-right">
+                                    <td className="p-2 text-end">
                                         <div className="flex justify-end gap-1">
                                             <Button variant="ghost" onClick={() => openModal(post)} aria-label={copy.editTitle}>
                                                 <Pencil className="h-4 w-4" />

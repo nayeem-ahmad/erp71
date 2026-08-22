@@ -42,7 +42,7 @@ export default function TotalsFooter({
     totalLabel = 'Total',
     roundingLabel = 'Rounding',
 }: TotalsFooterProps) {
-    const inputClass = 'w-16 px-1.5 py-0.5 border rounded text-xs text-right';
+    const inputClass = 'w-16 px-1.5 py-0.5 border rounded text-xs text-end';
     const amount = (value: number) => `৳${value.toFixed(2)}`;
 
     // In read-only mode only the rows that actually carry a value are shown —
@@ -87,7 +87,7 @@ export default function TotalsFooter({
                                 className={inputClass}
                             />
                             <span className="text-xs text-gray-400">%</span>
-                            <span className="font-medium w-20 text-right text-red-600">-{amount(totals.discount)}</span>
+                            <span className="font-medium w-20 text-end text-red-600">-{amount(totals.discount)}</span>
                         </div>
                     </div>
 

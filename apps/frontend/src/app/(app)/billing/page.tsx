@@ -275,7 +275,7 @@ function BillingPageContent() {
 
                 {isLoading ? (
                     <div className="rounded-lg border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" /> {copy.loadingSummary}
+                        <Loader2 className="w-5 h-5 animate-spin me-2" /> {copy.loadingSummary}
                     </div>
                 ) : summary && (
                     <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
@@ -345,7 +345,7 @@ function BillingPageContent() {
                                                         disabled={isSubmitting}
                                                         className="mt-3 inline-flex items-center rounded-xl bg-white px-3 py-2 text-xs font-bold text-danger-text border border-red-200 transition hover:bg-danger-light disabled:opacity-60"
                                                     >
-                                                        <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                                        <RotateCcw className="w-3.5 h-3.5 me-1.5" />
                                                         {copy.cancelAtPeriodEnd}
                                                     </button>
                                                 )}
@@ -374,7 +374,7 @@ function BillingPageContent() {
                                                     key={plan.code}
                                                     type="button"
                                                     onClick={() => setSelectedPlanCode(plan.code)}
-                                                    className={`rounded-lg border p-4 text-left transition-all ${selected ? 'border-blue-600 bg-white shadow-lg shadow-sm' : 'border-blue-100 bg-white/70 hover:border-blue-200'}`}
+                                                    className={`rounded-lg border p-4 text-start transition-all ${selected ? 'border-blue-600 bg-white shadow-lg shadow-sm' : 'border-blue-100 bg-white/70 hover:border-blue-200'}`}
                                                 >
                                                     <div className="flex items-center justify-between gap-3">
                                                         <span className="text-lg font-bold text-gray-900">{plan.name}</span>
@@ -461,7 +461,7 @@ function BillingPageContent() {
                                             disabled={isSubmitting}
                                             className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                         >
-                                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CreditCard className="w-4 h-4 me-2" />}
                                             {isSslProvider ? copy.continueSsl : copy.startSandbox}
                                         </button>
 
@@ -472,7 +472,7 @@ function BillingPageContent() {
                                                 disabled={isSubmitting}
                                                 className="inline-flex items-center rounded-lg bg-white px-5 py-3 text-sm font-bold text-gray-900 border border-gray-200 transition hover:border-blue-300 disabled:opacity-60"
                                             >
-                                                <ArrowUpRight className="w-4 h-4 mr-2" />
+                                                <ArrowUpRight className="w-4 h-4 me-2" />
                                                 {copy.confirmCheckout}
                                             </button>
                                         )}
@@ -484,7 +484,7 @@ function BillingPageContent() {
                                                 disabled={isSubmitting}
                                                 className="inline-flex items-center rounded-lg bg-white px-5 py-3 text-sm font-bold text-danger-text border border-red-200 transition hover:bg-danger-light disabled:opacity-60"
                                             >
-                                                <RotateCcw className="w-4 h-4 mr-2" />
+                                                <RotateCcw className="w-4 h-4 me-2" />
                                                 {copy.cancelAtPeriodEnd}
                                             </button>
                                         )}
@@ -563,7 +563,7 @@ function BillingPageFallback() {
         <PageShell>
             <div className="max-w-6xl mx-auto">
                 <div className="rounded-lg border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" /> {copy.loadingWorkspace}
+                    <Loader2 className="w-5 h-5 animate-spin me-2" /> {copy.loadingWorkspace}
                 </div>
             </div>
         </PageShell>

@@ -526,7 +526,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {showEmailVerificationBanner && (
                     <div className="bg-amber-500 text-white px-6 py-2.5 flex items-center justify-between gap-4 flex-shrink-0">
                         <div className="text-sm font-medium">
-                            Verify your email to secure your account and receive billing alerts.
+                            {t.dashboardLayout.emailVerifyMessage}
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
                             <button
@@ -535,9 +535,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                     setResendingVerification(true);
                                     try {
                                         await api.resendVerificationEmail();
-                                        toast.success('Verification email sent — check your inbox.');
+                                        toast.success(t.dashboardLayout.emailVerifySent);
                                     } catch (err: unknown) {
-                                        const message = err instanceof Error ? err.message : 'Failed to send verification email.';
+                                        const message = err instanceof Error ? err.message : t.dashboardLayout.emailVerifyFailed;
                                         toast.error(message);
                                     } finally {
                                         setResendingVerification(false);
@@ -545,12 +545,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 }}
                                 className="text-xs font-bold bg-white text-amber-700 px-3 py-1 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-60"
                             >
-                                {resendingVerification ? 'Sending…' : 'Resend email'}
+                                {resendingVerification ? t.dashboardLayout.emailVerifySending : t.dashboardLayout.emailVerifyResend}
                             </button>
                             <button
                                 onClick={() => setShowEmailVerificationBanner(false)}
                                 className="text-amber-100 hover:text-white transition-colors"
-                                aria-label="Dismiss"
+                                aria-label={t.dashboardLayout.emailVerifyDismiss}
                             >
                                 <X className="w-4 h-4" />
                             </button>

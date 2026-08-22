@@ -200,7 +200,7 @@ export default function PrintTemplatesPage() {
                                 >
                                     {template.name}
                                     {template.is_default ? (
-                                        <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                                        <span className="ms-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
                                             {copy.defaultBadge}
                                         </span>
                                     ) : null}

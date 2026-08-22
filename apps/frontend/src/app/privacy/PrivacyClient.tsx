@@ -31,7 +31,7 @@ export default function PrivacyClient() {
                             <p className="mb-3">
                                 We collect information you provide directly when you create an account or use the Service:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li><strong>Account data:</strong> your full name, email address, and password (stored as a bcrypt hash).</li>
                                 <li><strong>Business data:</strong> organisation name, store name(s), and subscription plan selection.</li>
                                 <li><strong>Transaction data:</strong> sales records, inventory movements, customer profiles, and payment references you enter while using the platform.</li>
@@ -47,7 +47,7 @@ export default function PrivacyClient() {
                         {/* 2 */}
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">2. How We Use Your Information</h2>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>To create and manage your account and workspace.</li>
                                 <li>To provide and operate the ERP71 platform and all its features.</li>
                                 <li>To send transactional emails: email verification, password resets, invoices, low-stock alerts, and staff invitations.</li>
@@ -68,7 +68,7 @@ export default function PrivacyClient() {
                             <p className="mb-3">
                                 We share personal data only in the following circumstances:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Service providers:</strong> hosting (cloud infrastructure), transactional email delivery,
                                     error monitoring, and analytics tools that process data on our behalf under strict data processing
@@ -111,7 +111,7 @@ export default function PrivacyClient() {
                             <p className="mb-3">
                                 We implement industry-standard technical and organisational measures to protect your data:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>All data is transmitted over TLS 1.2 or higher — plain HTTP is rejected.</li>
                                 <li>Passwords are hashed using bcrypt with a work factor of 12.</li>
                                 <li>Sensitive tokens (email verification, password reset) are stored as SHA-256 hashes; plaintext is never persisted.</li>
@@ -132,7 +132,7 @@ export default function PrivacyClient() {
                             <p className="mb-3">
                                 You have the following rights regarding your personal data:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Access &amp; portability:</strong> export a copy of all personal data associated with your
                                     account in JSON format via{' '}
@@ -177,7 +177,7 @@ export default function PrivacyClient() {
                                 ERP71 is operated by ERP71 Ltd., a company registered in Bangladesh. We
                                 comply with applicable Bangladeshi data protection requirements, including:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Digital Security Act 2018 / Cyber Security Act 2023:</strong> we maintain
                                     appropriate safeguards for digital personal data and report material security

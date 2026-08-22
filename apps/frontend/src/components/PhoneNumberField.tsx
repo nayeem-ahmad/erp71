@@ -31,7 +31,7 @@ export default function PhoneNumberField({
     return (
         <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-3">
             <div className="space-y-2">
-                <label htmlFor={`${idPrefix}-country`} className="text-sm font-medium text-gray-700 ml-1">
+                <label htmlFor={`${idPrefix}-country`} className="text-sm font-medium text-gray-700 ms-1">
                     {countryLabel}
                 </label>
                 <select
@@ -48,11 +48,11 @@ export default function PhoneNumberField({
                 </select>
             </div>
             <div className="space-y-2">
-                <label htmlFor={`${idPrefix}-mobile`} className="text-sm font-medium text-gray-700 ml-1">
+                <label htmlFor={`${idPrefix}-mobile`} className="text-sm font-medium text-gray-700 ms-1">
                     {mobileLabel}
                 </label>
                 <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+                    <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
                         {selected.dial}
                     </span>
                     <input
@@ -62,7 +62,7 @@ export default function PhoneNumberField({
                         onChange={(e) => onMobileChange(e.target.value)}
                         required={required}
                         placeholder={mobilePlaceholder}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-14 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-14 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                 </div>
             </div>

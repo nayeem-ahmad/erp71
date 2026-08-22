@@ -280,7 +280,7 @@ export default function ManufacturingPage() {
 // ------------------------------------------------------------------ //
 
 function BomTab() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const [boms, setBoms] = useState<BomRecipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -402,10 +402,7 @@ function BomTab() {
         }));
     }
 
-    const recipeCountLabel = formatMessage(
-        boms.length === 1 ? t.manufacturing.recipeCount : t.manufacturing.recipeCountPlural,
-        { count: boms.length },
-    );
+    const recipeCountLabel = fmt(t.manufacturing.recipeCount, { count: boms.length });
 
     return (
         <>
@@ -438,12 +435,12 @@ function BomTab() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                             <tr>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.product}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.outputQty}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.components}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.notes}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.created}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.actions}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.product}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.outputQty}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.components}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.notes}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.created}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.actions}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -604,7 +601,7 @@ function BomTab() {
 // ------------------------------------------------------------------ //
 
 function JobsTab() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const [jobs, setJobs] = useState<ProductionJob[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -905,10 +902,7 @@ function JobsTab() {
         { label: t.manufacturing.jobStatuses.completed, value: 'COMPLETED' },
     ];
 
-    const jobCountLabel = formatMessage(
-        total === 1 ? t.manufacturing.jobCount : t.manufacturing.jobCountPlural,
-        { count: total },
-    );
+    const jobCountLabel = fmt(t.manufacturing.jobCount, { count: total });
 
     function getJobStatusLabel(status: string): string {
         const key = JOB_STATUS_LABEL_KEYS[status];
@@ -965,14 +959,14 @@ function JobsTab() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                             <tr>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.jobId}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.product}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.qty}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.status}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.started}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.completed}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.created}</th>
-                                <th className="px-4 py-3 text-left">{t.manufacturing.columns.actions}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.jobId}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.product}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.qty}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.status}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.started}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.completed}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.created}</th>
+                                <th className="px-4 py-3 text-start">{t.manufacturing.columns.actions}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -1086,10 +1080,10 @@ function JobsTab() {
                                                         <tbody className="divide-y divide-gray-200">
                                                             {jobCosts[job.id]!.map((cost) => (
                                                                 <tr key={cost.id}>
-                                                                    <td className="py-1.5 pr-3 text-gray-700">
+                                                                    <td className="py-1.5 pe-3 text-gray-700">
                                                                         {t.manufacturing.jobCosts.costTypes[cost.costType]}
                                                                     </td>
-                                                                    <td className="py-1.5 pr-3 text-gray-500">
+                                                                    <td className="py-1.5 pe-3 text-gray-500">
                                                                         {cost.notes}
                                                                         {cost.sourcePurchaseItem && (
                                                                             <span className="text-gray-400">
@@ -1097,10 +1091,10 @@ function JobsTab() {
                                                                             </span>
                                                                         )}
                                                                     </td>
-                                                                    <td className="py-1.5 pr-3 text-right font-medium text-gray-800">
+                                                                    <td className="py-1.5 pe-3 text-end font-medium text-gray-800">
                                                                         {formatBDT(Number(cost.amount))}
                                                                     </td>
-                                                                    <td className="py-1.5 text-right">
+                                                                    <td className="py-1.5 text-end">
                                                                         {cost.costType !== 'RAW_MATERIAL' && (
                                                                             <button
                                                                                 onClick={() => handleRemoveCost(job.id, cost.id)}
@@ -1343,10 +1337,10 @@ function JobsTab() {
                                             <table className="w-full text-xs">
                                                 <thead className="bg-gray-50 text-gray-600 uppercase">
                                                     <tr>
-                                                        <th className="px-3 py-2 text-left">{t.manufacturing.requirementsColumns.component}</th>
-                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.perUnit}</th>
-                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.required}</th>
-                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.available}</th>
+                                                        <th className="px-3 py-2 text-start">{t.manufacturing.requirementsColumns.component}</th>
+                                                        <th className="px-3 py-2 text-end">{t.manufacturing.requirementsColumns.perUnit}</th>
+                                                        <th className="px-3 py-2 text-end">{t.manufacturing.requirementsColumns.required}</th>
+                                                        <th className="px-3 py-2 text-end">{t.manufacturing.requirementsColumns.available}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100">
@@ -1358,9 +1352,9 @@ function JobsTab() {
                                                                     <span className="text-gray-400"> ({item.productSku})</span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-3 py-2 text-right text-gray-700">{item.perUnitQty}</td>
-                                                            <td className="px-3 py-2 text-right text-gray-700">{item.requiredQty}</td>
-                                                            <td className={`px-3 py-2 text-right ${item.sufficient ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
+                                                            <td className="px-3 py-2 text-end text-gray-700">{item.perUnitQty}</td>
+                                                            <td className="px-3 py-2 text-end text-gray-700">{item.requiredQty}</td>
+                                                            <td className={`px-3 py-2 text-end ${item.sufficient ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
                                                                 {item.availableQty}
                                                             </td>
                                                         </tr>
@@ -1525,7 +1519,7 @@ function AnalyticsTab() {
                                     style={{ width: `${Math.max(4, (point.quantityProduced / maxVolume) * 100)}%` }}
                                 />
                             </div>
-                            <span className="w-12 shrink-0 text-xs text-gray-700 text-right">{point.quantityProduced}</span>
+                            <span className="w-12 shrink-0 text-xs text-gray-700 text-end">{point.quantityProduced}</span>
                         </div>
                     ))}
                 </div>
@@ -1538,13 +1532,13 @@ function AnalyticsTab() {
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                         <tr>
-                            <th className="px-4 py-3 text-left">{t.manufacturing.analytics.columns.product}</th>
-                            <th className="px-4 py-3 text-left">{t.manufacturing.analytics.columns.completed}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.qtyProduced}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.plannedCost}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.wastageCost}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.actualCost}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.unitCost}</th>
+                            <th className="px-4 py-3 text-start">{t.manufacturing.analytics.columns.product}</th>
+                            <th className="px-4 py-3 text-start">{t.manufacturing.analytics.columns.completed}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.analytics.columns.qtyProduced}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.analytics.columns.plannedCost}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.analytics.columns.wastageCost}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.analytics.columns.actualCost}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.analytics.columns.unitCost}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1555,13 +1549,13 @@ function AnalyticsTab() {
                                     {job.productSku && <div className="text-xs text-gray-500">{job.productSku}</div>}
                                 </td>
                                 <td className="px-4 py-3 text-gray-500">{formatDate(job.completedAt)}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{job.quantityProduced}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(job.plannedMaterialCost)}</td>
-                                <td className={`px-4 py-3 text-right ${job.wastageCost > 0 ? 'text-amber-700 font-medium' : 'text-gray-700'}`}>
+                                <td className="px-4 py-3 text-end text-gray-700">{job.quantityProduced}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{formatBDT(job.plannedMaterialCost)}</td>
+                                <td className={`px-4 py-3 text-end ${job.wastageCost > 0 ? 'text-amber-700 font-medium' : 'text-gray-700'}`}>
                                     {formatBDT(job.wastageCost)}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(job.actualMaterialCost)}</td>
-                                <td className="px-4 py-3 text-right text-gray-900 font-medium">{formatBDT(job.unitProductionCost)}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{formatBDT(job.actualMaterialCost)}</td>
+                                <td className="px-4 py-3 text-end text-gray-900 font-medium">{formatBDT(job.unitProductionCost)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -1650,15 +1644,15 @@ function ProductPLTab() {
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                         <tr>
-                            <th className="px-4 py-3 text-left">{t.manufacturing.productPL.columns.product}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.jobsCompleted}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.qtyProduced}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.unitsSold}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.avgCost}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.productionCost}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.revenue}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.grossProfit}</th>
-                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.margin}</th>
+                            <th className="px-4 py-3 text-start">{t.manufacturing.productPL.columns.product}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.jobsCompleted}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.qtyProduced}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.unitsSold}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.avgCost}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.productionCost}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.revenue}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.grossProfit}</th>
+                            <th className="px-4 py-3 text-end">{t.manufacturing.productPL.columns.margin}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1668,16 +1662,16 @@ function ProductPLTab() {
                                     <div className="font-medium text-gray-900">{row.productName}</div>
                                     {row.productSku && <div className="text-xs text-gray-500">{row.productSku}</div>}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-700">{row.jobsCompleted}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{row.quantityProduced}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{row.unitsSold}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.avgCostPerUnit)}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.totalProductionCost)}</td>
-                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.revenue)}</td>
-                                <td className={`px-4 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
+                                <td className="px-4 py-3 text-end text-gray-700">{row.jobsCompleted}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{row.quantityProduced}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{row.unitsSold}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{formatBDT(row.avgCostPerUnit)}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{formatBDT(row.totalProductionCost)}</td>
+                                <td className="px-4 py-3 text-end text-gray-700">{formatBDT(row.revenue)}</td>
+                                <td className={`px-4 py-3 text-end font-medium ${row.grossProfit >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
                                     {formatBDT(row.grossProfit)}
                                 </td>
-                                <td className={`px-4 py-3 text-right font-medium ${row.grossMarginPct >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
+                                <td className={`px-4 py-3 text-end font-medium ${row.grossMarginPct >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
                                     {row.grossMarginPct.toFixed(1)}%
                                 </td>
                             </tr>

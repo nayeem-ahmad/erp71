@@ -14,8 +14,16 @@ export interface PostingContractEntry {
     conditionValue: string | null;
     /** Where this tuple is emitted — file:line, for whoever this test fails on. */
     emittedBy: string;
-    /** 'rule' = a default rule must exist. 'skip' = posting nothing is correct. */
-    expectation: 'rule' | 'skip';
+    /**
+     * 'rule'  = a default rule must exist.
+     * 'skip'  = posting nothing is correct.
+     * 'multi-leg' = the event posts through `postMultiLeg`, which resolves no
+     *   PostingRule at all. Such an event MUST NOT have a rule, and in
+     *   particular must not have a condition_key:'none' fallback: the rules
+     *   engine is two-legged, so a fallback here would post a two-line voucher
+     *   for an entry that needs five, silently.
+     */
+    expectation: 'rule' | 'skip' | 'multi-leg';
     skipReason?: string;
 }
 
@@ -31,6 +39,14 @@ export interface PostingContractEntry {
  * WHEN YOU ADD OR CHANGE AN autoPostFromRules CALL, ADD ITS TUPLE HERE.
  */
 export const POSTING_CONTRACT: PostingContractEntry[] = [
+    // ── imports under an LC ──────────────────────────────────────────────────
+    // These do not go through autoPostFromRules at all. They are listed so the
+    // registry stays a complete census of what posts, and so the guard below
+    // proves no rule ever shadows them.
+    { eventType: 'import_cost', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts addCost', expectation: 'multi-leg' },
+    { eventType: 'import_receipt', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts receive', expectation: 'multi-leg' },
+    { eventType: 'import_settlement', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts settle', expectation: 'multi-leg' },
+
     // ── sales ────────────────────────────────────────────────────────────────
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales.service.ts:325', expectation: 'rule' },
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales.service.ts:325', expectation: 'rule' },

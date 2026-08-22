@@ -13,16 +13,17 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { ENABLED_LOCALE_CODES } from '@erp71/shared-types';
 import { BLOG_AUDIENCES, BLOG_STATUSES } from './blog-status';
 
 const trim = ({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value;
 
-/** Locales a translation may be written in — mirrors the frontend registry. */
-export const BLOG_LOCALES = ['en', 'bn', 'ms'] as const;
+/** Locales a translation may be written in — the platform locale registry. */
+export const BLOG_LOCALES = ENABLED_LOCALE_CODES;
 
 export class BlogTranslationDto {
-    @IsIn(BLOG_LOCALES as unknown as string[])
+    @IsIn(BLOG_LOCALES)
     locale!: string;
 
     @IsString()
@@ -154,7 +155,7 @@ export class BlogAiDraftDto {
 
     /** Single-language callers (the shop editor). Ignored when `locales` is set. */
     @IsOptional()
-    @IsIn(BLOG_LOCALES as unknown as string[])
+    @IsIn(BLOG_LOCALES)
     locale?: string;
 
     /**

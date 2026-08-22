@@ -177,7 +177,7 @@ export default function ReportSettingsPage() {
                         label={(
                             <>
                                 Report Email Address
-                                <span className="ml-1.5 text-xs font-normal text-gray-400">{m.email.optional}</span>
+                                <span className="ms-1.5 text-xs font-normal text-gray-400">{m.email.optional}</span>
                             </>
                         )}
                         htmlFor="report_email"

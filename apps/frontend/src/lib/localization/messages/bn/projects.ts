@@ -25,7 +25,6 @@ export const projectsMessages = {
         status: 'অবস্থা',
         priority: 'অগ্রাধিকার',
         visibility: 'দৃশ্যমানতা',
-        visibilityHint: 'ব্যক্তিগত প্রকল্প কেবল নিচের টিমের সদস্যরাই দেখতে পান।',
         manager: 'ম্যানেজার',
         branch: 'শাখা',
         startDate: 'শুরুর তারিখ',

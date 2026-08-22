@@ -155,7 +155,7 @@ export default function InventoryShrinkagePage() {
                     </div>
                     <div className="flex items-center justify-between">
                         <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <Plus className="w-4 h-4 mr-2" /> {t.inventoryShrinkage.addLine}
+                            <Plus className="w-4 h-4 me-2" /> {t.inventoryShrinkage.addLine}
                         </button>
                         <button type="submit" className="bg-danger hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-lg shadow-sm">{t.inventoryShrinkage.postShrinkage}</button>
                     </div>

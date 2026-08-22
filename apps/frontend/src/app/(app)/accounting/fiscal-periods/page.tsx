@@ -104,9 +104,9 @@ export default function FiscalPeriodsPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className={`text-left px-3 py-2 ${compactDensity.formLabel}`}>Period</th>
+                                <th className={`text-start px-3 py-2 ${compactDensity.formLabel}`}>Period</th>
                                 <th className={`text-center px-3 py-2 ${compactDensity.formLabel}`}>Status</th>
-                                <th className={`text-right px-3 py-2 ${compactDensity.formLabel}`}>Locked At</th>
+                                <th className={`text-end px-3 py-2 ${compactDensity.formLabel}`}>Locked At</th>
                                 <th className="px-3 py-2" />
                             </tr>
                         </thead>
@@ -128,10 +128,10 @@ export default function FiscalPeriodsPage() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-2 text-right text-gray-400 text-xs">
+                                        <td className="px-3 py-2 text-end text-gray-400 text-xs">
                                             {p.locked_at ? new Date(p.locked_at).toLocaleDateString() : '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-right">
+                                        <td className="px-3 py-2 text-end">
                                             <button
                                                 onClick={() => toggle(p)}
                                                 disabled={isBusy}

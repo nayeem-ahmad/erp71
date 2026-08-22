@@ -1,7 +1,12 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors, Delete } from '@nestjs/common';
 import { PaginationDto } from '../common/pagination.dto';
 import { SalesQuotationsService } from './sales-quotations.service';
-import { CreateQuotationDto, UpdateQuotationDto, UpdateQuotationStatusDto } from './sales-quotations.dto';
+import {
+    CreateQuotationDto,
+    UpdateQuotationDto,
+    UpdateQuotationStatusDto,
+    QUOTATION_DOC_KINDS,
+} from './sales-quotations.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -23,10 +28,15 @@ export class SalesQuotationsController {
         @Query() query: PaginationDto,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        // Allow-listed rather than passed straight through: `doc_kind` reaches a
+        // Prisma `where`, and an unchecked query param there is a filter the
+        // caller gets to write.
+        @Query('docKind') docKind?: string,
     ) {
         return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, {
             createdFrom,
             createdTo,
+            docKind: QUOTATION_DOC_KINDS.includes(docKind as never) ? docKind : undefined,
         });
     }
 

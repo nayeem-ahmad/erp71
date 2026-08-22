@@ -122,7 +122,11 @@ describe('PurchasesService', () => {
                 movementType: 'PURCHASE_RECEIPT',
                 referenceType: 'PURCHASE',
                 referenceId: 'purchase-1',
-                unitCost: 8.5,
+                // 34.00 of goods plus 3.00 freight over 4 units. The bill line
+                // still says 8.50 above; only the cost pool sees the landed
+                // figure. This assertion previously read 8.50 and was pinning
+                // the bug where freight never reached avg_cost.
+                unitCost: 9.25,
             }),
         );
         expect(tx.purchase.findFirst).toHaveBeenCalledWith({
@@ -214,5 +218,88 @@ describe('PurchasesService', () => {
                 }),
             }),
         );
+    });
+
+    describe('landed cost', () => {
+        // The suite's outer beforeEach does not clear mocks, so
+        // applyInventoryMovement accumulates calls across tests. The existing
+        // tests use toHaveBeenCalledWith and do not notice; these read the whole
+        // call list and do, so they clear it first.
+        beforeEach(() => (applyInventoryMovement as jest.Mock).mockClear());
+
+        // The service refuses a purchase whose product lookup returns a
+        // different count from the item list, so the fixture has to name
+        // exactly the products the test is buying.
+        const setup = (...productIds: string[]) => {
+            db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+            db.product.findMany.mockResolvedValue(productIds.map((id) => ({ id })));
+            tx.purchase.count.mockResolvedValue(0);
+            tx.purchase.create.mockResolvedValue({ id: 'purchase-1' });
+            tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+        };
+
+        const receiptCosts = () =>
+            (applyInventoryMovement as jest.Mock).mock.calls.map(([, args]) => [args.productId, args.unitCost]);
+
+        it('spreads freight across lines pro-rata on value', async () => {
+            setup('prod-1', 'prod-2');
+
+            await service.create('tenant-1', 'user-1', {
+                storeId: 'store-1',
+                items: [
+                    { productId: 'prod-1', quantity: 10, unitCost: 100 },
+                    { productId: 'prod-2', quantity: 10, unitCost: 300 },
+                ],
+                freightAmount: 400,
+            });
+
+            // 1000:3000 of goods, so 100 and 300 of the freight.
+            expect(receiptCosts()).toEqual([
+                ['prod-1', 110],
+                ['prod-2', 330],
+            ]);
+        });
+
+        it('leaves the unit cost alone when there is no freight', async () => {
+            setup('prod-1');
+
+            await service.create('tenant-1', 'user-1', {
+                storeId: 'store-1',
+                items: [{ productId: 'prod-1', quantity: 5, unitCost: 20 }],
+            });
+
+            expect(receiptCosts()).toEqual([['prod-1', 20]]);
+        });
+
+        it('does not capitalise tax or discount', async () => {
+            setup('prod-1');
+
+            await service.create('tenant-1', 'user-1', {
+                storeId: 'store-1',
+                items: [{ productId: 'prod-1', quantity: 10, unitCost: 100 }],
+                // Local VAT is rebatable and a trade discount is already in the
+                // line price. Neither belongs in the cost pool.
+                taxAmount: 150,
+                discountAmount: 50,
+            });
+
+            expect(receiptCosts()).toEqual([['prod-1', 100]]);
+        });
+
+        it('still bills the supplier the full amount including freight', async () => {
+            setup('prod-1');
+
+            await service.create('tenant-1', 'user-1', {
+                storeId: 'store-1',
+                items: [{ productId: 'prod-1', quantity: 10, unitCost: 100 }],
+                freightAmount: 400,
+            });
+
+            // The payable is the bill, not the landed cost: allocation changes
+            // what inventory is worth, never what is owed.
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ subtotal_amount: 1000, freight_amount: 400, total_amount: 1400 }),
+            });
+        });
     });
 });

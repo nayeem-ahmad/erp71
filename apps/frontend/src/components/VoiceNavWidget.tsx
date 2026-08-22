@@ -298,7 +298,7 @@ export default function VoiceNavWidget() {
             `}</style>
 
             {hintOpen && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
+                <div className="absolute end-0 top-full z-50 mt-2 w-72 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
                     <div className="mb-2 flex items-center justify-between">
                         <p className="text-sm font-bold text-gray-800">{m.hintTitle}</p>
                         <button
@@ -359,7 +359,7 @@ export default function VoiceNavWidget() {
             >
                 {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 {listening && (
-                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                    <span className="absolute end-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
             </button>
         </div>

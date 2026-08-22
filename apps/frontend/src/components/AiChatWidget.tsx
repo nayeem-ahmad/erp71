@@ -235,14 +235,14 @@ export default function AiChatWidget() {
 
             {open ? (
                 <>
-                    {/* Mobile: a bottom sheet over a scrim. Desktop: a docked right-hand panel. */}
+                    {/* Mobile: a bottom sheet over a scrim. Desktop: a docked end-hand panel. */}
                     <button
                         type="button"
                         className="fixed inset-0 z-modal bg-black/40 backdrop-blur-sm md:hidden"
                         onClick={() => setOpen(false)}
                         aria-label={m.closeAria}
                     />
-                    <div className="fixed inset-x-0 bottom-0 z-modal flex h-[80vh] flex-col rounded-t-xl border border-gray-200 bg-white shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:h-full md:w-[380px] md:rounded-none md:border-y-0 md:border-r-0">
+                    <div className="fixed inset-x-0 bottom-0 z-modal flex h-[80vh] flex-col rounded-t-xl border border-gray-200 bg-white shadow-2xl md:inset-y-0 md:start-auto md:end-0 md:h-full md:w-[380px] md:rounded-none md:border-y-0 md:border-e-0">
                         <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                             <div className="flex items-center gap-2">
                                 {showHistory ? (
@@ -475,7 +475,7 @@ function HistoryList({
                         <button
                             type="button"
                             onClick={() => onOpen(c.id)}
-                            className="min-h-touch flex-1 overflow-hidden py-2 text-left"
+                            className="min-h-touch flex-1 overflow-hidden py-2 text-start"
                         >
                             <span className="block truncate text-xs font-medium text-gray-900">
                                 {c.title || labels.untitledConversation}
@@ -549,7 +549,7 @@ function EmptyState({
                         key={s}
                         type="button"
                         onClick={() => onPick(s)}
-                        className="min-h-touch w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-xs text-gray-700 transition-colors hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                        className="min-h-touch w-full rounded-lg border border-gray-200 px-3 py-2 text-start text-xs text-gray-700 transition-colors hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700"
                     >
                         {s}
                     </button>
@@ -623,7 +623,7 @@ function Sources({ calls, label }: { calls: AiChatToolCall[]; label: string }) {
                 {label} ({named.length})
             </button>
             {expanded ? (
-                <ul className="mt-1 space-y-0.5 pl-4">
+                <ul className="mt-1 space-y-0.5 ps-4">
                     {named.map((call, i) => {
                         const route = TOOL_ROUTES[call.name];
                         const detail = [
@@ -647,7 +647,7 @@ function Sources({ calls, label }: { calls: AiChatToolCall[]; label: string }) {
                                     lookup there is no report page to point at, and an
                                     unattributable external claim is not auditable. */}
                                 {call.urls?.length ? (
-                                    <ul className="mt-0.5 space-y-0.5 pl-3">
+                                    <ul className="mt-0.5 space-y-0.5 ps-3">
                                         {call.urls.map((url) => (
                                             <li key={url} className="truncate">
                                                 <a

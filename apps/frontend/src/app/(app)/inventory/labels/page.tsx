@@ -48,7 +48,7 @@ const PRINT_CSS = `
 `;
 
 export default function PrintLabelsPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const { businessName } = useBranding();
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
@@ -141,22 +141,22 @@ export default function PrintLabelsPage() {
 
             <div className="flex min-h-0 flex-1">
             {/* ---- Left panel: product selector (hidden on print) ---- */}
-            <aside className="print:hidden w-72 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+            <aside className="print:hidden w-72 flex-shrink-0 bg-white border-e border-gray-200 flex flex-col">
                 <div className="px-4 py-4 border-b border-gray-100">
                     {/* Search */}
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                         <input
                             type="text"
                             placeholder={t.inventoryLabels.searchPlaceholder}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         {search && (
                             <button
                                 onClick={() => setSearch('')}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                className="absolute end-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             >
                                 <X className="w-3.5 h-3.5" />
                             </button>
@@ -255,9 +255,7 @@ export default function PrintLabelsPage() {
                     <>
                         <div className="flex items-center justify-between mb-4 print:hidden">
                             <h2 className="text-sm font-semibold text-gray-600">
-                                {labelsToRender.length === 1
-                                    ? t.inventoryLabels.previewTitle.replace('{count}', String(labelsToRender.length))
-                                    : t.inventoryLabels.previewTitlePlural.replace('{count}', String(labelsToRender.length))}
+                                {fmt(t.inventoryLabels.previewTitle, { count: labelsToRender.length })}
                             </h2>
                             <button
                                 onClick={handlePrint}

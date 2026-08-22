@@ -193,7 +193,7 @@ export default function SupportPage() {
                                     key={thread.id}
                                     type="button"
                                     onClick={() => selectThread(thread.id)}
-                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-l-2 border-primary' : ''}`}
+                                    className={`w-full text-start px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
                                         <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>

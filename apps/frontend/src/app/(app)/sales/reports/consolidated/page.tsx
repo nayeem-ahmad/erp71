@@ -129,7 +129,7 @@ function RevenueBarChart({ stores, title }: { stores: StoreRow[]; title: string 
                         <div key={store.store_id} className="flex items-center gap-3">
                             {/* Label */}
                             <span
-                                className="w-32 shrink-0 text-sm text-gray-600 truncate text-right"
+                                className="w-32 shrink-0 text-sm text-gray-600 truncate text-end"
                                 title={store.store_name}
                             >
                                 {store.store_name}
@@ -169,16 +169,16 @@ function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof us
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="bg-gray-50">
-                            <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                            <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
                                 {m.columns.storeName}
                             </th>
-                            <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
                                 {m.columns.revenue}
                             </th>
-                            <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
                                 {m.columns.transactions}
                             </th>
-                            <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
                                 {m.columns.avgOrder}
                             </th>
                             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400 min-w-[160px]">
@@ -192,13 +192,13 @@ function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof us
                                 <td className="px-6 py-3 font-medium text-gray-800">
                                     {store.store_name}
                                 </td>
-                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                <td className="px-4 py-3 text-end font-semibold text-gray-900">
                                     {formatBDT(store.revenue)}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-600">
+                                <td className="px-4 py-3 text-end text-gray-600">
                                     {store.transactions.toLocaleString()}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-600">
+                                <td className="px-4 py-3 text-end text-gray-600">
                                     {formatBDT(store.avg_order)}
                                 </td>
                                 <td className="px-4 py-3">
@@ -212,7 +212,7 @@ function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof us
                                                 }}
                                             />
                                         </div>
-                                        <span className="text-xs font-semibold text-gray-500 w-12 text-right shrink-0">
+                                        <span className="text-xs font-semibold text-gray-500 w-12 text-end shrink-0">
                                             {store.revenue_share.toFixed(1)}%
                                         </span>
                                     </div>

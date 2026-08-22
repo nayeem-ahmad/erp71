@@ -205,7 +205,7 @@ export default function ProjectDetailPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
+                                        <tr className="border-b border-gray-200 text-start text-xs text-gray-500">
                                             <th className="px-3 py-2 font-medium">{m.task.title}</th>
                                             <th className="px-3 py-2 font-medium">{m.fields.status}</th>
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
@@ -217,7 +217,7 @@ export default function ProjectDetailPage() {
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
                                                 {m.fields.priority}
                                             </th>
-                                            <th className="px-3 py-2 text-right font-medium">
+                                            <th className="px-3 py-2 text-end font-medium">
                                                 {m.overview.remaining}
                                             </th>
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
@@ -257,7 +257,7 @@ export default function ProjectDetailPage() {
                                                 <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
                                                     {m.priority[task.priority as keyof typeof m.priority] ?? task.priority}
                                                 </td>
-                                                <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                                                <td className="px-3 py-2 text-end tabular-nums text-gray-600">
                                                     {num(task.remaining_hours)}h
                                                 </td>
                                                 <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
@@ -402,7 +402,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     return (
         <div className="flex items-center justify-between gap-2">
             <dt className="text-gray-500">{label}</dt>
-            <dd className="truncate text-right">{children}</dd>
+            <dd className="truncate text-end">{children}</dd>
         </div>
     );
 }

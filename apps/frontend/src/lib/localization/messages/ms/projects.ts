@@ -25,7 +25,6 @@ export const projectsMessages = {
         status: 'Status',
         priority: 'Keutamaan',
         visibility: 'Keterlihatan',
-        visibilityHint: 'Projek persendirian hanya kelihatan kepada ahli pasukan di bawah.',
         manager: 'Pengurus',
         branch: 'Cawangan',
         startDate: 'Tarikh mula',

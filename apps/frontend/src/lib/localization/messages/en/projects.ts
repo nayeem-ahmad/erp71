@@ -25,7 +25,6 @@ export const projectsMessages = {
         status: 'Status',
         priority: 'Priority',
         visibility: 'Visibility',
-        visibilityHint: 'Private projects are visible only to the people on the team below.',
         manager: 'Manager',
         branch: 'Branch',
         startDate: 'Start date',

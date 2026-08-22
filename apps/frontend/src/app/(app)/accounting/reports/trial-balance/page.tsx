@@ -67,8 +67,8 @@ function buildScopeParams(
     return { scope: 'company' as const };
 }
 
-const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
-const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
+const thClass = `text-end px-3 py-2 ${compactDensity.formLabel}`;
+const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function TrialBalancePage() {
     const { t, locale } = useI18n();
@@ -311,18 +311,18 @@ export default function TrialBalancePage() {
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-xs text-gray-500">{row.account.type}</td>
-                                        <td className="px-3 py-2 text-right text-gray-700">{formatBDT(row.debit_total, { locale })}</td>
-                                        <td className="px-3 py-2 text-right text-gray-700">{formatBDT(row.credit_total, { locale })}</td>
-                                        <td className="px-3 py-2 text-right font-medium text-gray-800">{row.debit_balance > 0 ? formatBDT(row.debit_balance, { locale }) : '—'}</td>
-                                        <td className="px-3 py-2 text-right font-medium text-gray-800">{row.credit_balance > 0 ? formatBDT(row.credit_balance, { locale }) : '—'}</td>
+                                        <td className="px-3 py-2 text-end text-gray-700">{formatBDT(row.debit_total, { locale })}</td>
+                                        <td className="px-3 py-2 text-end text-gray-700">{formatBDT(row.credit_total, { locale })}</td>
+                                        <td className="px-3 py-2 text-end font-medium text-gray-800">{row.debit_balance > 0 ? formatBDT(row.debit_balance, { locale }) : '—'}</td>
+                                        <td className="px-3 py-2 text-end font-medium text-gray-800">{row.credit_balance > 0 ? formatBDT(row.credit_balance, { locale }) : '—'}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="bg-gray-50 font-semibold border-t border-gray-200">
                                     <td className="px-3 py-2 text-xs" colSpan={5}>{t.accountingShared.totals}</td>
-                                    <td className="px-3 py-2 text-right text-gray-900">{formatBDT(data.totals.debit as number, { locale })}</td>
-                                    <td className="px-3 py-2 text-right text-gray-900">{formatBDT(data.totals.credit as number, { locale })}</td>
+                                    <td className="px-3 py-2 text-end text-gray-900">{formatBDT(data.totals.debit as number, { locale })}</td>
+                                    <td className="px-3 py-2 text-end text-gray-900">{formatBDT(data.totals.credit as number, { locale })}</td>
                                 </tr>
                             </tfoot>
                         </table>

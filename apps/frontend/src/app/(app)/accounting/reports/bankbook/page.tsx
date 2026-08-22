@@ -119,7 +119,7 @@ export default function BankbookPage() {
             cell: (info) => (
                 <span className="font-bold text-blue-700">
                     {formatBDT(Number(info.getValue()), { locale })}
-                    <span className="ml-1 text-xs font-normal text-gray-400">{info.row.original.running_balance_side}</span>
+                    <span className="ms-1 text-xs font-normal text-gray-400">{info.row.original.running_balance_side}</span>
                 </span>
             ),
             size: 150,

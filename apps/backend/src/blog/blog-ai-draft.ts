@@ -79,6 +79,14 @@ export const BLOG_AI_LANGUAGES: Record<string, string> = {
     en: 'English',
     bn: 'Bangla (Bengali)',
     ms: 'Malay (Bahasa Melayu)',
+    hi: 'Hindi',
+    de: 'German',
+    fr: 'French',
+    es: 'Spanish',
+    // Named as written rather than as spoken, because the model is being asked
+    // for prose in a right-to-left script, not a transliteration.
+    ur: 'Urdu (Nastaliq script)',
+    ar: 'Arabic (Modern Standard)',
 };
 
 const DEFAULT_LOCALE = 'en';

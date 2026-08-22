@@ -122,7 +122,7 @@ export default function AiCreditsPage() {
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Plan</span>
                         <p className="text-lg font-bold text-gray-900 mt-0.5">{summary.plan}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-end">
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Billing period</span>
                         <p className="text-sm text-gray-700 mt-0.5">{periodLabel}</p>
                     </div>
@@ -202,7 +202,7 @@ export default function AiCreditsPage() {
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
                     <BarChart2 size={18} className="text-gray-500" />
                     <h2 className="font-semibold text-gray-900">Recent AI requests</h2>
-                    <span className="ml-auto text-xs text-gray-400">(last 100)</span>
+                    <span className="ms-auto text-xs text-gray-400">(last 100)</span>
                 </div>
 
                 {summary.logs.length === 0 ? (
@@ -215,12 +215,12 @@ export default function AiCreditsPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <th className="text-left px-6 py-3">Feature</th>
-                                    <th className="text-left px-4 py-3">Model</th>
-                                    <th className="text-right px-4 py-3">Tokens in</th>
-                                    <th className="text-right px-4 py-3">Tokens out</th>
-                                    <th className="text-right px-4 py-3">Credits</th>
-                                    <th className="text-left px-4 py-3">Date</th>
+                                    <th className="text-start px-6 py-3">Feature</th>
+                                    <th className="text-start px-4 py-3">Model</th>
+                                    <th className="text-end px-4 py-3">Tokens in</th>
+                                    <th className="text-end px-4 py-3">Tokens out</th>
+                                    <th className="text-end px-4 py-3">Credits</th>
+                                    <th className="text-start px-4 py-3">Date</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -230,9 +230,9 @@ export default function AiCreditsPage() {
                                             {FEATURE_LABELS[log.feature] ?? log.feature}
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">{log.model}</td>
-                                        <td className="px-4 py-3 text-right text-gray-700">{log.input_tokens.toLocaleString()}</td>
-                                        <td className="px-4 py-3 text-right text-gray-700">{log.output_tokens.toLocaleString()}</td>
-                                        <td className="px-4 py-3 text-right font-semibold text-purple-700">
+                                        <td className="px-4 py-3 text-end text-gray-700">{log.input_tokens.toLocaleString()}</td>
+                                        <td className="px-4 py-3 text-end text-gray-700">{log.output_tokens.toLocaleString()}</td>
+                                        <td className="px-4 py-3 text-end font-semibold text-purple-700">
                                             {Math.round(log.credits_used * 100) / 100}
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(log.created_at)}</td>

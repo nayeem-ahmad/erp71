@@ -24,7 +24,12 @@ export type PostingEventType =
     | 'investor_contribution'
     | 'investor_withdrawal'
     | 'investor_profit_accrual'
-    | 'investor_profit_payout';
+    | 'investor_profit_payout'
+    // Imports under an LC. All three post through postMultiLeg rather than the
+    // rules engine, so they have no PostingRule rows and never will.
+    | 'import_cost'
+    | 'import_receipt'
+    | 'import_settlement';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -133,6 +138,16 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // it is the cash event.
     investor_profit_accrual: VoucherType.JOURNAL,
     investor_profit_payout: VoucherType.CASH_PAYMENT,
+    // The import events post through `postMultiLeg`, which takes its voucher
+    // type from the caller and defaults to JOURNAL — so this table is never
+    // consulted for them. They are listed because the Record is exhaustive on
+    // purpose: that exhaustiveness is what forces whoever adds the next event
+    // type to decide what its voucher is, and dropping it to keep these three
+    // out would cost more than it saves. The values match what postMultiLeg
+    // actually writes, so the table stays truthful rather than merely complete.
+    import_cost: VoucherType.JOURNAL,
+    import_receipt: VoucherType.JOURNAL,
+    import_settlement: VoucherType.JOURNAL,
 };
 
 function resolveVoucherType(
@@ -415,6 +430,232 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             voucher_id: voucher.id,
             last_error: null,
         },
+    });
+
+    return {
+        postingStatus: 'posted',
+        voucherId: voucher.id,
+        voucherNumber: voucher.voucher_number,
+        voucherType: voucher.voucher_type,
+    };
+}
+
+export interface MultiLegInput {
+    tx: Prisma.TransactionClient;
+    tenantId: string;
+    eventType: PostingEventType;
+    sourceModule: string;
+    sourceType: string;
+    sourceId: string;
+    /** See AutoPostInput.legKey — same purpose, same idempotency-key suffix. */
+    legKey?: string;
+    /**
+     * Defaults to a journal voucher, which is what a multi-leg entry almost
+     * always is. Pass one of the cash/bank types when the entry is genuinely a
+     * receipt or payment that happens to have more than two lines.
+     */
+    voucherType?: string;
+    legs: MultiLegLeg[];
+    description?: string;
+    referenceNumber?: string;
+    date?: Date;
+    storeId?: string;
+    attribution?: string;
+    counterpartyStoreId?: string;
+}
+
+export interface MultiLegLeg {
+    accountId: string;
+    /** Exactly one of debit/credit is non-zero. Both zero drops the leg. */
+    debit?: number;
+    credit?: number;
+    /**
+     * Party for this leg, tagged explicitly rather than derived. `autoPostFromRules`
+     * has only two legs and can work out which one is the control account; with
+     * N legs and possibly several control accounts, guessing would be wrong. A
+     * party named against an account that is not a control account of that type
+     * is a caller error and is rejected, not ignored.
+     */
+    partyType?: PartyType;
+    partyId?: string;
+    costCenterId?: string;
+    comment?: string;
+}
+
+/**
+ * Posts a journal with any number of legs.
+ *
+ * `autoPostFromRules` resolves exactly one debit and one credit account off a
+ * `PostingRule`, so every module-driven journal in the platform is a two-line
+ * voucher. That is fine for a sale or a supplier payment and wrong for anything
+ * that splits: receiving an import is inventory against goods-in-transit, duty,
+ * C&F and transport, all in one balanced entry.
+ *
+ * `AccountingService.createVoucher` already writes N `VoucherDetail` rows, so
+ * the capability existed — what was missing was a module-callable path with the
+ * `PostingEvent` lifecycle, idempotency key, fiscal-period guard, voucher
+ * numbering and approval handling that the two-leg helper provides. This is
+ * that path, and it deliberately shares all of those with `autoPostFromRules`
+ * rather than reimplementing them.
+ *
+ * Unlike `autoPostFromRules` there is no `PostingRule` lookup: the caller has
+ * already decided which accounts the entry touches, because a rules table
+ * cannot express "duty to this account, C&F to that one, in proportions
+ * computed at runtime". A caller that needs configurable accounts should read
+ * them from `AccountingSettings` and pass them in.
+ */
+export async function postMultiLeg(input: MultiLegInput): Promise<AutoPostResult> {
+    const idempotencyKey = postingIdempotencyKey(input.tenantId, input.eventType, input.sourceId, input.legKey);
+
+    // Same order as autoPostFromRules and for the same reason: an already-posted
+    // event short-circuits as a no-op even if its period has since been locked.
+    const existingEvent = await input.tx.postingEvent.findUnique({
+        where: {
+            tenant_id_idempotency_key: { tenant_id: input.tenantId, idempotency_key: idempotencyKey },
+        },
+        include: { voucher: true },
+    });
+
+    if (existingEvent?.status === 'posted' && existingEvent.voucher) {
+        return {
+            postingStatus: 'posted',
+            voucherId: existingEvent.voucher.id,
+            voucherNumber: existingEvent.voucher.voucher_number,
+            voucherType: existingEvent.voucher.voucher_type,
+        };
+    }
+
+    await assertFiscalPeriodOpen(input.tx, input.tenantId, input.date ?? new Date());
+
+    const postingEvent = existingEvent
+        ? await input.tx.postingEvent.update({
+            where: { id: existingEvent.id },
+            data: {
+                status: 'pending',
+                attempt_count: { increment: 1 },
+                last_attempt_at: new Date(),
+                last_error: null,
+            },
+        })
+        : await input.tx.postingEvent.create({
+            data: {
+                tenant_id: input.tenantId,
+                event_type: input.eventType,
+                source_module: input.sourceModule,
+                source_type: input.sourceType,
+                source_id: input.sourceId,
+                idempotency_key: idempotencyKey,
+                status: 'pending',
+                attempt_count: 1,
+                last_attempt_at: new Date(),
+            },
+        });
+
+    const fail = async (code: string): Promise<never> => {
+        await input.tx.postingEvent.update({
+            where: { id: postingEvent.id },
+            data: { status: 'failed', last_error: code },
+        });
+        throw new BadRequestException(code);
+    };
+
+    // Decimal throughout, never float. Legs are summed and compared for
+    // equality, and 0.1 + 0.2 !== 0.3 would reject a perfectly balanced entry.
+    const legs = input.legs
+        .map((leg) => ({
+            ...leg,
+            debit: new Prisma.Decimal(leg.debit ?? 0),
+            credit: new Prisma.Decimal(leg.credit ?? 0),
+        }))
+        // A charge that came to nothing should not leave an empty line on the
+        // voucher. Dropping it here rather than at every call site keeps
+        // "allocate, then post" callers simple.
+        .filter((leg) => !leg.debit.isZero() || !leg.credit.isZero());
+
+    if (legs.length < 2) await fail('MULTI_LEG_TOO_FEW_LEGS');
+
+    for (const leg of legs) {
+        if (leg.debit.isNegative() || leg.credit.isNegative()) {
+            // A negative debit is a credit. Allowing both spellings means two
+            // entries that post identically look different in the ledger.
+            await fail('MULTI_LEG_NEGATIVE_AMOUNT');
+        }
+        if (!leg.debit.isZero() && !leg.credit.isZero()) {
+            await fail('MULTI_LEG_BOTH_SIDES');
+        }
+    }
+
+    const totalDebit = legs.reduce((sum, leg) => sum.plus(leg.debit), new Prisma.Decimal(0));
+    const totalCredit = legs.reduce((sum, leg) => sum.plus(leg.credit), new Prisma.Decimal(0));
+
+    if (!totalDebit.equals(totalCredit)) await fail('MULTI_LEG_UNBALANCED');
+    if (totalDebit.isZero()) await fail('MULTI_LEG_ZERO_AMOUNT');
+
+    const accountIds = [...new Set(legs.map((leg) => leg.accountId))];
+    const accounts = await input.tx.account.findMany({
+        where: { tenant_id: input.tenantId, id: { in: accountIds } },
+        select: { id: true, party_type: true },
+    });
+
+    // Catches an account belonging to another tenant as well as one that does
+    // not exist — findMany silently returns fewer rows for both.
+    if (accounts.length !== accountIds.length) await fail('MULTI_LEG_ACCOUNT_INVALID');
+
+    const partyTypeByAccount = new Map(accounts.map((account) => [account.id, account.party_type]));
+
+    for (const leg of legs) {
+        if (!leg.partyId && !leg.partyType) continue;
+        if (!leg.partyId || !leg.partyType) await fail('MULTI_LEG_PARTY_INCOMPLETE');
+        if (partyTypeByAccount.get(leg.accountId) !== leg.partyType) {
+            // Rejected rather than dropped: a party silently discarded here
+            // leaves a control account whose balance no longer decomposes into
+            // per-party ledgers, and nothing reports that until someone
+            // reconciles a supplier statement.
+            await fail('MULTI_LEG_PARTY_ACCOUNT_MISMATCH');
+        }
+    }
+
+    const voucherType = input.voucherType ?? VoucherType.JOURNAL;
+    const voucherNumber = await generateVoucherNumber(input.tx, input.tenantId, voucherType);
+
+    const approvalSettings = toApprovalSettings(
+        await input.tx.accountingSettings.findUnique({ where: { tenant_id: input.tenantId } }),
+    );
+
+    const voucher = await input.tx.voucher.create({
+        data: {
+            tenant_id: input.tenantId,
+            voucher_number: voucherNumber,
+            voucher_type: voucherType,
+            approval_status: initialApprovalStatus(approvalSettings, 'system'),
+            source_module: input.sourceModule,
+            source_type: input.sourceType,
+            source_id: input.sourceId,
+            idempotency_key: idempotencyKey,
+            description: input.description,
+            reference_number: input.referenceNumber,
+            date: input.date,
+            store_id: input.storeId ?? null,
+            attribution: input.attribution ?? (input.storeId ? VoucherAttribution.BRANCH : VoucherAttribution.COMPANY),
+            counterparty_store_id: input.counterpartyStoreId ?? null,
+            details: {
+                create: legs.map((leg) => ({
+                    account_id: leg.accountId,
+                    debit_amount: leg.debit,
+                    credit_amount: leg.credit,
+                    comment: leg.comment,
+                    ...(leg.costCenterId ? { cost_center_id: leg.costCenterId } : {}),
+                    ...(leg.partyId && leg.partyType
+                        ? { party_type: leg.partyType, party_id: leg.partyId }
+                        : {}),
+                })),
+            },
+        },
+    });
+
+    await input.tx.postingEvent.update({
+        where: { id: postingEvent.id },
+        data: { status: 'posted', voucher_id: voucher.id, last_error: null },
     });
 
     return {

@@ -230,8 +230,15 @@ describe('AdminPostEditor — translating what is already written', () => {
         await screen.findByDisplayValue('existing-slug');
 
         fireEvent.click(screen.getByRole('button', { name: 'AI Assistant' }));
-        // Untick Malay so only Bangla is asked for.
-        fireEvent.click(screen.getByRole('checkbox', { name: /Bahasa Melayu/ }));
+        // Leave only Bangla ticked. The modal pre-selects every *other*
+        // language, so this was a single click when the platform had three
+        // locales and is seven at nine — derive it rather than hardcode, or
+        // this assertion breaks again the next time a language ships.
+        screen
+            .getAllByRole('checkbox')
+            .filter((box) => (box as HTMLInputElement).checked)
+            .filter((box) => !/বাংলা/.test(box.closest('label')?.textContent ?? ''))
+            .forEach((box) => fireEvent.click(box));
         fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
 
         await waitFor(() =>

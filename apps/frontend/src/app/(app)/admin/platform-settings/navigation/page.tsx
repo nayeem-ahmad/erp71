@@ -165,14 +165,14 @@ export default function PlatformNavigationSettingsPage() {
                                 {tab.label}
                             </button>
                         ))}
-                        <span className="ml-auto text-xs text-gray-500">
+                        <span className="ms-auto text-xs text-gray-500">
                             {isDefault ? m.usingDefaults : m.usingCustom}
                         </span>
                     </div>
 
                     {loading ? (
                         <div className="flex items-center justify-center py-16 text-gray-500">
-                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                            <Loader2 className="w-5 h-5 animate-spin me-2" />
                             {t.admin.platformSettings.common.loading}
                         </div>
                     ) : (
@@ -227,7 +227,7 @@ export default function PlatformNavigationSettingsPage() {
 
                     {loadingOverrides ? (
                         <div className="flex items-center justify-center py-8 text-gray-500">
-                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                            <Loader2 className="w-5 h-5 animate-spin me-2" />
                             {t.admin.platformSettings.common.loading}
                         </div>
                     ) : overrideRows.length === 0 ? (
@@ -236,17 +236,17 @@ export default function PlatformNavigationSettingsPage() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b text-left text-gray-500">
-                                        <th className="py-2 pr-4 font-semibold">{tenantOverrideCopy.columns.tenant}</th>
-                                        <th className="py-2 pr-4 font-semibold">{tenantOverrideCopy.columns.kind}</th>
+                                    <tr className="border-b text-start text-gray-500">
+                                        <th className="py-2 pe-4 font-semibold">{tenantOverrideCopy.columns.tenant}</th>
+                                        <th className="py-2 pe-4 font-semibold">{tenantOverrideCopy.columns.kind}</th>
                                         <th className="py-2 font-semibold">{tenantOverrideCopy.columns.updated}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {overrideRows.map((row) => (
                                         <tr key={row.tenantId} className="border-b border-gray-50">
-                                            <td className="py-2 pr-4 font-medium text-gray-900">{row.tenantName}</td>
-                                            <td className="py-2 pr-4 text-gray-600">
+                                            <td className="py-2 pe-4 font-medium text-gray-900">{row.tenantName}</td>
+                                            <td className="py-2 pe-4 text-gray-600">
                                                 {row.kind === 'custom'
                                                     ? tenantOverrideCopy.kinds.custom
                                                     : tenantOverrideCopy.kinds.pinned_default}

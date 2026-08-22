@@ -23,21 +23,30 @@ if (typeof window !== 'undefined') {
     });
 }
 
+/**
+ * Only the React-context half of `@/lib/i18n` is stubbed. `formatMessage` is
+ * re-exported from the real module rather than reimplemented: the hand-rolled
+ * copy that used to live here was a bare `replaceAll`, so once catalogs grew
+ * ICU plural blocks it would have rendered `{count, plural, one {# job} …}`
+ * verbatim in every component test while the browser showed "1 job" — a mock
+ * drifting from the thing it mocks, asserted against by 200+ suites.
+ */
 jest.mock('@/lib/i18n', () => {
+    const actual = jest.requireActual('@/lib/i18n');
     const { enMessages } = require('@/lib/localization/messages/en');
+    const localeInfo = { code: 'en', label: 'English', nativeLabel: 'English', htmlLang: 'en', dir: 'ltr', numberLocale: 'en-US', dateLocale: 'en-GB', enabled: true };
+
     return {
+        ...actual,
         useI18n: () => ({
             locale: 'en',
             setLocale: jest.fn(),
             locales: [],
-            localeInfo: { code: 'en', label: 'English', nativeLabel: 'English', htmlLang: 'en', dir: 'ltr', numberLocale: 'en-US', dateLocale: 'en-GB', enabled: true },
+            localeInfo,
             t: enMessages,
+            fmt: (template: string, values: Record<string, string | number> = {}) =>
+                actual.formatMessage(template ?? '', values, 'en'),
         }),
-        formatMessage: (template: string, values: Record<string, string | number> = {}) =>
-            Object.entries(values).reduce(
-                (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
-                template ?? '',
-            ),
         I18nProvider: ({ children }: { children: React.ReactNode }) => children,
     };
 });

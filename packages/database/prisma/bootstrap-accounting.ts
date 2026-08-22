@@ -112,6 +112,48 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                // Imports under an LC. None of these is a control account: the
+                // counterparty is the bank, and a shipment names its own bank,
+                // so there is no party dimension to keep.
+                name: 'Imports',
+                code: '1105',
+                accounts: [
+                    // Cash lodged with the bank when the LC opens, released
+                    // against the supplier's invoice when documents arrive.
+                    {
+                        name: 'LC Margin & Advance to Bank',
+                        code: '110501',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Everything the shipment has cost so far, until receipt
+                    // turns it into inventory. Balances to zero per shipment.
+                    {
+                        name: 'Goods in Transit',
+                        code: '110502',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // AIT is creditable against income tax, not a cost of the
+                    // goods. Capitalising it would overstate COGS on every
+                    // subsequent sale.
+                    {
+                        name: 'Advance Income Tax (AIT)',
+                        code: '110503',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Import VAT is rebatable against output VAT — a
+                    // receivable, for the same reason.
+                    {
+                        name: 'VAT Rebate Receivable',
+                        code: '110504',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -156,6 +198,15 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
                         party_type: PartyType.SUPPLIER,
+                    },
+                    // A usance LC the bank has accepted on the tenant's behalf:
+                    // owed to the BANK, not to the supplier, which is why it is
+                    // not Purchase Payable and carries no supplier party.
+                    {
+                        name: 'LC Acceptance Payable',
+                        code: '210102',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
                     },
                 ],
             },
@@ -276,6 +327,21 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                // Realised only, and only when a usance LC settles at a rate
+                // other than the one its liability was booked at. Open
+                // positions are deliberately not revalued — see the plan's §4.6.
+                name: 'Foreign Exchange',
+                code: '4102',
+                accounts: [
+                    {
+                        name: 'FX Gain',
+                        code: '410201',
+                        type: AccountType.REVENUE,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -290,6 +356,21 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: 'Purchases',
                         code: '510101',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Bank charges on an LC — commission, amendment, advising.
+                    // An expense of financing the import, not a cost of the
+                    // goods, so it is never capitalised into inventory.
+                    {
+                        name: 'LC & Bank Charges',
+                        code: '510102',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                    {
+                        name: 'FX Loss',
+                        code: '510103',
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
