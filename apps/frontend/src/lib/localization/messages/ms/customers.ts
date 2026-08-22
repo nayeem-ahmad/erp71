@@ -49,6 +49,12 @@ export const customersMessages = {
                 adding: "Menambah...",
                 addCustomer: "Tambah Pelanggan",
                 addFailed: "Gagal menambah pelanggan. Nombor telefon atau kod pelanggan mungkin sudah digunakan.",
+                editTitle: "Sunting Pelanggan",
+                editSubtitle: "Kemas kini butiran pelanggan",
+                customerCodeEditHint: "Biarkan kosong untuk mengekalkan kod semasa.",
+                saving: "Menyimpan...",
+                saveCustomer: "Simpan Perubahan",
+                updateFailed: "Gagal mengemas kini pelanggan. Nombor telefon atau kod pelanggan mungkin sudah digunakan.",
                 placeholders: {
                     customerCode: "CUST-00001",
                     name: "Ahmad bin Ali",

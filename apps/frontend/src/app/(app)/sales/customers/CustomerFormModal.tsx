@@ -5,10 +5,31 @@ import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
-interface AddCustomerModalProps {
+/** The subset of a customer row this form reads back when editing. */
+export interface CustomerFormValues {
+    id: string;
+    name: string;
+    customer_code?: string | null;
+    owner_name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    profile_pic_url?: string | null;
+    customer_type?: string | null;
+    customer_group_id?: string | null;
+    territory_id?: string | null;
+    credit_limit?: string | number | null;
+    default_discount_pct?: string | number | null;
+    birthday?: string | null;
+}
+
+interface CustomerFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAdd: (data: any) => Promise<void>;
+    /** Receives a create payload when `customer` is null, an update payload otherwise. */
+    onSave: (data: any) => Promise<void>;
+    /** Customer being edited; leave unset for the create flow. */
+    customer?: CustomerFormValues | null;
 }
 
 const emptyForm = {
@@ -17,8 +38,26 @@ const emptyForm = {
     credit_limit: '', default_discount_pct: '', birthday: '',
 };
 
-export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomerModalProps) {
+const toForm = (customer: CustomerFormValues): typeof emptyForm => ({
+    customer_code: customer.customer_code ?? '',
+    name: customer.name ?? '',
+    owner_name: customer.owner_name ?? '',
+    phone: customer.phone ?? '',
+    email: customer.email ?? '',
+    address: customer.address ?? '',
+    profile_pic_url: customer.profile_pic_url ?? '',
+    customer_type: customer.customer_type ?? 'INDIVIDUAL',
+    customer_group_id: customer.customer_group_id ?? '',
+    territory_id: customer.territory_id ?? '',
+    credit_limit: customer.credit_limit != null ? String(customer.credit_limit) : '',
+    default_discount_pct: customer.default_discount_pct != null ? String(customer.default_discount_pct) : '',
+    // `<input type="date">` only accepts yyyy-mm-dd; the API returns a full ISO timestamp.
+    birthday: customer.birthday ? String(customer.birthday).slice(0, 10) : '',
+});
+
+export default function CustomerFormModal({ isOpen, onClose, onSave, customer }: CustomerFormModalProps) {
     const { t } = useI18n();
+    const isEdit = Boolean(customer);
     const [formData, setFormData] = useState({ ...emptyForm });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -32,34 +71,66 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
         }
     }, [isOpen]);
 
+    // Reload the fields every time the modal opens so an edit never inherits the
+    // previous target's values (nor a half-typed create).
+    useEffect(() => {
+        if (!isOpen) return;
+        setFormData(customer ? toForm(customer) : { ...emptyForm });
+        setError('');
+    }, [isOpen, customer]);
+
     if (!isOpen) return null;
+
+    /** Omit blanks: the API fills in defaults (customer code) and leaves the rest null. */
+    const buildCreatePayload = () => {
+        const payload: any = {
+            name: formData.name,
+            customer_type: formData.customer_type,
+        };
+        if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
+        if (formData.owner_name.trim()) payload.owner_name = formData.owner_name.trim();
+        if (formData.phone.trim()) payload.phone = formData.phone.trim();
+        if (formData.email) payload.email = formData.email;
+        if (formData.address) payload.address = formData.address;
+        if (formData.profile_pic_url) payload.profile_pic_url = formData.profile_pic_url;
+        if (formData.customer_group_id) payload.customer_group_id = formData.customer_group_id;
+        if (formData.territory_id) payload.territory_id = formData.territory_id;
+        if (formData.credit_limit) payload.credit_limit = parseFloat(formData.credit_limit);
+        if (formData.default_discount_pct) payload.default_discount_pct = parseFloat(formData.default_discount_pct);
+        if (formData.birthday) payload.birthday = formData.birthday;
+        return payload;
+    };
+
+    /** Send blanks as null so clearing a field actually clears it on the server. */
+    const buildUpdatePayload = () => {
+        const blankToNull = (value: string) => (value.trim() ? value.trim() : null);
+        const payload: any = {
+            name: formData.name.trim(),
+            customer_type: formData.customer_type,
+            owner_name: blankToNull(formData.owner_name),
+            phone: blankToNull(formData.phone),
+            email: blankToNull(formData.email),
+            address: blankToNull(formData.address),
+            customer_group_id: formData.customer_group_id || null,
+            territory_id: formData.territory_id || null,
+            credit_limit: formData.credit_limit === '' ? null : parseFloat(formData.credit_limit),
+            default_discount_pct: formData.default_discount_pct === '' ? null : parseFloat(formData.default_discount_pct),
+            birthday: formData.birthday || null,
+        };
+        // The column is NOT NULL, so a cleared code keeps whatever the customer already has.
+        if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
+        return payload;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
         try {
-            const payload: any = {
-                name: formData.name,
-                customer_type: formData.customer_type,
-            };
-            if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
-            if (formData.owner_name.trim()) payload.owner_name = formData.owner_name.trim();
-            if (formData.phone.trim()) payload.phone = formData.phone.trim();
-            if (formData.email) payload.email = formData.email;
-            if (formData.address) payload.address = formData.address;
-            if (formData.profile_pic_url) payload.profile_pic_url = formData.profile_pic_url;
-            if (formData.customer_group_id) payload.customer_group_id = formData.customer_group_id;
-            if (formData.territory_id) payload.territory_id = formData.territory_id;
-            if (formData.credit_limit) payload.credit_limit = parseFloat(formData.credit_limit);
-            if (formData.default_discount_pct) payload.default_discount_pct = parseFloat(formData.default_discount_pct);
-            if (formData.birthday) payload.birthday = formData.birthday;
-
-            await onAdd(payload);
-            setFormData({ ...emptyForm });
+            await onSave(isEdit ? buildUpdatePayload() : buildCreatePayload());
             onClose();
         } catch (err: any) {
-            setError(err.message || t.customers.modal.addFailed);
+            setError(err.message || (isEdit ? t.customers.modal.updateFailed : t.customers.modal.addFailed));
         } finally {
             setLoading(false);
         }
@@ -72,8 +143,8 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
         <ModalShell size="sm" onBackdropClick={onClose}>
             <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
                 <ModalHeader
-                    title={t.customers.modal.title}
-                    subtitle={t.customers.modal.subtitle}
+                    title={isEdit ? t.customers.modal.editTitle : t.customers.modal.title}
+                    subtitle={isEdit ? t.customers.modal.editSubtitle : t.customers.modal.subtitle}
                     onClose={onClose}
                 />
 
@@ -87,7 +158,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                                 <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input type="text" value={formData.customer_code} onChange={set('customer_code')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.customerCode} />
                             </div>
-                            <p className="text-xs text-gray-400">{t.customers.modal.customerCodeHint}</p>
+                            <p className="text-xs text-gray-400">{isEdit ? t.customers.modal.customerCodeEditHint : t.customers.modal.customerCodeHint}</p>
                         </div>
 
                         <div className="col-span-2 space-y-2">
@@ -186,7 +257,9 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         {t.common.cancel}
                     </Button>
                     <Button type="submit" variant="primary" size="md" loading={loading} className="flex-1 justify-center">
-                        {loading ? t.customers.modal.adding : t.customers.modal.addCustomer}
+                        {isEdit
+                            ? (loading ? t.customers.modal.saving : t.customers.modal.saveCustomer)
+                            : (loading ? t.customers.modal.adding : t.customers.modal.addCustomer)}
                     </Button>
                 </ModalFooter>
             </form>
