@@ -283,6 +283,7 @@ export const coreMessages = {
                 hr: "HR",
                 billing: "Bil",
                 accountSettings: "Pentadbiran",
+                chat: "Sembang",
                 admin: "Pentadbir Platform",
                 settings: "Tetapan",
                 help: "Bantuan",

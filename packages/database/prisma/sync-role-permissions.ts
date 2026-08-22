@@ -167,6 +167,21 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.MANAGE_IMPORT_COSTS,
         ],
     },
+    {
+        // Team chat. `ROLE_DEFAULT_PERMISSIONS` gives it to every role — a
+        // workspace's whole staff is the point of the feature, and a cashier who
+        // cannot be messaged is a cashier the module does not cover.
+        //
+        // Granting it broadly is safe precisely because it opens nothing: chat
+        // reads are gated on participant membership, not on this permission, so
+        // holding it lets someone start a conversation and never lets them read
+        // one they are not in. The feature still stays dark until the workspace
+        // has the `teamChat` entitlement from the add-on.
+        key: 'team-chat',
+        permissions: [
+            StorePermission.USE_TEAM_CHAT,
+        ],
+    },
 ];
 
 export interface GroupResult {

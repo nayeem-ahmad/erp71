@@ -283,6 +283,7 @@ export const coreMessages = {
                 hr: "এইচআর",
                 billing: "বিলিং",
                 accountSettings: "অ্যাডমিন",
+                chat: "চ্যাট",
                 admin: "প্ল্যাটফর্ম অ্যাডমিন",
                 settings: "সেটিংস",
                 help: "সহায়তা",

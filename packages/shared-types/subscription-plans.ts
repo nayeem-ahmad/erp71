@@ -138,6 +138,17 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'modules',
   },
   {
+    key: 'teamChat',
+    type: 'boolean',
+    label: 'Team chat',
+    description: 'Private staff-to-staff messaging inside the workspace.',
+    // Off on every plan: chat ships as an add-on, and add-ons only ever grant
+    // capability on top of the plan (see mergeAddonFeatures). A plan can still
+    // be edited to include it.
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
     key: 'multiStore',
     type: 'boolean',
     label: 'Multi-store',

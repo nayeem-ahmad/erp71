@@ -270,6 +270,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.ai-credits': { id: 'account-settings.ai-credits', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.aiCredits', href: '/ai-credits' },
 
   'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
+  // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
+  // and granted by the Team Chat add-on, which is how a workspace turns it on.
+  chat: { id: 'chat', kind: 'module', icon: 'MessagesSquare', labelKey: 'sidebar.modules.chat', href: '/chat', moduleKey: 'chat', entitlement: 'teamChat' },
   support: { id: 'support', kind: 'module', icon: 'MessageSquare', labelKey: 'sidebar.items.support', href: '/support', moduleKey: 'support', platformFeature: 'support' },
   admin: { id: 'admin', kind: 'module', icon: 'ShieldCheck', labelKey: 'sidebar.modules.admin', moduleKey: 'admin' },
   'admin.overview': { id: 'admin.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/admin' },
@@ -480,8 +483,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
 
-  layoutNode('support', null, 11),
-  layoutNode('admin', null, 12),
+  layoutNode('chat', null, 11),
+  layoutNode('support', null, 12),
+  layoutNode('admin', null, 13),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -493,8 +497,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 13),
-  layoutNode('help', null, 14),
+  layoutNode('whats-new', null, 14),
+  layoutNode('help', null, 15),
 ];
 
 /**

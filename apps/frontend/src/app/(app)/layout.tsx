@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, Zap, X } from 'lucide-react';
+import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import Sidebar from '@/components/Sidebar';
@@ -497,6 +498,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         <AppHeaderMobileMenu />
                         {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                         {canAccessAiChat ? <AiChatWidget /> : null}
+                        <ChatBell />
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                         <AvatarDropdown

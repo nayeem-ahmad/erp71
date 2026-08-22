@@ -111,6 +111,7 @@ import { InvestorsModule } from './investors/investors.module';
 import { FundTransfersModule } from './fund-transfers/fund-transfers.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
+import { ChatModule } from './chat/chat.module';
 import { SupportModule } from './support/support.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { DemoDataModule } from './demo-data/demo-data.module';
@@ -232,6 +233,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         FundTransfersModule,
         SalaryPaymentsModule,
         AiModule,
+        ChatModule,
         SupportModule,
         ReferralsModule,
         DemoDataModule,
