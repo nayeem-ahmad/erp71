@@ -138,6 +138,16 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // it is the cash event.
     investor_profit_accrual: VoucherType.JOURNAL,
     investor_profit_payout: VoucherType.CASH_PAYMENT,
+    // The import events post through `postMultiLeg`, which takes its voucher
+    // type from the caller and defaults to JOURNAL — so this table is never
+    // consulted for them. They are listed because the Record is exhaustive on
+    // purpose: that exhaustiveness is what forces whoever adds the next event
+    // type to decide what its voucher is, and dropping it to keep these three
+    // out would cost more than it saves. The values match what postMultiLeg
+    // actually writes, so the table stays truthful rather than merely complete.
+    import_cost: VoucherType.JOURNAL,
+    import_receipt: VoucherType.JOURNAL,
+    import_settlement: VoucherType.JOURNAL,
 };
 
 function resolveVoucherType(

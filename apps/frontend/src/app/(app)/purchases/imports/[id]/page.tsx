@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Ship, Plus, PackageCheck } from 'lucide-react';
 import { api } from '@/lib/api';
