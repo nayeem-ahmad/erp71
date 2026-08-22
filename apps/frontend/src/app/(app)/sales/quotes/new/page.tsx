@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import DocumentEntryLayout from '../../components/DocumentEntryLayout';
@@ -15,9 +15,20 @@ import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { toast } from '@/lib/toast';
+import ProformaTermsFields, {
+    emptyProformaTerms,
+    proformaTermsPayload,
+    type ProformaTerms,
+} from '../ProformaTermsFields';
 
 export default function NewQuotationPage() {
     const router = useRouter();
+    // `?kind=PROFORMA` rather than a separate route: the two documents share
+    // every field except the terms block, and a second page would be the same
+    // screen with one panel shown.
+    const docKind = useSearchParams().get('kind') === 'PROFORMA' ? 'PROFORMA' : 'QUOTE';
+    const isProforma = docKind === 'PROFORMA';
+    const [terms, setTerms] = useState<ProformaTerms>(emptyProformaTerms);
     const {
         items,
         customer,
@@ -90,7 +101,14 @@ export default function NewQuotationPage() {
         e.preventDefault();
 
         if (items.length === 0) {
-            toast.error('Add at least one item to the quotation');
+            toast.error(`Add at least one item to the ${isProforma ? 'proforma invoice' : 'quotation'}`);
+            return;
+        }
+
+        if (isProforma && terms.currency.toUpperCase() !== 'BDT' && !Number(terms.exchangeRate)) {
+            // The backend rejects this too; catching it here saves a round trip
+            // and points at the field rather than at a generic error toast.
+            toast.error(`Enter the BDT rate for ${terms.currency.toUpperCase()}`);
             return;
         }
 
@@ -107,10 +125,11 @@ export default function NewQuotationPage() {
                 totalAmount: totals.total,
                 validUntil: validUntil || undefined,
                 notes: description || undefined,
+                ...(isProforma ? proformaTermsPayload(terms, 'PROFORMA') : {}),
             });
 
             clearCart();
-            toast.success('Quotation created');
+            toast.success(isProforma ? 'Proforma invoice created' : 'Quotation created');
             router.push(routes.sales.quotes);
         } catch (error: any) {
             console.error('Quotation creation error:', error);
@@ -122,12 +141,12 @@ export default function NewQuotationPage() {
 
     return (
         <DocumentEntryLayout
-            title="New Quotation"
+            title={isProforma ? 'New Proforma Invoice' : 'New Quotation'}
             backHref={routes.sales.quotes}
             onSubmit={handleSubmit}
             metaBar={
                 <SalesHeader
-                    docLabel="Quotation #"
+                    docLabel={isProforma ? 'Proforma #' : 'Quotation #'}
                     currentUser={currentUser}
                     showRefNumber={false}
                     showDate={false}
@@ -157,13 +176,18 @@ export default function NewQuotationPage() {
                 />
             }
             note={
-                <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Notes (optional)…"
-                    className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
-                />
+                <div className="space-y-2">
+                    {isProforma && (
+                        <ProformaTermsFields terms={terms} onChange={setTerms} disabled={submitting} />
+                    )}
+                    <input
+                        type="text"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Notes (optional)…"
+                        className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
+                    />
+                </div>
             }
             panel={
                 <TotalsFooter
@@ -186,7 +210,7 @@ export default function NewQuotationPage() {
                         disabled={submitting || items.length === 0}
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
                     >
-                        {submitting ? 'Creating…' : 'Create Quotation'}
+                        {submitting ? 'Creating…' : isProforma ? 'Create Proforma Invoice' : 'Create Quotation'}
                     </button>
                 </>
             }

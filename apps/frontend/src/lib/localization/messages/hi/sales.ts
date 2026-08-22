@@ -434,8 +434,10 @@ export const salesMessages = {
         title: "बिक्री कोटेशन",
         subtitle: "अनुमान बनाएँ और समाप्ति पर नज़र रखें",
         newQuotation: "नया कोटेशन",
+        newProforma: "नया प्रोफ़ॉर्मा इनवॉइस",
         columns: {
             quoteNumber: "कोट #",
+            docKind: "प्रकार",
             date: "तिथि",
             customer: "ग्राहक",
             items: "आइटम",
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: "भेजा गया",
             accepted: "स्वीकृत",
             converted: "परिवर्तित",
+            quotesOnly: "केवल कोटेशन",
+            proformas: "प्रोफ़ॉर्मा इनवॉइस",
         },
         dataTable: {
             title: "बिक्री कोटेशन",
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "कोटेशन {number}",
             shareError: "साझा लिंक नहीं बन सका। कृपया फिर कोशिश करें।",
+            shareSubjectProforma: "प्रोफ़ॉर्मा इनवॉइस {number}",
+            docKind: {
+                QUOTE: "कोटेशन",
+                PROFORMA: "प्रोफ़ॉर्मा",
+            },
+            terms: {
+                heading: "व्यावसायिक शर्तें",
+                incoterm: "इनकोटर्म",
+                portOfLoading: "लदान बंदरगाह",
+                portOfDischarge: "उतराई बंदरगाह",
+                paymentTerms: "भुगतान शर्तें",
+                deliveryLeadTime: "डिलीवरी अवधि",
+                countryOfOrigin: "मूल देश",
+                currency: "मुद्रा",
+                advance: "अग्रिम",
+                days: "{count} दिन",
+            },
         },
     },
     returns: {

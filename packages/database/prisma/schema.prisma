@@ -162,6 +162,14 @@ enum StorePermission {
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
 
+  // Imports (LC)
+  VIEW_IMPORTS
+  MANAGE_IMPORTS
+  /// Separate from MANAGE_IMPORTS on purpose: adding an import cost changes the
+  /// landed cost of the goods and therefore the COGS on every subsequent sale
+  /// of them. That is a finance action, not a warehouse one.
+  MANAGE_IMPORT_COSTS
+
   // Short Links
   MANAGE_SHORT_LINKS
 
@@ -270,6 +278,12 @@ enum PostingRuleEventType {
   investor_withdrawal
   investor_profit_accrual
   investor_profit_payout
+  /// LC margin paid to the bank, and every cost booked against a shipment.
+  import_cost
+  /// Goods in transit becoming inventory at landed cost.
+  import_receipt
+  /// Settling a usance LC, where the rate paid differs from the rate booked.
+  import_settlement
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
@@ -384,6 +398,8 @@ model User {
   createdLeadConversations          LeadConversation[]          @relation("LeadConversationCreator")
   createdCreditTransactions         CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
+  createdImportShipments            ImportShipment[]            @relation("ImportShipmentCreator")
+  uploadedImportDocuments           ImportDocument[]            @relation("ImportDocumentUploader")
   createdCampaigns                  CrmCampaign[]               @relation("CampaignCreator")
   managedProjects                   Project[]                   @relation("ProjectManager")
   createdProjects                   Project[]                   @relation("ProjectCreator")
@@ -601,6 +617,10 @@ model Tenant {
   accountSubgroups           AccountSubgroup[]
   accounts                   Account[]
   voucherSequences           VoucherSequence[]
+  documentSequences          DocumentSequence[]
+  importShipments            ImportShipment[]
+  importCosts                ImportCost[]
+  importDocuments            ImportDocument[]
   vouchers                   Voucher[]
   voucherAttachments         VoucherAttachment[]
   cashierSessions            CashierSession[]
@@ -929,6 +949,19 @@ model SalesSettings {
   paper_size              String   @default("A4") // A4, A5, Letter, Thermal80, Thermal58
   reference_number_format String   @default("YYMM-#") // Format template
   pos_enabled             Boolean  @default(true)
+
+  /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
+  /// buyer's bank opening an LC) knows where to remit. Held on the tenant
+  /// rather than per document because they are typed once and change rarely —
+  /// and because a wrong account number repeated across fifty PIs is a support
+  /// case, not a data-entry mistake.
+  bank_name               String?
+  bank_branch             String?
+  bank_account_name       String?
+  bank_account_number     String?
+  bank_routing_number     String?
+  bank_swift_code         String?
+
   created_at              DateTime @default(now())
   updated_at              DateTime @updatedAt
 
@@ -1010,6 +1043,7 @@ model Store {
   purchases                Purchase[]
   purchaseOrders           PurchaseOrder[]
   purchaseQuotations       PurchaseQuotation[]
+  importShipments          ImportShipment[]
   cashierSessions          CashierSession[]
   warehouses               Warehouse[]
   userStoreAccess          UserStoreAccess[]
@@ -1162,6 +1196,20 @@ model Product {
   description            String?
   images_gallery         String[]    @default([])
   unit_type              String      @default("none")
+
+  /// Harmonised System code, as classified on the Bill of Entry. Drives the
+  /// duty rate, so a wrong one is an assessment dispute rather than a typo.
+  /// Snapshotted onto ImportShipmentItem at shipment time, because a later
+  /// reclassification must not retroactively change how past entries were
+  /// assessed.
+  hs_code                String?
+  country_of_origin      String?
+  /// Per unit. Sea and air freight are billed on weight, LCL on volume, and
+  /// without these an import can only allocate freight by value — which puts
+  /// the freight bill on the expensive line rather than the heavy one.
+  net_weight_kg          Decimal?    @db.Decimal(12, 3)
+  cbm                    Decimal?    @db.Decimal(12, 4)
+
   created_at             DateTime    @default(now())
   deleted_at             DateTime?
 
@@ -1192,6 +1240,7 @@ model Product {
   bomRecipe              BomRecipe?
   bomComponents          BomComponent[]           @relation("BomComponent")
   productionWastages     ProductionWastage[]      @relation("ProductionWastage")
+  importShipmentItems    ImportShipmentItem[]
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -1559,6 +1608,20 @@ model Supplier {
   email       String?
   address     String?
   due_balance Decimal   @default(0) @db.Decimal(12, 2)
+
+  /// Set on a supplier bought from under an LC. Drives whether the import
+  /// fields below are asked for, and nothing else — a foreign supplier is
+  /// billed, paid and reported exactly like a local one.
+  is_foreign          Boolean @default(false)
+  country             String?
+  /// The currency this supplier invoices in. A default for new shipments, not a
+  /// constraint: one supplier can invoice in USD and EUR.
+  currency            String?
+  bank_name           String?
+  swift_code          String?
+  beneficiary_name    String?
+  beneficiary_account String?
+
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
@@ -1569,8 +1632,10 @@ model Supplier {
   purchaseOrders     PurchaseOrder[]
   purchaseQuotations PurchaseQuotation[]
   creditTransactions SupplierCreditTransaction[]
+  importShipments    ImportShipment[]
 
   @@unique([tenant_id, name])
+  @@index([tenant_id, is_foreign])
 }
 
 model SupplierCreditTransaction {
@@ -1644,6 +1709,7 @@ model Purchase {
   items              PurchaseItem[]
   returns            PurchaseReturn[]
   paymentAllocations SupplierPaymentAllocation[]
+  importShipment     ImportShipment?
 
   @@unique([tenant_id, purchase_number])
   @@index([tenant_id, created_at])
@@ -1780,6 +1846,209 @@ model PurchaseQuotationItem {
 
   purchaseQuotation PurchaseQuotation @relation(fields: [rfq_id], references: [id], onDelete: Cascade)
   product           Product           @relation(fields: [product_id], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Imports under a Letter of Credit.
+//
+// An ImportShipment is a file that stays open for the 60–150 days between
+// committing to a foreign supplier and the goods clearing customs, accumulating
+// costs from the bank, the shipping line, Customs and the C&F agent as they are
+// incurred.
+//
+// The decision the whole module rests on: receiving a shipment EMITS an
+// ordinary `Purchase` at landed cost rather than replacing it. After
+// `purchase_id` is set, nothing downstream — ProductCost, InventoryMovement,
+// the supplier ledger, every purchase report — knows or cares that these goods
+// were imported.
+//
+// See docs/lc-imports-and-proforma-invoice-plan.md §4.
+// ---------------------------------------------------------------------------
+
+model ImportShipment {
+  id        String @id @default(uuid())
+  tenant_id String
+  store_id  String
+  /// Where the goods land. A container split across branches is received whole
+  /// here and moved on with warehouse transfers — see the plan's open question 1.
+  supplier_id String?
+
+  /// Set once received. This is the join back to the ordinary purchase
+  /// pipeline, and its presence is what "this shipment is closed to further
+  /// costing" means.
+  purchase_id String? @unique
+  /// The customer proforma that justified opening this LC, where there was one.
+  /// Not a foreign key with an action: deleting the quotation must not cascade
+  /// into an import file that has money against it.
+  customer_pi_id String?
+
+  reference_number String
+  /// DRAFT | LC_APPLIED | LC_ISSUED | SHIPPED | DOCS_RECEIVED | CUSTOMS |
+  /// RECEIVED | CLOSED | CANCELLED
+  status           String @default("DRAFT")
+
+  // --- Letter of credit ---
+  lc_number            String?
+  /// SIGHT | DEFERRED | USANCE
+  lc_type              String?
+  lc_date              DateTime?
+  /// An expired LC is a real loss and nothing else in the system watches a date.
+  lc_expiry_date       DateTime?
+  latest_shipment_date DateTime?
+  bank_name            String?
+  bank_branch          String?
+  margin_percent       Decimal?  @db.Decimal(5, 2)
+  /// Days of credit on a usance LC, from acceptance.
+  tenor_days           Int?
+
+  // --- Foreign exchange ---
+  /// The GL stays BDT. This is the one place a foreign amount is held, and
+  /// every voucher line is translated on the way out.
+  currency          String   @default("USD")
+  /// BDT per unit of `currency` when the LC opened; what the liability is
+  /// booked at.
+  fx_rate_at_open   Decimal? @db.Decimal(12, 6)
+  /// The rate actually paid at settlement. The difference against
+  /// `fx_rate_at_open` is realised FX gain or loss.
+  fx_rate_at_settle Decimal? @db.Decimal(12, 6)
+  /// Supplier invoice value in `currency`. Decimal(16,2) rather than (12,2):
+  /// a container of electronics quoted in a weak currency overflows twelve
+  /// digits, and this column is the one that holds a foreign figure.
+  invoice_value_fc  Decimal  @default(0) @db.Decimal(16, 2)
+
+  // --- Shipment ---
+  incoterm          String?
+  bl_number         String?
+  bl_date           DateTime?
+  vessel_name       String?
+  port_of_loading   String?
+  port_of_discharge String?
+  etd               DateTime?
+  eta               DateTime?
+
+  // --- Customs ---
+  be_number    String?
+  be_date      DateTime?
+  cf_agent_name String?
+
+  notes      String?
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant    Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store     Store                @relation(fields: [store_id], references: [id])
+  supplier  Supplier?            @relation(fields: [supplier_id], references: [id])
+  purchase  Purchase?            @relation(fields: [purchase_id], references: [id])
+  creator   User?                @relation("ImportShipmentCreator", fields: [created_by], references: [id])
+  items     ImportShipmentItem[]
+  costs     ImportCost[]
+  documents ImportDocument[]
+
+  @@unique([tenant_id, reference_number])
+  @@index([tenant_id, status])
+  @@index([tenant_id, lc_number])
+  @@index([tenant_id, lc_expiry_date])
+  @@index([tenant_id, created_at])
+}
+
+model ImportShipmentItem {
+  id          String @id @default(uuid())
+  shipment_id String
+  product_id  String
+  quantity    Int
+  /// Unit price in the shipment's currency. The BDT figure is derived at
+  /// posting and deliberately not stored: the rate can move between opening and
+  /// settlement, and a stale translated value would quietly disagree with the
+  /// voucher that was actually written.
+  unit_price_fc Decimal @db.Decimal(16, 4)
+
+  /// Snapshots taken when the item was added. A product's HS code can be
+  /// corrected later, but this shipment was assessed under the old one.
+  hs_code       String?
+  net_weight_kg Decimal? @db.Decimal(12, 3)
+  cbm           Decimal? @db.Decimal(12, 4)
+
+  /// Written by the allocation run at receipt, in BDT. Null until then, which
+  /// is also how "this shipment has not been costed" is read.
+  landed_unit_cost Decimal? @db.Decimal(14, 4)
+
+  shipment ImportShipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  product  Product        @relation(fields: [product_id], references: [id])
+
+  @@index([shipment_id])
+}
+
+/// One charge against a shipment: the LC margin, a bank commission, freight,
+/// insurance, duty, VAT, AIT, the C&F agent's bill, port charges, inland
+/// transport.
+model ImportCost {
+  id          String @id @default(uuid())
+  tenant_id   String
+  shipment_id String
+
+  /// LC_MARGIN | LC_COMMISSION | BANK_CHARGE | FREIGHT | INSURANCE |
+  /// CUSTOMS_DUTY | VAT | AIT | RD | SD | CF_AGENT | PORT | TRANSPORT | OTHER
+  cost_type   String
+  description String?
+
+  currency   String   @default("BDT")
+  amount     Decimal  @db.Decimal(16, 2)
+  fx_rate    Decimal? @db.Decimal(12, 6)
+  /// Always populated, always BDT: what the ledger and the allocation both use.
+  amount_bdt Decimal  @db.Decimal(16, 2)
+
+  /// VALUE | QTY | WEIGHT | CBM — see landed-cost.utils.ts.
+  allocation_basis String @default("VALUE")
+
+  /// False for rebatable VAT and creditable AIT, which are receivables rather
+  /// than product cost. Capitalising them overstates COGS on every subsequent
+  /// sale of the goods, and it is the most common landed-cost error there is.
+  is_capitalized Boolean @default(true)
+  /// Where a non-capitalised charge lands instead — VAT Rebate Receivable, AIT.
+  /// Required when is_capitalized is false.
+  receivable_account_id String?
+
+  paid_at              DateTime?
+  paid_from_account_id String?
+  /// The voucher this charge posted through, once it has.
+  voucher_id           String?
+
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shipment ImportShipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, shipment_id])
+  @@index([tenant_id, cost_type])
+}
+
+/// Shipping and customs paperwork. Stored by `storage_key` on the same
+/// AssetsService path as expense-claim receipts and project attachments, not as
+/// a bare URL.
+model ImportDocument {
+  id          String @id @default(uuid())
+  tenant_id   String
+  shipment_id String
+
+  /// LC_COPY | COMMERCIAL_INVOICE | PACKING_LIST | BL | COO | INSURANCE |
+  /// BILL_OF_ENTRY | RELEASE_ORDER | OTHER
+  doc_type    String
+  file_name   String
+  storage_key String
+  mime_type   String?
+  file_size   Int?
+
+  uploaded_by String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shipment ImportShipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  uploader User?          @relation("ImportDocumentUploader", fields: [uploaded_by], references: [id])
+
+  @@index([tenant_id, shipment_id])
 }
 
 model Sale {
@@ -2633,6 +2902,39 @@ model AccountingSettings {
   @@map("accounting_settings")
 }
 
+/// A named, tenant-scoped, optionally year-resetting counter for human-readable
+/// document numbers (`PI-2526-00001`, `IMP-2526-00007`).
+///
+/// Deliberately NOT `VoucherSequence`, which it resembles: that table is keyed
+/// by `voucher_type` and read by the posting engine, and widening it to hold
+/// sales and import series would make an accounting table the source of truth
+/// for documents that never touch the ledger.
+///
+/// Counting rows (`count() + 1`, as PurchasesService does) is what this exists
+/// to avoid: quotations can be deleted, so a count-derived number reissues an
+/// identifier that a customer may already be holding on a printed document.
+model DocumentSequence {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT.
+  doc_type    String
+  /// Bangladeshi fiscal year the series resets on — "2526" means July 2025 to
+  /// June 2026. Empty string for a series that never resets, so the unique
+  /// constraint below stays usable either way (a nullable column would let two
+  /// never-resetting rows coexist, since NULL != NULL in Postgres).
+  period_key  String   @default("")
+  prefix      String
+  next_number Int      @default(1)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, doc_type, period_key])
+  @@index([tenant_id])
+  @@map("document_sequences")
+}
+
 model VoucherSequence {
   id           String   @id
   tenant_id    String
@@ -2913,6 +3215,42 @@ model Quotation {
   version           Int       @default(1)
   original_quote_id String?
   notes             String?
+
+  /// QUOTE | PROFORMA. A proforma invoice is a quotation with commercial terms
+  /// attached and a different name on the paper, so it is a document kind here
+  /// rather than a table of its own. Drives the number series, the print
+  /// template and what the public page calls itself.
+  ///
+  /// A quote can be promoted to a proforma; the reverse is deliberately not
+  /// allowed, because a PI may already have an advance receipted against it.
+  doc_kind          String    @default("QUOTE")
+
+  /// Commercial terms. All null on an ordinary quote — these are what make a
+  /// document a PI that a buyer's bank will accept against an LC application.
+  ///
+  /// `currency` is the one place a non-BDT amount is allowed to reach the
+  /// database outside platform billing, and it stops at this table: nothing
+  /// posts to the ledger until the PI becomes a sale, and `convertToOrder`
+  /// translates at `exchange_rate` on the way through. See
+  /// docs/lc-imports-and-proforma-invoice-plan.md §3.
+  currency          String    @default("BDT")
+  /// BDT per one unit of `currency`, fixed when the document was written.
+  /// Required when currency is not BDT, ignored when it is.
+  exchange_rate     Decimal?  @db.Decimal(12, 6)
+  incoterm          String? // FOB | CFR | CIF | EXW | DDP | DAP | FCA
+  port_of_loading   String?
+  port_of_discharge String?
+  payment_terms     String?
+  /// Percentage of the total requested up front. Drives the suggested deposit
+  /// when the PI is converted to a sales order.
+  advance_percent   Decimal?  @db.Decimal(5, 2)
+  /// Days from order to delivery, as promised to the buyer. Deliberately not
+  /// `lead_time_days`: `Product.lead_time_days` is the tenant's own
+  /// replenishment lead time — internal planning data that a customer-facing
+  /// document must never carry — and two fields a line apart in a join with the
+  /// same name eventually get copied into each other.
+  delivery_lead_time_days Int?
+  country_of_origin String?
   /// Unguessable secret authorizing the public view. Clearing it revokes every
   /// link ever shared for this quotation, short or long.
   share_token       String?   @unique
@@ -6093,6 +6431,12 @@ enum ShortLinkKind {
 
 enum ShortLinkEntity {
   QUOTATION
+  /// Distinct from QUOTATION even though both resolve to a Quotation row and to
+  /// the same /q/<token> page. "Did the buyer open the PI" is a materially
+  /// different sales signal from "did they open a quote", and ShortLinkClick
+  /// already captures everything needed to answer it — it just cannot separate
+  /// the two without this value.
+  PROFORMA_INVOICE
   STOREFRONT_PRODUCT
 }
 

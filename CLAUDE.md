@@ -82,7 +82,7 @@ Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed U
 - Notifications go through the global `Toaster` store only — no page-local toasts; validation errors are inline per field, never `alert()`
 - No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions
 - Mobile: ≥44px touch targets (`min-h-touch`), `hideOnMobile` on secondary columns of wide tables, no horizontal body scroll at 360px
-- Money always via `formatBDT()` — never a literal `$`
+- Money always via `formatBDT()` — never a literal `$`. Sole exception: a document genuinely denominated in a foreign currency (proforma invoices, import shipments) uses `formatCurrency(value, { currency })` — see `docs/ui-design-guidelines.md`
 
 ---
 

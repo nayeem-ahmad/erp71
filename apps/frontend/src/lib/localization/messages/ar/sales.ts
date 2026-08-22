@@ -434,8 +434,10 @@ export const salesMessages = {
         title: 'عروض الأسعار',
         subtitle: 'أعِدّ التقديرات وتابع تواريخ انتهائها',
         newQuotation: 'عرض سعر جديد',
+        newProforma: "فاتورة أولية جديدة",
         columns: {
             quoteNumber: 'رقم العرض',
+            docKind: "النوع",
             date: 'التاريخ',
             customer: 'الزبون',
             items: 'الأصناف',
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: 'مُرسل',
             accepted: 'مقبول',
             converted: 'مُحوَّل',
+            quotesOnly: "عروض الأسعار فقط",
+            proformas: "الفواتير الأولية",
         },
         dataTable: {
             title: 'عروض الأسعار',
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: 'عرض سعر {number}',
             shareError: 'تعذّر إنشاء رابط المشاركة. حاول مرة أخرى.',
+            shareSubjectProforma: "فاتورة أولية {number}",
+            docKind: {
+                QUOTE: "عرض سعر",
+                PROFORMA: "أولية",
+            },
+            terms: {
+                heading: "الشروط التجارية",
+                incoterm: "إنكوترم",
+                portOfLoading: "ميناء الشحن",
+                portOfDischarge: "ميناء التفريغ",
+                paymentTerms: "شروط الدفع",
+                deliveryLeadTime: "مدة التسليم",
+                countryOfOrigin: "بلد المنشأ",
+                currency: "العملة",
+                advance: "الدفعة المقدمة",
+                days: "{count} يوم",
+            },
         },
     },
     returns: {

@@ -12,6 +12,11 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import ShareModal from '@/components/share/ShareModal';
+import ProformaTermsFields, {
+    emptyProformaTerms,
+    proformaTermsPayload,
+    type ProformaTerms,
+} from '../ProformaTermsFields';
 
 interface EditQuoteItem {
     productId: string;
@@ -19,6 +24,17 @@ interface EditQuoteItem {
     sku: string;
     quantity: number;
     unitPrice: number;
+}
+
+/** One term of a proforma, omitted entirely when it was never filled in. */
+function ReadOnlyTerm({ label, value }: { label: string; value: string | number | null | undefined }) {
+    if (value === null || value === undefined || value === '') return null;
+    return (
+        <div>
+            <dt className="text-xs text-gray-500">{label}</dt>
+            <dd className="text-sm text-gray-900">{value}</dd>
+        </div>
+    );
 }
 
 function QuoteDetailsPageContent() {
@@ -41,6 +57,8 @@ function QuoteDetailsPageContent() {
     const [productSearch, setProductSearch] = useState('');
     const [showProductDropdown, setShowProductDropdown] = useState(false);
     const [sharePath, setSharePath] = useState<string | null>(null);
+    const [editTerms, setEditTerms] = useState<ProformaTerms>(emptyProformaTerms);
+    const isProforma = quote?.doc_kind === 'PROFORMA';
 
     useEffect(() => {
         loadQuote();
@@ -65,6 +83,20 @@ function QuoteDetailsPageContent() {
                 quantity: item.quantity,
                 unitPrice: Number(item.unit_price),
             })));
+            // Every term back to a string, because the inputs are controlled and
+            // a null would flip them to uncontrolled on first render.
+            setEditTerms({
+                currency: quote.currency || 'BDT',
+                exchangeRate: quote.exchange_rate == null ? '' : String(quote.exchange_rate),
+                incoterm: quote.incoterm || '',
+                portOfLoading: quote.port_of_loading || '',
+                portOfDischarge: quote.port_of_discharge || '',
+                paymentTerms: quote.payment_terms || '',
+                advancePercent: quote.advance_percent == null ? '' : String(quote.advance_percent),
+                deliveryLeadTimeDays:
+                    quote.delivery_lead_time_days == null ? '' : String(quote.delivery_lead_time_days),
+                countryOfOrigin: quote.country_of_origin || '',
+            });
         }
     }, [isEditMode, quote]);
 
@@ -133,6 +165,10 @@ function QuoteDetailsPageContent() {
                     unitPrice: item.unitPrice,
                 })),
                 totalAmount: editTotalAmount,
+                // Sent only for a proforma. A quotation has no terms to write,
+                // and posting docKind: 'QUOTE' at an already-promoted document
+                // is refused by the service.
+                ...(isProforma ? proformaTermsPayload(editTerms, 'PROFORMA') : {}),
             });
             await loadQuote();
             router.push(`/sales/quotes/${quote.id}`);
@@ -268,7 +304,7 @@ function QuoteDetailsPageContent() {
                     <PageHeader
                         title={
                             <span className="inline-flex items-center gap-3">
-                                <FileText className="w-8 h-8 text-purple-600" />
+                                <FileText className="w-8 h-8 text-blue-600" />
                                 <span>
                                     {quote.quote_number}{' '}
                                     <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-bold ms-1">v{quote.version}</span>
@@ -277,6 +313,15 @@ function QuoteDetailsPageContent() {
                         }
                         subtitle={
                             <span className="inline-flex items-center gap-3">
+                                <span
+                                    className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
+                                        isProforma
+                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                                    }`}
+                                >
+                                    {isProforma ? t.quotes.detail.docKind.PROFORMA : t.quotes.detail.docKind.QUOTE}
+                                </span>
                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800">
                                     {formatMessage(t.quotes.detail.statusLabel, {
                                         status: t.shared.statuses.quote[quote.status as keyof typeof t.shared.statuses.quote] ?? quote.status,
@@ -525,6 +570,52 @@ function QuoteDetailsPageContent() {
                             )}
                         </div>
                         
+                        {isProforma && isEditMode && (
+                            <ProformaTermsFields terms={editTerms} onChange={setEditTerms} disabled={saving} />
+                        )}
+
+                        {isProforma && !isEditMode && (
+                            <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                <p className="mb-3 text-xs font-semibold uppercase text-gray-500">
+                                    {t.quotes.detail.terms.heading}
+                                </p>
+                                <dl className="grid grid-cols-2 gap-3">
+                                    <ReadOnlyTerm label={t.quotes.detail.terms.currency} value={quote.currency} />
+                                    <ReadOnlyTerm label={t.quotes.detail.terms.incoterm} value={quote.incoterm} />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.portOfLoading}
+                                        value={quote.port_of_loading}
+                                    />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.portOfDischarge}
+                                        value={quote.port_of_discharge}
+                                    />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.countryOfOrigin}
+                                        value={quote.country_of_origin}
+                                    />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.deliveryLeadTime}
+                                        value={
+                                            quote.delivery_lead_time_days
+                                                ? formatMessage(t.quotes.detail.terms.days, {
+                                                      count: quote.delivery_lead_time_days,
+                                                  })
+                                                : null
+                                        }
+                                    />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.advance}
+                                        value={quote.advance_percent ? `${quote.advance_percent}%` : null}
+                                    />
+                                    <ReadOnlyTerm
+                                        label={t.quotes.detail.terms.paymentTerms}
+                                        value={quote.payment_terms}
+                                    />
+                                </dl>
+                            </div>
+                        )}
+
                         {!isEditMode && quote.notes && (
                             <div className="bg-yellow-50 text-yellow-800 p-6 rounded-lg text-sm font-medium italic">
                                 &quot;{quote.notes}&quot;
@@ -550,7 +641,10 @@ function QuoteDetailsPageContent() {
 
             {sharePath && (
                 <ShareModal
-                    subject={formatMessage(t.quotes.detail.shareSubject, { number: quote.quote_number })}
+                    subject={formatMessage(
+                        isProforma ? t.quotes.detail.shareSubjectProforma : t.quotes.detail.shareSubject,
+                        { number: quote.quote_number },
+                    )}
                     shortPath={sharePath}
                     onRevoke={handleRevokeShare}
                     onClose={() => setSharePath(null)}

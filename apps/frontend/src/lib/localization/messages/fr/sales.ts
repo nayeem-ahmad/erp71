@@ -434,8 +434,10 @@ export const salesMessages = {
         title: "Devis clients",
         subtitle: "Établissez des estimations et suivez les échéances",
         newQuotation: "Nouveau devis",
+        newProforma: "Nouvelle facture proforma",
         columns: {
             quoteNumber: "N° de devis",
+            docKind: "Type",
             date: "Date",
             customer: "Client",
             items: "Articles",
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: "Envoyé",
             accepted: "Accepté",
             converted: "Converti",
+            quotesOnly: "Devis uniquement",
+            proformas: "Factures proforma",
         },
         dataTable: {
             title: "Devis clients",
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "Devis {number}",
             shareError: "Impossible de créer le lien de partage. Veuillez réessayer.",
+            shareSubjectProforma: "Facture proforma {number}",
+            docKind: {
+                QUOTE: "Devis",
+                PROFORMA: "Proforma",
+            },
+            terms: {
+                heading: "Conditions commerciales",
+                incoterm: "Incoterm",
+                portOfLoading: "Port de chargement",
+                portOfDischarge: "Port de déchargement",
+                paymentTerms: "Conditions de paiement",
+                deliveryLeadTime: "Délai de livraison",
+                countryOfOrigin: "Pays d'origine",
+                currency: "Devise",
+                advance: "Acompte",
+                days: "{count} jours",
+            },
         },
     },
     returns: {

@@ -434,8 +434,10 @@ export const salesMessages = {
         title: 'سیلز کوٹیشنز',
         subtitle: 'تخمینے بنائیں اور میعاد پر نظر رکھیں',
         newQuotation: 'نئی کوٹیشن',
+        newProforma: "نیا پروفارما انوائس",
         columns: {
             quoteNumber: 'کوٹیشن نمبر',
+            docKind: "قسم",
             date: 'تاریخ',
             customer: 'گاہک',
             items: 'آئٹمز',
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: 'بھیجی گئی',
             accepted: 'منظور',
             converted: 'تبدیل شدہ',
+            quotesOnly: "صرف کوٹیشن",
+            proformas: "پروفارما انوائس",
         },
         dataTable: {
             title: 'سیلز کوٹیشنز',
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: 'کوٹیشن {number}',
             shareError: 'شیئر لنک نہیں بن سکا۔ براہِ کرم دوبارہ کوشش کریں۔',
+            shareSubjectProforma: "پروفارما انوائس {number}",
+            docKind: {
+                QUOTE: "کوٹیشن",
+                PROFORMA: "پروفارما",
+            },
+            terms: {
+                heading: "تجارتی شرائط",
+                incoterm: "انکوٹرم",
+                portOfLoading: "بندرگاہِ لدائی",
+                portOfDischarge: "بندرگاہِ تخلیہ",
+                paymentTerms: "ادائیگی کی شرائط",
+                deliveryLeadTime: "ترسیل کا دورانیہ",
+                countryOfOrigin: "ملکِ اصل",
+                currency: "کرنسی",
+                advance: "پیشگی",
+                days: "{count} دن",
+            },
         },
     },
     returns: {

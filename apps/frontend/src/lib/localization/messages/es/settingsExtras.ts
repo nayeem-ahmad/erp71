@@ -169,6 +169,8 @@ export const settingsExtrasMessages = {
             PURCHASE_ORDER: "Pedidos de compra",
             PURCHASE_RETURN: "Devoluciones de compra",
             LIST_REPORT: "Informes de lista",
+            PROFORMA_INVOICE: "Facturas proforma",
+            PAYSLIP: "Nóminas",
         },
     },
     tax: {

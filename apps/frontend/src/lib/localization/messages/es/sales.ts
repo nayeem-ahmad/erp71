@@ -434,8 +434,10 @@ export const salesMessages = {
         title: "Presupuestos de venta",
         subtitle: "Elabore estimaciones y controle las caducidades",
         newQuotation: "Nuevo presupuesto",
+        newProforma: "Nueva factura proforma",
         columns: {
             quoteNumber: "N.º de presupuesto",
+            docKind: "Tipo",
             date: "Fecha",
             customer: "Cliente",
             items: "Artículos",
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: "Enviado",
             accepted: "Aceptado",
             converted: "Convertido",
+            quotesOnly: "Solo cotizaciones",
+            proformas: "Facturas proforma",
         },
         dataTable: {
             title: "Presupuestos de venta",
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "Presupuesto {number}",
             shareError: "No se pudo crear el enlace para compartir. Inténtelo de nuevo.",
+            shareSubjectProforma: "Factura proforma {number}",
+            docKind: {
+                QUOTE: "Cotización",
+                PROFORMA: "Proforma",
+            },
+            terms: {
+                heading: "Condiciones comerciales",
+                incoterm: "Incoterm",
+                portOfLoading: "Puerto de carga",
+                portOfDischarge: "Puerto de descarga",
+                paymentTerms: "Condiciones de pago",
+                deliveryLeadTime: "Plazo de entrega",
+                countryOfOrigin: "País de origen",
+                currency: "Moneda",
+                advance: "Anticipo",
+                days: "{count} días",
+            },
         },
     },
     returns: {

@@ -169,6 +169,8 @@ export const settingsExtrasMessages = {
             PURCHASE_ORDER: "Pesanan belian",
             PURCHASE_RETURN: "Pulangan belian",
             LIST_REPORT: "Laporan senarai",
+            PROFORMA_INVOICE: "Invois proforma",
+            PAYSLIP: "Slip gaji",
         },
     },
     tax: {

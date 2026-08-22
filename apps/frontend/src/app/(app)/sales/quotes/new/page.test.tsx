@@ -9,8 +9,12 @@ jest.mock('next/link', () => {
 });
 
 const push = jest.fn();
+// `?kind=` decides whether the screen is a quotation or a proforma, so the
+// search params have to be mockable per test, not fixed at module scope.
+const searchParams = { get: jest.fn().mockReturnValue(null) };
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push }),
+    useSearchParams: () => searchParams,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -34,6 +38,7 @@ const addRiceToCart = async () => {
 describe('NewQuotationPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        searchParams.get.mockReturnValue(null);
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([
             { id: 'cust-1', name: 'Rahim Ahmed', phone: '01700000001' },
@@ -119,5 +124,96 @@ describe('NewQuotationPage', () => {
 
         await waitFor(() => expect(api.createQuotation).toHaveBeenCalled());
         expect(push).not.toHaveBeenCalled();
+    });
+
+    describe('proforma mode', () => {
+        const asProforma = () => searchParams.get.mockReturnValue('PROFORMA');
+
+        it('stays an ordinary quotation without ?kind=PROFORMA', async () => {
+            await act(async () => { render(<NewQuotationPage />); });
+
+            expect(screen.getByText('New Quotation')).toBeInTheDocument();
+            expect(screen.queryByText('Commercial Terms')).not.toBeInTheDocument();
+        });
+
+        it('renders the commercial terms block', async () => {
+            asProforma();
+            await act(async () => { render(<NewQuotationPage />); });
+
+            expect(screen.getByText('New Proforma Invoice')).toBeInTheDocument();
+            expect(screen.getByText('Commercial Terms')).toBeInTheDocument();
+            expect(screen.getByText('Incoterm')).toBeInTheDocument();
+            expect(screen.getByText('Payment terms')).toBeInTheDocument();
+        });
+
+        it('hides the exchange rate until the currency is not BDT', async () => {
+            asProforma();
+            await act(async () => { render(<NewQuotationPage />); });
+
+            expect(screen.queryByText('BDT / USD')).not.toBeInTheDocument();
+
+            const currency = screen.getByDisplayValue('BDT');
+            await act(async () => { fireEvent.change(currency, { target: { value: 'USD' } }); });
+
+            expect(screen.getByText('BDT / USD')).toBeInTheDocument();
+        });
+
+        it('refuses a foreign-currency proforma with no rate, without calling the API', async () => {
+            asProforma();
+            await act(async () => { render(<NewQuotationPage />); });
+            await addRiceToCart();
+
+            await act(async () => {
+                fireEvent.change(screen.getByDisplayValue('BDT'), { target: { value: 'USD' } });
+            });
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /Create Proforma Invoice/i }));
+            });
+
+            expect(api.createQuotation).not.toHaveBeenCalled();
+            expect(push).not.toHaveBeenCalled();
+        });
+
+        it('sends the terms with the document', async () => {
+            asProforma();
+            await act(async () => { render(<NewQuotationPage />); });
+            await addRiceToCart();
+
+            await act(async () => {
+                fireEvent.change(screen.getByDisplayValue('BDT'), { target: { value: 'USD' } });
+            });
+            await act(async () => {
+                fireEvent.change(screen.getByLabelText('BDT / USD'), { target: { value: '121.5' } });
+            });
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /Create Proforma Invoice/i }));
+            });
+
+            await waitFor(() => {
+                expect(api.createQuotation).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        docKind: 'PROFORMA',
+                        currency: 'USD',
+                        exchangeRate: 121.5,
+                    }),
+                );
+            });
+            expect(push).toHaveBeenCalledWith('/sales/quotes');
+        });
+
+        it('never sends a rate on a BDT proforma', async () => {
+            asProforma();
+            await act(async () => { render(<NewQuotationPage />); });
+            await addRiceToCart();
+
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /Create Proforma Invoice/i }));
+            });
+
+            await waitFor(() => expect(api.createQuotation).toHaveBeenCalled());
+            const payload = (api.createQuotation as jest.Mock).mock.calls[0][0];
+            expect(payload).toMatchObject({ docKind: 'PROFORMA', currency: 'BDT' });
+            expect(payload.exchangeRate).toBeUndefined();
+        });
     });
 });

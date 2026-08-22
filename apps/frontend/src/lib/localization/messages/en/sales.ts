@@ -434,8 +434,10 @@ export const salesMessages = {
         title: 'Sales Quotations',
         subtitle: 'Build estimates and track expirations',
         newQuotation: 'New Quotation',
+        newProforma: 'New Proforma Invoice',
         columns: {
             quoteNumber: 'Quote #',
+            docKind: 'Type',
             date: 'Date',
             customer: 'Customer',
             items: 'Items',
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: 'Sent',
             accepted: 'Accepted',
             converted: 'Converted',
+            quotesOnly: 'Quotations only',
+            proformas: 'Proforma invoices',
         },
         dataTable: {
             title: 'Sales Quotations',
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: 'Quotation {number}',
             shareError: 'Could not create the share link. Please try again.',
+            shareSubjectProforma: 'Proforma Invoice {number}',
+            docKind: {
+                QUOTE: 'Quotation',
+                PROFORMA: 'Proforma',
+            },
+            terms: {
+                heading: 'Commercial Terms',
+                incoterm: 'Incoterm',
+                portOfLoading: 'Port of loading',
+                portOfDischarge: 'Port of discharge',
+                paymentTerms: 'Payment terms',
+                deliveryLeadTime: 'Delivery lead time',
+                countryOfOrigin: 'Country of origin',
+                currency: 'Currency',
+                advance: 'Advance',
+                days: '{count} days',
+            },
         },
     },
     returns: {

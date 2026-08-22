@@ -169,6 +169,8 @@ export const settingsExtrasMessages = {
             PURCHASE_ORDER: "खरीद ऑर्डर",
             PURCHASE_RETURN: "खरीद वापसी",
             LIST_REPORT: "सूची रिपोर्ट",
+            PROFORMA_INVOICE: "प्रोफ़ॉर्मा इनवॉइस",
+            PAYSLIP: "वेतन पर्ची",
         },
     },
     tax: {

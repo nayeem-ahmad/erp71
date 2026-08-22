@@ -169,6 +169,8 @@ export const settingsExtrasMessages = {
             PURCHASE_ORDER: "خریداری کے آرڈرز",
             PURCHASE_RETURN: "خریداری کی واپسیاں",
             LIST_REPORT: "فہرستی رپورٹس",
+            PROFORMA_INVOICE: "پروفارما انوائس",
+            PAYSLIP: "تنخواہ کی پرچی",
         },
     },
     tax: {

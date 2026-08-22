@@ -434,8 +434,10 @@ export const salesMessages = {
         title: "Angebote",
         subtitle: "Kostenvoranschläge erstellen und Ablauffristen verfolgen",
         newQuotation: "Neues Angebot",
+        newProforma: "Neue Proformarechnung",
         columns: {
             quoteNumber: "Angebotsnr.",
+            docKind: "Typ",
             date: "Datum",
             customer: "Kunde",
             items: "Artikel",
@@ -449,6 +451,8 @@ export const salesMessages = {
             sent: "Gesendet",
             accepted: "Angenommen",
             converted: "Umgewandelt",
+            quotesOnly: "Nur Angebote",
+            proformas: "Proformarechnungen",
         },
         dataTable: {
             title: "Angebote",
@@ -487,6 +491,23 @@ export const salesMessages = {
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "Angebot {number}",
             shareError: "Der Freigabelink konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+            shareSubjectProforma: "Proformarechnung {number}",
+            docKind: {
+                QUOTE: "Angebot",
+                PROFORMA: "Proforma",
+            },
+            terms: {
+                heading: "Handelsbedingungen",
+                incoterm: "Incoterm",
+                portOfLoading: "Verladehafen",
+                portOfDischarge: "Löschhafen",
+                paymentTerms: "Zahlungsbedingungen",
+                deliveryLeadTime: "Lieferzeit",
+                countryOfOrigin: "Ursprungsland",
+                currency: "Währung",
+                advance: "Anzahlung",
+                days: "{count} Tage",
+            },
         },
     },
     returns: {

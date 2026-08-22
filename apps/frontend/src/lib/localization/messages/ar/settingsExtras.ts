@@ -169,6 +169,8 @@ export const settingsExtrasMessages = {
             PURCHASE_ORDER: "أوامر الشراء",
             PURCHASE_RETURN: "مرتجعات المشتريات",
             LIST_REPORT: "تقارير القوائم",
+            PROFORMA_INVOICE: "الفواتير الأولية",
+            PAYSLIP: "قسائم الرواتب",
         },
     },
     tax: {

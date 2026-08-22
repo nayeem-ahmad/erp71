@@ -1929,6 +1929,53 @@ export const api = {
     deletePurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`, {
         method: 'DELETE',
     }),
+    // ── Imports (LC) ────────────────────────────────────────────────────────
+    getImportShipments: (params?: { status?: string; supplierId?: string; openOnly?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.supplierId) query.set('supplierId', params.supplierId);
+        if (params?.openOnly) query.set('openOnly', 'true');
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`),
+    createImportShipment: (data: any) =>
+        fetchWithAuth('/imports', { method: 'POST', body: JSON.stringify(data) }),
+    updateImportShipment: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    updateImportShipmentStatus: (id: string, status: string) =>
+        fetchWithAuth(`/imports/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`, { method: 'DELETE' }),
+
+    getImportCostSheet: (id: string) => fetchWithAuth(`/imports/${id}/cost-sheet`),
+    addImportCost: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/costs`, { method: 'POST', body: JSON.stringify(data) }),
+    updateImportCost: (id: string, costId: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteImportCost: (id: string, costId: string) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'DELETE' }),
+
+    /** Emits an ordinary Purchase at landed cost and moves the stock. */
+    receiveImportShipment: (id: string, data: any = {}) =>
+        fetchWithAuth(`/imports/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+    settleImportShipment: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/settle`, { method: 'POST', body: JSON.stringify(data) }),
+
+    addImportDocument: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteImportDocument: (id: string, documentId: string) =>
+        fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
+
+    getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
+    getImportDutyReport: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportBankLimits: () => fetchWithAuth('/imports/bank-limits'),
+
     getQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
