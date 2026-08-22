@@ -283,6 +283,7 @@ export const coreMessages = {
             hr: 'ایچ آر',
             billing: 'بلنگ',
             accountSettings: 'ایڈمن',
+            chat: 'چیٹ',
             admin: 'پلیٹ فارم ایڈمن',
             settings: 'ترتیبات',
             help: 'مدد',

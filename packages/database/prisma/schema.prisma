@@ -178,6 +178,9 @@ enum StorePermission {
   VIEW_BLOG
   MANAGE_BLOG
   PUBLISH_BLOG
+
+  // Team chat
+  USE_TEAM_CHAT
 }
 
 enum EmployeeStatus {
@@ -419,6 +422,9 @@ model User {
   addedBoardCards                   BoardTask[]                 @relation("BoardTaskAdder")
   authoredSocialMediaPosts          SocialMediaPost[]           @relation("SocialMediaPostAuthor")
   jobApplicationEvents              JobApplicationEvent[]       @relation("JobApplicationEventAuthor")
+  chatConversationsCreated          ChatConversation[]          @relation("ChatConversationCreator")
+  chatParticipations                ChatParticipant[]           @relation("ChatParticipantUser")
+  chatMessages                      ChatMessage[]               @relation("ChatMessageSender")
 
   // Mobile sign-in looks an account up by number on every SMS code entered.
   // Deliberately not unique: one person may own several workspaces under the
@@ -752,6 +758,7 @@ model Tenant {
   boardColumns               BoardColumn[]
   boardColumnStatuses        BoardColumnStatus[]
   boardTasks                 BoardTask[]
+  chatConversations          ChatConversation[]
 
   @@index([deleted_at])
 }
@@ -6876,4 +6883,120 @@ model SocialMediaPostPush {
 
   @@index([post_id])
   @@map("social_media_post_pushes")
+}
+
+// ── Team chat (tenant staff ↔ staff) ──────────────────────────────────────────
+//
+// Deliberately separate from SupportThread/SupportMessage: those are one tenant
+// talking to the platform, always exactly two sides, and readable by any
+// platform admin. These are conversations *inside* a workspace and are private
+// to their participants — see the access note on ChatParticipant.
+
+model ChatConversation {
+  id        String @id @default(cuid())
+  tenant_id String
+  /// dm | group
+  kind      String @default("dm")
+  /// Null for DMs: the title a member sees is the *other* participant's name,
+  /// which differs per viewer and so cannot be a stored column.
+  title     String?
+  /// The two user ids of a DM, sorted and joined with ':'. Unique per tenant so
+  /// two people opening a DM with each other at the same moment converge on one
+  /// row instead of racing into two parallel threads. Null for groups, which is
+  /// what makes the unique constraint below harmless for them — Postgres treats
+  /// NULLs as distinct.
+  dm_key    String?
+
+  created_by  String?
+  archived_at DateTime?
+  created_at  DateTime  @default(now())
+
+  /// Both denormalised from the newest message. Without them the conversation
+  /// list needs a correlated subquery per row just to sort and preview, which is
+  /// the query that gets polled every 30 seconds by every open client.
+  last_message_at      DateTime?
+  last_message_preview String?
+
+  tenant       Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  creator      User?             @relation("ChatConversationCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+
+  @@unique([tenant_id, dm_key])
+  @@index([tenant_id, last_message_at])
+  @@map("chat_conversations")
+}
+
+/// Membership *is* the access rule for chat, and it is the only one. Unlike
+/// every other module in this codebase, an OWNER is not implicitly allowed to
+/// read a conversation they are not in — staff DMs are private. Any query that
+/// reads a conversation or its messages must filter on a live row here.
+model ChatParticipant {
+  id              String @id @default(uuid())
+  conversation_id String
+  user_id         String
+  /// member | admin — a group admin can rename it and add or remove people.
+  /// Always 'admin' for both sides of a DM, which has nothing to administer.
+  role            String @default("member")
+
+  /// Everything unread is derived from this rather than a per-message read row:
+  /// one write per conversation-open instead of one per message seen.
+  last_read_at DateTime?
+  muted_until  DateTime?
+  /// Set instead of deleting the row when someone leaves a group, so their
+  /// earlier messages still resolve to a name. A left participant reads nothing.
+  left_at      DateTime?
+  joined_at    DateTime  @default(now())
+
+  conversation ChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User             @relation("ChatParticipantUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@index([user_id, left_at])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id              String @id @default(cuid())
+  tenant_id       String
+  conversation_id String
+  sender_id       String
+  body            String
+  /// text | system. A system message records membership changes ("Karim added
+  /// Rina") in the transcript itself, so a group's history explains itself.
+  kind            String @default("text")
+
+  edited_at  DateTime?
+  /// Soft delete: the row stays so the thread keeps its shape and a tombstone
+  /// renders in place. `body` is blanked at delete time — a hidden-but-stored
+  /// message is one careless `select` away from being shown again.
+  deleted_at DateTime?
+  created_at DateTime  @default(now())
+
+  conversation ChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       User             @relation("ChatMessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+  attachments  ChatAttachment[]
+
+  @@index([conversation_id, created_at])
+  @@index([conversation_id, sender_id, created_at])
+  @@map("chat_messages")
+}
+
+model ChatAttachment {
+  id         String @id @default(uuid())
+  message_id String
+  file_url   String
+  file_name  String
+  mime_type  String
+  file_size  Int?
+  /// Cloudinary's handle for the stored asset. `file_url` cannot be turned back
+  /// into one, so without this the row could be deleted while the file stayed —
+  /// billed forever. Same reason ProjectAttachment carries one.
+  storage_key String?
+  created_at  DateTime @default(now())
+
+  message ChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  @@index([message_id])
+  @@map("chat_attachments")
 }

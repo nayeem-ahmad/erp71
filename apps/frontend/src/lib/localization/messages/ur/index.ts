@@ -13,6 +13,7 @@ import { reportsMessages } from './reports';
 import { componentsMessages } from './components';
 import { helpMessages } from './help';
 import { projectsMessages } from './projects';
+import { chatMessages } from './chat';
 
 export const urMessages = {
     ...coreMessages,
@@ -30,4 +31,5 @@ export const urMessages = {
     components: componentsMessages,
     help: helpMessages,
     projects: projectsMessages,
+    chat: chatMessages,
 } as const;

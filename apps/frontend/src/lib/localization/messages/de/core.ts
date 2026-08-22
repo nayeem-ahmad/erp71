@@ -283,6 +283,7 @@ export const coreMessages = {
             hr: "Personal",
             billing: "Abrechnung",
             accountSettings: "Verwaltung",
+            chat: "Chat",
             admin: "Plattformverwaltung",
             settings: "Einstellungen",
             help: "Hilfe",

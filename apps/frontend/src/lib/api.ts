@@ -3247,6 +3247,55 @@ export const api = {
     getNotificationUnreadCount: () => fetchWithAuth('/notifications/unread-count'),
     markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),
+
+    /* ── Team chat ─────────────────────────────────────────────────────── */
+    getChatConversations: () => fetchWithAuth('/chat/conversations'),
+    getChatConversation: (id: string) => fetchWithAuth(`/chat/conversations/${id}`),
+    createChatConversation: (body: {
+        kind: 'dm' | 'group';
+        title?: string;
+        participantIds: string[];
+    }) => fetchWithAuth('/chat/conversations', { method: 'POST', body: JSON.stringify(body) }),
+    updateChatConversation: (
+        id: string,
+        body: { title?: string; archived?: boolean; muteMinutes?: number },
+    ) => fetchWithAuth(`/chat/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    getChatMessages: (id: string, params?: { before?: string; limit?: number }) => {
+        const q = new URLSearchParams();
+        if (params?.before) q.set('before', params.before);
+        if (params?.limit) q.set('limit', String(params.limit));
+        const query = q.toString();
+        return fetchWithAuth(`/chat/conversations/${id}/messages${query ? `?${query}` : ''}`);
+    },
+    sendChatMessage: (
+        id: string,
+        body: {
+            body: string;
+            attachments?: { fileBase64: string; fileName?: string; mimeType?: string }[];
+        },
+    ) =>
+        fetchWithAuth(`/chat/conversations/${id}/messages`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        }),
+    markChatConversationRead: (id: string) =>
+        fetchWithAuth(`/chat/conversations/${id}/read`, { method: 'POST' }),
+    addChatParticipants: (id: string, participantIds: string[]) =>
+        fetchWithAuth(`/chat/conversations/${id}/participants`, {
+            method: 'POST',
+            body: JSON.stringify({ participantIds }),
+        }),
+    removeChatParticipant: (id: string, userId: string) =>
+        fetchWithAuth(`/chat/conversations/${id}/participants/${userId}`, { method: 'DELETE' }),
+    editChatMessage: (messageId: string, body: string) =>
+        fetchWithAuth(`/chat/messages/${messageId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ body }),
+        }),
+    deleteChatMessage: (messageId: string) =>
+        fetchWithAuth(`/chat/messages/${messageId}`, { method: 'DELETE' }),
+    getChatUnreadCount: () => fetchWithAuth('/chat/unread-count'),
+    getChatDirectory: () => fetchWithAuth('/chat/directory'),
     // Accounting — Mid-Size Features
     getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams & ApprovedOnlyParams) => {
         const q = new URLSearchParams();

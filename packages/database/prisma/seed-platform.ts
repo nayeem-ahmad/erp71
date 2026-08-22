@@ -341,6 +341,18 @@ export async function seedPlatformReferenceData(
     });
 
     await upsertAddon({
+        code: 'TEAM_CHAT',
+        name: 'Team Chat',
+        description:
+            'Private one-to-one and group messaging between the people in a workspace, with photo and PDF attachments. Conversations are readable only by their participants.',
+        category: 'operations',
+        monthly_price: 299,
+        yearly_price: 2990,
+        sort_order: 18,
+        features_json: { teamChat: true },
+    });
+
+    await upsertAddon({
         code: 'ADVANCED_ACCOUNTING',
         name: 'Advanced Accounting',
         description: 'Comparative P&L, budget vs actual, cash flow, and financial ratios for tenants on plans below PREMIUM.',
