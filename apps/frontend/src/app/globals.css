@@ -6,6 +6,47 @@
     html {
         -webkit-tap-highlight-color: transparent;
     }
+
+    /*
+     * Directional icons under RTL.
+     *
+     * Logical Tailwind utilities mirror boxes, not glyphs: a "next" chevron
+     * still points at the physical right in Arabic, where next is to the left.
+     * lucide-react stamps a stable `lucide-<kebab-name>` class on every icon
+     * (v0.475), so the whole family flips from one rule instead of 147
+     * call-site edits.
+     *
+     * `:where()` pins specificity at 0 so any Tailwind transform utility on the
+     * same element wins outright rather than fighting this rule and producing a
+     * half-applied transform. The six icons that carry their own transform
+     * (`group-hover:translate-x-1` hover nudges) therefore opt in explicitly
+     * with `rtl:-scale-x-100`, which composes through Tailwind's own transform
+     * variables.
+     *
+     * Only left/right glyphs are listed. Up/down chevrons, sort carets and
+     * spinners mean the same thing in both directions, and flipping them would
+     * be the mirror-image bug. `.rtl-keep` opts a single icon out — use it when
+     * the arrow describes something physical (a chart axis, a printed form)
+     * rather than reading order.
+     */
+    [dir='rtl'] :where(
+        .lucide-chevron-left,
+        .lucide-chevron-right,
+        .lucide-chevrons-left,
+        .lucide-chevrons-right,
+        .lucide-arrow-left,
+        .lucide-arrow-right,
+        .lucide-arrow-up-right,
+        .lucide-arrow-down-left,
+        .lucide-arrow-left-right,
+        .lucide-corner-down-left,
+        .lucide-move-left,
+        .lucide-move-right,
+        .lucide-log-out,
+        .lucide-reply
+    ):not(.rtl-keep) {
+        transform: scaleX(-1);
+    }
 }
 
 @layer utilities {
@@ -21,12 +62,23 @@
         bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     }
 
-    .right-safe {
-        right: max(1.25rem, env(safe-area-inset-right, 0px));
+    /* Logical, so a floating element anchored with these mirrors under RTL.
+       `env(safe-area-inset-*)` has no logical form — the notch is physical —
+       so the two physical insets are max()'d together rather than guessed. */
+    .end-safe {
+        inset-inline-end: max(
+            1.25rem,
+            env(safe-area-inset-right, 0px),
+            env(safe-area-inset-left, 0px)
+        );
     }
 
-    .left-safe {
-        left: max(1.25rem, env(safe-area-inset-left, 0px));
+    .start-safe {
+        inset-inline-start: max(
+            1.25rem,
+            env(safe-area-inset-right, 0px),
+            env(safe-area-inset-left, 0px)
+        );
     }
 
     .overflow-x-touch {

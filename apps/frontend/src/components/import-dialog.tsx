@@ -171,7 +171,7 @@ export function ImportDialog({
                 <div key={field.key} className="flex items-center gap-3">
                   <label className="text-xs font-semibold uppercase text-gray-700 w-44 shrink-0">
                     {field.label}
-                    {field.required && <span className="text-danger ml-0.5">*</span>}
+                    {field.required && <span className="text-danger ms-0.5">*</span>}
                   </label>
                   <select
                     value={mapping[field.key] ?? ''}
@@ -210,7 +210,7 @@ export function ImportDialog({
                 <thead>
                   <tr className="bg-gray-50">
                     {mappedFields.map((f) => (
-                      <th key={f.key} className="px-3 py-2 text-left font-semibold uppercase text-gray-500 whitespace-nowrap">{f.label}</th>
+                      <th key={f.key} className="px-3 py-2 text-start font-semibold uppercase text-gray-500 whitespace-nowrap">{f.label}</th>
                     ))}
                   </tr>
                 </thead>

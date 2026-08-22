@@ -283,7 +283,7 @@ export default function BranchReportPage() {
                             </h3>
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3">
-                                    <span className="w-28 shrink-0 text-sm text-gray-600 text-right">{r.store.name}</span>
+                                    <span className="w-28 shrink-0 text-sm text-gray-600 text-end">{r.store.name}</span>
                                     <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
                                         <div
                                             className="h-full bg-blue-500 rounded-lg transition-all duration-500"
@@ -295,7 +295,7 @@ export default function BranchReportPage() {
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="w-28 shrink-0 text-sm text-gray-500 text-right">{m.companyComparison.allBranches}</span>
+                                    <span className="w-28 shrink-0 text-sm text-gray-500 text-end">{m.companyComparison.allBranches}</span>
                                     <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
                                         <div className="h-full bg-gray-300 rounded-lg w-full" />
                                     </div>
@@ -323,17 +323,17 @@ export default function BranchReportPage() {
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="bg-gray-50">
-                                                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.product}</th>
-                                                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.units}</th>
-                                                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.revenue}</th>
+                                                <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.product}</th>
+                                                <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.units}</th>
+                                                <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.revenue}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {r.top_products.map((p, i) => (
                                                 <tr key={i} className="hover:bg-gray-50 transition-colors">
                                                     <td className="px-6 py-3 font-medium text-gray-800 truncate max-w-[160px]">{p.name}</td>
-                                                    <td className="px-4 py-3 text-right text-gray-600">{p.unitsSold}</td>
-                                                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatBDT(p.revenue)}</td>
+                                                    <td className="px-4 py-3 text-end text-gray-600">{p.unitsSold}</td>
+                                                    <td className="px-4 py-3 text-end font-semibold text-gray-900">{formatBDT(p.revenue)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -358,17 +358,17 @@ export default function BranchReportPage() {
                                         <table className="w-full text-sm">
                                             <thead className="sticky top-0 bg-gray-50">
                                                 <tr>
-                                                    <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.date}</th>
-                                                    <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.txns}</th>
-                                                    <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.netRevenue}</th>
+                                                    <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.date}</th>
+                                                    <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.txns}</th>
+                                                    <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.netRevenue}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {r.daily.map((row) => (
                                                     <tr key={row.date} className="hover:bg-gray-50 transition-colors">
                                                         <td className="px-6 py-2 text-gray-600">{row.date}</td>
-                                                        <td className="px-4 py-2 text-right text-gray-600">{row.transactions}</td>
-                                                        <td className="px-4 py-2 text-right font-semibold text-gray-900">{formatBDT(row.net_revenue)}</td>
+                                                        <td className="px-4 py-2 text-end text-gray-600">{row.transactions}</td>
+                                                        <td className="px-4 py-2 text-end font-semibold text-gray-900">{formatBDT(row.net_revenue)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

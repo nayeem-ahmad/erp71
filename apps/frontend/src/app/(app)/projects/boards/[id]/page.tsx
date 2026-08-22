@@ -597,7 +597,7 @@ function BoardFilterBar({
                         className="min-h-touch"
                         onClick={() => onChange(NO_FILTERS)}
                     >
-                        <X className="mr-1 h-4 w-4" />
+                        <X className="me-1 h-4 w-4" />
                         {f.clear}
                     </Button>
                 </>
@@ -667,7 +667,7 @@ function TaskCard({
             }}
             // pan-y keeps the column scrollable by finger; the grip below opts
             // out of that so a touch drag can start there.
-            className={`touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-left text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+            className={`touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-start text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 dragging ? 'opacity-40' : ''
             }`}
         >
@@ -683,7 +683,7 @@ function TaskCard({
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
-                    className="-ml-1 min-h-touch touch-none px-1 text-gray-300 hover:text-gray-500"
+                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 hover:text-gray-500"
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
@@ -717,7 +717,7 @@ function TaskCard({
                         e.stopPropagation();
                         onRemove();
                     }}
-                    className="min-h-touch min-w-touch -mr-1 rounded px-1 text-gray-300 hover:text-red-600"
+                    className="min-h-touch min-w-touch -me-1 rounded px-1 text-gray-300 hover:text-red-600"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -790,12 +790,12 @@ function TaskCard({
                     <span
                         title={assigneeName}
                         aria-label={assigneeName}
-                        className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-medium text-blue-700"
+                        className="ms-auto inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-medium text-blue-700"
                     >
                         {initialsOf(assigneeName)}
                     </span>
                 ) : (
-                    <span className="ml-auto text-gray-400">{c.unassigned}</span>
+                    <span className="ms-auto text-gray-400">{c.unassigned}</span>
                 )}
             </div>
             </div>

@@ -302,8 +302,8 @@ export default function SchedulesPage() {
                             <table className="w-full text-sm">
                                 <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                                     <tr>
-                                        <th className="p-2 text-left font-medium">{copy.holidays.date}</th>
-                                        <th className="p-2 text-left font-medium">{copy.holidays.name}</th>
+                                        <th className="p-2 text-start font-medium">{copy.holidays.date}</th>
+                                        <th className="p-2 text-start font-medium">{copy.holidays.name}</th>
                                         <th className="p-2" />
                                     </tr>
                                 </thead>
@@ -312,7 +312,7 @@ export default function SchedulesPage() {
                                         <tr key={holiday.id} className="border-b border-gray-100 last:border-0">
                                             <td className="p-2">{formatDate(holiday.date)}</td>
                                             <td className="p-2 font-medium text-gray-900">{holiday.name}</td>
-                                            <td className="p-2 text-right">
+                                            <td className="p-2 text-end">
                                                 <div className="flex justify-end gap-1">
                                                     <Button variant="ghost" onClick={() => openHoliday(holiday)} aria-label={copy.holidays.editTitle}>
                                                         <Pencil className="h-4 w-4" />

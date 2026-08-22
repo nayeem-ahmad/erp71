@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
-import { Inter, Noto_Sans_Bengali } from 'next/font/google';
+import { Inter, Noto_Sans_Arabic, Noto_Sans_Bengali } from 'next/font/google';
 
 import './globals.css';
 import { siteOrigin } from '../lib/blog/api';
@@ -17,6 +17,26 @@ const notoSansBengali = Noto_Sans_Bengali({
     subsets: ['bengali'],
     weight: ['400', '500', '600', '700'],
     variable: '--font-bengali',
+});
+
+/*
+ * Arabic script, covering both `ar` and `ur` — Inter has no Arabic glyphs at
+ * all, so without this every Urdu and Arabic screen falls through to whatever
+ * the OS happens to ship.
+ *
+ * Naskh rather than Nastaliq, which is a real tradeoff and not an oversight:
+ * Urdu readers expect Nastaliq (`Noto Nastaliq Urdu`), but its cascading
+ * baseline needs roughly double the line-height, and this UI is deliberately
+ * compact (`text-sm`/`text-xs` body, dense tables). Shipping Nastaliq without
+ * first re-tuning row heights would break every table in Urdu; shipping Naskh
+ * renders correct, readable Urdu in a typeface that is not the preferred one.
+ * The Nastaliq pass is tracked as a follow-up and wants a designer looking at
+ * real tables, not a font swap.
+ */
+const notoSansArabic = Noto_Sans_Arabic({
+    subsets: ['arabic'],
+    weight: ['400', '500', '600', '700'],
+    variable: '--font-arabic',
 });
 
 export const viewport: Viewport = {
@@ -66,7 +86,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
     return (
         <html lang={localeInfo.htmlLang} dir={localeInfo.dir} suppressHydrationWarning>
-            <body className={`${inter.variable} ${notoSansBengali.variable}`}>
+            <body className={`${inter.variable} ${notoSansBengali.variable} ${notoSansArabic.variable}`}>
                 <I18nProvider initialLocale={initialLocale}>{children}</I18nProvider>
             </body>
         </html>

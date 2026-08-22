@@ -31,7 +31,7 @@ export default function AppHeaderMobileMenu() {
             </button>
 
             {open ? (
-                <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
+                <div className="absolute end-0 top-full z-50 mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
                     <div className="space-y-4">
                         {voice ? (
                             <div>

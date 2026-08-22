@@ -171,24 +171,24 @@ function ReturnDetailPageContent() {
                 {/* Edit Mode Banner */}
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
                                 Edit Mode — Modify item quantities and reason
                             </span>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
                                 disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 <span>{saving ? t.returns.detail.saving : t.returns.detail.saveChanges}</span>
                             </button>
                             <button
                                 onClick={() => router.push(`/sales/returns/${ret.id}`)}
-                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1"
+                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1 rtl:space-x-reverse"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 <span>{t.common.cancel}</span>
@@ -212,14 +212,14 @@ function ReturnDetailPageContent() {
                             <>
                                 <button
                                     onClick={() => router.push(`/sales/returns/${ret.id}?edit=true`)}
-                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all"
+                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                 >
                                     <Pencil className="w-4 h-4" />
                                     <span>{t.returns.detail.edit}</span>
                                 </button>
                                 <button
                                     onClick={handlePrint}
-                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
+                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.returns.detail.printPreview}</span>
@@ -308,7 +308,7 @@ function ReturnDetailPageContent() {
 
                 {/* {t.returns.detail.returnedItems} Section */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
+                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3 rtl:space-x-reverse">
                         <div className="p-2 bg-danger-light rounded-xl text-danger">
                             <Package className="w-5 h-5" />
                         </div>
@@ -326,11 +326,11 @@ function ReturnDetailPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                            <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-20">{t.shared.max}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.unitPrice}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.refund}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.unitPrice}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.refund}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -353,10 +353,10 @@ function ReturnDetailPageContent() {
                                                 <td className="py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
                                                     {item.maxQuantity}
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-bold text-gray-500">
+                                                <td className="py-3 text-end text-sm font-bold text-gray-500">
                                                     {formatBDT(item.priceAtSale, { locale })}
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-bold text-danger">
+                                                <td className="py-3 text-end text-sm font-bold text-danger">
                                                     {formatBDT(item.quantity * item.priceAtSale, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -372,8 +372,8 @@ function ReturnDetailPageContent() {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
-                                            <td colSpan={4} className="pt-3 text-right text-sm font-semibold">{t.returns.detail.totalRefund}</td>
-                                            <td className="pt-3 text-right text-xl font-bold text-danger">{formatBDT(editTotal, { locale })}</td>
+                                            <td colSpan={4} className="pt-3 text-end text-sm font-semibold">{t.returns.detail.totalRefund}</td>
+                                            <td className="pt-3 text-end text-xl font-bold text-danger">{formatBDT(editTotal, { locale })}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -384,16 +384,16 @@ function ReturnDetailPageContent() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                    <th className="text-start p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
                                     <th className="text-center p-4 text-xs font-medium text-gray-500">{t.returns.detail.qtyReturned}</th>
-                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.refundAmount}</th>
+                                    <th className="text-end p-4 text-xs font-medium text-gray-500">{t.shared.columns.refundAmount}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {ret.items?.map((item: any) => (
                                     <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="p-4">
-                                            <div className="flex items-center space-x-3">
+                                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                                 <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center">
                                                     <Package className="w-4 h-4 text-gray-200" />
                                                 </div>
@@ -401,14 +401,14 @@ function ReturnDetailPageContent() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-center text-sm font-bold">{item.quantity}</td>
-                                        <td className="p-4 text-right text-sm font-bold text-danger">{formatBDT(parseFloat(item.refund_amount), { locale })}</td>
+                                        <td className="p-4 text-end text-sm font-bold text-danger">{formatBDT(parseFloat(item.refund_amount), { locale })}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
-                                    <td colSpan={2} className="p-4 text-right text-sm font-semibold">{t.returns.detail.totalRefund}</td>
-                                    <td className="p-4 text-right text-xl font-bold text-danger">{formatBDT(parseFloat(ret.total_refund), { locale })}</td>
+                                    <td colSpan={2} className="p-4 text-end text-sm font-semibold">{t.returns.detail.totalRefund}</td>
+                                    <td className="p-4 text-end text-xl font-bold text-danger">{formatBDT(parseFloat(ret.total_refund), { locale })}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -417,7 +417,7 @@ function ReturnDetailPageContent() {
 
                 {/* Reason Section */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
+                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3 rtl:space-x-reverse">
                         <div className="p-2 bg-amber-50 rounded-xl text-amber-600">
                             <FileText className="w-5 h-5" />
                         </div>
@@ -442,7 +442,7 @@ function ReturnDetailPageContent() {
 
                 {/* Bottom Save Bar in edit mode */}
                 {isEditMode && (
-                    <div className="flex justify-end space-x-3 pb-6">
+                    <div className="flex justify-end space-x-3 rtl:space-x-reverse pb-6">
                         <button
                             onClick={() => router.push(`/sales/returns/${ret.id}`)}
                             className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-all"
@@ -452,7 +452,7 @@ function ReturnDetailPageContent() {
                         <button
                             onClick={handleSave}
                             disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0}
-                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />
                             <span>{saving ? t.returns.detail.saving : t.returns.detail.saveChanges}</span>

@@ -173,7 +173,7 @@ export function VoucherAttachments({
                                 <button
                                     type="button"
                                     onClick={() => setPreviewAttachment(attachment)}
-                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-start"
                                     aria-label={`${previewLabel} ${attachment.fileName}`}
                                 >
                                     {kind === 'image' ? (

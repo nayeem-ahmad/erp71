@@ -431,7 +431,7 @@ function CustomerPaymentsContent() {
 
                 {loading ? (
                     <div className="flex items-center justify-center py-20 text-gray-400">
-                        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                        <Loader2 className="w-6 h-6 animate-spin me-2" />
                         {copy.loading}
                     </div>
                 ) : (
@@ -564,7 +564,7 @@ function CustomerPaymentsContent() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.customer}</span>
-                                <span className="font-bold text-right">
+                                <span className="font-bold text-end">
                                     {viewPayment.customer?.name}
                                     <span className="block text-xs text-gray-400 font-normal">{viewPayment.customer?.phone}</span>
                                 </span>

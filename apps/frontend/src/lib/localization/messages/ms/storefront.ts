@@ -266,8 +266,7 @@ export const storefrontMessages = {
                 sortBy: "Susun mengikut",
                 noProducts: "Tiada produk dijumpai",
                 noFilteredProducts: "Tiada produk sepadan dengan penapis semasa.",
-                showingProducts: "Menunjukkan {count} produk",
-                showingProductsPlural: "Menunjukkan {count} produk",
+                showingProducts: "{count, plural, one {Menunjukkan # produk} other {Menunjukkan # produk}}",
                 sort: {
                     newest: "Terbaharu",
                     priceAsc: "Harga: Rendah ke Tinggi",

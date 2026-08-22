@@ -26,7 +26,7 @@ const typeIcons: Record<string, string> = {
 };
 
 export default function CustomerProfile() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const { id } = useParams();
     const [customer, setCustomer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -165,7 +165,7 @@ export default function CustomerProfile() {
             />
 
             {/* Profile Header */}
-            <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 flex items-start space-x-6">
+            <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 flex items-start space-x-6 rtl:space-x-reverse">
                 <div className="w-20 h-20 bg-blue-600 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-3xl uppercase overflow-hidden">
                     {customer.profile_pic_url
                         ? <img src={customer.profile_pic_url} alt={customer.name} className="w-full h-full object-cover" />
@@ -185,18 +185,18 @@ export default function CustomerProfile() {
                         )}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
-                        {customer.owner_name && <div className="flex items-center text-sm text-gray-600 font-medium"><UserCog className="w-4 h-4 mr-2 text-gray-400" /> {customer.owner_name}</div>}
-                        {customer.phone && <div className="flex items-center text-sm text-gray-600 font-medium"><Phone className="w-4 h-4 mr-2 text-gray-400" /> {customer.phone}</div>}
-                        {customer.email && <div className="flex items-center text-sm text-gray-600 font-medium"><Mail className="w-4 h-4 mr-2 text-gray-400" /> {customer.email}</div>}
-                        {customer.address && <div className="flex items-center text-sm text-gray-600 font-medium"><MapPin className="w-4 h-4 mr-2 text-gray-400" /> {customer.address}</div>}
+                        {customer.owner_name && <div className="flex items-center text-sm text-gray-600 font-medium"><UserCog className="w-4 h-4 me-2 text-gray-400" /> {customer.owner_name}</div>}
+                        {customer.phone && <div className="flex items-center text-sm text-gray-600 font-medium"><Phone className="w-4 h-4 me-2 text-gray-400" /> {customer.phone}</div>}
+                        {customer.email && <div className="flex items-center text-sm text-gray-600 font-medium"><Mail className="w-4 h-4 me-2 text-gray-400" /> {customer.email}</div>}
+                        {customer.address && <div className="flex items-center text-sm text-gray-600 font-medium"><MapPin className="w-4 h-4 me-2 text-gray-400" /> {customer.address}</div>}
                     </div>
                 </div>
-                <div className="text-right shrink-0 space-y-2">
+                <div className="text-end shrink-0 space-y-2">
                     <div>
                         <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.profile.lifetimeValue}</p>
                         <p className="text-4xl font-bold text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
                         {history && (
-                            <p className="text-xs text-gray-400 font-bold mt-1">{formatMessage(history.total !== 1 ? t.customers.profile.transactionsPlural : t.customers.profile.transactions, { count: history.total })}</p>
+                            <p className="text-xs text-gray-400 font-bold mt-1">{fmt(t.customers.profile.transactions, { count: history.total })}</p>
                         )}
                     </div>
                     {Number(customer.due_balance) > 0 && (
@@ -264,7 +264,7 @@ export default function CustomerProfile() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="text-end">
                                                     <p className="font-bold">{formatBDT(Number(sale.amount_paid))}</p>
                                                     <p className={`text-[10px] font-semibold ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
                                                 </div>
@@ -422,11 +422,11 @@ export default function CustomerProfile() {
                                         <table className="w-full text-sm">
                                             <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                 <tr>
-                                                    <th className="text-left px-4 py-3">{t.customers.profile.creditColumns.date}</th>
-                                                    <th className="text-left px-4 py-3">{t.customers.profile.creditColumns.type}</th>
-                                                    <th className="text-right px-4 py-3">{t.customers.profile.creditColumns.amount}</th>
-                                                    <th className="text-right px-4 py-3">{t.customers.profile.balanceAfter}</th>
-                                                    <th className="text-left px-4 py-3">{t.customers.profile.creditColumns.notes}</th>
+                                                    <th className="text-start px-4 py-3">{t.customers.profile.creditColumns.date}</th>
+                                                    <th className="text-start px-4 py-3">{t.customers.profile.creditColumns.type}</th>
+                                                    <th className="text-end px-4 py-3">{t.customers.profile.creditColumns.amount}</th>
+                                                    <th className="text-end px-4 py-3">{t.customers.profile.balanceAfter}</th>
+                                                    <th className="text-start px-4 py-3">{t.customers.profile.creditColumns.notes}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -440,10 +440,10 @@ export default function CustomerProfile() {
                                                                 'bg-gray-100 text-gray-600'
                                                             }`}>{tx.type}</span>
                                                         </td>
-                                                        <td className={`px-4 py-3 text-right font-bold ${tx.type === 'PAYMENT' ? 'text-emerald-600' : 'text-danger'}`}>
+                                                        <td className={`px-4 py-3 text-end font-bold ${tx.type === 'PAYMENT' ? 'text-emerald-600' : 'text-danger'}`}>
                                                             {tx.type === 'PAYMENT' ? '-' : '+'}{formatBDT(Number(tx.amount))}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right text-gray-700 font-medium">{formatBDT(Number(tx.balance_after))}</td>
+                                                        <td className="px-4 py-3 text-end text-gray-700 font-medium">{formatBDT(Number(tx.balance_after))}</td>
                                                         <td className="px-4 py-3 text-gray-400">{tx.notes ?? '—'}</td>
                                                     </tr>
                                                 ))}
@@ -468,7 +468,7 @@ export default function CustomerProfile() {
 
 function InfoCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
     return (
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100 flex items-center space-x-4 rtl:space-x-reverse">
             <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">{icon}</div>
             <div>
                 <p className="text-gray-500 font-bold text-[10px] uppercase tracking-widest">{label}</p>

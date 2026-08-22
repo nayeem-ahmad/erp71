@@ -114,7 +114,7 @@ function RolesPanel({
 }: {
     onToast: (t: ToastState) => void;
 }) {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const tr = t.teamManagement.roles;
     const [roles, setRoles] = useState<TenantRoleSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -234,15 +234,9 @@ function RolesPanel({
         }
     };
 
-    const formatPermCount = (count: number) =>
-        count === 1
-            ? formatMessage(tr.permissionCount, { count })
-            : formatMessage(tr.permissionCountPlural, { count });
+    const formatPermCount = (count: number) => fmt(tr.permissionCount, { count });
 
-    const formatMemberCount = (count: number) =>
-        count === 1
-            ? formatMessage(tr.memberCount, { count })
-            : formatMessage(tr.memberCountPlural, { count });
+    const formatMemberCount = (count: number) => fmt(tr.memberCount, { count });
 
     return (
         <div className="space-y-4">
@@ -284,7 +278,7 @@ function RolesPanel({
 
             {loading ? (
                 <div className="rounded-lg border border-gray-200 bg-white p-8 flex items-center justify-center text-sm text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t.teamManagement.loading}
+                    <Loader2 className="w-4 h-4 animate-spin me-2" /> {t.teamManagement.loading}
                 </div>
             ) : roles.length === 0 ? (
                 <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">{tr.noRoles}</div>
@@ -372,7 +366,7 @@ function MemberPanel({
     onChanged: () => void;
     onClose: () => void;
 }) {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const tm = t.teamManagement.member;
     const [detail, setDetail] = useState<MemberDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -605,9 +599,7 @@ function MemberPanel({
                                             </div>
                                             <div className="flex items-center justify-end gap-3 pt-1 border-t border-gray-100">
                                                 <span className="text-xs text-gray-400">
-                                                    {draft.size === 1
-                                                        ? formatMessage(tm.permissionsSelected, { count: draft.size })
-                                                        : formatMessage(tm.permissionsSelectedPlural, { count: draft.size })}
+                                                    {fmt(tm.permissionsSelected, { count: draft.size })}
                                                 </span>
                                                 <button
                                                     onClick={() => savePerms(s.storeId, s.storeName)}
@@ -640,7 +632,7 @@ function MemberPanel({
 /* -------------------------------- Page -------------------------------- */
 
 export default function TeamPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const tm = t.teamManagement;
     const [activeTab, setActiveTab] = useState<TeamTab>('members');
     const [isOwner, setIsOwner] = useState(false);
@@ -828,7 +820,7 @@ export default function TeamPage() {
                                 </div>
                                 {loading ? (
                                     <div className="p-8 flex items-center justify-center text-sm text-gray-400">
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" /> {tm.loading}
+                                        <Loader2 className="w-4 h-4 animate-spin me-2" /> {tm.loading}
                                     </div>
                                 ) : members.length === 0 ? (
                                     <div className="p-8 text-center text-sm text-gray-400">{tm.noMembers}</div>
@@ -838,16 +830,14 @@ export default function TeamPage() {
                                             <button
                                                 key={m.userId}
                                                 onClick={() => setSelected(m.userId)}
-                                                className={`w-full px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-gray-50 transition ${selected === m.userId ? 'bg-blue-50/60' : ''}`}
+                                                className={`w-full px-5 py-3.5 flex items-center justify-between gap-3 text-start hover:bg-gray-50 transition ${selected === m.userId ? 'bg-blue-50/60' : ''}`}
                                             >
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-bold text-gray-900 truncate">{m.name || m.email}</p>
                                                     <p className="text-xs text-gray-500 truncate">
                                                         {m.isOwner
                                                             ? tm.allBranches
-                                                            : m.stores.length === 1
-                                                                ? formatMessage(tm.branchCount, { count: m.stores.length })
-                                                                : formatMessage(tm.branchCountPlural, { count: m.stores.length })}
+                                                            : fmt(tm.branchCount, { count: m.stores.length })}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">

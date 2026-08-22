@@ -324,12 +324,12 @@ export default function ContactsPage() {
 
             <div className="flex flex-wrap gap-3 items-center">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder={m.searchPlaceholder}
-                        className="pl-9"
+                        className="ps-9"
                     />
                 </div>
                 <Select

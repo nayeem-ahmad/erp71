@@ -336,7 +336,7 @@ export default function StorefrontPage() {
 
             {orderSuccess && (
                 <div className="max-w-7xl mx-auto mt-6 px-4 sm:px-6 lg:px-8">
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start space-x-3">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start space-x-3 rtl:space-x-reverse">
                         <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-green-800">{m.orderSuccess}</p>
@@ -410,7 +410,7 @@ export default function StorefrontPage() {
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                        <div className="absolute bottom-6 left-6 right-6">
+                                        <div className="absolute bottom-6 start-6 end-6">
                                             <h3 className="text-2xl font-bold text-white mb-1">{category.name}</h3>
                                             <p className="text-gray-300 font-medium">{formatMessage(home.productCount, { count: category.count })}</p>
                                         </div>
@@ -444,7 +444,7 @@ export default function StorefrontPage() {
                                         <article key={product.id} className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
                                             <div className="relative aspect-[4/5] bg-gray-100 overflow-hidden">
                                                 {onSale && (
-                                                    <div className="absolute top-4 left-4 z-10 bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full tracking-wide shadow-sm">
+                                                    <div className="absolute top-4 start-4 z-10 bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full tracking-wide shadow-sm">
                                                         {m.sale}
                                                     </div>
                                                 )}
@@ -461,7 +461,7 @@ export default function StorefrontPage() {
                                                     </div>
                                                 )}
 
-                                                <div className="absolute bottom-4 left-4 right-4 translate-y-0 opacity-100 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300">
+                                                <div className="absolute bottom-4 start-4 end-4 translate-y-0 opacity-100 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300">
                                                     <button
                                                         type="button"
                                                         onClick={() => addToCart(product)}
@@ -534,7 +534,7 @@ export default function StorefrontPage() {
                         </div>
                     </div>
 
-                    <div className="pt-8 border-t border-gray-800 text-center md:text-left flex flex-col md:flex-row justify-between items-center text-gray-400 text-sm">
+                    <div className="pt-8 border-t border-gray-800 text-center md:text-start flex flex-col md:flex-row justify-between items-center text-gray-400 text-sm">
                         <p>{formatMessage(footer.allRightsReserved, { year: new Date().getFullYear(), name: data.tenant.name })}</p>
                         <p className="mt-4 md:mt-0">{formatMessage(footer.poweredBy, { brand: 'StoreCraft' })}</p>
                     </div>
@@ -551,7 +551,7 @@ export default function StorefrontPage() {
                     />
                     <aside className="relative w-full max-w-md bg-white h-full flex flex-col shadow-2xl">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-bold flex items-center space-x-2">
+                            <h2 className="text-xl font-bold flex items-center space-x-2 rtl:space-x-reverse">
                                 <ShoppingCart className="w-5 h-5" />
                                 <span>{formatMessage(m.yourCart, { count: cartCount })}</span>
                             </h2>
@@ -576,7 +576,7 @@ export default function StorefrontPage() {
                             ) : (
                                 <ul className="space-y-6">
                                     {cart.map((item) => (
-                                        <li key={item.product.id} className="flex space-x-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                        <li key={item.product.id} className="flex space-x-4 rtl:space-x-reverse bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                                             {item.product.image_url ? (
                                                 <img src={item.product.image_url} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50" />
                                             ) : (
@@ -586,13 +586,13 @@ export default function StorefrontPage() {
                                             )}
                                             <div className="flex-1 flex flex-col">
                                                 <div className="flex justify-between items-start">
-                                                    <h3 className="font-semibold text-gray-900 leading-tight pr-4">{item.product.name}</h3>
+                                                    <h3 className="font-semibold text-gray-900 leading-tight pe-4">{item.product.name}</h3>
                                                     <button type="button" onClick={() => removeFromCart(item.product.id)} className="text-gray-400 hover:text-red-500 transition-colors">
                                                         <X className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                                 <p className="text-sm font-bold text-gray-900 mt-1">{formatBDT(toNumber(item.product.selling_price))}</p>
-                                                <div className="mt-auto pt-3 flex items-center space-x-3">
+                                                <div className="mt-auto pt-3 flex items-center space-x-3 rtl:space-x-reverse">
                                                     <button
                                                         type="button"
                                                         onClick={() => updateQty(item.product.id, -1)}
@@ -663,7 +663,7 @@ export default function StorefrontPage() {
                                     <div className="space-y-2">
                                         {cart.map((item) => (
                                             <div key={item.product.id} className="flex justify-between text-sm text-gray-700 gap-4">
-                                                <span className="flex-1 pr-4 truncate">
+                                                <span className="flex-1 pe-4 truncate">
                                                     {item.quantity} × {item.product.name}
                                                 </span>
                                                 <span className="font-semibold whitespace-nowrap">
@@ -768,7 +768,7 @@ export default function StorefrontPage() {
 
                         <div className="p-6 border-t border-gray-100 bg-white">
                             {orderError && (
-                                <p className="text-red-600 text-sm bg-red-50 rounded-lg px-4 py-3 mb-4 flex items-center space-x-2">
+                                <p className="text-red-600 text-sm bg-red-50 rounded-lg px-4 py-3 mb-4 flex items-center space-x-2 rtl:space-x-reverse">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                     <span>{orderError}</span>
                                 </p>

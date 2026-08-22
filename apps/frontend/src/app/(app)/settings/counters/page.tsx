@@ -155,9 +155,9 @@ export default function CountersPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100 bg-gray-50">
-                                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.number}</th>
-                                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.name}</th>
-                                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.status}</th>
+                                    <th className="text-start px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.number}</th>
+                                    <th className="text-start px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.name}</th>
+                                    <th className="text-start px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{m.columns.status}</th>
                                     <th className="px-5 py-3" />
                                 </tr>
                             </thead>

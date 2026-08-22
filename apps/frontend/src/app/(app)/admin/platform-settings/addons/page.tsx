@@ -259,7 +259,7 @@ export default function PlatformAddonModulesPage() {
 
                 {loading ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        <Loader2 className="w-5 h-5 animate-spin me-2" />
                         {c.loading}
                     </div>
                 ) : (
@@ -268,7 +268,7 @@ export default function PlatformAddonModulesPage() {
                             <button
                                 type="button"
                                 onClick={() => setSelectedId(NEW_ADDON_ID)}
-                                className={`w-full flex items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-bold transition-colors ${
+                                className={`w-full flex items-center gap-2 rounded-xl px-3 py-3 text-start text-sm font-bold transition-colors ${
                                     isCreating ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50 text-blue-600'
                                 }`}
                             >
@@ -281,7 +281,7 @@ export default function PlatformAddonModulesPage() {
                                         key={addon.id}
                                         type="button"
                                         onClick={() => setSelectedId(addon.id)}
-                                        className={`w-full rounded-xl px-3 py-3 text-left transition-colors ${
+                                        className={`w-full rounded-xl px-3 py-3 text-start transition-colors ${
                                             active ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50 text-gray-700'
                                         }`}
                                     >

@@ -286,7 +286,7 @@ describe('resolveDraftLocales', () => {
     // A duplicate would be a second full round-trip that overwrites the first
     // with a paraphrase of itself.
     it('drops duplicates and anything it cannot write', () => {
-        expect(resolveDraftLocales({ locales: ['en', 'EN', ' en ', 'fr'] })).toEqual(['en']);
+        expect(resolveDraftLocales({ locales: ['en', 'EN', ' en ', 'zz'] })).toEqual(['en']);
     });
 });
 
@@ -303,7 +303,7 @@ describe('resolveTranslationTargets', () => {
 
     it('rejects a request with nothing left to translate into', () => {
         expect(() => resolveTranslationTargets('en', ['en'])).toThrow(BadRequestException);
-        expect(() => resolveTranslationTargets('en', ['fr'])).toThrow(BadRequestException);
+        expect(() => resolveTranslationTargets('en', ['zz'])).toThrow(BadRequestException);
     });
 });
 

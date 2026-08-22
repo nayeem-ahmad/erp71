@@ -272,12 +272,12 @@ export default function DiscountCodesPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100 bg-gray-50">
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.code}</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.discount}</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.conditions}</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.usage}</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.validity}</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.status}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.code}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.discount}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.conditions}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.usage}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.validity}</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{m.table.status}</th>
                                 <th className="px-4 py-3"></th>
                             </tr>
                         </thead>

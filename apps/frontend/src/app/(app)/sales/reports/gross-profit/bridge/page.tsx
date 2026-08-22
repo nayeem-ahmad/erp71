@@ -138,7 +138,7 @@ export default function MarginBridgePage() {
 
             <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{gp.currentPeriod}</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{gp.currentPeriod}</label>
                     <div className="flex gap-2">
                         <input
                             type="date"
@@ -155,7 +155,7 @@ export default function MarginBridgePage() {
                     </div>
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{gp.comparedWith}</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{gp.comparedWith}</label>
                     <div className="flex gap-2">
                         <input
                             type="date"

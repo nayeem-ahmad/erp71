@@ -97,7 +97,7 @@ export default function DocumentEntryLayout({
                 </div>
 
                 {/* Right panel: totals, payment, actions */}
-                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col lg:overflow-hidden">
+                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-s bg-white flex flex-col lg:overflow-hidden">
                     <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-3">
                         {panel}
                     </div>

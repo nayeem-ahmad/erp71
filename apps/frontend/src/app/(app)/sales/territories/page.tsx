@@ -119,7 +119,7 @@ export default function TerritoriesPage() {
                     const depth = depthById[territory.id] || 0;
                     return (
                         <div className="flex items-center" style={{ paddingLeft: `${depth * 16}px` }}>
-                            <div className="mr-3 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                            <div className="me-3 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                                 <MapPin className="w-4 h-4" />
                             </div>
                             <div>
@@ -172,7 +172,7 @@ export default function TerritoriesPage() {
                 cell: (info) => {
                     const territory = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1">
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <button
                                 onClick={() => openEdit(territory)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -216,11 +216,11 @@ export default function TerritoriesPage() {
                                 onClick={() => setImportOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import
                             </button>
                             <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-sm transition-all">
-                                <Plus className="w-4 h-4 mr-2" /> {t.territories.newTerritory}
+                                <Plus className="w-4 h-4 me-2" /> {t.territories.newTerritory}
                             </button>
                         </>
                     }

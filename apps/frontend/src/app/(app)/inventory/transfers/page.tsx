@@ -227,28 +227,28 @@ export default function InventoryTransfersPage() {
                     {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
                     <div className="grid md:grid-cols-4 gap-4">
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryTransfers.sourceWarehouse}</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.sourceWarehouse}</label>
                             <select required value={form.sourceWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, sourceWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                 <option value="">{t.inventoryTransfers.selectSource}</option>
                                 {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryTransfers.destinationWarehouse}</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.destinationWarehouse}</label>
                             <select required value={form.destinationWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, destinationWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                 <option value="">{t.inventoryTransfers.selectDestination}</option>
                                 {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryTransfers.initialStatus}</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.initialStatus}</label>
                             <select value={form.status} onChange={(e) => setForm((current: any) => ({ ...current, status: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                 <option value="SENT">{t.inventoryTransfers.sendNow}</option>
                                 <option value="DRAFT">{t.inventoryTransfers.saveAsDraft}</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.common.notes}</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.notes}</label>
                             <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.common.optional} />
                         </div>
                     </div>
@@ -257,14 +257,14 @@ export default function InventoryTransfersPage() {
                         {form.items.map((item: any, index: number) => (
                             <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.common.product}</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.product}</label>
                                     <select required value={item.productId} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                         <option value="">{t.inventoryTransfers.selectProduct}</option>
                                         {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.common.quantity}</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>
                                     <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
                                 </div>
                                 <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">
@@ -276,10 +276,10 @@ export default function InventoryTransfersPage() {
 
                     <div className="flex items-center justify-between">
                         <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <Plus className="w-4 h-4 mr-2" /> {t.inventoryTransfers.addLine}
+                            <Plus className="w-4 h-4 me-2" /> {t.inventoryTransfers.addLine}
                         </button>
                         <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
-                            <ArrowRightLeft className="w-4 h-4 mr-2" /> {t.inventoryTransfers.createTransfer}
+                            <ArrowRightLeft className="w-4 h-4 me-2" /> {t.inventoryTransfers.createTransfer}
                         </button>
                     </div>
                 </form>

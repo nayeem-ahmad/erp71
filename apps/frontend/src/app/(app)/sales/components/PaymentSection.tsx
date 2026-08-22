@@ -164,7 +164,7 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
         <div key={m.key} className="flex items-center gap-2">
             <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={m.name}>
                 {m.name}
-                {m.inactive ? <span className="text-gray-400 font-normal text-xs ml-1">(inactive)</span> : null}
+                {m.inactive ? <span className="text-gray-400 font-normal text-xs ms-1">(inactive)</span> : null}
             </span>
             <input
                 type="number"
@@ -174,7 +174,7 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
                 onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
                 placeholder="0.00"
                 aria-label={`${m.name} amount`}
-                className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-right"
+                className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
             />
         </div>
     );

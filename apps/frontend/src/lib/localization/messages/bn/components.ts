@@ -132,12 +132,12 @@ export const componentsMessages = {
                 inventory: "ইনভেন্টরি",
             },
             examples: {
-                "sales-entry": "sales entry",
+                "sales-entry": "সেলস এন্ট্রি",
                 pos: "pos",
-                "customer-payment": "customer payment",
-                "expense-entry": "expense entry",
-                "purchase-entry": "purchase entry",
-                "voucher-entry": "voucher entry",
+                "customer-payment": "গ্রাহক পেমেন্ট",
+                "expense-entry": "ব্যয় এন্ট্রি",
+                "purchase-entry": "ক্রয় এন্ট্রি",
+                "voucher-entry": "ভাউচার এন্ট্রি",
             },
         },
             aiChatWidget: {

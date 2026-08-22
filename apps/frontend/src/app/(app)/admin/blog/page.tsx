@@ -117,18 +117,18 @@ export default function AdminBlogPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{m.columns.title}</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{m.columns.status}</th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{m.columns.title}</th>
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{m.columns.status}</th>
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.columns.audience}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 lg:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 lg:table-cell">
                                     {m.columns.category}
                                 </th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 lg:table-cell">
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 lg:table-cell">
                                     {m.columns.published}
                                 </th>
-                                <th className="hidden px-3 py-2 text-right text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="hidden px-3 py-2 text-end text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.columns.views}
                                 </th>
                             </tr>
@@ -174,7 +174,7 @@ export default function AdminBlogPage() {
                                         <td className="hidden px-3 py-2 text-xs text-gray-600 lg:table-cell">
                                             {formatDate(row.published_at ?? row.scheduled_for)}
                                         </td>
-                                        <td className="hidden px-3 py-2 text-right text-xs text-gray-600 md:table-cell">
+                                        <td className="hidden px-3 py-2 text-end text-xs text-gray-600 md:table-cell">
                                             {row.view_count}
                                         </td>
                                     </tr>

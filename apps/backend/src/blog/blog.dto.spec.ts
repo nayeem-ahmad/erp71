@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { BlogAiDraftDto, BlogAiTranslateDto } from './blog.dto';
+import { BlogAiDraftDto, BlogAiTranslateDto, BLOG_LOCALES } from './blog.dto';
 
 const errorsFor = <T extends object>(cls: new () => T, payload: Record<string, unknown>) =>
     validateSync(plainToInstance(cls, payload) as object).map((e) => e.property);
@@ -27,8 +27,18 @@ describe('BlogAiDraftDto validation', () => {
         expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock' })).toEqual([]);
     });
 
+    /**
+     * `zz` rather than a real language tag on purpose. This assertion used to
+     * pass `fr`, which stopped testing anything the day French shipped — the
+     * DTO started (correctly) accepting it, and the test failed for a reason
+     * that had nothing to do with the DTO. `zz` is unassigned in ISO 639-1, so
+     * it cannot become a supported locale; the first expectation guards the
+     * fixture itself, so if it somehow ever does, this fails loudly instead of
+     * passing vacuously.
+     */
     it('rejects a locale outside the supported set', () => {
-        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locale: 'fr' })).toEqual(['locale']);
+        expect(BLOG_LOCALES as readonly string[]).not.toContain('zz');
+        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locale: 'zz' })).toEqual(['locale']);
     });
 
     it('accepts several locales', () => {
@@ -36,15 +46,16 @@ describe('BlogAiDraftDto validation', () => {
     });
 
     it('rejects an unsupported locale inside the list', () => {
-        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locales: ['en', 'fr'] })).toEqual(['locales']);
+        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locales: ['en', 'zz'] })).toEqual(['locales']);
     });
 
     // Each extra language is another model round-trip, so the list cannot be
-    // longer than the set of languages that exist.
+    // longer than the set of languages that exist. Derived from BLOG_LOCALES
+    // rather than hardcoded: a fixed four-item list stopped exceeding the cap
+    // the moment a fourth language shipped.
     it('rejects more locales than there are languages', () => {
-        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locales: ['en', 'bn', 'ms', 'en'] })).toEqual([
-            'locales',
-        ]);
+        const tooMany = [...BLOG_LOCALES, 'en'];
+        expect(errorsFor(BlogAiDraftDto, { prompt: 'dead stock', locales: tooMany })).toEqual(['locales']);
     });
 });
 
@@ -77,8 +88,8 @@ describe('BlogAiTranslateDto validation', () => {
     });
 
     it('rejects an unsupported language on either side', () => {
-        expect(errorsFor(BlogAiTranslateDto, { ...valid, source_locale: 'fr' })).toEqual(['source_locale']);
-        expect(errorsFor(BlogAiTranslateDto, { ...valid, target_locales: ['fr'] })).toEqual(['target_locales']);
+        expect(errorsFor(BlogAiTranslateDto, { ...valid, source_locale: 'zz' })).toEqual(['source_locale']);
+        expect(errorsFor(BlogAiTranslateDto, { ...valid, target_locales: ['zz'] })).toEqual(['target_locales']);
     });
 
     /**

@@ -338,10 +338,10 @@ function SignupPageContent() {
 
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-2">
-                            <label htmlFor="signup-email" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.emailLabel}</label>
+                            <label htmlFor="signup-email" className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.emailLabel}</label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-email" type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="owner@company.com" />
+                                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input id="signup-email" type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="owner@company.com" />
                             </div>
                         </div>
 
@@ -359,38 +359,38 @@ function SignupPageContent() {
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor="signup-password" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.passwordLabel}</label>
+                            <label htmlFor="signup-password" className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.passwordLabel}</label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-password" type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="At least 8 characters" />
+                                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input id="signup-password" type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="At least 8 characters" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor="signup-organization" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.organizationLabel}</label>
+                            <label htmlFor="signup-organization" className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.organizationLabel}</label>
                             <div className="relative">
-                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-organization" value={form.tenantName} onChange={(e) => handleChange('tenantName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Dhaka Retail Co." />
+                                <Building2 className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input id="signup-organization" value={form.tenantName} onChange={(e) => handleChange('tenantName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Dhaka Retail Co." />
                             </div>
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
-                            <label htmlFor="signup-referral" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.referralCodeLabel}</label>
+                            <label htmlFor="signup-referral" className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.referralCodeLabel}</label>
                             <div className="relative">
-                                <Gift className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <Gift className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
                                     id="signup-referral"
                                     value={form.referralCode}
                                     onChange={(e) => handleChange('referralCode', e.target.value.toUpperCase())}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 uppercase tracking-wider"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 uppercase tracking-wider"
                                     placeholder={t.auth.signup.referralCodePlaceholder}
                                 />
                             </div>
                             {referralStatus === 'checking' && (
-                                <p className="text-xs text-gray-500 ml-1">{t.auth.signup.referralCodeValidating}</p>
+                                <p className="text-xs text-gray-500 ms-1">{t.auth.signup.referralCodeValidating}</p>
                             )}
                             {referralStatus === 'valid' && referralDiscount !== null && (
-                                <p className="text-xs font-medium text-emerald-600 ml-1">
+                                <p className="text-xs font-medium text-emerald-600 ms-1">
                                     {formatMessage(t.auth.signup.referralCodeValid, {
                                         discount: String(referralDiscount),
                                         name: referralName,
@@ -398,12 +398,12 @@ function SignupPageContent() {
                                 </p>
                             )}
                             {referralStatus === 'invalid' && form.referralCode.trim() && (
-                                <p className="text-xs font-medium text-red-600 ml-1">{t.auth.signup.referralCodeInvalid}</p>
+                                <p className="text-xs font-medium text-red-600 ms-1">{t.auth.signup.referralCodeInvalid}</p>
                             )}
                         </div>
 
                         <div className="md:col-span-2 space-y-3">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.planLabel}</label>
+                            <label className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.planLabel}</label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {(plans.length > 0 ? plans : FALLBACK_PLANS).map((plan) => {
                                     const selected = form.planCode === plan.code;
@@ -412,14 +412,14 @@ function SignupPageContent() {
                                             type="button"
                                             key={plan.code}
                                             onClick={() => handleChange('planCode', plan.code)}
-                                            className={`rounded-2xl border p-4 text-left transition-all ${selected ? 'border-blue-600 bg-blue-50 shadow-blue-100 shadow-lg' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                            className={`rounded-2xl border p-4 text-start transition-all ${selected ? 'border-blue-600 bg-blue-50 shadow-blue-100 shadow-lg' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <p className="font-bold text-gray-900">{plan.name}</p>
                                                 <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{plan.code}</span>
                                             </div>
                                             <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                            <p className="mt-3 text-lg font-black text-gray-900">{formatBDT(plan.monthly_price)}<span className="text-xs font-bold text-gray-400 ml-1">{t.auth.signup.monthSuffix}</span></p>
+                                            <p className="mt-3 text-lg font-black text-gray-900">{formatBDT(plan.monthly_price)}<span className="text-xs font-bold text-gray-400 ms-1">{t.auth.signup.monthSuffix}</span></p>
                                         </button>
                                     );
                                 })}
@@ -434,8 +434,8 @@ function SignupPageContent() {
                         </p>
 
                         <div className="md:col-span-2">
-                            <button type="submit" disabled={isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group">
-                                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>{t.auth.signup.submit}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
+                            <button type="submit" disabled={isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group">
+                                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>{t.auth.signup.submit}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" /></>}
                             </button>
                         </div>
                     </form>

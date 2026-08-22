@@ -52,8 +52,8 @@ function VarianceBadge({ pct }: { pct: number | null }) {
     );
 }
 
-const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
-const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
+const thClass = `text-end px-3 py-2 ${compactDensity.formLabel}`;
+const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function ComparativePLPage() {
     const { t, locale } = useI18n();
@@ -136,28 +136,28 @@ export default function ComparativePLPage() {
                                 <>
                                     <tr key={g.group.id} className="bg-gray-50/50 border-b border-gray-100">
                                         <td className="px-3 py-1.5 font-semibold text-gray-700 text-xs">{g.group.name}</td>
-                                        <td className="px-3 py-1.5 text-right font-semibold">{formatBDT(g.current, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(g.previous, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(g.year_ago, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right">—</td>
+                                        <td className="px-3 py-1.5 text-end font-semibold">{formatBDT(g.current, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(g.previous, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(g.year_ago, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end">—</td>
                                     </tr>
                                     {g.accounts.map((a) => (
                                         <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                            <td className="px-5 py-1.5 text-gray-600">{a.name}{a.code && <span className="ml-2 text-xs text-gray-400">{a.code}</span>}</td>
-                                            <td className="px-3 py-1.5 text-right">{formatBDT(a.current, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(a.previous, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(a.year_ago, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right"><VarianceBadge pct={a.variance_period_pct} /></td>
+                                            <td className="px-5 py-1.5 text-gray-600">{a.name}{a.code && <span className="ms-2 text-xs text-gray-400">{a.code}</span>}</td>
+                                            <td className="px-3 py-1.5 text-end">{formatBDT(a.current, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(a.previous, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(a.year_ago, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end"><VarianceBadge pct={a.variance_period_pct} /></td>
                                         </tr>
                                     ))}
                                 </>
                             ))}
                             <tr className="bg-emerald-50 font-semibold border-y border-emerald-100">
                                 <td className="px-3 py-2 text-xs">Total Revenue</td>
-                                <td className="px-3 py-2 text-right text-emerald-800">{formatBDT(data.revenue.total.current, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-emerald-700">{formatBDT(data.revenue.total.previous, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-emerald-700">{formatBDT(data.revenue.total.year_ago, { locale })}</td>
-                                <td className="px-3 py-2 text-right">—</td>
+                                <td className="px-3 py-2 text-end text-emerald-800">{formatBDT(data.revenue.total.current, { locale })}</td>
+                                <td className="px-3 py-2 text-end text-emerald-700">{formatBDT(data.revenue.total.previous, { locale })}</td>
+                                <td className="px-3 py-2 text-end text-emerald-700">{formatBDT(data.revenue.total.year_ago, { locale })}</td>
+                                <td className="px-3 py-2 text-end">—</td>
                             </tr>
                             <tr className="bg-danger-light">
                                 <td colSpan={5} className="px-3 py-1.5 text-xs font-medium text-danger-text">Expenses</td>
@@ -166,35 +166,35 @@ export default function ComparativePLPage() {
                                 <>
                                     <tr key={g.group.id} className="bg-gray-50/50 border-b border-gray-100">
                                         <td className="px-3 py-1.5 font-semibold text-gray-700 text-xs">{g.group.name}</td>
-                                        <td className="px-3 py-1.5 text-right font-semibold">{formatBDT(g.current, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(g.previous, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(g.year_ago, { locale })}</td>
-                                        <td className="px-3 py-1.5 text-right">—</td>
+                                        <td className="px-3 py-1.5 text-end font-semibold">{formatBDT(g.current, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(g.previous, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(g.year_ago, { locale })}</td>
+                                        <td className="px-3 py-1.5 text-end">—</td>
                                     </tr>
                                     {g.accounts.map((a) => (
                                         <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                            <td className="px-5 py-1.5 text-gray-600">{a.name}{a.code && <span className="ml-2 text-xs text-gray-400">{a.code}</span>}</td>
-                                            <td className="px-3 py-1.5 text-right">{formatBDT(a.current, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(a.previous, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right text-gray-500">{formatBDT(a.year_ago, { locale })}</td>
-                                            <td className="px-3 py-1.5 text-right"><VarianceBadge pct={a.variance_period_pct} /></td>
+                                            <td className="px-5 py-1.5 text-gray-600">{a.name}{a.code && <span className="ms-2 text-xs text-gray-400">{a.code}</span>}</td>
+                                            <td className="px-3 py-1.5 text-end">{formatBDT(a.current, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(a.previous, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end text-gray-500">{formatBDT(a.year_ago, { locale })}</td>
+                                            <td className="px-3 py-1.5 text-end"><VarianceBadge pct={a.variance_period_pct} /></td>
                                         </tr>
                                     ))}
                                 </>
                             ))}
                             <tr className="bg-danger-light font-semibold border-y border-red-100">
                                 <td className="px-3 py-2 text-xs">Total Expenses</td>
-                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.current, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.previous, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.year_ago, { locale })}</td>
-                                <td className="px-3 py-2 text-right">—</td>
+                                <td className="px-3 py-2 text-end text-danger-text">{formatBDT(data.expenses.total.current, { locale })}</td>
+                                <td className="px-3 py-2 text-end text-danger-text">{formatBDT(data.expenses.total.previous, { locale })}</td>
+                                <td className="px-3 py-2 text-end text-danger-text">{formatBDT(data.expenses.total.year_ago, { locale })}</td>
+                                <td className="px-3 py-2 text-end">—</td>
                             </tr>
                             <tr className="bg-blue-50 font-semibold border-t-2 border-blue-200">
                                 <td className="px-3 py-3 text-blue-800">Net Profit</td>
-                                <td className="px-3 py-3 text-right text-blue-900">{formatBDT(data.net_profit.current, { locale })}</td>
-                                <td className="px-3 py-3 text-right text-blue-700">{formatBDT(data.net_profit.previous, { locale })}</td>
-                                <td className="px-3 py-3 text-right text-blue-700">{formatBDT(data.net_profit.year_ago, { locale })}</td>
-                                <td className="px-3 py-3 text-right">—</td>
+                                <td className="px-3 py-3 text-end text-blue-900">{formatBDT(data.net_profit.current, { locale })}</td>
+                                <td className="px-3 py-3 text-end text-blue-700">{formatBDT(data.net_profit.previous, { locale })}</td>
+                                <td className="px-3 py-3 text-end text-blue-700">{formatBDT(data.net_profit.year_ago, { locale })}</td>
+                                <td className="px-3 py-3 text-end">—</td>
                             </tr>
                         </tbody>
                     </table>

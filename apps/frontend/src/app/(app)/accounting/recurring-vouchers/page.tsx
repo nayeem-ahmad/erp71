@@ -182,9 +182,9 @@ export default function RecurringVouchersPage() {
                         <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                             <thead>
                                 <tr className="bg-gray-50">
-                                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
-                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
-                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
+                                    <th className="text-start px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
+                                    <th className="text-end px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
+                                    <th className="text-end px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
                                     <th className="w-8" />
                                 </tr>
                             </thead>
@@ -203,12 +203,12 @@ export default function RecurringVouchersPage() {
                                         <td className="px-3 py-1.5">
                                             <input type="number" min="0" step="0.01" value={l.debitAmount}
                                                 onChange={(e) => { setLine(i, 'debitAmount', e.target.value); if (e.target.value) setLine(i, 'creditAmount', ''); }}
-                                                className={`${compactDensity.formField} text-right`} placeholder="0.00" />
+                                                className={`${compactDensity.formField} text-end`} placeholder="0.00" />
                                         </td>
                                         <td className="px-3 py-1.5">
                                             <input type="number" min="0" step="0.01" value={l.creditAmount}
                                                 onChange={(e) => { setLine(i, 'creditAmount', e.target.value); if (e.target.value) setLine(i, 'debitAmount', ''); }}
-                                                className={`${compactDensity.formField} text-right`} placeholder="0.00" />
+                                                className={`${compactDensity.formField} text-end`} placeholder="0.00" />
                                         </td>
                                         <td className="px-2 py-1.5 text-center">
                                             {lines.length > 2 && (

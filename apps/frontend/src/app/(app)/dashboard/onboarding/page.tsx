@@ -98,7 +98,7 @@ function StoreStep({
                     <h2 className="text-2xl font-bold text-gray-900">{copy.confirmTitle}</h2>
                     <p className="text-gray-500 text-sm mt-2">{copy.confirmDescription}</p>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-5 text-left space-y-2">
+                <div className="bg-gray-50 border border-gray-100 rounded-lg p-5 text-start space-y-2">
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-400">{copy.tenantName}</p>
                     <p className="font-semibold text-gray-900">{existingStore.tenantName}</p>
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-400 pt-2">{copy.storeName}</p>
@@ -194,7 +194,7 @@ function StoreStep({
                                 type="button"
                                 disabled={!isAvailable}
                                 onClick={() => setBusinessType(isSelected ? null : value)}
-                                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
+                                className={`flex items-start gap-3 p-3 rounded-xl border text-start transition-all ${
                                     isSelected
                                         ? 'border-blue-500 bg-blue-50'
                                         : isAvailable

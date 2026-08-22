@@ -254,7 +254,7 @@ export default function TenantMessagingIdentityCard({ tenantId, onToast, onError
                             disabled={saving}
                             className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                         >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                             {mi.save}
                         </button>
                         {draft.updated_at ? (

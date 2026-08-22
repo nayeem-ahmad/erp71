@@ -261,7 +261,7 @@ export default function MobileSignInPanel({
                         {formatMessage(copy.codeSentTo, { mobile: verifiedMobile })}
                     </p>
                     <div className="space-y-2">
-                        <label htmlFor="mobile-signin-code" className="text-sm font-medium text-gray-700 ml-1">
+                        <label htmlFor="mobile-signin-code" className="text-sm font-medium text-gray-700 ms-1">
                             {copy.codeLabel}
                         </label>
                         <input
@@ -315,7 +315,7 @@ export default function MobileSignInPanel({
                         </p>
                     </div>
                     <div className="space-y-2">
-                        <label htmlFor="mobile-signin-email" className="text-sm font-medium text-gray-700 ml-1">
+                        <label htmlFor="mobile-signin-email" className="text-sm font-medium text-gray-700 ms-1">
                             {copy.emailLabel}
                         </label>
                         <input
@@ -328,7 +328,7 @@ export default function MobileSignInPanel({
                         />
                     </div>
                     <div className="space-y-2">
-                        <label htmlFor="mobile-signin-name" className="text-sm font-medium text-gray-700 ml-1">
+                        <label htmlFor="mobile-signin-name" className="text-sm font-medium text-gray-700 ms-1">
                             {copy.nameLabel}
                         </label>
                         <input

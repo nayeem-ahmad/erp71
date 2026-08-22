@@ -1,3 +1,5 @@
+import { SECONDARY_LOCALE_CODES } from '@erp71/shared-types';
+
 import {
     DEFAULT_LOCALE,
     isLocale,
@@ -11,12 +13,12 @@ export type TenantLocaleConfig = {
     secondary_locale?: string | null;
 };
 
-const SECONDARY_LOCALE_CODES = new Set<SupportedLocaleCode>(['bn', 'ms']);
+const secondaryLocaleCodes = new Set<SupportedLocaleCode>(SECONDARY_LOCALE_CODES);
 
 export function resolveSecondaryLocale(value: unknown): SupportedLocaleCode | null {
     const code = resolveSupportedLocale(value);
     if (code === DEFAULT_LOCALE) return null;
-    return SECONDARY_LOCALE_CODES.has(code) ? code : null;
+    return secondaryLocaleCodes.has(code) ? code : null;
 }
 
 /** Locales available to a tenant workspace. Defaults to English only. */

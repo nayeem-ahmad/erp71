@@ -274,7 +274,7 @@ export default function CreatePurchaseModal({
                                 </label>
                                 <VoiceEntryInput entryType="purchase" onResult={handleVoicePurchase} inline>
                                     <div className="relative">
-                                        <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                        <div className="flex items-center space-x-2 rtl:space-x-reverse bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
                                             <Search className="w-4 h-4 text-gray-400" />
                                             <input
                                                 type="text"
@@ -296,11 +296,11 @@ export default function CreatePurchaseModal({
                                                         <button
                                                             key={product.id}
                                                             onClick={() => addItem(product)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-primary-light flex items-center justify-between transition-colors"
+                                                            className="w-full text-start px-4 py-3 hover:bg-primary-light flex items-center justify-between transition-colors"
                                                         >
                                                             <div>
                                                                 <span className="text-sm font-bold">{product.name}</span>
-                                                                <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
+                                                                <span className="text-xs text-gray-400 ms-2">{product.sku}</span>
                                                             </div>
                                                             <span className="text-sm font-bold text-emerald-600">
                                                                 {formatBDT(Number(product.price || 0), { locale })}
@@ -318,16 +318,16 @@ export default function CreatePurchaseModal({
                                 <table className="w-full min-w-[480px]">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">
+                                            <th className="text-start pb-2 text-xs font-medium text-gray-500">
                                                 Product
                                             </th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">
                                                 Qty
                                             </th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-32">
                                                 Unit Cost
                                             </th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">
                                                 Line Total
                                             </th>
                                             <th className="w-10"></th>
@@ -338,7 +338,7 @@ export default function CreatePurchaseModal({
                                             <tr key={`${item.productId}-${index}`}>
                                                 <td className="py-3">
                                                     <span className="text-sm font-bold">{item.productName}</span>
-                                                    <span className="text-xs text-gray-400 ml-2">{item.sku}</span>
+                                                    <span className="text-xs text-gray-400 ms-2">{item.sku}</span>
                                                 </td>
                                                 <td className="py-3">
                                                     {isCompoundUnit(item.unitType) ? (
@@ -372,10 +372,10 @@ export default function CreatePurchaseModal({
                                                         onChange={(event) =>
                                                             updateItem(index, 'unitCost', Number(event.target.value) || 0)
                                                         }
-                                                        className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
+                                                        className="w-full text-end bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                                     />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-bold text-emerald-600">
+                                                <td className="py-3 text-end text-sm font-bold text-emerald-600">
                                                     {formatBDT(item.quantity * item.unitCost, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">

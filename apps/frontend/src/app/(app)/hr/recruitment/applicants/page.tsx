@@ -170,12 +170,12 @@ export default function ApplicantsPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                             <tr>
-                                <th className="p-2 text-left font-medium">{copy.columns.name}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.contact}</th>
-                                <th className="hidden p-2 text-left font-medium md:table-cell">{copy.columns.current}</th>
-                                <th className="hidden p-2 text-right font-medium lg:table-cell">{copy.columns.experience}</th>
-                                <th className="hidden p-2 text-right font-medium lg:table-cell">{copy.columns.expectedSalary}</th>
-                                <th className="p-2 text-left font-medium">{copy.columns.applications}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.name}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.contact}</th>
+                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.current}</th>
+                                <th className="hidden p-2 text-end font-medium lg:table-cell">{copy.columns.experience}</th>
+                                <th className="hidden p-2 text-end font-medium lg:table-cell">{copy.columns.expectedSalary}</th>
+                                <th className="p-2 text-start font-medium">{copy.columns.applications}</th>
                                 <th className="p-2" />
                             </tr>
                         </thead>
@@ -208,10 +208,10 @@ export default function ApplicantsPage() {
                                             ? [applicant.current_designation, applicant.current_company].filter(Boolean).join(' · ')
                                             : '—'}
                                     </td>
-                                    <td className="hidden p-2 text-right text-gray-600 lg:table-cell">
+                                    <td className="hidden p-2 text-end text-gray-600 lg:table-cell">
                                         {applicant.experience_years == null ? '—' : String(applicant.experience_years)}
                                     </td>
-                                    <td className="hidden p-2 text-right text-gray-600 lg:table-cell">
+                                    <td className="hidden p-2 text-end text-gray-600 lg:table-cell">
                                         {applicant.expected_salary == null ? '—' : formatBDT(Number(applicant.expected_salary))}
                                     </td>
                                     <td className="p-2">
@@ -232,7 +232,7 @@ export default function ApplicantsPage() {
                                             </p>
                                         )}
                                     </td>
-                                    <td className="p-2 text-right">
+                                    <td className="p-2 text-end">
                                         <div className="flex justify-end gap-1">
                                             <Button variant="ghost" onClick={() => openModal(applicant)} aria-label={copy.editTitle}>
                                                 <Pencil className="h-4 w-4" />

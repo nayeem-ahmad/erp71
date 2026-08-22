@@ -287,7 +287,7 @@ export default function CustomersPage() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1">
+                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                         <Link
                             href={`/sales/customers/${info.row.original.id}`}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
@@ -356,14 +356,14 @@ export default function CustomersPage() {
                                 className="flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
                                 title={t.customers.runSegmentationTitle}
                             >
-                                <RefreshCw className={`w-4 h-4 mr-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`w-4 h-4 me-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
                                 {runningSegmentation ? t.customers.running : t.customers.runSegmentation}
                             </button>
                             <button
                                 onClick={() => setImportOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import
                             </button>
                             <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>

@@ -159,9 +159,9 @@ export default function UploadRecipients({ rows, issues, onChange }: UploadRecip
                         <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-gray-50">
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.fieldEmail}</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.fieldName}</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.fieldSubject}</th>
+                                    <th className="px-3 py-2 text-start font-semibold text-gray-500">{m.fieldEmail}</th>
+                                    <th className="px-3 py-2 text-start font-semibold text-gray-500">{m.fieldName}</th>
+                                    <th className="px-3 py-2 text-start font-semibold text-gray-500">{m.fieldSubject}</th>
                                 </tr>
                             </thead>
                             <tbody>

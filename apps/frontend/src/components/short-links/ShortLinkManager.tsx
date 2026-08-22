@@ -200,11 +200,11 @@ export default function ShortLinkManager({
 
             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                    <thead className="bg-gray-50 text-start text-xs uppercase text-gray-500">
                         <tr>
                             <th className="p-3">{m.shortLinkColumn}</th>
                             <th className="p-3">{m.targetColumn}</th>
-                            <th className="p-3 text-right">{m.clicksColumn}</th>
+                            <th className="p-3 text-end">{m.clicksColumn}</th>
                             <th className="p-3" />
                         </tr>
                     </thead>
@@ -230,11 +230,11 @@ export default function ShortLinkManager({
                                             </button>
                                         )}
                                     </span>
-                                    {row.revoked_at && <span className="ml-2 text-xs text-red-600">{m.revoked}</span>}
+                                    {row.revoked_at && <span className="ms-2 text-xs text-red-600">{m.revoked}</span>}
                                 </td>
                                 <td className="p-3 max-w-md truncate text-gray-600">{row.target_url}</td>
-                                <td className="p-3 text-right text-gray-700">{row.click_count}</td>
-                                <td className="p-3 text-right">
+                                <td className="p-3 text-end text-gray-700">{row.click_count}</td>
+                                <td className="p-3 text-end">
                                     {!row.revoked_at && (
                                         <button
                                             onClick={() => void revoke(row.id)}

@@ -411,14 +411,14 @@ function GroupRailItem({
                 type="button"
                 onClick={onSelect}
                 aria-current={selected ? 'true' : undefined}
-                className="min-h-touch min-w-0 flex-1 px-3 py-2 text-left"
+                className="min-h-touch min-w-0 flex-1 px-3 py-2 text-start"
             >
                 <span
                     className={`block truncate text-sm font-semibold ${
                         selected ? 'text-blue-900' : 'text-gray-900'
                     }`}
                 >
-                    <span className="mr-1.5 font-mono text-xs font-normal text-gray-400">
+                    <span className="me-1.5 font-mono text-xs font-normal text-gray-400">
                         {group.code}
                     </span>
                     {group.name}
@@ -427,7 +427,7 @@ function GroupRailItem({
                     {meta}
                 </span>
             </button>
-            <div className="flex items-center gap-0.5 pr-1.5">
+            <div className="flex items-center gap-0.5 pe-1.5">
                 <button
                     type="button"
                     onClick={onEdit}
