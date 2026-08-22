@@ -283,6 +283,7 @@ export const coreMessages = {
             hr: "मानव संसाधन",
             billing: "बिलिंग",
             accountSettings: "प्रशासन",
+            chat: "चैट",
             admin: "प्लेटफ़ॉर्म प्रशासन",
             settings: "सेटिंग्स",
             help: "सहायता",

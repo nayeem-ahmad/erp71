@@ -120,6 +120,13 @@ export const StorePermission = {
   VIEW_BLOG: "VIEW_BLOG",
   MANAGE_BLOG: "MANAGE_BLOG",
   PUBLISH_BLOG: "PUBLISH_BLOG",
+
+  // Team chat
+  // Gates access to the feature only. It deliberately has no "manage" sibling:
+  // staff conversations are private to their participants, so there is no
+  // permission that grants reading someone else's thread — not even for OWNER,
+  // who bypasses every check in this list. See apps/backend/src/chat.
+  USE_TEAM_CHAT: "USE_TEAM_CHAT",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -175,6 +182,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_BLOG,
     StorePermission.MANAGE_BLOG,
     StorePermission.PUBLISH_BLOG,
+    StorePermission.USE_TEAM_CHAT,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -185,6 +193,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.CREATE_RETURN,
     StorePermission.SWITCH_STORES,
     StorePermission.VIEW_LEDGER,
+    StorePermission.USE_TEAM_CHAT,
   ],
   [UserRole.ACCOUNTANT]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -198,6 +207,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.MANAGE_LOANS,
     StorePermission.VIEW_INVESTORS,
     StorePermission.MANAGE_INVESTORS,
+    StorePermission.USE_TEAM_CHAT,
   ],
 };
 
@@ -281,6 +291,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_BLOG]: "View storefront blog posts",
   [StorePermission.MANAGE_BLOG]: "Write & edit storefront blog posts",
   [StorePermission.PUBLISH_BLOG]: "Publish storefront blog posts",
+  [StorePermission.USE_TEAM_CHAT]: "Use team chat",
 };
 
 /** Store permissions grouped by feature area — drives the per-branch permission matrix UI. */
@@ -387,6 +398,10 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.MANAGE_BLOG,
       StorePermission.PUBLISH_BLOG,
     ],
+  },
+  {
+    label: "Team Chat",
+    permissions: [StorePermission.USE_TEAM_CHAT],
   },
   {
     label: "Administration",

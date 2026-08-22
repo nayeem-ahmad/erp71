@@ -307,6 +307,7 @@ export const routes = {
     help: '/help',
     status: '/status',
     support: '/support',
+    chat: '/chat',
     smsCredits: '/sms-credits',
     aiCredits: '/ai-credits',
     manufacturing: '/manufacturing',

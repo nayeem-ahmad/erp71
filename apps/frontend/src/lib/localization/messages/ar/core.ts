@@ -283,6 +283,7 @@ export const coreMessages = {
             hr: 'الموارد البشرية',
             billing: 'الفوترة',
             accountSettings: 'الإدارة',
+            chat: 'الدردشة',
             admin: 'مسؤول المنصة',
             settings: 'الإعدادات',
             help: 'المساعدة',
