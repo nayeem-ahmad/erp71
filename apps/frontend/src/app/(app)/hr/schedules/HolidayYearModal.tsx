@@ -172,7 +172,7 @@ export default function HolidayYearModal({ year, holidayCount, onClose, onApplie
                                             />
                                             <label htmlFor={`suggest-${row.date}`} className="min-w-0 flex-1 text-sm">
                                                 <span className="font-medium text-gray-900">{row.name}</span>
-                                                <span className="ml-2 text-xs text-gray-500">{formatDate(row.date)}</span>
+                                                <span className="ms-2 text-xs text-gray-500">{formatDate(row.date)}</span>
                                             </label>
                                             {row.exists && (
                                                 <span className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-xs text-gray-500">

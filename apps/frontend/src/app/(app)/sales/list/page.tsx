@@ -210,7 +210,7 @@ export default function SalesPage() {
                 id: 'actions',
                 header: t.sales.columns.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1">
+                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                         <Link
                             href={`/sales/${info.row.original.id}`}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
@@ -274,7 +274,7 @@ export default function SalesPage() {
                             href={routes.sales.new}
                             className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
                         >
-                            <FileText className="w-4 h-4 mr-2" />
+                            <FileText className="w-4 h-4 me-2" />
                             {t.sidebar.items.newSalesEntry}
                         </Link>
                     }
@@ -282,12 +282,12 @@ export default function SalesPage() {
 
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                     <div className="relative flex-1 min-w-[220px]">
-                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                         <Input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder={t.sales.dataTable.searchPlaceholder}
-                            className="pl-9"
+                            className="ps-9"
                         />
                     </div>
                     <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />

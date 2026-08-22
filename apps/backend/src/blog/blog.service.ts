@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    InternalServerErrorException,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
@@ -6,8 +12,19 @@ import { AiService } from '../ai/ai.service';
 import { resolveSlug } from './blog-slug';
 import { readingMinutes } from './reading-time';
 import { BlogStatus, canTransition, isInAppAudience, isPublicAudience } from './blog-status';
-import { BLOG_DRAFT_MAX_TOKENS, BlogAiDraft, buildBlogDraftPrompt, normalizeBlogDraft } from './blog-ai-draft';
-import { BlogAiDraftDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
+import {
+    BLOG_DRAFT_MAX_TOKENS,
+    BLOG_TRANSLATION_MAX_TOKENS,
+    BlogAiDraft,
+    BlogAiTranslation,
+    buildBlogDraftPrompt,
+    buildBlogTranslationPrompt,
+    normalizeBlogDraft,
+    normalizeBlogTranslation,
+    resolveDraftLocales,
+    resolveTranslationTargets,
+} from './blog-ai-draft';
+import { BlogAiDraftDto, BlogAiTranslateDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
 
 const DEFAULT_LOCALE = 'en';
 const MAX_PAGE_SIZE = 50;
@@ -154,13 +171,22 @@ export class BlogService {
     }
 
     /**
-     * Turn a one-line brief into a filled post for the author to review.
+     * Turn a one-line brief into a filled post for the author to review, in one
+     * language or in several.
+     *
+     * The extra languages are translated from the first rather than generated
+     * again from the brief. Three independent generations would produce three
+     * different articles — different arguments, different examples, different
+     * length — filed under one slug, one cover and one category, which is not
+     * what a post's translations are. It is also the cheaper half of the two.
      *
      * Nothing is written — the editor patches its own fields and the author
      * saves through the normal path. Unbilled: a platform post belongs to no
      * tenant, so there is no credit balance to charge.
      */
     async draftWithAi(dto: BlogAiDraftDto): Promise<BlogAiDraft> {
+        const [primary, ...extra] = resolveDraftLocales(dto);
+
         const rows = await this.db.blogCategory.findMany({
             select: { id: true, name_en: true },
             orderBy: [{ sort_order: 'asc' }, { name_en: 'asc' }],
@@ -170,13 +196,95 @@ export class BlogService {
         const model = await this.ai.getDefaultModel();
         const { systemPrompt, userMessage } = buildBlogDraftPrompt({
             prompt: dto.prompt,
-            locale: dto.locale ?? 'en',
+            locale: primary,
             categories,
             includeAudience: true,
         });
 
         const { text } = await this.ai.completeUnbilled(model, systemPrompt, userMessage, BLOG_DRAFT_MAX_TOKENS);
-        return normalizeBlogDraft(text, { categories, includeAudience: true });
+        const draft = normalizeBlogDraft(text, { categories, includeAudience: true, locale: primary });
+
+        if (extra.length) {
+            const { translations, failed } = await this.translateAll(draft.translations[0], extra);
+            draft.translations.push(...translations);
+            if (failed.length) draft.failed_locales = failed;
+        }
+
+        return draft;
+    }
+
+    /**
+     * Carry copy the author already has into other languages.
+     *
+     * The alternative the editor used to offer was generating again on the
+     * other tab, which spends a full generation to produce a different article
+     * and quietly leaves the two tabs disagreeing.
+     */
+    async translateWithAi(dto: BlogAiTranslateDto): Promise<{
+        translations: BlogAiTranslation[];
+        failed_locales?: string[];
+    }> {
+        const targets = resolveTranslationTargets(dto.source_locale, dto.target_locales);
+
+        const source: BlogAiTranslation = {
+            locale: dto.source_locale,
+            title: dto.title,
+            body_md: dto.body_md,
+            excerpt: dto.excerpt,
+            seo_title: dto.seo_title,
+            seo_description: dto.seo_description,
+        };
+
+        const { translations, failed } = await this.translateAll(source, targets);
+        if (!translations.length) {
+            throw new InternalServerErrorException('AI could not translate this post. Please try again.');
+        }
+
+        return failed.length ? { translations, failed_locales: failed } : { translations };
+    }
+
+    /**
+     * One round-trip per target language, settled independently.
+     *
+     * A language that fails — a truncated reply, a rate limit — must not throw
+     * away the ones that worked: the author keeps what came back and is told
+     * which tabs to retry, rather than losing a two-minute wait to the weakest
+     * of three calls.
+     */
+    private async translateAll(
+        source: BlogAiTranslation,
+        targets: string[],
+    ): Promise<{ translations: BlogAiTranslation[]; failed: string[] }> {
+        const model = await this.ai.getDefaultModel();
+
+        const settled = await Promise.allSettled(
+            targets.map(async (targetLocale) => {
+                const { systemPrompt, userMessage } = buildBlogTranslationPrompt({ source, targetLocale });
+                const { text } = await this.ai.completeUnbilled(
+                    model,
+                    systemPrompt,
+                    userMessage,
+                    BLOG_TRANSLATION_MAX_TOKENS,
+                );
+                return normalizeBlogTranslation(text, targetLocale);
+            }),
+        );
+
+        const translations: BlogAiTranslation[] = [];
+        const failed: string[] = [];
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                translations.push(result.value);
+                return;
+            }
+            failed.push(targets[index]);
+            this.logger.warn(
+                `Blog translation into ${targets[index]} failed: ${(result.reason as Error)?.message ?? result.reason}`,
+            );
+        });
+
+        return { translations, failed };
     }
 
     /**

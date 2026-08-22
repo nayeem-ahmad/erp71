@@ -159,12 +159,12 @@ export default function StorefrontSignUpPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder={p.passwordMin}
-                                    className="w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                                    className="w-full border border-gray-300 rounded-xl px-4 py-3 pe-12 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword((v) => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                     tabIndex={-1}
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

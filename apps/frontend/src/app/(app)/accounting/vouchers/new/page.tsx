@@ -649,12 +649,12 @@ function AccountingVouchersPageContent() {
                             <table className="w-full text-sm">
                                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                                        <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
-                                        <th className="px-2 py-1.5 text-left font-semibold min-w-[180px]">Account</th>
-                                        <th className="px-2 py-1.5 text-right font-semibold w-24">Debit</th>
-                                        <th className="px-2 py-1.5 text-right font-semibold w-24">Credit</th>
-                                        <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Comment</th>
-                                        <th className="px-2 py-1.5 text-left font-semibold hidden lg:table-cell">{t.vouchers.costCenter}</th>
+                                        <th className="px-2 py-1.5 text-start font-semibold w-8">#</th>
+                                        <th className="px-2 py-1.5 text-start font-semibold min-w-[180px]">Account</th>
+                                        <th className="px-2 py-1.5 text-end font-semibold w-24">Debit</th>
+                                        <th className="px-2 py-1.5 text-end font-semibold w-24">Credit</th>
+                                        <th className="px-2 py-1.5 text-start font-semibold hidden md:table-cell">Comment</th>
+                                        <th className="px-2 py-1.5 text-start font-semibold hidden lg:table-cell">{t.vouchers.costCenter}</th>
                                         <th className="px-2 py-1.5 w-8" />
                                     </tr>
                                 </thead>
@@ -678,7 +678,7 @@ function AccountingVouchersPageContent() {
                                                     />
                                                     {error ? <p className="mt-0.5 text-[11px] text-red-600">{error}</p> : null}
                                                 </td>
-                                                <td className="px-2 py-1 text-right align-top">
+                                                <td className="px-2 py-1 text-end align-top">
                                                     <input
                                                         aria-label={`Debit row ${index + 1}`}
                                                         type="number"
@@ -686,11 +686,11 @@ function AccountingVouchersPageContent() {
                                                         step="0.01"
                                                         value={row.debitAmount}
                                                         onChange={(event) => updateRow(row.id, 'debitAmount', event.target.value)}
-                                                        className={`w-20 text-right ${inputClass}`}
+                                                        className={`w-20 text-end ${inputClass}`}
                                                         placeholder="0.00"
                                                     />
                                                 </td>
-                                                <td className="px-2 py-1 text-right align-top">
+                                                <td className="px-2 py-1 text-end align-top">
                                                     <input
                                                         aria-label={`Credit row ${index + 1}`}
                                                         type="number"
@@ -698,7 +698,7 @@ function AccountingVouchersPageContent() {
                                                         step="0.01"
                                                         value={row.creditAmount}
                                                         onChange={(event) => updateRow(row.id, 'creditAmount', event.target.value)}
-                                                        className={`w-20 text-right ${inputClass}`}
+                                                        className={`w-20 text-end ${inputClass}`}
                                                         placeholder="0.00"
                                                     />
                                                 </td>
@@ -752,7 +752,7 @@ function AccountingVouchersPageContent() {
                     />
                 </div>
 
-                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col lg:overflow-hidden">
+                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-s bg-white flex flex-col lg:overflow-hidden">
                     <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-1.5">
                         <BalanceStat label={t.accountingShared.debitTotal} value={debitTotal} tone="debit" locale={locale} />
                         <BalanceStat label={t.accountingShared.creditTotal} value={creditTotal} tone="credit" locale={locale} />

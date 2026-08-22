@@ -238,7 +238,7 @@ export default function CreatePurchaseReturnModal({
                 <div className="p-6 overflow-y-auto space-y-6">
                     {error && (
                         <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold flex items-center">
-                            <AlertCircle className="w-4 h-4 mr-2" />
+                            <AlertCircle className="w-4 h-4 me-2" />
                             {error}
                         </div>
                     )}
@@ -249,7 +249,7 @@ export default function CreatePurchaseReturnModal({
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">
                                     Search Purchases
                                 </label>
-                                <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                <div className="flex items-center space-x-2 rtl:space-x-reverse bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
                                     <Search className="w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
@@ -278,7 +278,7 @@ export default function CreatePurchaseReturnModal({
                                                 <button
                                                     key={purchase.id}
                                                     onClick={() => setSelectedPurchaseId(purchase.id)}
-                                                    className={`w-full text-left p-4 transition-colors ${
+                                                    className={`w-full text-start p-4 transition-colors ${
                                                         active ? 'bg-primary-light' : 'hover:bg-white'
                                                     }`}
                                                 >
@@ -363,7 +363,7 @@ export default function CreatePurchaseReturnModal({
 
                                     <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                                         <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                                            <div className="flex items-center space-x-2">
+                                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
                                                 <Undo2 className="w-4 h-4 text-emerald-600" />
                                                 <h3 className="text-sm font-bold tracking-tight">Returnable Purchase Lines</h3>
                                             </div>
@@ -373,12 +373,12 @@ export default function CreatePurchaseReturnModal({
                                             <table className="w-full">
                                                 <thead>
                                                     <tr className="border-b border-gray-100 bg-gray-50/80">
-                                                        <th className="text-left p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                                        <th className="text-start p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
                                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.purchased}</th>
                                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.remaining}</th>
-                                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                                        <th className="text-end p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
                                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-28">Return Qty</th>
-                                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
+                                                        <th className="text-end p-3 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
@@ -390,7 +390,7 @@ export default function CreatePurchaseReturnModal({
                                                             <tr key={item.id}>
                                                                 <td className="p-3">
                                                                     <span className="text-sm font-bold text-gray-900">{item.product?.name || 'Unknown item'}</span>
-                                                                    <span className="text-xs text-gray-400 ml-2">{item.product?.sku || ''}</span>
+                                                                    <span className="text-xs text-gray-400 ms-2">{item.product?.sku || ''}</span>
                                                                 </td>
                                                                 <td className="p-3 text-center text-sm font-bold text-gray-700">{item.quantity}</td>
                                                                 <td className="p-3 text-center">
@@ -398,7 +398,7 @@ export default function CreatePurchaseReturnModal({
                                                                         {remaining}
                                                                     </span>
                                                                 </td>
-                                                                <td className="p-3 text-right text-sm font-bold text-gray-700">
+                                                                <td className="p-3 text-end text-sm font-bold text-gray-700">
                                                                     {formatBDT(Number(item.unit_cost || 0), { locale })}
                                                                 </td>
                                                                 <td className="p-3">
@@ -412,7 +412,7 @@ export default function CreatePurchaseReturnModal({
                                                                         className="w-full text-center bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 disabled:opacity-40"
                                                                     />
                                                                 </td>
-                                                                <td className="p-3 text-right text-sm font-bold text-emerald-600">
+                                                                <td className="p-3 text-end text-sm font-bold text-emerald-600">
                                                                     {formatBDT(quantity * Number(item.unit_cost || 0), { locale })}
                                                                 </td>
                                                             </tr>

@@ -214,26 +214,26 @@ export default function ImportShipmentDetailPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-100 text-left text-xs uppercase text-gray-500">
+                                <tr className="border-b border-gray-100 text-start text-xs uppercase text-gray-500">
                                     <th className="py-2">{copy.detail.items}</th>
-                                    <th className="py-2 text-right">{t.common.quantity}</th>
-                                    <th className="py-2 text-right">{copy.detail.goodsValue}</th>
-                                    <th className="hidden py-2 text-right md:table-cell">
+                                    <th className="py-2 text-end">{t.common.quantity}</th>
+                                    <th className="py-2 text-end">{copy.detail.goodsValue}</th>
+                                    <th className="hidden py-2 text-end md:table-cell">
                                         {copy.detail.capitalizedCharges}
                                     </th>
-                                    <th className="py-2 text-right">{copy.detail.projectedUnitCost}</th>
+                                    <th className="py-2 text-end">{copy.detail.projectedUnitCost}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {sheet.items.map((item: any) => (
                                     <tr key={item.item_id} className="border-b border-gray-50">
                                         <td className="py-2 text-gray-900">{item.product_name}</td>
-                                        <td className="py-2 text-right text-gray-700">{item.quantity}</td>
-                                        <td className="py-2 text-right text-gray-700">{money(item.goods_value_bdt)}</td>
-                                        <td className="hidden py-2 text-right text-gray-700 md:table-cell">
+                                        <td className="py-2 text-end text-gray-700">{item.quantity}</td>
+                                        <td className="py-2 text-end text-gray-700">{money(item.goods_value_bdt)}</td>
+                                        <td className="hidden py-2 text-end text-gray-700 md:table-cell">
                                             {money(item.allocated_charges_bdt)}
                                         </td>
-                                        <td className="py-2 text-right font-semibold text-gray-900">
+                                        <td className="py-2 text-end font-semibold text-gray-900">
                                             {money(item.landed_unit_cost ?? item.projected_unit_cost)}
                                         </td>
                                     </tr>
@@ -252,10 +252,10 @@ export default function ImportShipmentDetailPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-100 text-left text-xs uppercase text-gray-500">
+                                <tr className="border-b border-gray-100 text-start text-xs uppercase text-gray-500">
                                     <th className="py-2">Type</th>
                                     <th className="hidden py-2 md:table-cell">{t.common.description}</th>
-                                    <th className="py-2 text-right">{t.common.amount}</th>
+                                    <th className="py-2 text-end">{t.common.amount}</th>
                                     <th className="py-2">Basis</th>
                                 </tr>
                             </thead>
@@ -265,7 +265,7 @@ export default function ImportShipmentDetailPage() {
                                         <td className="py-2 text-gray-900">
                                             {cost.cost_type}
                                             {!cost.is_capitalized && (
-                                                <span className="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                                <span className="ms-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                                                     {copy.detail.recoverable}
                                                 </span>
                                             )}
@@ -273,7 +273,7 @@ export default function ImportShipmentDetailPage() {
                                         <td className="hidden py-2 text-gray-600 md:table-cell">
                                             {cost.description ?? '—'}
                                         </td>
-                                        <td className="py-2 text-right text-gray-900">
+                                        <td className="py-2 text-end text-gray-900">
                                             {cost.currency === 'BDT'
                                                 ? money(Number(cost.amount_bdt))
                                                 : `${formatCurrency(Number(cost.amount), { currency: cost.currency, locale })} → ${money(Number(cost.amount_bdt))}`}

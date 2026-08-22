@@ -103,11 +103,11 @@ export default function ImportDutyReportPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-100 text-left text-xs uppercase text-gray-500">
+                                <tr className="border-b border-gray-100 text-start text-xs uppercase text-gray-500">
                                     <th className="p-3">{t.imports.columns.reference}</th>
                                     <th className="hidden p-3 md:table-cell">{copy.beNumber}</th>
                                     <th className="p-3">Type</th>
-                                    <th className="p-3 text-right">{t.imports.columns.invoiceValue}</th>
+                                    <th className="p-3 text-end">{t.imports.columns.invoiceValue}</th>
                                     <th className="hidden p-3 md:table-cell">{t.common.date}</th>
                                 </tr>
                             </thead>
@@ -119,12 +119,12 @@ export default function ImportDutyReportPage() {
                                         <td className="p-3">
                                             <span className="text-gray-700">{line.cost_type}</span>
                                             {line.is_recoverable && (
-                                                <span className="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                                <span className="ms-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                                                     {copy.recoverable}
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-3 text-right font-medium text-gray-900">
+                                        <td className="p-3 text-end font-medium text-gray-900">
                                             {formatBDT(line.amount_bdt, { locale })}
                                         </td>
                                         <td className="hidden p-3 text-gray-600 md:table-cell">

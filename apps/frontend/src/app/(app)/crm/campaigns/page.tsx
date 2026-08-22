@@ -286,7 +286,7 @@ export default function CrmCampaignsPage() {
                             <button
                                 type="button"
                                 onClick={() => void handleSelect(c)}
-                                className="font-semibold text-gray-900 hover:text-primary truncate text-left"
+                                className="font-semibold text-gray-900 hover:text-primary truncate text-start"
                             >
                                 {c.name}
                             </button>
@@ -317,7 +317,7 @@ export default function CrmCampaignsPage() {
                         {c.status === 'COMPLETED' && (
                             <div className="text-xs mt-0.5">
                                 <span className="text-emerald-600 font-medium">{c.delivered_count} delivered</span>
-                                {c.failed_count > 0 && <span className="text-danger ml-2">{c.failed_count} failed</span>}
+                                {c.failed_count > 0 && <span className="text-danger ms-2">{c.failed_count} failed</span>}
                             </div>
                         )}
                     </div>
@@ -394,12 +394,12 @@ export default function CrmCampaignsPage() {
             {/* Filters */}
             <div className="flex flex-wrap gap-3 items-center">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder={m.searchPlaceholder}
-                        className="pl-9"
+                        className="ps-9"
                     />
                 </div>
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
@@ -609,7 +609,7 @@ export default function CrmCampaignsPage() {
                                 ) : preview ? (
                                     <div>
                                         <p className="text-sm font-semibold text-blue-700 mb-2">
-                                            <Users className="w-4 h-4 inline mr-1" />{preview.count} recipient{preview.count !== 1 ? 's' : ''} will receive this message
+                                            <Users className="w-4 h-4 inline me-1" />{preview.count} recipient{preview.count !== 1 ? 's' : ''} will receive this message
                                         </p>
                                         {preview.sample.length > 0 && (
                                             <div className="space-y-1">
@@ -642,9 +642,9 @@ export default function CrmCampaignsPage() {
                                             <table className="w-full text-xs">
                                                 <thead>
                                                     <tr className="bg-gray-50">
-                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.recipients.columnRecipient}</th>
-                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500 hidden md:table-cell">{m.recipients.columnSubject}</th>
-                                                        <th className="px-3 py-2 text-left font-semibold text-gray-500">{m.recipients.columnStatus}</th>
+                                                        <th className="px-3 py-2 text-start font-semibold text-gray-500">{m.recipients.columnRecipient}</th>
+                                                        <th className="px-3 py-2 text-start font-semibold text-gray-500 hidden md:table-cell">{m.recipients.columnSubject}</th>
+                                                        <th className="px-3 py-2 text-start font-semibold text-gray-500">{m.recipients.columnStatus}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>

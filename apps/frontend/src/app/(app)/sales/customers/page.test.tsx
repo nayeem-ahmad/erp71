@@ -13,6 +13,7 @@ jest.mock('@/lib/api', () => ({
         getCustomers: jest.fn(),
         getCustomersPaged: jest.fn(),
         createCustomer: jest.fn(),
+        updateCustomer: jest.fn(),
         getCustomerGroups: jest.fn(),
         getTerritories: jest.fn(),
     },
@@ -34,6 +35,13 @@ const mockCustomers = [
         phone: '01800000001',
         customer_code: 'CUST-001',
         customer_type: 'INDIVIDUAL',
+        email: 'alice@example.com',
+        address: '12 Green Road',
+        customer_group_id: 'grp-1',
+        territory_id: 'ter-1',
+        credit_limit: '5000.00',
+        default_discount_pct: '2.50',
+        birthday: '1990-04-12T00:00:00.000Z',
         total_spent: '250.00',
         segment_category: 'VIP',
         created_at: '2026-01-15T08:00:00.000Z',
@@ -59,6 +67,7 @@ describe('CustomersPage — Customer Management', () => {
         const { api } = require('@/lib/api');
         api.getCustomersPaged.mockResolvedValue({ items: mockCustomers, total: mockCustomers.length, page: 1, limit: 20, pages: 1 });
         api.createCustomer.mockResolvedValue({ id: 'cust-3' });
+        api.updateCustomer.mockResolvedValue({ id: 'cust-1' });
         api.getCustomerGroups.mockResolvedValue([{ id: 'grp-1', name: 'Wholesale' }]);
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
     });
@@ -245,6 +254,117 @@ describe('CustomersPage — Customer Management', () => {
         await waitFor(() => {
             expect(screen.getByText(/phone already exists/i)).toBeInTheDocument();
         });
+    });
+
+    it('renders an edit action button for every customer row', async () => {
+        render(<CustomersPage />);
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /^edit$/i })).toHaveLength(mockCustomers.length);
+        });
+    });
+
+    it('opens the edit modal prefilled with that customer', async () => {
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => {
+            expect(screen.getByRole('heading', { name: /edit customer/i })).toBeInTheDocument();
+        });
+        expect(screen.getByPlaceholderText('CUST-00001')).toHaveValue('CUST-001');
+        expect(screen.getByPlaceholderText('John Doe')).toHaveValue('Alice Smith');
+        expect(screen.getByPlaceholderText('+8801234567890')).toHaveValue('01800000001');
+        expect(screen.getByPlaceholderText('john@example.com')).toHaveValue('alice@example.com');
+    });
+
+    it('saves edits through updateCustomer, not createCustomer', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => screen.getByPlaceholderText('John Doe'));
+        fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Alice Renamed' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateCustomer).toHaveBeenCalledWith(
+                'cust-1',
+                expect.objectContaining({
+                    name: 'Alice Renamed',
+                    phone: '01800000001',
+                    customer_code: 'CUST-001',
+                    customer_type: 'INDIVIDUAL',
+                    credit_limit: 5000,
+                    default_discount_pct: 2.5,
+                    birthday: '1990-04-12',
+                }),
+            );
+        });
+        expect(api.createCustomer).not.toHaveBeenCalled();
+    });
+
+    it('clears an optional field by sending null', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => screen.getByPlaceholderText('john@example.com'));
+        fireEvent.change(screen.getByPlaceholderText('john@example.com'), { target: { value: '' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateCustomer).toHaveBeenCalledWith('cust-1', expect.objectContaining({ email: null }));
+        });
+    });
+
+    it('reloads the list and closes the modal after a successful edit', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => screen.getByPlaceholderText('John Doe'));
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(screen.queryByRole('heading', { name: /edit customer/i })).not.toBeInTheDocument();
+        });
+        // fetched once on mount, again after the update
+        expect(api.getCustomersPaged).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows the edit failure message when the update is rejected', async () => {
+        const { api } = require('@/lib/api');
+        api.updateCustomer.mockRejectedValueOnce(new Error('Phone already exists'));
+
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => screen.getByPlaceholderText('John Doe'));
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/phone already exists/i)).toBeInTheDocument();
+        });
+    });
+
+    it('starts from a blank form when adding after an edit', async () => {
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+        await waitFor(() => screen.getByPlaceholderText('John Doe'));
+        fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+        fireEvent.click(screen.getByRole('button', { name: /new customer/i }));
+        await waitFor(() => {
+            expect(screen.getByRole('heading', { name: /new customer/i })).toBeInTheDocument();
+        });
+        expect(screen.getByPlaceholderText('John Doe')).toHaveValue('');
+        expect(screen.getByPlaceholderText('john@example.com')).toHaveValue('');
     });
 
     it('calls getCustomersPaged once on initial load', async () => {

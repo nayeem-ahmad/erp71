@@ -115,14 +115,14 @@ export default function InventoryLedgerPage() {
                     )}
                     actions={(
                         <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <RefreshCw className="w-4 h-4 mr-2" /> {t.common.refresh}
+                            <RefreshCw className="w-4 h-4 me-2" /> {t.common.refresh}
                         </button>
                     )}
                 />
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.warehouseLabel}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryLedger.warehouseLabel}</label>
                         <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="">{t.inventoryLedger.allWarehouses}</option>
                             {warehouses.map((warehouse) => (
@@ -131,7 +131,7 @@ export default function InventoryLedgerPage() {
                         </select>
                     </div>
                     <div className="min-w-[220px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.movementType}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryLedger.movementType}</label>
                         <input value={movementType} onChange={(e) => setMovementType(e.target.value)} placeholder={t.inventoryLedger.movementPlaceholder} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
                     </div>
                 </div>

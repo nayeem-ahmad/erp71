@@ -5,6 +5,7 @@ import type {
     DashboardPreference,
     PlatformFeatureKey,
     PlatformFeatures,
+    SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
@@ -2051,8 +2052,17 @@ export const api = {
     },
     removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
     getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
-    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+    draftAdminBlogPost: (data: { prompt: string; locale?: string; locales?: string[] }) =>
         fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    translateAdminBlogPost: (data: {
+        source_locale: string;
+        target_locales: string[];
+        title: string;
+        body_md: string;
+        excerpt?: string;
+        seo_title?: string;
+        seo_description?: string;
+    }) => fetchWithAuth('/admin/blog/ai-translate', { method: 'POST', body: JSON.stringify(data) }),
     createAdminBlogCategory: (data: any) =>
         fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateAdminBlogCategory: (id: string, data: any) =>
@@ -2331,7 +2341,7 @@ export const api = {
     }),
     updateAdminTenantLocalization: (
         tenantId: string,
-        data: { localization_enabled?: boolean; secondary_locale?: 'bn' | 'ms' | null },
+        data: { localization_enabled?: boolean; secondary_locale?: SupportedLocaleCode | null },
     ) => fetchWithAuth(`/admin/tenants/${tenantId}/localization`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -2867,7 +2877,7 @@ export const api = {
     getMyAddonSubscriptions: () => fetchWithAuth('/addon-modules/mine'),
     cancelAddonAtPeriodEnd: (code: string) =>
         fetchWithAuth(`/addon-modules/${code}/cancel-at-period-end`, { method: 'POST' }),
-    updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
+    updateProfile: (data: { name?: string; preferred_locale?: SupportedLocaleCode }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -2882,7 +2892,7 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
-    updateTenantLocalizationSettings: (data: { default_locale: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/tenants/localization-settings', {
+    updateTenantLocalizationSettings: (data: { default_locale: SupportedLocaleCode }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

@@ -97,12 +97,12 @@ export default function InventoryTransferDetailPage() {
                         <>
                             {transfer.status === 'DRAFT' ? (
                                 <button onClick={() => void handleSend()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
-                                    <ArrowRightLeft className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.sendTransfer}
+                                    <ArrowRightLeft className="w-4 h-4 me-2" /> {t.inventoryTransferDetail.sendTransfer}
                                 </button>
                             ) : null}
                             {canReceive ? (
                                 <button onClick={() => void handleReceive()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
-                                    <CheckCircle2 className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.receiveStock}
+                                    <CheckCircle2 className="w-4 h-4 me-2" /> {t.inventoryTransferDetail.receiveStock}
                                 </button>
                             ) : null}
                         </>

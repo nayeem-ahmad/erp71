@@ -55,7 +55,7 @@ export default function TermsClient() {
                                 information including your legal name, business name, and a valid email address. You are
                                 responsible for:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>Maintaining the confidentiality of your account credentials.</li>
                                 <li>All activity that occurs under your account.</li>
                                 <li>Notifying us immediately at <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a> of any unauthorised access.</li>
@@ -79,7 +79,7 @@ export default function TermsClient() {
                                 <p><strong>Standard</strong> — ৳ 2,999/month</p>
                                 <p><strong>Premium</strong> — ৳ 3,999/month (unlimited stores and staff)</p>
                             </div>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Activation.</strong> New workspaces require a paid plan and successful checkout
                                     before full access is granted. Free trials and the free tier are temporarily unavailable
@@ -111,7 +111,7 @@ export default function TermsClient() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">5. Acceptable Use</h2>
                             <p className="mb-3">You agree not to use the Service to:</p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>Violate any applicable law or regulation, including those of Bangladesh.</li>
                                 <li>Process transactions for illegal goods or services.</li>
                                 <li>Reverse-engineer, decompile, or attempt to extract the source code of the platform.</li>
@@ -160,7 +160,7 @@ export default function TermsClient() {
                             <p className="mb-3">
                                 To the maximum extent permitted by law:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     The Service is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo; without warranties of any kind,
                                     express or implied, including fitness for a particular purpose or uninterrupted availability.

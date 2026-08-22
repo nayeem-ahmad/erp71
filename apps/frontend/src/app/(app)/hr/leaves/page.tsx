@@ -434,9 +434,9 @@ export default function LeavesPage() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.name}</th>
-                                            <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.columns.daysPerYear}</th>
-                                            <th className="text-right px-6 py-3"></th>
+                                            <th className="text-start text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.name}</th>
+                                            <th className="text-start text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.columns.daysPerYear}</th>
+                                            <th className="text-end px-6 py-3"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -444,7 +444,7 @@ export default function LeavesPage() {
                                             <tr key={lt.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
                                                 <td className="px-6 py-3.5 text-sm font-bold text-gray-900">{lt.name}</td>
                                                 <td className="px-6 py-3.5 text-sm text-gray-600">{lt.days_per_year}</td>
-                                                <td className="px-6 py-3.5 text-right">
+                                                <td className="px-6 py-3.5 text-end">
                                                     <button
                                                         onClick={() => handleDeleteType(lt.id)}
                                                         className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors"

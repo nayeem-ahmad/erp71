@@ -94,7 +94,7 @@ interface SaleEntryLayoutProps {
     payments: Payment[];
     onPaymentChange: (payments: Payment[]) => void;
 
-    /** Buttons for the bottom of the right-hand panel. */
+    /** Buttons for the bottom of the end-hand panel. */
     actions: ReactNode;
     onSubmit?: (e: React.FormEvent) => void;
 }

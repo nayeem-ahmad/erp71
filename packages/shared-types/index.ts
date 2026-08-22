@@ -1186,3 +1186,4 @@ export * from './subscription-plans';
 export * from './phone';
 export * from './campaign-rows';
 export * from './careers';
+export * from './locales';

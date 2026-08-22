@@ -302,7 +302,7 @@ export function CashFlowChart({
                             <p key={line.label} className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap">
                                 <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: line.color }} />
                                 <span className="opacity-75">{line.label}</span>
-                                <span className="ml-auto font-bold tabular-nums">{money(line.value)}</span>
+                                <span className="ms-auto font-bold tabular-nums">{money(line.value)}</span>
                             </p>
                         ))}
                     </div>

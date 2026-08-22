@@ -105,7 +105,7 @@ export default function PublicQuotationView({ quotation }: { quotation: PublicQu
                                 {title} for {quotation.customer_name || 'Customer'}
                             </p>
                         </div>
-                        <div className="text-right text-xs text-gray-600">
+                        <div className="text-end text-xs text-gray-600">
                             <p className="font-semibold text-gray-900">
                                 {quotation.quote_number}
                                 {quotation.version > 1 ? ` (v${quotation.version})` : ''}
@@ -121,20 +121,20 @@ export default function PublicQuotationView({ quotation }: { quotation: PublicQu
                     <div className="mt-3 overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-100 text-left text-xs uppercase text-gray-500">
+                                <tr className="border-b border-gray-100 text-start text-xs uppercase text-gray-500">
                                     <th className="py-2">Item</th>
-                                    <th className="py-2 text-right">Qty</th>
-                                    <th className="py-2 text-right">Unit price</th>
-                                    <th className="py-2 text-right">Total</th>
+                                    <th className="py-2 text-end">Qty</th>
+                                    <th className="py-2 text-end">Unit price</th>
+                                    <th className="py-2 text-end">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {quotation.items.map((item, index) => (
                                     <tr key={index} className="border-b border-gray-50">
                                         <td className="py-2 text-gray-900">{item.product_name}</td>
-                                        <td className="py-2 text-right text-gray-700">{item.quantity}</td>
-                                        <td className="py-2 text-right text-gray-700">{money(item.unit_price)}</td>
-                                        <td className="py-2 text-right font-medium text-gray-900">
+                                        <td className="py-2 text-end text-gray-700">{item.quantity}</td>
+                                        <td className="py-2 text-end text-gray-700">{money(item.unit_price)}</td>
+                                        <td className="py-2 text-end font-medium text-gray-900">
                                             {money(item.line_total)}
                                         </td>
                                     </tr>

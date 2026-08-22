@@ -198,7 +198,7 @@ export default function OrdersPage() {
                 cell: (info) => {
                     const row = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1">
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <Link
                                 href={`/sales/orders/${row.id}`}
                                 className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"

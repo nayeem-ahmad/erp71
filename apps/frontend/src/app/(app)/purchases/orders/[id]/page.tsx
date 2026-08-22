@@ -165,11 +165,11 @@ export default function PurchaseOrderDetailPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="text-left pb-3 text-xs font-medium text-gray-500">{t.common.product}</th>
-                                <th className="text-left pb-3 text-xs font-medium text-gray-500">{t.purchases.invoice.sku}</th>
+                                <th className="text-start pb-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                <th className="text-start pb-3 text-xs font-medium text-gray-500">{t.purchases.invoice.sku}</th>
                                 <th className="text-center pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.qty}</th>
-                                <th className="text-right pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.unitCost}</th>
-                                <th className="text-right pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.lineTotal}</th>
+                                <th className="text-end pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.unitCost}</th>
+                                <th className="text-end pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.lineTotal}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -178,8 +178,8 @@ export default function PurchaseOrderDetailPage() {
                                     <td className="py-3 font-medium">{item.product?.name ?? 'Unknown'}</td>
                                     <td className="py-3 text-gray-400 font-mono text-xs">{item.product?.sku ?? '—'}</td>
                                     <td className="py-3 text-center">{item.quantity}</td>
-                                    <td className="py-3 text-right">{formatBDT(parseFloat(item.unit_cost))}</td>
-                                    <td className="py-3 text-right font-bold">{formatBDT(parseFloat(item.line_total))}</td>
+                                    <td className="py-3 text-end">{formatBDT(parseFloat(item.unit_cost))}</td>
+                                    <td className="py-3 text-end font-bold">{formatBDT(parseFloat(item.line_total))}</td>
                                 </tr>
                             ))}
                         </tbody>

@@ -281,7 +281,7 @@ export default function NewImportShipmentPage() {
 
                     <div className="mt-3 flex justify-end border-t border-gray-100 pt-3 text-sm">
                         <span className="text-gray-500">{copy.columns.invoiceValue}</span>
-                        <span className="ml-3 font-semibold text-gray-900">
+                        <span className="ms-3 font-semibold text-gray-900">
                             {total.toFixed(2)} {currency}
                         </span>
                     </div>

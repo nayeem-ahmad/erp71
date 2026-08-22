@@ -159,7 +159,7 @@ export default function ProductionDeployPage() {
                                     <p className="text-sm text-gray-400">No deploys yet.</p>
                                 )}
                             </div>
-                            <span className={`ml-3 flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${badge.cls}`}>
+                            <span className={`ms-3 flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${badge.cls}`}>
                                 {active && <Loader2 className="w-3 h-3 animate-spin" />}
                                 {badge.label}
                             </span>

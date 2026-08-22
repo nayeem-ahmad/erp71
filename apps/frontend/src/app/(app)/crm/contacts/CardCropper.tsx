@@ -210,7 +210,7 @@ export default function CardCropper({
                                     setDragging(key);
                                 }}
                                 style={percent(quad[key])}
-                                className="absolute -ml-3 -mt-3 h-6 w-6 rounded-full border-2 border-white bg-blue-600 shadow ring-1 ring-blue-700"
+                                className="absolute -ms-3 -mt-3 h-6 w-6 rounded-full border-2 border-white bg-blue-600 shadow ring-1 ring-blue-700"
                             />
                         ))}
                     </>

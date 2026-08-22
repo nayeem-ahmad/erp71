@@ -185,7 +185,7 @@ export default function PostingRulesPage() {
                         <span className="text-sm text-gray-700">
                             {CONDITION_KEY_LABELS[key] ?? key}
                             {value && (
-                                <span className="ml-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{value}</span>
+                                <span className="ms-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{value}</span>
                             )}
                         </span>
                     );
@@ -300,7 +300,7 @@ export default function PostingRulesPage() {
                                 <>
                                     {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
                                     {editingRule.conditionValue && (
-                                        <span className="ml-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
+                                        <span className="ms-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
                                     )}
                                 </>
                             )}
@@ -381,7 +381,7 @@ export default function PostingRulesPage() {
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.active} side="right" />
                                         </span>
                                     </label>
-                                    <p className="text-xs text-gray-400 mt-1 ml-6">Inactive rules are skipped</p>
+                                    <p className="text-xs text-gray-400 mt-1 ms-6">Inactive rules are skipped</p>
                                 </div>
                             </div>
 

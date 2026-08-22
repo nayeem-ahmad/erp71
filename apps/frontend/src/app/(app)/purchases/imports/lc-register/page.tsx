@@ -104,12 +104,12 @@ export default function LcRegisterPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-100 text-left text-xs uppercase text-gray-500">
+                                <tr className="border-b border-gray-100 text-start text-xs uppercase text-gray-500">
                                     <th className="p-3">{t.imports.columns.reference}</th>
                                     <th className="p-3">{t.imports.columns.lcNumber}</th>
                                     <th className="hidden p-3 md:table-cell">{t.imports.columns.supplier}</th>
                                     <th className="hidden p-3 lg:table-cell">Bank</th>
-                                    <th className="p-3 text-right">{t.imports.columns.invoiceValue}</th>
+                                    <th className="p-3 text-end">{t.imports.columns.invoiceValue}</th>
                                     <th className="p-3">{copy.daysToExpiry}</th>
                                 </tr>
                             </thead>
@@ -127,7 +127,7 @@ export default function LcRegisterPage() {
                                         <td className="p-3 text-gray-700">{row.lc_number ?? '—'}</td>
                                         <td className="hidden p-3 text-gray-700 md:table-cell">{row.supplier ?? '—'}</td>
                                         <td className="hidden p-3 text-gray-700 lg:table-cell">{row.bank_name ?? '—'}</td>
-                                        <td className="p-3 text-right text-gray-900">
+                                        <td className="p-3 text-end text-gray-900">
                                             {formatCurrency(row.invoice_value_fc, { currency: row.currency, locale })}
                                         </td>
                                         <td className={`p-3 ${expiryClass(row)}`}>
@@ -138,7 +138,7 @@ export default function LcRegisterPage() {
                                             ) : (
                                                 <>
                                                     {row.days_to_expiry}
-                                                    <span className="ml-2 text-xs font-normal text-gray-400">
+                                                    <span className="ms-2 text-xs font-normal text-gray-400">
                                                         {formatDate(row.lc_expiry_date, locale)}
                                                     </span>
                                                 </>

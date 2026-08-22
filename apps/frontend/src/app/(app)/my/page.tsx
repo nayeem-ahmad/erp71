@@ -271,10 +271,10 @@ export default function MyWorkspacePage() {
                                 <table className="w-full text-sm">
                                     <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                                         <tr>
-                                            <th className="p-2 text-left font-medium">{copy.attendance.date}</th>
-                                            <th className="p-2 text-left font-medium">{copy.attendance.status}</th>
-                                            <th className="hidden p-2 text-left font-medium md:table-cell">{copy.attendance.clockIn}</th>
-                                            <th className="hidden p-2 text-left font-medium md:table-cell">{copy.attendance.clockOut}</th>
+                                            <th className="p-2 text-start font-medium">{copy.attendance.date}</th>
+                                            <th className="p-2 text-start font-medium">{copy.attendance.status}</th>
+                                            <th className="hidden p-2 text-start font-medium md:table-cell">{copy.attendance.clockIn}</th>
+                                            <th className="hidden p-2 text-start font-medium md:table-cell">{copy.attendance.clockOut}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -320,7 +320,7 @@ export default function MyWorkspacePage() {
                                             <p className="text-xs text-gray-500">{balance.leave_type}</p>
                                             <p className="mt-1 text-lg font-semibold text-gray-900">
                                                 {balance.remaining_days}
-                                                <span className="ml-1 text-xs font-normal text-gray-500">
+                                                <span className="ms-1 text-xs font-normal text-gray-500">
                                                     {copy.leave.of} {balance.total_days} {copy.leave.remaining}
                                                 </span>
                                             </p>
@@ -337,11 +337,11 @@ export default function MyWorkspacePage() {
                                     <table className="w-full text-sm">
                                         <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                                             <tr>
-                                                <th className="p-2 text-left font-medium">{copy.leave.type}</th>
-                                                <th className="p-2 text-left font-medium">{copy.leave.from}</th>
-                                                <th className="hidden p-2 text-left font-medium md:table-cell">{copy.leave.to}</th>
-                                                <th className="p-2 text-left font-medium">{copy.leave.days}</th>
-                                                <th className="p-2 text-left font-medium">{copy.attendance.status}</th>
+                                                <th className="p-2 text-start font-medium">{copy.leave.type}</th>
+                                                <th className="p-2 text-start font-medium">{copy.leave.from}</th>
+                                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.leave.to}</th>
+                                                <th className="p-2 text-start font-medium">{copy.leave.days}</th>
+                                                <th className="p-2 text-start font-medium">{copy.attendance.status}</th>
                                                 <th className="p-2" />
                                             </tr>
                                         </thead>
@@ -353,7 +353,7 @@ export default function MyWorkspacePage() {
                                                     <td className="hidden p-2 md:table-cell">{formatDate(req.end_date)}</td>
                                                     <td className="p-2">{req.days}</td>
                                                     <td className="p-2"><StatusPill status={req.status} /></td>
-                                                    <td className="p-2 text-right">
+                                                    <td className="p-2 text-end">
                                                         {req.status === 'PENDING' && (
                                                             <Button variant="ghost" onClick={() => withdraw(req.id)}>
                                                                 {copy.leave.cancel}
@@ -377,10 +377,10 @@ export default function MyWorkspacePage() {
                                 <table className="w-full text-sm">
                                     <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                                         <tr>
-                                            <th className="p-2 text-left font-medium">{copy.pay.period}</th>
-                                            <th className="p-2 text-left font-medium">{copy.pay.paidOn}</th>
-                                            <th className="p-2 text-right font-medium">{copy.pay.amount}</th>
-                                            <th className="hidden p-2 text-left font-medium md:table-cell">{copy.pay.method}</th>
+                                            <th className="p-2 text-start font-medium">{copy.pay.period}</th>
+                                            <th className="p-2 text-start font-medium">{copy.pay.paidOn}</th>
+                                            <th className="p-2 text-end font-medium">{copy.pay.amount}</th>
+                                            <th className="hidden p-2 text-start font-medium md:table-cell">{copy.pay.method}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -388,7 +388,7 @@ export default function MyWorkspacePage() {
                                             <tr key={payment.id} className="border-b border-gray-100 last:border-0">
                                                 <td className="p-2">{payment.pay_period}</td>
                                                 <td className="p-2">{formatDate(payment.payment_date)}</td>
-                                                <td className="p-2 text-right font-medium">{formatBDT(Number(payment.amount))}</td>
+                                                <td className="p-2 text-end font-medium">{formatBDT(Number(payment.amount))}</td>
                                                 <td className="hidden p-2 text-gray-600 md:table-cell">{payment.payment_method}</td>
                                             </tr>
                                         ))}

@@ -1,6 +1,10 @@
 import { IsBoolean, IsEmail, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { BUSINESS_TYPE_VALUES } from '@erp71/shared-types';
+import {
+    BUSINESS_TYPE_VALUES,
+    SECONDARY_LOCALE_CODES,
+    type SupportedLocaleCode,
+} from '@erp71/shared-types';
 
 export class ListAdminTenantsQueryDto {
     @IsOptional() @IsString() search?: string;
@@ -38,8 +42,8 @@ export class UpdateAdminTenantLocalizationDto {
     localization_enabled?: boolean;
 
     @IsOptional()
-    @IsIn(['bn', 'ms'])
-    secondary_locale?: 'bn' | 'ms' | null;
+    @IsIn(SECONDARY_LOCALE_CODES)
+    secondary_locale?: SupportedLocaleCode | null;
 }
 
 /**

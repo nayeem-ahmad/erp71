@@ -237,7 +237,7 @@ export default function PlatformSubscriptionPlansPage() {
 
                 {loading ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        <Loader2 className="w-5 h-5 animate-spin me-2" />
                         {t.admin.platformSettings.common.loading}
                     </div>
                 ) : (
@@ -250,7 +250,7 @@ export default function PlatformSubscriptionPlansPage() {
                                         key={plan.code}
                                         type="button"
                                         onClick={() => setSelectedCode(plan.code)}
-                                        className={`w-full rounded-xl px-3 py-3 text-left transition-colors ${
+                                        className={`w-full rounded-xl px-3 py-3 text-start transition-colors ${
                                             active ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50 text-gray-700'
                                         }`}
                                     >

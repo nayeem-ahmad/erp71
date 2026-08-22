@@ -61,16 +61,16 @@ export default function LineItemsTable({
             <table className="w-full text-sm min-w-[620px]">
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                        <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
-                        <th className="px-2 py-1.5 text-left font-semibold">Name</th>
-                        <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Group</th>
+                        <th className="px-2 py-1.5 text-start font-semibold w-8">#</th>
+                        <th className="px-2 py-1.5 text-start font-semibold">Name</th>
+                        <th className="px-2 py-1.5 text-start font-semibold hidden md:table-cell">Group</th>
                         {showAvailable && (
-                            <th className="px-2 py-1.5 text-right font-semibold hidden md:table-cell">Avail</th>
+                            <th className="px-2 py-1.5 text-end font-semibold hidden md:table-cell">Avail</th>
                         )}
-                        <th className="px-2 py-1.5 text-right font-semibold">Price</th>
-                        {showDiscount && <th className="px-2 py-1.5 text-right font-semibold">Disc %</th>}
+                        <th className="px-2 py-1.5 text-end font-semibold">Price</th>
+                        {showDiscount && <th className="px-2 py-1.5 text-end font-semibold">Disc %</th>}
                         <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
-                        <th className="px-2 py-1.5 text-right font-semibold">Total</th>
+                        <th className="px-2 py-1.5 text-end font-semibold">Total</th>
                         <th className="px-2 py-1.5 w-8"></th>
                     </tr>
                 </thead>
@@ -92,7 +92,7 @@ export default function LineItemsTable({
                                     {item.subgroup && ` → ${item.subgroup}`}
                                 </td>
                                 {showAvailable && (
-                                    <td className="px-2 py-1 text-right text-xs hidden md:table-cell">
+                                    <td className="px-2 py-1 text-end text-xs hidden md:table-cell">
                                         {item.availableQty == null ? (
                                             <span className="text-gray-400">—</span>
                                         ) : (
@@ -102,7 +102,7 @@ export default function LineItemsTable({
                                         )}
                                     </td>
                                 )}
-                                <td className="px-2 py-1 text-right">
+                                <td className="px-2 py-1 text-end">
                                     {priceFrozen ? (
                                         <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
                                     ) : (
@@ -112,12 +112,12 @@ export default function LineItemsTable({
                                             step="0.01"
                                             value={item.price}
                                             onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
-                                            className="w-20 px-1.5 py-0.5 border rounded text-sm text-right"
+                                            className="w-20 px-1.5 py-0.5 border rounded text-sm text-end"
                                         />
                                     )}
                                 </td>
                                 {showDiscount && (
-                                    <td className="px-2 py-1 text-right">
+                                    <td className="px-2 py-1 text-end">
                                         {readOnly ? (
                                             <span className="text-gray-700">{item.discount || 0}</span>
                                         ) : (
@@ -127,7 +127,7 @@ export default function LineItemsTable({
                                                 max="100"
                                                 value={item.discount}
                                                 onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                                className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
+                                                className="w-14 px-1.5 py-0.5 border rounded text-sm text-end"
                                             />
                                         )}
                                     </td>
@@ -162,7 +162,7 @@ export default function LineItemsTable({
                                         </div>
                                     )}
                                 </td>
-                                <td className="px-2 py-1 text-right text-gray-900 font-semibold whitespace-nowrap">
+                                <td className="px-2 py-1 text-end text-gray-900 font-semibold whitespace-nowrap">
                                     ৳{calculateLineTotal(item).toFixed(2)}
                                 </td>
                                 <td className="px-2 py-1 text-center">

@@ -43,7 +43,7 @@ export function RankedListPanel({
                                 <span className="block truncate font-semibold text-gray-900">{item.name}</span>
                                 <span className="block text-[9px] text-gray-400">{item.meta}</span>
                             </span>
-                            <span className="ml-auto font-extrabold text-gray-900">{item.amount}</span>
+                            <span className="ms-auto font-extrabold text-gray-900">{item.amount}</span>
                         </li>
                     ))}
                 </ul>

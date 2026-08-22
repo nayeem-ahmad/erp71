@@ -360,7 +360,7 @@ export default function CrmDashboard({
                                             {campaign.status}
                                         </StatusBadge>
                                         <span className="min-w-0 truncate font-semibold text-gray-900">{campaign.name}</span>
-                                        <span className="ml-auto shrink-0 text-[10px] text-gray-500">
+                                        <span className="ms-auto shrink-0 text-[10px] text-gray-500">
                                             {campaign.status === 'COMPLETED'
                                                 ? formatMessage(crm.campaignDelivered, {
                                                     delivered: campaign.delivered_count,

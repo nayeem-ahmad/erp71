@@ -272,24 +272,24 @@ function QuoteDetailsPageContent() {
             {isEditMode && (
                 <div className="px-8 pt-6">
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
                                 {t.shared.editMode.quote}
                             </span>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
                                 disabled={saving || editItems.length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 <span>{saving ? t.quotes.detail.saving : t.quotes.detail.saveChanges}</span>
                             </button>
                             <button
                                 onClick={() => router.push(`/sales/quotes/${quote.id}`)}
-                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1"
+                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1 rtl:space-x-reverse"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 <span>{t.common.cancel}</span>
@@ -307,7 +307,7 @@ function QuoteDetailsPageContent() {
                                 <FileText className="w-8 h-8 text-blue-600" />
                                 <span>
                                     {quote.quote_number}{' '}
-                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-bold ml-1">v{quote.version}</span>
+                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-bold ms-1">v{quote.version}</span>
                                 </span>
                             </span>
                         }
@@ -344,7 +344,7 @@ function QuoteDetailsPageContent() {
                         actions={
                             <>
                                 <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all">
-                                    <Printer className="w-4 h-4 mr-2 text-gray-400" />
+                                    <Printer className="w-4 h-4 me-2 text-gray-400" />
                                     {t.quotes.detail.printPdf}
                                 </button>
                                 <button
@@ -352,14 +352,14 @@ function QuoteDetailsPageContent() {
                                     disabled={actionLoading}
                                     className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all disabled:opacity-50"
                                 >
-                                    <Share2 className="w-4 h-4 mr-2 text-gray-400" />
+                                    <Share2 className="w-4 h-4 me-2 text-gray-400" />
                                     Share
                                 </button>
                                 <button
                                     onClick={() => router.push(`/sales/quotes/${quote.id}?edit=true`)}
                                     className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all"
                                 >
-                                    <Pencil className="w-4 h-4 mr-2 text-gray-400" />
+                                    <Pencil className="w-4 h-4 me-2 text-gray-400" />
                                     {t.quotes.detail.edit}
                                 </button>
                                 <button
@@ -367,7 +367,7 @@ function QuoteDetailsPageContent() {
                                     disabled={actionLoading}
                                     className="bg-red-50 border border-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-red-100 transition-all disabled:opacity-50"
                                 >
-                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    <Trash2 className="w-4 h-4 me-2" />
                                     {t.quotes.detail.delete}
                                 </button>
                                 {quote.status === 'DRAFT' && (
@@ -390,13 +390,13 @@ function QuoteDetailsPageContent() {
                                 )}
                                 {quote.status !== 'REVISED' && quote.status !== 'CONVERTED' && (
                                     <button onClick={handleRevise} disabled={actionLoading} className="bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-amber-200 transition-all">
-                                        <PlusCircle className="w-4 h-4 mr-2" />
+                                        <PlusCircle className="w-4 h-4 me-2" />
                                         {t.quotes.detail.revise}
                                     </button>
                                 )}
                                 {quote.status !== 'REVISED' && quote.status !== 'CONVERTED' && (
                                     <button onClick={handleConvertToOrder} disabled={actionLoading} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-700 shadow-sm transition-all">
-                                        <ClipboardList className="w-4 h-4 mr-2" />
+                                        <ClipboardList className="w-4 h-4 me-2" />
                                         {t.quotes.detail.convertToOrder}
                                     </button>
                                 )}
@@ -418,7 +418,7 @@ function QuoteDetailsPageContent() {
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.addProducts}</label>
                                         <div className="relative">
-                                            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                            <div className="flex items-center space-x-2 rtl:space-x-reverse bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
                                                 <Search className="w-4 h-4 text-gray-400" />
                                                 <input
                                                     type="text"
@@ -438,11 +438,11 @@ function QuoteDetailsPageContent() {
                                                         <button
                                                             key={product.id}
                                                             onClick={() => addItem(product)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
+                                                            className="w-full text-start px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
                                                         >
                                                             <div>
                                                                 <span className="text-sm font-bold">{product.name}</span>
-                                                                <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
+                                                                <span className="text-xs text-gray-400 ms-2">{product.sku}</span>
                                                             </div>
                                                             <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(product.price), { locale })}</span>
                                                         </button>
@@ -455,10 +455,10 @@ function QuoteDetailsPageContent() {
                                     <table className="w-full">
                                         <thead>
                                             <tr className="border-b border-gray-100">
-                                                <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                                <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
                                                 <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
-                                                <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.unitPrice}</th>
-                                                <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
+                                                <th className="text-end pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.unitPrice}</th>
+                                                <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                                 <th className="w-10"></th>
                                             </tr>
                                         </thead>
@@ -467,7 +467,7 @@ function QuoteDetailsPageContent() {
                                                 <tr key={`${item.productId}-${index}`}>
                                                     <td className="py-3">
                                                         <span className="text-sm font-bold">{item.productName}</span>
-                                                        <span className="text-xs text-gray-400 ml-2">{item.sku}</span>
+                                                        <span className="text-xs text-gray-400 ms-2">{item.sku}</span>
                                                     </td>
                                                     <td className="py-3">
                                                         <input
@@ -485,10 +485,10 @@ function QuoteDetailsPageContent() {
                                                             step={0.01}
                                                             value={item.unitPrice}
                                                             onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                                                            className="w-full text-end bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                                         />
                                                     </td>
-                                                    <td className="py-3 text-right text-sm font-bold text-blue-600">
+                                                    <td className="py-3 text-end text-sm font-bold text-blue-600">
                                                         {formatBDT(item.quantity * item.unitPrice, { locale })}
                                                     </td>
                                                     <td className="py-3 text-center">
@@ -505,7 +505,7 @@ function QuoteDetailsPageContent() {
                                 <div className="divide-y divide-gray-50">
                                     {quote.items.map((item: any) => (
                                         <div key={item.id} className="p-6 flex items-center justify-between print:px-0">
-                                            <div className="flex items-center space-x-4">
+                                            <div className="flex items-center space-x-4 rtl:space-x-reverse">
                                                 <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
                                                     <Package className="w-5 h-5 text-gray-400" />
                                                 </div>
@@ -514,7 +514,7 @@ function QuoteDetailsPageContent() {
                                                     <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">{formatMessage(t.quotes.detail.qtyLabel, { count: item.quantity })}</p>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-end">
                                                 <p className="font-bold">{formatBDT(Number(item.unit_price) * item.quantity, { locale })}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">{formatBDT(Number(item.unit_price), { locale })}{t.shared.perEa}</p>
                                             </div>

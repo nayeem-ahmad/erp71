@@ -197,14 +197,14 @@ function AcceptInvitationContent() {
                                         {formatMessage(m.signInPasswordPrompt, { email: info.email })}
                                     </p>
                                     <div className="relative">
-                                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Lock className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                                         <input
                                             type="password"
                                             autoComplete="current-password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder={m.passwordPlaceholder}
-                                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                                            className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
                                         />
                                     </div>
                                     {formError && <p className="text-sm text-red-600">{formError}</p>}
@@ -231,36 +231,36 @@ function AcceptInvitationContent() {
                                         {formatMessage(m.createAccountPrompt, { email: info.email })}
                                     </p>
                                     <div className="relative">
-                                        <User className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <User className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                                         <input
                                             type="text"
                                             autoComplete="name"
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
                                             placeholder={m.namePlaceholder}
-                                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                                            className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
                                         />
                                     </div>
                                     <div className="relative">
-                                        <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Phone className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                                         <input
                                             type="tel"
                                             autoComplete="tel"
                                             value={mobile}
                                             onChange={(e) => setMobile(e.target.value)}
                                             placeholder={m.mobilePlaceholder}
-                                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                                            className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
                                         />
                                     </div>
                                     <div className="relative">
-                                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Lock className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
                                         <input
                                             type="password"
                                             autoComplete="new-password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder={m.passwordPlaceholder}
-                                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                                            className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
                                         />
                                     </div>
                                     <p className="text-xs text-gray-400">{m.passwordHint}</p>

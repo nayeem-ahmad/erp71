@@ -169,7 +169,7 @@ export default function PurchasesPage() {
                             onClick={() => setIsModalOpen(true)}
                             className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
-                            <Plus className="w-4 h-4 mr-2" />
+                            <Plus className="w-4 h-4 me-2" />
                             {t.purchases.recordPurchase}
                         </button>
                     )}

@@ -315,21 +315,21 @@ export default function NewSalePage() {
                             <button
                                 type="button"
                                 onClick={() => setShowPaperMenu((v) => !v)}
-                                className="px-1.5 py-2 border-l text-gray-500 hover:bg-gray-50"
+                                className="px-1.5 py-2 border-s text-gray-500 hover:bg-gray-50"
                                 title="Choose paper size"
                             >
                                 <ChevronDown className="w-4 h-4" />
                             </button>
                         </div>
                         {showPaperMenu && (
-                            <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                            <div className="absolute end-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
                                 <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
                                 {PAPER_SIZES.map((size) => (
                                     <button
                                         key={size}
                                         type="button"
                                         onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
+                                        className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
                                     >
                                         {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
                                     </button>

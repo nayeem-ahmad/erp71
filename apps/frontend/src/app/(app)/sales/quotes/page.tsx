@@ -131,7 +131,7 @@ export default function QuotesPage() {
                 cell: (info) => (
                     <div>
                         <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
-                        <span className="ml-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                        <span className="ms-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
                             {formatMessage(t.shared.version, { version: info.row.original.version })}
                         </span>
                     </div>
@@ -212,7 +212,7 @@ export default function QuotesPage() {
                 cell: (info) => {
                     const quote = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1">
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <Link
                                 href={`/sales/quotes/${quote.id}`}
                                 className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"

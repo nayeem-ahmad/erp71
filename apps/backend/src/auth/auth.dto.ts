@@ -1,7 +1,9 @@
 import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { BUSINESS_TYPE_VALUES } from '@erp71/shared-types';
-
-const SUPPORTED_LOCALES = ['en', 'bn', 'ms'] as const;
+import {
+    BUSINESS_TYPE_VALUES,
+    ENABLED_LOCALE_CODES,
+    type SupportedLocaleCode,
+} from '@erp71/shared-types';
 
 export class SignupDto {
     @IsEmail({}, { message: 'Please enter a valid email address.' })
@@ -162,8 +164,8 @@ export class UpdateProfileDto {
     name?: string;
 
     @IsOptional()
-    @IsIn(SUPPORTED_LOCALES)
-    preferred_locale?: (typeof SUPPORTED_LOCALES)[number];
+    @IsIn(ENABLED_LOCALE_CODES)
+    preferred_locale?: SupportedLocaleCode;
 }
 
 export class ChangePasswordDto {

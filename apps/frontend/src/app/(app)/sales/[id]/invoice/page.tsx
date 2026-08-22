@@ -191,7 +191,7 @@ export default function InvoicePage() {
                                 ) : null}
                                 <h1 className="text-2xl font-bold text-white">{businessName}</h1>
                             </div>
-                            <div className="text-right">
+                            <div className="text-end">
                                 <div className="text-white/70 text-xs uppercase tracking-widest font-semibold mb-1">
                                     {hasVat ? t.sales.invoice.vatInvoice : t.sales.invoice.invoice}
                                 </div>
@@ -275,14 +275,14 @@ export default function InvoicePage() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b-2 border-gray-200">
-                                        <th className="text-left py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.description}</th>
-                                        <th className="text-left py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.shared.columns.sku}</th>
+                                        <th className="text-start py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.description}</th>
+                                        <th className="text-start py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.shared.columns.sku}</th>
                                         <th className="text-center py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.qty}</th>
-                                        <th className="text-right py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.unitPrice}</th>
+                                        <th className="text-end py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.unitPrice}</th>
                                         {hasVat && (
-                                            <th className="text-right py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.vat}</th>
+                                            <th className="text-end py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.vat}</th>
                                         )}
-                                        <th className="text-right py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.amount}</th>
+                                        <th className="text-end py-3 text-xs font-bold uppercase tracking-widest text-gray-500">{t.sales.invoice.amount}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -291,15 +291,15 @@ export default function InvoicePage() {
                                             <td className="py-3 font-medium text-gray-900">{item.product?.name ?? t.shared.unknownProduct}</td>
                                             <td className="py-3 text-gray-400 font-mono text-xs">{item.product?.sku ?? '—'}</td>
                                             <td className="py-3 text-center text-gray-700">{item.quantity}</td>
-                                            <td className="py-3 text-right text-gray-700">{formatBDT(item.unitPrice, { locale })}</td>
+                                            <td className="py-3 text-end text-gray-700">{formatBDT(item.unitPrice, { locale })}</td>
                                             {hasVat && (
-                                                <td className="py-3 text-right text-gray-500 text-xs">
+                                                <td className="py-3 text-end text-gray-500 text-xs">
                                                     {item.vatRate > 0
                                                         ? `${item.vatRate}% / ${formatBDT(item.vatAmount, { locale })}`
                                                         : '—'}
                                                 </td>
                                             )}
-                                            <td className="py-3 text-right font-semibold text-gray-900">{formatBDT(item.lineTotal, { locale })}</td>
+                                            <td className="py-3 text-end font-semibold text-gray-900">{formatBDT(item.lineTotal, { locale })}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -348,7 +348,7 @@ export default function InvoicePage() {
                                     {sale.payments.map((p, i) => (
                                         <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs">
                                             <span className="font-semibold text-gray-700">{p.payment_method.replace(/_/g, ' ')}</span>
-                                            <span className="text-gray-500 ml-2">{formatBDT(parseFloat(p.amount), { locale })}</span>
+                                            <span className="text-gray-500 ms-2">{formatBDT(parseFloat(p.amount), { locale })}</span>
                                         </div>
                                     ))}
                                 </div>

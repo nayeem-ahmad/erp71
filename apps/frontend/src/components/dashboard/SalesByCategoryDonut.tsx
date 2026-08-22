@@ -103,7 +103,7 @@ export function SalesByCategoryDonut({
                     <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Total</span>
                 </div>
             </div>
-            {/* Share sits immediately before the name: right-aligned in its own
+            {/* Share sits immediately before the name: end-aligned in its own
                 narrow column, so the figures still line up for scanning, but a
                 short category name never strands its percentage across the card. */}
             <ul className="w-full min-w-[150px] max-w-[280px] flex-1 space-y-1.5">
@@ -116,7 +116,7 @@ export function SalesByCategoryDonut({
                             className="h-2.5 w-2.5 rounded-sm"
                             style={{ background: CATEGORY_PALETTE[index % CATEGORY_PALETTE.length] }}
                         />
-                        <span className="text-right font-extrabold tabular-nums text-gray-900">
+                        <span className="text-end font-extrabold tabular-nums text-gray-900">
                             {Math.round(row.share)}%
                         </span>
                         <span className="truncate" title={row.categoryName}>{row.categoryName}</span>

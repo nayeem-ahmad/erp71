@@ -240,25 +240,25 @@ export default function SystemHealthPanel({
                             <Clock className="w-4 h-4" /> {m.sections.jobs}
                         </h2>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
+                            <table className="w-full text-start text-sm">
                                 <thead>
                                     <tr className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                        <th className="pb-2 pr-4">{m.table.job}</th>
-                                        <th className="pb-2 pr-4">{m.table.schedule}</th>
-                                        <th className="pb-2 pr-4">{m.table.lastRun}</th>
-                                        <th className="pb-2 pr-4">{m.table.lastSuccess}</th>
-                                        <th className="pb-2 pr-4">{m.table.duration}</th>
+                                        <th className="pb-2 pe-4">{m.table.job}</th>
+                                        <th className="pb-2 pe-4">{m.table.schedule}</th>
+                                        <th className="pb-2 pe-4">{m.table.lastRun}</th>
+                                        <th className="pb-2 pe-4">{m.table.lastSuccess}</th>
+                                        <th className="pb-2 pe-4">{m.table.duration}</th>
                                         <th className="pb-2">{m.table.state}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {jobs.map((job) => (
                                         <tr key={job.name}>
-                                            <td className="py-2 pr-4 font-semibold text-gray-800">{job.label}</td>
-                                            <td className="py-2 pr-4 font-mono text-xs text-gray-500">{job.schedule}</td>
-                                            <td className="py-2 pr-4 text-xs text-gray-600">{formatTimestamp(job.last_run_at)}</td>
-                                            <td className="py-2 pr-4 text-xs text-gray-600">{formatTimestamp(job.last_success_at)}</td>
-                                            <td className="py-2 pr-4 text-xs text-gray-600">
+                                            <td className="py-2 pe-4 font-semibold text-gray-800">{job.label}</td>
+                                            <td className="py-2 pe-4 font-mono text-xs text-gray-500">{job.schedule}</td>
+                                            <td className="py-2 pe-4 text-xs text-gray-600">{formatTimestamp(job.last_run_at)}</td>
+                                            <td className="py-2 pe-4 text-xs text-gray-600">{formatTimestamp(job.last_success_at)}</td>
+                                            <td className="py-2 pe-4 text-xs text-gray-600">
                                                 {job.last_duration_ms != null ? `${job.last_duration_ms}ms` : '—'}
                                             </td>
                                             <td className="py-2">

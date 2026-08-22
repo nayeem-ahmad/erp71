@@ -735,7 +735,7 @@ function TitleField({
                 title={m.editTitle}
                 aria-label={`${m.editTitle}: ${title}`}
                 onClick={open}
-                className="group -mx-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-gray-100 disabled:opacity-60 max-md:min-h-touch"
+                className="group -mx-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-start hover:bg-gray-100 disabled:opacity-60 max-md:min-h-touch"
             >
                 <span className="truncate">{title}</span>
                 <Pencil
@@ -881,7 +881,7 @@ function DescriptionSection({
                 <button
                     type="button"
                     onClick={open}
-                    className="mt-2 min-h-touch w-full rounded-md border border-dashed border-gray-200 px-3 py-2 text-left text-sm text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                    className="mt-2 min-h-touch w-full rounded-md border border-dashed border-gray-200 px-3 py-2 text-start text-sm text-gray-500 hover:border-gray-300 hover:bg-gray-50"
                 >
                     {m.add}
                 </button>
@@ -1198,9 +1198,9 @@ function ActivitySection({
                     }
                 >
                     {watching ? (
-                        <Eye className="mr-1 h-4 w-4" />
+                        <Eye className="me-1 h-4 w-4" />
                     ) : (
-                        <EyeOff className="mr-1 h-4 w-4" />
+                        <EyeOff className="me-1 h-4 w-4" />
                     )}
                     {watching ? m.watching : m.watch}
                 </Button>
@@ -1303,7 +1303,7 @@ function ActivitySection({
                                         {actorName(entry.actor) ?? m.someone}
                                     </span>{' '}
                                     {describeActivity(entry, m.types as Record<string, string>)}
-                                    <span className="ml-1 text-xs text-gray-400">
+                                    <span className="ms-1 text-xs text-gray-400">
                                         {new Date(entry.created_at).toLocaleString()}
                                     </span>
                                 </p>
@@ -1581,7 +1581,7 @@ function ChecklistSection({
                             ) : (
                                 <button
                                     type="button"
-                                    className={`min-h-touch flex-1 text-left text-sm ${
+                                    className={`min-h-touch flex-1 text-start text-sm ${
                                         item.is_done ? 'text-gray-400 line-through' : ''
                                     }`}
                                     onClick={() => {

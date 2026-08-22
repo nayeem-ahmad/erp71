@@ -274,7 +274,7 @@ export default function HourLogsPage() {
                     row.original.task ? (
                         <button
                             type="button"
-                            className="text-left font-medium text-blue-600 hover:underline"
+                            className="text-start font-medium text-blue-600 hover:underline"
                             onClick={() => setOpenTaskId(row.original.task!.id)}
                         >
                             {row.original.task.title}

@@ -46,13 +46,13 @@ export const dataTableDensity = {
         wrapper: 'rounded-2xl',
         toolbar: 'p-4 border-b border-gray-100 space-y-3',
         headerCell:
-            'text-left p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 select-none group bg-gray-50/80 border-b border-gray-200',
+            'text-start p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 select-none group bg-gray-50/80 border-b border-gray-200',
         bodyCell: 'p-3',
         toolbarBtn:
-            'flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border',
+            'flex items-center space-x-1.5 rtl:space-x-reverse px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border',
         toolbarBtnIdle: 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50',
         searchInput:
-            'w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium',
+            'w-full bg-gray-50 border border-gray-200 rounded-xl py-2 ps-10 pe-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium',
         emptyState: 'p-12',
         emptyIcon: 'w-16 h-16',
         pagination: 'px-4 py-3',
@@ -63,13 +63,13 @@ export const dataTableDensity = {
         wrapper: 'rounded-lg',
         toolbar: 'p-2 border-b border-gray-100 space-y-2',
         headerCell:
-            'text-left px-2 py-1.5 text-xs font-medium text-gray-500 select-none group bg-gray-50/80 border-b border-gray-200',
+            'text-start px-2 py-1.5 text-xs font-medium text-gray-500 select-none group bg-gray-50/80 border-b border-gray-200',
         bodyCell: 'px-2 py-1.5 text-[13px]',
         toolbarBtn:
             'flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border',
         toolbarBtnIdle: 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50',
         searchInput:
-            'w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 pl-8 pr-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all',
+            'w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 ps-8 pe-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all',
         emptyState: 'p-6',
         emptyIcon: 'w-10 h-10',
         pagination: 'px-3 py-2',

@@ -70,8 +70,8 @@ export default function StorefrontBlogCategoriesPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{m.categoryName}</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600" />
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{m.categoryName}</th>
+                                <th className="px-3 py-2 text-end text-xs font-semibold text-gray-600" />
                             </tr>
                         </thead>
                         <tbody>
@@ -88,7 +88,7 @@ export default function StorefrontBlogCategoriesPage() {
                                             <span className="font-medium text-gray-900">{row.name}</span>
                                             <div className="text-xs text-gray-500">/{row.slug}</div>
                                         </td>
-                                        <td className="px-3 py-2 text-right">
+                                        <td className="px-3 py-2 text-end">
                                             <Button
                                                 variant="ghost"
                                                 icon={<Trash2 className="h-4 w-4" />}
