@@ -56,7 +56,13 @@ export const customersMessages = {
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
                 "address": "123 الشارع الرئيسي..."
-            }
+            },
+            editTitle: "تعديل الزبون",
+            editSubtitle: "تحديث بيانات الزبون",
+            customerCodeEditHint: "اتركه فارغًا للإبقاء على الرمز الحالي.",
+            saving: "جارٍ الحفظ...",
+            saveCustomer: "حفظ التغييرات",
+            updateFailed: "تعذّر تحديث الزبون. قد يكون رقم الهاتف أو رمز الزبون مستخدمًا بالفعل."
         },
         "profile": {
             "back": "العودة إلى العملاء",

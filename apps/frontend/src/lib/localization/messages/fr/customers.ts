@@ -56,7 +56,13 @@ export const customersMessages = {
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
                 "address": "123 rue Principale..."
-            }
+            },
+            editTitle: "Modifier le client",
+            editSubtitle: "Mettre à jour les informations du client",
+            customerCodeEditHint: "Laisser vide pour conserver le code actuel.",
+            saving: "Enregistrement...",
+            saveCustomer: "Enregistrer les modifications",
+            updateFailed: "Impossible de mettre à jour le client. Le numéro de téléphone ou le code client est peut-être déjà utilisé."
         },
         "profile": {
             "back": "Retour aux clients",

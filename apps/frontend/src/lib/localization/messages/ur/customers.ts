@@ -56,7 +56,13 @@ export const customersMessages = {
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
                 "address": "123 مین اسٹریٹ..."
-            }
+            },
+            editTitle: "گاہک میں ترمیم کریں",
+            editSubtitle: "گاہک کی تفصیلات اپ ڈیٹ کریں",
+            customerCodeEditHint: "موجودہ کوڈ برقرار رکھنے کے لیے خالی چھوڑ دیں۔",
+            saving: "محفوظ ہو رہا ہے...",
+            saveCustomer: "تبدیلیاں محفوظ کریں",
+            updateFailed: "گاہک اپ ڈیٹ نہیں ہو سکا۔ ممکن ہے فون نمبر یا گاہک کوڈ پہلے سے زیرِ استعمال ہو۔"
         },
         "profile": {
             "back": "گاہکوں پر واپس",
