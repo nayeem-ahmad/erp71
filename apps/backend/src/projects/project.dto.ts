@@ -108,16 +108,26 @@ export class CreateProjectDto {
     @IsOptional() @IsString() @MaxLength(5000)
     description?: string;
 
-    @IsOptional() @IsUUID()
+    /**
+     * The links and dates below take `''` to mean "clear this", the same
+     * spelling `UpdateTaskDto` uses: PATCH reads undefined as "leave alone", so
+     * only the empty string can say "no project type" or "no target date".
+     * `@IsOptional()` skips null and undefined only, so without `@ValidateIf`
+     * the empty string reaches `@IsUUID()`/`@IsDateString()` and 400s — which is
+     * what the edit form got the moment it grew a clearable field.
+     *
+     * `create` and `update` both normalise `'' -> null` before the column.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     storeId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     customerId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     leadId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     projectTypeId?: string;
 
     @IsOptional() @IsEnum(ProjectStatusDto)
@@ -133,13 +143,13 @@ export class CreateProjectDto {
     @IsOptional() @IsEnum(ProjectVisibilityDto)
     visibility?: ProjectVisibilityDto;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     managerId?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     startDate?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     targetEndDate?: string;
 
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
@@ -150,7 +160,7 @@ export class UpdateProjectDto extends CreateProjectDto {
     @IsOptional() @IsString() @MinLength(1) @MaxLength(200)
     declare name: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     actualEndDate?: string;
 }
 

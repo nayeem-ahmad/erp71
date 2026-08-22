@@ -128,7 +128,14 @@ export default function ProjectForm({
             visibility: form.visibility,
             startDate: clearable(form.startDate),
             targetEndDate: clearable(form.targetEndDate),
-            budgetAmount: form.budgetAmount ? Number(form.budgetAmount) : undefined,
+            // `null`, not `undefined`, on edit: undefined is "leave alone", so
+            // clearing the field would otherwise leave the old budget in place.
+            // `@IsOptional()` skips null, and the service writes it as null.
+            budgetAmount: form.budgetAmount
+                ? Number(form.budgetAmount)
+                : mode === 'edit'
+                  ? null
+                  : undefined,
         };
 
         try {

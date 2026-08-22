@@ -204,14 +204,17 @@ export class ProjectsService {
                         name: dto.name.trim(),
                         short_name: dto.shortName?.trim() || null,
                         description: dto.description?.trim() || null,
-                        store_id: dto.storeId ?? null,
-                        customer_id: dto.customerId ?? null,
-                        lead_id: dto.leadId ?? null,
-                        project_type_id: dto.projectTypeId ?? null,
+                        // `|| null`, not `?? null`: the DTO lets `''` through so
+                        // an edit can clear these, and an empty string reaching a
+                        // FK column is a constraint violation, not a blank.
+                        store_id: dto.storeId || null,
+                        customer_id: dto.customerId || null,
+                        lead_id: dto.leadId || null,
+                        project_type_id: dto.projectTypeId || null,
                         status: (dto.status ?? 'DRAFT') as never,
                         priority: (dto.priority ?? 'MEDIUM') as never,
                         visibility: (dto.visibility ?? 'PUBLIC') as never,
-                        manager_id: dto.managerId ?? userId,
+                        manager_id: dto.managerId || userId,
                         start_date: this.toDate(dto.startDate) ?? null,
                         target_end_date: this.toDate(dto.targetEndDate) ?? null,
                         budget_amount: dto.budgetAmount ?? null,
