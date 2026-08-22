@@ -166,7 +166,7 @@ export default function HourLogReportPage() {
                                 style={{ width: `${Math.min(row.original.share, 100)}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-xs tabular-nums text-gray-600">
+                        <span className="w-12 text-end text-xs tabular-nums text-gray-600">
                             {row.original.share.toFixed(1)}%
                         </span>
                     </div>

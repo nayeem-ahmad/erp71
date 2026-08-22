@@ -177,8 +177,8 @@ function PurchaseReturnDetailPageContent() {
                     <tr>
                         <td>${item.product?.name || t.shared.unknown}</td>
                         <td class="text-center">${item.quantity}</td>
-                        <td class="text-right">${formatBDT(Number(item.unit_cost || 0), { locale })}</td>
-                        <td class="text-right">${formatBDT(Number(item.line_total || 0), { locale })}</td>
+                        <td class="text-end">${formatBDT(Number(item.unit_cost || 0), { locale })}</td>
+                        <td class="text-end">${formatBDT(Number(item.line_total || 0), { locale })}</td>
                     </tr>
                 `,
             )
@@ -225,15 +225,15 @@ function PurchaseReturnDetailPageContent() {
                         <tr>
                             <th>${t.purchaseReturns.detail.product}</th>
                             <th class="text-center">${t.purchaseReturns.detail.qty}</th>
-                            <th class="text-right">${t.purchaseReturns.detail.unitCost}</th>
-                            <th class="text-right">${t.purchaseReturns.detail.lineTotal}</th>
+                            <th class="text-end">${t.purchaseReturns.detail.unitCost}</th>
+                            <th class="text-end">${t.purchaseReturns.detail.lineTotal}</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${itemRows}
                         <tr class="total-row">
                             <td colspan="3">${t.purchaseReturns.detail.total}</td>
-                            <td class="text-right">${formatBDT(Number(purchaseReturn.total_amount || 0), { locale })}</td>
+                            <td class="text-end">${formatBDT(Number(purchaseReturn.total_amount || 0), { locale })}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -263,24 +263,24 @@ function PurchaseReturnDetailPageContent() {
             <div className="max-w-4xl mx-auto space-y-6">
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
                                 Edit Mode — update quantities, reference, and notes with purchase-level caps applied
                             </span>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
                                 disabled={saving || editItems.filter((item) => item.quantity > 0).length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 <span>{saving ? 'Saving...' : 'Save Changes'}</span>
                             </button>
                             <button
                                 onClick={() => router.push(`/purchases/returns/${purchaseReturn.id}`)}
-                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1"
+                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1 rtl:space-x-reverse"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 <span>{t.common.cancel}</span>
@@ -303,14 +303,14 @@ function PurchaseReturnDetailPageContent() {
                         <>
                             <button
                                 onClick={() => router.push(`/purchases/returns/${purchaseReturn.id}?edit=true`)}
-                                className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all"
+                                className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <Pencil className="w-4 h-4" />
                                 <span>{t.common.edit}</span>
                             </button>
                             <button
                                 onClick={handlePrint}
-                                className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
+                                className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <Printer className="w-4 h-4" />
                                 <span>Print Preview</span>
@@ -318,7 +318,7 @@ function PurchaseReturnDetailPageContent() {
                             <button
                                 onClick={handleDelete}
                                 disabled={deleting}
-                                className="bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all disabled:opacity-50"
+                                className="bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Trash2 className="w-4 h-4" />
                                 <span>{deleting ? 'Deleting...' : 'Delete'}</span>
@@ -379,7 +379,7 @@ function PurchaseReturnDetailPageContent() {
                 )}
 
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
+                    <div className="p-6 border-b border-gray-100 flex items-center space-x-3 rtl:space-x-reverse">
                         <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600">
                             <Undo2 className="w-5 h-5" />
                         </div>
@@ -396,11 +396,11 @@ function PurchaseReturnDetailPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                            <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.purchaseShared.qty}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-20">{t.purchaseReturns.modal.returnQty}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.unitCost}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.unitCost}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -421,8 +421,8 @@ function PurchaseReturnDetailPageContent() {
                                                     />
                                                 </td>
                                                 <td className="py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">{item.maxQuantity}</td>
-                                                <td className="py-3 text-right text-sm font-bold text-gray-700">{formatBDT(item.unitCost, { locale })}</td>
-                                                <td className="py-3 text-right text-sm font-bold text-emerald-600">{formatBDT(item.quantity * item.unitCost, { locale })}</td>
+                                                <td className="py-3 text-end text-sm font-bold text-gray-700">{formatBDT(item.unitCost, { locale })}</td>
+                                                <td className="py-3 text-end text-sm font-bold text-emerald-600">{formatBDT(item.quantity * item.unitCost, { locale })}</td>
                                                 <td className="py-3 text-center">
                                                     <button
                                                         onClick={() => removeItem(index)}
@@ -436,8 +436,8 @@ function PurchaseReturnDetailPageContent() {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
-                                            <td colSpan={4} className="pt-3 text-right text-sm font-semibold">Total</td>
-                                            <td className="pt-3 text-right text-xl font-bold text-emerald-600">{formatBDT(editTotal, { locale })}</td>
+                                            <td colSpan={4} className="pt-3 text-end text-sm font-semibold">Total</td>
+                                            <td className="pt-3 text-end text-xl font-bold text-emerald-600">{formatBDT(editTotal, { locale })}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -449,10 +449,10 @@ function PurchaseReturnDetailPageContent() {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50/80">
-                                        <th className="text-left p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                        <th className="text-start p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.qty}</th>
-                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
-                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.lineTotal}</th>
+                                        <th className="text-end p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                        <th className="text-end p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.lineTotal}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -462,8 +462,8 @@ function PurchaseReturnDetailPageContent() {
                                                 <span className="text-sm font-bold text-gray-900">{item.product?.name || 'Unknown item'}</span>
                                             </td>
                                             <td className="p-3 text-center text-sm font-bold text-gray-700">{item.quantity}</td>
-                                            <td className="p-3 text-right text-sm font-bold text-gray-700">{formatBDT(Number(item.unit_cost || 0), { locale })}</td>
-                                            <td className="p-3 text-right text-sm font-bold text-emerald-600">{formatBDT(Number(item.line_total || 0), { locale })}</td>
+                                            <td className="p-3 text-end text-sm font-bold text-gray-700">{formatBDT(Number(item.unit_cost || 0), { locale })}</td>
+                                            <td className="p-3 text-end text-sm font-bold text-emerald-600">{formatBDT(Number(item.line_total || 0), { locale })}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -474,7 +474,7 @@ function PurchaseReturnDetailPageContent() {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white p-5 rounded-lg shadow-sm">
-                        <div className="flex items-center space-x-2 mb-3">
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse mb-3">
                             <Receipt className="w-4 h-4 text-gray-400" />
                             <h3 className="text-sm font-bold tracking-tight">{t.purchaseReturns.detail.reference}</h3>
                         </div>
@@ -491,7 +491,7 @@ function PurchaseReturnDetailPageContent() {
                         )}
                     </div>
                     <div className="bg-white p-5 rounded-lg shadow-sm">
-                        <div className="flex items-center space-x-2 mb-3">
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse mb-3">
                             <Receipt className="w-4 h-4 text-gray-400" />
                             <h3 className="text-sm font-bold tracking-tight">{t.common.notes}</h3>
                         </div>

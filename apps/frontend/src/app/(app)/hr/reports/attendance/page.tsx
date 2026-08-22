@@ -189,7 +189,7 @@ export default function HrAttendanceReportPage() {
                                 style={{ width: `${Math.min(row.original.attendanceRate ?? 0, 100)}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-xs tabular-nums text-gray-600">
+                        <span className="w-12 text-end text-xs tabular-nums text-gray-600">
                             {row.original.attendanceRate == null
                                 ? '—'
                                 : `${row.original.attendanceRate.toFixed(1)}%`}

@@ -36,8 +36,8 @@ function varianceColor(row: BudgetRow) {
     return row.variance >= 0 ? 'text-emerald-700' : 'text-danger-text';
 }
 
-const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
-const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
+const thClass = `text-end px-3 py-2 ${compactDensity.formLabel}`;
+const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function BudgetVsActualPage() {
     const { t, locale } = useI18n();
@@ -130,15 +130,15 @@ export default function BudgetVsActualPage() {
                                 <tr key={row.account.id} className="border-b border-gray-50">
                                     <td className="px-3 py-2 font-medium text-gray-800">
                                         {row.account.name}
-                                        {row.account.code && <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>}
+                                        {row.account.code && <span className="ms-2 text-xs text-gray-400">{row.account.code}</span>}
                                     </td>
                                     <td className="px-3 py-2 text-gray-400 text-xs capitalize">{row.account.type.toLowerCase()}</td>
-                                    <td className="px-3 py-2 text-right">{formatBDT(row.budget, { locale })}</td>
-                                    <td className="px-3 py-2 text-right">{formatBDT(row.actual, { locale })}</td>
-                                    <td className={`px-3 py-2 text-right font-semibold ${varianceColor(row)}`}>
+                                    <td className="px-3 py-2 text-end">{formatBDT(row.budget, { locale })}</td>
+                                    <td className="px-3 py-2 text-end">{formatBDT(row.actual, { locale })}</td>
+                                    <td className={`px-3 py-2 text-end font-semibold ${varianceColor(row)}`}>
                                         {row.variance >= 0 ? '+' : ''}{formatBDT(row.variance, { locale })}
                                     </td>
-                                    <td className={`px-3 py-2 text-right font-semibold ${varianceColor(row)}`}>
+                                    <td className={`px-3 py-2 text-end font-semibold ${varianceColor(row)}`}>
                                         {row.variance_pct !== null ? `${row.variance_pct >= 0 ? '+' : ''}${row.variance_pct.toFixed(1)}%` : '—'}
                                     </td>
                                 </tr>
@@ -147,9 +147,9 @@ export default function BudgetVsActualPage() {
                         <tfoot>
                             <tr className="border-t border-gray-200 bg-gray-50">
                                 <td className="px-3 py-2 font-semibold text-sm text-gray-700" colSpan={2}>Totals</td>
-                                <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.budget, { locale })}</td>
-                                <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.actual, { locale })}</td>
-                                <td className={`px-3 py-2 text-right font-semibold text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-danger-text'}`}>
+                                <td className="px-3 py-2 text-end font-semibold text-sm">{formatBDT(data.totals.budget, { locale })}</td>
+                                <td className="px-3 py-2 text-end font-semibold text-sm">{formatBDT(data.totals.actual, { locale })}</td>
+                                <td className={`px-3 py-2 text-end font-semibold text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-danger-text'}`}>
                                     {data.totals.variance >= 0 ? '+' : ''}{formatBDT(data.totals.variance, { locale })}
                                 </td>
                                 <td />

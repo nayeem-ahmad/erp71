@@ -29,8 +29,8 @@ interface AgingData {
     note: string;
 }
 
-const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
-const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
+const thClass = `text-end px-3 py-2 ${compactDensity.formLabel}`;
+const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function ApAgingPage() {
     const { t, locale } = useI18n();
@@ -98,23 +98,23 @@ export default function ApAgingPage() {
                             <tbody>
                                 {data.accounts.map((a) => (
                                     <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                        <td className="px-3 py-2 font-medium text-gray-800">{a.name}{a.code && <span className="ml-2 text-xs text-gray-400">{a.code}</span>}</td>
-                                        <td className="px-3 py-2 text-right">{formatBDT(a.balance, { locale })}</td>
-                                        <td className="px-3 py-2 text-right">{formatBDT(a.buckets.current, { locale })}</td>
-                                        <td className="px-3 py-2 text-right text-amber-700">{formatBDT(a.buckets.overdue_31_60, { locale })}</td>
-                                        <td className="px-3 py-2 text-right text-orange-700">{formatBDT(a.buckets.overdue_61_90, { locale })}</td>
-                                        <td className="px-3 py-2 text-right text-red-700">{formatBDT(a.buckets.overdue_90_plus, { locale })}</td>
+                                        <td className="px-3 py-2 font-medium text-gray-800">{a.name}{a.code && <span className="ms-2 text-xs text-gray-400">{a.code}</span>}</td>
+                                        <td className="px-3 py-2 text-end">{formatBDT(a.balance, { locale })}</td>
+                                        <td className="px-3 py-2 text-end">{formatBDT(a.buckets.current, { locale })}</td>
+                                        <td className="px-3 py-2 text-end text-amber-700">{formatBDT(a.buckets.overdue_31_60, { locale })}</td>
+                                        <td className="px-3 py-2 text-end text-orange-700">{formatBDT(a.buckets.overdue_61_90, { locale })}</td>
+                                        <td className="px-3 py-2 text-end text-red-700">{formatBDT(a.buckets.overdue_90_plus, { locale })}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="bg-gray-50 font-semibold border-t border-gray-200">
                                     <td className="px-3 py-2 text-xs">Totals</td>
-                                    <td className="px-3 py-2 text-right">{formatBDT(data.totals.balance, { locale })}</td>
-                                    <td className="px-3 py-2 text-right">{formatBDT(data.totals.current, { locale })}</td>
-                                    <td className="px-3 py-2 text-right text-amber-700">{formatBDT(data.totals.overdue_31_60, { locale })}</td>
-                                    <td className="px-3 py-2 text-right text-orange-700">{formatBDT(data.totals.overdue_61_90, { locale })}</td>
-                                    <td className="px-3 py-2 text-right text-red-700">{formatBDT(data.totals.overdue_90_plus, { locale })}</td>
+                                    <td className="px-3 py-2 text-end">{formatBDT(data.totals.balance, { locale })}</td>
+                                    <td className="px-3 py-2 text-end">{formatBDT(data.totals.current, { locale })}</td>
+                                    <td className="px-3 py-2 text-end text-amber-700">{formatBDT(data.totals.overdue_31_60, { locale })}</td>
+                                    <td className="px-3 py-2 text-end text-orange-700">{formatBDT(data.totals.overdue_61_90, { locale })}</td>
+                                    <td className="px-3 py-2 text-end text-red-700">{formatBDT(data.totals.overdue_90_plus, { locale })}</td>
                                 </tr>
                             </tfoot>
                         </table>

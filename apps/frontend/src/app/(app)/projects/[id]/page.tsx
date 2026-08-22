@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Lock, Plus } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -45,6 +45,7 @@ interface Project {
     description?: string | null;
     status: string;
     priority: string;
+    visibility?: string;
     budget_amount?: string | null;
     start_date?: string | null;
     target_end_date?: string | null;
@@ -172,6 +173,19 @@ export default function ProjectDetailPage() {
                 }
             />
 
+            {project.visibility === 'PRIVATE' && (
+                // Said once, plainly, near the top: whoever is looking at this
+                // needs to know the team list below is also the access list.
+                <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span>
+                        <span className="font-medium text-gray-700">{m.visibility.PRIVATE}</span>
+                        {' — '}
+                        {m.visibilityHelp.PRIVATE}
+                    </span>
+                </p>
+            )}
+
             <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Stat label={m.fields.progress} value={`${progress.percentComplete}% ${m.overview.complete}`} />
                 <Stat label={m.overview.estimated} value={`${progress.estimatedHours}h`} />
@@ -191,7 +205,7 @@ export default function ProjectDetailPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
+                                        <tr className="border-b border-gray-200 text-start text-xs text-gray-500">
                                             <th className="px-3 py-2 font-medium">{m.task.title}</th>
                                             <th className="px-3 py-2 font-medium">{m.fields.status}</th>
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
@@ -203,7 +217,7 @@ export default function ProjectDetailPage() {
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
                                                 {m.fields.priority}
                                             </th>
-                                            <th className="px-3 py-2 text-right font-medium">
+                                            <th className="px-3 py-2 text-end font-medium">
                                                 {m.overview.remaining}
                                             </th>
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
@@ -243,7 +257,7 @@ export default function ProjectDetailPage() {
                                                 <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
                                                     {m.priority[task.priority as keyof typeof m.priority] ?? task.priority}
                                                 </td>
-                                                <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                                                <td className="px-3 py-2 text-end tabular-nums text-gray-600">
                                                     {num(task.remaining_hours)}h
                                                 </td>
                                                 <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
@@ -310,6 +324,7 @@ export default function ProjectDetailPage() {
                     <ProjectTeamCard
                         projectId={projectId}
                         members={project.members}
+                        isPrivate={project.visibility === 'PRIVATE'}
                         onChanged={load}
                     />
                 </div>
@@ -387,7 +402,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     return (
         <div className="flex items-center justify-between gap-2">
             <dt className="text-gray-500">{label}</dt>
-            <dd className="truncate text-right">{children}</dd>
+            <dd className="truncate text-end">{children}</dd>
         </div>
     );
 }

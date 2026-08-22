@@ -183,10 +183,10 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                             <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                                                 {filteredProducts.map((p) => (
                                                     <button key={p.id} onClick={() => addItem(p)}
-                                                        className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center justify-between">
+                                                        className="w-full text-start px-4 py-3 hover:bg-blue-50 flex items-center justify-between">
                                                         <div>
                                                             <span className="text-sm font-bold">{p.name}</span>
-                                                            <span className="text-xs text-gray-400 ml-2">{p.sku}</span>
+                                                            <span className="text-xs text-gray-400 ms-2">{p.sku}</span>
                                                         </div>
                                                         <span className="text-sm font-bold text-blue-600">{formatBDT(Number(p.price || 0), { locale })}</span>
                                                     </button>
@@ -201,10 +201,10 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                            <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
                                             <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.purchaseShared.qty}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
-                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.common.total}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                            <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.common.total}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -213,7 +213,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                             <tr key={item.productId}>
                                                 <td className="py-3">
                                                     <span className="text-sm font-bold">{item.productName}</span>
-                                                    <span className="text-xs text-gray-400 ml-2">{item.sku}</span>
+                                                    <span className="text-xs text-gray-400 ms-2">{item.sku}</span>
                                                 </td>
                                                 <td className="py-3">
                                                     <input type="number" min={1} value={item.quantity}
@@ -223,9 +223,9 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                                 <td className="py-3">
                                                     <input type="number" min={0} step={0.01} value={item.unitCost}
                                                         onChange={(e) => updateItem(idx, 'unitCost', Number(e.target.value) || 0)}
-                                                        className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold" />
+                                                        className="w-full text-end bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold" />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-bold text-blue-600">
+                                                <td className="py-3 text-end text-sm font-bold text-blue-600">
                                                     {formatBDT(item.quantity * item.unitCost, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">

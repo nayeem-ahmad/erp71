@@ -82,7 +82,7 @@ export function OrdinalBars({
                                             style={{ width: `${width}%` }}
                                         />
                                     </span>
-                                    <span className="w-20 shrink-0 text-right text-[11px] font-bold tabular-nums text-gray-900">
+                                    <span className="w-20 shrink-0 text-end text-[11px] font-bold tabular-nums text-gray-900">
                                         {formatCount(bar.count, share)}
                                     </span>
                                 </Link>

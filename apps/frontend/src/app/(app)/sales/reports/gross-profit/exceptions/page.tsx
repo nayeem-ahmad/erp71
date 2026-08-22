@@ -174,7 +174,7 @@ export default function MarginExceptionsPage() {
                     className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-h-touch"
                 />
                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1" htmlFor="margin-floor">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1" htmlFor="margin-floor">
                         {gp.marginFloor}
                     </label>
                     <input

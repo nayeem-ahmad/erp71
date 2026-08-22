@@ -51,7 +51,7 @@ function AccountBalanceCell({
     const sideLabel = sideLabels[account.balance_side ?? 'neutral'] ?? null;
 
     return (
-        <div className="text-right">
+        <div className="text-end">
             <span className="block text-sm font-semibold tabular-nums text-gray-900">
                 {formatBDT(account.balance ?? 0, { locale })}
             </span>

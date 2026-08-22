@@ -139,12 +139,12 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
 
     const stagedAvailable = staged ? availableQtyOf(staged) : 0;
     const stagedQtyNum = parseFloat(stagedQty) || 0;
-    const numberInput = 'px-2 py-1 border rounded text-sm text-right min-h-touch sm:min-h-0';
+    const numberInput = 'px-2 py-1 border rounded text-sm text-end min-h-touch sm:min-h-0';
 
     return (
         <div className="flex flex-col gap-1.5">
             <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                     ref={inputRef}
                     type="text"
@@ -156,14 +156,14 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                     onFocus={() => setShowDropdown(true)}
                     onKeyDown={handleSearchKeyDown}
                     placeholder="Add product — search by name, SKU, or code…"
-                    className="w-full pl-8 pr-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full ps-8 pe-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 />
 
                 {/* Results Dropdown */}
                 {showDropdown && (
                     <div
                         ref={dropdownRef}
-                        className="absolute top-full left-0 right-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
+                        className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
                     >
                         {loading ? (
                             <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
@@ -190,14 +190,14 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                                                 <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
                                                 <div className="text-xs text-gray-600">
                                                     SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
-                                                    <span className={`ml-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
+                                                    <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
                                                         Avail: {stock}
                                                     </span>
                                                     {product.qty_sold > 0 && (
-                                                        <span className="text-emerald-600 ml-2">{product.qty_sold} sold</span>
+                                                        <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
                                                     )}
                                                     {product.subgroup && (
-                                                        <span className="text-gray-400 ml-2">{product.group?.name} → {product.subgroup.name}</span>
+                                                        <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
                                                     )}
                                                 </div>
                                             </div>

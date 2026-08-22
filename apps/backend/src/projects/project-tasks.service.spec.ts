@@ -4,6 +4,8 @@ import { ProjectTasksService } from './project-tasks.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
+import { ProjectAccessService } from './project-access.service';
+import { OWNER, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('ProjectTasksService', () => {
@@ -72,6 +74,7 @@ describe('ProjectTasksService', () => {
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 3 } }),
             },
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
+            userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             // Both forms: the interactive callback move() uses, and the array of
             // promises reorderChecklist() batches.
             $transaction: jest.fn(async (arg: any) =>
@@ -82,6 +85,9 @@ describe('ProjectTasksService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectTasksService,
+                // The real access service against the same mock db: a stub here
+                // would let a filter regression through unnoticed.
+                ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: RemainingHoursService, useValue: remaining },
                 { provide: ProjectActivityService, useValue: activity },
@@ -100,7 +106,7 @@ describe('ProjectTasksService', () => {
 
     describe('create', () => {
         it('opens the remaining log at the estimate when none is given', async () => {
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Wire the panel',
                 estimateHours: 6,
@@ -116,7 +122,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('honours an explicit opening remainder over the estimate', async () => {
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Wire the panel',
                 estimateHours: 6,
@@ -129,7 +135,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('writes no opening row for a task with no hours at all', async () => {
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Call the client',
             } as never);
@@ -141,7 +147,7 @@ describe('ProjectTasksService', () => {
             db.projectTask.findFirst.mockResolvedValue(task({ parent_task_id: 'task-parent' }));
 
             await expect(
-                service.create('tenant-1', 'user-1', {
+                service.create(OWNER, {
                     projectId: 'project-1',
                     title: 'Nested too deep',
                     parentTaskId: 'task-1',
@@ -155,7 +161,7 @@ describe('ProjectTasksService', () => {
             // thing cross-project sprints exist to allow.
             db.sprint.findFirst.mockResolvedValue({ id: 'sprint-9' });
 
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Borrowed into a shared sprint',
                 sprintId: 'sprint-9',
@@ -172,7 +178,7 @@ describe('ProjectTasksService', () => {
             db.sprint.findFirst.mockResolvedValue(null);
 
             await expect(
-                service.create('tenant-1', 'user-1', {
+                service.create(OWNER, {
                     projectId: 'project-1',
                     title: 'Foreign sprint',
                     sprintId: 'sprint-x',
@@ -185,7 +191,7 @@ describe('ProjectTasksService', () => {
         it('burns remaining to zero when a task reaches a Done column', async () => {
             db.projectTaskStatus.findFirst.mockResolvedValue(done);
 
-            await service.update('tenant-1', 'user-1', 'task-1', { statusId: done.id } as never);
+            await service.update(OWNER, 'task-1', { statusId: done.id } as never);
 
             expect(remaining.write).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -202,7 +208,7 @@ describe('ProjectTasksService', () => {
             );
             db.projectTaskStatus.findFirst.mockResolvedValue(doing);
 
-            await service.update('tenant-1', 'user-1', 'task-1', { statusId: doing.id } as never);
+            await service.update(OWNER, 'task-1', { statusId: doing.id } as never);
 
             // 8h estimated, 3h already logged → 5h genuinely left.
             expect(remaining.write).toHaveBeenCalledWith(
@@ -213,7 +219,7 @@ describe('ProjectTasksService', () => {
         it('lets an explicit re-estimate win over the status-derived write', async () => {
             db.projectTaskStatus.findFirst.mockResolvedValue(done);
 
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 statusId: done.id,
                 remainingHours: 4,
             } as never);
@@ -225,12 +231,12 @@ describe('ProjectTasksService', () => {
         });
 
         it('does not touch remaining hours for an ordinary edit', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+            await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
             expect(remaining.write).not.toHaveBeenCalled();
         });
 
         it('carries the re-estimate note onto the log row', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 remainingHours: 12,
                 remainingNote: 'client added two more rooms',
             } as never);
@@ -245,7 +251,7 @@ describe('ProjectTasksService', () => {
         it('renumbers the target column so ordering stays stable integers', async () => {
             db.projectTask.findMany.mockResolvedValue([{ id: 'task-a' }, { id: 'task-b' }]);
 
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 1,
             } as never);
@@ -264,7 +270,7 @@ describe('ProjectTasksService', () => {
         it('clamps an out-of-range drop index to the end of the column', async () => {
             db.projectTask.findMany.mockResolvedValue([{ id: 'task-a' }]);
 
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 99,
             } as never);
@@ -276,7 +282,7 @@ describe('ProjectTasksService', () => {
         it('burns to zero when a card is dragged into a Done column', async () => {
             db.projectTaskStatus.findFirst.mockResolvedValue(done);
 
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: done.id,
                 sortOrder: 0,
             } as never);
@@ -287,7 +293,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('sends a card back to the backlog when asked to clear its sprint', async () => {
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 0,
                 clearSprint: true,
@@ -304,7 +310,7 @@ describe('ProjectTasksService', () => {
         it('replaces the whole set: clears first, then writes what was sent', async () => {
             db.projectLabel.count.mockResolvedValue(2);
 
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 labelIds: ['label-a', 'label-b'],
             } as never);
 
@@ -320,7 +326,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('clears every label when sent an empty array', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { labelIds: [] } as never);
+            await service.update(OWNER, 'task-1', { labelIds: [] } as never);
 
             expect(db.projectTaskLabel.deleteMany).toHaveBeenCalled();
             expect(db.projectTaskLabel.createMany).not.toHaveBeenCalled();
@@ -329,7 +335,7 @@ describe('ProjectTasksService', () => {
         it('leaves the labels alone when the field is absent', async () => {
             // PATCH semantics: undefined means "do not touch", which must not be
             // confused with the empty array that means "remove them all".
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+            await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
 
             expect(db.projectTaskLabel.deleteMany).not.toHaveBeenCalled();
         });
@@ -340,7 +346,7 @@ describe('ProjectTasksService', () => {
             db.projectLabel.count.mockResolvedValue(1);
 
             await expect(
-                service.update('tenant-1', 'user-1', 'task-1', {
+                service.update(OWNER, 'task-1', {
                     labelIds: ['label-a', 'label-from-another-tenant'],
                 } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
@@ -350,7 +356,7 @@ describe('ProjectTasksService', () => {
 
         it('scopes the label check to the tenant', async () => {
             db.projectLabel.count.mockResolvedValue(1);
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 labelIds: ['label-a'],
             } as never);
 
@@ -362,7 +368,7 @@ describe('ProjectTasksService', () => {
         it('de-duplicates a repeated id rather than violating the primary key', async () => {
             db.projectLabel.count.mockResolvedValue(1);
 
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 labelIds: ['label-a', 'label-a'],
             } as never);
 
@@ -374,7 +380,7 @@ describe('ProjectTasksService', () => {
         it('tags a task on create', async () => {
             db.projectLabel.count.mockResolvedValue(1);
 
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Wire the panel',
                 labelIds: ['label-a'],
@@ -388,7 +394,7 @@ describe('ProjectTasksService', () => {
 
     describe('dates', () => {
         it('stores a start date', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 startDate: '2026-08-05',
             } as never);
 
@@ -402,7 +408,7 @@ describe('ProjectTasksService', () => {
         // '' is the only way to express "no date" over PATCH, where undefined
         // already means "leave alone".
         it('clears a date when sent an empty string', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { dueDate: '' } as never);
+            await service.update(OWNER, 'task-1', { dueDate: '' } as never);
 
             expect(db.projectTask.update).toHaveBeenCalledWith(
                 expect.objectContaining({ data: expect.objectContaining({ due_date: null }) }),
@@ -410,7 +416,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('leaves a date alone when the field is absent', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+            await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
 
             const data = db.projectTask.update.mock.calls.at(-1)[0].data;
             expect(data).not.toHaveProperty('due_date');
@@ -420,7 +426,7 @@ describe('ProjectTasksService', () => {
 
     describe('activity', () => {
         it('records the creation and subscribes the creator', async () => {
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Wire the panel',
             } as never);
@@ -432,7 +438,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('subscribes whoever the new task lands on', async () => {
-            await service.create('tenant-1', 'user-1', {
+            await service.create(OWNER, {
                 projectId: 'project-1',
                 title: 'Wire the panel',
                 assigneeId: 'user-2',
@@ -444,7 +450,7 @@ describe('ProjectTasksService', () => {
         it('records a rename with both sides', async () => {
             db.projectTask.findFirst.mockResolvedValue(task({ title: 'Old name' }));
 
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'New name' } as never);
+            await service.update(OWNER, 'task-1', { title: 'New name' } as never);
 
             expect(activity.record).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -459,7 +465,7 @@ describe('ProjectTasksService', () => {
         it('records nothing when a field is sent unchanged', async () => {
             db.projectTask.findFirst.mockResolvedValue(task({ title: 'Same' }));
 
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Same' } as never);
+            await service.update(OWNER, 'task-1', { title: 'Same' } as never);
 
             expect(activity.record).not.toHaveBeenCalled();
         });
@@ -471,7 +477,7 @@ describe('ProjectTasksService', () => {
                 category: doing.category,
             });
 
-            await service.update('tenant-1', 'user-1', 'task-1', { statusId: doing.id } as never);
+            await service.update(OWNER, 'task-1', { statusId: doing.id } as never);
 
             expect(activity.record).toHaveBeenCalledWith(
                 expect.objectContaining({ type: 'STATUS_CHANGED' }),
@@ -479,7 +485,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('records an assignment and notifies, naming the new holder', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', {
+            await service.update(OWNER, 'task-1', {
                 assigneeId: 'user-2',
             } as never);
 
@@ -493,7 +499,7 @@ describe('ProjectTasksService', () => {
         it('records an unassignment as a null target rather than skipping it', async () => {
             db.projectTask.findFirst.mockResolvedValue(task({ assignee_id: 'user-2' }));
 
-            await service.update('tenant-1', 'user-1', 'task-1', { assigneeId: '' } as never);
+            await service.update(OWNER, 'task-1', { assigneeId: '' } as never);
 
             expect(activity.record).toHaveBeenCalledWith(
                 expect.objectContaining({ type: 'ASSIGNED', data: { to: null } }),
@@ -501,7 +507,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('records a re-estimate with both numbers', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { remainingHours: 2 } as never);
+            await service.update(OWNER, 'task-1', { remainingHours: 2 } as never);
 
             expect(activity.record).toHaveBeenCalledWith(
                 expect.objectContaining({ type: 'RE_ESTIMATED', data: { from: 5, to: 2 } }),
@@ -515,7 +521,7 @@ describe('ProjectTasksService', () => {
                 category: doing.category,
             });
 
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: doing.id,
                 sortOrder: 0,
             } as never);
@@ -530,7 +536,7 @@ describe('ProjectTasksService', () => {
 
         // Reordering within a column is not news.
         it('records nothing when a card is dropped back in the same column', async () => {
-            await service.move('tenant-1', 'user-1', 'task-1', {
+            await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 2,
             } as never);
@@ -551,7 +557,7 @@ describe('ProjectTasksService', () => {
             });
 
             await expect(
-                service.create('tenant-1', 'user-1', {
+                service.create(OWNER, {
                     projectId: 'project-1',
                     title: 'Wrong board',
                     statusId: todo.id,
@@ -567,7 +573,7 @@ describe('ProjectTasksService', () => {
             });
 
             await expect(
-                service.create('tenant-1', 'user-1', {
+                service.create(OWNER, {
                     projectId: 'project-1',
                     title: 'Fine',
                     statusId: todo.id,
@@ -576,7 +582,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('stores a cover colour', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { coverColor: 'BLUE' } as never);
+            await service.update(OWNER, 'task-1', { coverColor: 'BLUE' } as never);
 
             expect(db.projectTask.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -586,7 +592,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('removes a cover with an empty string, the PATCH-clearing convention', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { coverColor: '' } as never);
+            await service.update(OWNER, 'task-1', { coverColor: '' } as never);
 
             expect(db.projectTask.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -596,7 +602,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('leaves the cover alone when the field is absent', async () => {
-            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+            await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
 
             const data = db.projectTask.update.mock.calls.at(-1)[0].data;
             expect(data).not.toHaveProperty('cover_color');
@@ -612,7 +618,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('renumbers every item to its position in the submitted order', async () => {
-            await service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a', 'item-b']);
+            await service.reorderChecklist(OWNER, 'task-1', ['item-c', 'item-a', 'item-b']);
 
             expect(db.projectTaskChecklistItem.update).toHaveBeenCalledWith({
                 where: { id: 'item-c' },
@@ -629,7 +635,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('writes the whole sequence in one transaction', async () => {
-            await service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a', 'item-b']);
+            await service.reorderChecklist(OWNER, 'task-1', ['item-c', 'item-a', 'item-b']);
 
             expect(db.$transaction).toHaveBeenCalledTimes(1);
             expect(db.$transaction.mock.calls[0][0]).toHaveLength(3);
@@ -640,7 +646,7 @@ describe('ProjectTasksService', () => {
         // only orders by sort_order, so the list would shuffle on every read.
         it('rejects an order that omits an item, without writing anything', async () => {
             await expect(
-                service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a']),
+                service.reorderChecklist(OWNER, 'task-1', ['item-c', 'item-a']),
             ).rejects.toBeInstanceOf(BadRequestException);
 
             expect(db.projectTaskChecklistItem.update).not.toHaveBeenCalled();
@@ -649,7 +655,7 @@ describe('ProjectTasksService', () => {
 
         it('rejects an order that repeats an item', async () => {
             await expect(
-                service.reorderChecklist('tenant-1', 'task-1', ['item-a', 'item-a', 'item-b']),
+                service.reorderChecklist(OWNER, 'task-1', ['item-a', 'item-a', 'item-b']),
             ).rejects.toBeInstanceOf(BadRequestException);
 
             expect(db.projectTaskChecklistItem.update).not.toHaveBeenCalled();
@@ -657,7 +663,7 @@ describe('ProjectTasksService', () => {
 
         it('rejects an id that is not on this task', async () => {
             await expect(
-                service.reorderChecklist('tenant-1', 'task-1', [
+                service.reorderChecklist(OWNER, 'task-1', [
                     'item-a',
                     'item-b',
                     'item-from-another-task',
@@ -668,7 +674,7 @@ describe('ProjectTasksService', () => {
         });
 
         it('scopes the item lookup to the tenant and the task', async () => {
-            await service.reorderChecklist('tenant-1', 'task-1', ['item-a', 'item-b', 'item-c']);
+            await service.reorderChecklist(OWNER, 'task-1', ['item-a', 'item-b', 'item-c']);
 
             expect(db.projectTaskChecklistItem.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -680,14 +686,64 @@ describe('ProjectTasksService', () => {
         it('refuses a task from another tenant', async () => {
             db.projectTask.findFirst.mockResolvedValue(null);
             await expect(
-                service.reorderChecklist('tenant-2', 'task-1', ['item-a']),
+                service.reorderChecklist(staff('user-9', 'tenant-2'), 'task-1', ['item-a']),
             ).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
+    describe('project visibility', () => {
+        it('filters the cross-project task list to projects the viewer can reach', async () => {
+            await service.list(staff('user-7'), {} as never);
+
+            expect(db.projectTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        AND: [{ project: { OR: visibilityOr('user-7') } }],
+                    }),
+                }),
+            );
+        });
+
+        it('adds no filter at all for the owner', async () => {
+            await service.list(OWNER, {} as never);
+
+            const [{ where }] = db.projectTask.findMany.mock.calls.at(-1);
+            expect(where.AND).toBeUndefined();
+        });
+
+        it('reports a task in an unreachable project as missing, not forbidden', async () => {
+            // What the filtered query returns for a private project the viewer
+            // is not on — indistinguishable from an id that never existed.
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            await expect(service.findOne(staff('user-7'), 'task-1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.projectTask.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        AND: [{ project: { OR: visibilityOr('user-7') } }],
+                    }),
+                }),
+            );
+        });
+
+        it('refuses to create a task in a project the viewer cannot reach', async () => {
+            db.project.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.create(staff('user-7'), {
+                    projectId: 'project-1',
+                    title: 'Sneak in',
+                } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.projectTask.create).not.toHaveBeenCalled();
         });
     });
 
     it('scopes every task lookup to the tenant', async () => {
         db.projectTask.findFirst.mockResolvedValue(null);
-        await expect(service.findOne('tenant-1', 'task-1')).rejects.toBeInstanceOf(NotFoundException);
+        await expect(service.findOne(OWNER, 'task-1')).rejects.toBeInstanceOf(NotFoundException);
         expect(db.projectTask.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({ tenant_id: 'tenant-1' }),

@@ -1,9 +1,8 @@
 import { IsIn, IsOptional } from 'class-validator';
-
-const SUPPORTED_LOCALES = ['en', 'bn', 'ms'] as const;
+import { ENABLED_LOCALE_CODES, type SupportedLocaleCode } from '@erp71/shared-types';
 
 export class UpdateLocalizationSettingsDto {
     @IsOptional()
-    @IsIn(SUPPORTED_LOCALES)
-    default_locale?: (typeof SUPPORTED_LOCALES)[number];
+    @IsIn(ENABLED_LOCALE_CODES)
+    default_locale?: SupportedLocaleCode;
 }

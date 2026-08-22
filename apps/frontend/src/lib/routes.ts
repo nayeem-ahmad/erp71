@@ -71,6 +71,13 @@ export const routes = {
         returns: '/purchases/returns',
         returnDetail: (id: string) => `/purchases/returns/${id}` as const,
         suppliers: '/purchases/suppliers',
+        imports: {
+            root: '/purchases/imports',
+            shipmentNew: '/purchases/imports/new',
+            shipmentDetail: (id: string) => `/purchases/imports/${id}` as const,
+            lcRegister: '/purchases/imports/lc-register',
+            dutyReport: '/purchases/imports/duty-report',
+        },
         reports: {
             summary: '/purchases/reports/summary',
             byProduct: '/purchases/reports/by-product',

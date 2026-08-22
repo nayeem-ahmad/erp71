@@ -58,11 +58,11 @@ const baseComponents: Components = {
     del: styled('del', 'text-gray-500 line-through'),
     hr: styled('hr', 'my-3 border-gray-200'),
 
-    ul: styled('ul', 'mt-2 list-disc space-y-1 pl-4 text-sm first:mt-0'),
-    ol: styled('ol', 'mt-2 list-decimal space-y-1 pl-4 text-sm first:mt-0'),
+    ul: styled('ul', 'mt-2 list-disc space-y-1 ps-4 text-sm first:mt-0'),
+    ol: styled('ol', 'mt-2 list-decimal space-y-1 ps-4 text-sm first:mt-0'),
     li: styled('li', 'leading-relaxed marker:text-gray-400'),
 
-    blockquote: styled('blockquote', 'mt-2 border-l-2 border-gray-300 pl-2 text-sm text-gray-600'),
+    blockquote: styled('blockquote', 'mt-2 border-s-2 border-gray-300 ps-2 text-sm text-gray-600'),
 
     // Wide tables scroll inside the bubble; the panel itself never scrolls sideways.
     table: ({ node: _node, ...props }) => (
@@ -73,7 +73,7 @@ const baseComponents: Components = {
     thead: styled('thead', 'bg-gray-50'),
     th: styled(
         'th',
-        'whitespace-nowrap border-b border-gray-200 px-2 py-1.5 text-left font-semibold text-gray-700',
+        'whitespace-nowrap border-b border-gray-200 px-2 py-1.5 text-start font-semibold text-gray-700',
     ),
     td: styled('td', 'border-b border-gray-100 px-2 py-1.5 align-top text-gray-800 last:border-b-0'),
 

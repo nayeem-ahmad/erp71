@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
 import { buildBurndownSeries, toDateKey } from './burndown.util';
 import { AssignTasksToSprintDto, CreateSprintDto, UpdateSprintDto } from './project.dto';
@@ -9,6 +10,7 @@ export class SprintsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly snapshots: SprintSnapshotService,
+        private readonly access: ProjectAccessService,
     ) {}
 
     /**
@@ -16,7 +18,20 @@ export class SprintsService {
      * `projectId` filters by *participation* — sprints holding at least one task
      * from that project — rather than by ownership, which no longer exists.
      */
-    async list(tenantId: string, projectId?: string) {
+    /**
+     * Note what is *not* filtered by visibility here: the hour totals. A sprint
+     * is a tenant-level commitment and its burndown is a single shared number —
+     * a per-viewer total would mean two people reading the same chart and
+     * disagreeing about whether the sprint is on track, and the snapshot rows
+     * behind `burndown()` are precomputed and cannot be re-derived per viewer
+     * anyway. What a private project must not leak is its *identity*, so the
+     * `projects` span below is filtered and the totals are left whole.
+     */
+    async list(viewer: ProjectViewer, projectId?: string) {
+        const tenantId = viewer.tenantId;
+        if (projectId) await this.access.assertProjectVisible(viewer, projectId);
+        const visible = await this.access.relatedFilter(viewer);
+
         const participating = projectId
             ? (await this.db.projectTask.findMany({
                 where: {
@@ -67,7 +82,8 @@ export class SprintsService {
                 tenant_id: tenantId,
                 deleted_at: null,
                 sprint_id: { in: sprints.map((s) => s.id) },
-            },
+                ...visible,
+            } as never,
             select: { sprint_id: true, project: { select: { id: true, code: true, name: true } } },
             distinct: ['sprint_id', 'project_id'],
         });
@@ -184,24 +200,37 @@ export class SprintsService {
         return { ...updated, carried_over: carried.length };
     }
 
-    /** Tasks may come from any project — that is the point of a tenant-level sprint. */
-    async assignTasks(tenantId: string, sprintId: string, dto: AssignTasksToSprintDto) {
+    /**
+     * Tasks may come from any project — that is the point of a tenant-level
+     * sprint — but only from a project this viewer can open. Filtered rather
+     * than refused: `updateMany` silently skipping an id someone cannot see is
+     * the same answer as "no such task", which is what the id deserves.
+     */
+    async assignTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
+        const tenantId = viewer.tenantId;
         await this.findOne(tenantId, sprintId);
         const result = await this.db.projectTask.updateMany({
             where: {
                 tenant_id: tenantId,
                 id: { in: dto.taskIds },
                 deleted_at: null,
-            },
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             data: { sprint_id: sprintId },
         });
         return { assigned: result.count };
     }
 
-    async removeTasks(tenantId: string, sprintId: string, dto: AssignTasksToSprintDto) {
+    async removeTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
+        const tenantId = viewer.tenantId;
         await this.findOne(tenantId, sprintId);
         const result = await this.db.projectTask.updateMany({
-            where: { tenant_id: tenantId, sprint_id: sprintId, id: { in: dto.taskIds } },
+            where: {
+                tenant_id: tenantId,
+                sprint_id: sprintId,
+                id: { in: dto.taskIds },
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             data: { sprint_id: null },
         });
         return { removed: result.count };

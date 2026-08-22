@@ -41,6 +41,22 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'AssetDepreciationEntry', postsVia: 'depreciation' },
     { model: 'CashTransaction', postsVia: 'cash_transaction', note: 'PAYOUT/LOAN post; DROP/OTHER post nothing by design' },
     { model: 'SalaryAccrual', postsVia: 'salary_accrual' },
+
+    // ── Imports under an LC ──────────────────────────────────────────────────
+    // The only models in the system that post through `postMultiLeg` rather than
+    // `autoPostFromRules`: an import receipt is inventory against
+    // goods-in-transit, duty, C&F and transport, which the two-legged rules
+    // engine cannot express.
+    {
+        model: 'ImportShipment',
+        postsVia: 'import_receipt',
+        note: 'Receipt emits an ordinary Purchase at landed cost and posts Dr Inventory / Cr Goods in Transit + Purchase Payable. A usance LC posts again via import_settlement, which recognises the realised FX difference.',
+    },
+    {
+        model: 'ImportCost',
+        postsVia: 'import_cost',
+        note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account is accrued, not posted — it still allocates into the landed cost at receipt.',
+    },
     { model: 'SalaryPayment', postsVia: 'salary_payment' },
     { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_SALE row mirrors the Sale, which posts' },
     { model: 'SupplierCreditTransaction', postsVia: 'supplier_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_PURCHASE row mirrors the Purchase, which posts' },
@@ -151,6 +167,11 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'JobApplication', exempt: 'Expected salary for one application; same category as Applicant. The hire it may lead to posts through Employee/SalaryAccrual.' },
     { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
     { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
+
+    {
+        model: 'ImportShipmentItem',
+        exempt: 'A line on an ImportShipment. unit_price_fc is the supplier\'s foreign-currency price and landed_unit_cost is what the receipt stamped on the inventory movement — both are inputs to, or records of, the parent\'s posting rather than money of their own.',
+    },
 
     // ── Exempt: platform billing / SaaS revenue (not the tenant GL) ──────────
     { model: 'BillingEvent', exempt: 'Platform SaaS billing, not a tenant ledger entry.' },

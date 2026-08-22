@@ -56,7 +56,7 @@ export default function RefundClient() {
                             <p className="mb-3">
                                 You may cancel your subscription at any time with no cancellation fee. To cancel:
                             </p>
-                            <ol className="list-decimal pl-6 space-y-2 text-sm">
+                            <ol className="list-decimal ps-6 space-y-2 text-sm">
                                 <li>Log in to your ERP71 account.</li>
                                 <li>Go to <strong>Dashboard &rarr; Billing &rarr; Cancel Subscription</strong>.</li>
                                 <li>Confirm the cancellation when prompted.</li>
@@ -77,7 +77,7 @@ export default function RefundClient() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">3. Refund Eligibility</h2>
                             <p className="mb-3">You may be eligible for a full or partial refund in the following circumstances:</p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>7-day satisfaction guarantee.</strong> If you are not satisfied with the
                                     Service, you may request a full refund within 7 calendar days of your first paid
@@ -100,7 +100,7 @@ export default function RefundClient() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">4. Non-Refundable Cases</h2>
                             <p className="mb-3">Refunds will <strong>not</strong> be issued in the following situations:</p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     Partial months used beyond the 7-day satisfaction window. Once the 7-day period has
                                     passed, the subscription fee for that billing cycle is non-refundable.
@@ -127,7 +127,7 @@ export default function RefundClient() {
                                 <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a>{' '}
                                 with the following information:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>Your registered email address and business name.</li>
                                 <li>Your order or invoice ID (found in Dashboard &rarr; Billing &rarr; Invoices).</li>
                                 <li>The reason for your refund request.</li>
@@ -144,7 +144,7 @@ export default function RefundClient() {
                         {/* 6 */}
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">6. Subscription Changes</h2>
-                            <ul className="list-disc pl-6 space-y-3 text-sm">
+                            <ul className="list-disc ps-6 space-y-3 text-sm">
                                 <li>
                                     <strong>Upgrades.</strong> When you upgrade to a higher-tier plan mid-cycle, the
                                     price difference is prorated immediately and charged to your payment method on file.

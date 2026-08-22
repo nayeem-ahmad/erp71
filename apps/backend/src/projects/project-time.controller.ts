@@ -33,7 +33,7 @@ export class ProjectTimeController {
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext, @Query() query: ListTimeEntriesDto) {
-        return this.time.list(tenant.tenantId, resolveMe(query, tenant.userId));
+        return this.time.list(tenant, resolveMe(query, tenant.userId));
     }
 
     /**
@@ -43,20 +43,20 @@ export class ProjectTimeController {
     @Get('report')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     report(@Tenant() tenant: TenantContext, @Query() query: TimeReportQueryDto) {
-        return this.time.report(tenant.tenantId, resolveMe(query, tenant.userId));
+        return this.time.report(tenant, resolveMe(query, tenant.userId));
     }
 
     /** Options for the "person" filter — everyone with hours in the range. */
     @Get('people')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     people(@Tenant() tenant: TenantContext, @Query() query: TimeReportQueryDto) {
-        return this.time.people(tenant.tenantId, query);
+        return this.time.people(tenant, query);
     }
 
     @Post()
     @RequireStorePermission(StorePermission.LOG_PROJECT_TIME)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTimeEntryDto) {
-        return this.time.create(tenant.tenantId, tenant.userId, dto);
+        return this.time.create(tenant, dto);
     }
 
     @Patch(':id')
@@ -66,13 +66,13 @@ export class ProjectTimeController {
         @Param('id') id: string,
         @Body() dto: UpdateTimeEntryDto,
     ) {
-        return this.time.update(tenant.tenantId, id, dto);
+        return this.time.update(tenant, id, dto);
     }
 
     @Delete(':id')
     @RequireStorePermission(StorePermission.LOG_PROJECT_TIME)
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.time.remove(tenant.tenantId, tenant.userId, id);
+        return this.time.remove(tenant, id);
     }
 }
 

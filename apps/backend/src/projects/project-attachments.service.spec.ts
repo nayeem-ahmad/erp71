@@ -10,6 +10,8 @@ import {
     resourceTypeFor,
 } from './project-attachments.service';
 import { AssetsService } from '../assets/assets.service';
+import { ProjectAccessService } from './project-access.service';
+import { OWNER, staff } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 const png = Buffer.from('a real enough png').toString('base64');
@@ -80,6 +82,7 @@ describe('ProjectAttachmentsService', () => {
         };
 
         db = {
+            userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTask: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'task-1', project_id: 'project-1' }),
             },
@@ -98,6 +101,7 @@ describe('ProjectAttachmentsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectAttachmentsService,
+                ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: AssetsService, useValue: assets },
             ],
@@ -110,7 +114,7 @@ describe('ProjectAttachmentsService', () => {
     // be turned back into a public_id, so a row deleted that way strands its
     // file forever.
     it('stores the Cloudinary public_id so the file can be deleted later', async () => {
-        await service.create('tenant-1', 'user-1', 'task-1', {
+        await service.create(OWNER, 'task-1', {
             fileBase64: png,
             fileName: 'plan.png',
             mimeType: 'image/png',
@@ -129,7 +133,7 @@ describe('ProjectAttachmentsService', () => {
     });
 
     it('uploads a PDF as a raw asset', async () => {
-        await service.create('tenant-1', 'user-1', 'task-1', {
+        await service.create(OWNER, 'task-1', {
             fileBase64: png,
             fileName: 'spec.pdf',
             mimeType: 'application/pdf',
@@ -144,7 +148,7 @@ describe('ProjectAttachmentsService', () => {
     });
 
     it('sanitises the file name rather than trusting it', async () => {
-        await service.create('tenant-1', 'user-1', 'task-1', {
+        await service.create(OWNER, 'task-1', {
             fileBase64: png,
             fileName: '../../etc/passwd.png',
             mimeType: 'image/png',
@@ -162,7 +166,7 @@ describe('ProjectAttachmentsService', () => {
         assets.isEnabled.mockReturnValue(false);
 
         await expect(
-            service.create('tenant-1', 'user-1', 'task-1', {
+            service.create(OWNER, 'task-1', {
                 fileBase64: png,
                 mimeType: 'image/png',
             } as never),
@@ -174,7 +178,7 @@ describe('ProjectAttachmentsService', () => {
         assets.uploadBuffer.mockRejectedValue(new Error('cloudinary down'));
 
         await expect(
-            service.create('tenant-1', 'user-1', 'task-1', {
+            service.create(OWNER, 'task-1', {
                 fileBase64: png,
                 mimeType: 'image/png',
             } as never),
@@ -186,7 +190,7 @@ describe('ProjectAttachmentsService', () => {
         db.projectTask.findFirst.mockResolvedValue(null);
 
         await expect(
-            service.create('tenant-2', 'user-1', 'task-1', {
+            service.create(staff('user-9', 'tenant-2'), 'task-1', {
                 fileBase64: png,
                 mimeType: 'image/png',
             } as never),
@@ -195,7 +199,7 @@ describe('ProjectAttachmentsService', () => {
 
     describe('remove', () => {
         it('purges the stored file, not just the row', async () => {
-            await service.remove('tenant-1', 'att-1');
+            await service.remove(OWNER, 'att-1');
 
             expect(db.projectAttachment.delete).toHaveBeenCalled();
             expect(assets.deleteFile).toHaveBeenCalledWith(
@@ -211,7 +215,7 @@ describe('ProjectAttachmentsService', () => {
                 mime_type: 'application/pdf',
             });
 
-            await service.remove('tenant-1', 'att-1');
+            await service.remove(OWNER, 'att-1');
 
             expect(assets.deleteFile).toHaveBeenCalledWith('k', 'raw');
         });
@@ -223,7 +227,7 @@ describe('ProjectAttachmentsService', () => {
             db.projectAttachment.delete.mockImplementation(async () => order.push('row'));
             assets.deleteFile.mockImplementation(async () => order.push('asset'));
 
-            await service.remove('tenant-1', 'att-1');
+            await service.remove(OWNER, 'att-1');
 
             expect(order).toEqual(['row', 'asset']);
         });
@@ -235,12 +239,12 @@ describe('ProjectAttachmentsService', () => {
                 mime_type: 'image/png',
             });
 
-            await expect(service.remove('tenant-1', 'att-1')).resolves.toEqual({ success: true });
+            await expect(service.remove(OWNER, 'att-1')).resolves.toEqual({ success: true });
             expect(assets.deleteFile).not.toHaveBeenCalled();
         });
 
         it('scopes the lookup to the tenant', async () => {
-            await service.remove('tenant-1', 'att-1');
+            await service.remove(OWNER, 'att-1');
 
             expect(db.projectAttachment.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -252,7 +256,7 @@ describe('ProjectAttachmentsService', () => {
         it('404s on an attachment that does not exist', async () => {
             db.projectAttachment.findFirst.mockResolvedValue(null);
 
-            await expect(service.remove('tenant-1', 'missing')).rejects.toBeInstanceOf(
+            await expect(service.remove(OWNER, 'missing')).rejects.toBeInstanceOf(
                 NotFoundException,
             );
         });

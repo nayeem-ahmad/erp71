@@ -211,7 +211,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                     >
                         {(t.addProductModal as any).basicTab || "Basic Details"}
                         {activeTab === 'basic' && (
-                            <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-blue-600" />
+                            <span className="absolute bottom-0 start-0 end-0 h-0.5 rounded-t-full bg-blue-600" />
                         )}
                     </button>
                     <button
@@ -225,7 +225,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                     >
                         {(t.addProductModal as any).storefrontTab || "Storefront (Ecommerce)"}
                         {activeTab === 'storefront' && (
-                            <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-blue-600" />
+                            <span className="absolute bottom-0 start-0 end-0 h-0.5 rounded-t-full bg-blue-600" />
                         )}
                     </button>
                 </div>
@@ -236,7 +236,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                             {/* Left Column: Basic Info & Categories */}
                             <div className="md:col-span-7 space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.productName}</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.productName}</label>
                                     <input
                                         required
                                         type="text"
@@ -248,7 +248,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.productType}</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.productType}</label>
                                     <div className="flex gap-2 bg-gray-50 rounded-xl p-1">
                                         <button
                                             type="button"
@@ -270,13 +270,13 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         </button>
                                     </div>
                                     {formData.type === 'SERVICE' && (
-                                        <p className="text-[11px] text-gray-400 mt-1 ml-1">{t.addProductModal.typeHint}</p>
+                                        <p className="text-[11px] text-gray-400 mt-1 ms-1">{t.addProductModal.typeHint}</p>
                                     )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">SKU</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">SKU</label>
                                         <input
                                             type="text"
                                             placeholder={t.addProductModal.placeholders.sku}
@@ -286,7 +286,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.salePrice}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.salePrice}</label>
                                         <input
                                             required
                                             type="number"
@@ -301,7 +301,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.brand}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.brand}</label>
                                         <select
                                             className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
                                             value={formData.brandId}
@@ -316,7 +316,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.quantityUnit}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.quantityUnit}</label>
                                         <select
                                             className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
                                             value={formData.unitType}
@@ -331,7 +331,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.group}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.group}</label>
                                         <select
                                             className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
                                             value={formData.groupId}
@@ -359,7 +359,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.subgroup}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.subgroup}</label>
                                         <select
                                             className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
                                             value={formData.subgroupId}
@@ -409,7 +409,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                     {/* Initial Stock */}
                                     {formData.type !== 'SERVICE' && (
                                         <div className="flex-1">
-                                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.initialStock}</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.initialStock}</label>
                                             <input
                                                 required={mode === 'create'}
                                                 type="number"
@@ -434,7 +434,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         {t.addProductModal.warrantyEnabled}
                                     </label>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-400 mb-1 ml-1">{t.addProductModal.warrantyDuration}</label>
+                                        <label className="block text-xs font-medium text-gray-400 mb-1 ms-1">{t.addProductModal.warrantyDuration}</label>
                                         <input
                                             type="number"
                                             min="0"
@@ -449,10 +449,10 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
                                 {formData.type !== 'SERVICE' && (
                                 <div className="bg-gray-50/50 rounded-lg p-4 border border-gray-100/50 space-y-3">
-                                    <span className="block text-xs font-bold text-gray-700 ml-1">Inventory Alert & Lead Times</span>
+                                    <span className="block text-xs font-bold text-gray-700 ms-1">Inventory Alert & Lead Times</span>
                                     <div className="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ml-1 truncate" title={t.addProductModal.reorderLevel}>
+                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ms-1 truncate" title={t.addProductModal.reorderLevel}>
                                                 {t.addProductModal.reorderLevel}
                                             </label>
                                             <input
@@ -465,7 +465,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ml-1 truncate" title={t.addProductModal.safetyStock}>
+                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ms-1 truncate" title={t.addProductModal.safetyStock}>
                                                 {t.addProductModal.safetyStock}
                                             </label>
                                             <input
@@ -478,7 +478,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ml-1 truncate" title={t.addProductModal.leadTimeDays}>
+                                            <label className="block text-[10px] font-medium text-gray-400 mb-0.5 ms-1 truncate" title={t.addProductModal.leadTimeDays}>
                                                 {t.addProductModal.leadTimeDays}
                                             </label>
                                             <input
@@ -510,13 +510,13 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
                                         className="sr-only peer"
                                     />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                 </label>
                             </div>
 
                             {/* Rich Text Description */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ml-1">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ms-1">
                                     {(t.addProductModal as any).description || "Product Description"}
                                 </label>
                                 <RichTextEditor
@@ -528,7 +528,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
                             {/* Image Gallery */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ml-1">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ms-1">
                                     {(t.addProductModal as any).imageGallery || "Image Gallery"}
                                 </label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">

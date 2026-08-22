@@ -137,13 +137,19 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
         }
     }
 
-    /** Fills the fields for review; nothing is written until the owner saves. */
+    /**
+     * Fills the fields for review; nothing is written until the owner saves.
+     *
+     * One language: a shop's post has a single title and body, so the assistant
+     * is asked for one and the first translation it returns is that one.
+     */
     function applyDraft(draft: any) {
-        setTitle(draft.title ?? '');
-        setExcerpt(draft.excerpt ?? '');
-        setBody(draft.body_md ?? '');
-        setSeoTitle(draft.seo_title ?? '');
-        setSeoDescription(draft.seo_description ?? '');
+        const copy = draft?.translations?.[0] ?? {};
+        setTitle(copy.title ?? '');
+        setExcerpt(copy.excerpt ?? '');
+        setBody(copy.body_md ?? '');
+        setSeoTitle(copy.seo_title ?? '');
+        setSeoDescription(copy.seo_description ?? '');
         if (draft.slug) setSlug(draft.slug);
         setCategoryId(draft.category_id ?? '');
         if (draft.author_name) setAuthorName(draft.author_name);

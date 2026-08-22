@@ -40,7 +40,7 @@ function defaultTo() {
 }
 
 export default function MonthlySalesPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const [data, setData] = useState<MonthlyData | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
@@ -108,15 +108,15 @@ export default function MonthlySalesPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 sticky left-0 bg-white min-w-[200px]">
+                                    <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400 sticky start-0 bg-white min-w-[200px]">
                                         {t.salesReports.common.customer}
                                     </th>
                                     {data.months.map((m) => (
-                                        <th key={m} className="text-right px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[120px]">
+                                        <th key={m} className="text-end px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[120px]">
                                             {formatMonth(m, locale)}
                                         </th>
                                     ))}
-                                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[130px] bg-gray-50">
+                                    <th className="text-end px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[130px] bg-gray-50">
                                         {t.salesReports.common.total}
                                     </th>
                                 </tr>
@@ -124,21 +124,19 @@ export default function MonthlySalesPage() {
                             <tbody>
                                 {data.rows.map((row, i) => (
                                     <tr key={row.customer.id ?? `walkin-${i}`} className="border-b border-gray-50 hover:bg-gray-50">
-                                        <td className="px-4 py-3 sticky left-0 bg-white">
+                                        <td className="px-4 py-3 sticky start-0 bg-white">
                                             <div className="font-bold text-gray-900">{row.customer.name}</div>
                                             {row.customer.phone && (
                                                 <div className="text-xs text-gray-400 mt-0.5">{row.customer.phone}</div>
                                             )}
                                         </td>
                                         {row.monthly.map((m) => (
-                                            <td key={m.month} className="px-4 py-3 text-right">
+                                            <td key={m.month} className="px-4 py-3 text-end">
                                                 {m.revenue > 0 ? (
                                                     <div>
                                                         <div className="font-bold text-gray-900">{formatBDT(m.revenue, { locale })}</div>
                                                         <div className="text-xs text-gray-400">
-                                                            {m.orderCount === 1
-                                                                ? formatMessage(t.shared.orderCount, { count: m.orderCount })
-                                                                : formatMessage(t.shared.orderCountPlural, { count: m.orderCount })}
+                                                            {fmt(t.shared.orderCount, { count: m.orderCount })}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -146,7 +144,7 @@ export default function MonthlySalesPage() {
                                                 )}
                                             </td>
                                         ))}
-                                        <td className="px-4 py-3 text-right bg-gray-50">
+                                        <td className="px-4 py-3 text-end bg-gray-50">
                                             <span className="font-bold text-blue-700">{formatBDT(row.total, { locale })}</span>
                                         </td>
                                     </tr>
@@ -154,7 +152,7 @@ export default function MonthlySalesPage() {
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200 bg-gray-50">
-                                    <td className="px-4 py-3 text-xs font-semibold text-gray-500 sticky left-0 bg-gray-50">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-500 sticky start-0 bg-gray-50">
                                         {t.salesReports.common.total}
                                     </td>
                                     {data.months.map((m) => {
@@ -163,12 +161,12 @@ export default function MonthlySalesPage() {
                                             return sum + (monthData?.revenue ?? 0);
                                         }, 0);
                                         return (
-                                            <td key={m} className="px-4 py-3 text-right font-bold text-gray-800">
+                                            <td key={m} className="px-4 py-3 text-end font-bold text-gray-800">
                                                 {formatBDT(colTotal, { locale })}
                                             </td>
                                         );
                                     })}
-                                    <td className="px-4 py-3 text-right font-bold text-blue-700">
+                                    <td className="px-4 py-3 text-end font-bold text-blue-700">
                                         {formatBDT(data.rows.reduce((sum, r) => sum + r.total, 0), { locale })}
                                     </td>
                                 </tr>

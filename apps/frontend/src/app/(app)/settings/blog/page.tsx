@@ -175,12 +175,12 @@ export default function StorefrontBlogPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{m.postTitle}</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{t.common.status}</th>
-                                <th className="hidden px-3 py-2 text-left text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{m.postTitle}</th>
+                                <th className="px-3 py-2 text-start text-xs font-semibold text-gray-600">{t.common.status}</th>
+                                <th className="hidden px-3 py-2 text-start text-xs font-semibold text-gray-600 md:table-cell">
                                     {m.category}
                                 </th>
-                                <th className="hidden px-3 py-2 text-right text-xs font-semibold text-gray-600 md:table-cell">
+                                <th className="hidden px-3 py-2 text-end text-xs font-semibold text-gray-600 md:table-cell">
                                     {t.common.total}
                                 </th>
                             </tr>
@@ -218,7 +218,7 @@ export default function StorefrontBlogPage() {
                                         <td className="hidden px-3 py-2 text-xs text-gray-600 md:table-cell">
                                             {row.category?.name ?? '—'}
                                         </td>
-                                        <td className="hidden px-3 py-2 text-right text-xs text-gray-600 md:table-cell">
+                                        <td className="hidden px-3 py-2 text-end text-xs text-gray-600 md:table-cell">
                                             {row.view_count}
                                         </td>
                                     </tr>

@@ -89,7 +89,7 @@ export default function AvatarDropdown({
                 aria-label="User menu"
                 aria-expanded={isOpen}
             >
-                <div className="text-right hidden sm:block">
+                <div className="text-end hidden sm:block">
                     <p className="text-sm font-semibold tracking-tight leading-none text-gray-800">
                         {userName}
                     </p>
@@ -108,7 +108,7 @@ export default function AvatarDropdown({
             </button>
 
             <div
-                className={`absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden transition-all duration-150 origin-top-right ${
+                className={`absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden transition-all duration-150 origin-top-right ${
                     isOpen
                         ? 'opacity-100 scale-100 translate-y-0'
                         : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'

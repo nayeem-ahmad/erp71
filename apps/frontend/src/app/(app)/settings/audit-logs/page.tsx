@@ -189,7 +189,7 @@ export default function AuditLogsPage() {
 
             {loading ? (
                 <div className="flex items-center justify-center py-20 text-gray-400">
-                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    <Loader2 className="w-6 h-6 animate-spin me-2" />
                     {t.common.loading}
                 </div>
             ) : (

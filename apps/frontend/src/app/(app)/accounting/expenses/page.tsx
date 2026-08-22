@@ -277,7 +277,7 @@ function ExpensesPageContent() {
 
             {loading ? (
                 <div className="flex items-center justify-center py-12 text-gray-400">
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    <Loader2 className="w-5 h-5 animate-spin me-2" />
                     {t.common.loading}
                 </div>
             ) : (

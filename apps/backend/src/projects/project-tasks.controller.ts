@@ -47,26 +47,26 @@ export class ProjectTasksController {
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext, @Query() query: ListTasksDto) {
-        return this.tasks.list(tenant.tenantId, query);
+        return this.tasks.list(tenant, query);
     }
 
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTaskDto) {
-        return this.tasks.create(tenant.tenantId, tenant.userId, dto);
+        return this.tasks.create(tenant, dto);
     }
 
     @Get(':id')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.tasks.findOne(tenant.tenantId, id);
+        return this.tasks.findOne(tenant, id);
     }
 
     /** The audit view: why the burndown moved, who moved it, and when. */
     @Get(':id/remaining-history')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     remainingHistory(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.tasks.remainingHistory(tenant.tenantId, id);
+        return this.tasks.remainingHistory(tenant, id);
     }
 
     @Patch(':id')
@@ -76,19 +76,19 @@ export class ProjectTasksController {
         @Param('id') id: string,
         @Body() dto: UpdateTaskDto,
     ) {
-        return this.tasks.update(tenant.tenantId, tenant.userId, id, dto);
+        return this.tasks.update(tenant, id, dto);
     }
 
     @Patch(':id/move')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     move(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: MoveTaskDto) {
-        return this.tasks.move(tenant.tenantId, tenant.userId, id, dto);
+        return this.tasks.move(tenant, id, dto);
     }
 
     @Delete(':id')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.tasks.remove(tenant.tenantId, id);
+        return this.tasks.remove(tenant, id);
     }
 
     // Comments, watching and the feed are gated on VIEW_PROJECTS rather than
@@ -98,7 +98,7 @@ export class ProjectTasksController {
     @Get(':id/comments')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     listComments(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.comments.list(tenant.tenantId, id);
+        return this.comments.list(tenant, id);
     }
 
     @Post(':id/comments')
@@ -108,7 +108,7 @@ export class ProjectTasksController {
         @Param('id') id: string,
         @Body() dto: CreateCommentDto,
     ) {
-        return this.comments.create(tenant.tenantId, tenant.userId, id, dto);
+        return this.comments.create(tenant, id, dto);
     }
 
     @Patch('comments/:commentId')
@@ -130,7 +130,7 @@ export class ProjectTasksController {
     @Get(':id/attachments')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     listAttachments(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.attachments.list(tenant.tenantId, id);
+        return this.attachments.list(tenant, id);
     }
 
     @Post(':id/attachments')
@@ -140,7 +140,7 @@ export class ProjectTasksController {
         @Param('id') id: string,
         @Body() dto: CreateAttachmentDto,
     ) {
-        return this.attachments.create(tenant.tenantId, tenant.userId, id, dto);
+        return this.attachments.create(tenant, id, dto);
     }
 
     @Delete('attachments/:attachmentId')
@@ -149,31 +149,34 @@ export class ProjectTasksController {
         @Tenant() tenant: TenantContext,
         @Param('attachmentId') attachmentId: string,
     ) {
-        return this.attachments.remove(tenant.tenantId, attachmentId);
+        return this.attachments.remove(tenant, attachmentId);
     }
 
     @Get(':id/activity')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    listActivity(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    async listActivity(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.tasks.assertTask(tenant, id);
         return this.activity.list(tenant.tenantId, id);
     }
 
     @Get(':id/watchers')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    listWatchers(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    async listWatchers(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.tasks.assertTask(tenant, id);
         return this.activity.listWatchers(tenant.tenantId, id);
     }
 
     @Post(':id/watch')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     async watch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        await this.tasks.assertTask(tenant.tenantId, id);
+        await this.tasks.assertTask(tenant, id);
         return this.activity.watch(tenant.tenantId, id, tenant.userId);
     }
 
     @Delete(':id/watch')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    unwatch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    async unwatch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.tasks.assertTask(tenant, id);
         return this.activity.unwatch(tenant.tenantId, id, tenant.userId);
     }
 
@@ -184,7 +187,7 @@ export class ProjectTasksController {
         @Param('id') id: string,
         @Body() dto: CreateChecklistItemDto,
     ) {
-        return this.tasks.addChecklistItem(tenant.tenantId, id, dto);
+        return this.tasks.addChecklistItem(tenant, id, dto);
     }
 
     @Patch(':id/checklist/reorder')
@@ -194,7 +197,7 @@ export class ProjectTasksController {
         @Param('id') id: string,
         @Body() dto: ReorderChecklistDto,
     ) {
-        return this.tasks.reorderChecklist(tenant.tenantId, id, dto.itemIds);
+        return this.tasks.reorderChecklist(tenant, id, dto.itemIds);
     }
 
     @Patch('checklist/:itemId')
@@ -204,12 +207,12 @@ export class ProjectTasksController {
         @Param('itemId') itemId: string,
         @Body() dto: UpdateChecklistItemDto,
     ) {
-        return this.tasks.updateChecklistItem(tenant.tenantId, itemId, dto);
+        return this.tasks.updateChecklistItem(tenant, itemId, dto);
     }
 
     @Delete('checklist/:itemId')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     removeChecklistItem(@Tenant() tenant: TenantContext, @Param('itemId') itemId: string) {
-        return this.tasks.removeChecklistItem(tenant.tenantId, itemId);
+        return this.tasks.removeChecklistItem(tenant, itemId);
     }
 }

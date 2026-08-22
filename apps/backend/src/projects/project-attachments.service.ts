@@ -5,6 +5,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { AssetsService } from '../assets/assets.service';
 import { CreateAttachmentDto } from './project.dto';
 
@@ -81,10 +82,12 @@ export class ProjectAttachmentsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly assets: AssetsService,
+        private readonly access: ProjectAccessService,
     ) {}
 
-    async list(tenantId: string, taskId: string) {
-        await this.assertTask(tenantId, taskId);
+    async list(viewer: ProjectViewer, taskId: string) {
+        const tenantId = viewer.tenantId;
+        await this.assertTask(viewer, taskId);
         return this.db.projectAttachment.findMany({
             where: { tenant_id: tenantId, task_id: taskId },
             orderBy: { created_at: 'desc' },
@@ -92,8 +95,10 @@ export class ProjectAttachmentsService {
         });
     }
 
-    async create(tenantId: string, userId: string, taskId: string, dto: CreateAttachmentDto) {
-        const task = await this.assertTask(tenantId, taskId);
+    async create(viewer: ProjectViewer, taskId: string, dto: CreateAttachmentDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
+        const task = await this.assertTask(viewer, taskId);
         const { buffer, mimeType } = parseAttachmentUpload(dto.fileBase64, dto.mimeType);
 
         if (!this.assets.isEnabled()) {
@@ -137,9 +142,16 @@ export class ProjectAttachmentsService {
         });
     }
 
-    async remove(tenantId: string, attachmentId: string) {
+    async remove(viewer: ProjectViewer, attachmentId: string) {
+        // Addressed by its own id with no task in the route, so the project it
+        // belongs to has to be resolved through the task before deleting it.
+        const filter = await this.access.relatedFilter(viewer);
         const existing = await this.db.projectAttachment.findFirst({
-            where: { id: attachmentId, tenant_id: tenantId },
+            where: {
+                id: attachmentId,
+                tenant_id: viewer.tenantId,
+                ...(Object.keys(filter).length ? { task: filter } : {}),
+            } as never,
             select: { id: true, storage_key: true, mime_type: true },
         });
         if (!existing) throw new NotFoundException('Attachment not found');
@@ -158,9 +170,14 @@ export class ProjectAttachmentsService {
         return { success: true };
     }
 
-    private async assertTask(tenantId: string, taskId: string) {
+    private async assertTask(viewer: ProjectViewer, taskId: string) {
         const task = await this.db.projectTask.findFirst({
-            where: { id: taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: taskId,
+                tenant_id: viewer.tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: { id: true, project_id: true },
         });
         if (!task) throw new NotFoundException('Task not found');

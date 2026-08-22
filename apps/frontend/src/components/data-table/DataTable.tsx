@@ -174,7 +174,7 @@ function SortableHeader({
             }}
             className={headerClassName}
         >
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 rtl:space-x-reverse">
                 <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
                     <GripVertical className="w-3 h-3" />
                 </span>
@@ -185,7 +185,7 @@ function SortableHeader({
                 <div
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
-                    className={`absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none hover:bg-blue-400 transition-colors ${
+                    className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none hover:bg-blue-400 transition-colors ${
                         header.column.getIsResizing() ? 'bg-blue-500' : 'bg-transparent'
                     }`}
                 />
@@ -619,7 +619,7 @@ export default function DataTable<T>({
                     {/* Search */}
                     {showSearch && (
                         <div className="relative flex-1 min-w-[200px] max-w-md">
-                            <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
+                            <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'start-2.5' : 'start-3'}`} />
                             <input
                                 type="text"
                                 placeholder={resolvedSearchPlaceholder}
@@ -630,7 +630,7 @@ export default function DataTable<T>({
                             {globalFilter && (
                                 <button
                                     onClick={() => setGlobalFilter('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                 </button>
@@ -639,7 +639,7 @@ export default function DataTable<T>({
                     )}
 
                     {/* Toolbar buttons — always aligned to the right, even when the search box is hidden */}
-                    <div className="flex items-center gap-2 flex-wrap ml-auto">
+                    <div className="flex items-center gap-2 flex-wrap ms-auto">
                         {/* Advanced Filters */}
                         <button
                             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -670,7 +670,7 @@ export default function DataTable<T>({
                                 <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.columns}</span>
                             </button>
                             {showColumnSelector && (
-                                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
+                                <div className="absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
                                     {table.getAllLeafColumns()
                                         .filter((c) => c.id !== 'select')
                                         .map((column) => (
@@ -678,7 +678,7 @@ export default function DataTable<T>({
                                                 key={column.id}
                                                 className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer"
                                             >
-                                                <div className={`w-4 h-4 rounded border mr-2.5 flex items-center justify-center transition-colors ${
+                                                <div className={`w-4 h-4 rounded border me-2.5 flex items-center justify-center transition-colors ${
                                                     column.getIsVisible()
                                                         ? 'bg-blue-600 border-blue-600'
                                                         : 'border-gray-300'
@@ -809,7 +809,7 @@ export default function DataTable<T>({
                 {!isMdUp && tableCanScroll ? (
                     <div
                         aria-hidden
-                        className="pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-white via-white/80 to-transparent md:hidden"
+                        className="pointer-events-none absolute end-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-white via-white/80 to-transparent md:hidden"
                     />
                 ) : null}
                 <div ref={tableScrollRef} className="overflow-x-auto overflow-x-touch [scrollbar-width:thin]">
@@ -863,7 +863,7 @@ export default function DataTable<T>({
                                                     <SortableHeader key={header.id} header={header} headerClassName={d.headerCell}>
                                                         <button
                                                             onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                                                            className={`flex items-center space-x-1 ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
+                                                            className={`flex items-center space-x-1 rtl:space-x-reverse ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
                                                         >
                                                             <span>
                                                                 {header.isPlaceholder
@@ -871,7 +871,7 @@ export default function DataTable<T>({
                                                                     : flexRender(header.column.columnDef.header, header.getContext())}
                                                             </span>
                                                             {canSort && (
-                                                                <span className="ml-0.5">
+                                                                <span className="ms-0.5">
                                                                     {sorted === 'asc' ? (
                                                                         <ChevronUp className="w-3 h-3 text-blue-600" />
                                                                     ) : sorted === 'desc' ? (
@@ -910,7 +910,11 @@ export default function DataTable<T>({
                 </div>
                 {!isMdUp && tableCanScroll ? (
                     <p className="px-3 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 md:hidden">
-                        {t.common.dataTable.scrollHint} →
+                        {t.common.dataTable.scrollHint}
+                        {/* Points the way the table actually scrolls, which is
+                            the other way round in Arabic and Urdu. */}
+                        <span className="rtl:hidden"> →</span>
+                        <span className="hidden rtl:inline"> ←</span>
                     </p>
                 ) : null}
             </div>

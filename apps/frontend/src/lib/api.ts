@@ -5,6 +5,7 @@ import type {
     DashboardPreference,
     PlatformFeatureKey,
     PlatformFeatures,
+    SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
@@ -1928,6 +1929,53 @@ export const api = {
     deletePurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`, {
         method: 'DELETE',
     }),
+    // ── Imports (LC) ────────────────────────────────────────────────────────
+    getImportShipments: (params?: { status?: string; supplierId?: string; openOnly?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.supplierId) query.set('supplierId', params.supplierId);
+        if (params?.openOnly) query.set('openOnly', 'true');
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`),
+    createImportShipment: (data: any) =>
+        fetchWithAuth('/imports', { method: 'POST', body: JSON.stringify(data) }),
+    updateImportShipment: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    updateImportShipmentStatus: (id: string, status: string) =>
+        fetchWithAuth(`/imports/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`, { method: 'DELETE' }),
+
+    getImportCostSheet: (id: string) => fetchWithAuth(`/imports/${id}/cost-sheet`),
+    addImportCost: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/costs`, { method: 'POST', body: JSON.stringify(data) }),
+    updateImportCost: (id: string, costId: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteImportCost: (id: string, costId: string) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'DELETE' }),
+
+    /** Emits an ordinary Purchase at landed cost and moves the stock. */
+    receiveImportShipment: (id: string, data: any = {}) =>
+        fetchWithAuth(`/imports/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+    settleImportShipment: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/settle`, { method: 'POST', body: JSON.stringify(data) }),
+
+    addImportDocument: (id: string, data: any) =>
+        fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteImportDocument: (id: string, documentId: string) =>
+        fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
+
+    getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
+    getImportDutyReport: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportBankLimits: () => fetchWithAuth('/imports/bank-limits'),
+
     getQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
@@ -2004,8 +2052,17 @@ export const api = {
     },
     removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
     getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
-    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+    draftAdminBlogPost: (data: { prompt: string; locale?: string; locales?: string[] }) =>
         fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    translateAdminBlogPost: (data: {
+        source_locale: string;
+        target_locales: string[];
+        title: string;
+        body_md: string;
+        excerpt?: string;
+        seo_title?: string;
+        seo_description?: string;
+    }) => fetchWithAuth('/admin/blog/ai-translate', { method: 'POST', body: JSON.stringify(data) }),
     createAdminBlogCategory: (data: any) =>
         fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateAdminBlogCategory: (id: string, data: any) =>
@@ -2284,7 +2341,7 @@ export const api = {
     }),
     updateAdminTenantLocalization: (
         tenantId: string,
-        data: { localization_enabled?: boolean; secondary_locale?: 'bn' | 'ms' | null },
+        data: { localization_enabled?: boolean; secondary_locale?: SupportedLocaleCode | null },
     ) => fetchWithAuth(`/admin/tenants/${tenantId}/localization`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -2820,7 +2877,7 @@ export const api = {
     getMyAddonSubscriptions: () => fetchWithAuth('/addon-modules/mine'),
     cancelAddonAtPeriodEnd: (code: string) =>
         fetchWithAuth(`/addon-modules/${code}/cancel-at-period-end`, { method: 'POST' }),
-    updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
+    updateProfile: (data: { name?: string; preferred_locale?: SupportedLocaleCode }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -2835,7 +2892,7 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
-    updateTenantLocalizationSettings: (data: { default_locale: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/tenants/localization-settings', {
+    updateTenantLocalizationSettings: (data: { default_locale: SupportedLocaleCode }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -3665,6 +3722,7 @@ export const api = {
         limit?: number;
         search?: string;
         status?: string;
+        visibility?: string;
         projectTypeId?: string;
         managerId?: string;
         customerId?: string;

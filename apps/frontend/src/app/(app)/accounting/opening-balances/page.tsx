@@ -114,9 +114,9 @@ export default function OpeningBalancesPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 w-1/2">Account</th>
-                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Debit</th>
-                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Credit</th>
+                                <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400 w-1/2">Account</th>
+                                <th className="text-end px-4 py-3 text-xs font-semibold text-gray-400">Debit</th>
+                                <th className="text-end px-4 py-3 text-xs font-semibold text-gray-400">Credit</th>
                                 <th className="w-10" />
                             </tr>
                         </thead>
@@ -136,13 +136,13 @@ export default function OpeningBalancesPage() {
                                         <input type="number" min="0" step="0.01" placeholder="0.00"
                                             value={row.debitAmount}
                                             onChange={(e) => { setRow(i, 'debitAmount', e.target.value); if (e.target.value) setRow(i, 'creditAmount', ''); }}
-                                            className={`${compactDensity.formField} text-right`} />
+                                            className={`${compactDensity.formField} text-end`} />
                                     </td>
                                     <td className="px-4 py-2">
                                         <input type="number" min="0" step="0.01" placeholder="0.00"
                                             value={row.creditAmount}
                                             onChange={(e) => { setRow(i, 'creditAmount', e.target.value); if (e.target.value) setRow(i, 'debitAmount', ''); }}
-                                            className={`${compactDensity.formField} text-right`} />
+                                            className={`${compactDensity.formField} text-end`} />
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                         {rows.length > 2 && (
@@ -157,8 +157,8 @@ export default function OpeningBalancesPage() {
                         <tfoot>
                             <tr className="border-t border-gray-200 bg-gray-50">
                                 <td className="px-4 py-3 text-xs font-semibold text-gray-500">Totals</td>
-                                <td className="px-4 py-3 text-right font-bold text-sm">{formatBDT(totalDebit, { locale })}</td>
-                                <td className="px-4 py-3 text-right font-bold text-sm">{formatBDT(totalCredit, { locale })}</td>
+                                <td className="px-4 py-3 text-end font-bold text-sm">{formatBDT(totalDebit, { locale })}</td>
+                                <td className="px-4 py-3 text-end font-bold text-sm">{formatBDT(totalCredit, { locale })}</td>
                                 <td />
                             </tr>
                         </tfoot>

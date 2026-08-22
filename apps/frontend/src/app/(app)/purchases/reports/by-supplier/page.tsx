@@ -108,7 +108,7 @@ export default function PurchasesBySupplierPage() {
                                 style={{ width: `${Math.min(info.getValue(), 100)}%` }}
                             />
                         </div>
-                        <span className="text-xs font-bold text-gray-600 w-12 text-right">
+                        <span className="text-xs font-bold text-gray-600 w-12 text-end">
                             {Number(info.getValue()).toFixed(1)}%
                         </span>
                     </div>

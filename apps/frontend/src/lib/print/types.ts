@@ -16,6 +16,7 @@ export type PrintDocType =
     | 'SALES_INVOICE'
     | 'POS_RECEIPT'
     | 'QUOTE'
+    | 'PROFORMA_INVOICE'
     | 'VOUCHER'
     | 'MONEY_RECEIPT'
     | 'SALES_ORDER'

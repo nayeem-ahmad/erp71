@@ -115,7 +115,7 @@ export default function CustomerSelection({ customer, setCustomer, readOnly = fa
     return (
         <div className="flex flex-col gap-1">
             <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                     ref={inputRef}
                     type="text"
@@ -127,13 +127,13 @@ export default function CustomerSelection({ customer, setCustomer, readOnly = fa
                     onFocus={() => setShowDropdown(true)}
                     onKeyDown={handleKeyDown}
                     placeholder={customer ? customer.name : 'Customer — search by name or phone…'}
-                    className="w-full pl-8 pr-8 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full ps-8 pe-8 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 />
                 {customer && (
                     <button
                         type="button"
                         onClick={handleClearCustomer}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                        className="absolute end-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                         title="Remove customer"
                     >
                         <X className="w-4 h-4" />
@@ -143,7 +143,7 @@ export default function CustomerSelection({ customer, setCustomer, readOnly = fa
                 {showDropdown && (
                     <div
                         ref={dropdownRef}
-                        className="absolute top-full left-0 right-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
+                        className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
                     >
                         {loading ? (
                             <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>

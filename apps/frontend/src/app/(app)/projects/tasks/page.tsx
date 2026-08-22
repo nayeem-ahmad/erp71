@@ -166,7 +166,7 @@ export default function TasksPage() {
                     <button
                         type="button"
                         onClick={() => setOpenTaskId(row.original.id)}
-                        className="text-left font-medium text-blue-600 hover:underline"
+                        className="text-start font-medium text-blue-600 hover:underline"
                     >
                         {row.original.title}
                     </button>

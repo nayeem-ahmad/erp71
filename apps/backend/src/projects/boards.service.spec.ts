@@ -3,6 +3,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
+import { visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('BoardsService', () => {
@@ -13,6 +15,9 @@ describe('BoardsService', () => {
 
     const tenantId = 't1';
     const userId = 'u1';
+    /** Sees every project, so the card queries below are unfiltered. */
+    const owner: ProjectViewer = { tenantId, userId, userRole: 'OWNER', storeId: 's1' };
+    const staff = (id = 'u2'): ProjectViewer => ({ tenantId, userId: id, userRole: 'STAFF', storeId: 's1' });
 
     const card = (id: string, projectId: string, statusId: string) => ({
         id,
@@ -50,6 +55,7 @@ describe('BoardsService', () => {
                 findFirst: jest.fn().mockResolvedValue({ id: 'bt1', board_id: 'b1', task_id: 'k1' }),
             },
             boardColumnStatus: { findMany: jest.fn().mockResolvedValue([]) },
+            userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTask: {
                 findMany: jest.fn().mockResolvedValue([{ id: 'k1', project_id: 'p1' }]),
                 // status_id 's1' is bound to c1, not c2 (see columns.listColumns
@@ -71,11 +77,15 @@ describe('BoardsService', () => {
                 { id: 'c2', name: 'Done', category: 'DONE', sort_order: 1, wip_limit: null, bindings: [{ status_id: 's2' }] },
             ]),
         };
-        tasks = { move: jest.fn().mockResolvedValue({ id: 'k1' }) };
+        tasks = {
+            move: jest.fn().mockResolvedValue({ id: 'k1' }),
+            assertTask: jest.fn().mockResolvedValue({ id: 'k1' }),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 BoardsService,
+                ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: BoardColumnsService, useValue: columns },
                 { provide: ProjectTasksService, useValue: tasks },
@@ -99,7 +109,7 @@ describe('BoardsService', () => {
             { id: 'b1', name: 'Release', description: null, created_at: createdAt, _count: { cards: 6 } },
         ]);
 
-        const boards = await service.list(tenantId);
+        const boards = await service.list(owner);
 
         expect(db.board.findMany).toHaveBeenCalledWith({
             where: { tenant_id: tenantId, deleted_at: null },
@@ -114,7 +124,7 @@ describe('BoardsService', () => {
     it('groups cards into the column their status is bound to', async () => {
         db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1'), card('k2', 'p2', 's2')]);
 
-        const board = await service.findOne(tenantId, 'b1');
+        const board = await service.findOne(owner, 'b1');
 
         expect(db.boardTask.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ where: { board_id: 'b1', tenant_id: tenantId } }),
@@ -126,7 +136,7 @@ describe('BoardsService', () => {
     it('puts a card whose status is bound to nothing into unsorted', async () => {
         db.boardTask.findMany.mockResolvedValue([card('k3', 'p3', 's-loose')]);
 
-        const board = await service.findOne(tenantId, 'b1');
+        const board = await service.findOne(owner, 'b1');
 
         expect(board.unsorted.map((t: any) => t.id)).toEqual(['k3']);
         expect(board.columns.every((c: any) => c.tasks.length === 0)).toBe(true);
@@ -137,7 +147,7 @@ describe('BoardsService', () => {
         deleted.task.deleted_at = new Date() as never;
         db.boardTask.findMany.mockResolvedValue([deleted]);
 
-        const board = await service.findOne(tenantId, 'b1');
+        const board = await service.findOne(owner, 'b1');
 
         expect(board.columns.every((c: any) => c.tasks.length === 0)).toBe(true);
         expect(board.unsorted).toEqual([]);
@@ -150,7 +160,7 @@ describe('BoardsService', () => {
             { id: 'k3', project_id: 'p2' },
         ]);
 
-        await service.addTasks(tenantId, userId, 'b1', ['k1', 'k2', 'k3']);
+        await service.addTasks(owner, 'b1', ['k1', 'k2', 'k3']);
 
         expect(db.projectTask.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -165,7 +175,7 @@ describe('BoardsService', () => {
     it('does not error when re-adding a card already on the board', async () => {
         db.projectTask.findMany.mockResolvedValue([{ id: 'k1', project_id: 'p1' }]);
 
-        await service.addTasks(tenantId, userId, 'b1', ['k1']);
+        await service.addTasks(owner, 'b1', ['k1']);
 
         expect(db.boardTask.createMany).toHaveBeenCalledWith(
             expect.objectContaining({ skipDuplicates: true }),
@@ -175,7 +185,7 @@ describe('BoardsService', () => {
     it('dedupes task ids so a repeated id in the same request does not look missing', async () => {
         db.projectTask.findMany.mockResolvedValue([{ id: 'k1', project_id: 'p1' }]);
 
-        await expect(service.addTasks(tenantId, userId, 'b1', ['k1', 'k1'])).resolves.toBeDefined();
+        await expect(service.addTasks(owner, 'b1', ['k1', 'k1'])).resolves.toBeDefined();
 
         expect(db.projectTask.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ where: { id: { in: ['k1'] }, tenant_id: tenantId, deleted_at: null } }),
@@ -185,7 +195,7 @@ describe('BoardsService', () => {
     it('rejects a task id that is not in this tenant', async () => {
         db.projectTask.findMany.mockResolvedValue([{ id: 'k1', project_id: 'p1' }]);
 
-        await expect(service.addTasks(tenantId, userId, 'b1', ['k1', 'ghost'])).rejects.toBeInstanceOf(
+        await expect(service.addTasks(owner, 'b1', ['k1', 'ghost'])).rejects.toBeInstanceOf(
             NotFoundException,
         );
         expect(db.boardTask.createMany).not.toHaveBeenCalled();
@@ -195,7 +205,7 @@ describe('BoardsService', () => {
     it('moves a card by writing the task status the column binds for that project', async () => {
         // No siblings currently in the target column, so the moved card is the
         // whole list: dto.sortOrder=1 clamps to index 0, the only legal slot.
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 1 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 1 });
 
         expect(db.boardTask.findFirst).toHaveBeenCalledWith({
             where: { board_id: 'b1', tenant_id: tenantId, task_id: 'k1' },
@@ -204,7 +214,7 @@ describe('BoardsService', () => {
             expect.objectContaining({ where: { id: 'k1', tenant_id: tenantId, deleted_at: null } }),
         );
         expect(columns.resolveStatusId).toHaveBeenCalledWith(tenantId, 'b1', 'c2', 'p1');
-        expect(tasks.move).toHaveBeenCalledWith(tenantId, userId, 'k1', {
+        expect(tasks.move).toHaveBeenCalledWith(owner, 'k1', {
             statusId: 's-target',
             sortOrder: 1,
         });
@@ -219,7 +229,7 @@ describe('BoardsService', () => {
         // Two cards already sit in the target column c2, ordered bt2, bt3.
         db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }, { id: 'bt3' }]);
 
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
 
         expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt1' }, data: { sort_order: 0 } });
         expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt2' }, data: { sort_order: 1 } });
@@ -229,7 +239,7 @@ describe('BoardsService', () => {
     it('renumbers the target column when a card is inserted in the middle', async () => {
         db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }, { id: 'bt3' }]);
 
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 1 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 1 });
 
         expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt2' }, data: { sort_order: 0 } });
         expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt1' }, data: { sort_order: 1 } });
@@ -241,7 +251,7 @@ describe('BoardsService', () => {
 
         // 99 is well past the end of a 2-sibling column; it must clamp to the
         // last legal slot rather than throw or leave a gap.
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 99 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 99 });
 
         expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt2' }, data: { sort_order: 0 } });
         expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt3' }, data: { sort_order: 1 } });
@@ -261,7 +271,7 @@ describe('BoardsService', () => {
         });
         db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }]);
 
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c1', sortOrder: 0 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c1', sortOrder: 0 });
 
         expect(tasks.move).not.toHaveBeenCalled();
         expect(columns.resolveStatusId).not.toHaveBeenCalled();
@@ -272,10 +282,10 @@ describe('BoardsService', () => {
     it('still calls tasks.move with the resolved status for a genuine cross-column move', async () => {
         // Default fixture: k1's status s1 is bound to c1, dropped onto c2
         // (bound to s2) — the card really is changing columns.
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
 
         expect(columns.resolveStatusId).toHaveBeenCalledWith(tenantId, 'b1', 'c2', 'p1');
-        expect(tasks.move).toHaveBeenCalledWith(tenantId, userId, 'k1', {
+        expect(tasks.move).toHaveBeenCalledWith(owner, 'k1', {
             statusId: 's-target',
             sortOrder: 0,
         });
@@ -307,14 +317,14 @@ describe('BoardsService', () => {
         });
         db.boardTask.findMany.mockResolvedValueOnce([{ id: 'bt2' }]);
 
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
 
         expect(tasks.move).not.toHaveBeenCalled();
         expect(columns.resolveStatusId).not.toHaveBeenCalled();
     });
 
     it('excludes a soft-deleted task’s card from the sibling renumber', async () => {
-        await service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
+        await service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 });
 
         expect(db.boardTask.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -329,7 +339,7 @@ describe('BoardsService', () => {
         columns.resolveStatusId.mockResolvedValue(null);
 
         await expect(
-            service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 }),
+            service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 }),
         ).rejects.toBeInstanceOf(BadRequestException);
 
         expect(tasks.move).not.toHaveBeenCalled();
@@ -340,7 +350,7 @@ describe('BoardsService', () => {
         db.boardTask.findFirst.mockResolvedValue(null);
 
         await expect(
-            service.moveCard(tenantId, userId, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 }),
+            service.moveCard(owner, 'b1', 'k1', { columnId: 'c2', sortOrder: 0 }),
         ).rejects.toBeInstanceOf(NotFoundException);
 
         expect(tasks.move).not.toHaveBeenCalled();
@@ -350,10 +360,55 @@ describe('BoardsService', () => {
     it('refuses to read a board from another tenant', async () => {
         db.board.findFirst.mockResolvedValue(null);
 
-        await expect(service.findOne('other', 'b1')).rejects.toBeInstanceOf(NotFoundException);
+        await expect(
+            service.findOne({ ...owner, tenantId: 'other' }, 'b1'),
+        ).rejects.toBeInstanceOf(NotFoundException);
 
         expect(db.board.findFirst).toHaveBeenCalledWith({
             where: { id: 'b1', tenant_id: 'other', deleted_at: null },
+        });
+    });
+
+    describe('project visibility', () => {
+        it('leaves cards from unreachable projects off a shared board', async () => {
+            await service.findOne(staff('u7'), 'b1');
+
+            expect(db.boardTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        task: { AND: [{ project: { OR: visibilityOr('u7') } }] },
+                    }),
+                }),
+            );
+        });
+
+        it('counts only reachable cards in the board list', async () => {
+            await service.list(staff('u7'));
+
+            const [{ include }] = db.board.findMany.mock.calls.at(-1);
+            expect(include._count.select.cards.where).toEqual({
+                task: { deleted_at: null, AND: [{ project: { OR: visibilityOr('u7') } }] },
+            });
+        });
+
+        it('refuses to add a task the viewer cannot see', async () => {
+            // The filtered lookup finds nothing, which is the same answer a
+            // made-up id gets.
+            db.projectTask.findMany.mockResolvedValue([]);
+
+            await expect(service.addTasks(staff('u7'), 'b1', ['k1'])).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.boardTask.createMany).not.toHaveBeenCalled();
+        });
+
+        it('refuses to pull a card the viewer cannot see off a shared board', async () => {
+            tasks.assertTask.mockRejectedValue(new NotFoundException('Task not found'));
+
+            await expect(service.removeTask(staff('u7'), 'b1', 'k1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.boardTask.deleteMany).not.toHaveBeenCalled();
         });
     });
 

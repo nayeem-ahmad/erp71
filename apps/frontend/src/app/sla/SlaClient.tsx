@@ -51,7 +51,7 @@ export default function SlaClient() {
                                 core platform (POS, inventory, billing) is accessible and operational, excluding the
                                 following:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>Scheduled maintenance windows (see Section 2).</li>
                                 <li>
                                     Outages caused by force majeure events, including natural disasters, government
@@ -103,9 +103,9 @@ export default function SlaClient() {
                                 <table className="w-full text-sm border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50">
-                                            <th className="text-left font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tl-lg">Priority</th>
-                                            <th className="text-left font-bold text-gray-900 px-4 py-3 border border-gray-200">Examples</th>
-                                            <th className="text-left font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tr-lg">First Response</th>
+                                            <th className="text-start font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tl-lg">Priority</th>
+                                            <th className="text-start font-bold text-gray-900 px-4 py-3 border border-gray-200">Examples</th>
+                                            <th className="text-start font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tr-lg">First Response</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -142,7 +142,7 @@ export default function SlaClient() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">4. Incident Response Process</h2>
                             <p className="mb-3">When a service incident is detected, we follow this process:</p>
-                            <ol className="list-decimal pl-6 space-y-3 text-sm">
+                            <ol className="list-decimal ps-6 space-y-3 text-sm">
                                 <li>
                                     <strong>Detection.</strong> Automated monitoring alerts trigger within minutes of
                                     a service degradation or outage being detected.
@@ -175,7 +175,7 @@ export default function SlaClient() {
                                 The uptime commitment and support response targets in this SLA do not apply to outages
                                 or degradation caused by:
                             </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Third-party payment services</strong> — bKash, Nagad, SSL Wireless, and any
                                     other payment gateway. Their availability is governed by their own service agreements.
@@ -208,8 +208,8 @@ export default function SlaClient() {
                                 <table className="w-full text-sm border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50">
-                                            <th className="text-left font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tl-lg">Monthly Uptime</th>
-                                            <th className="text-left font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tr-lg">Credit</th>
+                                            <th className="text-start font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tl-lg">Monthly Uptime</th>
+                                            <th className="text-start font-bold text-gray-900 px-4 py-3 border border-gray-200 rounded-tr-lg">Credit</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -228,7 +228,7 @@ export default function SlaClient() {
                                     </tbody>
                                 </table>
                             </div>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
+                            <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     Credits are applied to the next invoice and cannot be redeemed for cash or used
                                     against outstanding balances.

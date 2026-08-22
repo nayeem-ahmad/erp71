@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Eye, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
+import { Users, Plus, Eye, Pencil, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import AddCustomerModal from './AddCustomerModal';
+import CustomerFormModal from './CustomerFormModal';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -33,6 +33,14 @@ interface Customer {
     owner_name?: string | null;
     customer_code?: string | null;
     customer_type?: string | null;
+    email?: string | null;
+    address?: string | null;
+    profile_pic_url?: string | null;
+    customer_group_id?: string | null;
+    territory_id?: string | null;
+    credit_limit?: string | number | null;
+    default_discount_pct?: string | number | null;
+    birthday?: string | null;
     total_spent?: string | number | null;
     segment_category?: string | null;
     loyalty_points?: number | null;
@@ -65,6 +73,7 @@ const columnHelper = createColumnHelper<Customer>();
 export default function CustomersPage() {
     const { t, locale } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<Customer | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
@@ -130,9 +139,28 @@ export default function CustomersPage() {
         }
     };
 
-    const handleAddCustomer = async (data: any) => {
-        await api.createCustomer(data);
-        loadCustomers();
+    const openCreate = () => {
+        setEditTarget(null);
+        setIsModalOpen(true);
+    };
+
+    const openEdit = (customer: Customer) => {
+        setEditTarget(customer);
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditTarget(null);
+    };
+
+    const handleSaveCustomer = async (data: any) => {
+        if (editTarget) {
+            await api.updateCustomer(editTarget.id, data);
+        } else {
+            await api.createCustomer(data);
+        }
+        await loadCustomers();
     };
 
     const handleEvaluateSegments = async () => {
@@ -259,14 +287,24 @@ export default function CustomersPage() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1">
+                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                         <Link
                             href={`/sales/customers/${info.row.original.id}`}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
                             title={t.common.view}
+                            aria-label={t.common.view}
                         >
                             <Eye className="w-4 h-4" />
                         </Link>
+                        <button
+                            type="button"
+                            onClick={() => openEdit(info.row.original)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title={t.common.edit}
+                            aria-label={t.common.edit}
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
                     </div>
                 ),
                 enableSorting: false,
@@ -318,17 +356,17 @@ export default function CustomersPage() {
                                 className="flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
                                 title={t.customers.runSegmentationTitle}
                             >
-                                <RefreshCw className={`w-4 h-4 mr-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`w-4 h-4 me-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
                                 {runningSegmentation ? t.customers.running : t.customers.runSegmentation}
                             </button>
                             <button
                                 onClick={() => setImportOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import
                             </button>
-                            <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
+                            <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>
                                 {t.customers.newCustomer}
                             </Button>
                         </>
@@ -362,7 +400,12 @@ export default function CustomersPage() {
                     </div>
                 )}
 
-                <AddCustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAdd={handleAddCustomer} />
+                <CustomerFormModal
+                    isOpen={isModalOpen}
+                    onClose={closeModal}
+                    onSave={handleSaveCustomer}
+                    customer={editTarget}
+                />
 
                 <ImportDialog
                     open={importOpen}

@@ -98,11 +98,20 @@ export const StorePermission = {
 
   // Projects
   VIEW_PROJECTS: "VIEW_PROJECTS",
+  VIEW_ALL_PROJECTS: "VIEW_ALL_PROJECTS",
   MANAGE_PROJECTS: "MANAGE_PROJECTS",
   MANAGE_PROJECT_TASKS: "MANAGE_PROJECT_TASKS",
   LOG_PROJECT_TIME: "LOG_PROJECT_TIME",
   MANAGE_SPRINTS: "MANAGE_SPRINTS",
   MANAGE_PROJECT_SETTINGS: "MANAGE_PROJECT_SETTINGS",
+
+  // Imports (LC)
+  VIEW_IMPORTS: "VIEW_IMPORTS",
+  MANAGE_IMPORTS: "MANAGE_IMPORTS",
+  // Separate from MANAGE_IMPORTS on purpose: adding an import cost changes the
+  // landed cost of the goods and therefore the COGS on every subsequent sale of
+  // them. That is a finance action, not a warehouse one.
+  MANAGE_IMPORT_COSTS: "MANAGE_IMPORT_COSTS",
 
   // Short Links
   MANAGE_SHORT_LINKS: "MANAGE_SHORT_LINKS",
@@ -154,6 +163,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
     StorePermission.VIEW_INVESTORS,
+    StorePermission.VIEW_IMPORTS,
+    StorePermission.MANAGE_IMPORTS,
     StorePermission.VIEW_PROJECTS,
     StorePermission.MANAGE_PROJECTS,
     StorePermission.MANAGE_PROJECT_TASKS,
@@ -257,11 +268,15 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_INVESTORS]: "View investors & profit shares",
   [StorePermission.MANAGE_INVESTORS]: "Manage investors, capital & profit runs",
   [StorePermission.VIEW_PROJECTS]: "View projects",
+  [StorePermission.VIEW_ALL_PROJECTS]: "View private projects without being a member",
   [StorePermission.MANAGE_PROJECTS]: "Create & edit projects",
   [StorePermission.MANAGE_PROJECT_TASKS]: "Manage project tasks",
   [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
   [StorePermission.MANAGE_SPRINTS]: "Plan & run sprints",
   [StorePermission.MANAGE_PROJECT_SETTINGS]: "Manage project types & board columns",
+  [StorePermission.VIEW_IMPORTS]: "View import shipments",
+  [StorePermission.MANAGE_IMPORTS]: "Create & edit import shipments",
+  [StorePermission.MANAGE_IMPORT_COSTS]: "Record import costs & receive shipments",
   [StorePermission.MANAGE_SHORT_LINKS]: "Manage short links",
   [StorePermission.VIEW_BLOG]: "View storefront blog posts",
   [StorePermission.MANAGE_BLOG]: "Write & edit storefront blog posts",
@@ -339,6 +354,14 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
     ],
   },
   {
+    label: "Imports (LC)",
+    permissions: [
+      StorePermission.VIEW_IMPORTS,
+      StorePermission.MANAGE_IMPORTS,
+      StorePermission.MANAGE_IMPORT_COSTS,
+    ],
+  },
+  {
     label: "HR & Payroll",
     permissions: [
       StorePermission.VIEW_HR,
@@ -349,6 +372,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
     label: "Projects",
     permissions: [
       StorePermission.VIEW_PROJECTS,
+      StorePermission.VIEW_ALL_PROJECTS,
       StorePermission.MANAGE_PROJECTS,
       StorePermission.MANAGE_PROJECT_TASKS,
       StorePermission.LOG_PROJECT_TIME,
@@ -1165,3 +1189,4 @@ export * from './subscription-plans';
 export * from './phone';
 export * from './campaign-rows';
 export * from './careers';
+export * from './locales';

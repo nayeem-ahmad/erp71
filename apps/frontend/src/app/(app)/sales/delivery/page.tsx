@@ -236,13 +236,13 @@ export default function DeliveryPage() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                             <tr>
-                                <th className="px-4 py-3 text-left">Customer</th>
-                                <th className="px-4 py-3 text-left">Address</th>
-                                <th className="px-4 py-3 text-left">Driver</th>
-                                <th className="px-4 py-3 text-left">Status</th>
-                                <th className="px-4 py-3 text-left">Scheduled</th>
-                                <th className="px-4 py-3 text-left">Created</th>
-                                <th className="px-4 py-3 text-left">Actions</th>
+                                <th className="px-4 py-3 text-start">Customer</th>
+                                <th className="px-4 py-3 text-start">Address</th>
+                                <th className="px-4 py-3 text-start">Driver</th>
+                                <th className="px-4 py-3 text-start">Status</th>
+                                <th className="px-4 py-3 text-start">Scheduled</th>
+                                <th className="px-4 py-3 text-start">Created</th>
+                                <th className="px-4 py-3 text-start">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">

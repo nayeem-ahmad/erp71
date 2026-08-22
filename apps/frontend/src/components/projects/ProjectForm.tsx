@@ -16,6 +16,7 @@ export interface ProjectFormValues {
     projectTypeId: string;
     status: string;
     priority: string;
+    visibility: string;
     startDate: string;
     targetEndDate: string;
     budgetAmount: string;
@@ -29,6 +30,7 @@ const EMPTY: ProjectFormValues = {
     projectTypeId: '',
     status: 'DRAFT',
     priority: 'MEDIUM',
+    visibility: 'PUBLIC',
     startDate: '',
     targetEndDate: '',
     budgetAmount: '',
@@ -47,6 +49,7 @@ export function toFormValues(project: Record<string, unknown> | null): ProjectFo
         projectTypeId: (project.project_type_id as string) ?? '',
         status: (project.status as string) ?? 'DRAFT',
         priority: (project.priority as string) ?? 'MEDIUM',
+        visibility: (project.visibility as string) ?? 'PUBLIC',
         startDate: toDateInput(project.start_date as string),
         targetEndDate: toDateInput(project.target_end_date as string),
         budgetAmount: project.budget_amount == null ? '' : String(project.budget_amount),
@@ -122,9 +125,17 @@ export default function ProjectForm({
             projectTypeId: clearable(form.projectTypeId),
             status: form.status,
             priority: form.priority,
+            visibility: form.visibility,
             startDate: clearable(form.startDate),
             targetEndDate: clearable(form.targetEndDate),
-            budgetAmount: form.budgetAmount ? Number(form.budgetAmount) : undefined,
+            // `null`, not `undefined`, on edit: undefined is "leave alone", so
+            // clearing the field would otherwise leave the old budget in place.
+            // `@IsOptional()` skips null, and the service writes it as null.
+            budgetAmount: form.budgetAmount
+                ? Number(form.budgetAmount)
+                : mode === 'edit'
+                  ? null
+                  : undefined,
         };
 
         try {
@@ -185,6 +196,18 @@ export default function ProjectForm({
                 <Field label={m.fields.priority}>
                     <Select value={form.priority} onChange={set('priority')}>
                         {Object.entries(m.priority).map(([key, label]) => (
+                            <option key={key} value={key}>
+                                {label}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+                <Field
+                    label={m.fields.visibility}
+                    hint={m.visibilityHelp[form.visibility as keyof typeof m.visibilityHelp]}
+                >
+                    <Select value={form.visibility} onChange={set('visibility')}>
+                        {Object.entries(m.visibility).map(([key, label]) => (
                             <option key={key} value={key}>
                                 {label}
                             </option>

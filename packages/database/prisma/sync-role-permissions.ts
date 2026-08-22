@@ -74,6 +74,11 @@ export interface PermissionGroup {
 
 export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
     {
+        // VIEW_ALL_PROJECTS is deliberately absent. It overrides per-project
+        // privacy, so handing it to every existing manager as part of a
+        // backfill would quietly undo the point of a private project. It is
+        // also absent from MANAGER's defaults in ROLE_DEFAULT_PERMISSIONS for
+        // the same reason: it is a grant an owner makes on purpose.
         key: 'projects',
         permissions: [
             StorePermission.VIEW_PROJECTS,
@@ -143,6 +148,23 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         permissions: [
             StorePermission.CREATE_PRODUCT_DEMAND,
             StorePermission.APPROVE_PRODUCT_DEMAND,
+        ],
+    },
+    {
+        // Imports (LC). A new group rather than joining an existing one: a
+        // group already reconciled onto a role is skipped forever, so a
+        // permission added after a group has landed always needs its own — see
+        // this file's header.
+        //
+        // All three together because they ship together and no role holds any
+        // of them. `ROLE_DEFAULT_PERMISSIONS` decides who gets what: Owner all
+        // three, Manager view and manage but not costs, since a landed-cost
+        // change moves COGS on every later sale.
+        key: 'imports-lc',
+        permissions: [
+            StorePermission.VIEW_IMPORTS,
+            StorePermission.MANAGE_IMPORTS,
+            StorePermission.MANAGE_IMPORT_COSTS,
         ],
     },
 ];

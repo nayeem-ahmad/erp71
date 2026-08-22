@@ -124,7 +124,7 @@ export default function CostCentersPage() {
                         <CompactSection className="text-center text-gray-400 text-sm py-6">No cost centers yet.</CompactSection>
                     ) : centers.map((c) => (
                         <button key={c.id} onClick={() => setSelected(c)}
-                            className={`w-full text-left rounded-lg border p-3 transition ${selected?.id === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
+                            className={`w-full text-start rounded-lg border p-3 transition ${selected?.id === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
                                 <div className="flex items-center gap-3">
                                     <Building2 className="w-4 h-4 shrink-0" />
                                     <div>

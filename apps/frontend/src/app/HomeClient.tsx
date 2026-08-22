@@ -16,8 +16,8 @@ function HeroBackground() {
     return (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
             <div className="absolute inset-0 bg-gradient-to-b from-blue-50 to-white" />
-            <div className="absolute -top-28 -left-28 w-[28rem] h-[28rem] bg-blue-200/35 rounded-full blur-3xl animate-hero-float" />
-            <div className="absolute top-1/4 -right-36 w-80 h-80 bg-indigo-200/30 rounded-full blur-3xl animate-hero-float-slow" />
+            <div className="absolute -top-28 -start-28 w-[28rem] h-[28rem] bg-blue-200/35 rounded-full blur-3xl animate-hero-float" />
+            <div className="absolute top-1/4 -end-36 w-80 h-80 bg-indigo-200/30 rounded-full blur-3xl animate-hero-float-slow" />
             <div
                 className="absolute bottom-8 left-1/3 w-72 h-72 bg-sky-200/25 rounded-full blur-3xl animate-hero-float"
                 style={{ animationDelay: '-11s' }}
@@ -48,7 +48,7 @@ function DashboardPreview({ m }: { m: ReturnType<typeof useI18n>['t']['marketing
                     <span className="w-3 h-3 rounded-full bg-red-400" />
                     <span className="w-3 h-3 rounded-full bg-yellow-400" />
                     <span className="w-3 h-3 rounded-full bg-green-400" />
-                    <span className="ml-3 text-xs font-semibold text-gray-400">{preview.url}</span>
+                    <span className="ms-3 text-xs font-semibold text-gray-400">{preview.url}</span>
                 </div>
                 <div className="grid grid-cols-12 min-h-[280px]">
                     <div className="col-span-3 bg-gray-900 p-4 space-y-3 hidden sm:block">
@@ -129,7 +129,7 @@ export default function HomeClient() {
                                 className="group bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-2xl shadow-lg shadow-blue-200 transition-all flex items-center gap-3 w-full sm:w-auto justify-center"
                             >
                                 {m.hero.startTrial}
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" />
                             </Link>
                             <Link
                                 href="/demo"

@@ -43,7 +43,7 @@ export default function FunnelChart({
             {stages.map((stage) => (
                 <div key={stage.key}>
                     {stage.dropOffPct !== null && (
-                        <p className="pb-1 pl-1 text-[11px] text-gray-400">
+                        <p className="pb-1 ps-1 text-[11px] text-gray-400">
                             {labels.dropOff.replace('{pct}', String(stage.dropOffPct))}
                         </p>
                     )}
@@ -52,7 +52,7 @@ export default function FunnelChart({
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <div
                                 data-testid="funnel-bar"
-                                className="h-5 rounded-r-sm"
+                                className="h-5 rounded-e-sm"
                                 style={{
                                     background: CHART_BLUE,
                                     // Floor at 2% so a non-zero stage is never invisible.

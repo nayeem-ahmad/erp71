@@ -11,6 +11,7 @@ import {
     BlogAiDraft,
     buildBlogDraftPrompt,
     normalizeBlogDraft,
+    resolveDraftLocales,
 } from '../blog/blog-ai-draft';
 import { BlogAiDraftDto } from '../blog/blog.dto';
 import {
@@ -411,10 +412,15 @@ export class TenantBlogService {
         });
         const categories = rows.map((row) => ({ id: row.id, name: row.name }));
 
+        // One language, whatever the request asks for: a shop's post stores a
+        // single title and body, so a second language would have nowhere to go
+        // and would only spend the tenant's credits.
+        const [locale] = resolveDraftLocales(dto);
+
         const model = await this.ai.getDefaultModel();
         const { systemPrompt, userMessage } = buildBlogDraftPrompt({
             prompt: dto.prompt,
-            locale: dto.locale ?? 'en',
+            locale,
             categories,
             includeAudience: false,
         });
@@ -427,7 +433,7 @@ export class TenantBlogService {
         );
         await this.ai.logUsage(tenantId, 'blog_post_draft', usedModel, usage);
 
-        return normalizeBlogDraft(text, { categories, includeAudience: false });
+        return normalizeBlogDraft(text, { categories, includeAudience: false, locale });
     }
 
     async createCategory(tenantId: string, dto: UpsertTenantBlogCategoryDto) {

@@ -41,7 +41,7 @@ export default {
                 surface: '#ffffff',
             },
             fontFamily: {
-                sans: ['var(--font-inter)', 'var(--font-bengali)', ...defaultTheme.fontFamily.sans],
+                sans: ['var(--font-inter)', 'var(--font-bengali)', 'var(--font-arabic)', ...defaultTheme.fontFamily.sans],
             },
             zIndex: {
                 modal: '60',

@@ -1,4 +1,6 @@
 import {
+    ArrayMaxSize,
+    ArrayNotEmpty,
     IsArray,
     IsBoolean,
     IsIn,
@@ -11,16 +13,17 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { ENABLED_LOCALE_CODES } from '@erp71/shared-types';
 import { BLOG_AUDIENCES, BLOG_STATUSES } from './blog-status';
 
 const trim = ({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value;
 
-/** Locales a translation may be written in — mirrors the frontend registry. */
-export const BLOG_LOCALES = ['en', 'bn', 'ms'] as const;
+/** Locales a translation may be written in — the platform locale registry. */
+export const BLOG_LOCALES = ENABLED_LOCALE_CODES;
 
 export class BlogTranslationDto {
-    @IsIn(BLOG_LOCALES as unknown as string[])
+    @IsIn(BLOG_LOCALES)
     locale!: string;
 
     @IsString()
@@ -141,7 +144,7 @@ export class PublishBlogPostDto {
 /**
  * The editors' AI Assistant request. Shared by the platform and tenant blogs —
  * a shop writes in one language and sends its own locale, the platform editor
- * sends whichever tab is open.
+ * sends every language tab it wants filled.
  */
 export class BlogAiDraftDto {
     @Transform(trim)
@@ -150,7 +153,65 @@ export class BlogAiDraftDto {
     @MaxLength(2000)
     prompt!: string;
 
+    /** Single-language callers (the shop editor). Ignored when `locales` is set. */
     @IsOptional()
-    @IsIn(BLOG_LOCALES as unknown as string[])
+    @IsIn(BLOG_LOCALES)
     locale?: string;
+
+    /**
+     * Every language the post should come back in. The first is written from
+     * the brief and the rest are translated from it, so one request produces
+     * one article rather than three unrelated ones sharing a slug.
+     */
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(BLOG_LOCALES.length)
+    @IsIn(BLOG_LOCALES as unknown as string[], { each: true })
+    locales?: string[];
+}
+
+/**
+ * Translate copy the author already has instead of generating a second article
+ * about the same subject.
+ *
+ * The copy travels in the request rather than being read from the post,
+ * because the editor's unsaved edits are what the author means by "this
+ * article" — requiring a save first would make the button useless mid-draft.
+ */
+export class BlogAiTranslateDto {
+    @IsIn(BLOG_LOCALES as unknown as string[])
+    source_locale!: string;
+
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(BLOG_LOCALES.length)
+    @IsIn(BLOG_LOCALES as unknown as string[], { each: true })
+    target_locales!: string[];
+
+    @Transform(trim)
+    @IsString()
+    @MinLength(1)
+    @MaxLength(200)
+    title!: string;
+
+    @Transform(trim)
+    @IsString()
+    @MinLength(1)
+    @MaxLength(200_000)
+    body_md!: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(400)
+    excerpt?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    seo_title?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(400)
+    seo_description?: string;
 }

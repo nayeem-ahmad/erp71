@@ -136,7 +136,7 @@ export default function CustomerGroupsPage() {
                 cell: (info) => {
                     const group = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1">
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <button
                                 onClick={() => openEdit(group)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -180,11 +180,11 @@ export default function CustomerGroupsPage() {
                                 onClick={() => setImportOpen(true)}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                                <Upload className="w-4 h-4 me-1.5" />
                                 Import
                             </button>
                             <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-sm transition-all">
-                                <Plus className="w-4 h-4 mr-2" /> {t.customerGroups.newGroup}
+                                <Plus className="w-4 h-4 me-2" /> {t.customerGroups.newGroup}
                             </button>
                         </>
                     }

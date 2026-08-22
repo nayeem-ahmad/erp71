@@ -598,9 +598,9 @@ export default function ProductDemandsPage() {
                             <table className="w-full text-sm">
                                 <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
                                     <tr>
-                                        <th className="p-2 text-left font-medium">{t.common.product}</th>
-                                        <th className="p-2 text-right font-medium">{copy.columns.requested}</th>
-                                        <th className="p-2 text-right font-medium">{copy.columns.approved}</th>
+                                        <th className="p-2 text-start font-medium">{t.common.product}</th>
+                                        <th className="p-2 text-end font-medium">{copy.columns.requested}</th>
+                                        <th className="p-2 text-end font-medium">{copy.columns.approved}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -610,14 +610,14 @@ export default function ProductDemandsPage() {
                                                 <span className="font-medium text-gray-900">{productName(item)}</span>
                                                 {item.note ? <span className="block text-xs text-gray-500">{item.note}</span> : null}
                                             </td>
-                                            <td className="p-2 text-right">{item.quantity_requested}</td>
-                                            <td className="p-2 text-right">
+                                            <td className="p-2 text-end">{item.quantity_requested}</td>
+                                            <td className="p-2 text-end">
                                                 {detail.status === 'SUBMITTED' && canApprove ? (
                                                     <Input
                                                         type="number"
                                                         min="0"
                                                         max={item.quantity_requested}
-                                                        className="ml-auto w-24 text-right"
+                                                        className="ms-auto w-24 text-end"
                                                         aria-label={`${copy.columns.approved} — ${productName(item)}`}
                                                         value={reviewQuantities[item.product_id] ?? String(item.quantity_requested)}
                                                         onChange={(e) => setReviewQuantities((prev) => ({

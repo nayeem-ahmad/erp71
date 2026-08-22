@@ -97,13 +97,13 @@ function buildComponents(variant: ArticleMarkdownVariant): Components {
     del: styled('del', 'text-gray-500 line-through'),
     hr: styled('hr', 'my-8 border-gray-200'),
 
-    ul: styled('ul', `mt-4 list-disc space-y-2 pl-5 ${s.body} text-gray-700`),
-    ol: styled('ol', `mt-4 list-decimal space-y-2 pl-5 ${s.body} text-gray-700`),
+    ul: styled('ul', `mt-4 list-disc space-y-2 ps-5 ${s.body} text-gray-700`),
+    ol: styled('ol', `mt-4 list-decimal space-y-2 ps-5 ${s.body} text-gray-700`),
     li: styled('li', 'marker:text-gray-400'),
 
     blockquote: styled(
         'blockquote',
-        `mt-6 border-l-2 border-blue-600 bg-blue-50/40 py-2 pl-4 ${s.body} italic text-gray-700`,
+        `mt-6 border-s-2 border-blue-600 bg-blue-50/40 py-2 ps-4 ${s.body} italic text-gray-700`,
     ),
 
     // Wide tables scroll in their own container; the article body never
@@ -114,7 +114,7 @@ function buildComponents(variant: ArticleMarkdownVariant): Components {
         </div>
     ),
     thead: styled('thead', 'bg-gray-50'),
-    th: styled('th', 'whitespace-nowrap border-b border-gray-200 px-3 py-2 text-left font-semibold text-gray-700'),
+    th: styled('th', 'whitespace-nowrap border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700'),
     td: styled('td', 'border-b border-gray-100 px-3 py-2 align-top text-gray-700 last:border-b-0'),
 
     code: ({ node: _node, className, ...props }) => {
