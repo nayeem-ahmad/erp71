@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "Noch keine Nachrichten. Sagen Sie etwas.",
         deleted: "Diese Nachricht wurde gelöscht",
         edited: "bearbeitet",
+        seen: "Gelesen",
         edit: "Nachricht bearbeiten",
         delete: "Nachricht löschen",
     },

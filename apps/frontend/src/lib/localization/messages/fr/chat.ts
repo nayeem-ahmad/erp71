@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "Aucun message. Dites quelque chose.",
         deleted: "Ce message a été supprimé",
         edited: "modifié",
+        seen: "Vu",
         edit: "Modifier le message",
         delete: "Supprimer le message",
     },

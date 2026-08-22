@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "لا توجد رسائل بعد. قل شيئًا.",
         deleted: "تم حذف هذه الرسالة",
         edited: "مُعدّلة",
+        seen: "تمت المشاهدة",
         edit: "تعديل الرسالة",
         delete: "حذف الرسالة",
     },

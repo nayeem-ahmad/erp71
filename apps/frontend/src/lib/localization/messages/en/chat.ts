@@ -28,6 +28,7 @@ export const chatMessages = {
         empty: "No messages yet. Say something.",
         deleted: "This message was deleted",
         edited: "edited",
+        seen: "Seen",
         edit: "Edit message",
         delete: "Delete message",
     },
