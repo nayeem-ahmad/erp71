@@ -74,6 +74,11 @@ export interface PermissionGroup {
 
 export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
     {
+        // VIEW_ALL_PROJECTS is deliberately absent. It overrides per-project
+        // privacy, so handing it to every existing manager as part of a
+        // backfill would quietly undo the point of a private project. It is
+        // also absent from MANAGER's defaults in ROLE_DEFAULT_PERMISSIONS for
+        // the same reason: it is a grant an owner makes on purpose.
         key: 'projects',
         permissions: [
             StorePermission.VIEW_PROJECTS,

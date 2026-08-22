@@ -32,6 +32,11 @@ export enum ProjectPriorityDto {
     URGENT = 'URGENT',
 }
 
+export enum ProjectVisibilityDto {
+    PUBLIC = 'PUBLIC',
+    PRIVATE = 'PRIVATE',
+}
+
 export enum ProjectMemberRoleDto {
     MANAGER = 'MANAGER',
     MEMBER = 'MEMBER',
@@ -79,6 +84,9 @@ export class ListProjectsDto {
     @IsOptional() @IsString()
     status?: string;
 
+    @IsOptional() @IsEnum(ProjectVisibilityDto)
+    visibility?: ProjectVisibilityDto;
+
     @IsOptional() @IsUUID()
     projectTypeId?: string;
 
@@ -117,6 +125,13 @@ export class CreateProjectDto {
 
     @IsOptional() @IsEnum(ProjectPriorityDto)
     priority?: ProjectPriorityDto;
+
+    /**
+     * PUBLIC unless asked otherwise. A private project is reachable only by its
+     * members, its manager, the OWNER, and holders of VIEW_ALL_PROJECTS.
+     */
+    @IsOptional() @IsEnum(ProjectVisibilityDto)
+    visibility?: ProjectVisibilityDto;
 
     @IsOptional() @IsUUID()
     managerId?: string;

@@ -3674,6 +3674,7 @@ export const api = {
         limit?: number;
         search?: string;
         status?: string;
+        visibility?: string;
         projectTypeId?: string;
         managerId?: string;
         customerId?: string;

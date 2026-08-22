@@ -29,7 +29,7 @@ export class SprintsController {
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     /** No projectId returns every sprint in the tenant; one filters by participation. */
     list(@Tenant() tenant: TenantContext, @Query('projectId') projectId?: string) {
-        return this.sprints.list(tenant.tenantId, projectId || undefined);
+        return this.sprints.list(tenant, projectId || undefined);
     }
 
     @Post()
@@ -93,7 +93,7 @@ export class SprintsController {
         @Param('id') id: string,
         @Body() dto: AssignTasksToSprintDto,
     ) {
-        return this.sprints.assignTasks(tenant.tenantId, id, dto);
+        return this.sprints.assignTasks(tenant, id, dto);
     }
 
     @Delete(':id/tasks')
@@ -103,7 +103,7 @@ export class SprintsController {
         @Param('id') id: string,
         @Body() dto: AssignTasksToSprintDto,
     ) {
-        return this.sprints.removeTasks(tenant.tenantId, id, dto);
+        return this.sprints.removeTasks(tenant, id, dto);
     }
 
     @Delete(':id')

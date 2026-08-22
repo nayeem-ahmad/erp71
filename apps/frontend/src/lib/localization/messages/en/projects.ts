@@ -24,6 +24,8 @@ export const projectsMessages = {
         type: 'Type',
         status: 'Status',
         priority: 'Priority',
+        visibility: 'Visibility',
+        visibilityHint: 'Private projects are visible only to the people on the team below.',
         manager: 'Manager',
         branch: 'Branch',
         startDate: 'Start date',
@@ -45,6 +47,16 @@ export const projectsMessages = {
         ON_HOLD: 'On hold',
         COMPLETED: 'Completed',
         CANCELLED: 'Cancelled',
+    },
+
+    visibility: {
+        PUBLIC: 'Public',
+        PRIVATE: 'Private',
+    },
+
+    visibilityHelp: {
+        PUBLIC: 'Everyone in the workspace who can see projects.',
+        PRIVATE: 'Only the people added to the project team.',
     },
 
     priority: {
@@ -95,6 +107,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: 'This list is who can open this project. Removing someone takes their access away too.',
         add: 'Add member',
         role: 'Role',
         MANAGER: 'Manager',

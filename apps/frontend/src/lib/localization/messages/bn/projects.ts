@@ -24,6 +24,8 @@ export const projectsMessages = {
         type: 'ধরন',
         status: 'অবস্থা',
         priority: 'অগ্রাধিকার',
+        visibility: 'দৃশ্যমানতা',
+        visibilityHint: 'ব্যক্তিগত প্রকল্প কেবল নিচের টিমের সদস্যরাই দেখতে পান।',
         manager: 'ম্যানেজার',
         branch: 'শাখা',
         startDate: 'শুরুর তারিখ',
@@ -45,6 +47,16 @@ export const projectsMessages = {
         ON_HOLD: 'স্থগিত',
         COMPLETED: 'সম্পন্ন',
         CANCELLED: 'বাতিল',
+    },
+
+    visibility: {
+        PUBLIC: 'সর্বজনীন',
+        PRIVATE: 'ব্যক্তিগত',
+    },
+
+    visibilityHelp: {
+        PUBLIC: 'কর্মক্ষেত্রের যাঁরা প্রকল্প দেখতে পারেন, সবাই।',
+        PRIVATE: 'কেবল প্রকল্প টিমে যুক্ত ব্যক্তিরা।',
     },
 
     priority: {
@@ -95,6 +107,7 @@ export const projectsMessages = {
     },
 
     team: {
+        accessNote: 'এই তালিকাই ঠিক করে কারা প্রকল্পটি খুলতে পারবেন। কাউকে সরালে তাঁর প্রবেশাধিকারও চলে যাবে।',
         add: 'সদস্য যোগ',
         role: 'ভূমিকা',
         MANAGER: 'ম্যানেজার',

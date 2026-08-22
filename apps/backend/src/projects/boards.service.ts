@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { CreateBoardDto, MoveBoardCardDto, UpdateBoardDto } from './board.dto';
@@ -23,6 +24,7 @@ export class BoardsService {
         private readonly db: DatabaseService,
         private readonly columns: BoardColumnsService,
         private readonly tasks: ProjectTasksService,
+        private readonly access: ProjectAccessService,
     ) {}
 
     private async assertBoard(tenantId: string, boardId: string) {
@@ -33,13 +35,21 @@ export class BoardsService {
         return board;
     }
 
-    async list(tenantId: string) {
+    async list(viewer: ProjectViewer) {
+        const tenantId = viewer.tenantId;
+        const visible = await this.access.relatedFilter(viewer);
         const boards = await this.db.board.findMany({
             where: { tenant_id: tenantId, deleted_at: null },
             orderBy: { created_at: 'desc' },
             // Scoped to non-deleted tasks: an unscoped count would advertise
             // cards that findOne() then hides, e.g. "8 cards" rendering as 6.
-            include: { _count: { select: { cards: { where: { task: { deleted_at: null } } } } } },
+            // Private projects are filtered on the same principle — a count is
+            // a disclosure too, and boards are shared across projects.
+            include: {
+                _count: {
+                    select: { cards: { where: { task: { deleted_at: null, ...visible } } } },
+                },
+            } as never,
         });
         return boards.map((board: any) => ({
             id: board.id,
@@ -85,13 +95,24 @@ export class BoardsService {
      * stored on the card itself, so a status changed from the task panel is
      * already in the right column here.
      */
-    async findOne(tenantId: string, boardId: string) {
+    async findOne(viewer: ProjectViewer, boardId: string) {
+        const tenantId = viewer.tenantId;
         const board = await this.assertBoard(tenantId, boardId);
+
+        // A board is tenant-level and its cards come from any project, so the
+        // filter belongs on the cards rather than on the board: a shared board
+        // stays open to everyone, and the cards drawn from a private project
+        // simply are not on it for anyone outside that project.
+        const visible = await this.access.relatedFilter(viewer);
 
         const [boardColumns, cards] = await Promise.all([
             this.columns.listColumns(tenantId, boardId),
             this.db.boardTask.findMany({
-                where: { board_id: boardId, tenant_id: tenantId },
+                where: {
+                    board_id: boardId,
+                    tenant_id: tenantId,
+                    ...(Object.keys(visible).length ? { task: visible } : {}),
+                } as never,
                 orderBy: [{ sort_order: 'asc' }, { added_at: 'asc' }],
                 include: { task: { include: CARD_TASK_INCLUDE } },
             }),
@@ -137,7 +158,9 @@ export class BoardsService {
         };
     }
 
-    async addTasks(tenantId: string, userId: string, boardId: string, taskIds: string[]) {
+    async addTasks(viewer: ProjectViewer, boardId: string, taskIds: string[]) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
         await this.assertBoard(tenantId, boardId);
 
         // Deduped before the existence check: a repeated id in the request is
@@ -148,7 +171,12 @@ export class BoardsService {
         const uniqueTaskIds = [...new Set(taskIds)];
 
         const found = await this.db.projectTask.findMany({
-            where: { id: { in: uniqueTaskIds }, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: { in: uniqueTaskIds },
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: { id: true, project_id: true },
         });
         if (found.length !== uniqueTaskIds.length) {
@@ -179,11 +207,15 @@ export class BoardsService {
             await this.columns.bindProject(tenantId, boardId, projectId);
         }
 
-        return this.findOne(tenantId, boardId);
+        return this.findOne(viewer, boardId);
     }
 
-    async removeTask(tenantId: string, boardId: string, taskId: string) {
+    async removeTask(viewer: ProjectViewer, boardId: string, taskId: string) {
+        const tenantId = viewer.tenantId;
         await this.assertBoard(tenantId, boardId);
+        // Not a soft check: a card the viewer cannot see is a card they must
+        // not be able to pull off a board everyone else is using.
+        await this.tasks.assertTask(viewer, taskId);
         await this.db.boardTask.deleteMany({
             where: { board_id: boardId, tenant_id: tenantId, task_id: taskId },
         });
@@ -195,12 +227,12 @@ export class BoardsService {
      * behaviour are identical to moving the card from the task panel.
      */
     async moveCard(
-        tenantId: string,
-        userId: string,
+        viewer: ProjectViewer,
         boardId: string,
         taskId: string,
         dto: MoveBoardCardDto,
     ) {
+        const tenantId = viewer.tenantId;
         await this.assertBoard(tenantId, boardId);
 
         const membership = await this.db.boardTask.findFirst({
@@ -209,7 +241,12 @@ export class BoardsService {
         if (!membership) throw new NotFoundException('That card is not on this board');
 
         const task = await this.db.projectTask.findFirst({
-            where: { id: taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: taskId,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: { id: true, project_id: true, status_id: true },
         });
         if (!task) throw new NotFoundException('Task not found');
@@ -251,7 +288,7 @@ export class BoardsService {
                 );
             }
 
-            await this.tasks.move(tenantId, userId, taskId, {
+            await this.tasks.move(viewer, taskId, {
                 statusId,
                 sortOrder: dto.sortOrder,
             });
@@ -291,6 +328,6 @@ export class BoardsService {
             }
         });
 
-        return this.findOne(tenantId, boardId);
+        return this.findOne(viewer, boardId);
     }
 }

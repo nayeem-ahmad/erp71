@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import {
@@ -120,6 +121,7 @@ export class ProjectTimeService {
     constructor(
         private readonly db: DatabaseService,
         private readonly remaining: RemainingHoursService,
+        private readonly access: ProjectAccessService,
     ) {}
 
     /**
@@ -127,12 +129,18 @@ export class ProjectTimeService {
      * panel already used. Kept as one `where` builder so the list and the
      * report can never disagree about what a filter means.
      */
-    private buildWhere(
-        tenantId: string,
+    private async buildWhere(
+        viewer: ProjectViewer,
         query: { projectId?: string; taskId?: string; userId?: string; from?: string; to?: string; search?: string },
-    ): Record<string, unknown> {
+    ): Promise<Record<string, unknown>> {
+        const tenantId = viewer.tenantId;
         const where: Record<string, unknown> = {
             tenant_id: tenantId,
+            // Hours are the most quietly revealing thing in the module: an
+            // entry names its project, its task and who worked on it. The
+            // filter goes in the one shared builder so the list, the totals
+            // strip and the report can never disagree about it.
+            ...(await this.access.relatedFilter(viewer)),
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.taskId ? { task_id: query.taskId } : {}),
             ...(query.userId ? { user_id: query.userId } : {}),
@@ -153,11 +161,11 @@ export class ProjectTimeService {
         return where;
     }
 
-    async list(tenantId: string, query: ListTimeEntriesDto) {
+    async list(viewer: ProjectViewer, query: ListTimeEntriesDto) {
         const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
         const page = Math.max(query.page ?? 1, 1);
 
-        const where = this.buildWhere(tenantId, query);
+        const where = await this.buildWhere(viewer, query);
 
         // Newest work first by default. Every sort but `created_at` breaks its
         // ties on it, so entries sharing a day keep a stable order instead of
@@ -193,9 +201,16 @@ export class ProjectTimeService {
      * `max(0, remaining - hours)` — a suggestion, never a derivation, because a
      * task can absorb hours and be no closer to finished.
      */
-    async create(tenantId: string, userId: string, dto: CreateTimeEntryDto) {
+    async create(viewer: ProjectViewer, dto: CreateTimeEntryDto) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
         const task = await this.db.projectTask.findFirst({
-            where: { id: dto.taskId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: dto.taskId,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: {
                 id: true,
                 project_id: true,
@@ -242,9 +257,13 @@ export class ProjectTimeService {
         return entry;
     }
 
-    async update(tenantId: string, entryId: string, dto: UpdateTimeEntryDto) {
+    async update(viewer: ProjectViewer, entryId: string, dto: UpdateTimeEntryDto) {
         const entry = await this.db.projectTimeEntry.findFirst({
-            where: { id: entryId, tenant_id: tenantId },
+            where: {
+                id: entryId,
+                tenant_id: viewer.tenantId,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             select: { id: true },
         });
         if (!entry) throw new NotFoundException('Time entry not found');
@@ -264,9 +283,15 @@ export class ProjectTimeService {
      * Not doing so would leave the sprint permanently short by hours nobody
      * actually worked, with no trace of why.
      */
-    async remove(tenantId: string, userId: string, entryId: string) {
+    async remove(viewer: ProjectViewer, entryId: string) {
+        const tenantId = viewer.tenantId;
+        const userId = viewer.userId;
         const entry = await this.db.projectTimeEntry.findFirst({
-            where: { id: entryId, tenant_id: tenantId },
+            where: {
+                id: entryId,
+                tenant_id: tenantId,
+                ...(await this.access.relatedFilter(viewer)),
+            } as never,
             include: {
                 task: {
                     select: { id: true, project_id: true, sprint_id: true, remaining_hours: true },
@@ -305,9 +330,10 @@ export class ProjectTimeService {
      * between groupings is the normal way this report is read. Only the labels
      * for the chosen dimension are hydrated.
      */
-    async report(tenantId: string, query: TimeReportQueryDto) {
+    async report(viewer: ProjectViewer, query: TimeReportQueryDto) {
+        const tenantId = viewer.tenantId;
         const groupBy = query.groupBy ?? TimeReportGroupByDto.TASK;
-        const where = this.buildWhere(tenantId, query);
+        const where = await this.buildWhere(viewer, query);
 
         const [byTask, byUser, byProject, byDate] = await Promise.all([
             this.db.projectTimeEntry.groupBy({
@@ -387,10 +413,10 @@ export class ProjectTimeService {
      * filter. Deliberately ignores any `userId` already selected, so choosing a
      * name never collapses the dropdown to that one name.
      */
-    async people(tenantId: string, query: { from?: string; to?: string; projectId?: string }) {
+    async people(viewer: ProjectViewer, query: { from?: string; to?: string; projectId?: string }) {
         const grouped = await this.db.projectTimeEntry.groupBy({
             by: ['user_id'],
-            where: this.buildWhere(tenantId, query) as never,
+            where: (await this.buildWhere(viewer, query)) as never,
             _sum: { hours: true },
         });
         const rows = grouped as GroupedRow[];
@@ -520,7 +546,9 @@ export class ProjectTimeService {
     }
 
     /** Hours per user for a project — the raw material for Phase 2 costing. */
-    async summary(tenantId: string, projectId: string) {
+    async summary(viewer: ProjectViewer, projectId: string) {
+        const tenantId = viewer.tenantId;
+        await this.access.assertProjectVisible(viewer, projectId);
         const rows = await this.db.projectTimeEntry.groupBy({
             by: ['user_id'],
             where: { tenant_id: tenantId, project_id: projectId },

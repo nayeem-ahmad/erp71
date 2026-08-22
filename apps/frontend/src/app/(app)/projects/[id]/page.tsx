@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Lock, Plus } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -45,6 +45,7 @@ interface Project {
     description?: string | null;
     status: string;
     priority: string;
+    visibility?: string;
     budget_amount?: string | null;
     start_date?: string | null;
     target_end_date?: string | null;
@@ -171,6 +172,19 @@ export default function ProjectDetailPage() {
                     </div>
                 }
             />
+
+            {project.visibility === 'PRIVATE' && (
+                // Said once, plainly, near the top: whoever is looking at this
+                // needs to know the team list below is also the access list.
+                <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span>
+                        <span className="font-medium text-gray-700">{m.visibility.PRIVATE}</span>
+                        {' — '}
+                        {m.visibilityHelp.PRIVATE}
+                    </span>
+                </p>
+            )}
 
             <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Stat label={m.fields.progress} value={`${progress.percentComplete}% ${m.overview.complete}`} />
@@ -310,6 +324,7 @@ export default function ProjectDetailPage() {
                     <ProjectTeamCard
                         projectId={projectId}
                         members={project.members}
+                        isPrivate={project.visibility === 'PRIVATE'}
                         onChanged={load}
                     />
                 </div>
