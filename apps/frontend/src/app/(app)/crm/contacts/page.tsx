@@ -16,6 +16,7 @@ import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import Avatar from '@/components/Avatar';
 import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from './BusinessCardScanner';
 import {
     CONTACT_CAPTURE_SOURCES,
@@ -32,6 +33,7 @@ interface Contact {
     phone: string | null;
     email: string | null;
     capture_source: string;
+    photo_url: string | null;
     assignee: { id: string; name: string } | null;
     created_at: string;
 }
@@ -205,13 +207,18 @@ export default function ContactsPage() {
     const columns: ColumnDef<Contact, any>[] = useMemo(() => [
         columnHelper.accessor('name', {
             header: m.fields.name,
+            // Accessor and id are unchanged, so the server-side sort key still
+            // works — the avatar rides along inside the same column.
             cell: (info) => (
-                <Link
-                    href={routes.crm.contactDetail(info.row.original.id)}
-                    className="font-semibold text-gray-900 hover:text-primary"
-                >
-                    {info.getValue()}
-                </Link>
+                <div className="flex items-center gap-2.5">
+                    <Avatar src={info.row.original.photo_url} name={info.row.original.name} />
+                    <Link
+                        href={routes.crm.contactDetail(info.row.original.id)}
+                        className="font-semibold text-gray-900 hover:text-primary"
+                    >
+                        {info.getValue()}
+                    </Link>
+                </div>
             ),
         }),
         columnHelper.accessor('company', {

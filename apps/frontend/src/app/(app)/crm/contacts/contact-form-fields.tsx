@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 import { Field, Input, Select, Textarea } from '@/components/ui';
+import PhotoField from '@/components/PhotoField';
 
 export const CONTACT_CAPTURE_SOURCES = ['MANUAL', 'BUSINESS_CARD', 'IMPORT'] as const;
 
@@ -34,6 +35,8 @@ export type ContactFormState = {
     linkedin_url: string;
     notes: string;
     assigned_to: string;
+    photo_url: string;
+    photo_storage_key: string;
 };
 
 export const emptyContactForm = (): ContactFormState => ({
@@ -48,6 +51,8 @@ export const emptyContactForm = (): ContactFormState => ({
     linkedin_url: '',
     notes: '',
     assigned_to: '',
+    photo_url: '',
+    photo_storage_key: '',
 });
 
 export function contactToFormState(contact: Record<string, unknown>): ContactFormState {
@@ -63,6 +68,8 @@ export function contactToFormState(contact: Record<string, unknown>): ContactFor
         linkedin_url: String(contact.linkedin_url ?? ''),
         notes: String(contact.notes ?? ''),
         assigned_to: String(contact.assigned_to ?? ''),
+        photo_url: String(contact.photo_url ?? ''),
+        photo_storage_key: String(contact.photo_storage_key ?? ''),
     };
 }
 
@@ -73,12 +80,22 @@ export function contactToFormState(contact: Record<string, unknown>): ContactFor
  * a field the user typed by hand is better evidence than a blank from the model.
  * The card wins only where it actually has a value and the form does not.
  */
+/**
+ * Fields a card scan may fill. The photo is not one: a scan produces a picture
+ * of a *card*, which is not what a profile photo is for, and it is kept as an
+ * attachment instead. Without this the loop below — which walks every key of
+ * the form state — would let a scan write the photo columns.
+ */
+const SCANNABLE_FIELDS = (Object.keys(emptyContactForm()) as (keyof ContactFormState)[]).filter(
+    (key) => key !== 'photo_url' && key !== 'photo_storage_key',
+);
+
 export function applyScannedCard(
     form: ContactFormState,
     scanned: Partial<Record<keyof ContactFormState, string>> & { raw_text?: string },
 ): ContactFormState {
     const merged = { ...form };
-    for (const key of Object.keys(emptyContactForm()) as (keyof ContactFormState)[]) {
+    for (const key of SCANNABLE_FIELDS) {
         const value = scanned[key];
         if (typeof value === 'string' && value.trim() && !merged[key].trim()) {
             merged[key] = value.trim();
@@ -123,6 +140,8 @@ export function contactFormToPayload(form: ContactFormState): Record<string, str
         linkedin_url: form.linkedin_url.trim(),
         notes: form.notes.trim(),
         assigned_to: form.assigned_to,
+        photo_url: form.photo_url,
+        photo_storage_key: form.photo_storage_key,
     };
 }
 
@@ -161,6 +180,21 @@ export function ContactFormFields({
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+                <PhotoField
+                    value={{ url: form.photo_url, storageKey: form.photo_storage_key }}
+                    name={form.name}
+                    onChange={(photo) =>
+                        onChange({
+                            ...form,
+                            photo_url: photo.url,
+                            photo_storage_key: photo.storageKey,
+                        })
+                    }
+                    labels={m.photo}
+                    cancelLabel={t.common.cancel}
+                />
+            </div>
             <Field label={m.fields.name} required error={errors.name} className="sm:col-span-2">
                 <Input
                     value={form.name}

@@ -104,3 +104,52 @@ describe('contactToFormState', () => {
         });
     });
 });
+
+describe('photo fields', () => {
+    it('starts empty', () => {
+        const form = emptyContactForm();
+        expect(form.photo_url).toBe('');
+        expect(form.photo_storage_key).toBe('');
+    });
+
+    it('reads both fields off a saved contact', () => {
+        const form = contactToFormState({
+            name: 'Rahim',
+            photo_url: 'https://cdn.example/rahim.jpg',
+            photo_storage_key: 'retail/tenant-1/crm-photos/rahim',
+        });
+        expect(form.photo_url).toBe('https://cdn.example/rahim.jpg');
+        expect(form.photo_storage_key).toBe('retail/tenant-1/crm-photos/rahim');
+    });
+
+    it('treats a contact with no photo as empty strings, not "null"', () => {
+        const form = contactToFormState({ name: 'Rahim', photo_url: null });
+        expect(form.photo_url).toBe('');
+        expect(form.photo_storage_key).toBe('');
+    });
+
+    it('sends both fields in the payload', () => {
+        const payload = contactFormToPayload({
+            ...emptyContactForm(),
+            name: 'Rahim',
+            photo_url: 'https://cdn.example/rahim.jpg',
+            photo_storage_key: 'retail/tenant-1/crm-photos/rahim',
+        });
+        expect(payload.photo_url).toBe('https://cdn.example/rahim.jpg');
+        expect(payload.photo_storage_key).toBe('retail/tenant-1/crm-photos/rahim');
+    });
+
+    it('sends blanks when the photo was removed, so the backend clears it', () => {
+        const payload = contactFormToPayload({ ...emptyContactForm(), name: 'Rahim' });
+        expect(payload.photo_url).toBe('');
+        expect(payload.photo_storage_key).toBe('');
+    });
+
+    it('does not let a scanned card overwrite the photo fields', () => {
+        const merged = applyScannedCard(emptyContactForm(), {
+            name: 'Rahim',
+            photo_url: 'https://evil.example/x.jpg',
+        } as any);
+        expect(merged.photo_url).toBe('');
+    });
+});
