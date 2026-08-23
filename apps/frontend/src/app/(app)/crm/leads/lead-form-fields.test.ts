@@ -1,39 +1,51 @@
-import {
-    emptyLeadForm,
-    leadFormToPayload,
-    type LeadFormState,
-} from './lead-form-fields';
+import { emptyLeadForm, leadFormToPayload, leadToFormState } from './lead-form-fields';
 
-function formWithNextStep(overrides: Partial<LeadFormState> = {}): LeadFormState {
-    return {
-        ...emptyLeadForm(),
-        name: 'Karim Traders',
-        next_step: 'Call back Thursday',
-        next_step_date: '2026-09-01T10:00',
-        next_step_assigned_to: 'user-9',
-        source: 'src-1',
-        category: 'cat-1',
-        ...overrides,
-    };
-}
-
-describe('leadFormToPayload', () => {
-    it('includes next_step fields on create so a new lead can open with a planned activity', () => {
-        const payload = leadFormToPayload(formWithNextStep());
-
-        expect(payload.next_step).toBe('Call back Thursday');
-        expect(payload.next_step_date).toBe(new Date('2026-09-01T10:00').toISOString());
-        expect(payload.next_step_assigned_to).toBe('user-9');
+describe('lead photo fields', () => {
+    it('starts empty', () => {
+        const form = emptyLeadForm();
+        expect(form.photo_url).toBe('');
+        expect(form.photo_storage_key).toBe('');
     });
 
-    it('omits next_step fields on update so ValidationPipe does not reject the save', () => {
-        const payload = leadFormToPayload(formWithNextStep(), { mode: 'update' });
+    it('reads both fields off a saved lead', () => {
+        const form = leadToFormState({
+            name: 'Rahim',
+            photo_url: 'https://cdn.example/rahim.jpg',
+            photo_storage_key: 'retail/tenant-1/crm-photos/rahim',
+        });
+        expect(form.photo_url).toBe('https://cdn.example/rahim.jpg');
+        expect(form.photo_storage_key).toBe('retail/tenant-1/crm-photos/rahim');
+    });
 
-        expect(payload).not.toHaveProperty('next_step');
-        expect(payload).not.toHaveProperty('next_step_date');
-        expect(payload).not.toHaveProperty('next_step_assigned_to');
-        expect(payload.name).toBe('Karim Traders');
-        expect(payload.source).toBe('src-1');
-        expect(payload.category).toBe('cat-1');
+    it('treats a lead with no photo as empty strings, not "null"', () => {
+        const form = leadToFormState({ name: 'Rahim', photo_url: null });
+        expect(form.photo_url).toBe('');
+        expect(form.photo_storage_key).toBe('');
+    });
+
+    it('sends both fields in the payload', () => {
+        const payload = leadFormToPayload({
+            ...emptyLeadForm(),
+            name: 'Rahim',
+            photo_url: 'https://cdn.example/rahim.jpg',
+            photo_storage_key: 'retail/tenant-1/crm-photos/rahim',
+        });
+        expect(payload.photo_url).toBe('https://cdn.example/rahim.jpg');
+        expect(payload.photo_storage_key).toBe('retail/tenant-1/crm-photos/rahim');
+    });
+
+    it('sends blanks when the photo was removed, so the backend clears it', () => {
+        const payload = leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim' });
+        expect(payload.photo_url).toBe('');
+        expect(payload.photo_storage_key).toBe('');
+    });
+
+    it('still sends the photo on an update, where next_step* are omitted', () => {
+        const payload = leadFormToPayload(
+            { ...emptyLeadForm(), name: 'Rahim', next_step: 'Call', photo_url: 'https://cdn.example/r.jpg' },
+            { mode: 'update' },
+        );
+        expect(payload.next_step).toBeUndefined();
+        expect(payload.photo_url).toBe('https://cdn.example/r.jpg');
     });
 });

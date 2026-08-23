@@ -5,7 +5,6 @@ import { DatabaseService } from '../src/database/database.service';
 import { TransformInterceptor } from '../src/common/transform.interceptor';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { readFileSync } from 'fs';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -41,18 +40,6 @@ describe('Inventory Operations (e2e)', () => {
 
     const bodyOf = (response: any) => response.body?.data ?? response.body;
 
-    const applyMigration = async (relativePath: string) => {
-        const migrationPath = path.resolve(__dirname, relativePath);
-        const sql = readFileSync(migrationPath, 'utf8');
-        const statements = sql
-            .split(/;\s*\n/g)
-            .map((s) => s.trim())
-            .filter(Boolean);
-        for (const statement of statements) {
-            await db.$executeRawUnsafe(`${statement};`);
-        }
-    };
-
     beforeAll(async () => {
         process.env.JWT_SECRET = 'fallback-secret-for-dev-only';
         const { AppModule } = await import('../src/app.module');
@@ -71,10 +58,17 @@ describe('Inventory Operations (e2e)', () => {
 
         db = moduleFixture.get<DatabaseService>(DatabaseService);
 
-        await applyMigration('../../../packages/database/migrations/03_accounting_coa.sql');
-        await applyMigration('../../../packages/database/migrations/04_voucher_sequences.sql');
-        await applyMigration('../../../packages/database/migrations/05_vouchers.sql');
-        await applyMigration('../../../packages/database/migrations/06_posting_rules_events.sql');
+        // The legacy `packages/database/migrations/*.sql` files are NOT applied here
+        // any more. `06_posting_rules_events.sql` did
+        // `DROP TYPE IF EXISTS "PostingRuleEventType"` and recreated it with the ten
+        // values it had when it was written; the Prisma schema is up to 24. Running
+        // it left the database's enum missing everything added since, so every
+        // subsequent signup 500'd on `postingRule.findFirst()` with
+        // `22P02 invalid input value for enum` — which is what failed 69 cases
+        // across these suites, and why they failed even against a live, seeded
+        // Postgres. Those three suites also share one database, so whichever ran
+        // first clobbered the others. The Prisma schema owns every one of these
+        // tables now; provision with `prisma migrate deploy` / `db push` instead.
 
         await db.$executeRawUnsafe(
             'TRUNCATE TABLE posting_events, posting_rules, voucher_details, vouchers, voucher_sequences, accounts, account_subgroups, account_groups, "ProductStock", "Product", "Warehouse", "Store", "User", "Tenant" CASCADE',

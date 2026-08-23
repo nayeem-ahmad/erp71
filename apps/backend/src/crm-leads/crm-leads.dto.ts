@@ -103,6 +103,19 @@ export class CreateLeadDto {
     @IsString()
     website_url?: string;
 
+    /**
+     * Set from the photo picker, which uploads to `POST /crm/photos` first.
+     * `''` clears the photo rather than meaning "leave it alone" — otherwise a
+     * photo could never be removed once set.
+     */
+    @IsOptional()
+    @IsString()
+    photo_url?: string;
+
+    @IsOptional()
+    @IsString()
+    photo_storage_key?: string;
+
     @IsOptional()
     @IsString()
     next_step?: string;
@@ -189,6 +202,19 @@ export class UpdateLeadDto {
     @IsOptional()
     @IsString()
     website_url?: string;
+
+    /**
+     * Set from the photo picker, which uploads to `POST /crm/photos` first.
+     * `''` clears the photo rather than meaning "leave it alone" — otherwise a
+     * photo could never be removed once set.
+     */
+    @IsOptional()
+    @IsString()
+    photo_url?: string;
+
+    @IsOptional()
+    @IsString()
+    photo_storage_key?: string;
 
     // `next_step` / `next_step_date` / `next_step_assigned_to` were dropped from
     // the update DTO in R1. They are a read-only rollup of the earliest PLANNED

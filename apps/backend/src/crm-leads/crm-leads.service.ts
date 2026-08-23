@@ -23,6 +23,8 @@ import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
+import { AssetsService } from '../assets/assets.service';
+import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import {
     buildTaxonomyIndex,
@@ -79,7 +81,60 @@ export class CrmLeadsService {
         private customersService: CustomersService,
         private customFields: CustomFieldsService,
         private taxonomy: CrmLeadTaxonomyService,
+        private assets: AssetsService,
+        private photos: CrmPhotosService,
     ) {}
+
+    /**
+     * Normalise the photo fields and refuse a key that is not this tenant's.
+     *
+     * Each half returns `undefined` when the field was absent (leave it alone),
+     * `null` when explicitly cleared, and the value otherwise — the same
+     * ''-means-clear rule the rest of the CRM DTOs follow, and what makes the
+     * form's Remove button able to remove anything.
+     */
+    private resolvePhoto(
+        tenantId: string,
+        dto: CreateLeadDto | UpdateLeadDto,
+    ): { url: string | null | undefined; key: string | null | undefined } {
+        const rawUrl = dto.photo_url;
+        const rawKey = dto.photo_storage_key;
+
+        const url = rawUrl === undefined ? undefined : rawUrl.trim() || null;
+
+        let key: string | null | undefined;
+        if (rawKey === undefined) {
+            key = undefined;
+        } else {
+            const trimmed = rawKey.trim();
+            if (!trimmed) {
+                key = null;
+            } else {
+                this.photos.assertTenantPhotoKey(tenantId, trimmed);
+                key = trimmed;
+            }
+        }
+
+        return { url, key };
+    }
+
+    /**
+     * Drop the Cloudinary photos for leads about to be deleted. The rows go on
+     * their own, but Cloudinary knows nothing about that.
+     */
+    private async purgePhotoAssets(tenantId: string, leadIds: string[]) {
+        if (!leadIds.length) return;
+        const rows = await this.db.lead.findMany({
+            where: { tenant_id: tenantId, id: { in: leadIds } },
+            select: { photo_storage_key: true },
+        });
+        await Promise.all(
+            rows
+                .map((row: { photo_storage_key: string | null }) => row.photo_storage_key)
+                .filter((key: string | null): key is string => !!key)
+                .map((key: string) => this.assets.deleteFile(key)),
+        );
+    }
 
     private mapLeadData(dto: CreateLeadDto | UpdateLeadDto) {
         // `source`/`category` are stripped: they name a taxonomy row rather than
@@ -99,6 +154,10 @@ export class CrmLeadsService {
             next_step: _ignoredNextStep,
             next_step_date: _ignoredNextStepDate,
             next_step_assigned_to: _ignoredNextStepAssignee,
+            // Stripped so the `...rest` spread cannot write an untrimmed `''`
+            // into the columns — resolvePhoto sets them explicitly instead.
+            photo_url: _ignoredPhotoUrl,
+            photo_storage_key: _ignoredPhotoKey,
             ...rest
         } = dto as any;
         return { ...rest } as Record<string, unknown>;
@@ -205,6 +264,8 @@ export class CrmLeadsService {
             dto.custom_fields,
         );
 
+        const photo = this.resolvePhoto(tenantId, dto);
+
         const lead = await this.db.lead.create({
             data: {
                 tenant_id: tenantId,
@@ -230,6 +291,8 @@ export class CrmLeadsService {
                 website_url: dto.website_url,
                 assigned_to: dto.assigned_to,
                 store_id: dto.store_id,
+                photo_url: photo.url ?? null,
+                photo_storage_key: photo.key ?? null,
                 created_by: userId,
                 custom_fields: customFields ?? undefined,
             },
@@ -430,6 +493,10 @@ export class CrmLeadsService {
 
         const data = this.mapLeadData(dto);
 
+        const photo = this.resolvePhoto(tenantId, dto);
+        if (photo.url !== undefined) data.photo_url = photo.url;
+        if (photo.key !== undefined) data.photo_storage_key = photo.key;
+
         await this.applyTaxonomyPatch(tenantId, dto, data);
 
         const customFields = await this.customFields.sanitizeValues(
@@ -482,16 +549,31 @@ export class CrmLeadsService {
             conversationCount,
         );
 
-        return this.db.lead.update({
+        const updated = await this.db.lead.update({
             where: { id },
             data,
             include: leadIncludes,
         });
+
+        // After the row, not before: a failed delete here leaves a stray file,
+        // while the other order leaves a row pointing at nothing. Only when the
+        // key actually changed — re-saving a form with an untouched photo must
+        // not delete the photo it is still using.
+        if (
+            photo.key !== undefined &&
+            existing.photo_storage_key &&
+            existing.photo_storage_key !== photo.key
+        ) {
+            await this.assets.deleteFile(existing.photo_storage_key);
+        }
+
+        return updated;
     }
 
     async remove(tenantId: string, id: string) {
         const existing = await this.db.lead.findFirst({ where: { id, tenant_id: tenantId } });
         if (!existing) throw new NotFoundException('Lead not found');
+        await this.purgePhotoAssets(tenantId, [id]);
         await this.db.lead.delete({ where: { id } });
         return { success: true };
     }
@@ -502,6 +584,7 @@ export class CrmLeadsService {
         const where = { tenant_id: tenantId, id: { in: ids } };
 
         if (action === LeadBulkAction.DELETE) {
+            await this.purgePhotoAssets(tenantId, ids);
             const res = await this.db.lead.deleteMany({ where });
             return { count: res.count };
         }

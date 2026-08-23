@@ -7,7 +7,6 @@ import { DatabaseService } from '../src/database/database.service';
 import { TransformInterceptor } from '../src/common/transform.interceptor';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
-import { readFileSync } from 'node:fs';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -59,19 +58,6 @@ describe('Integration Tests (e2e)', () => {
 
     const bodyOf = (response: any) => response.body?.data ?? response.body;
 
-    const applyMigration = async (relativePath: string) => {
-        const migrationPath = path.resolve(__dirname, relativePath);
-        const sql = readFileSync(migrationPath, 'utf8');
-        const statements = sql
-            .split(/;\s*\n/g)
-            .map((statement) => statement.trim())
-            .filter(Boolean);
-
-        for (const statement of statements) {
-            await db.$executeRawUnsafe(`${statement};`);
-        }
-    };
-
     beforeAll(async () => {
         process.env.JWT_SECRET = 'fallback-secret-for-dev-only';
         const { AppModule } = await import('../src/app.module');
@@ -91,10 +77,17 @@ describe('Integration Tests (e2e)', () => {
         db = moduleFixture.get<DatabaseService>(DatabaseService);
         accountingService = moduleFixture.get<AccountingService>(AccountingService);
 
-        await applyMigration('../../../packages/database/migrations/03_accounting_coa.sql');
-        await applyMigration('../../../packages/database/migrations/04_voucher_sequences.sql');
-        await applyMigration('../../../packages/database/migrations/05_vouchers.sql');
-        await applyMigration('../../../packages/database/migrations/06_posting_rules_events.sql');
+        // The legacy `packages/database/migrations/*.sql` files are NOT applied here
+        // any more. `06_posting_rules_events.sql` did
+        // `DROP TYPE IF EXISTS "PostingRuleEventType"` and recreated it with the ten
+        // values it had when it was written; the Prisma schema is up to 24. Running
+        // it left the database's enum missing everything added since, so every
+        // subsequent signup 500'd on `postingRule.findFirst()` with
+        // `22P02 invalid input value for enum` — which is what failed 69 cases
+        // across these suites, and why they failed even against a live, seeded
+        // Postgres. Those three suites also share one database, so whichever ran
+        // first clobbered the others. The Prisma schema owns every one of these
+        // tables now; provision with `prisma migrate deploy` / `db push` instead.
 
         // Clean database before tests
         // Note: In a real scenario, use a TDB or separate schema
@@ -152,9 +145,20 @@ describe('Integration Tests (e2e)', () => {
             if (!premiumPlan) {
                 throw new Error('Missing PREMIUM subscription plan for integration test setup.');
             }
+            // The status matters as much as the plan. `setupTenant` deliberately
+            // creates the subscription as PAST_DUE with a period that has already
+            // ended — a tenant is unpaid until it pays — and SubscriptionAccessGuard
+            // only opens plan-granted routes for ACTIVE/TRIALING. Upgrading the plan
+            // alone left every /accounting route 403ing, which is what failed the
+            // voucher, numbering and ledger cases here.
             await db.tenantSubscription.update({
                 where: { tenant_id: tenantId },
-                data: { plan_id: premiumPlan.id },
+                data: {
+                    plan_id: premiumPlan.id,
+                    status: 'ACTIVE',
+                    current_period_start: new Date(),
+                    current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+                },
             });
 
             expect(authToken).toBeTruthy();
@@ -248,9 +252,16 @@ describe('Integration Tests (e2e)', () => {
             if (!premiumPlan) {
                 throw new Error('Missing PREMIUM subscription plan for second-tenant integration test setup.');
             }
+            // Activated for the same reason as the first tenant — the KPI cases below
+            // drive /accounting through this tenant's token.
             await db.tenantSubscription.update({
                 where: { tenant_id: secondTenantId },
-                data: { plan_id: premiumPlan.id },
+                data: {
+                    plan_id: premiumPlan.id,
+                    status: 'ACTIVE',
+                    current_period_start: new Date(),
+                    current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+                },
             });
 
             const number = await accountingService.generateNextVoucherNumber(secondTenantId, VoucherType.CASH_PAYMENT);
@@ -310,7 +321,13 @@ describe('Integration Tests (e2e)', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
                 .send({
+                    // `date` and `description` are required by CreateVoucherDto. Without
+                    // them the ValidationPipe rejects on those fields first and the
+                    // balance rule under test is never reached — the assertion below saw
+                    // a list of description errors, not the balance message.
                     voucherType: VoucherType.CASH_PAYMENT,
+                    date: '2026-03-01',
+                    description: 'Deliberately unbalanced voucher',
                     details: [
                         { accountId: cashAccount?.id, debitAmount: 0, creditAmount: 125 },
                         { accountId: expenseAccount?.id, debitAmount: 100, creditAmount: 0 },
@@ -419,8 +436,13 @@ describe('Integration Tests (e2e)', () => {
                 cash_outflow: 125,
                 net_cash_movement: 175,
                 gross_revenue: 300,
+                // 0, not null: the signup bootstrap seeds a Chart of Accounts that
+                // already contains "Accounts Receivable", so the metric is configured
+                // and simply has no balance. null means "no such account at all",
+                // which is now only reachable if the seeded ones are removed — see the
+                // optional-metrics case below, which does exactly that.
                 operating_expense: 125,
-                accounts_receivable: null,
+                accounts_receivable: 0,
                 accounts_payable: 0,
                 tax_liability: null,
             });
@@ -482,8 +504,15 @@ describe('Integration Tests (e2e)', () => {
                 throw new Error('Missing seeded accounting groups for KPI integration test.');
             }
 
-            const receivableAccount = await db.account.create({
-                data: {
+            // Upsert, not create: the signup bootstrap seeds a full Chart of Accounts
+            // now, and it already contains these two names. `create` hit the
+            // (tenant_id, name) unique index and failed the test before a single
+            // assertion ran. Upserting keeps the test working whether or not the
+            // seeded CoA happens to carry them.
+            const receivableAccount = await db.account.upsert({
+                where: { tenant_id_name: { tenant_id: tenantId, name: 'Accounts Receivable' } },
+                update: { group_id: assetGroup.id, type: 'asset', category: 'general' },
+                create: {
                     tenant_id: tenantId,
                     group_id: assetGroup.id,
                     name: 'Accounts Receivable',
@@ -492,8 +521,10 @@ describe('Integration Tests (e2e)', () => {
                     category: 'general',
                 },
             });
-            const taxLiabilityAccount = await db.account.create({
-                data: {
+            const taxLiabilityAccount = await db.account.upsert({
+                where: { tenant_id_name: { tenant_id: tenantId, name: 'VAT Payable' } },
+                update: { group_id: liabilityGroup.id, type: 'liability', category: 'general' },
+                create: {
                     tenant_id: tenantId,
                     group_id: liabilityGroup.id,
                     name: 'VAT Payable',
@@ -570,6 +601,30 @@ describe('Integration Tests (e2e)', () => {
         });
 
         it('should return null for optional metrics when receivable or tax liability accounts are not configured', async () => {
+            // The bootstrap CoA seeds "Accounts Receivable" and "Loans Receivable",
+            // both of which match RECEIVABLE_ACCOUNT_PATTERN, so a freshly signed-up
+            // tenant always has the metric configured. Drop them for this tenant to
+            // reach the "not configured" branch this case exists to cover — asserting
+            // 0 instead would have quietly stopped testing the null path at all.
+            // Renamed rather than deleted: posting_rules reference these accounts by
+            // FK, so deleting them is refused. The metric is matched purely on the
+            // account name, so a name that no longer matches is exactly "not
+            // configured" as far as the KPI is concerned.
+            const seededReceivables = await db.account.findMany({
+                where: {
+                    tenant_id: secondTenantId,
+                    type: 'asset',
+                    name: { contains: 'Receivable', mode: 'insensitive' },
+                },
+                select: { id: true, name: true },
+            });
+            for (const account of seededReceivables) {
+                await db.account.update({
+                    where: { id: account.id },
+                    data: { name: account.name.replace(/Receivable/i, 'Dues') },
+                });
+            }
+
             const response = await request(app.getHttpServer())
                 .get('/accounting/dashboard/kpis')
                 .set('Authorization', `Bearer ${secondAuthToken}`)
