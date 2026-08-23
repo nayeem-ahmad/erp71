@@ -5,7 +5,9 @@ import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
-import { LeadStatus } from './crm-leads.dto';
+import { LeadBulkAction, LeadStatus } from './crm-leads.dto';
+import { AssetsService } from '../assets/assets.service';
+import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 
 describe('CrmLeadsService', () => {
     let service: CrmLeadsService;
@@ -13,6 +15,7 @@ describe('CrmLeadsService', () => {
     let customersService: any;
     let customFieldsService: any;
     let taxonomyService: any;
+    let assets: any;
 
     /** The seeded fallback row every tenant has. */
     const OTHER_SOURCE = {
@@ -32,6 +35,8 @@ describe('CrmLeadsService', () => {
                 count: jest.fn(),
                 create: jest.fn(),
                 update: jest.fn(),
+                delete: jest.fn(),
+                deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
                 groupBy: jest.fn(),
             },
             leadConversation: {
@@ -61,6 +66,11 @@ describe('CrmLeadsService', () => {
             fallbackSource: jest.fn().mockResolvedValue(OTHER_SOURCE),
             list: jest.fn().mockResolvedValue([]),
         };
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest.fn(),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -69,6 +79,8 @@ describe('CrmLeadsService', () => {
                 { provide: CustomersService, useValue: customersService },
                 { provide: CustomFieldsService, useValue: customFieldsService },
                 { provide: CrmLeadTaxonomyService, useValue: taxonomyService },
+                { provide: AssetsService, useValue: assets },
+                { provide: CrmPhotosService, useValue: new CrmPhotosService(assets as any) },
             ],
         }).compile();
 
@@ -817,6 +829,144 @@ describe('CrmLeadsService', () => {
                 gte: new Date('2026-08-18T18:00:00.000Z'),
                 lte: new Date('2026-08-19T17:59:59.999Z'),
             });
+        });
+    });
+
+    describe('photos', () => {
+        const KEY = 'retail/tenant-1/crm-photos/rahim';
+        const OTHER_KEY = 'retail/tenant-1/crm-photos/newer';
+
+        /** update() reads the whole row, so every case needs an editable lead. */
+        function existingLead(extra: Record<string, unknown> = {}) {
+            return {
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.NEW,
+                priority: 'MEDIUM',
+                source_id: 'src-other',
+                last_contacted_at: null,
+                next_step_date: null,
+                photo_storage_key: KEY,
+                ...extra,
+            };
+        }
+
+        it('stores the photo url and key on create', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Rahim',
+                photo_url: 'https://cdn.example/rahim.jpg',
+                photo_storage_key: KEY,
+            } as any);
+
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.photo_url).toBe('https://cdn.example/rahim.jpg');
+            expect(created.photo_storage_key).toBe(KEY);
+        });
+
+        it('stores nulls when a lead is created without a photo', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any);
+
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.photo_url).toBeNull();
+            expect(created.photo_storage_key).toBeNull();
+        });
+
+        it("refuses a storage key from another tenant's folder", async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+
+            await expect(
+                service.create('tenant-1', 'user-1', {
+                    name: 'Rahim',
+                    photo_url: 'https://cdn.example/rahim.jpg',
+                    photo_storage_key: 'retail/tenant-2/crm-photos/rahim',
+                } as any),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.lead.create).not.toHaveBeenCalled();
+        });
+
+        it('deletes the previous asset when the photo is replaced', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existingLead());
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', {
+                photo_url: 'https://cdn.example/newer.jpg',
+                photo_storage_key: OTHER_KEY,
+            } as any);
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data.photo_url).toBe('https://cdn.example/newer.jpg');
+            expect(data.photo_storage_key).toBe(OTHER_KEY);
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+        });
+
+        it('deletes the previous asset when the photo is cleared', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existingLead());
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', {
+                photo_url: '',
+                photo_storage_key: '',
+            } as any);
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data.photo_url).toBeNull();
+            expect(data.photo_storage_key).toBeNull();
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+        });
+
+        it('deletes nothing when an update does not touch the photo', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existingLead());
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { name: 'Rahim Uddin' } as any);
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data.photo_url).toBeUndefined();
+            expect(data.photo_storage_key).toBeUndefined();
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('deletes nothing when the same photo is re-saved', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existingLead());
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', {
+                photo_url: 'https://cdn.example/rahim.jpg',
+                photo_storage_key: KEY,
+            } as any);
+
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('reclaims the photo when the lead is deleted', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existingLead());
+            db.lead.findMany.mockResolvedValueOnce([{ photo_storage_key: KEY }]);
+
+            await service.remove('tenant-1', 'lead-1');
+
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+            expect(db.lead.delete).toHaveBeenCalledWith({ where: { id: 'lead-1' } });
+        });
+
+        it('reclaims photos on a bulk delete', async () => {
+            db.lead.findMany.mockResolvedValueOnce([
+                { photo_storage_key: KEY },
+                { photo_storage_key: OTHER_KEY },
+            ]);
+
+            await service.bulkAction('tenant-1', {
+                ids: ['lead-1', 'lead-2'],
+                action: LeadBulkAction.DELETE,
+            } as any);
+
+            expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
+            expect(assets.deleteFile).toHaveBeenCalledWith(OTHER_KEY);
         });
     });
 });
