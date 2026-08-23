@@ -66,12 +66,21 @@ jobs:
       - run: npm install
       - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
-      - name: Run backend unit + integration tests with coverage
-        run: |
-          npx jest --testPathPatterns="(src|test)/" --passWithNoTests --coverage --forceExit \
-            --testPathIgnorePatterns="test/integration.spec.ts" \
-            --testPathIgnorePatterns="test/inventory-operations.spec.ts" \
-            --testPathIgnorePatterns="test/sales-returns-orders.spec.ts"
+      # Signup reads SubscriptionPlan at runtime, so without the plan rows every
+      # signup in the integration suites 400s and takes the rest of the suite with
+      # it. seed-platform imports only @prisma/client, so unlike prisma/seed.ts it
+      # needs no @erp71/shared-types build first.
+      - run: npm run db:seed:platform --workspace=packages/database
+      - name: Run backend unit tests with coverage
+        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit
+        working-directory: apps/backend
+      # Serial, and in their own step: these suites TRUNCATE a shared set of tables,
+      # so run in parallel workers they wipe each other's fixtures mid-test. The
+      # three that used to be excluded here are back in — they were excluded because
+      # they applied the legacy packages/database/migrations/*.sql, which recreated
+      # PostingRuleEventType from a ten-value definition and broke every later signup.
+      - name: Run backend integration tests (serial — they share one database)
+        run: npx jest --testPathPatterns="test/" --passWithNoTests --runInBand --forceExit
         working-directory: apps/backend
       - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
