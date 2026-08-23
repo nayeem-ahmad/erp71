@@ -17,7 +17,7 @@ import {
     type HourLogRangePreset,
 } from '@/components/projects/HourLogRangeFilter';
 
-type GroupBy = 'task' | 'date' | 'week' | 'month' | 'user' | 'project';
+type GroupBy = 'task' | 'date' | 'week' | 'month' | 'user' | 'project' | 'tag';
 
 interface ReportRow {
     key: string;
@@ -50,7 +50,7 @@ interface PersonOption {
     email: string | null;
 }
 
-const GROUPS: GroupBy[] = ['task', 'date', 'week', 'month', 'user', 'project'];
+const GROUPS: GroupBy[] = ['task', 'date', 'week', 'month', 'user', 'project', 'tag'];
 
 export default function HourLogReportPage() {
     const { t } = useI18n();
@@ -67,6 +67,13 @@ export default function HourLogReportPage() {
     const [people, setPeople] = useState<PersonOption[]>([]);
     const [rows, setRows] = useState<ReportRow[]>([]);
     const [summary, setSummary] = useState<ReportSummary | null>(null);
+    /**
+     * How many entries in the range carry more than one tag. Only the server
+     * knows, and only for the tag dimension — where it is the difference
+     * between a column of shares that reads as wrong and one that says why it
+     * adds to more than 100%.
+     */
+    const [multiTagged, setMultiTagged] = useState(0);
     const [loading, setLoading] = useState(true);
 
     const valid = range.from <= range.to;
@@ -104,10 +111,12 @@ export default function HourLogReportPage() {
             });
             setRows((data?.rows ?? []) as ReportRow[]);
             setSummary((data?.summary ?? null) as ReportSummary | null);
+            setMultiTagged(Number((data as { multiTaggedEntries?: number })?.multiTaggedEntries ?? 0));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : r.loadFailed);
             setRows([]);
             setSummary(null);
+            setMultiTagged(0);
         } finally {
             setLoading(false);
         }
@@ -264,7 +273,17 @@ export default function HourLogReportPage() {
             </div>
 
             {valid ? (
-                <p className="text-xs text-gray-500">{r.rangeHint}</p>
+                <div className="space-y-1">
+                    <p className="text-xs text-gray-500">{r.rangeHint}</p>
+                    {/* Said only when it is true. A tag report where nothing is
+                        double-tagged adds to exactly 100%, and warning about it
+                        anyway would teach people to ignore the line. */}
+                    {groupBy === 'tag' && multiTagged > 0 ? (
+                        <p className="text-xs text-amber-700">
+                            {r.multiTagged.replace('{count}', String(multiTagged))}
+                        </p>
+                    ) : null}
+                </div>
             ) : (
                 <p className="text-sm text-red-600">{hl.rangeInvalid}</p>
             )}

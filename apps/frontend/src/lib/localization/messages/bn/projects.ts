@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "ঘণ্টা-লগ ট্যাগ",
+
+        hint: "কাজ নয়, *ঘণ্টা* শ্রেণিবদ্ধ করে — \"বিলযোগ্য\", \"সাপোর্ট\", \"পুনঃকাজ\"। লেবেল থেকে আলাদা তালিকা, এবং ঘণ্টা-লগ রিপোর্ট এটি দিয়ে যোগফল দিতে পারে।",
+
+        empty: "এখনও কোনো ট্যাগ নেই।",
+
+        add: "ট্যাগ যোগ করুন",
+
+        namePlaceholder: "যেমন বিলযোগ্য",
+
+        untagged: "{count}টি ঘণ্টা-লগ থেকে সরানো হয়েছে।",
+
+    },
+
     labels: {
         title: 'লেবেল',
         hint: 'সব প্রকল্পে একই লেবেল ব্যবহার হয়, তাই ওয়ার্কস্পেসজুড়ে টাস্ক তালিকা ও স্প্রিন্ট বোর্ডে ফিল্টার করা যায়।',
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: 'গত ৩০ দিন',
         presetMonth: 'এই মাস',
         presetCustom: 'নিজের সময়সীমা',
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'আপনি কী নিয়ে কাজ করছেন?',
+        captureProject: 'যে প্রকল্পে লেখা হবে',
+        captureTask: 'যে কাজে লেখা হবে',
+        start: 'শুরু',
+        stop: 'থামান',
+        running: 'টাইমার চলছে',
+        discardTimer: 'এই টাইমারটি বাতিল করুন',
+        timerMode: 'টাইমার দিয়ে সময় গণনা',
+        manualMode: 'হাতে ঘণ্টা লিখুন',
+        startTime: 'শুরুর সময়',
+        endTime: 'শেষের সময়',
+        spanHint: 'ঐচ্ছিক। দুটোই দিন, নয়তো কোনোটিই নয়। শুরুর আগে শেষ মানে মধ্যরাত পেরিয়ে গেছে।',
+        hoursFromSpan: 'শুরু ও শেষের সময় থেকে হিসাব করা হয়েছে।',
+        tags: 'ট্যাগ',
+        allTags: 'সব ট্যাগ',
+        noTags: 'এখনও কোনো ট্যাগ নেই। প্রকল্প সেটিংসে যোগ করুন।',
+        today: 'আজ',
+        yesterday: 'গতকাল',
+        total: 'মোট',
+        duration: 'সময়কাল',
+        partialDay: '{total}-এর মধ্যে {shown}টি দেখানো হচ্ছে ·',
+        addDescription: 'বিবরণ যোগ করুন',
+        logAgain: 'এটির জন্য আবার টাইমার চালু করুন',
+        expandGroup: 'এই সারির এন্ট্রিগুলো দেখান',
+        collapseGroup: 'এন্ট্রিগুলো লুকান',
+        pageOf: 'পৃষ্ঠা {page} / {pages}',
+        previous: 'পূর্ববর্তী',
+        next: 'পরবর্তী',
+        timerStarted: 'টাইমার শুরু হয়েছে',
+        timerStartFailed: 'টাইমার শুরু করা যায়নি।',
+        timerStopFailed: 'টাইমার থামানো যায়নি।',
+        timerUpdateFailed: 'টাইমার হালনাগাদ করা যায়নি।',
+        timerDiscarded: 'টাইমার বাতিল হয়েছে। কিছুই রেকর্ড হয়নি।',
+        timerDiscardedShort: 'এক মিনিটেরও কম চলেছে, তাই কিছুই রেকর্ড হয়নি।',
+        timerAlreadyRunning: '"{task}"-এ ইতিমধ্যে একটি টাইমার চলছে। আগে সেটি থামান।',
+        timerOverlapped: 'এই ঘণ্টাগুলো "{task}"-এ আগে লেখা সময়ের সঙ্গে মিলে যাচ্ছে।',
+        overlapTitle: 'এই ঘণ্টাগুলো মিলে যাচ্ছে',
+        overlapPrompt: 'তবুও দুটো এন্ট্রিই রাখবেন?',
+        overlapKeepBoth: 'দুটোই রাখুন',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: 'মাস',
             user: 'ব্যক্তি',
             project: 'প্রজেক্ট',
+            tag: 'ট্যাগ',
         },
         totalHours: 'মোট ঘণ্টা',
         entries: 'এন্ট্রি',
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: 'এই সময়সীমায় কোনো ঘণ্টা লগ করা হয়নি।',
         loadFailed: 'রিপোর্ট লোড করা যায়নি।',
         rangeHint: 'যেকোনো সময়ে এন্ট্রি হলেও, সময়সীমার ভেতরে তারিখ পড়া কাজই মোটে ধরা হয়।',
+        multiTagged: '{count}টি এন্ট্রিতে একাধিক ট্যাগ আছে, তাই অংশগুলোর যোগফল ১০০%-এর বেশি হয়।',
     },
 
     board: {

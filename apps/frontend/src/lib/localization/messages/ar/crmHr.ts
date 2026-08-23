@@ -1187,6 +1187,13 @@ export const crmHrMessages = {
             submit: 'حفظ السجل',
         },
         punchesLink: 'سجلات الدخول/الخروج',
+        today: "اليوم",
+        yesterday: "أمس",
+        worked: "وقت العمل",
+        dayRecords: "{count} سجلات",
+        deleteTitle: "حذف سجل الحضور",
+        deleted: "تم حذف سجل الحضور",
+        workedHint: "وقت العمل هو الرقم المسجَّل عند كتابة اليوم، وليس حسابًا جديدًا من أوقات الحضور.",
     },
     attendancePunches: {
         title: 'سجلات الدخول/الخروج',

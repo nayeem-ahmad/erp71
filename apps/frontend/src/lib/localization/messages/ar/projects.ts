@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "وسوم سجل الساعات",
+
+        hint: "تصنّف *الساعة* لا المهمة — \"قابل للفوترة\"، \"دعم\"، \"إعادة عمل\". قائمة منفصلة عن التسميات، ويمكن لتقرير الساعات أن يجمع بها.",
+
+        empty: "لا توجد وسوم بعد.",
+
+        add: "أضِف وسمًا",
+
+        namePlaceholder: "مثال: قابل للفوترة",
+
+        untagged: "أُزيل من {count} من سجلات الساعات.",
+
+    },
+
     labels: {
         title: "التسميات",
         hint: "مشتركة بين كل المشاريع، لتتمكن قائمة المهام على مستوى مساحة العمل ولوحة الدورة من التصفية بها.",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "آخر 30 يومًا",
         presetMonth: "هذا الشهر",
         presetCustom: "فترة مخصصة",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'على ماذا تعمل؟',
+        captureProject: 'المشروع الذي يُسجَّل عليه',
+        captureTask: 'المهمة التي تُسجَّل عليها',
+        start: 'ابدأ',
+        stop: 'أوقف',
+        running: 'المؤقّت يعمل',
+        discardTimer: 'تجاهل هذا المؤقّت',
+        timerMode: 'القياس بمؤقّت',
+        manualMode: 'إدخال الساعات يدويًا',
+        startTime: 'وقت البدء',
+        endTime: 'وقت الانتهاء',
+        spanHint: 'اختياري. أدخل الوقتين معًا أو لا شيء. نهاية قبل البداية تعني أن العمل تجاوز منتصف الليل.',
+        hoursFromSpan: 'محسوبة من وقتَي البدء والانتهاء.',
+        tags: 'الوسوم',
+        allTags: 'كل الوسوم',
+        noTags: 'لا توجد وسوم بعد. أضِفها من إعدادات المشاريع.',
+        today: 'اليوم',
+        yesterday: 'أمس',
+        total: 'الإجمالي',
+        duration: 'المدة',
+        partialDay: 'عرض {shown} من {total} ·',
+        addDescription: 'أضِف وصفًا',
+        logAgain: 'ابدأ مؤقّتًا لهذا مجددًا',
+        expandGroup: 'أظهر السجلات خلف هذا الصف',
+        collapseGroup: 'أخفِ هذه السجلات',
+        pageOf: 'صفحة {page} من {pages}',
+        previous: 'السابق',
+        next: 'التالي',
+        timerStarted: 'بدأ المؤقّت',
+        timerStartFailed: 'تعذّر بدء المؤقّت.',
+        timerStopFailed: 'تعذّر إيقاف المؤقّت.',
+        timerUpdateFailed: 'تعذّر تحديث المؤقّت.',
+        timerDiscarded: 'تم تجاهل المؤقّت. لم يُسجَّل شيء.',
+        timerDiscardedShort: 'استمر أقل من دقيقة، لذا لم يُسجَّل شيء.',
+        timerAlreadyRunning: 'هناك مؤقّت يعمل على "{task}". أوقفه أولًا.',
+        timerOverlapped: 'هذه الساعات تتداخل مع وقت سجّلته على "{task}".',
+        overlapTitle: 'هذه الساعات متداخلة',
+        overlapPrompt: 'هل تحتفظ بالسجلَّين رغم ذلك؟',
+        overlapKeepBoth: 'احتفظ بالاثنين',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "الشهر",
             user: "الشخص",
             project: "المشروع",
+            tag: "الوسم",
         },
         totalHours: "إجمالي الساعات",
         entries: "التسجيلات",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "لم تُسجَّل ساعات في هذه الفترة.",
         loadFailed: "تعذّر تحميل التقرير.",
         rangeHint: "تشمل الإجماليات العمل المؤرَّخ داخل الفترة، أيًّا كان وقت إدخاله.",
+        multiTagged: "{count} من السجلات تحمل أكثر من وسم واحد، لذا تتجاوز النسب مجموع 100%.",
     },
 
     board: {

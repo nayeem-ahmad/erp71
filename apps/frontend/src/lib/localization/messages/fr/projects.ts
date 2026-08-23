@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "Étiquettes d’heures",
+
+        hint: "Elles classent une *heure*, pas une tâche : « Facturable », « Support », « Reprise ». Liste distincte des étiquettes de tâches, et le rapport d’heures peut totaliser dessus.",
+
+        empty: "Aucune étiquette.",
+
+        add: "Ajouter une étiquette",
+
+        namePlaceholder: "ex. Facturable",
+
+        untagged: "Retirée de {count} saisie(s) d’heures.",
+
+    },
+
     labels: {
         title: "Étiquettes",
         hint: "Partagées entre tous les projets, afin que la liste de tâches globale et le tableau de sprint puissent filtrer dessus.",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "30 derniers jours",
         presetMonth: "Ce mois-ci",
         presetCustom: "Période personnalisée",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'Sur quoi travaillez-vous ?',
+        captureProject: 'Projet à imputer',
+        captureTask: 'Tâche à imputer',
+        start: 'Démarrer',
+        stop: 'Arrêter',
+        running: 'Minuteur en cours',
+        discardTimer: 'Abandonner ce minuteur',
+        timerMode: 'Chronométrer',
+        manualMode: 'Saisir les heures à la main',
+        startTime: 'Heure de début',
+        endTime: 'Heure de fin',
+        spanHint: 'Facultatif. Indiquez les deux, ou aucune. Une fin avant le début signifie que cela a dépassé minuit.',
+        hoursFromSpan: 'Calculées à partir des heures de début et de fin.',
+        tags: 'Étiquettes',
+        allTags: 'Toutes les étiquettes',
+        noTags: 'Aucune étiquette. Ajoutez-en dans les réglages des projets.',
+        today: 'Aujourd\'hui',
+        yesterday: 'Hier',
+        total: 'Total',
+        duration: 'Durée',
+        partialDay: '{shown} sur {total} affichées ·',
+        addDescription: 'Ajouter une description',
+        logAgain: 'Relancer un minuteur pour ceci',
+        expandGroup: 'Afficher les saisies de cette ligne',
+        collapseGroup: 'Replier ces saisies',
+        pageOf: 'Page {page} sur {pages}',
+        previous: 'Précédent',
+        next: 'Suivant',
+        timerStarted: 'Minuteur démarré',
+        timerStartFailed: 'Impossible de démarrer le minuteur.',
+        timerStopFailed: 'Impossible d\'arrêter le minuteur.',
+        timerUpdateFailed: 'Impossible de mettre à jour le minuteur.',
+        timerDiscarded: 'Minuteur abandonné. Rien n\'a été enregistré.',
+        timerDiscardedShort: 'Il a duré moins d\'une minute : rien n\'a été enregistré.',
+        timerAlreadyRunning: 'Un minuteur tourne déjà sur « {task} ». Arrêtez-le d’abord.',
+        timerOverlapped: 'Ces heures chevauchent du temps déjà saisi sur « {task} ».',
+        overlapTitle: 'Ces heures se chevauchent',
+        overlapPrompt: 'Garder les deux saisies malgré tout ?',
+        overlapKeepBoth: 'Garder les deux',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "Mois",
             user: "Personne",
             project: "Projet",
+            tag: "Étiquette",
         },
         totalHours: "Total des heures",
         entries: "Saisies",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "Aucune heure n'a été saisie sur cette période.",
         loadFailed: "Impossible de charger le rapport.",
         rangeHint: "Les totaux portent sur le travail daté dans la période, quelle que soit sa date de saisie.",
+        multiTagged: "{count} saisies portent plusieurs étiquettes : les parts dépassent donc 100 %.",
     },
 
     board: {

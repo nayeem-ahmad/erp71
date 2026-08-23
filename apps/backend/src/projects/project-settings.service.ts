@@ -4,6 +4,7 @@ import {
     CreateLabelDto,
     CreateProjectTypeDto,
     CreateTaskStatusDto,
+    TimeTagDto,
     UpdateLabelDto,
     UpdateProjectTypeDto,
     UpdateTaskStatusDto,
@@ -301,6 +302,86 @@ export class ProjectSettingsService {
         });
         if (!label) throw new NotFoundException('Label not found');
         return label;
+    }
+
+    // ── Hour-log tags ──────────────────────────────────────────────────────
+    //
+    // A separate vocabulary from labels on purpose — see the model comment.
+    // The CRUD is deliberately the same shape as the label CRUD above rather
+    // than a shared generic: two tables that happen to look alike today are
+    // not one table, and the first thing a tag grows that a label does not
+    // (a billable flag, a default rate) would have to unpick the abstraction.
+
+    async listTimeTags(tenantId: string) {
+        return this.db.projectTimeTag.findMany({
+            where: { tenant_id: tenantId },
+            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        });
+    }
+
+    async createTimeTag(tenantId: string, dto: TimeTagDto) {
+        const name = dto.name.trim();
+        const clash = await this.db.projectTimeTag.findFirst({
+            where: { tenant_id: tenantId, name },
+            select: { id: true },
+        });
+        if (clash) throw new ConflictException('A tag with that name already exists.');
+
+        const count = await this.db.projectTimeTag.count({ where: { tenant_id: tenantId } });
+        return this.db.projectTimeTag.create({
+            data: {
+                tenant_id: tenantId,
+                name,
+                color: (dto.color ?? 'GRAY') as never,
+                sort_order: dto.sortOrder ?? count,
+            },
+        });
+    }
+
+    async updateTimeTag(tenantId: string, id: string, dto: Partial<TimeTagDto>) {
+        await this.assertTimeTag(tenantId, id);
+
+        if (dto.name !== undefined) {
+            const name = dto.name.trim();
+            const clash = await this.db.projectTimeTag.findFirst({
+                where: { tenant_id: tenantId, name, id: { not: id } },
+                select: { id: true },
+            });
+            if (clash) throw new ConflictException('A tag with that name already exists.');
+        }
+
+        return this.db.projectTimeTag.update({
+            where: { id },
+            data: {
+                ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+                ...(dto.color !== undefined ? { color: dto.color as never } : {}),
+                ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+            },
+        });
+    }
+
+    /**
+     * Same call as a label: a tag in use is deleted rather than refused, and
+     * the count of hours that lose it comes back so the caller can say so.
+     * Retiring "Billable" should not mean untagging six months of afternoons
+     * first — and the hours themselves are untouched either way.
+     */
+    async removeTimeTag(tenantId: string, id: string) {
+        await this.assertTimeTag(tenantId, id);
+        const tagged = await this.db.projectTimeEntryTag.count({
+            where: { tenant_id: tenantId, tag_id: id },
+        });
+        await this.db.projectTimeTag.delete({ where: { id } });
+        return { success: true, untagged: tagged };
+    }
+
+    private async assertTimeTag(tenantId: string, id: string) {
+        const tag = await this.db.projectTimeTag.findFirst({
+            where: { id, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!tag) throw new NotFoundException('Tag not found');
+        return tag;
     }
 
     /** Scoped to one board: a project's default column is not the tenant's. */

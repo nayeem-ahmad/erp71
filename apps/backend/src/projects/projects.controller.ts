@@ -27,6 +27,7 @@ import {
     CreateTaskStatusDto,
     UpdateLabelDto,
     ListProjectsDto,
+    TimeTagDto,
     UpdateMilestoneDto,
     UpdateProjectDto,
     UpdateProjectTypeDto,
@@ -160,6 +161,40 @@ export class ProjectsController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
     removeLabel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.settings.removeLabel(tenant.tenantId, id);
+    }
+
+    // ── Hour-log tags ──────────────────────────────────────────────────────
+    //
+    // The write half of the vocabulary; the read half sits on
+    // `/project-time/tags` so a timesheet does not have to reach into settings
+    // to draw a chip. Declared above `:id` for the usual reason.
+
+    @Get('time-tags')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listTimeTags(@Tenant() tenant: TenantContext) {
+        return this.settings.listTimeTags(tenant.tenantId);
+    }
+
+    @Post('time-tags')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    createTimeTag(@Tenant() tenant: TenantContext, @Body() dto: TimeTagDto) {
+        return this.settings.createTimeTag(tenant.tenantId, dto);
+    }
+
+    @Patch('time-tags/:id')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    updateTimeTag(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: TimeTagDto,
+    ) {
+        return this.settings.updateTimeTag(tenant.tenantId, id, dto);
+    }
+
+    @Delete('time-tags/:id')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    removeTimeTag(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.settings.removeTimeTag(tenant.tenantId, id);
     }
 
     // ── Projects ───────────────────────────────────────────────────────────

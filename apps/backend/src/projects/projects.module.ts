@@ -13,6 +13,7 @@ import { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
+import { ProjectTimerService } from './project-timer.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -40,6 +41,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         BoardColumnsService,
         ProjectTasksService,
         ProjectTimeService,
+        ProjectTimerService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,

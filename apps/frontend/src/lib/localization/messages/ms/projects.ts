@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "Tag log jam",
+
+        hint: "Mengelaskan *jam*, bukan tugas — \"Boleh dibil\", \"Sokongan\", \"Kerja semula\". Senarai berasingan daripada label, dan laporan log jam boleh menjumlahkannya.",
+
+        empty: "Belum ada tag.",
+
+        add: "Tambah tag",
+
+        namePlaceholder: "cth. Boleh dibil",
+
+        untagged: "Dibuang daripada {count} log jam.",
+
+    },
+
     labels: {
         title: 'Label',
         hint: 'Dikongsi merentas semua projek, supaya senarai tugasan seluruh ruang kerja dan papan sprint boleh menapisnya.',
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: '30 hari lalu',
         presetMonth: 'Bulan ini',
         presetCustom: 'Julat tersuai',
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'Apa yang anda sedang buat?',
+        captureProject: 'Projek untuk dilog',
+        captureTask: 'Tugas untuk dilog',
+        start: 'Mula',
+        stop: 'Henti',
+        running: 'Pemasa sedang berjalan',
+        discardTimer: 'Buang pemasa ini',
+        timerMode: 'Ambil masa dengan pemasa',
+        manualMode: 'Masukkan jam secara manual',
+        startTime: 'Masa mula',
+        endTime: 'Masa tamat',
+        spanHint: 'Pilihan. Beri kedua-duanya, atau tiada langsung. Tamat sebelum mula bermakna ia melepasi tengah malam.',
+        hoursFromSpan: 'Dikira daripada masa mula dan tamat.',
+        tags: 'Tag',
+        allTags: 'Semua tag',
+        noTags: 'Belum ada tag. Tambahkannya dalam tetapan projek.',
+        today: 'Hari ini',
+        yesterday: 'Semalam',
+        total: 'Jumlah',
+        duration: 'Tempoh',
+        partialDay: 'menunjukkan {shown} daripada {total} ·',
+        addDescription: 'Tambah keterangan',
+        logAgain: 'Mulakan pemasa untuk ini semula',
+        expandGroup: 'Tunjukkan entri di sebalik baris ini',
+        collapseGroup: 'Kuncupkan entri ini',
+        pageOf: 'Halaman {page} daripada {pages}',
+        previous: 'Sebelumnya',
+        next: 'Seterusnya',
+        timerStarted: 'Pemasa dimulakan',
+        timerStartFailed: 'Pemasa tidak dapat dimulakan.',
+        timerStopFailed: 'Pemasa tidak dapat dihentikan.',
+        timerUpdateFailed: 'Pemasa tidak dapat dikemas kini.',
+        timerDiscarded: 'Pemasa dibuang. Tiada apa-apa direkodkan.',
+        timerDiscardedShort: 'Ia berjalan kurang seminit, jadi tiada apa-apa direkodkan.',
+        timerAlreadyRunning: 'Pemasa sedang berjalan pada "{task}". Hentikan dahulu.',
+        timerOverlapped: 'Jam itu bertindih dengan masa yang anda sudah log pada "{task}".',
+        overlapTitle: 'Jam ini bertindih',
+        overlapPrompt: 'Simpan kedua-dua entri juga?',
+        overlapKeepBoth: 'Simpan kedua-duanya',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: 'Bulan',
             user: 'Orang',
             project: 'Projek',
+            tag: 'Tag',
         },
         totalHours: 'Jumlah jam',
         entries: 'Entri',
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: 'Tiada jam dilog dalam julat ini.',
         loadFailed: 'Tidak dapat memuatkan laporan.',
         rangeHint: 'Jumlah merangkumi kerja bertarikh dalam julat ini, bila-bila ia dimasukkan.',
+        multiTagged: '{count} entri membawa lebih daripada satu tag, jadi bahagiannya berjumlah lebih 100%.',
     },
 
     board: {

@@ -1187,6 +1187,13 @@ export const crmHrMessages = {
                 submit: "রেকর্ড সংরক্ষণ",
             },
             punchesLink: "ইন/আউট রেকর্ড",
+            today: "আজ",
+            yesterday: "গতকাল",
+            worked: "কাজ হয়েছে",
+            dayRecords: "{count}টি রেকর্ড",
+            deleteTitle: "উপস্থিতি রেকর্ড মুছুন",
+            deleted: "উপস্থিতি রেকর্ড মুছে ফেলা হয়েছে",
+            workedHint: "কাজের সময় সেই হিসাব যা দিনটি লেখার সময় রেকর্ড হয়েছিল, ক্লক সময় থেকে নতুন করে গোনা নয়।",
         },
         attendancePunches: {
             title: "ইন/আউট রেকর্ড",

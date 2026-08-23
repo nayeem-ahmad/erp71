@@ -1186,7 +1186,14 @@ export const crmHrMessages = {
             "submitting": "Saving...",
             "submit": "Save Record"
         },
-        "punchesLink": "In/Out Records"
+        "punchesLink": "In/Out Records",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "worked": "Worked",
+        "dayRecords": "{count} records",
+        "deleteTitle": "Delete attendance record",
+        "deleted": "Attendance record deleted",
+        "workedHint": "Worked time is the figure recorded when the day was written, not a fresh count from the clock times."
     },
     "attendancePunches": {
         "title": "In/Out Records",

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -13,8 +13,14 @@ import {
     ConfirmDialog,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import DataTable from '@/components/data-table/DataTable';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import HourLogCaptureBar, {
+    type ManualLogInput,
+    type RunningTimer,
+} from '@/components/projects/HourLogCaptureBar';
+import HourLogDayList, { type DayTotal } from '@/components/projects/HourLogDayList';
+import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/components/projects/hour-log-day';
+import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -27,16 +33,6 @@ import {
     type HourLogRange,
     type HourLogRangePreset,
 } from '@/components/projects/HourLogRangeFilter';
-
-interface HourLogRow {
-    id: string;
-    work_date: string;
-    hours: string | number;
-    note?: string | null;
-    task?: { id: string; title: string } | null;
-    project?: { id: string; code: string; name: string } | null;
-    user?: { id: string; name?: string | null; email: string } | null;
-}
 
 interface ProjectOption {
     id: string;
@@ -58,15 +54,29 @@ interface ReportSummary {
     tasks: number;
 }
 
-const EMPTY_FORM = { projectId: '', taskId: '', workDate: '', hours: '', note: '' };
-
-const hoursOf = (row: HourLogRow): number => Number(row.hours ?? 0);
-
-/** A logged hour belongs to whoever entered it; historic rows can have lost their author. */
-function personLabel(row: HourLogRow, fallback: string): string {
-    if (!row.user) return fallback;
-    return row.user.name || row.user.email;
+interface ReportRow {
+    key: string;
+    hours: number;
+    entries: number;
 }
+
+const EMPTY_FORM = {
+    projectId: '',
+    taskId: '',
+    workDate: '',
+    hours: '',
+    startTime: '',
+    endTime: '',
+    note: '',
+    tagIds: [] as string[],
+};
+
+/** A 409 from the overlap guard, as opposed to any other failure. */
+const isOverlapConflict = (error: unknown): boolean =>
+    error instanceof Error && /overlap/i.test(error.message);
+
+const errorText = (error: unknown, fallback: string): string =>
+    error instanceof Error ? error.message : fallback;
 
 export default function HourLogsPage() {
     const { t } = useI18n();
@@ -79,28 +89,44 @@ export default function HourLogsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [projectId, setProjectId] = useState('');
     const [personId, setPersonId] = useState('');
+    const [tagId, setTagId] = useState('');
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [people, setPeople] = useState<PersonOption[]>([]);
+    const [tags, setTags] = useState<HourLogTag[]>([]);
     const [summary, setSummary] = useState<ReportSummary | null>(null);
+    const [dayTotals, setDayTotals] = useState<Record<string, DayTotal>>({});
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
+    // The capture bar's own project/task pair, separate from the filter above
+    // the list: narrowing what you are reading should not change what you are
+    // about to log against, and vice versa.
+    const [captureProjectId, setCaptureProjectId] = useState('');
+    const [captureTasks, setCaptureTasks] = useState<{ id: string; title: string }[]>([]);
+    const [timer, setTimer] = useState<RunningTimer | null>(null);
+    const [timerBusy, setTimerBusy] = useState(false);
+
     const [formOpen, setFormOpen] = useState(false);
-    const [editing, setEditing] = useState<HourLogRow | null>(null);
+    const [editing, setEditing] = useState<HourLogEntry | null>(null);
     const [form, setForm] = useState(EMPTY_FORM);
     const [formErrors, setFormErrors] = useState<{ taskId?: string; hours?: string; workDate?: string }>({});
     const [tasks, setTasks] = useState<{ id: string; title: string }[]>([]);
     const [saving, setSaving] = useState(false);
-    const [pendingDelete, setPendingDelete] = useState<HourLogRow | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<HourLogEntry | null>(null);
+    /** A save the overlap guard refused, held while we ask whether to keep both. */
+    const [pendingOverlap, setPendingOverlap] = useState<{ message: string; retry: () => Promise<void> } | null>(null);
 
     useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
-        return () => clearTimeout(timer);
+        const timeout = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timeout);
     }, [search]);
 
     useEffect(() => {
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as ProjectOption[]))
             .catch(() => setProjects([]));
+        api.getProjectTimeTags()
+            .then((rows: unknown) => setTags(Array.isArray(rows) ? (rows as HourLogTag[]) : []))
+            .catch(() => setTags([]));
     }, []);
 
     // The person options come from the hours themselves rather than the team
@@ -122,26 +148,30 @@ export default function HourLogsPage() {
 
     const valid = range.from <= range.to;
 
-    const { items, loading, serverPagination, reload } = useServerList<HourLogRow>({
-        tableId: 'project-hour-logs',
-        enabled: valid,
-        initialSort: { id: 'work_date', desc: true },
-        deps: [range.from, range.to, debouncedSearch, projectId, personId],
-        fetch: (params) =>
-            api.getProjectTimeEntries({
-                ...params,
-                from: range.from,
-                to: range.to,
-                search: debouncedSearch || undefined,
-                projectId: projectId || undefined,
-                userId: personId || undefined,
-            }),
-    });
+    const { items, loading, total, page, pageSize, serverPagination, reload } =
+        useServerList<HourLogEntry>({
+            tableId: 'project-hour-logs',
+            enabled: valid,
+            initialSort: { id: 'work_date', desc: true },
+            deps: [range.from, range.to, debouncedSearch, projectId, personId, tagId],
+            fetch: (params) =>
+                api.getProjectTimeEntries({
+                    ...params,
+                    from: range.from,
+                    to: range.to,
+                    search: debouncedSearch || undefined,
+                    projectId: projectId || undefined,
+                    userId: personId || undefined,
+                    tagId: tagId || undefined,
+                }),
+        });
 
-    // The totals strip has to cover the whole filtered set, not the page on
-    // screen, so it comes from the report aggregate rather than from `items`.
-    // It carries every filter the list does — a strip that ignored the search
-    // box would contradict the rows under it.
+    // The totals strip and every day header come from the report aggregate, not
+    // from `items`. Two reasons, and the second is the load-bearing one: the
+    // strip has to cover the whole filtered set rather than the page on screen,
+    // and a day split across a page boundary must still show the whole day's
+    // hours in its header. Summing the rows in view would quietly report a
+    // fraction of a day as the day.
     const loadSummary = useCallback(() => {
         if (!valid) return;
         api.getProjectTimeReport({
@@ -151,36 +181,212 @@ export default function HourLogsPage() {
             search: debouncedSearch || undefined,
             projectId: projectId || undefined,
             userId: personId || undefined,
+            tagId: tagId || undefined,
         })
-            .then((data: unknown) => setSummary((data as { summary: ReportSummary })?.summary ?? null))
-            .catch(() => setSummary(null));
-    }, [valid, range.from, range.to, debouncedSearch, projectId, personId]);
+            .then((data: unknown) => {
+                const report = data as { summary?: ReportSummary; rows?: ReportRow[] } | null;
+                setSummary(report?.summary ?? null);
+                setDayTotals(
+                    Object.fromEntries(
+                        (report?.rows ?? []).map((row) => [
+                            row.key,
+                            { hours: row.hours, entries: row.entries },
+                        ]),
+                    ),
+                );
+            })
+            .catch(() => {
+                setSummary(null);
+                setDayTotals({});
+            });
+    }, [valid, range.from, range.to, debouncedSearch, projectId, personId, tagId]);
 
     useEffect(() => {
         loadSummary();
     }, [loadSummary]);
+
+    const loadTimer = useCallback(() => {
+        api.getProjectTimer()
+            .then((data: unknown) => setTimer((data as RunningTimer) ?? null))
+            .catch(() => setTimer(null));
+    }, []);
+
+    useEffect(() => {
+        loadTimer();
+    }, [loadTimer]);
+
+    // The tasks the capture bar can start against.
+    useEffect(() => {
+        if (!captureProjectId) {
+            setCaptureTasks([]);
+            return;
+        }
+        let cancelled = false;
+        api.getProjectTasks({ projectId: captureProjectId, limit: 200 })
+            .then((res) => {
+                if (!cancelled) setCaptureTasks((res?.items ?? []) as { id: string; title: string }[]);
+            })
+            .catch(() => {
+                if (!cancelled) setCaptureTasks([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [captureProjectId]);
 
     const refresh = useCallback(async () => {
         await reload();
         loadSummary();
     }, [reload, loadSummary]);
 
-    const openCreate = () => {
-        const project = projectId || (projects.length === 1 ? projects[0].id : '');
-        setEditing(null);
-        setForm({ ...EMPTY_FORM, projectId: project, workDate: new Date().toISOString().slice(0, 10) });
-        setFormErrors({});
-        setFormOpen(true);
+    const days = useMemo(() => groupByDay(items), [items]);
+    // Only worth a column when there is more than one person to tell apart.
+    const showPerson = !personId && (summary?.people ?? 0) > 1;
+
+    // ── The running clock ──────────────────────────────────────────────────
+
+    /**
+     * Every timer call goes through here: one busy flag so a double press
+     * cannot double-write, one place that reports a failure, and a refetch
+     * afterwards either way — a start that failed and a start that succeeded
+     * both leave the bar needing to know what the server thinks is running.
+     */
+    const runTimerAction = async (
+        action: () => Promise<unknown>,
+        fallback: string,
+    ): Promise<void> => {
+        setTimerBusy(true);
+        try {
+            await action();
+        } catch (error) {
+            toast.error(errorText(error, fallback));
+        } finally {
+            setTimerBusy(false);
+            loadTimer();
+        }
     };
 
-    const openEdit = (row: HourLogRow) => {
-        setEditing(row);
+    const startTimer = (input: { taskId: string; note?: string; tagIds: string[] }) =>
+        runTimerAction(async () => {
+            await api.startProjectTimer(input);
+            toast.success(hl.timerStarted);
+        }, hl.timerStartFailed);
+
+    const stopTimer = () =>
+        runTimerAction(async () => {
+            const result = (await api.stopProjectTimer()) as
+                | { discarded?: boolean; overlap?: { taskTitle?: string | null } | null }
+                | null;
+            if (result?.discarded) {
+                // Nothing was written. Saying "saved" here would be a lie, and
+                // saying nothing leaves someone hunting for a missing entry.
+                toast.info(hl.timerDiscardedShort);
+            } else {
+                toast.success(m.time.logged);
+                if (result?.overlap) {
+                    toast.info(
+                        hl.timerOverlapped.replace('{task}', result.overlap.taskTitle ?? '—'),
+                    );
+                }
+            }
+            await refresh();
+        }, hl.timerStopFailed);
+
+    const discardTimer = () =>
+        runTimerAction(async () => {
+            await api.discardProjectTimer();
+            toast.info(hl.timerDiscarded);
+        }, hl.timerStopFailed);
+
+    const patchTimer = (patch: { note?: string; tagIds?: string[] }) =>
+        runTimerAction(() => api.updateProjectTimer(patch), hl.timerUpdateFailed);
+
+    /**
+     * Clockify's ▷ restarts the row. So does this: yesterday's afternoon is one
+     * press away from being today's clock, with its note and tags carried over.
+     * With a timer already running it says so rather than quietly starting a
+     * second one or logging something the person did not ask for.
+     */
+    const logAgain = (entry: HourLogEntry) => {
+        if (!entry.task) return;
+        if (timer) {
+            toast.info(hl.timerAlreadyRunning.replace('{task}', timer.task?.title ?? '—'));
+            return;
+        }
+        void startTimer({
+            taskId: entry.task.id,
+            note: entry.note ?? undefined,
+            tagIds: (entry.tags ?? []).map((tag) => tag.id),
+        });
+    };
+
+    // ── Writes ─────────────────────────────────────────────────────────────
+
+    /**
+     * Runs a save, and when the overlap guard refuses it, holds the retry
+     * behind a confirmation instead of failing outright. Keeping both is a
+     * decision someone can make; being unable to fix a mistyped span is not.
+     */
+    const saveGuardingOverlap = async (
+        attempt: (allowOverlap: boolean) => Promise<void>,
+        fallback: string,
+    ) => {
+        try {
+            await attempt(false);
+        } catch (error) {
+            if (isOverlapConflict(error)) {
+                setPendingOverlap({
+                    message: errorText(error, fallback),
+                    retry: () => attempt(true),
+                });
+                return;
+            }
+            toast.error(errorText(error, fallback));
+        }
+    };
+
+    const logManual = async (input: ManualLogInput) => {
+        setTimerBusy(true);
+        await saveGuardingOverlap(async (allowOverlap) => {
+            await api.logProjectTime({
+                taskId: input.taskId,
+                workDate: input.workDate,
+                hours: input.hours,
+                startTime: input.startTime,
+                endTime: input.endTime,
+                note: input.note,
+                tagIds: input.tagIds,
+                ...(allowOverlap ? { allowOverlap: true } : {}),
+            });
+            toast.success(m.time.logged);
+            await refresh();
+        }, hl.logFailed);
+        setTimerBusy(false);
+    };
+
+    /** The inline edits: one field, one PATCH, no modal. */
+    const patchEntry = async (entry: HourLogEntry, patch: { hours?: number; note?: string }) => {
+        try {
+            await api.updateProjectTimeEntry(entry.id, patch);
+            await refresh();
+        } catch (error) {
+            toast.error(errorText(error, hl.updateFailed));
+            // Rethrown so the row can put back what it was showing.
+            throw error;
+        }
+    };
+
+    const openEdit = (entry: HourLogEntry) => {
+        setEditing(entry);
         setForm({
-            projectId: row.project?.id ?? '',
-            taskId: row.task?.id ?? '',
-            workDate: row.work_date.slice(0, 10),
-            hours: String(hoursOf(row)),
-            note: row.note ?? '',
+            projectId: entry.project?.id ?? '',
+            taskId: entry.task?.id ?? '',
+            workDate: entry.work_date.slice(0, 10),
+            hours: String(hoursOf(entry)),
+            startTime: entry.start_time ?? '',
+            endTime: entry.end_time ?? '',
+            note: entry.note ?? '',
+            tagIds: (entry.tags ?? []).map((tag) => tag.id),
         });
         setFormErrors({});
         setFormOpen(true);
@@ -208,40 +414,48 @@ export default function HourLogsPage() {
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const timed = Boolean(form.startTime && form.endTime);
         const hours = Number(form.hours);
         const errors: typeof formErrors = {};
         if (!editing && !form.taskId) errors.taskId = t.common.required;
         if (!form.workDate) errors.workDate = t.common.required;
-        if (!Number.isFinite(hours) || hours <= 0) errors.hours = t.common.required;
+        // A span carries its own hours, so the box may be left empty; without
+        // one it is the entry and has to be a number.
+        if (!timed && (!Number.isFinite(hours) || hours <= 0)) errors.hours = t.common.required;
         setFormErrors(errors);
         if (Object.keys(errors).length > 0) return;
 
         setSaving(true);
-        try {
+        await saveGuardingOverlap(async (allowOverlap) => {
             if (editing) {
                 await api.updateProjectTimeEntry(editing.id, {
                     workDate: form.workDate,
-                    hours,
+                    ...(timed ? {} : { hours }),
+                    // `''` is what clears a span; sending both is what sets one.
+                    startTime: form.startTime,
+                    endTime: form.endTime,
                     note: form.note.trim(),
+                    tagIds: form.tagIds,
+                    ...(allowOverlap ? { allowOverlap: true } : {}),
                 });
                 toast.success(hl.updated);
             } else {
                 await api.logProjectTime({
                     taskId: form.taskId,
                     workDate: form.workDate,
-                    hours,
+                    hours: timed ? (hours > 0 ? hours : 0.01) : hours,
+                    startTime: form.startTime || undefined,
+                    endTime: form.endTime || undefined,
                     note: form.note.trim() || undefined,
+                    tagIds: form.tagIds,
+                    ...(allowOverlap ? { allowOverlap: true } : {}),
                 });
                 toast.success(m.time.logged);
             }
             setFormOpen(false);
             await refresh();
-        } catch (error) {
-            const fallback = editing ? hl.updateFailed : hl.logFailed;
-            toast.error(error instanceof Error ? error.message : fallback);
-        } finally {
-            setSaving(false);
-        }
+        }, editing ? hl.updateFailed : hl.logFailed);
+        setSaving(false);
     };
 
     const confirmDelete = async () => {
@@ -251,100 +465,32 @@ export default function HourLogsPage() {
             toast.success(m.time.deleted);
             await refresh();
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : hl.deleteFailed);
+            toast.error(errorText(error, hl.deleteFailed));
         } finally {
             setPendingDelete(null);
         }
     };
 
-    const columns = useMemo(
-        () => [
-            {
-                id: 'work_date',
-                header: m.time.workDate,
-                accessorKey: 'work_date',
-                cell: ({ row }: { row: { original: HourLogRow } }) =>
-                    new Date(row.original.work_date).toLocaleDateString(),
-            },
-            {
-                id: 'task',
-                header: m.fields.tasks,
-                accessorFn: (row: HourLogRow) => row.task?.title ?? '',
-                cell: ({ row }: { row: { original: HourLogRow } }) =>
-                    row.original.task ? (
-                        <button
-                            type="button"
-                            className="text-start font-medium text-blue-600 hover:underline"
-                            onClick={() => setOpenTaskId(row.original.task!.id)}
-                        >
-                            {row.original.task.title}
-                        </button>
-                    ) : (
-                        '—'
-                    ),
-            },
-            {
-                id: 'project',
-                header: m.fields.project,
-                accessorFn: (row: HourLogRow) => row.project?.code ?? '',
-                meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: HourLogRow } }) =>
-                    row.original.project
-                        ? `${row.original.project.code} · ${row.original.project.name}`
-                        : '—',
-            },
-            {
-                id: 'person',
-                header: hl.person,
-                accessorFn: (row: HourLogRow) => personLabel(row, hl.unattributed),
-                meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: HourLogRow } }) =>
-                    personLabel(row.original, hl.unattributed),
-            },
-            {
-                id: 'hours',
-                header: m.time.hours,
-                accessorFn: (row: HourLogRow) => hoursOf(row),
-                cell: ({ row }: { row: { original: HourLogRow } }) => (
-                    <span className="font-medium tabular-nums">{hoursOf(row.original).toFixed(2)}</span>
-                ),
-            },
-            {
-                id: 'note',
-                header: m.time.note,
-                accessorFn: (row: HourLogRow) => row.note ?? '',
-                meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: HourLogRow } }) => row.original.note || '—',
-            },
-            {
-                id: 'actions',
-                header: m.fields.actions,
-                cell: ({ row }: { row: { original: HourLogRow } }) => (
-                    <div className="flex items-center justify-end gap-1">
-                        <button
-                            type="button"
-                            aria-label={hl.editEntry}
-                            title={hl.editEntry}
-                            onClick={() => openEdit(row.original)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
-                        >
-                            <Pencil className="mx-auto h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            aria-label={hl.deleteEntry}
-                            title={hl.deleteEntry}
-                            onClick={() => setPendingDelete(row.original)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                            <Trash2 className="mx-auto h-4 w-4" />
-                        </button>
-                    </div>
-                ),
-            },
-        ],
-        [m, hl],
-    );
+    const confirmOverlap = async () => {
+        const pending = pendingOverlap;
+        setPendingOverlap(null);
+        if (!pending) return;
+        try {
+            await pending.retry();
+        } catch (error) {
+            toast.error(errorText(error, hl.logFailed));
+        }
+    };
+
+    const toggleFormTag = (id: string) =>
+        setForm((f) => ({
+            ...f,
+            tagIds: f.tagIds.includes(id)
+                ? f.tagIds.filter((value) => value !== id)
+                : [...f.tagIds, id],
+        }));
+
+    const lastPage = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
     return (
         <PageShell>
@@ -358,19 +504,55 @@ export default function HourLogsPage() {
                     'projects',
                 )}
                 actions={
-                    <>
-                        <Link href={routes.projects.hourLogReport}>
-                            <Button variant="secondary" className="min-h-touch">
-                                <BarChart3 className="h-4 w-4" />
-                                {hl.openReport}
-                            </Button>
-                        </Link>
-                        <Button className="min-h-touch" onClick={openCreate}>
-                            <Plus className="h-4 w-4" />
-                            {hl.logHours}
+                    <Link href={routes.projects.hourLogReport}>
+                        <Button variant="secondary" className="min-h-touch">
+                            <BarChart3 className="h-4 w-4" />
+                            {hl.openReport}
                         </Button>
-                    </>
+                    </Link>
                 }
+            />
+
+            <HourLogCaptureBar
+                labels={{
+                    placeholder: hl.capturePlaceholder,
+                    // Deliberately not the same names the filters below carry:
+                    // two controls called "Project" on one screen, one choosing
+                    // what you are reading and one choosing what you are about
+                    // to log against, is ambiguous to anyone reading the labels
+                    // aloud and to anyone reading them at all.
+                    project: hl.captureProject,
+                    task: hl.captureTask,
+                    selectProject: m.task.selectProject,
+                    selectTask: hl.selectTask,
+                    selectProjectFirst: hl.selectProjectFirst,
+                    noTasks: hl.noTasks,
+                    tags: hl.tags,
+                    noTags: hl.noTags,
+                    start: hl.start,
+                    stop: hl.stop,
+                    discard: hl.discardTimer,
+                    log: hl.logHours,
+                    hours: m.time.hours,
+                    date: m.time.workDate,
+                    startTime: hl.startTime,
+                    endTime: hl.endTime,
+                    timerMode: hl.timerMode,
+                    manualMode: hl.manualMode,
+                    running: hl.running,
+                }}
+                projects={projects}
+                tasks={captureTasks}
+                tags={tags}
+                timer={timer}
+                busy={timerBusy}
+                projectId={captureProjectId}
+                onProjectChange={setCaptureProjectId}
+                onStart={startTimer}
+                onStop={stopTimer}
+                onDiscard={discardTimer}
+                onUpdateTimer={patchTimer}
+                onLogManual={logManual}
             />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -428,22 +610,82 @@ export default function HourLogsPage() {
                         </option>
                     ))}
                 </Select>
+                {tags.length > 0 ? (
+                    <Select
+                        value={tagId}
+                        onChange={(e) => setTagId(e.target.value)}
+                        className="md:w-40"
+                        aria-label={hl.tags}
+                    >
+                        <option value="">{hl.allTags}</option>
+                        {tags.map((tag) => (
+                            <option key={tag.id} value={tag.id}>
+                                {tag.name}
+                            </option>
+                        ))}
+                    </Select>
+                ) : null}
             </div>
 
             {!valid && <p className="text-sm text-red-600">{hl.rangeInvalid}</p>}
 
-            <DataTable
-                title={hl.title}
-                tableId="project-hour-logs"
-                columns={columns as never}
-                data={items}
-                isLoading={loading}
-                serverPagination={serverPagination}
-                // The box above queries the server; the built-in one would only
-                // sift the page already fetched, which reads as the same control.
-                showSearch={false}
-                emptyMessage={hl.empty}
+            <HourLogDayList
+                days={days}
+                dayTotals={dayTotals}
+                showPerson={showPerson}
+                loading={loading}
+                labels={{
+                    today: hl.today,
+                    yesterday: hl.yesterday,
+                    total: hl.total,
+                    addDescription: hl.addDescription,
+                    logAgain: hl.logAgain,
+                    editEntry: hl.editEntry,
+                    deleteEntry: hl.deleteEntry,
+                    expand: hl.expandGroup,
+                    collapse: hl.collapseGroup,
+                    // "Duration", not "Hours": the capture bar above already
+                    // owns that name for the box you type a figure into, and two
+                    // controls with one accessible name is a screen nobody can
+                    // navigate by label.
+                    hours: hl.duration,
+                    note: m.time.note,
+                    unattributed: hl.unattributed,
+                    empty: hl.empty,
+                    partialDay: hl.partialDay,
+                }}
+                onLogAgain={logAgain}
+                onEdit={openEdit}
+                onDelete={setPendingDelete}
+                onPatch={patchEntry}
+                onOpenTask={setOpenTaskId}
             />
+
+            {lastPage > 1 ? (
+                <nav className="flex items-center justify-between gap-3" aria-label={hl.title}>
+                    <p className="text-xs text-gray-500">
+                        {hl.pageOf.replace('{page}', String(page)).replace('{pages}', String(lastPage))}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="secondary"
+                            disabled={page <= 1}
+                            onClick={() => serverPagination.onPageChange(page - 1)}
+                            icon={<ChevronLeft className="h-4 w-4" />}
+                        >
+                            {hl.previous}
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            disabled={page >= lastPage}
+                            onClick={() => serverPagination.onPageChange(page + 1)}
+                        >
+                            {hl.next}
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </nav>
+            ) : null}
 
             {formOpen && (
                 <ModalShell onBackdropClick={() => setFormOpen(false)}>
@@ -531,9 +773,10 @@ export default function HourLogsPage() {
                                 </Field>
                                 <Field
                                     label={m.time.hours}
-                                    required
+                                    required={!(form.startTime && form.endTime)}
                                     htmlFor="hour-log-hours"
                                     error={formErrors.hours}
+                                    hint={form.startTime && form.endTime ? hl.hoursFromSpan : undefined}
                                 >
                                     <Input
                                         id="hour-log-hours"
@@ -542,6 +785,7 @@ export default function HourLogsPage() {
                                         max="24"
                                         step="0.25"
                                         value={form.hours}
+                                        disabled={Boolean(form.startTime && form.endTime)}
                                         error={Boolean(formErrors.hours)}
                                         onChange={(e) => {
                                             const value = e.target.value;
@@ -551,6 +795,51 @@ export default function HourLogsPage() {
                                     />
                                 </Field>
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Field label={hl.startTime} htmlFor="hour-log-start" hint={hl.spanHint}>
+                                    <Input
+                                        id="hour-log-start"
+                                        type="time"
+                                        value={form.startTime}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, startTime: e.target.value }))
+                                        }
+                                    />
+                                </Field>
+                                <Field label={hl.endTime} htmlFor="hour-log-end">
+                                    <Input
+                                        id="hour-log-end"
+                                        type="time"
+                                        value={form.endTime}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, endTime: e.target.value }))
+                                        }
+                                    />
+                                </Field>
+                            </div>
+                            {tags.length > 0 ? (
+                                <Field label={hl.tags}>
+                                    <ul className="flex flex-wrap gap-1.5">
+                                        {tags.map((tag) => {
+                                            const on = form.tagIds.includes(tag.id);
+                                            return (
+                                                <li key={tag.id}>
+                                                    <button
+                                                        type="button"
+                                                        aria-pressed={on}
+                                                        onClick={() => toggleFormTag(tag.id)}
+                                                        className={`min-h-touch rounded-md px-2 text-xs font-medium transition-opacity md:min-h-0 md:py-1 ${labelClass(tag.color)} ${
+                                                            on ? '' : 'opacity-40'
+                                                        }`}
+                                                    >
+                                                        {tag.name}
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </Field>
+                            ) : null}
                             <Field label={m.time.note} htmlFor="hour-log-note">
                                 <Input
                                     id="hour-log-note"
@@ -586,6 +875,16 @@ export default function HourLogsPage() {
                 danger
                 onConfirm={confirmDelete}
                 onCancel={() => setPendingDelete(null)}
+            />
+
+            <ConfirmDialog
+                open={pendingOverlap !== null}
+                title={hl.overlapTitle}
+                prompt={`${pendingOverlap?.message ?? ''}\n\n${hl.overlapPrompt}`}
+                confirmLabel={hl.overlapKeepBoth}
+                cancelLabel={t.common.cancel}
+                onConfirm={confirmOverlap}
+                onCancel={() => setPendingOverlap(null)}
             />
 
             {openTaskId && (

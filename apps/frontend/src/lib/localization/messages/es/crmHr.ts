@@ -1186,7 +1186,14 @@ export const crmHrMessages = {
             "submitting": "Guardando...",
             "submit": "Guardar registro"
         },
-        "punchesLink": "Fichajes"
+        "punchesLink": "Fichajes",
+        today: "Hoy",
+        yesterday: "Ayer",
+        worked: "Trabajado",
+        dayRecords: "{count} registros",
+        deleteTitle: "Eliminar registro de asistencia",
+        deleted: "Registro de asistencia eliminado",
+        workedHint: "El tiempo trabajado es la cifra registrada al escribir el día, no un recuento nuevo a partir de las horas de fichaje.",
     },
     "attendancePunches": {
         "title": "Fichajes",

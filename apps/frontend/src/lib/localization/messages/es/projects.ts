@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "Etiquetas de horas",
+
+        hint: "Clasifican una *hora*, no una tarea: «Facturable», «Soporte», «Retrabajo». Una lista aparte de las etiquetas de tareas, y el informe de horas puede totalizar por ella.",
+
+        empty: "Aún no hay etiquetas.",
+
+        add: "Añadir etiqueta",
+
+        namePlaceholder: "p. ej. Facturable",
+
+        untagged: "Quitada de {count} registro(s) de horas.",
+
+    },
+
     labels: {
         title: "Etiquetas",
         hint: "Compartidas entre todos los proyectos, para que la lista global de tareas y el tablero de sprint puedan filtrar por ellas.",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "Últimos 30 días",
         presetMonth: "Este mes",
         presetCustom: "Rango personalizado",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: '¿En qué estás trabajando?',
+        captureProject: 'Proyecto al que registrar',
+        captureTask: 'Tarea a la que registrar',
+        start: 'Iniciar',
+        stop: 'Detener',
+        running: 'Temporizador en marcha',
+        discardTimer: 'Descartar este temporizador',
+        timerMode: 'Medir con temporizador',
+        manualMode: 'Escribir las horas a mano',
+        startTime: 'Hora de inicio',
+        endTime: 'Hora de fin',
+        spanHint: 'Opcional. Indica ambas o ninguna. Un fin anterior al inicio significa que pasó de medianoche.',
+        hoursFromSpan: 'Calculadas a partir de las horas de inicio y fin.',
+        tags: 'Etiquetas',
+        allTags: 'Todas las etiquetas',
+        noTags: 'Aún no hay etiquetas. Añádelas en los ajustes de proyectos.',
+        today: 'Hoy',
+        yesterday: 'Ayer',
+        total: 'Total',
+        duration: 'Duración',
+        partialDay: 'mostrando {shown} de {total} ·',
+        addDescription: 'Añadir descripción',
+        logAgain: 'Volver a iniciar un temporizador para esto',
+        expandGroup: 'Mostrar las entradas de esta fila',
+        collapseGroup: 'Contraer estas entradas',
+        pageOf: 'Página {page} de {pages}',
+        previous: 'Anterior',
+        next: 'Siguiente',
+        timerStarted: 'Temporizador iniciado',
+        timerStartFailed: 'No se pudo iniciar el temporizador.',
+        timerStopFailed: 'No se pudo detener el temporizador.',
+        timerUpdateFailed: 'No se pudo actualizar el temporizador.',
+        timerDiscarded: 'Temporizador descartado. No se registró nada.',
+        timerDiscardedShort: 'Duró menos de un minuto, así que no se registró nada.',
+        timerAlreadyRunning: 'Ya hay un temporizador en marcha en «{task}». Deténlo primero.',
+        timerOverlapped: 'Esas horas se solapan con tiempo que ya registraste en «{task}».',
+        overlapTitle: 'Estas horas se solapan',
+        overlapPrompt: '¿Conservar ambas entradas de todos modos?',
+        overlapKeepBoth: 'Conservar ambas',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "Mes",
             user: "Persona",
             project: "Proyecto",
+            tag: "Etiqueta",
         },
         totalHours: "Total de horas",
         entries: "Registros",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "No se imputaron horas en este rango.",
         loadFailed: "No se pudo cargar el informe.",
         rangeHint: "Los totales cubren el trabajo fechado dentro del rango, con independencia de cuándo se registrara.",
+        multiTagged: "{count} entradas llevan más de una etiqueta, por lo que los porcentajes suman más del 100%.",
     },
 
     board: {

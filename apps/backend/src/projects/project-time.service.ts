@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
@@ -10,6 +10,34 @@ import {
     TimeReportQueryDto,
     UpdateTimeEntryDto,
 } from './project.dto';
+import {
+    buildSpan,
+    dhakaTimeOfDay,
+    type SpanError,
+    type TimeSpan,
+    spanTimes,
+} from './project-time-span.util';
+import { liveTagIds } from './project-time-tags.util';
+
+/** What a rejected span means, in words a shopkeeper can act on. */
+const SPAN_ERRORS: Record<SpanError, string> = {
+    HALF_SPAN: 'Give both a start and an end time, or neither.',
+    BAD_DATE: 'That work date is not a real day.',
+    BAD_TIME: 'Times must be given as HH:mm.',
+    ZERO_LENGTH:
+        'The start and end times are the same. Give an end time after the start, '
+        + 'or on the next morning for a sitting that ran past midnight.',
+};
+
+/**
+ * The rows the list and the report both hand back for a tag. Flattened out of
+ * the join so a client never has to unwrap `tags[].tag`.
+ */
+interface TagRow {
+    id: string;
+    name: string;
+    color: string;
+}
 
 /** What `prisma.groupBy` hands back, narrowed to the keys this file reads. */
 interface GroupedRow {
@@ -131,7 +159,15 @@ export class ProjectTimeService {
      */
     private async buildWhere(
         viewer: ProjectViewer,
-        query: { projectId?: string; taskId?: string; userId?: string; from?: string; to?: string; search?: string },
+        query: {
+            projectId?: string;
+            taskId?: string;
+            userId?: string;
+            tagId?: string;
+            from?: string;
+            to?: string;
+            search?: string;
+        },
     ): Promise<Record<string, unknown>> {
         const tenantId = viewer.tenantId;
         const where: Record<string, unknown> = {
@@ -144,6 +180,9 @@ export class ProjectTimeService {
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.taskId ? { task_id: query.taskId } : {}),
             ...(query.userId ? { user_id: query.userId } : {}),
+            // `some` rather than a join on the id, so an entry carrying three
+            // tags is matched by any one of them.
+            ...(query.tagId ? { tags: { some: { tag_id: query.tagId } } } : {}),
         };
         if (query.from || query.to) {
             where.work_date = {
@@ -183,6 +222,7 @@ export class ProjectTimeService {
                     user: { select: { id: true, name: true, email: true } },
                     task: { select: { id: true, title: true } },
                     project: { select: { id: true, code: true, name: true } },
+                    tags: { include: { tag: true } },
                 },
             }),
             this.db.projectTimeEntry.count({ where: where as never }),
@@ -192,7 +232,7 @@ export class ProjectTimeService {
         // five pagination keys, so anything extra would be dropped on the way
         // out. The totals strip comes from `report()`, which the page calls with
         // the same filters.
-        return paginate(items, total, page, limit);
+        return paginate(items.map((item) => this.present(item)), total, page, limit);
     }
 
     /**
@@ -220,6 +260,15 @@ export class ProjectTimeService {
         });
         if (!task) throw new NotFoundException('Task not found');
 
+        const span = this.resolveSpan(dto.workDate, dto.startTime, dto.endTime);
+        // With a span present the hours are derived, never taken from the
+        // client: two figures for the same sitting is one figure too many, and
+        // the one a person can see on the row has to be the one that is stored.
+        const hours = span ? span.hours : dto.hours;
+        if (span && !dto.allowOverlap) await this.assertNoOverlap(viewer, span, null);
+
+        const tagIds = await this.liveTagIds(tenantId, dto.tagIds);
+
         const entry = await this.db.projectTimeEntry.create({
             data: {
                 tenant_id: tenantId,
@@ -227,14 +276,32 @@ export class ProjectTimeService {
                 project_id: task.project_id,
                 user_id: userId,
                 work_date: new Date(dto.workDate),
-                hours: dto.hours,
+                hours,
+                started_at: span?.startedAt ?? null,
+                ended_at: span?.endedAt ?? null,
                 note: dto.note?.trim() || null,
+                ...(tagIds.length
+                    ? {
+                          tags: {
+                              create: tagIds.map((tagId) => ({
+                                  tenant_id: tenantId,
+                                  tag_id: tagId,
+                              })),
+                          },
+                      }
+                    : {}),
+            },
+            include: {
+                user: { select: { id: true, name: true, email: true } },
+                task: { select: { id: true, title: true } },
+                project: { select: { id: true, code: true, name: true } },
+                tags: { include: { tag: true } },
             },
         });
 
         const previous = task.remaining_hours == null ? null : Number(task.remaining_hours);
         const next =
-            dto.remainingHours ?? RemainingHoursService.suggestAfterTimeLog(previous, dto.hours);
+            dto.remainingHours ?? RemainingHoursService.suggestAfterTimeLog(previous, hours);
 
         await this.remaining.write({
             tenantId,
@@ -254,9 +321,14 @@ export class ProjectTimeService {
             userId,
         });
 
-        return entry;
+        return this.present(entry);
     }
 
+    /**
+     * The inline edits the day list makes are all here: hours, note, the span,
+     * the tags. Each field is independently optional, so a row that only
+     * changes its note does not have to resend times it never showed.
+     */
     async update(viewer: ProjectViewer, entryId: string, dto: UpdateTimeEntryDto) {
         const entry = await this.db.projectTimeEntry.findFirst({
             where: {
@@ -264,17 +336,77 @@ export class ProjectTimeService {
                 tenant_id: viewer.tenantId,
                 ...(await this.access.relatedFilter(viewer)),
             } as never,
-            select: { id: true },
+            select: {
+                id: true,
+                work_date: true,
+                started_at: true,
+                ended_at: true,
+            },
         });
         if (!entry) throw new NotFoundException('Time entry not found');
 
-        return this.db.projectTimeEntry.update({
-            where: { id: entryId },
-            data: {
-                ...(dto.workDate !== undefined ? { work_date: new Date(dto.workDate) } : {}),
-                ...(dto.hours !== undefined ? { hours: dto.hours } : {}),
-                ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
-            },
+        const span = this.resolveUpdatedSpan(entry, dto);
+        if (span.value && !dto.allowOverlap) {
+            await this.assertNoOverlap(viewer, span.value, entryId);
+        }
+
+        // A timed entry's hours are *derived* from its span, so accepting a
+        // bare figure here would leave a row reading "13:45 – 18:08" beside
+        // "2h" — two claims about one sitting, with nothing on screen saying
+        // which is true. Changing the times, or clearing them, is how a timed
+        // entry's duration moves.
+        if (dto.hours !== undefined && !span.changed && entry.started_at) {
+            throw new BadRequestException(
+                'This entry runs to a clock. Change its start and end times, or clear them, '
+                + 'to change how long it was.',
+            );
+        }
+
+        const tagIds = dto.tagIds === undefined
+            ? null
+            : await this.liveTagIds(viewer.tenantId, dto.tagIds);
+
+        return this.db.$transaction(async (tx) => {
+            if (tagIds !== null) {
+                // Replaced wholesale rather than diffed: the client sends the
+                // set it wants, and `[]` has to be able to mean "none left".
+                await tx.projectTimeEntryTag.deleteMany({ where: { entry_id: entryId } });
+                if (tagIds.length) {
+                    await tx.projectTimeEntryTag.createMany({
+                        data: tagIds.map((tagId) => ({
+                            tenant_id: viewer.tenantId,
+                            entry_id: entryId,
+                            tag_id: tagId,
+                        })),
+                    });
+                }
+            }
+
+            const updated = await tx.projectTimeEntry.update({
+                where: { id: entryId },
+                data: {
+                    ...(dto.workDate !== undefined ? { work_date: new Date(dto.workDate) } : {}),
+                    // A span wins over a typed figure for the same reason it
+                    // does on create — but a bare `hours` with no span is still
+                    // the ordinary way an entry is corrected.
+                    ...(span.changed
+                        ? {
+                              started_at: span.value?.startedAt ?? null,
+                              ended_at: span.value?.endedAt ?? null,
+                              ...(span.value ? { hours: span.value.hours } : {}),
+                          }
+                        : {}),
+                    ...(dto.hours !== undefined && !span.value ? { hours: dto.hours } : {}),
+                    ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
+                },
+                include: {
+                    user: { select: { id: true, name: true, email: true } },
+                    task: { select: { id: true, title: true } },
+                    project: { select: { id: true, code: true, name: true } },
+                    tags: { include: { tag: true } },
+                },
+            });
+            return this.present(updated);
         });
     }
 
@@ -319,6 +451,106 @@ export class ProjectTimeService {
         }
 
         return { success: true };
+    }
+
+    // ── Spans, overlaps and tags ───────────────────────────────────────────
+
+    /** A rejected span is a 400 with the reason, not a silent drop. */
+    private resolveSpan(
+        workDate: string,
+        startTime: string | null | undefined,
+        endTime: string | null | undefined,
+    ): TimeSpan | null {
+        const result = buildSpan(workDate, startTime, endTime);
+        if (result.error) throw new BadRequestException(SPAN_ERRORS[result.error]);
+        return result.span;
+    }
+
+    /**
+     * What a PATCH means for the span, which is the one field with three
+     * possible intents rather than two: leave it alone (neither time sent),
+     * clear it (`''`), or set it (one or both times sent, the other falling
+     * back to what is already stored).
+     *
+     * The fallback is what makes "drag the end time later" a one-field save:
+     * without it, editing an end would silently wipe the start.
+     */
+    private resolveUpdatedSpan(
+        entry: { work_date: Date; started_at: Date | null; ended_at: Date | null },
+        dto: UpdateTimeEntryDto,
+    ): { changed: boolean; value: TimeSpan | null } {
+        if (dto.startTime === undefined && dto.endTime === undefined) {
+            return { changed: false, value: null };
+        }
+        if (dto.startTime === '' || dto.endTime === '') {
+            return { changed: true, value: null };
+        }
+
+        const workDate = (dto.workDate ?? entry.work_date.toISOString()).slice(0, 10);
+        const start = dto.startTime
+            ?? (entry.started_at ? dhakaTimeOfDay(entry.started_at) : undefined);
+        const end = dto.endTime
+            ?? (entry.ended_at ? dhakaTimeOfDay(entry.ended_at) : undefined);
+        return { changed: true, value: this.resolveSpan(workDate, start, end) };
+    }
+
+    /**
+     * Refuses a span that covers a minute this person has already logged.
+     *
+     * Scoped to the caller's own entries: two people working the same hour is
+     * the normal case, and only one person can be in two places at once. Only
+     * entries that *have* a span can clash — an afternoon typed as "4 hours"
+     * makes no claim about which four, so there is nothing to contradict.
+     */
+    private async assertNoOverlap(
+        viewer: ProjectViewer,
+        span: TimeSpan,
+        excludeId: string | null,
+    ): Promise<void> {
+        if (!viewer.userId) return;
+        const clash = await this.db.projectTimeEntry.findFirst({
+            where: {
+                tenant_id: viewer.tenantId,
+                user_id: viewer.userId,
+                ...(excludeId ? { id: { not: excludeId } } : {}),
+                started_at: { not: null, lt: span.endedAt },
+                ended_at: { gt: span.startedAt },
+            },
+            select: { id: true, task: { select: { title: true } } },
+        });
+        if (!clash) return;
+        throw new ConflictException(
+            `Those hours overlap time you already logged${
+                clash.task?.title ? ` on "${clash.task.title}"` : ''
+            }. Adjust the times, or resend with allowOverlap to keep both.`,
+        );
+    }
+
+    private liveTagIds(tenantId: string, ids: string[] | undefined) {
+        return liveTagIds(this.db, tenantId, ids);
+    }
+
+    /**
+     * The row shape every write and the list hand back: the stored entry, plus
+     * the two `HH:mm` strings its span reads as and its tags unwrapped out of
+     * the join. Both are derived here rather than in the client so no screen
+     * has to do timezone arithmetic or know the join table exists.
+     */
+    private present<T extends {
+        started_at?: Date | null;
+        ended_at?: Date | null;
+        tags?: { tag: { id: string; name: string; color: string } }[];
+    }>(entry: T) {
+        const { tags, ...rest } = entry;
+        return {
+            ...rest,
+            ...spanTimes(entry.started_at, entry.ended_at),
+            tags: (tags ?? []).map((row): TagRow => ({
+                id: row.tag.id,
+                name: row.tag.name,
+                color: row.tag.color,
+            })),
+        };
     }
 
     /**
@@ -370,12 +602,20 @@ export class ProjectTimeService {
             0,
         );
 
-        const rows = await this.buildReportRows(tenantId, groupBy, {
-            byTask,
-            byUser,
-            byProject,
-            byDate,
-        });
+        const rows = await this.buildReportRows(
+            tenantId,
+            groupBy,
+            { byTask, byUser, byProject, byDate },
+            where,
+        );
+
+        // Only when the tag dimension is on screen: an entry may carry several
+        // tags, so the rows below deliberately double-count it and the shares
+        // can add to more than 100%. Saying how many entries do that is the
+        // difference between a report that is wrong and one that is honest
+        // about what it is measuring.
+        const multiTagged =
+            groupBy === TimeReportGroupByDto.TAG ? await this.countMultiTagged(where) : null;
 
         // Share is of the filtered total, so the column always adds to 100%
         // regardless of which dimension is on screen.
@@ -383,12 +623,15 @@ export class ProjectTimeService {
             ...row,
             share: totalHours > 0 ? round2((row.hours / totalHours) * 100) : 0,
         }));
-        withShare.sort((a, b) =>
+        // Named dimensions read biggest-first; calendar ones read in calendar
+        // order, where "the largest week" is not a question anybody asks.
+        const byMagnitude =
             groupBy === TimeReportGroupByDto.TASK
             || groupBy === TimeReportGroupByDto.USER
             || groupBy === TimeReportGroupByDto.PROJECT
-                ? b.hours - a.hours
-                : a.key.localeCompare(b.key),
+            || groupBy === TimeReportGroupByDto.TAG;
+        withShare.sort((a, b) =>
+            byMagnitude ? b.hours - a.hours : a.key.localeCompare(b.key),
         );
 
         return {
@@ -405,7 +648,77 @@ export class ProjectTimeService {
                 avgHoursPerDay: byDate.length > 0 ? round2(totalHours / byDate.length) : 0,
             },
             rows: withShare,
+            ...(multiTagged === null ? {} : { multiTaggedEntries: multiTagged }),
         };
+    }
+
+    /**
+     * Hours per tag, plus an explicit **Untagged** row.
+     *
+     * One aggregate per tag rather than one grouped query, because Prisma
+     * cannot sum a column on the entry while grouping the join table, and
+     * rewriting the filter as SQL would give this report a second, drifting
+     * copy of `buildWhere` — the one thing that builder exists to prevent. The
+     * cost is bounded by the size of the tag vocabulary (a handful of rows),
+     * not by the number of hours in the range.
+     *
+     * The untagged row is not optional: a tag report that quietly omitted the
+     * hours nobody classified would show a total that disagrees with every
+     * other grouping of the same range.
+     */
+    private async tagRows(
+        tenantId: string,
+        where: Record<string, unknown>,
+    ): Promise<ReportRow[]> {
+        const tags = await this.db.projectTimeTag.findMany({
+            where: { tenant_id: tenantId },
+            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        });
+
+        const tagged = await Promise.all(
+            tags.map(async (tag: { id: string; name: string }) => {
+                const totals = await this.db.projectTimeEntry.aggregate({
+                    where: { ...where, tags: { some: { tag_id: tag.id } } } as never,
+                    _sum: { hours: true },
+                    _count: { _all: true },
+                });
+                return {
+                    key: tag.id,
+                    label: tag.name,
+                    sublabel: null,
+                    hours: round2(Number(totals._sum?.hours ?? 0)),
+                    entries: totals._count?._all ?? 0,
+                };
+            }),
+        );
+
+        const untagged = await this.db.projectTimeEntry.aggregate({
+            where: { ...where, tags: { none: {} } } as never,
+            _sum: { hours: true },
+            _count: { _all: true },
+        });
+
+        const rows = tagged.filter((row) => row.entries > 0);
+        if ((untagged._count?._all ?? 0) > 0) {
+            rows.push({
+                key: 'untagged',
+                label: 'Untagged',
+                sublabel: null,
+                hours: round2(Number(untagged._sum?.hours ?? 0)),
+                entries: untagged._count?._all ?? 0,
+            });
+        }
+        return rows;
+    }
+
+    /** How many entries in the filtered set carry more than one tag. */
+    private async countMultiTagged(where: Record<string, unknown>): Promise<number> {
+        const rows = await this.db.projectTimeEntryTag.groupBy({
+            by: ['entry_id'],
+            where: { entry: where } as never,
+            having: { entry_id: { _count: { gt: 1 } } },
+        });
+        return (rows as unknown[]).length;
     }
 
     /**
@@ -454,7 +767,10 @@ export class ProjectTimeService {
             byProject: GroupedRow[];
             byDate: GroupedRow[];
         },
+        where: Record<string, unknown>,
     ): Promise<ReportRow[]> {
+        if (groupBy === TimeReportGroupByDto.TAG) return this.tagRows(tenantId, where);
+
         if (groupBy === TimeReportGroupByDto.TASK) {
             const ids = grouped.byTask.map((row) => row.task_id as string).filter(Boolean);
             const tasks = ids.length

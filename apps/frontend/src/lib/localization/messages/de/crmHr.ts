@@ -1186,7 +1186,14 @@ export const crmHrMessages = {
             "submitting": "Wird gespeichert...",
             "submit": "Datensatz speichern"
         },
-        "punchesLink": "Ein-/Ausstempelungen"
+        "punchesLink": "Ein-/Ausstempelungen",
+        today: "Heute",
+        yesterday: "Gestern",
+        worked: "Gearbeitet",
+        dayRecords: "{count} Einträge",
+        deleteTitle: "Anwesenheitseintrag löschen",
+        deleted: "Anwesenheitseintrag gelöscht",
+        workedHint: "Die Arbeitszeit ist der beim Schreiben des Tages erfasste Wert, keine neue Berechnung aus den Stempelzeiten.",
     },
     "attendancePunches": {
         "title": "Ein-/Ausstempelungen",

@@ -10,6 +10,7 @@ import {
     IsOptional,
     IsString,
     IsUUID,
+    Matches,
     Max,
     MaxLength,
     Min,
@@ -427,6 +428,13 @@ export class ReorderChecklistDto {
     itemIds!: string[];
 }
 
+/**
+ * `HH:mm`, 24-hour. Deliberately not `IsDateString`: the client is stating a
+ * time of day against a work date it has already sent, and letting it post a
+ * full timestamp would let the two disagree about which day the hours land on.
+ */
+const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export class CreateTimeEntryDto {
     @IsUUID()
     taskId!: string;
@@ -434,8 +442,37 @@ export class CreateTimeEntryDto {
     @IsDateString()
     workDate!: string;
 
+    /**
+     * Required even when a span is given, because the client cannot be the one
+     * to decide what a span is worth. With both ends present the service
+     * overwrites this with the derived figure; on its own it is the entry.
+     */
     @Type(() => Number) @IsNumber() @Min(0.01) @Max(24)
     hours!: number;
+
+    /**
+     * Optional wall-clock span, as `HH:mm` on `workDate`. Both or neither —
+     * `assertSpan` rejects half a span rather than storing something no screen
+     * can render. An end before the start is read as crossing midnight.
+     */
+    @IsOptional() @Matches(TIME_OF_DAY)
+    startTime?: string;
+
+    @IsOptional() @Matches(TIME_OF_DAY)
+    endTime?: string;
+
+    /**
+     * Overlap is refused by default and this is the way past it. Deliberately
+     * an explicit flag rather than a silent allowance: two spans over the same
+     * minute is nearly always a mistake, but "nearly" is why editing a bad
+     * entry must not be able to trap someone.
+     */
+    @IsOptional() @IsBoolean() @Type(() => Boolean)
+    allowOverlap?: boolean;
+
+    /** Replaces the entry's tags wholesale. `[]` clears them. */
+    @IsOptional() @IsArray() @IsUUID('4', { each: true })
+    tagIds?: string[];
 
     @IsOptional() @IsString() @MaxLength(500)
     note?: string;
@@ -455,6 +492,24 @@ export class UpdateTimeEntryDto {
 
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01) @Max(24)
     hours?: number;
+
+    /**
+     * `''` clears the span, the way `''` clears an optional relation elsewhere
+     * in this file — PATCH reads `undefined` as "leave alone", so only an empty
+     * string can mean "there is no span". `@ValidateIf` is what lets it past
+     * the pattern, exactly as the assignee fields do.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @Matches(TIME_OF_DAY)
+    startTime?: string;
+
+    @IsOptional() @ValidateIf((_, value) => value !== '') @Matches(TIME_OF_DAY)
+    endTime?: string;
+
+    @IsOptional() @IsBoolean() @Type(() => Boolean)
+    allowOverlap?: boolean;
+
+    @IsOptional() @IsArray() @IsUUID('4', { each: true })
+    tagIds?: string[];
 
     @IsOptional() @IsString() @MaxLength(500)
     note?: string;
@@ -483,6 +538,9 @@ export class ListTimeEntriesDto {
     /** Matches the task title or the entry's note. */
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
+
+    @IsOptional() @IsUUID()
+    tagId?: string;
 
     /**
      * A table column id. Unknown ones fall back to the work date rather than
@@ -514,6 +572,7 @@ export enum TimeReportGroupByDto {
     MONTH = 'month',
     USER = 'user',
     PROJECT = 'project',
+    TAG = 'tag',
 }
 
 export class TimeReportQueryDto {
@@ -533,11 +592,57 @@ export class TimeReportQueryDto {
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
 
+    @IsOptional() @IsUUID()
+    tagId?: string;
+
     @IsDateString()
     from!: string;
 
     @IsDateString()
     to!: string;
+}
+
+
+export class StartTimerDto {
+    @IsUUID()
+    taskId!: string;
+
+    @IsOptional() @IsString() @MaxLength(500)
+    note?: string;
+
+    @IsOptional() @IsArray() @IsUUID('4', { each: true })
+    tagIds?: string[];
+}
+
+/** Everything a running timer can be edited to while it runs, except its start. */
+export class UpdateTimerDto {
+    @IsOptional() @IsString() @MaxLength(500)
+    note?: string;
+
+    @IsOptional() @IsArray() @IsUUID('4', { each: true })
+    tagIds?: string[];
+}
+
+export class StopTimerDto {
+    /**
+     * The re-estimate to carry onto the task, same meaning as on a manual log.
+     */
+    @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
+    remainingHours?: number;
+
+    @IsOptional() @IsString() @MaxLength(500)
+    note?: string;
+}
+
+export class TimeTagDto {
+    @IsString() @MinLength(1) @MaxLength(40)
+    name!: string;
+
+    @IsOptional() @IsEnum(ProjectLabelColorDto)
+    color?: ProjectLabelColorDto;
+
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+    sortOrder?: number;
 }
 
 export class CreateSprintDto {

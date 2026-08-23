@@ -35,23 +35,30 @@ export default function ProjectSettingsPage() {
     const [types, setTypes] = useState<ProjectType[]>([]);
     const [columns, setColumns] = useState<TaskStatus[]>([]);
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
+    const [timeTags, setTimeTags] = useState<ProjectLabel[]>([]);
     const [typeName, setTypeName] = useState('');
     const [column, setColumn] = useState({ name: '', category: 'TODO' });
     const [label, setLabel] = useState<{ name: string; color: ProjectLabelColor }>({
         name: '',
         color: 'BLUE',
     });
+    const [timeTag, setTimeTag] = useState<{ name: string; color: ProjectLabelColor }>({
+        name: '',
+        color: 'EMERALD',
+    });
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
-        const [typeList, columnList, labelList] = await Promise.all([
+        const [typeList, columnList, labelList, tagList] = await Promise.all([
             api.getProjectTypes(true),
             api.getProjectTaskStatuses(true),
             api.getProjectLabels(),
+            api.getProjectTimeTags(),
         ]);
         setTypes(Array.isArray(typeList) ? typeList : []);
         setColumns(Array.isArray(columnList) ? columnList : []);
         setLabels(Array.isArray(labelList) ? labelList : []);
+        setTimeTags(Array.isArray(tagList) ? tagList : []);
     }, []);
 
     useEffect(() => {
@@ -111,6 +118,26 @@ export default function ProjectSettingsPage() {
             const result = (await api.deleteProjectLabel(target.id)) as { untagged?: number };
             if (result?.untagged) {
                 toast.info(m.labels.untagged.replace('{count}', String(result.untagged)));
+            }
+        });
+
+    const addTimeTag = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!timeTag.name.trim()) return;
+        run(
+            () => api.createProjectTimeTag({ name: timeTag.name.trim(), color: timeTag.color }),
+            () => setTimeTag({ name: '', color: 'EMERALD' }),
+        );
+    };
+
+    // Deleted rather than refused even when hours carry it, same as a label:
+    // retiring "Billable" should not mean untagging six months of afternoons
+    // first. The count of hours that lose it comes back so we can say so.
+    const removeTimeTag = (target: ProjectLabel) =>
+        run(async () => {
+            const result = (await api.deleteProjectTimeTag(target.id)) as { untagged?: number };
+            if (result?.untagged) {
+                toast.info(m.timeTags.untagged.replace('{count}', String(result.untagged)));
             }
         });
 
@@ -253,6 +280,96 @@ export default function ProjectSettingsPage() {
                     <Button type="submit" disabled={busy || !label.name.trim()} className="min-h-touch">
                         <Plus className="h-4 w-4" />
                         {m.labels.add}
+                    </Button>
+                </form>
+            </section>
+
+            <section className="rounded-md border border-gray-200 bg-white">
+                <div className="border-b border-gray-200 px-3 py-2">
+                    <h2 className="text-sm font-medium">{m.timeTags.title}</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">{m.timeTags.hint}</p>
+                </div>
+
+                {timeTags.length === 0 ? (
+                    <p className="px-3 py-4 text-sm text-gray-500">{m.timeTags.empty}</p>
+                ) : (
+                    <ul className="divide-y divide-gray-200">
+                        {timeTags.map((item) => (
+                            <li
+                                key={item.id}
+                                className="flex min-h-touch flex-wrap items-center gap-2 px-3 py-2"
+                            >
+                                <span
+                                    className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${labelClass(item.color)}`}
+                                >
+                                    {item.name}
+                                </span>
+                                <Select
+                                    aria-label={`${m.labels.color} — ${item.name}`}
+                                    value={item.color}
+                                    disabled={busy}
+                                    className="w-36"
+                                    onChange={(e) =>
+                                        run(() =>
+                                            api.updateProjectTimeTag(item.id, {
+                                                color: e.target.value,
+                                            }),
+                                        )
+                                    }
+                                >
+                                    {LABEL_COLORS.map((color) => (
+                                        <option key={color} value={color}>
+                                            {m.labels.colors[color]}
+                                        </option>
+                                    ))}
+                                </Select>
+                                <span className="flex-1" />
+                                <button
+                                    type="button"
+                                    aria-label={`${t.common.delete} ${item.name}`}
+                                    className="min-h-touch px-2 text-red-600 disabled:opacity-40"
+                                    disabled={busy}
+                                    onClick={() => removeTimeTag(item)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                <form
+                    onSubmit={addTimeTag}
+                    className="flex flex-col gap-2 border-t border-gray-200 p-3 md:flex-row"
+                >
+                    <Input
+                        value={timeTag.name}
+                        onChange={(e) => setTimeTag((p) => ({ ...p, name: e.target.value }))}
+                        placeholder={m.timeTags.namePlaceholder}
+                        aria-label={m.timeTags.add}
+                        className="md:max-w-xs"
+                    />
+                    <Select
+                        aria-label={`${m.labels.color} — ${m.timeTags.title}`}
+                        value={timeTag.color}
+                        onChange={(e) =>
+                            setTimeTag((p) => ({ ...p, color: e.target.value as ProjectLabelColor }))
+                        }
+                        className="md:w-44"
+                    >
+                        {LABEL_COLORS.map((color) => (
+                            <option key={color} value={color}>
+                                {m.labels.colors[color]}
+                            </option>
+                        ))}
+                    </Select>
+                    <Button
+                        type="submit"
+                        disabled={busy || !timeTag.name.trim()}
+                        className="min-h-touch"
+                    >
+                        <Plus className="h-4 w-4" />
+                        {m.timeTags.add}
                     </Button>
                 </form>
             </section>

@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "घंटा-लॉग टैग",
+
+        hint: "ये *घंटे* को वर्गीकृत करते हैं, कार्य को नहीं — \"बिल योग्य\", \"सपोर्ट\", \"दोबारा काम\"। लेबल से अलग सूची, और घंटा-लॉग रिपोर्ट इसी से जोड़ सकती है।",
+
+        empty: "अभी कोई टैग नहीं।",
+
+        add: "टैग जोड़ें",
+
+        namePlaceholder: "जैसे बिल योग्य",
+
+        untagged: "{count} घंटा-लॉग से हटाया गया।",
+
+    },
+
     labels: {
         title: "लेबल",
         hint: "हर परियोजना में साझा, ताकि वर्कस्पेस-व्यापी कार्य सूची और स्प्रिंट बोर्ड इन पर फ़िल्टर कर सकें।",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "पिछले 30 दिन",
         presetMonth: "इस महीने",
         presetCustom: "कस्टम सीमा",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'आप किस पर काम कर रहे हैं?',
+        captureProject: 'किस प्रोजेक्ट पर दर्ज करें',
+        captureTask: 'किस कार्य पर दर्ज करें',
+        start: 'शुरू करें',
+        stop: 'रोकें',
+        running: 'टाइमर चल रहा है',
+        discardTimer: 'यह टाइमर हटाएँ',
+        timerMode: 'टाइमर से समय लें',
+        manualMode: 'घंटे हाथ से भरें',
+        startTime: 'शुरू का समय',
+        endTime: 'खत्म का समय',
+        spanHint: 'वैकल्पिक। दोनों दें या कोई नहीं। शुरू से पहले का अंत मतलब आधी रात पार हो गई।',
+        hoursFromSpan: 'शुरू और खत्म के समय से निकाले गए।',
+        tags: 'टैग',
+        allTags: 'सभी टैग',
+        noTags: 'अभी कोई टैग नहीं। प्रोजेक्ट सेटिंग्स में जोड़ें।',
+        today: 'आज',
+        yesterday: 'कल',
+        total: 'कुल',
+        duration: 'अवधि',
+        partialDay: '{total} में से {shown} दिख रहे हैं ·',
+        addDescription: 'विवरण जोड़ें',
+        logAgain: 'इसके लिए फिर से टाइमर चलाएँ',
+        expandGroup: 'इस पंक्ति की प्रविष्टियाँ दिखाएँ',
+        collapseGroup: 'ये प्रविष्टियाँ छिपाएँ',
+        pageOf: 'पृष्ठ {page} / {pages}',
+        previous: 'पिछला',
+        next: 'अगला',
+        timerStarted: 'टाइमर शुरू हुआ',
+        timerStartFailed: 'टाइमर शुरू नहीं हो सका।',
+        timerStopFailed: 'टाइमर रोका नहीं जा सका।',
+        timerUpdateFailed: 'टाइमर अपडेट नहीं हो सका।',
+        timerDiscarded: 'टाइमर हटा दिया गया। कुछ भी दर्ज नहीं हुआ।',
+        timerDiscardedShort: 'यह एक मिनट से कम चला, इसलिए कुछ दर्ज नहीं हुआ।',
+        timerAlreadyRunning: '"{task}" पर पहले से टाइमर चल रहा है। पहले उसे रोकें।',
+        timerOverlapped: 'ये घंटे "{task}" पर पहले दर्ज समय से टकरा रहे हैं।',
+        overlapTitle: 'ये घंटे आपस में टकरा रहे हैं',
+        overlapPrompt: 'फिर भी दोनों प्रविष्टियाँ रखें?',
+        overlapKeepBoth: 'दोनों रखें',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "महीना",
             user: "व्यक्ति",
             project: "परियोजना",
+            tag: "टैग",
         },
         totalHours: "कुल घंटे",
         entries: "प्रविष्टियाँ",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "इस सीमा में कोई घंटा दर्ज नहीं हुआ।",
         loadFailed: "रिपोर्ट लोड नहीं हो सकी।",
         rangeHint: "कुल में सीमा के भीतर की तिथि वाला काम शामिल है, चाहे वह कभी भी दर्ज हुआ हो।",
+        multiTagged: "{count} प्रविष्टियों पर एक से अधिक टैग हैं, इसलिए हिस्से मिलकर 100% से ज़्यादा होते हैं।",
     },
 
     board: {
