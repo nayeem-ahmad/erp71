@@ -21,6 +21,7 @@ import GoogleSignInButton from '@/components/GoogleSignInButton';
 import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
+import { useHydrated } from '@/hooks/useHydrated';
 
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
@@ -79,6 +80,8 @@ function SignupPageContent() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [googleAvailable, setGoogleAvailable] = useState(false);
     const [mobileAvailable, setMobileAvailable] = useState(false);
+    // Guards against a native form submit before React hydrates — see useHydrated.
+    const hydrated = useHydrated();
     const [error, setError] = useState<string | null>(null);
     const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [referralDiscount, setReferralDiscount] = useState<number | null>(null);
@@ -434,8 +437,8 @@ function SignupPageContent() {
                         </p>
 
                         <div className="md:col-span-2">
-                            <button type="submit" disabled={isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group">
-                                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>{t.auth.signup.submit}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" /></>}
+                            <button type="submit" disabled={!hydrated || isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group">
+                                {isLoading || !hydrated ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>{t.auth.signup.submit}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" /></>}
                             </button>
                         </div>
                     </form>

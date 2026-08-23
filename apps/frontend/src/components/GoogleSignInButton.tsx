@@ -102,6 +102,10 @@ export default function GoogleSignInButton({
 }: GoogleSignInButtonProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [ready, setReady] = useState(false);
+    // Fetching the config and loading Google's script takes seconds on a cold
+    // cache, and rendering nothing in the meantime reads as "this deployment has
+    // no Google sign-in". A placeholder says "still loading" instead.
+    const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
     // Held in a ref so re-rendering the page (e.g. typing in a form field)
     // doesn't re-initialize Google with a stale callback.
     const onCredentialRef = useRef(onCredential);
@@ -137,12 +141,18 @@ export default function GoogleSignInButton({
             // button that can only fail.
             const available = !!config?.enabled && !!config?.client_id;
             onAvailabilityChangeRef.current?.(available);
-            if (!available) return;
+            if (!available) {
+                setStatus('unavailable');
+                return;
+            }
 
             try {
                 await loadGsiScript();
             } catch {
-                if (!cancelled) onErrorRef.current?.('Could not load Google sign-in. Please try again.');
+                if (!cancelled) {
+                    setStatus('unavailable');
+                    onErrorRef.current?.('Could not load Google sign-in. Please try again.');
+                }
                 return;
             }
 
@@ -169,6 +179,7 @@ export default function GoogleSignInButton({
                 width: Math.min(container.offsetWidth || MAX_BUTTON_WIDTH, MAX_BUTTON_WIDTH),
             });
             setReady(true);
+            setStatus('ready');
         })();
 
         return () => {
@@ -178,6 +189,12 @@ export default function GoogleSignInButton({
 
     return (
         <div className="relative">
+            {status === 'loading' && (
+                <div
+                    aria-hidden
+                    className="h-11 w-full animate-pulse rounded-md border border-gray-200 bg-gray-50"
+                />
+            )}
             {/* Google's iframe ignores pointer-events on itself, so an overlay is
                 the only way to block a second click while the first is in flight. */}
             <div ref={containerRef} className="flex justify-center [color-scheme:light]" />
