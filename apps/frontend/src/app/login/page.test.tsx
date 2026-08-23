@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import LoginPage from './page';
 
 const pushMock = jest.fn();
@@ -121,5 +122,33 @@ describe('Login UI Authentication Mapping', () => {
 
     expect(localStorage.getItem('tenant_id')).toBe('tenant-1');
     expect(localStorage.getItem('store_id')).toBe('store-1');
+  });
+
+  /**
+   * Regression: the login markup is server-rendered, so the form is visible and
+   * typable for as long as it takes the bundle to hydrate — measured at ~7s on a
+   * cold cache over a slow mobile connection. A click in that window never
+   * reaches the React `onSubmit`, so `preventDefault()` never runs and the
+   * browser natively submits the (action-less) form: the page reloads and the
+   * typed credentials are wiped. Shipping the button disabled closes the gap.
+   */
+  it('server-renders the submit buttons disabled so a pre-hydration click cannot reload the page', () => {
+    const html = renderToString(<LoginPage />);
+    const submitButtons = html.match(/<button[^>]*type="submit"[^>]*>/g) ?? [];
+
+    expect(submitButtons.length).toBeGreaterThan(0);
+    for (const button of submitButtons) {
+      // The `disabled=""` attribute specifically — the className carries
+      // Tailwind `disabled:` variants, so a substring check would always pass.
+      expect(button).toMatch(/\sdisabled=""/);
+    }
+  });
+
+  it('enables the submit button once hydrated', async () => {
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /sign in/i })).not.toBeDisabled();
+    });
   });
 });

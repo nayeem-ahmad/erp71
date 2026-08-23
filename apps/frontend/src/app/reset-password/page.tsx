@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, ArrowLeft, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useHydrated } from '@/hooks/useHydrated';
 
 const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
@@ -19,6 +20,8 @@ function ResetPasswordContent() {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    // Guards against a native form submit before React hydrates — see useHydrated.
+    const hydrated = useHydrated();
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
@@ -140,7 +143,7 @@ function ResetPasswordContent() {
 
                                     <button
                                         type="submit"
-                                        disabled={isLoading}
+                                        disabled={!hydrated || isLoading}
                                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
                                         {isLoading ? (

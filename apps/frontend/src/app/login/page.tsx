@@ -11,6 +11,7 @@ import BrandLogo from '@/components/BrandLogo';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { routes } from '@/lib/routes';
+import { useHydrated } from '@/hooks/useHydrated';
 
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
 
@@ -29,6 +30,9 @@ function LoginPageContent() {
     const [twoFactorCode, setTwoFactorCode] = useState('');
     const router = useRouter();
     const searchParams = useSearchParams();
+    // The server-rendered form is typable before React attaches its handlers;
+    // until then a submit would natively reload the page. See useHydrated.
+    const hydrated = useHydrated();
     const postAuthPath = (() => {
         const redirect = searchParams.get('redirect');
         return redirect && redirect.startsWith('/') ? redirect : '/dashboard';
@@ -198,7 +202,7 @@ function LoginPageContent() {
                         </div>
                         <button
                             type="submit"
-                            disabled={isLoading || twoFactorCode.length !== 6}
+                            disabled={!hydrated || isLoading || twoFactorCode.length !== 6}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 disabled:opacity-70"
                         >
                             {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Verify and sign in'}
@@ -256,10 +260,10 @@ function LoginPageContent() {
 
                         <button
                             type="submit"
-                            disabled={isLoading || isDemoLoading || isGoogleLoading}
+                            disabled={!hydrated || isLoading || isDemoLoading || isGoogleLoading}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group"
                         >
-                            {isLoading ? (
+                            {isLoading || !hydrated ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 <>
@@ -307,7 +311,7 @@ function LoginPageContent() {
                     <button
                         type="button"
                         onClick={handleDemoLogin}
-                        disabled={isLoading || isDemoLoading || isGoogleLoading}
+                        disabled={!hydrated || isLoading || isDemoLoading || isGoogleLoading}
                         className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isDemoLoading ? (
