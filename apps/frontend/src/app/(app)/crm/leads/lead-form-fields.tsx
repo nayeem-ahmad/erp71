@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 import { Field, Input, Select, Textarea } from '@/components/ui';
+import PhotoField from '@/components/PhotoField';
 import type { LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
 
 export const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
@@ -62,6 +63,8 @@ export type LeadFormState = {
     next_step: string;
     next_step_date: string;
     next_step_assigned_to: string;
+    photo_url: string;
+    photo_storage_key: string;
     custom_fields: Record<string, string>;
 };
 
@@ -82,6 +85,8 @@ export const emptyLeadForm = (): LeadFormState => ({
     next_step: '',
     next_step_date: '',
     next_step_assigned_to: '',
+    photo_url: '',
+    photo_storage_key: '',
     custom_fields: {},
 });
 
@@ -104,6 +109,8 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         next_step: String(lead.next_step ?? ''),
         next_step_date: nextStepDate ? nextStepDate.slice(0, 16) : '',
         next_step_assigned_to: String((lead.next_step_assigned_to as string) ?? ''),
+        photo_url: String(lead.photo_url ?? ''),
+        photo_storage_key: String(lead.photo_storage_key ?? ''),
         custom_fields: (lead.custom_fields as Record<string, string>) ?? {},
     };
 }
@@ -177,6 +184,12 @@ export function leadFormToPayload(
     if (x) payload.x_url = x;
     const website = form.website_url.trim();
     if (website) payload.website_url = website;
+    // Sent unconditionally for the same reason as `category`: an empty value is
+    // meaningful ("no photo"), so omitting it would make removing one impossible.
+    // Both modes — the photo is an ordinary column, not part of the next_step
+    // rollup that `update` has to leave alone.
+    payload.photo_url = form.photo_url;
+    payload.photo_storage_key = form.photo_storage_key;
     // Create only: the opening next step is materialised as a PLANNED activity.
     // Reschedule an existing one through PATCH /crm/activities/:id.
     if (opts.mode !== 'update') {
@@ -261,6 +274,21 @@ export function LeadFormFields({
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+                <PhotoField
+                    value={{ url: form.photo_url, storageKey: form.photo_storage_key }}
+                    name={form.name}
+                    onChange={(photo) =>
+                        onChange({
+                            ...form,
+                            photo_url: photo.url,
+                            photo_storage_key: photo.storageKey,
+                        })
+                    }
+                    labels={m.photo}
+                    cancelLabel={t.common.cancel}
+                />
+            </div>
             <Field label={m.columns.name} required error={errors.name} className="sm:col-span-2">
                 <Input value={form.name} onChange={(e) => set('name', e.target.value)} error={Boolean(errors.name)} />
             </Field>

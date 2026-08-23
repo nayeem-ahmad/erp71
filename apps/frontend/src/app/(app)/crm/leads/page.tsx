@@ -21,6 +21,7 @@ import {
     LEAD_STATUSES,
 } from './lead-form-fields';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import Avatar from '@/components/Avatar';
 
 type TaxonomyRef = { id: string; name: string } | null;
 
@@ -37,6 +38,7 @@ interface Lead {
     priority: string;
     status: string;
     score: number;
+    photo_url: string | null;
     next_step: string | null;
     next_step_date: string | null;
     last_contacted_at: string | null;
@@ -228,13 +230,18 @@ export default function LeadsPage() {
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
         columnHelper.accessor('name', {
             header: m.columns.name,
+            // Accessor and id are unchanged, so the server-side sort key still
+            // works — the avatar rides along inside the same column.
             cell: (info) => (
-                <Link
-                    href={routes.crm.leadDetail(info.row.original.id)}
-                    className="font-semibold text-gray-900 hover:text-primary"
-                >
-                    {info.getValue()}
-                </Link>
+                <div className="flex items-center gap-2.5">
+                    <Avatar src={info.row.original.photo_url} name={info.row.original.name} />
+                    <Link
+                        href={routes.crm.leadDetail(info.row.original.id)}
+                        className="font-semibold text-gray-900 hover:text-primary"
+                    >
+                        {info.getValue()}
+                    </Link>
+                </div>
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
