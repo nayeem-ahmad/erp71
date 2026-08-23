@@ -909,6 +909,17 @@ export const api = {
             body: formData,
         });
     },
+    /**
+     * Store a cropped lead/contact photo and get back both its URL and
+     * Cloudinary's public_id. The record it belongs to may not exist yet, which
+     * is why this is not a route on /crm/leads or /crm/contacts.
+     */
+    uploadCrmPhoto: (body: { imageBase64: string; mimeType?: string; fileName?: string }) =>
+        fetchWithAuth('/crm/photos', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     createSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',
         body: JSON.stringify(data),
