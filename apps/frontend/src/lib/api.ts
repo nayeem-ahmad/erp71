@@ -4044,6 +4044,12 @@ export const api = {
         taskId: string;
         workDate: string;
         hours: number;
+        /** `HH:mm` wall clock. Both or neither; with both, the server derives the hours. */
+        startTime?: string;
+        endTime?: string;
+        /** Sent only after the user has agreed to keep a span that clashes. */
+        allowOverlap?: boolean;
+        tagIds?: string[];
         note?: string;
         remainingHours?: number;
     }) =>
@@ -4054,7 +4060,16 @@ export const api = {
         }),
     updateProjectTimeEntry: (
         id: string,
-        data: { workDate?: string; hours?: number; note?: string },
+        data: {
+            workDate?: string;
+            hours?: number;
+            /** `''` clears the span; omitted leaves it alone. */
+            startTime?: string;
+            endTime?: string;
+            allowOverlap?: boolean;
+            tagIds?: string[];
+            note?: string;
+        },
     ) =>
         fetchWithAuth(`/project-time/${id}`, {
             method: 'PATCH',
@@ -4063,6 +4078,59 @@ export const api = {
         }),
     deleteProjectTimeEntry: (id: string) => fetchWithAuth(`/project-time/${id}`, { method: 'DELETE' }),
 
+    // ── The running clock ──────────────────────────────────────────────────
+    //
+    // Every one of these acts on the caller's own timer; none takes a user id.
+    // The start time is the server's, so nothing here sends one.
+
+    /** The caller's running timer, or null. */
+    getProjectTimer: () => fetchWithAuth('/project-time/timer'),
+    startProjectTimer: (data: { taskId: string; note?: string; tagIds?: string[] }) =>
+        fetchWithAuth('/project-time/timer', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Note and tags only — a running timer's start time is not editable. */
+    updateProjectTimer: (data: { note?: string; tagIds?: string[] }) =>
+        fetchWithAuth('/project-time/timer', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * Stops the clock and writes the hour log. Resolves to `{ discarded: true }`
+     * when the timer ran for less than a minute, in which case nothing was
+     * recorded and the caller should say so rather than reporting a save.
+     */
+    stopProjectTimer: (data: { remainingHours?: number; note?: string } = {}) =>
+        fetchWithAuth('/project-time/timer/stop', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    discardProjectTimer: () => fetchWithAuth('/project-time/timer', { method: 'DELETE' }),
+
+    /** The hour-log tag vocabulary, readable by anyone who can see the hours. */
+    getProjectTimeTags: () => fetchWithAuth('/project-time/tags'),
+    createProjectTimeTag: (data: { name: string; color?: string; sortOrder?: number }) =>
+        fetchWithAuth('/projects/time-tags', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectTimeTag: (
+        id: string,
+        data: { name?: string; color?: string; sortOrder?: number },
+    ) =>
+        fetchWithAuth(`/projects/time-tags/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectTimeTag: (id: string) =>
+        fetchWithAuth(`/projects/time-tags/${id}`, { method: 'DELETE' }),
+
     /**
      * Hours in a date range collapsed to one dimension. `userId: 'me'` is
      * resolved server-side, so the caller never has to know its own id.
@@ -4070,10 +4138,11 @@ export const api = {
     getProjectTimeReport: (params: {
         from: string;
         to: string;
-        groupBy?: 'task' | 'date' | 'week' | 'month' | 'user' | 'project';
+        groupBy?: 'task' | 'date' | 'week' | 'month' | 'user' | 'project' | 'tag';
         projectId?: string;
         taskId?: string;
         userId?: string;
+        tagId?: string;
         search?: string;
     }) => {
         const query = new URLSearchParams();

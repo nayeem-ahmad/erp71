@@ -1187,6 +1187,13 @@ export const crmHrMessages = {
             submit: 'ریکارڈ محفوظ کریں',
         },
         punchesLink: 'آمد/روانگی ریکارڈ',
+        today: "آج",
+        yesterday: "کل",
+        worked: "کام کیا",
+        dayRecords: "{count} ریکارڈ",
+        deleteTitle: "حاضری کا ریکارڈ حذف کریں",
+        deleted: "حاضری کا ریکارڈ حذف ہو گیا",
+        workedHint: "کام کا وقت وہ عدد ہے جو دن لکھتے وقت درج ہوا تھا، کلاک اوقات سے نئی گنتی نہیں۔",
     },
     attendancePunches: {
         title: 'آمد/روانگی ریکارڈ',

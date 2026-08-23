@@ -411,6 +411,7 @@ model User {
   assignedProjectTasks              ProjectTask[]               @relation("ProjectTaskAssignee")
   createdProjectTasks               ProjectTask[]               @relation("ProjectTaskCreator")
   projectTimeEntries                ProjectTimeEntry[]          @relation("ProjectTimeEntryUser")
+  projectTimers                     ProjectTimer[]              @relation("ProjectTimerUser")
   projectRemainingLogs              ProjectTaskRemainingLog[]   @relation("RemainingLogUser")
   projectComments                   ProjectComment[]            @relation("ProjectCommentUser")
   projectTaskActivities             ProjectTaskActivity[]       @relation("ProjectTaskActivityActor")
@@ -722,6 +723,9 @@ model Tenant {
   projectTaskActivities      ProjectTaskActivity[]
   projectTaskWatchers        ProjectTaskWatcher[]
   projectTimeEntries         ProjectTimeEntry[]
+  projectTimeTags            ProjectTimeTag[]
+  projectTimeEntryTags       ProjectTimeEntryTag[]
+  projectTimers              ProjectTimer[]
   sprints                    Sprint[]
   sprintSnapshots            SprintSnapshot[]
   projectComments            ProjectComment[]
@@ -5902,6 +5906,7 @@ model Project {
   tasks          ProjectTask[]
   timeEntries    ProjectTimeEntry[]
   comments       ProjectComment[]
+  timers         ProjectTimer[]
   attachments    ProjectAttachment[]
   remainingLogs  ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
@@ -6070,6 +6075,7 @@ model ProjectTask {
   activities     ProjectTaskActivity[]
   watchers       ProjectTaskWatcher[]
   timeEntries    ProjectTimeEntry[]
+  timers         ProjectTimer[]
   remainingLogs  ProjectTaskRemainingLog[]
   comments       ProjectComment[]
   attachments    ProjectAttachment[]
@@ -6336,7 +6342,18 @@ model ProjectTimeEntry {
   /// Unused in Phase 1 — the hook Phase 2 needs to cost hours against payroll.
   employee_id String?
   work_date   DateTime @db.Date
+  /// `hours` stays the stored truth even when a span is present, and every
+  /// report reads it alone. The span is additive: entries written before it
+  /// existed, and hours typed by hand, have none — so a report that summed
+  /// `ended_at - started_at` would silently under-count the whole back
+  /// catalogue. When both ends are given the service derives `hours` from them
+  /// rather than trusting a third figure from the client, so the two can never
+  /// disagree.
   hours       Decimal  @db.Decimal(8, 2)
+  /// Optional wall-clock span. Both ends or neither: half a span cannot be
+  /// displayed, cannot be checked for overlap, and is not worth storing.
+  started_at  DateTime?
+  ended_at    DateTime?
   note        String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
@@ -6346,10 +6363,93 @@ model ProjectTimeEntry {
   project  Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
   user     User?       @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
   employee Employee?   @relation(fields: [employee_id], references: [id])
+  tags     ProjectTimeEntryTag[]
 
   @@index([tenant_id, project_id, work_date])
   @@index([task_id, work_date])
+  /// The overlap check reads one person's spans for one day; without this it
+  /// is a scan of every entry the tenant has ever written.
+  @@index([tenant_id, user_id, started_at])
   @@map("project_time_entries")
+}
+
+/// A cross-cutting label on an *hour*, not on a task: "Billable", "Support",
+/// "Rework". Deliberately a separate vocabulary from `ProjectLabel` — a task
+/// is one thing for its whole life, while the same task's hours can be
+/// billable one week and goodwill the next, and merging the two lists would
+/// offer "Blocked" as a way to classify an afternoon.
+///
+/// Tenant-scoped and colour-enumerated for the same reasons `ProjectLabel` is:
+/// the vocabulary is only useful shared across projects, and a free hex field
+/// is how a list ends up with twelve indistinguishable greys.
+model ProjectTimeTag {
+  id         String            @id @default(uuid())
+  tenant_id  String
+  name       String
+  color      ProjectLabelColor @default(GRAY)
+  sort_order Int               @default(0)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+
+  tenant  Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  entries ProjectTimeEntryTag[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, sort_order])
+  @@map("project_time_tags")
+}
+
+model ProjectTimeEntryTag {
+  tenant_id  String
+  entry_id   String
+  tag_id     String
+  created_at DateTime @default(now())
+
+  tenant Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  entry  ProjectTimeEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  tag    ProjectTimeTag   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([entry_id, tag_id])
+  @@index([tenant_id, tag_id])
+  @@map("project_time_entry_tags")
+}
+
+/// A clock that is currently running. At most one per person per tenant, and
+/// the unique pair is what enforces it rather than convention: two running
+/// timers on one person is not a state any screen could report honestly, and
+/// the second one would silently win.
+///
+/// `started_at` is the server's clock, never the client's. That is the whole
+/// reliability story of the feature — a closed browser, a slept phone or a
+/// second device must all be able to pick the same running timer back up, and
+/// a start time posted by the client is a start time that can be edited.
+///
+/// `tag_ids` is a scalar list rather than a fourth join table on purpose: a
+/// timer is ephemeral, lives at most one working day, and is read only by the
+/// person it belongs to. The cost is that a tag deleted while a timer runs
+/// leaves a dangling id, so `stop()` intersects the list with the tags that
+/// still exist rather than trusting it.
+model ProjectTimer {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  user_id    String
+  task_id    String
+  /// Denormalised from the task for the same reason the entry denormalises it.
+  project_id String
+  started_at DateTime @default(now())
+  note       String?
+  tag_ids    String[] @default([])
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user    User        @relation("ProjectTimerUser", fields: [user_id], references: [id], onDelete: Cascade)
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  project Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id])
+  @@index([tenant_id, task_id])
+  @@map("project_timers")
 }
 
 /// Tenant-level time-box. Deliberately NOT scoped to a project: one sprint

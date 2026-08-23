@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "Hour-log tags",
+
+        hint: "Classify an *hour*, not a task — \"Billable\", \"Support\", \"Rework\". A separate list from labels, and the hour-log report can total by it.",
+
+        empty: "No tags yet.",
+
+        add: "Add tag",
+
+        namePlaceholder: "e.g. Billable",
+
+        untagged: "Removed from {count} hour log(s).",
+
+    },
+
     labels: {
         title: 'Labels',
         hint: 'Shared across every project, so the workspace-wide task list and sprint board can filter on them.',
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: 'Last 30 days',
         presetMonth: 'This month',
         presetCustom: 'Custom range',
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'What are you working on?',
+        captureProject: 'Project to log against',
+        captureTask: 'Task to log against',
+        start: 'Start',
+        stop: 'Stop',
+        running: 'Timer running',
+        discardTimer: 'Discard this timer',
+        timerMode: 'Time with a timer',
+        manualMode: 'Enter hours by hand',
+        startTime: 'Start time',
+        endTime: 'End time',
+        spanHint: 'Optional. Give both, or neither. An end before the start means it ran past midnight.',
+        hoursFromSpan: 'Worked out from the start and end times.',
+        tags: 'Tags',
+        allTags: 'All tags',
+        noTags: 'No tags yet. Add them in project settings.',
+        today: 'Today',
+        yesterday: 'Yesterday',
+        total: 'Total',
+        duration: 'Duration',
+        partialDay: 'showing {shown} of {total} ·',
+        addDescription: 'Add description',
+        logAgain: 'Start a timer on this again',
+        expandGroup: 'Show the entries behind this row',
+        collapseGroup: 'Collapse these entries',
+        pageOf: 'Page {page} of {pages}',
+        previous: 'Previous',
+        next: 'Next',
+        timerStarted: 'Timer started',
+        timerStartFailed: 'Could not start the timer.',
+        timerStopFailed: 'Could not stop the timer.',
+        timerUpdateFailed: 'Could not update the timer.',
+        timerDiscarded: 'Timer discarded. Nothing was logged.',
+        timerDiscardedShort: 'That ran for under a minute, so nothing was logged.',
+        timerAlreadyRunning: 'A timer is already running on "{task}". Stop it first.',
+        timerOverlapped: 'Those hours overlap time you already logged on "{task}".',
+        overlapTitle: 'These hours overlap',
+        overlapPrompt: 'Keep both entries anyway?',
+        overlapKeepBoth: 'Keep both',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: 'Month',
             user: 'Person',
             project: 'Project',
+            tag: 'Tag',
         },
         totalHours: 'Total hours',
         entries: 'Entries',
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: 'No hours were logged in this range.',
         loadFailed: 'Could not load the report.',
         rangeHint: 'Totals cover work dated inside the range, whenever it was entered.',
+        multiTagged: '{count} entries carry more than one tag, so the shares add to more than 100%.',
     },
 
     board: {

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ProjectTimeService } from './project-time.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectAccessService } from './project-access.service';
@@ -29,10 +29,18 @@ describe('ProjectTimeService', () => {
                 findFirst: jest.fn(),
                 findMany: jest.fn().mockResolvedValue([]),
                 count: jest.fn().mockResolvedValue(0),
-                update: jest.fn(),
+                update: jest.fn().mockResolvedValue({ id: 'entry-1' }),
                 delete: jest.fn().mockResolvedValue({}),
                 groupBy: jest.fn().mockResolvedValue([]),
+                aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 0 }, _count: { _all: 0 } }),
             },
+            projectTimeTag: { findMany: jest.fn().mockResolvedValue([]) },
+            projectTimeEntryTag: {
+                deleteMany: jest.fn().mockResolvedValue({}),
+                createMany: jest.fn().mockResolvedValue({}),
+                groupBy: jest.fn().mockResolvedValue([]),
+            },
+            $transaction: jest.fn(async (fn: any) => fn(db)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -108,6 +116,211 @@ describe('ProjectTimeService', () => {
         db.projectTask.findFirst.mockResolvedValue(null);
         await expect(log()).rejects.toBeInstanceOf(NotFoundException);
         expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
+    });
+
+    describe('spans', () => {
+        const created = () => db.projectTimeEntry.create.mock.calls[0][0].data;
+
+        it('stores no span when neither time is given, which is most entries', async () => {
+            await log();
+            expect(created()).toMatchObject({ started_at: null, ended_at: null, hours: 3 });
+        });
+
+        it('derives the hours from the span rather than trusting the figure sent', async () => {
+            // The client sends 3; the times say 4.38. The times win, because
+            // the row shows the times and the two must not disagree.
+            await log({ startTime: '13:45', endTime: '18:08' });
+
+            expect(created().hours).toBe(4.38);
+            expect(created().started_at.toISOString()).toBe('2026-08-03T07:45:00.000Z');
+        });
+
+        it('carries the derived hours into the remaining-hours suggestion too', async () => {
+            await log({ hours: 3, startTime: '09:00', endTime: '17:00' });
+
+            // 8 remaining minus the 8 actually spanned, not the 3 that were sent.
+            expect(remaining.write).toHaveBeenCalledWith(
+                expect.objectContaining({ newHours: 0, source: 'TIME_LOGGED' }),
+            );
+        });
+
+        it('rejects half a span with a reason rather than storing one end', async () => {
+            await expect(log({ startTime: '13:45' })).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects a start and end that are the same time', async () => {
+            await expect(
+                service.create(OWNER, {
+                    taskId: 'task-1',
+                    workDate: '2026-08-03',
+                    hours: 3,
+                    startTime: '09:00',
+                    endTime: '09:00',
+                } as never),
+            ).rejects.toThrow(/same/);
+        });
+
+        it('accepts a sitting that ran past midnight', async () => {
+            await log({ startTime: '22:00', endTime: '02:00' });
+
+            expect(created().hours).toBe(4);
+            // Still filed on the work date that was sent, not the next day.
+            expect(created().work_date.toISOString()).toBe('2026-08-03T00:00:00.000Z');
+        });
+    });
+
+    describe('overlap', () => {
+        const clash = { id: 'entry-old', task: { title: 'Stock count' } };
+
+        it('refuses a span covering a minute this person already logged', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue(clash);
+
+            await expect(log({ startTime: '13:45', endTime: '18:08' })).rejects.toBeInstanceOf(
+                ConflictException,
+            );
+            expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
+        });
+
+        it('names the entry it clashes with', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue(clash);
+
+            await expect(log({ startTime: '13:45', endTime: '18:08' })).rejects.toThrow(
+                /Stock count/,
+            );
+        });
+
+        it('checks only this person’s own entries, and only ones that have a span', async () => {
+            await log({ startTime: '13:45', endTime: '18:08' });
+
+            expect(db.projectTimeEntry.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        tenant_id: 'tenant-1',
+                        user_id: 'user-1',
+                        started_at: { not: null, lt: expect.any(Date) },
+                        ended_at: { gt: expect.any(Date) },
+                    }),
+                }),
+            );
+        });
+
+        it('lets an explicit allowOverlap through', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue(clash);
+
+            await log({ startTime: '13:45', endTime: '18:08', allowOverlap: true });
+
+            expect(db.projectTimeEntry.create).toHaveBeenCalled();
+        });
+
+        it('does not check at all for an entry with no span — 4 hours claims no minutes', async () => {
+            await log({ hours: 4 });
+
+            expect(db.projectTimeEntry.findFirst).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('tags', () => {
+        it('writes only the tag ids that resolve in this tenant', async () => {
+            db.projectTimeTag.findMany.mockResolvedValue([{ id: 'tag-a' }]);
+
+            await log({ tagIds: ['tag-a', 'tag-elsewhere'] });
+
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.tags).toEqual({
+                create: [{ tenant_id: 'tenant-1', tag_id: 'tag-a' }],
+            });
+        });
+
+        it('writes no tag join at all when none are sent', async () => {
+            await log();
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data).not.toHaveProperty('tags');
+        });
+
+        it('filters the list by a tag with `some`, so any one of several matches', async () => {
+            await service.list(OWNER, { tagId: 'tag-a' } as never);
+
+            expect(db.projectTimeEntry.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ tags: { some: { tag_id: 'tag-a' } } }),
+                }),
+            );
+        });
+    });
+
+    describe('update', () => {
+        const stored = {
+            id: 'entry-1',
+            work_date: new Date('2026-08-03T00:00:00.000Z'),
+            started_at: new Date('2026-08-03T07:45:00.000Z'),
+            ended_at: new Date('2026-08-03T12:08:00.000Z'),
+        };
+
+        const patch = (dto: Record<string, unknown>) => {
+            db.projectTimeEntry.findFirst.mockResolvedValueOnce(stored);
+            return service.update(OWNER, 'entry-1', dto as never);
+        };
+        const written = () => db.projectTimeEntry.update.mock.calls[0][0].data;
+
+        it('leaves the span alone when neither time is sent', async () => {
+            await patch({ note: 'tidied' });
+
+            expect(written()).toEqual({ note: 'tidied' });
+        });
+
+        it('keeps the stored start when only the end moves', async () => {
+            await patch({ endTime: '19:00' });
+
+            expect(written().started_at.toISOString()).toBe('2026-08-03T07:45:00.000Z');
+            expect(written().ended_at.toISOString()).toBe('2026-08-03T13:00:00.000Z');
+            expect(written().hours).toBe(5.25);
+        });
+
+        it('clears the span on an empty string, leaving the hours as they were', async () => {
+            await patch({ startTime: '' });
+
+            expect(written()).toMatchObject({ started_at: null, ended_at: null });
+            expect(written()).not.toHaveProperty('hours');
+        });
+
+        it('refuses a bare hours figure on a timed entry, which its span already states', async () => {
+            await expect(patch({ hours: 2 })).rejects.toThrow(/runs to a clock/);
+            expect(db.projectTimeEntry.update).not.toHaveBeenCalled();
+        });
+
+        it('accepts hours alongside clearing the span — the two together are consistent', async () => {
+            await patch({ hours: 2, startTime: '' });
+
+            expect(written()).toMatchObject({ started_at: null, ended_at: null, hours: 2 });
+        });
+
+        it('accepts a bare hours correction on an entry with no span', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValueOnce({
+                ...stored,
+                started_at: null,
+                ended_at: null,
+            });
+            await service.update(OWNER, 'entry-1', { hours: 2 } as never);
+
+            expect(written()).toEqual({ hours: 2 });
+        });
+
+        it('replaces tags wholesale, so an empty list means none left', async () => {
+            await patch({ tagIds: [] });
+
+            expect(db.projectTimeEntryTag.deleteMany).toHaveBeenCalledWith({
+                where: { entry_id: 'entry-1' },
+            });
+            expect(db.projectTimeEntryTag.createMany).not.toHaveBeenCalled();
+        });
+
+        it('excludes the entry from its own overlap check', async () => {
+            await patch({ startTime: '14:00', endTime: '15:00' });
+
+            const overlapCall = db.projectTimeEntry.findFirst.mock.calls.at(-1)[0];
+            expect(overlapCall.where).toMatchObject({ id: { not: 'entry-1' } });
+        });
     });
 
     describe('remove', () => {

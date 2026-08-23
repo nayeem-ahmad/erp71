@@ -1186,7 +1186,14 @@ export const crmHrMessages = {
             "submitting": "Enregistrement...",
             "submit": "Enregistrer"
         },
-        "punchesLink": "Pointages"
+        "punchesLink": "Pointages",
+        today: "Aujourd'hui",
+        yesterday: "Hier",
+        worked: "Travaillé",
+        dayRecords: "{count} enregistrements",
+        deleteTitle: "Supprimer le pointage",
+        deleted: "Pointage supprimé",
+        workedHint: "Le temps travaillé est le chiffre enregistré lors de l'écriture de la journée, pas un nouveau calcul à partir des heures de pointage.",
     },
     "attendancePunches": {
         "title": "Pointages",

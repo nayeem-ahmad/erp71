@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "گھنٹہ لاگ ٹیگ",
+
+        hint: "یہ *گھنٹے* کی درجہ بندی کرتے ہیں، کام کی نہیں — \"قابلِ بل\"، \"سپورٹ\"، \"دوبارہ کام\"۔ لیبل سے الگ فہرست، اور گھنٹہ لاگ رپورٹ اسی سے جوڑ سکتی ہے۔",
+
+        empty: "ابھی کوئی ٹیگ نہیں۔",
+
+        add: "ٹیگ شامل کریں",
+
+        namePlaceholder: "مثلاً قابلِ بل",
+
+        untagged: "{count} گھنٹہ لاگ سے ہٹا دیا گیا۔",
+
+    },
+
     labels: {
         title: "لیبل",
         hint: "ہر پروجیکٹ میں مشترک، تاکہ پورے ورک اسپیس کی ٹاسک فہرست اور اسپرنٹ بورڈ اُن پر فلٹر کر سکیں۔",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "پچھلے 30 دن",
         presetMonth: "اس مہینے",
         presetCustom: "اپنی مدت",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'آپ کس کام میں مصروف ہیں؟',
+        captureProject: 'کس پروجیکٹ پر درج کریں',
+        captureTask: 'کس کام پر درج کریں',
+        start: 'شروع کریں',
+        stop: 'روکیں',
+        running: 'ٹائمر چل رہا ہے',
+        discardTimer: 'یہ ٹائمر ختم کریں',
+        timerMode: 'ٹائمر سے وقت لیں',
+        manualMode: 'گھنٹے ہاتھ سے لکھیں',
+        startTime: 'شروع کا وقت',
+        endTime: 'اختتام کا وقت',
+        spanHint: 'اختیاری۔ دونوں دیں یا کوئی نہیں۔ شروع سے پہلے اختتام کا مطلب ہے آدھی رات گزر گئی۔',
+        hoursFromSpan: 'شروع اور اختتام کے وقت سے نکالے گئے۔',
+        tags: 'ٹیگ',
+        allTags: 'تمام ٹیگ',
+        noTags: 'ابھی کوئی ٹیگ نہیں۔ پروجیکٹ سیٹنگز میں شامل کریں۔',
+        today: 'آج',
+        yesterday: 'کل',
+        total: 'کل',
+        duration: 'دورانیہ',
+        partialDay: '{total} میں سے {shown} دکھائے جا رہے ہیں ·',
+        addDescription: 'تفصیل شامل کریں',
+        logAgain: 'اس کے لیے دوبارہ ٹائمر چلائیں',
+        expandGroup: 'اس قطار کے اندراجات دکھائیں',
+        collapseGroup: 'یہ اندراجات چھپائیں',
+        pageOf: 'صفحہ {page} از {pages}',
+        previous: 'پچھلا',
+        next: 'اگلا',
+        timerStarted: 'ٹائمر شروع ہو گیا',
+        timerStartFailed: 'ٹائمر شروع نہیں ہو سکا۔',
+        timerStopFailed: 'ٹائمر روکا نہیں جا سکا۔',
+        timerUpdateFailed: 'ٹائمر اپ ڈیٹ نہیں ہو سکا۔',
+        timerDiscarded: 'ٹائمر ختم کر دیا گیا۔ کچھ درج نہیں ہوا۔',
+        timerDiscardedShort: 'یہ ایک منٹ سے کم چلا، اس لیے کچھ درج نہیں ہوا۔',
+        timerAlreadyRunning: '"{task}" پر پہلے ہی ٹائمر چل رہا ہے۔ پہلے اسے روکیں۔',
+        timerOverlapped: 'یہ گھنٹے "{task}" پر پہلے درج وقت سے ٹکرا رہے ہیں۔',
+        overlapTitle: 'یہ گھنٹے آپس میں ٹکرا رہے ہیں',
+        overlapPrompt: 'کیا پھر بھی دونوں اندراجات رکھیں؟',
+        overlapKeepBoth: 'دونوں رکھیں',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "مہینہ",
             user: "شخص",
             project: "پروجیکٹ",
+            tag: "ٹیگ",
         },
         totalHours: "کل گھنٹے",
         entries: "اندراجات",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "اس مدت میں کوئی گھنٹہ درج نہیں ہوا۔",
         loadFailed: "رپورٹ لوڈ نہیں ہو سکی۔",
         rangeHint: "میزان اُس کام کا ہے جس کی تاریخ اس مدت میں آتی ہے، چاہے وہ کبھی بھی درج ہوا ہو۔",
+        multiTagged: "{count} اندراجات پر ایک سے زیادہ ٹیگ ہیں، اس لیے حصص مل کر 100% سے زیادہ بنتے ہیں۔",
     },
 
     board: {

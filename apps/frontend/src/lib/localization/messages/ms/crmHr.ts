@@ -1187,6 +1187,13 @@ export const crmHrMessages = {
             submit: "Simpan Rekod",
         },
         punchesLink: "Rekod Masuk/Keluar",
+        today: "Hari ini",
+        yesterday: "Semalam",
+        worked: "Bekerja",
+        dayRecords: "{count} rekod",
+        deleteTitle: "Padam rekod kehadiran",
+        deleted: "Rekod kehadiran dipadam",
+        workedHint: "Masa bekerja ialah angka yang direkodkan semasa hari itu ditulis, bukan kiraan baharu daripada waktu jam.",
     },
     attendancePunches: {
         title: "Rekod Masuk/Keluar",

@@ -1186,7 +1186,14 @@ export const crmHrMessages = {
             "submitting": "सहेजा जा रहा है...",
             "submit": "रिकॉर्ड सहेजें"
         },
-        "punchesLink": "इन/आउट रिकॉर्ड"
+        "punchesLink": "इन/आउट रिकॉर्ड",
+        today: "आज",
+        yesterday: "कल",
+        worked: "काम किया",
+        dayRecords: "{count} रिकॉर्ड",
+        deleteTitle: "उपस्थिति रिकॉर्ड हटाएँ",
+        deleted: "उपस्थिति रिकॉर्ड हटा दिया गया",
+        workedHint: "काम का समय वह आँकड़ा है जो दिन लिखते समय दर्ज हुआ था, क्लॉक समय से नई गिनती नहीं।",
     },
     "attendancePunches": {
         "title": "इन/आउट रिकॉर्ड",

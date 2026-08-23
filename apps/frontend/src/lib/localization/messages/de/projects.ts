@@ -201,6 +201,22 @@ export const projectsMessages = {
         },
     },
 
+    timeTags: {
+
+        title: "Stunden-Tags",
+
+        hint: "Klassifizieren eine *Stunde*, keine Aufgabe — „Abrechenbar“, „Support“, „Nacharbeit“. Eine eigene Liste neben den Labels, und der Stundenbericht kann danach summieren.",
+
+        empty: "Noch keine Tags.",
+
+        add: "Tag hinzufügen",
+
+        namePlaceholder: "z. B. Abrechenbar",
+
+        untagged: "Von {count} Stundeneinträgen entfernt.",
+
+    },
+
     labels: {
         title: "Labels",
         hint: "Projektübergreifend geteilt, damit die arbeitsbereichsweite Aufgabenliste und das Sprint-Board danach filtern können.",
@@ -324,6 +340,48 @@ export const projectsMessages = {
         preset30: "Letzte 30 Tage",
         presetMonth: "Dieser Monat",
         presetCustom: "Eigener Zeitraum",
+
+        // Added with the day-grouped rework: the capture bar, the running
+        // clock, spans, tags and the folded rows.
+        capturePlaceholder: 'Woran arbeitest du gerade?',
+        captureProject: 'Projekt, auf das gebucht wird',
+        captureTask: 'Aufgabe, auf die gebucht wird',
+        start: 'Start',
+        stop: 'Stopp',
+        running: 'Timer läuft',
+        discardTimer: 'Diesen Timer verwerfen',
+        timerMode: 'Mit Timer erfassen',
+        manualMode: 'Stunden von Hand eintragen',
+        startTime: 'Startzeit',
+        endTime: 'Endzeit',
+        spanHint: 'Optional. Beide angeben oder keine. Ein Ende vor dem Start heißt: über Mitternacht hinaus.',
+        hoursFromSpan: 'Aus Start- und Endzeit berechnet.',
+        tags: 'Tags',
+        allTags: 'Alle Tags',
+        noTags: 'Noch keine Tags. Lege sie in den Projekteinstellungen an.',
+        today: 'Heute',
+        yesterday: 'Gestern',
+        total: 'Gesamt',
+        duration: 'Dauer',
+        partialDay: '{shown} von {total} angezeigt ·',
+        addDescription: 'Beschreibung hinzufügen',
+        logAgain: 'Timer dafür erneut starten',
+        expandGroup: 'Einträge hinter dieser Zeile zeigen',
+        collapseGroup: 'Einträge einklappen',
+        pageOf: 'Seite {page} von {pages}',
+        previous: 'Zurück',
+        next: 'Weiter',
+        timerStarted: 'Timer gestartet',
+        timerStartFailed: 'Timer konnte nicht gestartet werden.',
+        timerStopFailed: 'Timer konnte nicht gestoppt werden.',
+        timerUpdateFailed: 'Timer konnte nicht aktualisiert werden.',
+        timerDiscarded: 'Timer verworfen. Es wurde nichts erfasst.',
+        timerDiscardedShort: 'Lief unter einer Minute — es wurde nichts erfasst.',
+        timerAlreadyRunning: 'Für „{task}“ läuft bereits ein Timer. Stoppe ihn zuerst.',
+        timerOverlapped: 'Diese Stunden überschneiden sich mit bereits erfasster Zeit auf „{task}“.',
+        overlapTitle: 'Diese Stunden überschneiden sich',
+        overlapPrompt: 'Beide Einträge trotzdem behalten?',
+        overlapKeepBoth: 'Beide behalten',
     },
 
     hourLogReport: {
@@ -338,6 +396,7 @@ export const projectsMessages = {
             month: "Monat",
             user: "Person",
             project: "Projekt",
+            tag: "Tag",
         },
         totalHours: "Stunden gesamt",
         entries: "Buchungen",
@@ -351,6 +410,7 @@ export const projectsMessages = {
         empty: "In diesem Zeitraum wurden keine Stunden gebucht.",
         loadFailed: "Der Bericht konnte nicht geladen werden.",
         rangeHint: "Die Summen umfassen Arbeit, die im Zeitraum datiert ist, unabhängig davon, wann sie erfasst wurde.",
+        multiTagged: "{count} Einträge tragen mehr als ein Tag, daher ergeben die Anteile über 100 %.",
     },
 
     board: {
