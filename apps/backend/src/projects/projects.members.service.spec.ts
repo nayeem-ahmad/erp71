@@ -24,9 +24,15 @@ describe('ProjectsService — members and deletion', () => {
             },
             projectTask: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
             projectMember: { upsert: jest.fn().mockResolvedValue({}), deleteMany: jest.fn().mockResolvedValue({}) },
-            tenantUser: { findFirst: jest.fn().mockResolvedValue({ id: 'tu-1' }) },
+            tenantUser: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'tu-1' }),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
-            employee: { findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }) },
+            employee: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
         };
 
@@ -78,12 +84,80 @@ describe('ProjectsService — members and deletion', () => {
             expect(db.projectMember.upsert).not.toHaveBeenCalled();
         });
 
+        // The two rejections used to share one message, so an empty request
+        // told people to un-pick a second person they had never picked.
+        it('tells an empty request to pick somebody, not to pick fewer people', async () => {
+            await expect(service.addMember(OWNER, 'project-1', {} as never)).rejects.toThrow(
+                /pick the person/i,
+            );
+        });
+
         it('refuses an employee from another tenant', async () => {
             db.employee.findFirst.mockResolvedValue(null);
 
             await expect(
                 service.addMember(OWNER, 'project-1', { employeeId: 'emp-x' } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
+        });
+    });
+
+    describe('listMemberCandidates', () => {
+        // The picker is gated on MANAGE_PROJECTS through this method; the two
+        // directories it replaced needed MANAGE_USERS and VIEW_HR, which a
+        // project manager has no reason to hold — so the picker came up empty
+        // for exactly the people who manage projects.
+        it('returns users under their user id, not their membership row id', async () => {
+            db.tenantUser.findMany.mockResolvedValue([
+                { user_id: 'user-1', user: { id: 'user-1', name: 'Rakib', email: 'rakib@x.com' } },
+            ]);
+
+            const [candidate] = await service.listMemberCandidates('tenant-1');
+
+            expect(candidate).toMatchObject({ key: 'user:user-1', userId: 'user-1', name: 'Rakib' });
+        });
+
+        it('falls back to the email when a user has no name set', async () => {
+            db.tenantUser.findMany.mockResolvedValue([
+                { user_id: 'user-1', user: { id: 'user-1', name: null, email: 'rakib@x.com' } },
+            ]);
+
+            const [candidate] = await service.listMemberCandidates('tenant-1');
+
+            expect(candidate.name).toBe('rakib@x.com');
+        });
+
+        it('offers an employee with no login, flagged as such', async () => {
+            db.employee.findMany.mockResolvedValue([
+                { id: 'emp-2', name: 'Imran', employee_code: 'EMP-002', user_id: null },
+            ]);
+
+            const [candidate] = await service.listMemberCandidates('tenant-1');
+
+            expect(candidate).toMatchObject({ key: 'employee:emp-2', employeeId: 'emp-2', noLogin: true });
+        });
+
+        it('lists a linked employee once, as the user, so they keep their permissions', async () => {
+            db.tenantUser.findMany.mockResolvedValue([
+                { user_id: 'user-1', user: { id: 'user-1', name: 'Rakib', email: 'rakib@x.com' } },
+            ]);
+            db.employee.findMany.mockResolvedValue([
+                { id: 'emp-1', name: 'Rakib', employee_code: 'EMP-001', user_id: 'user-1' },
+                { id: 'emp-2', name: 'Imran', employee_code: 'EMP-002', user_id: null },
+            ]);
+
+            const candidates = await service.listMemberCandidates('tenant-1');
+
+            expect(candidates.map((c) => c.key)).toEqual(['user:user-1', 'employee:emp-2']);
+        });
+
+        it('leaves out anyone who has left — only ACTIVE, undeleted employees', async () => {
+            await service.listMemberCandidates('tenant-1');
+
+            expect(db.employee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ deleted_at: null, status: 'ACTIVE' }),
+                }),
+            );
         });
     });
 

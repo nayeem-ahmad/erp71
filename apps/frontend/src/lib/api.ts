@@ -3821,6 +3821,12 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * Everyone who can be put on a project — users and login-less employees in
+     * one list. Gated on MANAGE_PROJECTS, unlike `/team/members` (MANAGE_USERS)
+     * and `/employees` (VIEW_HR), which a project manager need not hold.
+     */
+    getProjectMemberCandidates: () => fetchWithAuth('/projects/member-candidates'),
     /** Keyed on the member row — an employee member has no user id. */
     removeProjectMember: (projectId: string, memberId: string) =>
         fetchWithAuth(`/projects/${projectId}/members/${memberId}`, { method: 'DELETE' }),
@@ -3942,6 +3948,13 @@ export const api = {
         fetchWithAuth(`/projects/boards/${id}/tasks`, {
             method: 'POST',
             body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Compose a new task straight into a board column; returns the reloaded board. */
+    createBoardCard: (id: string, columnId: string, data: { projectId: string; title: string }) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {
+            method: 'POST',
+            body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     removeBoardTask: (id: string, taskId: string) =>

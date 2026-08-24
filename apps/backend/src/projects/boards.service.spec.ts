@@ -55,6 +55,9 @@ describe('BoardsService', () => {
                 findFirst: jest.fn().mockResolvedValue({ id: 'bt1', board_id: 'b1', task_id: 'k1' }),
             },
             boardColumnStatus: { findMany: jest.fn().mockResolvedValue([]) },
+            project: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'p1', visibility: 'PUBLIC', manager_id: userId }),
+            },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTask: {
                 findMany: jest.fn().mockResolvedValue([{ id: 'k1', project_id: 'p1' }]),
@@ -80,6 +83,7 @@ describe('BoardsService', () => {
         tasks = {
             move: jest.fn().mockResolvedValue({ id: 'k1' }),
             assertTask: jest.fn().mockResolvedValue({ id: 'k1' }),
+            create: jest.fn().mockResolvedValue({ id: 'k9', project_id: 'p1' }),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -366,6 +370,70 @@ describe('BoardsService', () => {
 
         expect(db.board.findFirst).toHaveBeenCalledWith({
             where: { id: 'b1', tenant_id: 'other', deleted_at: null },
+        });
+    });
+
+    describe('createCard', () => {
+        const dto = { projectId: 'p1', title: 'Write the changelog' };
+
+        it('opens the task in the column it was composed in, not the project default', async () => {
+            columns.resolveStatusId.mockResolvedValue('s2');
+
+            await service.createCard(owner, 'b1', 'c2', dto);
+
+            expect(columns.resolveStatusId).toHaveBeenCalledWith(tenantId, 'b1', 'c2', 'p1');
+            expect(tasks.create).toHaveBeenCalledWith(
+                owner,
+                expect.objectContaining({ projectId: 'p1', title: dto.title, statusId: 's2' }),
+            );
+        });
+
+        it('binds the project first, so the first card composed for it is not orphaned', async () => {
+            // addTasks binds too, but it runs after the task exists — the status
+            // has to resolve before that, or there is nothing to create with.
+            await service.createCard(owner, 'b1', 'c1', dto);
+
+            const bindOrder = columns.bindProject.mock.invocationCallOrder[0];
+            const resolveOrder = columns.resolveStatusId.mock.invocationCallOrder[0];
+            expect(bindOrder).toBeLessThan(resolveOrder);
+        });
+
+        it('puts the task it just created on the board', async () => {
+            db.projectTask.findMany.mockResolvedValue([{ id: 'k9', project_id: 'p1' }]);
+
+            await service.createCard(owner, 'b1', 'c1', dto);
+
+            expect(db.boardTask.createMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: [expect.objectContaining({ board_id: 'b1', task_id: 'k9' })],
+                }),
+            );
+        });
+
+        it('refuses a column with no status for this project rather than guessing one', async () => {
+            columns.resolveStatusId.mockResolvedValue(null);
+
+            await expect(service.createCard(owner, 'b1', 'c1', dto)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(tasks.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a column that is not on this board', async () => {
+            await expect(service.createCard(owner, 'b1', 'c-nope', dto)).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(tasks.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a project the viewer cannot see, before anything is bound', async () => {
+            db.project.findFirst.mockResolvedValue(null);
+
+            await expect(service.createCard(staff('u7'), 'b1', 'c1', dto)).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(columns.bindProject).not.toHaveBeenCalled();
+            expect(tasks.create).not.toHaveBeenCalled();
         });
     });
 

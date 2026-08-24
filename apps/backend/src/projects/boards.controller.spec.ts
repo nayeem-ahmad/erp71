@@ -40,7 +40,7 @@ import { ProjectsScheduler } from './projects.scheduler';
  *    all, would pass `tsc` and the rest of the suite undetected. The second
  *    `describe` block reads the metadata straight off the controller with
  *    `Reflect.getMetadata` — the same mechanism Nest itself uses at request
- *    time — and asserts the full 13-route table exhaustively, so an
+ *    time — and asserts the full 14-route table exhaustively, so an
  *    undecorated or re-permissioned route fails loudly here instead of
  *    shipping.
  */
@@ -137,6 +137,11 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         addTasks: [StorePermission.MANAGE_PROJECTS],
         removeTask: [StorePermission.MANAGE_PROJECTS],
         moveCard: [StorePermission.MANAGE_PROJECTS],
+
+        // Both halves of what it does: creates a task and puts it on a board.
+        // Dropping MANAGE_PROJECT_TASKS here would turn this route into a way
+        // to create tasks without the permission that governs creating them.
+        createCard: [StorePermission.MANAGE_PROJECTS, StorePermission.MANAGE_PROJECT_TASKS],
 
         createColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],
         updateColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],

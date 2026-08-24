@@ -15,10 +15,13 @@ export interface ProjectMember {
     employee?: { id: string; name: string; employee_code: string } | null;
 }
 
-/** One row in the picker, from either directory. */
+/**
+ * One row in the picker, as `/projects/member-candidates` returns it — users
+ * and login-less employees already merged and de-duplicated server-side.
+ */
 interface Candidate {
     key: string;
-    label: string;
+    name: string;
     hint: string;
     userId?: string;
     employeeId?: string;
@@ -47,61 +50,32 @@ export default function ProjectTeamCard({
     const m = t.projects;
 
     const [open, setOpen] = useState(false);
-    const [users, setUsers] = useState<{ id: string; name?: string | null; email: string }[]>([]);
-    const [employees, setEmployees] = useState<
-        { id: string; name: string; employee_code: string; user_id?: string | null }[]
-    >([]);
+    const [directory, setDirectory] = useState<Candidate[]>([]);
     const [picked, setPicked] = useState('');
     const [role, setRole] = useState('MEMBER');
     const [saving, setSaving] = useState(false);
 
-    const loadDirectories = useCallback(() => {
-        api.getTeamMembers()
-            .then((res: unknown) => setUsers((Array.isArray(res) ? res : []) as never))
-            .catch(() => setUsers([]));
-        api.getEmployees({ status: 'ACTIVE' })
-            .then((res: unknown) => {
-                const rows = Array.isArray(res) ? res : ((res as { items?: unknown[] })?.items ?? []);
-                setEmployees(rows as never);
-            })
-            .catch(() => setEmployees([]));
+    const loadDirectory = useCallback(() => {
+        api.getProjectMemberCandidates()
+            .then((res: unknown) => setDirectory((Array.isArray(res) ? res : []) as Candidate[]))
+            .catch(() => setDirectory([]));
     }, []);
 
     useEffect(() => {
-        if (open) loadDirectories();
-    }, [open, loadDirectories]);
+        if (open) loadDirectory();
+    }, [open, loadDirectory]);
 
+    /** Whoever is already on the project is dropped; the rest is as served. */
     const candidates = useMemo<Candidate[]>(() => {
         const takenUsers = new Set(members.map((mem) => mem.user?.id).filter(Boolean));
         const takenEmployees = new Set(members.map((mem) => mem.employee?.id).filter(Boolean));
 
-        const fromUsers: Candidate[] = users
-            .filter((u) => !takenUsers.has(u.id))
-            .map((u) => ({
-                key: `user:${u.id}`,
-                label: u.name || u.email,
-                hint: u.email,
-                userId: u.id,
-                noLogin: false,
-            }));
-
-        // De-duplicated on Employee.user_id: someone who is both an employee and
-        // a user is one person and must appear once, added as the user so they
-        // keep their permissions.
-        const linkedUserIds = new Set(users.map((u) => u.id));
-        const fromEmployees: Candidate[] = employees
-            .filter((e) => !takenEmployees.has(e.id))
-            .filter((e) => !(e.user_id && linkedUserIds.has(e.user_id)))
-            .map((e) => ({
-                key: `employee:${e.id}`,
-                label: e.name,
-                hint: e.employee_code,
-                employeeId: e.id,
-                noLogin: true,
-            }));
-
-        return [...fromUsers, ...fromEmployees];
-    }, [users, employees, members]);
+        return directory.filter(
+            (c) =>
+                !(c.userId && takenUsers.has(c.userId)) &&
+                !(c.employeeId && takenEmployees.has(c.employeeId)),
+        );
+    }, [directory, members]);
 
     const add = async () => {
         const candidate = candidates.find((c) => c.key === picked);
@@ -187,7 +161,7 @@ export default function ProjectTeamCard({
                             <option value="">—</option>
                             {candidates.map((c) => (
                                 <option key={c.key} value={c.key}>
-                                    {c.label} · {c.hint}
+                                    {c.name} · {c.hint}
                                     {c.noLogin ? ` (${m.team.noLogin})` : ''}
                                 </option>
                             ))}

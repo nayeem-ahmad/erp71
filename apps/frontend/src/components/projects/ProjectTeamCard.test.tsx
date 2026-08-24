@@ -5,13 +5,12 @@ const addProjectMember = jest.fn().mockResolvedValue({});
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getTeamMembers: jest.fn().mockResolvedValue([
-            { id: 'u1', name: 'Rakib Hasan', email: 'rakib@x.com' },
-        ]),
-        getEmployees: jest.fn().mockResolvedValue([
-            // Linked to u1 — the same person, who must not appear twice.
-            { id: 'e1', name: 'Rakib Hasan', employee_code: 'EMP-001', user_id: 'u1' },
-            { id: 'e2', name: 'Imran Kabir', employee_code: 'EMP-002', user_id: null },
+        // The merged directory the endpoint serves: users and login-less
+        // employees in one list, already de-duplicated server-side (the
+        // employee linked to u1 is the same person and is absent here).
+        getProjectMemberCandidates: jest.fn().mockResolvedValue([
+            { key: 'user:u1', userId: 'u1', name: 'Rakib Hasan', hint: 'rakib@x.com', noLogin: false },
+            { key: 'employee:e2', employeeId: 'e2', name: 'Imran Kabir', hint: 'EMP-002', noLogin: true },
         ]),
         addProjectMember: (...args: unknown[]) => addProjectMember(...args),
         removeProjectMember: jest.fn().mockResolvedValue({}),
@@ -37,13 +36,30 @@ describe('ProjectTeamCard picker', () => {
         expect(options.some((o) => o?.includes('Imran Kabir') && o?.includes('no login'))).toBe(true);
     });
 
-    it('lists a linked employee once, as the user, so they keep their permissions', async () => {
+    it('offers a workspace user under their own id, not the membership row id', async () => {
         render(<ProjectTeamCard projectId="p1" members={[]} onChanged={jest.fn()} />);
         await open();
 
         const rakib = screen.getAllByRole('option').filter((o) => o.textContent?.includes('Rakib Hasan'));
         expect(rakib).toHaveLength(1);
         expect(rakib[0]).toHaveValue('user:u1');
+    });
+
+    // The bug this replaced: the picker read `id` off `/team/members`, which
+    // returns `userId`, so every user was submitted with userId undefined and
+    // the API rejected it as "pick either a user or an employee".
+    it('sends userId for a workspace user', async () => {
+        render(<ProjectTeamCard projectId="p1" members={[]} onChanged={jest.fn()} />);
+        await open();
+
+        fireEvent.change(personSelect(), { target: { value: 'user:u1' } });
+        fireEvent.click(screen.getByText('Save'));
+
+        await waitFor(() => expect(addProjectMember).toHaveBeenCalled());
+        expect(addProjectMember).toHaveBeenCalledWith(
+            'p1',
+            expect.objectContaining({ userId: 'u1', employeeId: undefined }),
+        );
     });
 
     it('sends employeeId, not userId, for a person with no account', async () => {

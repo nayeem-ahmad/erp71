@@ -199,6 +199,17 @@ export class ProjectsController {
 
     // ── Projects ───────────────────────────────────────────────────────────
 
+    /**
+     * Declared above `@Get(':id')` — Nest matches in declaration order, so the
+     * parameterised route would otherwise swallow this literal path and try to
+     * load a project called "member-candidates".
+     */
+    @Get('member-candidates')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    memberCandidates(@Tenant() tenant: TenantContext) {
+        return this.projects.listMemberCandidates(tenant.tenantId);
+    }
+
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     list(@Tenant() tenant: TenantContext, @Query() query: ListProjectsDto) {

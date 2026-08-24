@@ -18,6 +18,7 @@ import { PageShell, PageHeader, Button, Select, StatusBadge } from '@/components
 import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
+import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
 import {
     CARD_ATTR,
     COLUMN_ATTR,
@@ -98,6 +99,10 @@ export default function BoardPage() {
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
     const [adding, setAdding] = useState(false);
+    const [projects, setProjects] = useState<ComposerProject[]>([]);
+    // Which project a composed card belongs to. Held here rather than per
+    // column so picking it once covers the whole board.
+    const [composerProject, setComposerProject] = useState('');
 
     const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
     const visibleUnsorted = useMemo(
@@ -146,6 +151,27 @@ export default function BoardPage() {
             .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
             .catch(() => setLabels([]));
     }, []);
+
+    // For the column composers. Also tenant-wide: a board can take a card from
+    // a project that has none on it yet, so this is not derived from the cards.
+    useEffect(() => {
+        api.getProjects({ limit: 100 })
+            .then((res) => setProjects((res?.items ?? []) as ComposerProject[]))
+            .catch(() => setProjects([]));
+    }, []);
+
+    // Default the composer to a project the board already works with, falling
+    // back to the first in the workspace — one less choice in the common case
+    // of a board that only ever draws from one project.
+    useEffect(() => {
+        if (composerProject || projects.length === 0) return;
+        const onBoard = columns
+            .flatMap((column) => column.tasks)
+            .concat(unsorted)
+            .map((task) => task.project?.id)
+            .find((id) => id && projects.some((project) => project.id === id));
+        setComposerProject(onBoard ?? projects[0].id);
+    }, [projects, columns, unsorted, composerProject]);
 
     const move = async (taskId: string, columnId: string, sortOrder: number) => {
         const task =
@@ -448,6 +474,15 @@ export default function BoardPage() {
                                         </Fragment>
                                     ))}
                                     {dropIndex === column.tasks.length && <DropIndicator />}
+
+                                    <BoardCardComposer
+                                        boardId={boardId}
+                                        columnId={column.id}
+                                        projects={projects}
+                                        projectId={composerProject}
+                                        onProjectChange={setComposerProject}
+                                        onCreated={loadBoard}
+                                    />
                                 </div>
                             </div>
                         );

@@ -26,6 +26,8 @@ jest.mock('@/lib/api', () => {
             moveBoardCard: jest.fn(),
             removeBoardTask: jest.fn(),
             getProjectLabels: jest.fn(),
+            getProjects: jest.fn(),
+            createBoardCard: jest.fn(),
         },
     };
 });
@@ -58,6 +60,13 @@ describe('BoardPage', () => {
         (api.moveBoardCard as jest.Mock).mockReset().mockResolvedValue({});
         (api.removeBoardTask as jest.Mock).mockReset().mockResolvedValue({});
         (api.getProjectLabels as jest.Mock).mockReset().mockResolvedValue([]);
+        (api.getProjects as jest.Mock).mockReset().mockResolvedValue({
+            items: [
+                { id: 'p1', code: 'ALP', name: 'Alpha' },
+                { id: 'p2', code: 'BET', name: 'Beta' },
+            ],
+        });
+        (api.createBoardCard as jest.Mock).mockReset().mockResolvedValue({});
     });
 
     it('renders each column with its cards', async () => {
@@ -140,6 +149,83 @@ describe('BoardPage', () => {
         // just the mapped columns.
         expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
         expect(screen.queryByText('Other orphan')).not.toBeInTheDocument();
+    });
+
+    describe('composing a card in a column', () => {
+        /** The composer of the nth column, opened. */
+        const openComposer = async (index: number) => {
+            const triggers = await screen.findAllByRole('button', { name: /add a card/i });
+            fireEvent.click(triggers[index]);
+            return screen.getByRole('textbox', { name: /add a card/i });
+        };
+
+        it('creates the task in the column it was typed into', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Ship docs');
+
+            // Second column: the status the card opens in has to come from the
+            // column, not the project's default, or it would jump lanes.
+            const field = await openComposer(1);
+            fireEvent.change(field, { target: { value: 'Write changelog' } });
+            fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+            await waitFor(() =>
+                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c2', {
+                    projectId: 'p1',
+                    title: 'Write changelog',
+                }),
+            );
+            // The new card only exists server-side until the board is re-read.
+            await waitFor(() => expect(api.getBoard).toHaveBeenCalledTimes(2));
+        });
+
+        it('submits on Enter and keeps the composer open for the next card', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const field = await openComposer(0);
+            fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+            fireEvent.keyDown(field, { key: 'Enter' });
+
+            await waitFor(() =>
+                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c1', {
+                    projectId: 'p1',
+                    title: 'Rotate the keys',
+                }),
+            );
+            await waitFor(() => expect(field).toHaveValue(''));
+            expect(screen.getByRole('textbox', { name: /add a card/i })).toBeInTheDocument();
+        });
+
+        it('sends the project chosen in the composer, since a board spans projects', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const field = await openComposer(0);
+            fireEvent.change(screen.getByRole('combobox', { name: 'Project' }), {
+                target: { value: 'p2' },
+            });
+            fireEvent.change(field, { target: { value: 'Draft the spec' } });
+            fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+            await waitFor(() =>
+                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c1', {
+                    projectId: 'p2',
+                    title: 'Draft the spec',
+                }),
+            );
+        });
+
+        it('sends nothing for a blank title', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const field = await openComposer(0);
+            fireEvent.change(field, { target: { value: '   ' } });
+            fireEvent.keyDown(field, { key: 'Enter' });
+
+            expect(api.createBoardCard).not.toHaveBeenCalled();
+        });
     });
 
     // Pointer dragging needs real layout to pick a drop target (see
