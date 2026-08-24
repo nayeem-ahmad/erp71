@@ -20,6 +20,7 @@ import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import {
     AddBoardTasksDto,
+    CreateBoardCardDto,
     CreateBoardColumnDto,
     CreateBoardDto,
     MoveBoardCardDto,
@@ -75,6 +76,30 @@ export class BoardsController {
         @Body() dto: AddBoardTasksDto,
     ) {
         return this.boards.addTasks(tenant, id, dto.taskIds);
+    }
+
+    /**
+     * Composing into a column, not adding an existing task — hence the column in
+     * the path and a title in the body rather than a list of task ids.
+     *
+     * Both permissions, because the call does both things: it creates a task
+     * (MANAGE_PROJECT_TASKS, as `POST /projects/tasks` requires) and it puts a
+     * card on a board (MANAGE_PROJECTS, as `addTasks` requires). Requiring only
+     * the board half would make this route a way to create tasks without the
+     * permission that governs creating tasks.
+     */
+    @Post(':id/columns/:columnId/cards')
+    @RequireStorePermission(
+        StorePermission.MANAGE_PROJECTS,
+        StorePermission.MANAGE_PROJECT_TASKS,
+    )
+    createCard(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('columnId') columnId: string,
+        @Body() dto: CreateBoardCardDto,
+    ) {
+        return this.boards.createCard(tenant, id, columnId, dto);
     }
 
     @Delete(':id/tasks/:taskId')

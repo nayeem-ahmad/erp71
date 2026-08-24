@@ -46,6 +46,17 @@ export class AddBoardTasksDto {
     taskIds!: string[];
 }
 
+/** A card composed in a column, JIRA-style: a title and the project it is for. */
+export class CreateBoardCardDto {
+    @IsUUID()
+    projectId!: string;
+
+    @IsString()
+    @MinLength(1)
+    @MaxLength(300)
+    title!: string;
+}
+
 export class MoveBoardCardDto {
     @IsUUID()
     columnId!: string;

@@ -3,7 +3,12 @@ import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
-import { CreateBoardDto, MoveBoardCardDto, UpdateBoardDto } from './board.dto';
+import {
+    CreateBoardCardDto,
+    CreateBoardDto,
+    MoveBoardCardDto,
+    UpdateBoardDto,
+} from './board.dto';
 
 /**
  * What a card shows. Deliberately the same field set the board page already
@@ -208,6 +213,62 @@ export class BoardsService {
         }
 
         return this.findOne(viewer, boardId);
+    }
+
+    /**
+     * Compose a card straight into a column, the way JIRA lets you add an issue
+     * at the bottom of a lane. The board is cross-project, so the project comes
+     * with the request — nothing else can say which status set the new task
+     * belongs to.
+     *
+     * The column decides the status rather than the project's default: a card
+     * typed into "In Progress" that opened in "To Do" would jump lanes the
+     * moment it was saved.
+     */
+    async createCard(
+        viewer: ProjectViewer,
+        boardId: string,
+        columnId: string,
+        dto: CreateBoardCardDto,
+    ) {
+        const tenantId = viewer.tenantId;
+        await this.assertBoard(tenantId, boardId);
+
+        const column = (await this.columns.listColumns(tenantId, boardId)).find(
+            (c: { id: string }) => c.id === columnId,
+        );
+        if (!column) throw new NotFoundException('Board column not found');
+
+        // Visibility is checked before anything is bound: a project the viewer
+        // cannot see must not leave its status set mapped onto a shared board.
+        await this.access.assertProjectVisible(viewer, dto.projectId);
+
+        // The first card from a project usually arrives through addTasks, which
+        // binds the whole status set. Composing is the other way in, so it has
+        // to bind too or the card it just made would land in Unsorted.
+        await this.columns.bindProject(tenantId, boardId, dto.projectId);
+
+        const statusId = await this.columns.resolveStatusId(
+            tenantId,
+            boardId,
+            columnId,
+            dto.projectId,
+        );
+        if (!statusId) {
+            throw new BadRequestException(
+                'That column is not mapped to a status in this project. Map it in board settings first.',
+            );
+        }
+
+        const task = await this.tasks.create(viewer, {
+            projectId: dto.projectId,
+            title: dto.title,
+            statusId,
+        });
+
+        // addTasks returns the reloaded board, which is exactly what the page
+        // needs to render the new card.
+        return this.addTasks(viewer, boardId, [task.id]);
     }
 
     async removeTask(viewer: ProjectViewer, boardId: string, taskId: string) {

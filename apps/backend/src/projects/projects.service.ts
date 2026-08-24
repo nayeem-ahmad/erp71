@@ -317,6 +317,58 @@ export class ProjectsService {
     // ── Members ────────────────────────────────────────────────────────────
 
     /**
+     * Everyone in the workspace who could be put on a project: the users with a
+     * login, plus the employees without one.
+     *
+     * It exists because the two directories it replaces are gated on
+     * permissions a project manager has no reason to hold — `/team/members`
+     * needs MANAGE_USERS and `/employees` needs VIEW_HR — so anyone who could
+     * manage a project but not the payroll got an empty picker. This one is
+     * gated on MANAGE_PROJECTS, the same permission `addMember` already needs,
+     * and returns names only.
+     *
+     * De-duplication is here rather than in the picker so "who is on this
+     * project" has one answer: an employee row linked to a user is the same
+     * person as that user, and is offered as the user so they keep their
+     * permissions.
+     */
+    async listMemberCandidates(tenantId: string) {
+        const [users, employees] = await Promise.all([
+            this.db.tenantUser.findMany({
+                where: { tenant_id: tenantId },
+                include: { user: { select: { id: true, name: true, email: true } } },
+                orderBy: { user: { email: 'asc' } },
+            }),
+            this.db.employee.findMany({
+                where: { tenant_id: tenantId, deleted_at: null, status: 'ACTIVE' as never },
+                select: { id: true, name: true, employee_code: true, user_id: true },
+                orderBy: { name: 'asc' },
+            }),
+        ]);
+
+        const userIds = new Set(users.map((row: { user_id: string }) => row.user_id));
+
+        return [
+            ...users.map((row: { user: { id: string; name: string | null; email: string } }) => ({
+                key: `user:${row.user.id}`,
+                userId: row.user.id,
+                name: row.user.name || row.user.email,
+                hint: row.user.email,
+                noLogin: false,
+            })),
+            ...employees
+                .filter((e: { user_id: string | null }) => !(e.user_id && userIds.has(e.user_id)))
+                .map((e: { id: string; name: string; employee_code: string }) => ({
+                    key: `employee:${e.id}`,
+                    employeeId: e.id,
+                    name: e.name,
+                    hint: e.employee_code,
+                    noLogin: true,
+                })),
+        ];
+    }
+
+    /**
      * A member is either a workspace user or an employee with no login. Prisma
      * cannot express "exactly one of", so it is enforced here — the alternative
      * is a row that belongs to nobody or to two people.
@@ -324,7 +376,14 @@ export class ProjectsService {
     async addMember(viewer: ProjectViewer, projectId: string, dto: UpsertProjectMemberDto) {
         const tenantId = viewer.tenantId;
         await this.assertProject(viewer, projectId);
-        if (Boolean(dto.userId) === Boolean(dto.employeeId)) {
+        // Split rather than one `Boolean(a) === Boolean(b)` check: the two ways
+        // to fail it have nothing to do with each other, and reporting "not
+        // both" at an empty request sent people hunting for a second selection
+        // they had never made.
+        if (!dto.userId && !dto.employeeId) {
+            throw new BadRequestException('Pick the person to add.');
+        }
+        if (dto.userId && dto.employeeId) {
             throw new BadRequestException('Pick either a workspace user or an employee, not both.');
         }
 
