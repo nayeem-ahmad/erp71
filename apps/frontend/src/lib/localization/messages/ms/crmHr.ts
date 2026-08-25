@@ -367,6 +367,7 @@ export const crmHrMessages = {
             },
             allCategories: 'Semua kategori',
             allPriorities: 'Semua keutamaan',
+            allOwners: 'Semua pemilik',
             myTodaysActions: 'Senarai tindakan saya hari ini',
             myTodaysActionsEmpty: 'Tiada prospek dengan langkah seterusnya ditugaskan kepada anda untuk hari ini.',
             statuses: {

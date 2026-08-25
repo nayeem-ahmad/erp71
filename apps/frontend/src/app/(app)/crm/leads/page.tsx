@@ -42,6 +42,8 @@ interface Lead {
     next_step: string | null;
     next_step_date: string | null;
     last_contacted_at: string | null;
+    /** The lead's owner. `nextStepAssignee` below is the *activity* assignee. */
+    assignee: { id: string; name: string } | null;
     nextStepAssignee: { id: string; name: string } | null;
     custom_fields: Record<string, string> | null;
     created_at: string;
@@ -101,6 +103,7 @@ export default function LeadsPage() {
     const [categoryFilter, setCategoryFilter] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
+    const [ownerFilter, setOwnerFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
@@ -141,6 +144,7 @@ export default function LeadsPage() {
                         category: categoryFilter || undefined,
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
+                        assignedTo: ownerFilter || undefined,
                         myActionsToday: myTodaysActions || undefined,
                         page: p,
                         limit,
@@ -150,7 +154,7 @@ export default function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -163,6 +167,7 @@ export default function LeadsPage() {
                 category: categoryFilter || undefined,
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
+                assignedTo: ownerFilter || undefined,
                 myActionsToday: myTodaysActions || undefined,
                 page,
                 limit: pageSize,
@@ -180,14 +185,14 @@ export default function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, createdRange, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -226,6 +231,16 @@ export default function LeadsPage() {
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
+
+    const memberOptions = useMemo(
+        () => teamMembers
+            .map((mem) => {
+                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+                return id ? { id, label: mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id } : null;
+            })
+            .filter((entry): entry is { id: string; label: string } => entry !== null),
+        [teamMembers],
+    );
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
         columnHelper.accessor('name', {
@@ -273,6 +288,15 @@ export default function LeadsPage() {
                     {statusLabel(info.getValue())}
                 </StatusBadge>
             ),
+        }),
+        columnHelper.accessor('assignee', {
+            id: 'assignee',
+            // "Lead Owner" reads unambiguously on its own, so this is the same
+            // label the form uses — unlike the next-step assignee below, which
+            // needs a column-scoped one.
+            header: m.fields.owner,
+            cell: (info) => info.getValue()?.name ?? '—',
+            enableSorting: false,
         }),
         columnHelper.accessor('score', {
             header: m.fields.score,
@@ -425,6 +449,14 @@ export default function LeadsPage() {
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </Select>
+                <Select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="w-auto max-w-[180px]">
+                    <option value="">{m.allOwners}</option>
+                    {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. Every lead
+                        created before the owner field existed is unowned, so reaching
+                        them to distribute is the main use of this filter. */}
+                    <option value="unassigned">{m.fields.unassigned}</option>
+                    {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
@@ -473,11 +505,7 @@ export default function LeadsPage() {
                         >
                             <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
                             <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
-                            {teamMembers.map((mem) => {
-                                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
-                                const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
-                                return id ? <option key={id} value={id}>{label}</option> : null;
-                            })}
+                            {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
                         </select>
                     </>
                 )}

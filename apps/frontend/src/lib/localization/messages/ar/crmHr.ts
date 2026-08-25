@@ -367,6 +367,7 @@ export const crmHrMessages = {
             },
             allCategories: 'كل التصنيفات',
             allPriorities: 'كل الأولويات',
+            allOwners: 'كل المالكين',
             myTodaysActions: 'قائمة مهامي اليوم',
             myTodaysActionsEmpty: 'لا يوجد عملاء محتملون بخطوات تالية مسنَدة إليك اليوم.',
             statuses: {

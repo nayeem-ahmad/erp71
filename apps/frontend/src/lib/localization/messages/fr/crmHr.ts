@@ -367,6 +367,7 @@ export const crmHrMessages = {
             },
             allCategories: "Toutes les catégories",
             allPriorities: "Toutes les priorités",
+            allOwners: "Tous les propriétaires",
             myTodaysActions: "Ma liste d'actions du jour",
             myTodaysActionsEmpty: "Aucune piste avec une prochaine étape qui vous est attribuée aujourd'hui.",
             statuses: {
