@@ -13,6 +13,7 @@ import {
     LeadFormFields,
     emptyLeadForm,
     leadFormToPayload,
+    setLeadOwner,
     validateLeadFormErrors,
     type LeadFormErrors,
 } from '../lead-form-fields';
@@ -41,6 +42,20 @@ export default function NewLeadPage() {
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+    }, []);
+
+    // A lead belongs to whoever files it unless they say otherwise — the same
+    // default the backend applies, surfaced so the picker is never blank. It also
+    // seeds the opening activity's assignee, which is what stops that second
+    // picker from reading as a duplicate of the owner one. Only while both are
+    // still untouched, so it never overwrites a real choice.
+    useEffect(() => {
+        api.getMe()
+            .then((me: any) => {
+                if (!me?.id) return;
+                setForm((prev) => (prev.assigned_to ? prev : setLeadOwner(prev, me.id)));
+            })
+            .catch(() => null);
     }, []);
 
     useEffect(() => {

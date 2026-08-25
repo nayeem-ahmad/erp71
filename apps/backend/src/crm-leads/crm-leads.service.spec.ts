@@ -300,6 +300,57 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    describe('lead owner', () => {
+        it('defaults the owner to the creating user when the payload names none', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-30' });
+
+            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any);
+
+            expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-1');
+        });
+
+        it('keeps the owner the payload names', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-31' });
+
+            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: 'user-9' } as any);
+
+            expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-9');
+        });
+
+        it('files a lead against the creator even when the payload unassigns it', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-32' });
+
+            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: null } as any);
+
+            expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-1');
+        });
+
+        it('clears the owner when an update explicitly unassigns it', async () => {
+            const existing = {
+                id: 'lead-33',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.CONTACTED,
+                priority: 'HIGH',
+                source_id: 'src-other',
+                last_contacted_at: null,
+                next_step_date: null,
+                lost_reason: null,
+                assigned_to: 'user-9',
+            };
+            db.lead.findFirst.mockResolvedValueOnce(existing);
+            db.lead.update.mockResolvedValueOnce({ ...existing, assigned_to: null });
+
+            await service.update('tenant-1', 'lead-33', { assigned_to: null } as any);
+
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ assigned_to: null }) }),
+            );
+        });
+    });
+
     describe('create() — lost_reason validation', () => {
         it('rejects creating a LOST lead without a lost_reason', async () => {
             db.lead.findUnique.mockResolvedValueOnce(null);

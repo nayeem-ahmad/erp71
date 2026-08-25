@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'टाइमर रोका नहीं जा सका।',
         timerUpdateFailed: 'टाइमर अपडेट नहीं हो सका।',
         timerDiscarded: 'टाइमर हटा दिया गया। कुछ भी दर्ज नहीं हुआ।',
-        timerDiscardedShort: 'यह एक मिनट से कम चला, इसलिए कुछ दर्ज नहीं हुआ।',
+        timerStartedAt: 'शुरू हुआ',
         timerAlreadyRunning: '"{task}" पर पहले से टाइमर चल रहा है। पहले उसे रोकें।',
         timerOverlapped: 'ये घंटे "{task}" पर पहले दर्ज समय से टकरा रहे हैं।',
         overlapTitle: 'ये घंटे आपस में टकरा रहे हैं',

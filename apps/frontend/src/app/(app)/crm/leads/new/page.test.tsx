@@ -15,7 +15,11 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getTeamMembers: jest.fn().mockResolvedValue([]),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-1', name: 'Nayeem' }),
+        getTeamMembers: jest.fn().mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]),
         getCustomFields: jest.fn().mockResolvedValue([]),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         createLead: jest.fn(),
@@ -68,5 +72,46 @@ describe('NewLeadPage — initial status', () => {
 
         expect(await screen.findByText('Please provide a reason for marking this lead as lost.')).toBeInTheDocument();
         expect(api.createLead).not.toHaveBeenCalled();
+    });
+});
+
+describe('NewLeadPage — lead owner', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.createLead.mockResolvedValue({ id: 'lead-1' });
+    });
+
+    it('files the lead against the current user by default', async () => {
+        render(<NewLeadPage />);
+
+        await waitFor(() => expect((fieldControl('Lead Owner') as HTMLSelectElement).value).toBe('user-1'));
+
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Karim Traders' } });
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead).toHaveBeenCalledWith(expect.objectContaining({ assigned_to: 'user-1' }));
+    });
+
+    it('points the opening next step at the new owner too', async () => {
+        render(<NewLeadPage />);
+
+        await waitFor(() => expect((fieldControl('Lead Owner') as HTMLSelectElement).value).toBe('user-1'));
+        fireEvent.change(fieldControl('Lead Owner'), { target: { value: 'user-2' } });
+
+        expect((fieldControl('Assigned To') as HTMLSelectElement).value).toBe('user-2');
+    });
+
+    it('sends the address the form collects', async () => {
+        render(<NewLeadPage />);
+
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Karim Traders' } });
+        fireEvent.change(fieldControl('Address'), { target: { value: '12 Gulshan Ave, Dhaka' } });
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead).toHaveBeenCalledWith(
+            expect.objectContaining({ address: '12 Gulshan Ave, Dhaka' }),
+        );
     });
 });

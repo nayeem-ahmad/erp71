@@ -292,7 +292,10 @@ export default function LeadsPage() {
             cell: (info) => info.getValue() ? formatDate(info.getValue() as string) : '—',
         }),
         columnHelper.accessor('nextStepAssignee', {
-            header: m.fields.nextStepAssignedTo,
+            // The column-scoped label, not `fields.nextStepAssignedTo` — that one
+            // reads "Assigned To" because the form's "Next Step" section header
+            // already scopes it, which a bare table column does not.
+            header: m.columns.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
             enableSorting: false,
         }),

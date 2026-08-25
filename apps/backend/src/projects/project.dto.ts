@@ -614,13 +614,22 @@ export class StartTimerDto {
     tagIds?: string[];
 }
 
-/** Everything a running timer can be edited to while it runs, except its start. */
+/** Everything a running timer can be edited to while it runs. */
 export class UpdateTimerDto {
     @IsOptional() @IsString() @MaxLength(500)
     note?: string;
 
     @IsOptional() @IsArray() @IsUUID('4', { each: true })
     tagIds?: string[];
+
+    /**
+     * A correction to where the clock started, as a Dhaka `HH:mm` — the same
+     * shape a manual entry's span takes, so the two fields on the screen read
+     * alike. It resolves to the last instant that read that time, which is why
+     * no date comes with it. Never sent at `start`: see `ProjectTimerService`.
+     */
+    @IsOptional() @Matches(TIME_OF_DAY)
+    startTime?: string;
 }
 
 export class StopTimerDto {

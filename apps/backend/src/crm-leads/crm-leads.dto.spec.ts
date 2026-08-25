@@ -29,6 +29,22 @@ describe('UpdateLeadDto', () => {
         );
     });
 
+    it('turns a blank owner into an explicit null, so a lead can be unassigned', async () => {
+        const result: any = await pipe.transform({ name: 'Karim Traders', assigned_to: '' }, metadata);
+        expect(result.assigned_to).toBeNull();
+    });
+
+    it('still rejects a malformed owner id', async () => {
+        await expect(
+            pipe.transform({ name: 'Karim Traders', assigned_to: 'not-a-uuid' }, metadata),
+        ).rejects.toThrow(BadRequestException);
+    });
+
+    it('turns a blank address into an explicit null rather than storing an empty string', async () => {
+        const result: any = await pipe.transform({ name: 'Karim Traders', address: '' }, metadata);
+        expect(result.address).toBeNull();
+    });
+
     it('rejects next_step keys the edit form used to send', async () => {
         await expect(
             pipe.transform(

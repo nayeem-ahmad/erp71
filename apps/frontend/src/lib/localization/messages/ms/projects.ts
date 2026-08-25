@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'Pemasa tidak dapat dihentikan.',
         timerUpdateFailed: 'Pemasa tidak dapat dikemas kini.',
         timerDiscarded: 'Pemasa dibuang. Tiada apa-apa direkodkan.',
-        timerDiscardedShort: 'Ia berjalan kurang seminit, jadi tiada apa-apa direkodkan.',
+        timerStartedAt: 'Bermula pada',
         timerAlreadyRunning: 'Pemasa sedang berjalan pada "{task}". Hentikan dahulu.',
         timerOverlapped: 'Jam itu bertindih dengan masa yang anda sudah log pada "{task}".',
         overlapTitle: 'Jam ini bertindih',

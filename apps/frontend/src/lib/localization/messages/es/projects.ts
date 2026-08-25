@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'No se pudo detener el temporizador.',
         timerUpdateFailed: 'No se pudo actualizar el temporizador.',
         timerDiscarded: 'Temporizador descartado. No se registró nada.',
-        timerDiscardedShort: 'Duró menos de un minuto, así que no se registró nada.',
+        timerStartedAt: 'Iniciado a las',
         timerAlreadyRunning: 'Ya hay un temporizador en marcha en «{task}». Deténlo primero.',
         timerOverlapped: 'Esas horas se solapan con tiempo que ya registraste en «{task}».',
         overlapTitle: 'Estas horas se solapan',

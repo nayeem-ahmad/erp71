@@ -33,6 +33,18 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
 
 /**
+ * The counterpart to `emptyToUndefined`: `''` survives as an explicit `null`,
+ * which `mapLeadData` writes to the column. Use it for a field the form shows
+ * and therefore has to be able to *clear* — `undefined` means "leave alone",
+ * which would make the control silently do nothing when emptied.
+ *
+ * `@IsOptional()` skips the type check for `null` as well as `undefined`, so a
+ * nulled field still keeps its `@IsUUID()` / `@IsString()` guard on real values.
+ */
+const emptyToNull = ({ value }: { value: unknown }) =>
+    value === '' || value === null ? null : value;
+
+/**
  * Note on `source` / `category` across the DTOs below.
  *
  * They are tenant-managed rows in `LeadSourceOption` / `LeadCategoryOption`, not
@@ -60,8 +72,9 @@ export class CreateLeadDto {
     email?: string;
 
     @IsOptional()
+    @Transform(emptyToNull)
     @IsString()
-    address?: string;
+    address?: string | null;
 
     @IsOptional()
     @IsString()
@@ -130,10 +143,15 @@ export class CreateLeadDto {
     @IsUUID()
     next_step_assigned_to?: string;
 
+    /**
+     * The lead's owner. Cleared with `''`/`null` (see `emptyToNull`) rather than
+     * left alone, because the lead form's owner picker offers "Unassigned" — the
+     * same clear the list's bulk assign has always supported.
+     */
     @IsOptional()
-    @Transform(emptyToUndefined)
+    @Transform(emptyToNull)
     @IsUUID()
-    assigned_to?: string;
+    assigned_to?: string | null;
 
     @IsOptional()
     @Transform(emptyToUndefined)
@@ -160,8 +178,9 @@ export class UpdateLeadDto {
     email?: string;
 
     @IsOptional()
+    @Transform(emptyToNull)
     @IsString()
-    address?: string;
+    address?: string | null;
 
     @IsOptional()
     @IsString()
@@ -223,10 +242,15 @@ export class UpdateLeadDto {
     // CreateLeadDto only because a lead filed with an opening next step has no
     // activity to attach to yet, and create() materialises one from them.
 
+    /**
+     * The lead's owner. Cleared with `''`/`null` (see `emptyToNull`) rather than
+     * left alone, because the lead form's owner picker offers "Unassigned" — the
+     * same clear the list's bulk assign has always supported.
+     */
     @IsOptional()
-    @Transform(emptyToUndefined)
+    @Transform(emptyToNull)
     @IsUUID()
-    assigned_to?: string;
+    assigned_to?: string | null;
 
     @IsOptional()
     @IsObject()

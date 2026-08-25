@@ -1,29 +1,52 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { StartTimerDto, StopTimerDto, UpdateTimerDto } from './project.dto';
-import { hoursBetween, spanTimes, workDateFor } from './project-time-span.util';
+import {
+    dhakaTimeOfDay,
+    hoursBetween,
+    lastInstantAt,
+    spanTimes,
+    workDateFor,
+} from './project-time-span.util';
 import { liveTagIds } from './project-time-tags.util';
 
 /**
- * Below this, a timer is a misclick rather than work: it is discarded instead
- * of writing a zero-hour entry that every count on the report would then treat
- * as a real sitting. The caller is told which happened, so the UI can say so
- * rather than leaving someone wondering where their entry went.
+ * The smallest figure a `Decimal(8, 2)` column can hold, and the floor every
+ * stop is recorded at.
+ *
+ * `hoursBetween` rounds a sitting of a few seconds to zero, and stopping always
+ * writes a row (see the class comment), so without this the shortest sittings
+ * would be stored as a literal `0.00` — which reads on a timesheet as "nothing
+ * happened" rather than as the short sitting it was.
  */
-export const MIN_TIMER_SECONDS = 36;
+const MIN_LOGGED_HOURS = 0.01;
 
 /**
  * The running clock.
  *
- * Two rules carry the whole feature. **The start time is the server's**, never
- * a figure posted by the client — a closed browser, a slept phone or a second
- * device all have to be able to pick the same timer back up, and a start time
- * the client can state is a start time the client can edit. And **stopping
- * always succeeds**: the overlap that would refuse a manual entry is reported
- * as a warning here and written anyway, because a clock somebody cannot stop
- * is worse than a row somebody has to fix.
+ * Two rules carry the whole feature.
+ *
+ * **The start time is the server's**, never a figure posted by the client — a
+ * closed browser, a slept phone or a second device all have to be able to pick
+ * the same timer back up. It can be *corrected* afterwards by the person the
+ * clock belongs to (`update`), because the common case is remembering the timer
+ * an hour after starting the work; what it can never be is stated at `start`,
+ * where a client clock minutes out of true would silently become the record.
+ *
+ * **Stopping always writes the entry.** The overlap that would refuse a manual
+ * entry is reported as a warning here and written anyway, and a sitting of a
+ * few seconds is written at {@link MIN_LOGGED_HOURS} rather than thrown away.
+ * A stop that records nothing leaves somebody hunting for an entry that was
+ * never written, which is worse than a row they can edit or delete — and the
+ * discard button beside STOP is already the way to say "that was a misclick",
+ * stated rather than guessed at from a duration.
  */
 @Injectable()
 export class ProjectTimerService {
@@ -81,13 +104,36 @@ export class ProjectTimerService {
         return this.hydrate(viewer.tenantId, timer);
     }
 
-    /** Note and tags are editable while the clock runs; the start time is not. */
+    /**
+     * Note, tags and the start time, all editable while the clock runs.
+     *
+     * The start arrives as a Dhaka `HH:mm` — the same shape the manual entry
+     * form takes — and resolves to the last instant that read it, so nobody has
+     * to name a date to say "I actually started at nine". See
+     * {@link lastInstantAt} for what that costs and why it is the right reading.
+     */
     async update(viewer: ProjectViewer, dto: UpdateTimerDto) {
         const timer = await this.requireRunning(viewer);
+
+        let startedAt: Date | null = null;
+        if (dto.startTime !== undefined) {
+            // `Date.now()` rather than `new Date()` for the same reason
+            // `hydrate` reads it: it is the one clock in this file a test can
+            // hold still.
+            startedAt = lastInstantAt(new Date(Date.now()), dto.startTime);
+            // The DTO's pattern already rejects anything but `HH:mm`; this is
+            // the belt to its braces, and keeps the method safe to call from
+            // anywhere that is not behind the pipe.
+            if (!startedAt) {
+                throw new BadRequestException('Give the start time as HH:mm.');
+            }
+        }
+
         const updated = await this.db.projectTimer.update({
             where: { id: timer.id },
             data: {
                 ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
+                ...(startedAt ? { started_at: startedAt } : {}),
                 ...(dto.tagIds !== undefined
                     ? { tag_ids: await liveTagIds(this.db, viewer.tenantId, dto.tagIds) }
                     : {}),
@@ -104,18 +150,15 @@ export class ProjectTimerService {
      * Stops the clock and writes the hour log, in one transaction with the
      * timer's deletion — a stop that recorded the entry and left the timer
      * running would double-count the same sitting on the next stop.
+     *
+     * There is no duration below which this records nothing: see the class
+     * comment.
      */
     async stop(viewer: ProjectViewer, dto: StopTimerDto = {}) {
         const timer = await this.requireRunning(viewer);
         const endedAt = new Date();
-        const seconds = (endedAt.getTime() - timer.started_at.getTime()) / 1000;
 
-        if (seconds < MIN_TIMER_SECONDS) {
-            await this.db.projectTimer.delete({ where: { id: timer.id } });
-            return { discarded: true as const, entry: null, seconds: Math.round(seconds) };
-        }
-
-        const hours = hoursBetween(timer.started_at, endedAt);
+        const hours = Math.max(hoursBetween(timer.started_at, endedAt), MIN_LOGGED_HOURS);
         // The Dhaka day the clock *started* on, not the day it stopped: a
         // sitting that runs past midnight belongs to the evening it began in,
         // which is also how somebody reading their own timesheet reads it.
@@ -184,7 +227,6 @@ export class ProjectTimerService {
         });
 
         return {
-            discarded: false as const,
             entry: { ...entry, ...spanTimes(entry.started_at, entry.ended_at) },
             // Reported rather than refused: see the class comment. The row is
             // written either way and the UI warns instead of blocking.
@@ -270,6 +312,10 @@ export class ProjectTimerService {
             task: timer.task ?? null,
             project: timer.project ?? null,
             started_at: timer.started_at,
+            // The Dhaka wall clock the start reads as, so the field that edits
+            // it needs no timezone arithmetic of its own — the same courtesy
+            // `spanTimes` does a stored entry.
+            start_time: dhakaTimeOfDay(timer.started_at),
             // The client renders a ticking clock from this rather than from its
             // own `Date.now()` against a parsed timestamp, so a device whose
             // clock is minutes out still shows the elapsed time the server will

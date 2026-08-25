@@ -275,19 +275,13 @@ export default function HourLogsPage() {
     const stopTimer = () =>
         runTimerAction(async () => {
             const result = (await api.stopProjectTimer()) as
-                | { discarded?: boolean; overlap?: { taskTitle?: string | null } | null }
+                | { overlap?: { taskTitle?: string | null } | null }
                 | null;
-            if (result?.discarded) {
-                // Nothing was written. Saying "saved" here would be a lie, and
-                // saying nothing leaves someone hunting for a missing entry.
-                toast.info(hl.timerDiscardedShort);
-            } else {
-                toast.success(m.time.logged);
-                if (result?.overlap) {
-                    toast.info(
-                        hl.timerOverlapped.replace('{task}', result.overlap.taskTitle ?? '—'),
-                    );
-                }
+            // A stop always writes the entry, however briefly the clock ran —
+            // the discard button beside it is the way to throw one away.
+            toast.success(m.time.logged);
+            if (result?.overlap) {
+                toast.info(hl.timerOverlapped.replace('{task}', result.overlap.taskTitle ?? '—'));
             }
             await refresh();
         }, hl.timerStopFailed);
@@ -298,7 +292,7 @@ export default function HourLogsPage() {
             toast.info(hl.timerDiscarded);
         }, hl.timerStopFailed);
 
-    const patchTimer = (patch: { note?: string; tagIds?: string[] }) =>
+    const patchTimer = (patch: { note?: string; tagIds?: string[]; startTime?: string }) =>
         runTimerAction(() => api.updateProjectTimer(patch), hl.timerUpdateFailed);
 
     /**
@@ -540,6 +534,7 @@ export default function HourLogsPage() {
                     timerMode: hl.timerMode,
                     manualMode: hl.manualMode,
                     running: hl.running,
+                    startedAt: hl.timerStartedAt,
                 }}
                 projects={projects}
                 tasks={captureTasks}
