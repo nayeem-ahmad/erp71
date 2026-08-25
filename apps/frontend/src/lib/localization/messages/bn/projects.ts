@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'টাইমার থামানো যায়নি।',
         timerUpdateFailed: 'টাইমার হালনাগাদ করা যায়নি।',
         timerDiscarded: 'টাইমার বাতিল হয়েছে। কিছুই রেকর্ড হয়নি।',
-        timerDiscardedShort: 'এক মিনিটেরও কম চলেছে, তাই কিছুই রেকর্ড হয়নি।',
+        timerStartedAt: 'শুরু হয়েছে',
         timerAlreadyRunning: '"{task}"-এ ইতিমধ্যে একটি টাইমার চলছে। আগে সেটি থামান।',
         timerOverlapped: 'এই ঘণ্টাগুলো "{task}"-এ আগে লেখা সময়ের সঙ্গে মিলে যাচ্ছে।',
         overlapTitle: 'এই ঘণ্টাগুলো মিলে যাচ্ছে',

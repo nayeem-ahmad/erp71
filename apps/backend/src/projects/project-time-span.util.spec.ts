@@ -4,6 +4,7 @@ import {
     dhakaDayStart,
     dhakaTimeOfDay,
     hoursBetween,
+    lastInstantAt,
     parseTimeOfDay,
     workDateFor,
     spanTimes,
@@ -199,6 +200,44 @@ describe('project time spans', () => {
         it('is two nulls for the entries that have no span, which is most of them', () => {
             expect(spanTimes(null, null)).toEqual({ start_time: null, end_time: null });
         });
+    });
+
+    describe('lastInstantAt', () => {
+        // 11:00 Dhaka on the 18th.
+        const now = utc('2026-08-18T05:00:00Z');
+
+        it('is earlier today when the clock has already passed that time', () => {
+            expect(lastInstantAt(now, '09:00')!.toISOString()).toBe('2026-08-18T03:00:00.000Z');
+        });
+
+        it('is now when the time is this very minute', () => {
+            expect(lastInstantAt(now, '11:00')!.toISOString()).toBe('2026-08-18T05:00:00.000Z');
+        });
+
+        it('is yesterday when the time is still ahead on today’s clock', () => {
+            expect(lastInstantAt(now, '22:00')!.toISOString()).toBe('2026-08-17T16:00:00.000Z');
+        });
+
+        it('reads the Dhaka day, not the UTC one — an evening is already tomorrow in UTC', () => {
+            // 00:20 Dhaka on the 19th is 18:20Z on the 18th.
+            const lateEvening = utc('2026-08-18T18:20:00Z');
+            expect(lastInstantAt(lateEvening, '22:00')!.toISOString()).toBe(
+                '2026-08-18T16:00:00.000Z',
+            );
+        });
+
+        it('never reaches back a full day', () => {
+            const back = now.getTime() - lastInstantAt(now, '11:01')!.getTime();
+            expect(back).toBeLessThan(24 * 60 * 60 * 1000);
+            expect(back).toBe(24 * 60 * 60 * 1000 - 60 * 1000);
+        });
+
+        it.each([['', null], ['half nine', null], ['25:00', null], [null, null]])(
+            'is null for %p, which is not a wall clock',
+            (value) => {
+                expect(lastInstantAt(now, value as never)).toBeNull();
+            },
+        );
     });
 
     describe('round trip', () => {

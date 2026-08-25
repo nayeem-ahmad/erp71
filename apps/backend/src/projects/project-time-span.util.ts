@@ -186,3 +186,30 @@ export function spanTimes(
         end_time: endedAt ? dhakaTimeOfDay(endedAt) : null,
     };
 }
+
+/**
+ * The most recent instant whose Dhaka wall clock reads `HH:mm`, at or before
+ * `now`. Null if the string is not a time of day.
+ *
+ * This is how a running clock's start is corrected. Someone who began at 09:00
+ * and only remembered the timer at 11:00 types `09:00` and means this morning;
+ * someone correcting a late sitting at 00:20 types `22:00` and means last
+ * night. Both are "the last time the clock read that", which is what a bare
+ * time of day means when no date is attached to it.
+ *
+ * A time still ahead on today's clock is therefore read as yesterday's, the
+ * same liberty `buildSpan` takes with an end before its start — and for the
+ * same reason: a person logging an evening should not have to name a date to
+ * say something obvious. It bounds a correction at just under 24 hours by
+ * construction, so there is no separate limit to enforce.
+ */
+export function lastInstantAt(now: Date, timeOfDay: string | null | undefined): Date | null {
+    const minutes = parseTimeOfDay(timeOfDay);
+    if (minutes === null) return null;
+    const dayStart = dhakaDayStart(dhakaDateKey(now));
+    if (!dayStart) return null;
+    const candidate = new Date(dayStart.getTime() + minutes * MINUTE_MS);
+    return candidate.getTime() > now.getTime()
+        ? new Date(candidate.getTime() - DAY_MS)
+        : candidate;
+}

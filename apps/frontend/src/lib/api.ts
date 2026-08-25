@@ -4105,7 +4105,8 @@ export const api = {
     // ── The running clock ──────────────────────────────────────────────────
     //
     // Every one of these acts on the caller's own timer; none takes a user id.
-    // The start time is the server's, so nothing here sends one.
+    // The start time is the server's at `start`; it can be corrected afterwards
+    // through `updateProjectTimer`, never stated when the clock begins.
 
     /** The caller's running timer, or null. */
     getProjectTimer: () => fetchWithAuth('/project-time/timer'),
@@ -4115,17 +4116,21 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    /** Note and tags only — a running timer's start time is not editable. */
-    updateProjectTimer: (data: { note?: string; tagIds?: string[] }) =>
+    /**
+     * Note, tags and a correction to where the clock started, as a Dhaka
+     * `HH:mm` — the server reads it as the last instant that read that time,
+     * so no date goes with it.
+     */
+    updateProjectTimer: (data: { note?: string; tagIds?: string[]; startTime?: string }) =>
         fetchWithAuth('/project-time/timer', {
             method: 'PATCH',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     /**
-     * Stops the clock and writes the hour log. Resolves to `{ discarded: true }`
-     * when the timer ran for less than a minute, in which case nothing was
-     * recorded and the caller should say so rather than reporting a save.
+     * Stops the clock and writes the hour log — always, however briefly it ran.
+     * `discardProjectTimer` is the way to throw a misclick away, stated rather
+     * than inferred from a duration.
      */
     stopProjectTimer: (data: { remainingHours?: number; note?: string } = {}) =>
         fetchWithAuth('/project-time/timer/stop', {

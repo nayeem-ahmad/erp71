@@ -25,9 +25,10 @@ jest.mock('@/lib/api', () => ({
 
 const toastError = jest.fn();
 const toastInfo = jest.fn();
+const toastSuccess = jest.fn();
 jest.mock('@/lib/toast', () => ({
     toast: {
-        success: jest.fn(),
+        success: (...args: unknown[]) => toastSuccess(...args),
         error: (...args: unknown[]) => toastError(...args),
         info: (...args: unknown[]) => toastInfo(...args),
     },
@@ -78,6 +79,7 @@ beforeEach(() => {
     const { api } = jest.requireMock('@/lib/api');
     toastError.mockReset();
     toastInfo.mockReset();
+    toastSuccess.mockReset();
     getProjectTimeEntries.mockReset().mockResolvedValue(listOf([entry()]));
     getProjectTimeReport.mockReset().mockResolvedValue({ groupBy: 'date', summary, rows: [] });
     api.getProjects.mockReset().mockResolvedValue({
@@ -90,7 +92,7 @@ beforeEach(() => {
     api.getProjectTimeTags.mockReset().mockResolvedValue([]);
     api.getProjectTimer.mockReset().mockResolvedValue(null);
     api.startProjectTimer.mockReset().mockResolvedValue({});
-    api.stopProjectTimer.mockReset().mockResolvedValue({ discarded: false, entry: {} });
+    api.stopProjectTimer.mockReset().mockResolvedValue({ entry: {} });
     api.discardProjectTimer.mockReset().mockResolvedValue({ success: true });
     api.updateProjectTimer.mockReset().mockResolvedValue({});
     api.deleteProjectTimeEntry.mockReset().mockResolvedValue({ success: true });
@@ -303,25 +305,49 @@ describe('Hour logs page', () => {
             expect(screen.getByRole('timer')).toHaveTextContent('1:04:09');
         });
 
-        it('says nothing was logged when a timer is stopped under a minute', async () => {
+        it('logs the sitting even when the clock barely ran', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue({
                 id: 'timer-1',
                 started_at: '2026-08-03T08:00:00.000Z',
+                start_time: '14:00',
                 elapsed_seconds: 10,
                 tags: [],
                 task: { id: 't1', title: 'Wire the meter' },
                 project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
             });
-            api.stopProjectTimer.mockResolvedValue({ discarded: true, entry: null, seconds: 10 });
+            api.stopProjectTimer.mockResolvedValue({ entry: { id: 'e9' }, overlap: null });
             render(<HourLogsPage />);
 
             fireEvent.click(await screen.findByRole('button', { name: /Stop/ }));
 
+            // A stop that swallows the sitting is the bug this replaced: the
+            // discard button beside it is the way to throw one away.
+            await waitFor(() => expect(api.stopProjectTimer).toHaveBeenCalled());
+            expect(toastSuccess).toHaveBeenCalled();
+            expect(toastInfo).not.toHaveBeenCalled();
+        });
+
+        it('corrects a running clock’s start to the time the work actually began', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            api.getProjectTimer.mockResolvedValue({
+                id: 'timer-1',
+                started_at: '2026-08-03T08:00:00.000Z',
+                start_time: '14:00',
+                elapsed_seconds: 600,
+                tags: [],
+                task: { id: 't1', title: 'Wire the meter' },
+                project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
+            });
+            render(<HourLogsPage />);
+
+            const field = await screen.findByLabelText('Started at');
+            expect(field).toHaveValue('14:00');
+
+            fireEvent.change(field, { target: { value: '09:00' } });
+
             await waitFor(() =>
-                expect(toastInfo).toHaveBeenCalledWith(
-                    expect.stringContaining('under a minute'),
-                ),
+                expect(api.updateProjectTimer).toHaveBeenCalledWith({ startTime: '09:00' }),
             );
         });
 
