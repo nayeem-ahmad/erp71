@@ -1,4 +1,4 @@
-import { emptyLeadForm, leadFormToPayload, leadToFormState } from './lead-form-fields';
+import { emptyLeadForm, leadFormToPayload, leadToFormState, setLeadOwner } from './lead-form-fields';
 
 describe('lead photo fields', () => {
     it('starts empty', () => {
@@ -47,5 +47,68 @@ describe('lead photo fields', () => {
         );
         expect(payload.next_step).toBeUndefined();
         expect(payload.photo_url).toBe('https://cdn.example/r.jpg');
+    });
+});
+
+describe('lead owner', () => {
+    it('starts unassigned', () => {
+        expect(emptyLeadForm().assigned_to).toBe('');
+    });
+
+    it('reads the owner off a saved lead', () => {
+        const form = leadToFormState({ name: 'Rahim', assigned_to: 'user-9' });
+        expect(form.assigned_to).toBe('user-9');
+    });
+
+    it('treats an unowned lead as an empty string, not "null"', () => {
+        const form = leadToFormState({ name: 'Rahim', assigned_to: null });
+        expect(form.assigned_to).toBe('');
+    });
+
+    it('sends the owner unconditionally, so a lead can be unassigned', () => {
+        const payload = leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim' });
+        expect(payload.assigned_to).toBe('');
+    });
+
+    it('still sends the owner on an update, where next_step* are omitted', () => {
+        const payload = leadFormToPayload(
+            { ...emptyLeadForm(), name: 'Rahim', assigned_to: 'user-9', next_step: 'Call' },
+            { mode: 'update' },
+        );
+        expect(payload.next_step).toBeUndefined();
+        expect(payload.assigned_to).toBe('user-9');
+    });
+
+    it('drags the next-step assignee along while it still matches the owner', () => {
+        const form = setLeadOwner({ ...emptyLeadForm(), assigned_to: 'user-1', next_step_assigned_to: 'user-1' }, 'user-2');
+        expect(form.assigned_to).toBe('user-2');
+        expect(form.next_step_assigned_to).toBe('user-2');
+    });
+
+    it('leaves a deliberately different next-step assignee alone', () => {
+        const form = setLeadOwner({ ...emptyLeadForm(), assigned_to: 'user-1', next_step_assigned_to: 'user-7' }, 'user-2');
+        expect(form.assigned_to).toBe('user-2');
+        expect(form.next_step_assigned_to).toBe('user-7');
+    });
+});
+
+describe('lead address', () => {
+    it('starts empty', () => {
+        expect(emptyLeadForm().address).toBe('');
+    });
+
+    it('reads the address off a saved lead', () => {
+        const form = leadToFormState({ name: 'Rahim', address: '12 Gulshan Ave, Dhaka' });
+        expect(form.address).toBe('12 Gulshan Ave, Dhaka');
+    });
+
+    it('treats a lead with no address as an empty string, not "null"', () => {
+        expect(leadToFormState({ name: 'Rahim', address: null }).address).toBe('');
+    });
+
+    it('sends the trimmed address unconditionally, so it can be cleared', () => {
+        expect(leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim', address: '  12 Gulshan Ave  ' }).address)
+            .toBe('12 Gulshan Ave');
+        expect(leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim' }).address).toBe('');
     });
 });

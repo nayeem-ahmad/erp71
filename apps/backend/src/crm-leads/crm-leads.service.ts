@@ -289,7 +289,11 @@ export class CrmLeadsService {
                 fb_url: dto.fb_url,
                 x_url: dto.x_url,
                 website_url: dto.website_url,
-                assigned_to: dto.assigned_to,
+                // A lead is always owned by somebody: whoever files it, unless the
+                // payload names someone else. An unowned lead is invisible to the
+                // `assignedTo` filter and to "my leads", which is how every lead
+                // created through the UI used to end up.
+                assigned_to: dto.assigned_to ?? userId,
                 store_id: dto.store_id,
                 photo_url: photo.url ?? null,
                 photo_storage_key: photo.key ?? null,

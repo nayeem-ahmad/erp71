@@ -49,6 +49,17 @@ const lead = {
     custom_fields: null,
 };
 
+/** `Field` renders its label unassociated with the control, so there is no
+ *  accessible name to query by — same lookup the new-lead page tests use. */
+function fieldControl(label: string): HTMLElement {
+    const labelEl = screen.getByText((_, el) => (
+        el?.tagName === 'LABEL' && (el.textContent ?? '').trim().startsWith(label)
+    ));
+    const control = labelEl.parentElement?.querySelector('input, select, textarea');
+    if (!control) throw new Error(`No control under label "${label}"`);
+    return control as HTMLElement;
+}
+
 describe('LeadDetailPage — save', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -79,6 +90,46 @@ describe('LeadDetailPage — save', () => {
 
         // Unique to the edit form (the read-only card uses "Next Step", not this).
         expect(screen.queryByText('Next Step Date')).not.toBeInTheDocument();
-        expect(screen.queryByText('Next Step Assigned To')).not.toBeInTheDocument();
+        expect(screen.queryByText('Assigned To')).not.toBeInTheDocument();
+    });
+});
+
+describe('LeadDetailPage — owner and address', () => {
+    const owned = { ...lead, address: '12 Gulshan Ave, Dhaka', assigned_to: 'user-2', assignee: { id: 'user-2', name: 'Rifat' } };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getLead.mockResolvedValue(owned);
+        api.updateLead.mockResolvedValue(owned);
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+    });
+
+    it('names the owner in the record header, without opening the editor', async () => {
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText(/Lead Owner: Rifat/)).toBeInTheDocument();
+        expect(screen.getByText('12 Gulshan Ave, Dhaka')).toBeInTheDocument();
+    });
+
+    it('loads the saved owner and address into the edit form and saves changes to both', async () => {
+        render(<LeadDetailPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /edit lead/i }));
+
+        await waitFor(() => expect(screen.getByDisplayValue('12 Gulshan Ave, Dhaka')).toBeInTheDocument());
+        const owner = fieldControl('Lead Owner') as HTMLSelectElement;
+        expect(owner.value).toBe('user-2');
+
+        fireEvent.change(owner, { target: { value: 'user-1' } });
+        fireEvent.change(screen.getByDisplayValue('12 Gulshan Ave, Dhaka'), { target: { value: '9 Banani Rd, Dhaka' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.updateLead).toHaveBeenCalled());
+        const [, payload] = api.updateLead.mock.calls[0];
+        expect(payload.assigned_to).toBe('user-1');
+        expect(payload.address).toBe('9 Banani Rd, Dhaka');
     });
 });

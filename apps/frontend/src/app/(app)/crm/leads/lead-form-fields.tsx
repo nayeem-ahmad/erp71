@@ -50,6 +50,9 @@ export type LeadFormState = {
     name: string;
     mobile: string;
     email: string;
+    address: string;
+    /** The lead's owner — a user id. Distinct from `next_step_assigned_to`. */
+    assigned_to: string;
     category: string;
     priority: string;
     remarks: string;
@@ -72,6 +75,8 @@ export const emptyLeadForm = (): LeadFormState => ({
     name: '',
     mobile: '',
     email: '',
+    address: '',
+    assigned_to: '',
     category: '',
     priority: 'MEDIUM',
     remarks: '',
@@ -96,6 +101,8 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         name: String(lead.name ?? ''),
         mobile: String(lead.mobile ?? lead.phone ?? ''),
         email: String(lead.email ?? ''),
+        address: String(lead.address ?? ''),
+        assigned_to: String(lead.assigned_to ?? ''),
         category: String(lead.category_id ?? ''),
         priority: String(lead.priority ?? 'MEDIUM'),
         remarks: String(lead.remarks ?? lead.notes ?? ''),
@@ -112,6 +119,22 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         photo_url: String(lead.photo_url ?? ''),
         photo_storage_key: String(lead.photo_storage_key ?? ''),
         custom_fields: (lead.custom_fields as Record<string, string>) ?? {},
+    };
+}
+
+/**
+ * Change the lead's owner, dragging the opening next step's assignee along —
+ * but only while the two still agree. Once someone has deliberately pointed the
+ * opening activity at a different colleague, re-owning the lead must not undo
+ * that. Defaulting the two to the same person is what keeps the second picker
+ * from reading as a duplicate of the first.
+ */
+export function setLeadOwner(form: LeadFormState, ownerId: string): LeadFormState {
+    const followsOwner = form.next_step_assigned_to === form.assigned_to;
+    return {
+        ...form,
+        assigned_to: ownerId,
+        next_step_assigned_to: followsOwner ? ownerId : form.next_step_assigned_to,
     };
 }
 
@@ -169,6 +192,10 @@ export function leadFormToPayload(
     if (email) payload.email = email;
     // Sent unconditionally, unlike the other optional fields: an empty value is
     // meaningful ("no category"), so omitting it would make clearing impossible.
+    // Same for the address and the owner — both are controls the user can empty,
+    // and the DTOs map `''` to an explicit null (see `emptyToNull`).
+    payload.address = form.address.trim();
+    payload.assigned_to = form.assigned_to;
     payload.category = form.category;
     if (form.priority) payload.priority = form.priority;
     const remarks = form.remarks.trim();
@@ -265,6 +292,19 @@ export function LeadFormFields({
     const statusLabel = (v: string) => (m.statuses as Record<string, string>)[v] ?? v;
     const priorityLabel = (v: string) => (m.priorities as Record<string, string>)[v] ?? v;
 
+    // Same reason as `withCurrent` below, for people rather than taxonomy rows: a
+    // lead owned by someone who has since left the team must keep showing that
+    // owner, or saving any other field would silently reassign the lead.
+    const ownerOptions: [string, string][] = teamMembers
+        .map((member): [string, string] | null => {
+            const id = teamMemberId(member);
+            return id ? [id, teamMemberLabel(member)] : null;
+        })
+        .filter((entry): entry is [string, string] => entry !== null);
+    if (form.assigned_to && !ownerOptions.some(([id]) => id === form.assigned_to)) {
+        ownerOptions.push([form.assigned_to, form.assigned_to]);
+    }
+
     // A lead saved against a since-deactivated row must keep showing it, or
     // editing anything else would silently reassign the lead.
     const withCurrent = (options: LeadTaxonomyOption[], currentId: string) =>
@@ -298,6 +338,9 @@ export function LeadFormFields({
             <Field label={m.fields.email} error={errors.email}>
                 <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} error={Boolean(errors.email)} />
             </Field>
+            <Field label={m.fields.address} className="sm:col-span-2">
+                <Textarea value={form.address} onChange={(e) => set('address', e.target.value)} rows={2} />
+            </Field>
             <Field label={m.fields.category}>
                 <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
                     <option value="">{m.noCategory}</option>
@@ -309,6 +352,12 @@ export function LeadFormFields({
             <Field label={m.fields.priority}>
                 <Select value={form.priority} onChange={(e) => set('priority', e.target.value)}>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
+                </Select>
+            </Field>
+            <Field label={m.fields.owner}>
+                <Select value={form.assigned_to} onChange={(e) => onChange(setLeadOwner(form, e.target.value))}>
+                    <option value="">{m.fields.unassigned}</option>
+                    {ownerOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </Select>
             </Field>
             {showStatus && (

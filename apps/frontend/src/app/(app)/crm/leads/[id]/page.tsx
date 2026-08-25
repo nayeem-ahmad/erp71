@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Calendar, Trash2, } from 'lucide-react';
+    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Calendar, Trash2, User, MapPin, } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -257,6 +257,18 @@ export default function LeadDetailPage() {
                                     <Mail className="w-3.5 h-3.5 me-1.5 text-gray-400" /> {lead.email}
                                 </div>
                             )}
+                            {lead.address && (
+                                <div className="flex items-center">
+                                    <MapPin className="w-3.5 h-3.5 me-1.5 text-gray-400" /> {lead.address}
+                                </div>
+                            )}
+                            {/* The owner belongs in the record header, the way every CRM
+                                surfaces it — not only inside the edit form, where you would
+                                have to open the editor to learn who the lead belongs to. */}
+                            <div className="flex items-center">
+                                <User className="w-3.5 h-3.5 me-1.5 text-gray-400" />
+                                {m.fields.owner}: {lead.assignee?.name ?? m.fields.unassigned}
+                            </div>
                         </div>
                         {(lead.remarks ?? lead.notes) && (
                             <p className="text-xs text-gray-500 mt-2">{lead.remarks ?? lead.notes}</p>
