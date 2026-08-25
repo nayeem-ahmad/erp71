@@ -32,7 +32,7 @@ function dhakaDayStart(value: string | undefined): Date | null {
  * `new Date(to)` would be UTC midnight and drop almost everything entered on
  * that day in Bangladesh.
  */
-export function createdAtRange(
+export function dhakaDayRange(
     from?: string,
     to?: string,
 ): CreatedAtPrismaFilter | undefined {
@@ -43,3 +43,10 @@ export function createdAtRange(
     if (endStart) filter.lte = new Date(endStart.getTime() + DAY_MS - 1);
     return Object.keys(filter).length > 0 ? filter : undefined;
 }
+
+/**
+ * The `created_at` spelling, kept because most callers filter that column. Same
+ * function — the range logic is about calendar days, not about which column
+ * they are compared against.
+ */
+export const createdAtRange = dhakaDayRange;

@@ -17,11 +17,16 @@ type CreatedRangeFilterProps = {
     onChange: (next: CreatedRange | null) => void;
     /** Injected in tests so "Today" is a known Dhaka day. */
     now?: Date;
+    /**
+     * Which date field this filters, for the chip and the popover. Defaults to
+     * "Created"; a list filtering two different dates must name both.
+     */
+    label?: string;
 };
 
 const PRESETS: CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
 
-export default function CreatedRangeFilter({ value, onChange, now }: CreatedRangeFilterProps) {
+export default function CreatedRangeFilter({ value, onChange, now, label }: CreatedRangeFilterProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
     const [open, setOpen] = useState(false);
@@ -52,7 +57,8 @@ export default function CreatedRangeFilter({ value, onChange, now }: CreatedRang
         thisMonth: copy.thisMonth,
     };
 
-    const chip = `${t.common.createdAt} · ${formatCreatedRangeLabel(value, copy.anyTime)}`;
+    const fieldLabel = label ?? t.common.createdAt;
+    const chip = `${fieldLabel} · ${formatCreatedRangeLabel(value, copy.anyTime)}`;
 
     const applyPreset = (preset: CreatedRangePreset) => {
         onChange(createdRangeFromPreset(preset, now));
@@ -83,7 +89,7 @@ export default function CreatedRangeFilter({ value, onChange, now }: CreatedRang
             {open ? (
                 <div
                     role="dialog"
-                    aria-label={t.common.createdAt}
+                    aria-label={fieldLabel}
                     className="absolute z-50 mt-1 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg space-y-3"
                 >
                     <div className="grid grid-cols-2 gap-1.5">

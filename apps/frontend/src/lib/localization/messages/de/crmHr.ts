@@ -92,6 +92,11 @@ export const crmHrMessages = {
                 allPurposes: "Alle Zwecke",
                 allChannels: "Alle Kanäle",
                 overdueOnly: "Nur überfällige",
+                allOwners: "Alle Lead-Inhaber",
+                unassigned: "Nicht zugewiesen",
+                allAssignees: "Alle Zuständigen",
+                me: "Ich",
+                due: "Fällig",
             },
         },
         setup: {

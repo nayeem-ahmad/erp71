@@ -92,6 +92,11 @@ export const crmHrMessages = {
                 allPurposes: 'Semua tujuan',
                 allChannels: 'Semua saluran',
                 overdueOnly: 'Lewat sahaja',
+                allOwners: 'Semua pemilik prospek',
+                unassigned: 'Tidak ditetapkan',
+                allAssignees: 'Semua bertugas',
+                me: 'Saya',
+                due: 'Tempoh',
             },
         },
         setup: {

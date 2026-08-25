@@ -92,6 +92,11 @@ export const crmHrMessages = {
                 allPurposes: "Todos los propósitos",
                 allChannels: "Todos los canales",
                 overdueOnly: "Solo vencidas",
+                allOwners: "Todos los propietarios",
+                unassigned: "Sin asignar",
+                allAssignees: "Todos los responsables",
+                me: "Yo",
+                due: "Vence",
             },
         },
         setup: {

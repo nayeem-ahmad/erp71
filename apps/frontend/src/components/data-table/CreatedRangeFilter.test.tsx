@@ -51,4 +51,24 @@ describe('CreatedRangeFilter', () => {
 
         expect(onChange).toHaveBeenCalledWith(null);
     });
+
+    /**
+     * Activities carry both a created date and a due date, so the chip has to say
+     * which one it is filtering — two identical "Created ·" buttons would be a trap.
+     */
+    it('names the filtered field in the chip when given a label', () => {
+        render(<CreatedRangeFilter value={null} label="Due" onChange={() => undefined} />);
+        expect(screen.getByRole('button', { name: /due · any time/i })).toBeInTheDocument();
+    });
+
+    it('labels its popover with the same field name', () => {
+        render(<CreatedRangeFilter value={null} label="Due" onChange={() => undefined} />);
+        fireEvent.click(screen.getByRole('button', { name: /due · any time/i }));
+        expect(screen.getByRole('dialog', { name: 'Due' })).toBeInTheDocument();
+    });
+
+    it('still says Created when no label is given', () => {
+        render(<CreatedRangeFilter value={null} onChange={() => undefined} />);
+        expect(screen.getByRole('button', { name: /created · any time/i })).toBeInTheDocument();
+    });
 });

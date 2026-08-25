@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CrmActivitiesService } from './crm-activities.service';
+import { UNASSIGNED_OWNER_FILTER } from '../crm-leads/crm-leads.dto';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
@@ -163,6 +164,110 @@ describe('CrmActivitiesService', () => {
                     }),
                 }),
             );
+        });
+    });
+
+    describe('findAll() — lead owner filter', () => {
+        beforeEach(() => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+        });
+
+        it('filters to activities whose lead is owned by the named user', async () => {
+            await service.findAll('t1', { leadOwner: 'user-9' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ lead: { assigned_to: 'user-9' } }),
+            );
+        });
+
+        it('filters to activities on leads nobody owns for the unassigned sentinel', async () => {
+            await service.findAll('t1', { leadOwner: UNASSIGNED_OWNER_FILTER });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ lead: { assigned_to: null } }),
+            );
+        });
+
+        it('does not constrain the lead relation when no owner is given', async () => {
+            await service.findAll('t1', {});
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).not.toHaveProperty('lead');
+        });
+
+        it('leaves the activity assignee filter independent of the lead owner', async () => {
+            await service.findAll('t1', { leadOwner: 'user-9', assignedTo: 'user-3' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({
+                    lead: { assigned_to: 'user-9' },
+                    assigned_to: 'user-3',
+                }),
+            );
+        });
+    });
+
+    describe('findAll() — due date range', () => {
+        beforeEach(() => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+        });
+
+        it('filters due_at to the inclusive Dhaka day range', async () => {
+            await service.findAll('t1', { dueFrom: '2026-08-19', dueTo: '2026-08-19' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
+                gte: new Date('2026-08-18T18:00:00.000Z'),
+                lte: new Date('2026-08-19T17:59:59.999Z'),
+            });
+        });
+
+        it('accepts an open-ended range', async () => {
+            await service.findAll('t1', { dueFrom: '2026-08-19' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
+                gte: new Date('2026-08-18T18:00:00.000Z'),
+            });
+        });
+
+        it('does not filter on due_at when the range is empty', async () => {
+            await service.findAll('t1', {});
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).not.toHaveProperty('due_at');
+        });
+
+        /**
+         * `overdue` and `dueToday` each carry their own due window. Letting either
+         * side overwrite the other would silently drop a filter the caller asked
+         * for, so the two windows intersect.
+         */
+        it('intersects the range with the overdue window rather than overwriting it', async () => {
+            await service.findAll('t1', { dueFrom: '2026-08-19', dueTo: '2036-01-01', overdue: true });
+
+            const where = db.crmActivity.findMany.mock.calls[0][0].where;
+            expect(where.status).toBe('PLANNED');
+            // Lower bound is the explicit range; upper bound is overdue's "before today".
+            expect(where.due_at.gte).toEqual(new Date('2026-08-18T18:00:00.000Z'));
+            expect(where.due_at.lt).toBeInstanceOf(Date);
+            expect(where.due_at.lte).toBeUndefined();
+        });
+
+        it('keeps the tighter upper bound when the range ends before today', async () => {
+            await service.findAll('t1', { dueTo: '2020-01-01', overdue: true });
+
+            const where = db.crmActivity.findMany.mock.calls[0][0].where;
+            expect(where.due_at.lte).toEqual(new Date('2020-01-01T17:59:59.999Z'));
+            expect(where.due_at.lt).toBeUndefined();
+        });
+
+        it('intersects the range with the dueToday window', async () => {
+            await service.findAll('t1', { dueFrom: '2030-01-01', dueToday: true });
+
+            const where = db.crmActivity.findMany.mock.calls[0][0].where;
+            expect(where.status).toBe('PLANNED');
+            // The range's lower bound is the later of the two, so it survives.
+            expect(where.due_at.gte).toEqual(new Date('2029-12-31T18:00:00.000Z'));
+            expect(where.due_at.lt).toBeInstanceOf(Date);
         });
     });
 

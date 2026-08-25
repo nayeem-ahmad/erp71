@@ -92,6 +92,11 @@ export const crmHrMessages = {
                 allPurposes: "সব উদ্দেশ্য",
                 allChannels: "সব চ্যানেল",
                 overdueOnly: "শুধু সময় পেরোনো",
+                allOwners: "সব লিড ওনার",
+                unassigned: "অনির্ধারিত",
+                allAssignees: "সব দায়িত্বপ্রাপ্ত",
+                me: "আমি",
+                due: "সময়সীমা",
             },
         },
         setup: {

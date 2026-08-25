@@ -9,7 +9,12 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import {
+    applyCreatedRangeQuery,
+    applyDueRangeQuery,
+    createdRangeFromPreset,
+    type CreatedRange,
+} from '@/lib/created-range';
 import {
     PageShell,
     PageHeader,
@@ -72,8 +77,32 @@ export default function CrmActivitiesPage() {
     const [targetFilter, setTargetFilter] = useState<'' | 'customer' | 'lead'>('');
     const [purposeFilter, setPurposeFilter] = useState('');
     const [channelFilter, setChannelFilter] = useState('');
+    const [leadOwnerFilter, setLeadOwnerFilter] = useState('');
+    const [assigneeFilter, setAssigneeFilter] = useState('');
     const [overdueOnly, setOverdueOnly] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    // Opens on today's agenda. `createdRangeFromPreset` resolves the Dhaka
+    // calendar day, so a shopkeeper's "today" is not UTC's.
+    const [dueRange, setDueRange] = useState<CreatedRange | null>(() =>
+        createdRangeFromPreset('today'),
+    );
+    const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    /**
+     * "Overdue" means due before today, so it can never agree with a due range
+     * that starts today — holding both would show an empty list and look broken.
+     * Each control therefore releases the other.
+     */
+    const chooseDueRange = useCallback((next: CreatedRange | null) => {
+        setDueRange(next);
+        if (next) setOverdueOnly(false);
+    }, []);
+
+    const chooseOverdueOnly = useCallback((next: boolean) => {
+        setOverdueOnly(next);
+        if (next) setDueRange(null);
+    }, []);
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -85,6 +114,9 @@ export default function CrmActivitiesPage() {
                 purposeId: purposeFilter || undefined,
                 channelId: channelFilter || undefined,
                 overdue: overdueOnly || undefined,
+                leadOwner: leadOwnerFilter || undefined,
+                assignedTo: assigneeFilter || undefined,
+                ...applyDueRangeQuery(dueRange),
                 ...applyCreatedRangeQuery(createdRange),
             });
             setRows(Array.isArray(data) ? data : []);
@@ -94,7 +126,18 @@ export default function CrmActivitiesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [statusFilter, targetFilter, purposeFilter, channelFilter, overdueOnly, createdRange, m.loadFailed]);
+    }, [
+        statusFilter,
+        targetFilter,
+        purposeFilter,
+        channelFilter,
+        overdueOnly,
+        leadOwnerFilter,
+        assigneeFilter,
+        dueRange,
+        createdRange,
+        m.loadFailed,
+    ]);
 
     const loadSummary = useCallback(() => {
         api.getCrmActivitySummary().then(setSummary).catch(() => null);
@@ -102,6 +145,35 @@ export default function CrmActivitiesPage() {
 
     useEffect(() => { void load(); }, [load]);
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    useEffect(() => {
+        api.getTeamMembers()
+            .then((d: any) => setTeamMembers(Array.isArray(d) ? d : []))
+            .catch(() => setTeamMembers([]));
+        api.getMe()
+            .then((me: any) => setCurrentUserId(me?.id ?? null))
+            .catch(() => setCurrentUserId(null));
+    }, []);
+
+    /**
+     * The signed-in user is relabelled "Me" and pinned first rather than added as
+     * a second option: two options sharing one id makes a <select> resolve the
+     * wrong one, and "filter to my own work" is what this control is mostly for.
+     */
+    const memberOptions = useMemo(() => {
+        const members = teamMembers
+            .map((mem) => {
+                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+                return id
+                    ? { id, label: mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id }
+                    : null;
+            })
+            .filter((entry): entry is { id: string; label: string } => entry !== null);
+
+        if (!currentUserId) return members;
+        const others = members.filter((mem) => mem.id !== currentUserId);
+        return [{ id: currentUserId, label: m.filters.me }, ...others];
+    }, [teamMembers, currentUserId, m.filters.me]);
 
     const columns = useMemo<ColumnDef<CrmActivityRow, any>[]>(() => [
         columnHelper.accessor((row) => row.subject ?? row.summary ?? '', {
@@ -226,10 +298,29 @@ export default function CrmActivitiesPage() {
                     <option value="">{m.filters.allChannels}</option>
                     {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </Select>
+                <Select
+                    value={leadOwnerFilter}
+                    onChange={(e) => setLeadOwnerFilter(e.target.value)}
+                    className="w-auto max-w-[180px]"
+                >
+                    <option value="">{m.filters.allOwners}</option>
+                    {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. */}
+                    <option value="unassigned">{m.filters.unassigned}</option>
+                    {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
+                <Select
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    className="w-auto max-w-[180px]"
+                >
+                    <option value="">{m.filters.allAssignees}</option>
+                    {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
                 <label className="flex min-h-touch items-center gap-2 text-sm text-gray-600">
-                    <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} className="h-4 w-4" />
+                    <input type="checkbox" checked={overdueOnly} onChange={(e) => chooseOverdueOnly(e.target.checked)} className="h-4 w-4" />
                     {m.filters.overdueOnly}
                 </label>
+                <CreatedRangeFilter value={dueRange} onChange={chooseDueRange} label={m.filters.due} />
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
