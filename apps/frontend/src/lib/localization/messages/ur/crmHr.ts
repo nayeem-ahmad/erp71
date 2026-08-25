@@ -367,6 +367,7 @@ export const crmHrMessages = {
             },
             allCategories: 'تمام زمرے',
             allPriorities: 'تمام ترجیحات',
+            allOwners: 'تمام مالکان',
             myTodaysActions: 'میری آج کی فہرستِ کارروائی',
             myTodaysActionsEmpty: 'آج آپ کو تفویض شدہ اگلے قدم والی کوئی لیڈ نہیں۔',
             statuses: {

@@ -15,6 +15,7 @@ import {
     LeadBulkAction,
     LeadPriority,
     LeadStatus,
+    UNASSIGNED_OWNER_FILTER,
     UpdateLeadDto,
 } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
@@ -403,7 +404,8 @@ export class CrmLeadsService {
         if (opts.source) where.source_id = opts.source;
         if (opts.category) where.category_id = opts.category;
         if (opts.priority) where.priority = opts.priority;
-        if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        if (opts.assignedTo === UNASSIGNED_OWNER_FILTER) where.assigned_to = null;
+        else if (opts.assignedTo) where.assigned_to = opts.assignedTo;
         if (opts.myActionsToday && opts.userId) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);

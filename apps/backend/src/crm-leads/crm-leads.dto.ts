@@ -266,6 +266,14 @@ export class UpdateLeadDto {
  * instead of a 400. `source` and `category` are free strings because they now
  * hold tenant-defined row ids.
  */
+/**
+ * `assignedTo` sentinel meaning "leads nobody owns". A real owner is a UUID, so
+ * this cannot collide with one. Needed because an empty `assignedTo` already
+ * means "do not filter on owner" — without a sentinel the unowned leads (every
+ * lead created before the owner field existed) are unreachable from the list.
+ */
+export const UNASSIGNED_OWNER_FILTER = 'unassigned';
+
 export class ListLeadsDto {
     @IsOptional()
     @Transform(emptyToUndefined)

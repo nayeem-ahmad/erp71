@@ -5,7 +5,7 @@ import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
-import { LeadBulkAction, LeadStatus } from './crm-leads.dto';
+import { LeadBulkAction, LeadStatus, UNASSIGNED_OWNER_FILTER } from './crm-leads.dto';
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 
@@ -846,6 +846,35 @@ describe('CrmLeadsService', () => {
                     data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
                 }),
             );
+        });
+    });
+
+    describe('findAll — owner filter', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        it('filters to a named owner', async () => {
+            await service.findAll('tenant-1', { assignedTo: 'user-9' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ assigned_to: 'user-9' }),
+            );
+        });
+
+        it('filters to leads nobody owns when given the unassigned sentinel', async () => {
+            await service.findAll('tenant-1', { assignedTo: UNASSIGNED_OWNER_FILTER } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ assigned_to: null }),
+            );
+        });
+
+        it('does not filter on owner at all when none is given', async () => {
+            await service.findAll('tenant-1', {} as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('assigned_to');
         });
     });
 

@@ -367,6 +367,7 @@ export const crmHrMessages = {
             },
             allCategories: "सभी श्रेणियाँ",
             allPriorities: "सभी प्राथमिकताएँ",
+            allOwners: "सभी स्वामी",
             myTodaysActions: "मेरी आज की कार्य-सूची",
             myTodaysActionsEmpty: "आज आपको सौंपे गए अगले कदम वाली कोई लीड नहीं।",
             statuses: {
