@@ -92,6 +92,11 @@ export const crmHrMessages = {
                 allPurposes: 'تمام مقاصد',
                 allChannels: 'تمام چینل',
                 overdueOnly: 'صرف تاخیر زدہ',
+                allOwners: 'تمام لیڈ مالکان',
+                unassigned: 'غیر تفویض شدہ',
+                allAssignees: 'تمام ذمہ داران',
+                me: 'میں',
+                due: 'مقررہ',
             },
         },
         setup: {

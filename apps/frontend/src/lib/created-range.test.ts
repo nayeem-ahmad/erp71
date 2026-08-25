@@ -1,5 +1,6 @@
 import {
     applyCreatedRangeQuery,
+    applyDueRangeQuery,
     createdRangeFromPreset,
     formatCreatedRangeLabel,
     isCreatedRangeEmpty,
@@ -61,5 +62,22 @@ describe('applyCreatedRangeQuery', () => {
             createdFrom: '2026-08-12',
             createdTo: '2026-08-19',
         });
+    });
+});
+
+describe('applyDueRangeQuery', () => {
+    it('sends nothing for an empty range', () => {
+        expect(applyDueRangeQuery(null)).toEqual({});
+    });
+
+    it('names the bounds dueFrom/dueTo so they filter due_at, not created_at', () => {
+        expect(applyDueRangeQuery({ from: '2026-08-01', to: '2026-08-25' })).toEqual({
+            dueFrom: '2026-08-01',
+            dueTo: '2026-08-25',
+        });
+    });
+
+    it('omits an absent bound', () => {
+        expect(applyDueRangeQuery({ from: '2026-08-01' })).toEqual({ dueFrom: '2026-08-01' });
     });
 });

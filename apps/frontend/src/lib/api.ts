@@ -464,11 +464,16 @@ export type CrmActivityFilters = {
     customerId?: string;
     target?: 'lead' | 'customer';
     status?: string;
+    /** Who has to do the activity. */
     assignedTo?: string;
+    /** Who owns the related lead — a user id, or 'unassigned'. */
+    leadOwner?: string;
     purposeId?: string;
     channelId?: string;
     dueToday?: boolean;
     overdue?: boolean;
+    dueFrom?: string;
+    dueTo?: string;
     createdFrom?: string;
     createdTo?: string;
     sortBy?: string;

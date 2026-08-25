@@ -8,7 +8,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import { paginate } from '../common/pagination.dto';
-import { createdAtRange } from '../common/created-range.util';
+import { createdAtRange, dhakaDayRange } from '../common/created-range.util';
+import { UNASSIGNED_OWNER_FILTER } from '../crm-leads/crm-leads.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import {
@@ -45,10 +46,14 @@ export type ListActivityOpts = {
     target?: 'lead' | 'customer';
     status?: string;
     assignedTo?: string;
+    /** A user id, or UNASSIGNED_OWNER_FILTER — the owner of the *lead*, not the activity's assignee. */
+    leadOwner?: string;
     purposeId?: string;
     channelId?: string;
     dueToday?: boolean;
     overdue?: boolean;
+    dueFrom?: string;
+    dueTo?: string;
     createdFrom?: string;
     createdTo?: string;
     page?: number;
@@ -61,6 +66,33 @@ function startOfToday(): Date {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
+}
+
+/** A Prisma `due_at` constraint. `lt` is exclusive (windows), `lte` inclusive (calendar days). */
+type DueWindow = { gte?: Date; lt?: Date; lte?: Date };
+
+const startInstant = (w: DueWindow) => (w.gte ? w.gte.getTime() : -Infinity);
+/** `lte X` and `lt X+1ms` are the same instant, so both ends compare on one scale. */
+const endInstant = (w: DueWindow) =>
+    w.lt ? w.lt.getTime() : w.lte ? w.lte.getTime() + 1 : Infinity;
+
+/**
+ * Narrows one due window by another: the later start and the earlier end win.
+ *
+ * `dueToday`, `overdue` and the explicit `dueFrom`/`dueTo` range each carry a
+ * due window, and callers can send more than one. Assigning them in turn would
+ * let the last one silently discard the others; intersecting means every filter
+ * the caller asked for still constrains the result.
+ */
+function intersectDueWindow(current: DueWindow | undefined, next: DueWindow): DueWindow {
+    if (!current) return next;
+    const start = startInstant(current) >= startInstant(next) ? current : next;
+    const end = endInstant(current) <= endInstant(next) ? current : next;
+    const merged: DueWindow = {};
+    if (start.gte) merged.gte = start.gte;
+    if (end.lt) merged.lt = end.lt;
+    else if (end.lte) merged.lte = end.lte;
+    return merged;
 }
 
 @Injectable()
@@ -191,17 +223,24 @@ export class CrmActivitiesService {
         if (opts.purposeId) where.purpose_id = opts.purposeId;
         if (opts.channelId) where.channel_id = opts.channelId;
 
+        // Filtering through the relation also drops customer activities, which is
+        // right: they have no lead, so they have no lead owner either.
+        if (opts.leadOwner === UNASSIGNED_OWNER_FILTER) where.lead = { assigned_to: null };
+        else if (opts.leadOwner) where.lead = { assigned_to: opts.leadOwner };
+
+        let due = dhakaDayRange(opts.dueFrom, opts.dueTo) as DueWindow | undefined;
         if (opts.dueToday) {
             const today = startOfToday();
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
             where.status = 'PLANNED';
-            where.due_at = { gte: today, lt: tomorrow };
+            due = intersectDueWindow(due, { gte: today, lt: tomorrow });
         }
         if (opts.overdue) {
             where.status = 'PLANNED';
-            where.due_at = { lt: startOfToday() };
+            due = intersectDueWindow(due, { lt: startOfToday() });
         }
+        if (due) where.due_at = due;
 
         const created = createdAtRange(opts.createdFrom, opts.createdTo);
         if (created) where.created_at = created;

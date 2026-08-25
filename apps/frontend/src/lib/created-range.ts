@@ -62,3 +62,17 @@ export function applyCreatedRangeQuery(
         ...(range?.to ? { createdTo: range.to } : {}),
     };
 }
+
+/**
+ * The same range as `applyCreatedRangeQuery`, aimed at `due_at` instead. The
+ * activities list carries both, so the two cannot share one pair of param names.
+ */
+export function applyDueRangeQuery(
+    range: CreatedRange | null | undefined,
+): { dueFrom?: string; dueTo?: string } {
+    if (isCreatedRangeEmpty(range)) return {};
+    return {
+        ...(range?.from ? { dueFrom: range.from } : {}),
+        ...(range?.to ? { dueTo: range.to } : {}),
+    };
+}
