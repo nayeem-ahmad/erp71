@@ -126,6 +126,39 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('create() — assignee', () => {
+        beforeEach(() => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+        });
+
+        /**
+         * Mirrors `CrmLeadsService.create`, which files a lead against its creator.
+         * Without this an activity scheduled from the panel is unassigned, which
+         * makes the assignee filter blind to it and `notifyAssignee` a no-op.
+         */
+        it('files a new activity against its creator when no assignee is named', async () => {
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any);
+
+            expect(db.crmActivity.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ assigned_to: 'u1' }),
+            );
+        });
+
+        it('keeps an explicitly named assignee', async () => {
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call',
+                assigned_to: 'u2',
+            } as any);
+
+            expect(db.crmActivity.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ assigned_to: 'u2' }),
+            );
+        });
+    });
+
     describe('findAll()', () => {
         it('scopes to the tenant and paginates', async () => {
             db.crmActivity.findMany.mockResolvedValue([]);

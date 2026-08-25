@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, PhoneCall, X } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, Pencil, PhoneCall, X } from 'lucide-react';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 
 export type CrmActivity = {
     id: string;
@@ -37,7 +38,7 @@ type Props = {
     onDraftConsumed?: () => void;
 };
 
-const emptyPlan = { subject: '', due_at: '', purpose: '', notes: '' };
+const emptyPlan = { subject: '', due_at: '', purpose: '', notes: '', assigned_to: '' };
 const emptyLog = { channel: '', summary: '', outcome: '' };
 const emptyComplete = {
     channel: '',
@@ -45,7 +46,20 @@ const emptyComplete = {
     outcome: '',
     nextSubject: '',
     nextDueAt: '',
+    nextAssignedTo: '',
 };
+const emptyEdit = { subject: '', due_at: '', purpose: '', notes: '', assigned_to: '' };
+
+/**
+ * `datetime-local` wants wall-clock `YYYY-MM-DDTHH:mm`; feeding it a UTC ISO
+ * string puts the box an offset out — six hours early, in Dhaka.
+ */
+function toLocalInputValue(iso: string | null): string {
+    if (!iso) return '';
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) return '';
+    return new Date(at.getTime() - at.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
 
 /**
  * Every CRM touch against one lead or customer — planned and logged — in one
@@ -83,6 +97,17 @@ export default function CrmActivityPanel({
     const [completing, setCompleting] = useState<CrmActivity | null>(null);
     const [done, setDone] = useState(emptyComplete);
     const [showNext, setShowNext] = useState(false);
+
+    const [editing, setEditing] = useState<CrmActivity | null>(null);
+    const [edit, setEdit] = useState(emptyEdit);
+
+    const { options: memberOptions, currentUserId } = useTeamMemberOptions(m.fields.me);
+
+    const planAssigneeId = useId();
+    const editAssigneeId = useId();
+    const nextSubjectId = useId();
+    const nextDueId = useId();
+    const nextAssigneeId = useId();
 
     const target = useMemo(
         () => (leadId ? { lead_id: leadId } : { customer_id: customerId }),
@@ -128,6 +153,7 @@ export default function CrmActivityPanel({
                 due_at: plan.due_at || undefined,
                 purpose: plan.purpose || undefined,
                 notes: plan.notes || undefined,
+                assigned_to: plan.assigned_to || undefined,
             });
             setPlan(emptyPlan);
             setPlanning(false);
@@ -173,7 +199,13 @@ export default function CrmActivityPanel({
                 // Omitted entirely unless both fields are filled — the API
                 // validates the nested object, so a half-filled one is a 400.
                 ...(showNext && done.nextSubject.trim() && done.nextDueAt
-                    ? { next: { subject: done.nextSubject.trim(), due_at: done.nextDueAt } }
+                    ? {
+                        next: {
+                            subject: done.nextSubject.trim(),
+                            due_at: done.nextDueAt,
+                            assigned_to: done.nextAssignedTo || undefined,
+                        },
+                    }
                     : {}),
             });
             setCompleting(null);
@@ -200,8 +232,54 @@ export default function CrmActivityPanel({
 
     const openComplete = (row: CrmActivity) => {
         setCompleting(row);
-        setDone({ ...emptyComplete, channel: channels[0]?.id ?? '' });
+        setDone({
+            ...emptyComplete,
+            channel: channels[0]?.id ?? '',
+            // The follow-up stays with whoever held the activity being closed,
+            // falling back to the person closing it.
+            nextAssignedTo: row.assignee?.id ?? currentUserId ?? '',
+        });
         setShowNext(false);
+    };
+
+    const openEdit = (row: CrmActivity) => {
+        setEditing(row);
+        setEdit({
+            subject: row.subject ?? '',
+            due_at: toLocalInputValue(row.due_at),
+            purpose: row.purpose?.id ?? '',
+            notes: row.notes ?? '',
+            assigned_to: row.assignee?.id ?? '',
+        });
+    };
+
+    /**
+     * The only caller of PATCH /crm/activities/:id in the app, and so the only
+     * way to move a lead's `next_step`, `next_step_date` and
+     * `next_step_assigned_to` — those three are a read-only rollup of the
+     * earliest planned activity, recalculated by the server on every write here.
+     */
+    const saveEdit = async () => {
+        if (!editing || !edit.subject.trim()) return;
+        setSaving(true);
+        try {
+            await api.updateCrmActivity(editing.id, {
+                subject: edit.subject.trim(),
+                due_at: edit.due_at || undefined,
+                purpose: edit.purpose || undefined,
+                notes: edit.notes,
+                // Sent even when empty, so "nobody" is a reachable answer — the
+                // DTO's emptyToNull turns '' into an explicit null.
+                assigned_to: edit.assigned_to,
+            });
+            setEditing(null);
+            toast.success(m.toast.updated);
+            await load();
+        } catch {
+            toast.error(m.toast.failed);
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -214,7 +292,13 @@ export default function CrmActivityPanel({
                 >
                     {m.logActivity}
                 </Button>
-                <Button onClick={() => setPlanning(true)} icon={<CalendarPlus className="w-4 h-4" />}>
+                <Button
+                    onClick={() => {
+                        setPlan({ ...emptyPlan, assigned_to: currentUserId ?? '' });
+                        setPlanning(true);
+                    }}
+                    icon={<CalendarPlus className="w-4 h-4" />}
+                >
                     {m.schedule}
                 </Button>
             </div>
@@ -263,6 +347,13 @@ export default function CrmActivityPanel({
                                             <Button size="sm" onClick={() => openComplete(row)} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
                                                 {m.complete}
                                             </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={() => openEdit(row)}
+                                                aria-label={m.edit}
+                                                icon={<Pencil className="w-3.5 h-3.5" />}
+                                            />
                                             <Button
                                                 size="sm"
                                                 variant="secondary"
@@ -344,6 +435,17 @@ export default function CrmActivityPanel({
                                 <option value="">{m.fields.noPurpose}</option>
                                 {purposes.map((p) => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field label={m.fields.assignedTo} htmlFor={planAssigneeId}>
+                            <Select
+                                id={planAssigneeId}
+                                value={plan.assigned_to}
+                                onChange={(e) => setPlan({ ...plan, assigned_to: e.target.value })}
+                            >
+                                {memberOptions.map((mem) => (
+                                    <option key={mem.id} value={mem.id}>{mem.label}</option>
                                 ))}
                             </Select>
                         </Field>
@@ -435,18 +537,31 @@ export default function CrmActivityPanel({
                             </label>
                             {showNext && (
                                 <div className="mt-3 space-y-3">
-                                    <Field label={m.fields.subject} required>
+                                    <Field label={m.fields.subject} required htmlFor={nextSubjectId}>
                                         <Input
+                                            id={nextSubjectId}
                                             value={done.nextSubject}
                                             onChange={(e) => setDone({ ...done, nextSubject: e.target.value })}
                                         />
                                     </Field>
-                                    <Field label={m.fields.dueAt} required>
+                                    <Field label={m.fields.dueAt} required htmlFor={nextDueId}>
                                         <Input
+                                            id={nextDueId}
                                             type="datetime-local"
                                             value={done.nextDueAt}
                                             onChange={(e) => setDone({ ...done, nextDueAt: e.target.value })}
                                         />
+                                    </Field>
+                                    <Field label={m.fields.assignedTo} htmlFor={nextAssigneeId}>
+                                        <Select
+                                            id={nextAssigneeId}
+                                            value={done.nextAssignedTo}
+                                            onChange={(e) => setDone({ ...done, nextAssignedTo: e.target.value })}
+                                        >
+                                            {memberOptions.map((mem) => (
+                                                <option key={mem.id} value={mem.id}>{mem.label}</option>
+                                            ))}
+                                        </Select>
                                     </Field>
                                     <p className="text-xs text-gray-400">{m.inheritsHint}</p>
                                 </div>
@@ -461,6 +576,64 @@ export default function CrmActivityPanel({
                             disabled={!done.channel || !done.summary.trim()}
                         >
                             {m.complete}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
+            )}
+
+            {editing && (
+                <ModalShell onBackdropClick={() => setEditing(null)}>
+                    <ModalHeader title={m.editTitle} onClose={() => setEditing(null)} />
+                    <div className="space-y-3 p-4">
+                        <Field label={m.fields.subject} required>
+                            <Input
+                                value={edit.subject}
+                                onChange={(e) => setEdit({ ...edit, subject: e.target.value })}
+                                placeholder={m.fields.subjectPlaceholder}
+                            />
+                        </Field>
+                        <Field label={m.fields.dueAt}>
+                            <Input
+                                type="datetime-local"
+                                value={edit.due_at}
+                                onChange={(e) => setEdit({ ...edit, due_at: e.target.value })}
+                            />
+                        </Field>
+                        <Field label={m.fields.purpose}>
+                            <Select value={edit.purpose} onChange={(e) => setEdit({ ...edit, purpose: e.target.value })}>
+                                <option value="">{m.fields.noPurpose}</option>
+                                {purposes.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field label={m.fields.assignedTo} htmlFor={editAssigneeId}>
+                            <Select
+                                id={editAssigneeId}
+                                value={edit.assigned_to}
+                                onChange={(e) => setEdit({ ...edit, assigned_to: e.target.value })}
+                            >
+                                {/* Unlike the schedule form, this one can clear: an
+                                    activity already filed may need handing back. */}
+                                <option value="">{m.fields.unassigned}</option>
+                                {memberOptions.map((mem) => (
+                                    <option key={mem.id} value={mem.id}>{mem.label}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field label={m.fields.notes}>
+                            <Textarea
+                                rows={2}
+                                value={edit.notes}
+                                onChange={(e) => setEdit({ ...edit, notes: e.target.value })}
+                            />
+                        </Field>
+                        <p className="text-xs text-gray-400">{m.editRollupHint}</p>
+                    </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setEditing(null)}>{t.common.cancel}</Button>
+                        <Button onClick={saveEdit} loading={saving} disabled={!edit.subject.trim()}>
+                            {m.fields.save}
                         </Button>
                     </ModalFooter>
                 </ModalShell>

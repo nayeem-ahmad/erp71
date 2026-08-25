@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CrmActivityPanel from './CrmActivityPanel';
 
 jest.mock('@/lib/api', () => ({
@@ -7,7 +7,10 @@ jest.mock('@/lib/api', () => ({
         createCrmActivity: jest.fn(),
         completeCrmActivity: jest.fn(),
         cancelCrmActivity: jest.fn(),
+        updateCrmActivity: jest.fn(),
         getLeadTaxonomy: jest.fn(),
+        getTeamMembers: jest.fn(),
+        getMe: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -53,6 +56,12 @@ beforeEach(() => {
     api.createCrmActivity.mockResolvedValue({ id: 'new' });
     api.completeCrmActivity.mockResolvedValue({ completed: {}, next: null });
     api.cancelCrmActivity.mockResolvedValue({});
+    api.updateCrmActivity.mockResolvedValue({});
+    api.getTeamMembers.mockResolvedValue([
+        { userId: 'user-1', name: 'Nayeem' },
+        { userId: 'user-2', name: 'Rifat' },
+    ]);
+    api.getMe.mockResolvedValue({ id: 'user-1' });
 });
 
 describe('CrmActivityPanel', () => {
@@ -125,5 +134,135 @@ describe('CrmActivityPanel', () => {
 
         expect(await screen.findByDisplayValue('Drafted by AI')).toBeInTheDocument();
         expect(onConsumed).toHaveBeenCalled();
+    });
+});
+
+/**
+ * The three `next_step*` columns on a lead are a read-only rollup of its earliest
+ * PLANNED activity, so editing that activity is the only way to change them —
+ * `PATCH /crm/activities/:id` is what the lead DTO points at, and until now
+ * nothing in the app called it.
+ */
+describe('CrmActivityPanel — editing a planned activity', () => {
+    const openEdit = async () => {
+        const subject = await screen.findByText('Chase the invoice');
+        const row = subject.closest('div')!.parentElement!;
+        fireEvent.click(within(row).getByRole('button', { name: /edit/i }));
+    };
+
+    it('offers Edit on planned work', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await screen.findByText('Chase the invoice');
+
+        expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+    });
+
+    it('does not offer Edit on history, which the API refuses to edit', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await screen.findByText('Sent the catalogue');
+
+        expect(screen.getAllByRole('button', { name: /edit/i })).toHaveLength(1);
+    });
+
+    it('prefills the form from the activity it is editing', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await openEdit();
+
+        expect(await screen.findByDisplayValue('Chase the invoice')).toBeInTheDocument();
+    });
+
+    it('patches the activity rather than creating a second one', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await openEdit();
+
+        fireEvent.change(await screen.findByDisplayValue('Chase the invoice'), {
+            target: { value: 'Chase it again' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.updateCrmActivity).toHaveBeenCalled());
+        expect(api.updateCrmActivity.mock.calls[0][0]).toBe('a1');
+        expect(api.updateCrmActivity.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ subject: 'Chase it again' }),
+        );
+        expect(api.createCrmActivity).not.toHaveBeenCalled();
+    });
+
+    it('reassigns through the same form', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await openEdit();
+
+        const assignee = await screen.findByLabelText('Assigned to');
+        fireEvent.change(assignee, { target: { value: 'user-2' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.updateCrmActivity).toHaveBeenCalled());
+        expect(api.updateCrmActivity.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ assigned_to: 'user-2' }),
+        );
+    });
+
+    it('can hand an activity back to nobody', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await openEdit();
+
+        fireEvent.change(await screen.findByLabelText('Assigned to'), { target: { value: '' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.updateCrmActivity).toHaveBeenCalled());
+        // '' rather than an omitted key: the DTO's emptyToNull turns it into an
+        // explicit null, where omitting it would leave the old assignee in place.
+        expect(api.updateCrmActivity.mock.calls[0][1].assigned_to).toBe('');
+    });
+});
+
+describe('CrmActivityPanel — naming an assignee on new work', () => {
+    it('defaults a scheduled activity to the person scheduling it', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Schedule' }));
+
+        await waitFor(() =>
+            expect((screen.getByLabelText('Assigned to') as HTMLSelectElement).value).toBe('user-1'),
+        );
+    });
+
+    it('sends the chosen assignee when scheduling', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Schedule' }));
+
+        fireEvent.change(await screen.findByPlaceholderText(/Call about the outstanding/), {
+            target: { value: 'Call Karim' },
+        });
+        await waitFor(() => expect(screen.getByLabelText('Assigned to')).toBeInTheDocument());
+        fireEvent.change(screen.getByLabelText('Assigned to'), { target: { value: 'user-2' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ subject: 'Call Karim', assigned_to: 'user-2' }),
+        );
+    });
+
+    it('carries an assignee on the follow-up scheduled at completion', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        fireEvent.click(await screen.findByRole('button', { name: /^Complete$/ }));
+
+        fireEvent.change(await screen.findByPlaceholderText(/Spoke to Karim/), {
+            target: { value: 'Spoke to him' },
+        });
+        fireEvent.click(screen.getByLabelText(/Schedule the next one/i, { selector: 'input' }));
+
+        // Regexes, not exact strings: a `required` Field appends " *" to its label.
+        fireEvent.change(await screen.findByLabelText(/^What needs doing/), {
+            target: { value: 'Call again' },
+        });
+        fireEvent.change(screen.getByLabelText(/^Due/), { target: { value: '2026-09-01T10:00' } });
+        fireEvent.change(screen.getByLabelText('Assigned to'), { target: { value: 'user-2' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /^Complete$/ }).slice(-1)[0]);
+
+        await waitFor(() => expect(api.completeCrmActivity).toHaveBeenCalled());
+        expect(api.completeCrmActivity.mock.calls[0][1].next).toEqual(
+            expect.objectContaining({ subject: 'Call again', assigned_to: 'user-2' }),
+        );
     });
 });

@@ -12,6 +12,14 @@ import {
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
+/**
+ * The counterpart, for a field whose *clear* has to reach the column. `update()`
+ * skips undefined keys, so `emptyToUndefined` would silently keep the old value
+ * where the user asked for none. `@IsOptional()` skips validation for null as
+ * well as undefined, so `@IsUUID()` still guards real values.
+ */
+const emptyToNull = ({ value }: { value: unknown }) =>
+    value === '' || value === null ? null : value;
 
 export const ACTIVITY_STATUSES = ['PLANNED', 'DONE', 'CANCELLED'] as const;
 export type ActivityStatus = (typeof ACTIVITY_STATUSES)[number];
@@ -50,7 +58,8 @@ export class UpdateCrmActivityDto {
     @IsOptional() @Transform(emptyToUndefined) @IsDateString() due_at?: string;
     @IsOptional() @Transform(emptyToUndefined) @IsString() purpose?: string;
     @IsOptional() @Transform(trim) @IsString() notes?: string;
-    @IsOptional() @Transform(emptyToUndefined) @IsUUID() assigned_to?: string;
+    /** `emptyToNull`, not `emptyToUndefined`: handing an activity back to nobody is a real edit. */
+    @IsOptional() @Transform(emptyToNull) @IsUUID() assigned_to?: string | null;
 }
 
 export class CreateNextActivityDto {
