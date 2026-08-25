@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import {
     applyCreatedRangeQuery,
@@ -86,8 +87,7 @@ export default function CrmActivitiesPage() {
     const [dueRange, setDueRange] = useState<CreatedRange | null>(() =>
         createdRangeFromPreset('today'),
     );
-    const [teamMembers, setTeamMembers] = useState<any[]>([]);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const { options: memberOptions } = useTeamMemberOptions(m.filters.me);
 
     /**
      * "Overdue" means due before today, so it can never agree with a due range
@@ -146,34 +146,6 @@ export default function CrmActivitiesPage() {
     useEffect(() => { void load(); }, [load]);
     useEffect(() => { loadSummary(); }, [loadSummary]);
 
-    useEffect(() => {
-        api.getTeamMembers()
-            .then((d: any) => setTeamMembers(Array.isArray(d) ? d : []))
-            .catch(() => setTeamMembers([]));
-        api.getMe()
-            .then((me: any) => setCurrentUserId(me?.id ?? null))
-            .catch(() => setCurrentUserId(null));
-    }, []);
-
-    /**
-     * The signed-in user is relabelled "Me" and pinned first rather than added as
-     * a second option: two options sharing one id makes a <select> resolve the
-     * wrong one, and "filter to my own work" is what this control is mostly for.
-     */
-    const memberOptions = useMemo(() => {
-        const members = teamMembers
-            .map((mem) => {
-                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
-                return id
-                    ? { id, label: mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id }
-                    : null;
-            })
-            .filter((entry): entry is { id: string; label: string } => entry !== null);
-
-        if (!currentUserId) return members;
-        const others = members.filter((mem) => mem.id !== currentUserId);
-        return [{ id: currentUserId, label: m.filters.me }, ...others];
-    }, [teamMembers, currentUserId, m.filters.me]);
 
     const columns = useMemo<ColumnDef<CrmActivityRow, any>[]>(() => [
         columnHelper.accessor((row) => row.subject ?? row.summary ?? '', {

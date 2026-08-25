@@ -195,7 +195,10 @@ export class CrmActivitiesService {
                 outcome: dto.outcome ?? null,
                 notes: dto.notes ?? null,
                 direction: dto.direction ?? 'OUTBOUND',
-                assigned_to: dto.assigned_to ?? null,
+                // Falls back to the creator, as CrmLeadsService.create does for a
+                // lead's owner. An activity nobody owns is invisible to the
+                // assignee filter and silently skips notifyAssignee.
+                assigned_to: dto.assigned_to ?? userId,
                 store_id: dto.store_id ?? null,
                 created_by: userId,
                 origin: 'MANUAL',
