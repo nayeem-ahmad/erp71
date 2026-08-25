@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
-import { MIN_TIMER_SECONDS, ProjectTimerService } from './project-timer.service';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { ProjectTimerService } from './project-timer.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectAccessService } from './project-access.service';
 import { OWNER, staff, visibilityOr } from './project-access.test-support';
@@ -175,25 +175,16 @@ describe('ProjectTimerService', () => {
             jest.restoreAllMocks();
         });
 
-        it('discards a misclick instead of writing a zero-hour entry', async () => {
-            db.projectTimer.findFirst.mockResolvedValue(runningFor(MIN_TIMER_SECONDS - 1));
+        it('records even a few seconds — a stop never swallows the sitting', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(4));
 
             const result = await service.stop(OWNER, {} as never);
 
-            expect(result).toMatchObject({ discarded: true, entry: null });
-            expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
-            expect(db.projectTimer.delete).toHaveBeenCalled();
-            // And nothing is written back onto the task's remaining hours.
-            expect(remaining.write).not.toHaveBeenCalled();
-        });
-
-        it('records a sitting just over the floor', async () => {
-            db.projectTimer.findFirst.mockResolvedValue(runningFor(MIN_TIMER_SECONDS + 5));
-
-            const result = await service.stop(OWNER, {} as never);
-
-            expect(result.discarded).toBe(false);
             expect(db.projectTimeEntry.create).toHaveBeenCalled();
+            expect(result.entry).not.toBeNull();
+            // Floored to the smallest figure the column holds, so the row does
+            // not read as "nothing happened".
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.hours).toBe(0.01);
         });
 
         it('suggests the remainder after the hours, same as a manual log', async () => {
@@ -279,13 +270,69 @@ describe('ProjectTimerService', () => {
     });
 
     describe('update', () => {
-        it('changes the note without touching the start time', async () => {
+        it('changes the note and leaves the start alone when none is sent', async () => {
             db.projectTimer.findFirst.mockResolvedValue(runningFor(600));
 
             await service.update(OWNER, { note: '  counter wiring  ' } as never);
 
             const data = db.projectTimer.update.mock.calls[0][0].data;
             expect(data).toEqual({ note: 'counter wiring' });
+        });
+
+        it('corrects the start to the last instant that read that wall clock', async () => {
+            // 11:00 Dhaka on the 18th is 05:00Z; 09:00 Dhaka is 03:00Z the same
+            // day, so "I actually started at nine" is two hours back, not a day.
+            jest.spyOn(Date, 'now').mockReturnValue(
+                new Date('2026-08-18T05:00:00.000Z').getTime(),
+            );
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(600));
+
+            await service.update(OWNER, { startTime: '09:00' } as never);
+
+            const data = db.projectTimer.update.mock.calls[0][0].data;
+            expect(data.started_at.toISOString()).toBe('2026-08-18T03:00:00.000Z');
+            jest.restoreAllMocks();
+        });
+
+        it('reads a start still ahead on today’s clock as yesterday’s', async () => {
+            // 00:20 Dhaka on the 19th, correcting a sitting that began at 22:00
+            // the evening before. Tomorrow's 22:00 has not happened yet.
+            jest.spyOn(Date, 'now').mockReturnValue(
+                new Date('2026-08-18T18:20:00.000Z').getTime(),
+            );
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(600));
+
+            await service.update(OWNER, { startTime: '22:00' } as never);
+
+            expect(db.projectTimer.update.mock.calls[0][0].data.started_at.toISOString()).toBe(
+                '2026-08-18T16:00:00.000Z',
+            );
+            jest.restoreAllMocks();
+        });
+
+        it('refuses a start time that is not a wall clock', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(600));
+
+            await expect(service.update(OWNER, { startTime: 'half nine' } as never)).rejects.toThrow(
+                BadRequestException,
+            );
+            expect(db.projectTimer.update).not.toHaveBeenCalled();
+        });
+
+        it('hands back the corrected start as a wall clock the field can show', async () => {
+            jest.spyOn(Date, 'now').mockReturnValue(
+                new Date('2026-08-18T05:00:00.000Z').getTime(),
+            );
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(600));
+            db.projectTimer.update.mockResolvedValue(
+                runningFor(0, { started_at: new Date('2026-08-18T03:00:00.000Z') }),
+            );
+
+            const timer = await service.update(OWNER, { startTime: '09:00' } as never);
+
+            expect(timer.start_time).toBe('09:00');
+            expect(timer.elapsed_seconds).toBe(2 * 3600);
+            jest.restoreAllMocks();
         });
 
         it('clears the note when it is emptied', async () => {

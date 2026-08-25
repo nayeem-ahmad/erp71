@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'Timer konnte nicht gestoppt werden.',
         timerUpdateFailed: 'Timer konnte nicht aktualisiert werden.',
         timerDiscarded: 'Timer verworfen. Es wurde nichts erfasst.',
-        timerDiscardedShort: 'Lief unter einer Minute — es wurde nichts erfasst.',
+        timerStartedAt: 'Gestartet um',
         timerAlreadyRunning: 'Für „{task}“ läuft bereits ein Timer. Stoppe ihn zuerst.',
         timerOverlapped: 'Diese Stunden überschneiden sich mit bereits erfasster Zeit auf „{task}“.',
         overlapTitle: 'Diese Stunden überschneiden sich',

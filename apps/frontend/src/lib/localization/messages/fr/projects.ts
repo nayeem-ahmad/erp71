@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'Impossible d\'arrêter le minuteur.',
         timerUpdateFailed: 'Impossible de mettre à jour le minuteur.',
         timerDiscarded: 'Minuteur abandonné. Rien n\'a été enregistré.',
-        timerDiscardedShort: 'Il a duré moins d\'une minute : rien n\'a été enregistré.',
+        timerStartedAt: 'Démarré à',
         timerAlreadyRunning: 'Un minuteur tourne déjà sur « {task} ». Arrêtez-le d’abord.',
         timerOverlapped: 'Ces heures chevauchent du temps déjà saisi sur « {task} ».',
         overlapTitle: 'Ces heures se chevauchent',

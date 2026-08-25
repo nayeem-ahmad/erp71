@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'تعذّر إيقاف المؤقّت.',
         timerUpdateFailed: 'تعذّر تحديث المؤقّت.',
         timerDiscarded: 'تم تجاهل المؤقّت. لم يُسجَّل شيء.',
-        timerDiscardedShort: 'استمر أقل من دقيقة، لذا لم يُسجَّل شيء.',
+        timerStartedAt: 'بدأ في',
         timerAlreadyRunning: 'هناك مؤقّت يعمل على "{task}". أوقفه أولًا.',
         timerOverlapped: 'هذه الساعات تتداخل مع وقت سجّلته على "{task}".',
         overlapTitle: 'هذه الساعات متداخلة',

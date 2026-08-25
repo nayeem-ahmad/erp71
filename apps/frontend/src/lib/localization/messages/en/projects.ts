@@ -376,7 +376,7 @@ export const projectsMessages = {
         timerStopFailed: 'Could not stop the timer.',
         timerUpdateFailed: 'Could not update the timer.',
         timerDiscarded: 'Timer discarded. Nothing was logged.',
-        timerDiscardedShort: 'That ran for under a minute, so nothing was logged.',
+        timerStartedAt: 'Started at',
         timerAlreadyRunning: 'A timer is already running on "{task}". Stop it first.',
         timerOverlapped: 'Those hours overlap time you already logged on "{task}".',
         overlapTitle: 'These hours overlap',

@@ -21,6 +21,11 @@ export interface CaptureTask {
 export interface RunningTimer {
     id: string;
     started_at: string;
+    /**
+     * The Dhaka wall clock `started_at` reads as, `HH:mm`. The server derives
+     * it so the field that edits it never has to do timezone arithmetic.
+     */
+    start_time?: string | null;
     elapsed_seconds: number;
     note?: string | null;
     tags?: HourLogTag[];
@@ -49,6 +54,7 @@ export interface CaptureLabels {
     timerMode: string;
     manualMode: string;
     running: string;
+    startedAt: string;
 }
 
 export interface ManualLogInput {
@@ -75,7 +81,11 @@ interface Props {
     onStart: (input: { taskId: string; note?: string; tagIds: string[] }) => void | Promise<void>;
     onStop: () => void | Promise<void>;
     onDiscard: () => void | Promise<void>;
-    onUpdateTimer: (patch: { note?: string; tagIds?: string[] }) => void | Promise<void>;
+    onUpdateTimer: (patch: {
+        note?: string;
+        tagIds?: string[];
+        startTime?: string;
+    }) => void | Promise<void>;
     onLogManual: (input: ManualLogInput) => void | Promise<void>;
 }
 
@@ -153,6 +163,22 @@ export default function HourLogCaptureBar({
         // the running clock.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timer?.id]);
+
+    // The start the running clock is showing. Unlike the note, this *does*
+    // follow every refetch: it has no half-typed state to lose — a time input
+    // only ever reports a whole `HH:mm` — and following the server is what lets
+    // a correction made on a second device show up here.
+    const [runningStart, setRunningStart] = useState('');
+    useEffect(() => {
+        setRunningStart(timer?.start_time ?? '');
+    }, [timer]);
+
+    const commitStart = (value: string) => {
+        setRunningStart(value);
+        // An empty box is a time input mid-edit, not an instruction to unset a
+        // start a clock cannot run without.
+        if (value && value !== timer?.start_time) void onUpdateTimer({ startTime: value });
+    };
 
     useDismissOnClickOutside(
         tagsOpen,
@@ -315,6 +341,21 @@ export default function HourLogCaptureBar({
                         </div>
                     ) : null}
                 </div>
+
+                {running ? (
+                    <div className="flex items-center gap-2">
+                        <span className="flex-shrink-0 text-xs text-gray-500">
+                            {labels.startedAt}
+                        </span>
+                        <Input
+                            type="time"
+                            value={runningStart}
+                            onChange={(e) => commitStart(e.target.value)}
+                            aria-label={labels.startedAt}
+                            className="w-28"
+                        />
+                    </div>
+                ) : null}
 
                 {mode === 'manual' && !running ? (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
