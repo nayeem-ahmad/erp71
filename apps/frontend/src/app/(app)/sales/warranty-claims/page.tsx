@@ -13,6 +13,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 const STATUS_STYLES: Record<string, string> = {
     SUBMITTED: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -79,7 +80,7 @@ export default function WarrantyClaimsPage() {
     const [replacementSerial, setReplacementSerial] = useState('');
     const [statusUpdating, setStatusUpdating] = useState(false);
 
-    const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') ?? '' : '';
+    const storeId = typeof window !== 'undefined' ? getWorkspaceItem('store_id') ?? '' : '';
 
     useEffect(() => {
         loadClaims();

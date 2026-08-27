@@ -15,6 +15,7 @@ import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { toast } from '@/lib/toast';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 export default function NewSalesOrderPage() {
     const router = useRouter();
@@ -95,7 +96,7 @@ export default function NewSalesOrderPage() {
         setSubmitting(true);
         try {
             await api.createOrder({
-                storeId: localStorage.getItem('store_id') || '',
+                storeId: getWorkspaceItem('store_id') || '',
                 customerId: customer?.id,
                 items: items.map((item) => ({
                     productId: item.productId,

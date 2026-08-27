@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingSettingsPage from './page';
 import { api } from '@/lib/api';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
@@ -21,7 +22,7 @@ const mockMe = (role: string) => {
 describe('AccountingSettingsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        localStorage.setItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('tenant_id', 'tenant-1');
         (api.getAccountingSettings as jest.Mock).mockResolvedValue({
             requireVoucherApproval: false,
             autoApproveSystemVouchers: true,

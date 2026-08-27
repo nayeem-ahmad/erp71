@@ -13,6 +13,7 @@ import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db'
 import { useI18n } from '@/lib/i18n';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 import { toast } from '@/lib/toast';
+import { getAccessToken, getWorkspaceItem } from '@/lib/session-store';
 
 function interpolate(template: string, values: Record<string, string | number>): string {
     return Object.entries(values).reduce(
@@ -409,7 +410,7 @@ export default function POSPage() {
             : 0;
 
         const saleData = {
-            storeId: localStorage.getItem('store_id') || '',
+            storeId: getWorkspaceItem('store_id') || '',
             ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
             ...(counterId ? { counterId } : {}),
             ...(selectedCustomer?.id ? { customerId: selectedCustomer.id } : {}),
@@ -437,8 +438,8 @@ export default function POSPage() {
                     ...saleData,
                     id: generateId(),
                     createdAt: new Date().toISOString(),
-                    authToken: localStorage.getItem('access_token') || '',
-                    tenantId: localStorage.getItem('tenant_id') || '',
+                    authToken: getAccessToken() || '',
+                    tenantId: getWorkspaceItem('tenant_id') || '',
                 });
                 await refreshPendingCount();
                 addNotification(t.pos.notifications.saleOffline, 'info');
@@ -491,8 +492,8 @@ export default function POSPage() {
                         ...saleData,
                         id: generateId(),
                         createdAt: new Date().toISOString(),
-                        authToken: localStorage.getItem('access_token') || '',
-                        tenantId: localStorage.getItem('tenant_id') || '',
+                        authToken: getAccessToken() || '',
+                        tenantId: getWorkspaceItem('tenant_id') || '',
                     });
                     await refreshPendingCount();
                     addNotification(t.pos.notifications.saleOffline, 'info');

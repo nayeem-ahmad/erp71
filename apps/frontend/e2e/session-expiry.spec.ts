@@ -27,7 +27,7 @@ async function applyExpiredSession(page: import('@playwright/test').Page) {
             'access_token',
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJleHBpcmVkIiwiZXhwIjoxfQ.invalid',
         );
-        localStorage.setItem('tenant_id', '00000000-0000-0000-0000-000000000000');
+        sessionStorage.setItem('tenant_id', '00000000-0000-0000-0000-000000000000');
     });
 }
 

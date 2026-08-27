@@ -21,7 +21,18 @@ const localStorageMock = (() => {
         removeItem: jest.fn((key: string) => { delete store[key]; }),
         clear: jest.fn(() => { store = {}; }),
         _store: () => store,
-        _setAll: (entries: Record<string, string>) => { store = { ...entries }; },
+        /**
+         * Fixtures are still declared as a flat bag of keys. The workspace ones
+         * now live per tab in sessionStorage, so hand each fixture to the real
+         * adoption path in `session-store` instead of duplicating the split
+         * across a hundred call sites.
+         */
+        _setAll: (entries: Record<string, string>) => {
+            store = { ...entries };
+            sessionStorage.clear();
+            resetWorkspaceBootstrapForTests();
+            resetWorkspaceRecoveryForTests();
+        },
     };
 })();
 
@@ -34,32 +45,34 @@ Object.defineProperty(window, 'localStorage', {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a minimal ok fetch response that resolves to `body`. */
-function okJson(body: unknown) {
-    return Promise.resolve({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
+/**
+ * A minimal stand-in for `Response`. `clone()` is part of the contract, not a
+ * convenience: `api.ts` peeks at an error body before the error path reads it,
+ * and a body can only be consumed once.
+ */
+function fakeResponse(init: { ok: boolean; status: number; statusText: string; body?: unknown }) {
+    const build = (): any => ({
+        ok: init.ok,
+        status: init.status,
+        statusText: init.statusText,
         headers: {
             get: (_: string) => null,
         },
-        json: async () => body,
-        blob: async () => new Blob([JSON.stringify(body)]),
+        json: async () => init.body,
+        blob: async () => new Blob([JSON.stringify(init.body ?? '')]),
+        clone: () => build(),
     });
+    return Promise.resolve(build());
+}
+
+/** Build a minimal ok fetch response that resolves to `body`. */
+function okJson(body: unknown) {
+    return fakeResponse({ ok: true, status: 200, statusText: 'OK', body });
 }
 
 /** Build a minimal error fetch response. */
 function errorJson(status: number, statusText: string, body?: unknown) {
-    return Promise.resolve({
-        ok: false,
-        status,
-        statusText,
-        headers: {
-            get: (_: string) => null,
-        },
-        json: async () => body,
-        blob: async () => new Blob(),
-    });
+    return fakeResponse({ ok: false, status, statusText, body });
 }
 
 // The expired-session handler navigates the browser, so stub it and assert the
@@ -69,8 +82,9 @@ jest.mock('./session-expiry', () => ({
 }));
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, resetWorkspaceRecoveryForTests } from './api';
 import { handleExpiredSession } from './session-expiry';
+import { resetWorkspaceBootstrapForTests } from './session-store';
 
 // ---------------------------------------------------------------------------
 // Shared beforeEach
@@ -3227,5 +3241,237 @@ describe('api sales analytics helpers', () => {
 
         expect(lastUrl()).toContain('/purchase-reports/trend?');
         expect(lastUrl()).toContain('granularity=month');
+    });
+});
+
+// ===========================================================================
+// Silent session renewal
+// ===========================================================================
+
+describe('silent renewal on 401', () => {
+    /** The `{ data }` envelope the backend wraps /auth/refresh in. */
+    function renewalOk(accessToken = 'fresh-token', refreshToken = 'fresh-refresh') {
+        return okJson({ data: { access_token: accessToken, refresh_token: refreshToken, expires_in: 3600 } });
+    }
+
+    function refreshCalls() {
+        return mockFetch.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'));
+    }
+
+    beforeEach(() => {
+        localStorageMock._setAll({
+            access_token: 'stale-token',
+            refresh_token: 'refresh-abc',
+            tenant_id: 'tenant-abc',
+        });
+    });
+
+    it('renews and replays the request instead of ending the session', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: 'recovered' }));
+
+        await expect(fetchWithAuth('/sales')).resolves.toBe('recovered');
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('sends the refresh token, and only the refresh token, to /auth/refresh', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: null }));
+
+        await fetchWithAuth('/sales');
+
+        const [url, opts] = refreshCalls()[0];
+        expect(String(url)).toContain('/auth/refresh');
+        expect(opts.method).toBe('POST');
+        expect(JSON.parse(opts.body)).toEqual({ refresh_token: 'refresh-abc' });
+    });
+
+    it('replays with the renewed token, not the one that just failed', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk('brand-new'))
+            .mockReturnValueOnce(okJson({ data: null }));
+
+        await fetchWithAuth('/sales');
+
+        const [, retryOpts] = mockFetch.mock.calls[2];
+        expect(retryOpts.headers.get('Authorization')).toBe('Bearer brand-new');
+    });
+
+    it('ends the session when there is no refresh token to renew with', async () => {
+        localStorageMock._setAll({ access_token: 'stale-token' });
+        mockFetch.mockReturnValueOnce(errorJson(401, 'Unauthorized'));
+
+        await expect(fetchWithAuth('/sales')).rejects.toThrow();
+
+        expect(refreshCalls()).toHaveLength(0);
+        expect(handleExpiredSession).toHaveBeenCalled();
+    });
+
+    it('ends the session when the refresh token is itself rejected', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'));
+
+        await expect(fetchWithAuth('/sales')).rejects.toThrow();
+
+        expect(handleExpiredSession).toHaveBeenCalled();
+    });
+
+    it('gives up after one retry rather than looping on a persistent 401', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'));
+
+        await expect(fetchWithAuth('/sales')).rejects.toThrow();
+
+        expect(refreshCalls()).toHaveLength(1);
+        expect(handleExpiredSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends the session when the renewal request itself cannot be made', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(Promise.reject(new Error('offline')));
+
+        await expect(fetchWithAuth('/sales')).rejects.toThrow();
+
+        expect(handleExpiredSession).toHaveBeenCalled();
+    });
+
+    it('renews once for a page that fires several requests at the same moment', async () => {
+        mockFetch.mockImplementation((url: string) => {
+            if (String(url).endsWith('/auth/refresh')) return renewalOk();
+            const token = mockFetch.mock.calls.filter(([u]) => String(u).endsWith('/auth/refresh')).length;
+            return token ? okJson({ data: 'ok' }) : errorJson(401, 'Unauthorized');
+        });
+
+        await Promise.all([fetchWithAuth('/a'), fetchWithAuth('/b'), fetchWithAuth('/c')]);
+
+        expect(refreshCalls()).toHaveLength(1);
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('renews ahead of expiry so the request never 401s in the first place', async () => {
+        localStorageMock._setAll({
+            access_token: 'stale-token',
+            refresh_token: 'refresh-abc',
+            tenant_id: 'tenant-abc',
+            access_token_expires_at: String(Date.now() + 5_000),
+        });
+        mockFetch
+            .mockReturnValueOnce(renewalOk('pre-emptive'))
+            .mockReturnValueOnce(okJson({ data: 'ok' }));
+
+        await fetchWithAuth('/sales');
+
+        expect(refreshCalls()).toHaveLength(1);
+        const [, opts] = mockFetch.mock.calls[1];
+        expect(opts.headers.get('Authorization')).toBe('Bearer pre-emptive');
+    });
+
+    it('leaves a healthy token alone', async () => {
+        localStorageMock._setAll({
+            access_token: 'good-token',
+            refresh_token: 'refresh-abc',
+            access_token_expires_at: String(Date.now() + 3_600_000),
+        });
+        mockFetch.mockReturnValue(okJson({ data: 'ok' }));
+
+        await fetchWithAuth('/sales');
+
+        expect(refreshCalls()).toHaveLength(0);
+    });
+
+    it('renews a blob download too', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: 'file' }));
+
+        await expect(fetchBlobWithAuth('/exports/sales')).resolves.toHaveProperty('blob');
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+});
+
+// ===========================================================================
+// Recovering from a workspace the server rejects
+// ===========================================================================
+
+describe('stale workspace recovery', () => {
+    /** What `TenantInterceptor` returns for a shop the user is not in. */
+    function invalidTenant() {
+        return errorJson(403, 'Forbidden', { message: 'Invalid tenant context' });
+    }
+
+    beforeEach(() => {
+        localStorageMock._setAll({ access_token: 'tok', tenant_id: 'shop-the-user-left' });
+    });
+
+    it('drops the rejected shop and retries rather than failing the page', async () => {
+        mockFetch
+            .mockReturnValueOnce(invalidTenant())
+            .mockReturnValueOnce(okJson({ data: 'ok' }));
+
+        await expect(fetchWithAuth('/dashboard')).resolves.toBe('ok');
+
+        const [, retryOpts] = mockFetch.mock.calls[1];
+        expect(retryOpts.headers.get('x-tenant-id')).toBeNull();
+        expect(sessionStorage.getItem('tenant_id')).toBeNull();
+    });
+
+    it('forgets the resume hint too, so the next tab does not repeat the mistake', async () => {
+        localStorageMock._setAll({
+            access_token: 'tok',
+            tenant_id: 'shop-the-user-left',
+            last_tenant_id: 'shop-the-user-left',
+        });
+        mockFetch
+            .mockReturnValueOnce(invalidTenant())
+            .mockReturnValueOnce(okJson({ data: 'ok' }));
+
+        await fetchWithAuth('/dashboard');
+
+        expect(localStorage.getItem('last_tenant_id')).toBeNull();
+    });
+
+    it('never treats it as an expired session', async () => {
+        mockFetch
+            .mockReturnValueOnce(invalidTenant())
+            .mockReturnValueOnce(okJson({ data: 'ok' }));
+
+        await fetchWithAuth('/dashboard');
+
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('leaves an ordinary permission denial alone', async () => {
+        mockFetch.mockReturnValueOnce(errorJson(403, 'Forbidden', { message: 'You do not have access to this store' }));
+
+        await expect(fetchWithAuth('/dashboard')).rejects.toThrow('You do not have access to this store');
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(sessionStorage.getItem('tenant_id')).toBe('shop-the-user-left');
+    });
+
+    it('clears once per page load, not on every request that fails', async () => {
+        mockFetch.mockReturnValue(invalidTenant());
+
+        await expect(fetchWithAuth('/a')).rejects.toThrow();
+        await expect(fetchWithAuth('/b')).rejects.toThrow();
+
+        // /a: original + retry. /b: original only — the latch is already spent.
+        expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('surfaces the error when clearing the workspace does not help', async () => {
+        mockFetch.mockReturnValue(invalidTenant());
+
+        await expect(fetchWithAuth('/dashboard')).rejects.toThrow('Invalid tenant context');
     });
 });

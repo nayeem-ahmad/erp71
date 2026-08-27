@@ -2,6 +2,15 @@ import { api } from './api';
 import { syncLocalePreferenceFromSession } from './localization/preference';
 import { routes } from './routes';
 import { clearStoredSession } from './session-expiry';
+import {
+    clearLastTenantId,
+    clearWorkspace,
+    getWorkspaceItem,
+    removeWorkspaceItem,
+    setCredentials,
+    setLastTenantId,
+    setWorkspaceItem,
+} from './session-store';
 
 /**
  * A "login context" is one of the workspaces a signed-in identity can act as:
@@ -38,14 +47,11 @@ export function getLoginContexts(me: any): LoginContexts {
 
 /** Activate the referee self-service portal (no shop/tenant scope). */
 export function applyRefereeContext() {
-    const currentTenantId = getStorage('tenant_id');
-    if (currentTenantId) {
-        setStorage('last_tenant_id', currentTenantId);
-    }
-    setStorage('active_context', 'referee');
-    removeStorage('tenant_id');
-    removeStorage('store_id');
-    removeStorage('subscription_plan_code');
+    rememberCurrentTenant();
+    setWorkspaceItem('active_context', 'referee');
+    removeWorkspaceItem('tenant_id');
+    removeWorkspaceItem('store_id');
+    removeWorkspaceItem('subscription_plan_code');
 }
 
 /**
@@ -57,83 +63,63 @@ export function applyRefereeContext() {
  * only break the app shell, which needs a tenant to render.
  */
 export function applyEmployeeContext(employee: { tenant_id?: string | null }) {
-    setStorage('active_context', 'employee');
+    setWorkspaceItem('active_context', 'employee');
     if (employee?.tenant_id) {
-        setStorage('tenant_id', employee.tenant_id);
-        setStorage('last_tenant_id', employee.tenant_id);
+        setWorkspaceItem('tenant_id', employee.tenant_id);
+        setLastTenantId(employee.tenant_id);
     }
-    removeStorage('store_id');
+    removeWorkspaceItem('store_id');
 }
 
 /** Activate the Platform Admin console (no shop/tenant scope). */
 export function applyPlatformAdminContext() {
-    const currentTenantId = getStorage('tenant_id');
-    if (currentTenantId) {
-        setStorage('last_tenant_id', currentTenantId);
-    }
-    setStorage('active_context', 'platform-admin');
-    removeStorage('tenant_id');
-    removeStorage('store_id');
-    removeStorage('subscription_plan_code');
+    rememberCurrentTenant();
+    setWorkspaceItem('active_context', 'platform-admin');
+    removeWorkspaceItem('tenant_id');
+    removeWorkspaceItem('store_id');
+    removeWorkspaceItem('subscription_plan_code');
 }
 
-/** Activate a specific shop/tenant as the current workspace. */
+/**
+ * Activate a specific shop/tenant as the current workspace.
+ *
+ * Scoped to this tab. `last_tenant_id` is the one part that is shared, because
+ * it is what a brand-new tab resumes from.
+ */
 export function applyTenantContext(tenant: any) {
-    removeStorage('active_context');
-    setStorage('tenant_id', tenant.id);
-    setStorage('last_tenant_id', tenant.id);
+    removeWorkspaceItem('active_context');
+    setWorkspaceItem('tenant_id', tenant.id);
+    setLastTenantId(tenant.id);
     if (tenant.stores && tenant.stores.length > 0) {
-        setStorage('store_id', tenant.stores[0].id);
+        setWorkspaceItem('store_id', tenant.stores[0].id);
     } else {
-        removeStorage('store_id');
+        removeWorkspaceItem('store_id');
     }
     if (tenant.subscription?.plan?.code) {
-        setStorage('subscription_plan_code', tenant.subscription.plan.code);
+        setWorkspaceItem('subscription_plan_code', tenant.subscription.plan.code);
     } else {
-        removeStorage('subscription_plan_code');
+        removeWorkspaceItem('subscription_plan_code');
     }
 }
 
 /** Forget the selected workspace so the account chooser starts clean. */
 export function clearActiveContext() {
-    removeStorage('active_context');
-    removeStorage('tenant_id');
-    removeStorage('last_tenant_id');
-    removeStorage('store_id');
-    removeStorage('subscription_plan_code');
+    clearWorkspace();
+    clearLastTenantId();
+}
+
+/**
+ * Park the shop this tab is in before leaving it for a portal, so coming back
+ * lands on the same one.
+ */
+function rememberCurrentTenant() {
+    const currentTenantId = getWorkspaceItem('tenant_id');
+    if (currentTenantId) setLastTenantId(currentTenantId);
 }
 
 export type StoreAuthResult = { redirectTo: string };
 
-/**
- * Helper: get an item from localStorage, falling back to sessionStorage.
- * Used for reading token and other session-scoped values.
- */
-function getStorage(key: string): string | null {
-    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
-}
-
-/**
- * Helper: set a value in the correct storage depending on whether "Remember Me"
- * was checked. When `rememberMe` is true, use localStorage (persists across
- * browser closes). When false, use sessionStorage (cleared when tab closes).
- * For keys that are always contextual (tenant_id, store_id, etc.) we always
- * write to localStorage since those are not secrets.
- */
-const ALWAYS_LOCAL_KEYS = new Set([
-    'tenant_id', 'last_tenant_id', 'store_id', 'subscription_plan_code',
-    'active_context', 'demo_session', 'onboarding_complete', 'locale',
-    'demo_banner_dismissed', 'last_tenant_id',
-]);
-
-function setStorage(key: string, value: string, rememberMe?: boolean): void {
-    if (ALWAYS_LOCAL_KEYS.has(key) || rememberMe) {
-        localStorage.setItem(key, value);
-    } else {
-        sessionStorage.setItem(key, value);
-    }
-}
-
+/** Remove a key from both backends, whichever one it happens to sit in. */
 function removeStorage(key: string): void {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
@@ -151,7 +137,7 @@ export function clearSidebarLayoutState(): void {
 
 export async function storeAuthResponse(res: any, rememberMe = false): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
-    setStorage('access_token', data.access_token, rememberMe);
+    setCredentials(data, rememberMe);
     // Fresh login → start from a collapsed, default-width sidebar.
     clearSidebarLayoutState();
 

@@ -2,7 +2,7 @@ import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, Param, H
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto, MobileSignInDto } from './auth.dto';
+import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto, MobileSignInDto, RefreshTokenDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleTokenService } from './google-token.service';
 import { FirebaseTokenService } from './firebase-token.service';
@@ -67,6 +67,20 @@ export class AuthController {
     @Post('mobile')
     async mobileSignIn(@Body() dto: MobileSignInDto, @Request() req) {
         return this.authService.mobileSignIn(dto, extractRequestMeta(req));
+    }
+
+    /**
+     * Renew an expired access token.
+     *
+     * Unauthenticated on purpose: the caller reaches here precisely because its
+     * access token is no longer accepted, so `JwtAuthGuard` would reject every
+     * legitimate request. The refresh token in the body is the credential.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 30 } })
+    @HttpCode(HttpStatus.OK)
+    @Post('refresh')
+    async refresh(@Body() dto: RefreshTokenDto, @Request() req) {
+        return this.authService.refreshSession(dto.refresh_token, extractRequestMeta(req));
     }
 
     @UseGuards(JwtAuthGuard)

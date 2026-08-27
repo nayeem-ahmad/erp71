@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { extractTenantPlan } from './nav-visibility';
+import { getWorkspaceItem } from './session-store';
 
 type TenantPlanState = {
   planCode: string | null;
@@ -38,7 +39,7 @@ export function useTenantPlanFeatures() {
     api.getMe()
       .then((me) => {
         if (!active) return;
-        const tenantId = localStorage.getItem('tenant_id');
+        const tenantId = getWorkspaceItem('tenant_id');
         setState({ ...extractTenantPlan(me, tenantId), ready: true });
       })
       .catch(() => {

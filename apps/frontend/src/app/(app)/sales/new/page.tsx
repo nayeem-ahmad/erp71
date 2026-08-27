@@ -18,6 +18,7 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 export default function NewSalePage() {
     const {
@@ -187,7 +188,7 @@ export default function NewSalePage() {
         // The active branch/store is persisted in localStorage and sent
         // as x-store-id on every request; the sale body needs the same id.
         // (Owners have no currentUser.store_id, so don't rely on it.)
-        storeId: localStorage.getItem('store_id') || '',
+        storeId: getWorkspaceItem('store_id') || '',
         referenceNumber: refNumber || undefined,
         customerId: customer?.id,
         items: items.map((item) => ({

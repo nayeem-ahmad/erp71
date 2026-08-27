@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import BalanceSheetPage from './page';
 import { api } from '@/lib/api';
 import { printStatementReport } from '@/lib/statement-printer';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -46,8 +47,8 @@ describe('BalanceSheetPage — print', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         localStorage.clear();
-        localStorage.setItem('tenant_id', 'tenant-1');
-        localStorage.setItem('store_id', 's1');
+        setWorkspaceItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('store_id', 's1');
         (api.getMe as jest.Mock).mockResolvedValue({
             tenants: [{ id: 'tenant-1', role: 'OWNER', stores: mockStores }],
         });

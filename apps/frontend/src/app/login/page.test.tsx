@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import LoginPage from './page';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 const pushMock = jest.fn();
 
@@ -117,11 +118,11 @@ describe('Login UI Authentication Mapping', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(localStorage.getItem('tenant_id')).toBe('tenant-1');
+      expect(getWorkspaceItem('tenant_id')).toBe('tenant-1');
     });
 
-    expect(localStorage.getItem('tenant_id')).toBe('tenant-1');
-    expect(localStorage.getItem('store_id')).toBe('store-1');
+    expect(getWorkspaceItem('tenant_id')).toBe('tenant-1');
+    expect(getWorkspaceItem('store_id')).toBe('store-1');
   });
 
   /**

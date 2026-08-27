@@ -17,6 +17,7 @@ import {
     resetSessionExpiryGuard,
     resolveExpiredSessionRedirect,
 } from './session-expiry';
+import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
 beforeEach(() => {
     localStorage.clear();
@@ -29,15 +30,15 @@ describe('clearStoredSession', () => {
         // "Remember me" writes the token to localStorage, otherwise sessionStorage.
         localStorage.setItem('access_token', 'local-token');
         sessionStorage.setItem('access_token', 'session-token');
-        localStorage.setItem('tenant_id', 'tenant-1');
-        localStorage.setItem('active_context', 'platform-admin');
+        setWorkspaceItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('active_context', 'platform-admin');
 
         clearStoredSession();
 
         expect(localStorage.getItem('access_token')).toBeNull();
         expect(sessionStorage.getItem('access_token')).toBeNull();
-        expect(localStorage.getItem('tenant_id')).toBeNull();
-        expect(localStorage.getItem('active_context')).toBeNull();
+        expect(getWorkspaceItem('tenant_id')).toBeNull();
+        expect(getWorkspaceItem('active_context')).toBeNull();
     });
 
     it('leaves preferences that should survive a logout alone', () => {

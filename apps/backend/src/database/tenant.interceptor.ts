@@ -4,7 +4,6 @@ import {
     ExecutionContext,
     CallHandler,
     BadRequestException,
-    UnauthorizedException,
     ForbiddenException,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
@@ -39,7 +38,13 @@ export class TenantInterceptor implements NestInterceptor {
             });
 
             if (!membership) {
-                throw new UnauthorizedException('Invalid tenant context');
+                // Forbidden, not Unauthorized: the caller is signed in perfectly
+                // well, they just asked for a workspace they are not in — a tab
+                // resuming a shop they have since left, or a stale header. The
+                // frontend treats 401 as "your session is over" and bounces to
+                // the login page, which would turn a wrong header into a
+                // spurious sign-out.
+                throw new ForbiddenException('Invalid tenant context');
             }
 
             resolvedTenantId = tenantId as string;

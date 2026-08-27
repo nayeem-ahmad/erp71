@@ -1,12 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useTenantPlanFeatures } from './use-tenant-plan-features';
 import { api } from './api';
+import { setWorkspaceItem } from './session-store';
 
 jest.mock('./api', () => ({ api: { getMe: jest.fn() } }));
 
 describe('useTenantPlanFeatures', () => {
   beforeEach(() => {
-    localStorage.setItem('tenant_id', 't1');
+    setWorkspaceItem('tenant_id', 't1');
     (api.getMe as jest.Mock).mockResolvedValue({
       tenants: [{ id: 't1', subscription: { plan: { code: 'BASIC', features_json: { premiumCrm: false } } } }],
     });

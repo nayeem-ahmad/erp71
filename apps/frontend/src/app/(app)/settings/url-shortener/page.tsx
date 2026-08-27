@@ -11,6 +11,7 @@ import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type PermissionState = 'checking' | 'allowed' | 'denied' | 'error';
 
@@ -36,7 +37,7 @@ export default function SettingsUrlShortenerPage() {
         api.getMe()
             .then((me: any) => {
                 const tenant =
-                    me?.tenants?.find((e: { id: string }) => e.id === localStorage.getItem('tenant_id'))
+                    me?.tenants?.find((e: { id: string }) => e.id === getWorkspaceItem('tenant_id'))
                     ?? me?.tenants?.[0];
                 setPermission(
                     isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_SHORT_LINKS')

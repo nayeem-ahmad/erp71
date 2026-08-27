@@ -17,6 +17,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell } from '@/components/ui';
 import { toast } from '@/lib/toast';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 /* ------------------------------- Types -------------------------------- */
 
@@ -648,7 +649,7 @@ export default function TeamPage() {
 
     useEffect(() => {
         api.getMe().then((me) => {
-            const tenantId = localStorage.getItem('tenant_id');
+            const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsOwner(tenant?.role === 'OWNER');
         }).catch(() => setIsOwner(false));

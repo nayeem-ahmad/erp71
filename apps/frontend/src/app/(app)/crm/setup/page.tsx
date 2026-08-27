@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 const TABS = ['channels', 'purposes', 'sources', 'categories', 'customFields'] as const;
 type Tab = (typeof TABS)[number];
@@ -47,7 +48,7 @@ function CrmSetupPage() {
         api.getMe()
             .then((me) => {
                 const tenant =
-                    me?.tenants?.find((e: { id: string }) => e.id === localStorage.getItem('tenant_id'))
+                    me?.tenants?.find((e: { id: string }) => e.id === getWorkspaceItem('tenant_id'))
                     ?? me?.tenants?.[0];
                 setCanManage(
                     isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_CRM_SETTINGS'),

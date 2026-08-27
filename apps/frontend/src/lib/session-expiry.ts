@@ -7,26 +7,28 @@
  * So a 401 out of the authenticated helpers can only mean the token expired or
  * was revoked; there is nothing to disambiguate and no endpoint allowlist needed.
  *
- * This module deliberately imports nothing. `api.ts` needs it, and
- * `auth-session.ts` imports `api.ts`, so any heavier dependency would close an
- * import cycle.
+ * Those helpers try a silent renewal against the refresh token first, so
+ * reaching here means the renewal failed too — the session is really over, not
+ * merely stale.
+ *
+ * This module imports only `session-store`, which itself imports nothing.
+ * `api.ts` needs both, and `auth-session.ts` imports `api.ts`, so any heavier
+ * dependency would close an import cycle.
  */
+import { CREDENTIAL_KEYS, LAST_TENANT_KEY, WORKSPACE_KEYS } from './session-store';
 
 /**
- * Everything that identifies the signed-in session. Written to localStorage when
- * "Remember me" was checked and sessionStorage otherwise, so both backends get
- * cleared. Deliberately excludes preferences that should survive a logout
- * (`locale`, sidebar layout, `demo_banner_dismissed`).
+ * Everything that identifies the signed-in session. Credentials, the tab's
+ * workspace and the cross-tab resume hint each live in a different backend, so
+ * every key is cleared from both. Deliberately excludes preferences that should
+ * survive a logout (`locale`, sidebar layout, `demo_banner_dismissed`).
  */
 export const SESSION_STORAGE_KEYS = [
-    'access_token',
-    'tenant_id',
-    'last_tenant_id',
-    'store_id',
-    'subscription_plan_code',
+    ...CREDENTIAL_KEYS,
+    ...WORKSPACE_KEYS,
+    LAST_TENANT_KEY,
     'demo_session',
     'onboarding_complete',
-    'active_context',
 ] as const;
 
 /** Wipe the stored session from both storage backends. */

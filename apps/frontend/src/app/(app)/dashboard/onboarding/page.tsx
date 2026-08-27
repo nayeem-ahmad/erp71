@@ -9,6 +9,7 @@ import {
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE, type BusinessType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { getWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
 
 type Step = 'store' | 'products' | 'pos' | 'done';
 
@@ -135,10 +136,10 @@ function StoreStep({
                 businessType: businessType ?? undefined,
             });
             if (result?.tenant?.id) {
-                localStorage.setItem('tenant_id', result.tenant.id);
+                setWorkspaceItem('tenant_id', result.tenant.id);
             }
             if (result?.store?.id) {
-                localStorage.setItem('store_id', result.store.id);
+                setWorkspaceItem('store_id', result.store.id);
             }
             onNext();
         } catch (err: any) {
@@ -463,16 +464,16 @@ export default function OnboardingPage() {
 
         api.getMe()
             .then((me) => {
-                const tenantId = localStorage.getItem('tenant_id');
+                const tenantId = getWorkspaceItem('tenant_id');
                 const tenant = me?.tenants?.find((item: any) => item.id === tenantId) || me?.tenants?.[0];
                 const store = tenant?.stores?.[0];
                 if (tenant && store) {
                     setExistingStore({ tenantName: tenant.name, storeName: store.name });
-                    if (!localStorage.getItem('tenant_id')) {
-                        localStorage.setItem('tenant_id', tenant.id);
+                    if (!getWorkspaceItem('tenant_id')) {
+                        setWorkspaceItem('tenant_id', tenant.id);
                     }
-                    if (!localStorage.getItem('store_id')) {
-                        localStorage.setItem('store_id', store.id);
+                    if (!getWorkspaceItem('store_id')) {
+                        setWorkspaceItem('store_id', store.id);
                     }
                 } else {
                     setExistingStore(null);

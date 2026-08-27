@@ -1,4 +1,5 @@
 import { clearSidebarLayoutState } from './auth-session';
+import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
 describe('clearSidebarLayoutState', () => {
     beforeEach(() => {
@@ -27,10 +28,10 @@ describe('clearSidebarLayoutState', () => {
     });
 
     it('leaves unrelated keys untouched', () => {
-        localStorage.setItem('tenant_id', 'abc');
+        setWorkspaceItem('tenant_id', 'abc');
 
         clearSidebarLayoutState();
 
-        expect(localStorage.getItem('tenant_id')).toBe('abc');
+        expect(getWorkspaceItem('tenant_id')).toBe('abc');
     });
 });

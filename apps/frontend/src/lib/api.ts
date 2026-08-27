@@ -11,6 +11,13 @@ import type {
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
 import { handleExpiredSession } from './session-expiry';
+import {
+    getAccessToken,
+    getRefreshToken,
+    getWorkspaceItem,
+    isAccessTokenNearExpiry,
+    updateCredentials,
+} from './session-store';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -78,16 +85,106 @@ export class ApiError extends Error {
     }
 }
 
-/** Read an auth token from localStorage first, falling back to sessionStorage. */
-function getAccessToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('access_token') ?? sessionStorage.getItem('access_token');
+/** The tab's single outstanding renewal, if one is running. See `renewSession`. */
+let renewalInFlight: Promise<boolean> | null = null;
+
+async function performRenewal(): Promise<boolean> {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (!response.ok) return false;
+
+        const body = await response.json();
+        const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
+        if (!tokens?.access_token) return false;
+
+        updateCredentials(tokens);
+        return true;
+    } catch {
+        // Offline, or the API is unreachable. Indistinguishable from a dead
+        // refresh token from here, and the caller has already had a 401 from a
+        // server that was answering a moment ago, so it is treated the same.
+        return false;
+    }
 }
 
-export async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string }> {
+/**
+ * The backend's answer when this tab's `x-tenant-id` names a workspace the
+ * signed-in user is not in — a resumed shop they have since left, or a hint
+ * left behind by a different account on the same browser.
+ */
+const INVALID_TENANT_MESSAGE = 'Invalid tenant context';
+
+/**
+ * Forget a workspace the server just rejected, once per page load.
+ *
+ * Once, because the app shell re-resolves the workspace from `GET /auth/me`
+ * straight afterwards; retrying every request would otherwise keep clearing
+ * whatever it settles on.
+ */
+let workspaceCleared = false;
+
+/** Test-only: forget that a rejected workspace was already cleared. */
+export function resetWorkspaceRecoveryForTests(): void {
+    workspaceCleared = false;
+}
+
+function clearRejectedWorkspace(): boolean {
+    if (workspaceCleared || typeof window === 'undefined') return false;
+    workspaceCleared = true;
+
+    sessionStorage.removeItem('tenant_id');
+    sessionStorage.removeItem('store_id');
+    sessionStorage.removeItem('subscription_plan_code');
+    localStorage.removeItem('last_tenant_id');
+    return true;
+}
+
+/**
+ * Renew the access token, sharing one exchange across the whole tab.
+ *
+ * A page routinely has half a dozen requests in flight, they all notice the
+ * expiry at the same instant, and a refresh token is good for a single
+ * exchange — firing six of them would look exactly like a replay and get the
+ * session revoked.
+ *
+ * Resolves `false` rather than throwing, so the caller decides what a failed
+ * renewal means.
+ */
+export function renewSession(): Promise<boolean> {
+    if (!renewalInFlight) {
+        renewalInFlight = performRenewal().finally(() => {
+            renewalInFlight = null;
+        });
+    }
+    return renewalInFlight;
+}
+
+/**
+ * Renew before sending when the token is about to lapse, so the common case
+ * costs no failed round-trip. Silent on failure: the 401 path below is still
+ * there to catch it.
+ */
+async function renewIfNearExpiry(): Promise<void> {
+    if (isAccessTokenNearExpiry()) await renewSession();
+}
+
+export async function fetchBlobWithAuth(
+    endpoint: string,
+    options: RequestInit = {},
+    isRetry = false,
+): Promise<{ blob: Blob; filename: string }> {
+    if (!isRetry) await renewIfNearExpiry();
+
     const token = getAccessToken();
-    const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
-    const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+    const tenantId = getWorkspaceItem('tenant_id');
+    const storeId = getWorkspaceItem('store_id');
 
     const headers = new Headers(options.headers);
     if (token) {
@@ -106,9 +203,17 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
     });
 
     if (!response.ok) {
-        // Only authenticated endpoints reach here, so a 401 means the session died.
         if (response.status === 401) {
+            // Only authenticated endpoints reach here, so a 401 is always an
+            // expired or revoked token. Try to renew once; only a failed
+            // renewal is genuinely the end of the session.
+            if (!isRetry && (await renewSession())) {
+                return fetchBlobWithAuth(endpoint, options, true);
+            }
             handleExpiredSession();
+        }
+        if (response.status === 403 && !isRetry && (await isInvalidTenant(response))) {
+            if (clearRejectedWorkspace()) return fetchBlobWithAuth(endpoint, options, true);
         }
         let message = `API error: ${response.statusText}`;
         try {
@@ -139,10 +244,25 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
  * paginated endpoints. Most callers should use `fetchWithAuth` (which unwraps
  * `.data`); paginated callers use `fetchPaginated` (which also reads `meta`).
  */
-async function requestWithAuth(endpoint: string, options: RequestInit = {}): Promise<any> {
+/**
+ * Peek at a 403's body without consuming it for the error path below —
+ * `clone()` because a Response body can only be read once.
+ */
+async function isInvalidTenant(response: Response): Promise<boolean> {
+    try {
+        const body = await response.clone().json();
+        return body?.message === INVALID_TENANT_MESSAGE;
+    } catch {
+        return false;
+    }
+}
+
+async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<any> {
+    if (!isRetry) await renewIfNearExpiry();
+
     const token = getAccessToken();
-    const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
-    const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+    const tenantId = getWorkspaceItem('tenant_id');
+    const storeId = getWorkspaceItem('store_id');
 
     const headers = new Headers(options.headers);
     if (token) {
@@ -164,9 +284,18 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}): Pro
     });
 
     if (!response.ok) {
-        // Only authenticated endpoints reach here, so a 401 means the session died.
         if (response.status === 401) {
+            // Only authenticated endpoints reach here, so a 401 is always an
+            // expired or revoked token. Try to renew once; only a failed
+            // renewal is genuinely the end of the session.
+            if (!isRetry && (await renewSession())) {
+                return requestWithAuth(endpoint, options, true);
+            }
             handleExpiredSession();
+        }
+
+        if (response.status === 403 && !isRetry && (await isInvalidTenant(response))) {
+            if (clearRejectedWorkspace()) return requestWithAuth(endpoint, options, true);
         }
 
         let message = `API error: ${response.statusText}`;
@@ -1711,7 +1840,7 @@ export const api = {
         return fetchWithAuth(`/sales-reports/branch-report?${query.toString()}`);
     },
     getStores: () => {
-        const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+        const tenantId = getWorkspaceItem('tenant_id');
         return fetchWithAuth('/auth/me').then((me: any) => {
             if (!tenantId || !me?.tenants) return [];
             const tenant = me.tenants.find((t: any) => t.id === tenantId);

@@ -10,6 +10,7 @@ import AccountingDashboard from '@/components/dashboard/AccountingDashboard';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import RetailDashboard from '@/components/dashboard/RetailDashboard';
 import PageShell from '@/components/ui/compact/PageShell';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type Resolved = {
     variant: DashboardVariant;
@@ -39,7 +40,7 @@ export default function DashboardPage() {
         api.getMe()
             .then((me) => {
                 if (cancelled) return;
-                const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+                const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
                 const { planCode, features, dashboardPreference, permissions } = extractTenantPlan(me, tenantId);
                 const tenants = me?.tenants ?? [];
                 const tenant = tenants.find((entry: { id: string }) => entry.id === tenantId) ?? tenants[0];

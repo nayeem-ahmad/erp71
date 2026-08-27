@@ -9,6 +9,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 export default function CashierSessionsPage() {
     const { t, locale } = useI18n();
@@ -49,7 +50,7 @@ export default function CashierSessionsPage() {
 
     const loadCounters = async () => {
         try {
-            const storeId = localStorage.getItem('store_id') || '';
+            const storeId = getWorkspaceItem('store_id') || '';
             if (!storeId) return;
             const data = await api.getActiveCounters(storeId);
             const list = Array.isArray(data) ? data : (data?.data ?? []);
@@ -61,7 +62,7 @@ export default function CashierSessionsPage() {
 
     const handleOpenSession = async () => {
         try {
-            const storeId = localStorage.getItem('store_id') || '';
+            const storeId = getWorkspaceItem('store_id') || '';
             const payload: any = { storeId, openingCash };
             if (selectedCounterId) payload.counterId = selectedCounterId;
             await api.openCashierSession(payload);

@@ -10,6 +10,7 @@ import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button, StatusBadge, statusToneFor } from '@/components/ui';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface Department { id: string; name: string; }
 interface Designation { id: string; name: string; }
@@ -91,7 +92,7 @@ export default function EmployeeDetailPage() {
         try {
             // Get tenant users via the invitations/users context from auth/me
             const me = await api.getMe();
-            const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+            const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((t: any) => t.id === tenantId) || me?.tenants?.[0];
             setTenantUsers(tenant?.users ?? []);
         } catch {

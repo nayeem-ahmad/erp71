@@ -20,6 +20,7 @@ import ProformaTermsFields, {
     proformaTermsPayload,
     type ProformaTerms,
 } from '../ProformaTermsFields';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 export default function NewQuotationPage() {
     const router = useRouter();
@@ -115,7 +116,7 @@ export default function NewQuotationPage() {
         setSubmitting(true);
         try {
             await api.createQuotation({
-                storeId: localStorage.getItem('store_id') || '',
+                storeId: getWorkspaceItem('store_id') || '',
                 customerId: customer?.id,
                 items: items.map((item) => ({
                     productId: item.productId,

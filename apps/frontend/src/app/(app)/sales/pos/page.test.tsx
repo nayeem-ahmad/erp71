@@ -1,6 +1,7 @@
 'use client';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import POSPage from './page';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/components/HelpTooltip', () => ({
   HelpTooltip: () => null,
@@ -70,7 +71,7 @@ const mockProducts = [
 describe('POSPage — Story 10.2: POS Interface UI', () => {
   beforeEach(() => {
     const { api } = require('@/lib/api');
-    localStorage.setItem('store_id', 'store-test');
+    setWorkspaceItem('store_id', 'store-test');
     jest.clearAllMocks();
     api.getProducts.mockResolvedValue(mockProducts);
     api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
@@ -181,7 +182,7 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
     api.getProducts.mockResolvedValue(mockProducts);
     api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
     api.createSale.mockResolvedValue({ id: 'sale-1' });
-    localStorage.setItem('store_id', 'store-test');
+    setWorkspaceItem('store_id', 'store-test');
   });
 
   it('checkout modal shows bKash, Cash, Card inputs', async () => {

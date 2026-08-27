@@ -15,6 +15,7 @@ const db = {
     user: { findUnique: jest.fn(), update: jest.fn() },
     passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
     emailVerificationToken: { deleteMany: jest.fn() },
+    refreshToken: { updateMany: jest.fn() },
     $transaction: jest.fn(),
 };
 const emailService = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
@@ -33,6 +34,7 @@ describe('PasswordResetService', () => {
             return Promise.all(fn);
         });
         db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
+        db.refreshToken.updateMany.mockResolvedValue({ count: 0 });
         const mod = await Test.createTestingModule({
             providers: [
                 PasswordResetService,

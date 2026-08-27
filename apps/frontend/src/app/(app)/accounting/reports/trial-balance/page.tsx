@@ -27,6 +27,7 @@ import {
     useReportStores,
     useApprovedOnly,
 } from '@/lib/accounting-report-scope';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 function defaultToday() {
     return new Date().toISOString().slice(0, 10);
@@ -93,7 +94,7 @@ export default function TrialBalancePage() {
             return;
         }
 
-        const savedStoreId = localStorage.getItem('store_id');
+        const savedStoreId = getWorkspaceItem('store_id');
         const resolvedStoreId = stores.some((store) => store.id === savedStoreId)
             ? (savedStoreId as string)
             : stores[0].id;

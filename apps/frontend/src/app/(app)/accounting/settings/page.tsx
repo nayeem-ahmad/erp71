@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type AccountingSettings = {
     requireVoucherApproval: boolean;
@@ -35,7 +36,7 @@ export default function AccountingSettingsPage() {
     const load = useCallback(async () => {
         try {
             const [data, me] = await Promise.all([api.getAccountingSettings(), api.getMe()]);
-            const tenantId = localStorage.getItem('tenant_id');
+            const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) ?? me?.tenants?.[0];
             setCanEdit(isOwner(tenant?.role));
             setSettings({

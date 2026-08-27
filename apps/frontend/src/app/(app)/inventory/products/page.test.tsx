@@ -2,6 +2,7 @@
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import InventoryPage from './page';
+import { removeWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -107,7 +108,7 @@ describe('InventoryPage', () => {
             { id: 'sub-1', name: 'Gadgets', group_id: 'grp-1' },
         ]);
         // Clear localStorage subscription plan
-        localStorage.removeItem('subscription_plan_code');
+        removeWorkspaceItem('subscription_plan_code');
     });
 
     it('renders the page heading', async () => {

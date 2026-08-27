@@ -51,10 +51,10 @@ describe('TenantInterceptor', () => {
         expect(req.userRole).toBe('MANAGER');
     });
 
-    it('throws UnauthorizedException for invalid tenant', async () => {
+    it('throws ForbiddenException for a tenant the user is not a member of', async () => {
         const { ctx } = makeContext({ userId: 'user-1', tenantIdHeader: 'bad-tenant' });
         db.tenantUser.findFirst.mockResolvedValue(null);
-        await expect(interceptor.intercept(ctx, next)).rejects.toThrow(UnauthorizedException);
+        await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
     });
 
     it('auto-resolves tenant when user has exactly one', async () => {

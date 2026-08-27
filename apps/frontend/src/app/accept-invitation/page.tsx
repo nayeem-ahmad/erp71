@@ -7,6 +7,7 @@ import { ArrowRight, CheckCircle2, Loader2, Lock, Mail, Phone, User, UserPlus, X
 import { api } from '@/lib/api';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { getAccessToken, setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
 
 type PageStatus = 'loading' | 'ready' | 'accepting' | 'success' | 'error';
 
@@ -42,7 +43,7 @@ function AcceptInvitationContent() {
             return;
         }
 
-        const accessToken = localStorage.getItem('access_token');
+        const accessToken = getAccessToken();
         setIsLoggedIn(Boolean(accessToken));
 
         if (accessToken) {
@@ -76,9 +77,10 @@ function AcceptInvitationContent() {
             || me.tenants?.at(-1);
 
         if (matchedTenant) {
-            localStorage.setItem('tenant_id', matchedTenant.id);
+            setWorkspaceItem('tenant_id', matchedTenant.id);
+            setLastTenantId(matchedTenant.id);
             if (matchedTenant.stores?.[0]?.id) {
-                localStorage.setItem('store_id', matchedTenant.stores[0].id);
+                setWorkspaceItem('store_id', matchedTenant.stores[0].id);
             }
         }
 
@@ -116,7 +118,7 @@ function AcceptInvitationContent() {
                 setFormError(m.twoFactorRedirect);
                 return;
             }
-            localStorage.setItem('access_token', res.access_token);
+            setCredentials(res);
             setIsLoggedIn(true);
             await api.acceptInvitation(token);
             await finalizeSession();
@@ -142,7 +144,7 @@ function AcceptInvitationContent() {
         try {
             await api.acceptInvitationSignup({ token, name: name.trim(), mobile: mobile.trim(), password });
             const res: any = await api.login({ email: info.email, password });
-            localStorage.setItem('access_token', res.access_token);
+            setCredentials(res);
             setIsLoggedIn(true);
             await finalizeSession();
         } catch (error: any) {

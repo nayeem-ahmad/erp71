@@ -20,6 +20,7 @@ import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { Button } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface ExpenseCategory {
     id: string;
@@ -130,7 +131,7 @@ function ExpensesPageContent() {
                 expenseDate: formDate,
                 description: formDescription.trim() || undefined,
                 paymentMethod: formPaymentMethod,
-                storeId: localStorage.getItem('store_id') || undefined,
+                storeId: getWorkspaceItem('store_id') || undefined,
             });
             setToast({ type: 'success', message: t.expenses.entrySaved });
             setShowForm(false);

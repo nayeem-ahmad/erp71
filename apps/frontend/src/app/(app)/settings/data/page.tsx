@@ -11,6 +11,7 @@ import { isOwner } from '@/lib/permissions';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { toast } from '@/lib/toast';
 import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface DemoBatch {
     status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
@@ -71,7 +72,7 @@ export default function DataManagementPage() {
 
     useEffect(() => {
         api.getMe().then((me: any) => {
-            const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+            const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);
         }).catch(() => null);

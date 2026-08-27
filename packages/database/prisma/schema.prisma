@@ -376,6 +376,7 @@ model User {
   auditLogs                         AuditLog[]
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
+  refreshTokens                     RefreshToken[]
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
   supportMessages                   SupportMessage[]            @relation("SupportMessageSender")
@@ -444,6 +445,34 @@ model PasswordResetToken {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+}
+
+/// One row per signed-in browser session. The access JWT is short-lived and
+/// refreshed against this table, so a day at work no longer ends with a
+/// surprise bounce to the login screen.
+///
+/// Only the sha256 of the opaque token is stored: a database leak must not hand
+/// the reader a working session, the same rule PasswordResetToken follows.
+model RefreshToken {
+  id          String    @id @default(uuid())
+  user_id     String
+  token_hash  String    @unique
+  /// Set when this token has been exchanged. Rotation means a token is usable
+  /// once; `replaced_by` keeps the chain so a replay can be traced to a family.
+  used_at     DateTime?
+  replaced_by String?
+  revoked_at  DateTime?
+  expires_at  DateTime
+  /// Recorded for the "where am I signed in" list and for forensics after a
+  /// replay. Neither is used to authorise a refresh — a moving IP is normal.
+  user_agent  String?
+  ip          String?
+  created_at  DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
 }
 
 model EmailVerificationToken {

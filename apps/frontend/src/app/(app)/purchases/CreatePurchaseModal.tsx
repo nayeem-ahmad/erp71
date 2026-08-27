@@ -11,6 +11,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface PurchaseProductOption {
     id: string;
@@ -220,7 +221,7 @@ export default function CreatePurchaseModal({
         setError('');
 
         try {
-            const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+            const storeId = typeof window !== 'undefined' ? getWorkspaceItem('store_id') : null;
             await api.createPurchase({
                 storeId: storeId || '',
                 supplierId: createInlineSupplier ? undefined : supplierId || undefined,
