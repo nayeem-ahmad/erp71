@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import DemoPage from './page';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 const replaceMock = jest.fn();
 
@@ -53,7 +54,7 @@ describe('DemoPage', () => {
 
         expect(localStorage.getItem('access_token')).toBe('demo-token');
         expect(localStorage.getItem('demo_session')).toBe('1');
-        expect(localStorage.getItem('tenant_id')).toBe('tenant-demo');
+        expect(getWorkspaceItem('tenant_id')).toBe('tenant-demo');
     });
 
     it('shows an error state when demo login fails', async () => {

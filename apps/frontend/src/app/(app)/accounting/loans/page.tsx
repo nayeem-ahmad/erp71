@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface LoanPayment {
     id: string;
@@ -156,7 +157,7 @@ export default function LoansPage() {
                 dueDate: form.dueDate || undefined,
                 reference: form.reference.trim() || undefined,
                 notes: form.notes.trim() || undefined,
-                storeId: localStorage.getItem('store_id') || undefined,
+                storeId: getWorkspaceItem('store_id') || undefined,
             };
             if (editingId) {
                 await api.updateLoan(editingId, payload);

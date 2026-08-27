@@ -17,6 +17,7 @@ jest.mock('@/lib/i18n', () => {
 
 import { render, screen, waitFor } from '@testing-library/react';
 import SalesHubPage from './page';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -41,7 +42,7 @@ jest.mock('@/lib/api', () => ({
 
 describe('SalesHubPage', () => {
     beforeEach(() => {
-        localStorage.setItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('tenant_id', 'tenant-1');
     });
 
     it('renders the sales hub heading', () => {

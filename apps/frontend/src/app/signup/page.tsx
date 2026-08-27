@@ -22,6 +22,7 @@ import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 import { useHydrated } from '@/hooks/useHydrated';
+import { setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
 
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
@@ -209,7 +210,7 @@ function SignupPageContent() {
                 ...form,
                 referralCode: form.referralCode.trim() || undefined,
             });
-            localStorage.setItem('access_token', signupRes.access_token);
+            setCredentials(signupRes);
             // The remembered code has done its job. Leaving it would silently attach
             // the same partner to an unrelated signup from this browser weeks later.
             clearReferralCode();
@@ -217,12 +218,15 @@ function SignupPageContent() {
 
             const primaryTenant = signupRes.tenants?.[0];
             if (primaryTenant) {
-                localStorage.setItem('tenant_id', primaryTenant.id);
+                setWorkspaceItem('tenant_id', primaryTenant.id);
+                // Without this a new tab would resume whichever shop the last
+                // account signed into on this browser was in.
+                setLastTenantId(primaryTenant.id);
                 if (primaryTenant.stores?.[0]?.id) {
-                    localStorage.setItem('store_id', primaryTenant.stores[0].id);
+                    setWorkspaceItem('store_id', primaryTenant.stores[0].id);
                 }
                 if (primaryTenant.subscription?.plan?.code) {
-                    localStorage.setItem('subscription_plan_code', primaryTenant.subscription.plan.code);
+                    setWorkspaceItem('subscription_plan_code', primaryTenant.subscription.plan.code);
                 }
             }
 

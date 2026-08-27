@@ -9,6 +9,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
 import { Button, Field, Input, PageShell, Select } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type Counter = {
     id: string;
@@ -31,7 +32,7 @@ export default function CountersPage() {
     const [counterNumber, setCounterNumber] = useState<number | ''>('');
     const [status, setStatus] = useState('ACTIVE');
 
-    const storeId = typeof window !== 'undefined' ? (localStorage.getItem('store_id') || '') : '';
+    const storeId = typeof window !== 'undefined' ? (getWorkspaceItem('store_id') || '') : '';
 
     useEffect(() => {
         if (storeId) loadCounters();

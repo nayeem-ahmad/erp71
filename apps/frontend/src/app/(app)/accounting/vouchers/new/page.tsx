@@ -15,6 +15,7 @@ import {
 } from '@/components/accounting/VoucherAttachments';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import type { VoucherAttachmentItem } from '@/lib/file-preview';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type VoucherAccount = {
     id: string;
@@ -273,7 +274,7 @@ function AccountingVouchersPageContent() {
                     return;
                 }
 
-                const savedStoreId = localStorage.getItem('store_id');
+                const savedStoreId = getWorkspaceItem('store_id');
                 const resolvedStoreId = data.some((store: VoucherStore) => store.id === savedStoreId)
                     ? (savedStoreId as string)
                     : data[0]?.id ?? '';

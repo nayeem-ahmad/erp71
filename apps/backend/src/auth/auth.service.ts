@@ -13,6 +13,8 @@ import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInD
 import { GoogleProfile, GoogleTokenService } from './google-token.service';
 import { FirebasePhoneProfile, FirebaseTokenService } from './firebase-token.service';
 import { isPlatformAdminEmail } from './platform-admin.util';
+import { RefreshTokenService } from './refresh-token.service';
+import { accessTokenTtl, accessTokenTtlSeconds } from './access-token-ttl';
 import { AUTH_SCOPE_APP } from './token-scope';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
 import {
@@ -55,6 +57,7 @@ export class AuthService {
         private readonly planEntitlements: PlanEntitlementsService,
         private readonly google: GoogleTokenService,
         private readonly firebase: FirebaseTokenService,
+        private readonly refreshTokens: RefreshTokenService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -117,7 +120,7 @@ export class AuthService {
                 email: user.email,
             })
             .catch(() => {});
-        const auth = await this.generateAuthResponse(user.id);
+        const auth = await this.generateAuthResponse(user.id, meta);
         return {
             ...auth,
             requires_email_verification: !user.email_verified_at,
@@ -130,7 +133,7 @@ export class AuthService {
         this.audit
             .logForUserTenants('USER_LOGIN', 'User', { userId, ...meta }, userId, { two_factor: true })
             .catch(() => {});
-        return this.generateAuthResponse(userId);
+        return this.generateAuthResponse(userId, meta);
     }
 
     async login(dto: LoginDto, meta: AuditRequestMeta = {}) {
@@ -182,7 +185,7 @@ export class AuthService {
         this.audit
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id)
             .catch(() => {});
-        return this.generateAuthResponse(user.id);
+        return this.generateAuthResponse(user.id, meta);
     }
 
     /**
@@ -249,7 +252,7 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'google' })
             .catch(() => {});
 
-        return { ...(await this.generateAuthResponse(user.id)), is_new_user: false };
+        return { ...(await this.generateAuthResponse(user.id, meta)), is_new_user: false };
     }
 
     private async createUserFromGoogle(profile: GoogleProfile, dto: GoogleSignInDto, meta: AuditRequestMeta) {
@@ -305,7 +308,7 @@ export class AuthService {
             .catch(() => {});
 
         return {
-            ...(await this.generateAuthResponse(user.id)),
+            ...(await this.generateAuthResponse(user.id, meta)),
             is_new_user: true,
             // Tells the login page to hand them to the onboarding wizard rather
             // than a dashboard with no workspace behind it.
@@ -389,7 +392,7 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'mobile' })
             .catch(() => {});
 
-        return { ...(await this.generateAuthResponse(user.id)), is_new_user: false };
+        return { ...(await this.generateAuthResponse(user.id, meta)), is_new_user: false };
     }
 
     private async createUserFromMobile(
@@ -459,7 +462,7 @@ export class AuthService {
             .catch(() => {});
 
         return {
-            ...(await this.generateAuthResponse(user.id)),
+            ...(await this.generateAuthResponse(user.id, meta)),
             is_new_user: true,
             // Tells the page to hand them to the onboarding wizard rather than a
             // dashboard with no workspace behind it.
@@ -475,9 +478,43 @@ export class AuthService {
             where: { id: userId },
             data: { token_version: { increment: 1 } },
         });
+        // The access JWT dies with the `tv` bump above, but a refresh token is
+        // checked against its own row — without this it would happily mint a
+        // brand-new session seconds after the user signed out.
+        await this.refreshTokens.revokeAllForUser(userId);
         this.audit
             .logForUserTenants('USER_LOGOUT', 'User', { userId, ...meta }, userId)
             .catch(() => {});
+    }
+
+    /**
+     * Exchange a refresh token for a new access token (and its successor).
+     *
+     * Deliberately does not re-run `generateAuthResponse`: that would issue a
+     * *second* refresh token for the same session, and the tenant/user payload
+     * is not what the caller is asking for here. `GET /auth/me` remains the one
+     * place the session profile is loaded.
+     */
+    async refreshSession(rawToken: string, meta: AuditRequestMeta = {}) {
+        const rotated = await this.refreshTokens.rotate(rawToken, meta);
+
+        const user = await this.db.user.findUnique({
+            where: { id: rotated.userId },
+            select: { id: true, email: true, token_version: true },
+        });
+        if (!user) throw new UnauthorizedException('User not found');
+
+        const payload = { sub: user.id, email: user.email, tv: user.token_version, scope: AUTH_SCOPE_APP };
+        return {
+            access_token: this.jwtService.sign(payload, { expiresIn: accessTokenTtl() }),
+            refresh_token: rotated.token,
+            expires_in: accessTokenTtlSeconds(),
+        };
+    }
+
+    /** Sign one session out without touching the user's other devices. */
+    async revokeRefreshToken(rawToken: string | undefined | null): Promise<void> {
+        await this.refreshTokens.revoke(rawToken);
     }
 
     async sendVerificationEmail(userId: string): Promise<void> {
@@ -584,7 +621,7 @@ export class AuthService {
         return { defaultPlanCode: code as 'BASIC' | 'ACCOUNTING' | 'STANDARD' };
     }
 
-    private async generateAuthResponse(userId: string) {
+    private async generateAuthResponse(userId: string, meta: AuditRequestMeta = {}) {
         const user = await this.db.user.findUnique({
             where: { id: userId },
             include: {
@@ -620,8 +657,13 @@ export class AuthService {
 
         const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
         const payload = { sub: user.id, email: user.email, tv: user.token_version, scope: AUTH_SCOPE_APP };
+        const refresh = await this.refreshTokens.issue(user.id, meta);
         return {
-            access_token: this.jwtService.sign(payload),
+            access_token: this.jwtService.sign(payload, { expiresIn: accessTokenTtl() }),
+            refresh_token: refresh.token,
+            /// Seconds the access token is good for, so the frontend can renew
+            /// ahead of expiry rather than waiting for a request to 401.
+            expires_in: accessTokenTtlSeconds(),
             is_platform_admin: isPlatformAdmin,
             user: {
                 id: user.id,
@@ -811,6 +853,7 @@ export class AuthService {
                 applicant_token_version: { increment: 1 },
             },
         });
+        await this.refreshTokens.revokeAllForUser(userId);
         this.audit
             .logForUserTenants('PASSWORD_CHANGED', 'User', { userId, ...meta }, userId)
             .catch(() => {});

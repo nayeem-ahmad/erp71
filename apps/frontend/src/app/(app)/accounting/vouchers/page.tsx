@@ -22,6 +22,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import { VoucherApprovalBadge } from '@/components/accounting/VoucherApprovalBadge';
 import { toast } from '@/lib/toast';
 import { notifyVoucherApprovalChanged } from '@/hooks/usePendingVoucherCount';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type VoucherRow = {
     id: string;
@@ -94,7 +95,7 @@ function AccountingVouchersListPageContent() {
     useEffect(() => {
         api.getMe()
             .then((me) => {
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === localStorage.getItem('tenant_id'))
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
                     ?? me?.tenants?.[0];
                 setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_VOUCHER'));
             })

@@ -71,18 +71,24 @@ export async function fetchE2ESession(force = false): Promise<E2ESession> {
     return cachedSession;
 }
 
-/** Inject an authenticated shop session into the browser. */
+/**
+ * Inject an authenticated shop session into the browser.
+ *
+ * Split the way the app stores it: the token follows "Remember me" into
+ * localStorage, the workspace belongs to this tab.
+ */
 export async function applyE2ESession(page: Page, session: E2ESession) {
     await page.goto(E2E_BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.evaluate(
         ({ accessToken, tenantId, storeId, planCode }) => {
             localStorage.setItem('access_token', accessToken);
-            localStorage.setItem('tenant_id', tenantId);
-            localStorage.setItem('store_id', storeId);
-            localStorage.removeItem('active_context');
+            sessionStorage.setItem('tenant_id', tenantId);
+            sessionStorage.setItem('store_id', storeId);
+            localStorage.setItem('last_tenant_id', tenantId);
+            sessionStorage.removeItem('active_context');
             localStorage.removeItem('demo_session');
             if (planCode) {
-                localStorage.setItem('subscription_plan_code', planCode);
+                sessionStorage.setItem('subscription_plan_code', planCode);
             }
         },
         session,

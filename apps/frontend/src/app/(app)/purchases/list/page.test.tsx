@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PurchasesPage from './page';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -36,7 +37,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         ]);
         api.getSuppliers.mockResolvedValue([{ id: 'sup-1', name: 'Fresh Farms' }]);
         api.createPurchase.mockResolvedValue({ id: 'purchase-2' });
-        localStorage.setItem('store_id', 'store-1');
+        setWorkspaceItem('store_id', 'store-1');
     });
 
     it('renders purchases loaded from the API', async () => {

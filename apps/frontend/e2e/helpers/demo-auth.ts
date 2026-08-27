@@ -110,19 +110,20 @@ export async function fetchDemoSession(force = false): Promise<DemoSession> {
     return cachedDemoSession;
 }
 
-/** Inject demo session into browser localStorage (same keys as production client). */
+/** Inject a demo session, split across the backends the production client uses. */
 export async function applyDemoSession(page: Page, session: DemoSession) {
     await page.goto(E2E_BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.evaluate(
         ({ accessToken, tenantId, storeId, planCode }) => {
             localStorage.setItem('access_token', accessToken);
-            localStorage.setItem('tenant_id', tenantId);
-            localStorage.setItem('store_id', storeId);
-            localStorage.removeItem('active_context');
+            sessionStorage.setItem('tenant_id', tenantId);
+            sessionStorage.setItem('store_id', storeId);
+            localStorage.setItem('last_tenant_id', tenantId);
+            sessionStorage.removeItem('active_context');
             localStorage.setItem('demo_session', '1');
             localStorage.setItem('onboarding_complete', '1');
             if (planCode) {
-                localStorage.setItem('subscription_plan_code', planCode);
+                sessionStorage.setItem('subscription_plan_code', planCode);
             }
         },
         session,

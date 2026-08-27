@@ -49,6 +49,7 @@ import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { isPosEnabled } from '@/lib/sales-settings';
+import { getLastTenantId, getWorkspaceItem, removeWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
@@ -92,10 +93,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     useEffect(() => {
         if (!hasResolvedUser || !user) return;
-        if (localStorage.getItem('active_context')) return;
+        if (getWorkspaceItem('active_context')) return;
 
         const { isReferee, isPlatformAdmin, isEmployee, tenants, count } = getLoginContexts(user);
-        if (count !== 1) return;
+        if (count !== 1) {
+            // Several workspaces to choose from and this tab is in none of them
+            // — a resumed shop that turned out to be stale, or a fresh tab with
+            // nothing to resume. Anything but asking would be a guess.
+            if (count > 1 && !getWorkspaceItem('tenant_id')) {
+                router.replace(`${routes.selectAccount}?redirect=${encodeURIComponent(pathname)}`);
+            }
+            return;
+        }
 
         // Checked before the referee branch and before the single-tenant one:
         // an employee is also a tenant member, so `tenants.length === 1` is true
@@ -133,8 +142,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     useEffect(() => {
         api.getMe().then((me) => {
-            const tenantId = globalThis.window === undefined ? null : localStorage.getItem('tenant_id');
-            const sessionTenant = me?.tenants?.find((t: { id: string }) => t.id === tenantId) || me?.tenants?.[0];
+            // A tab that resumed from `last_tenant_id` may be pointing at a shop
+            // this account no longer belongs to. Correct it against the real
+            // membership list rather than letting the header carry a stale id.
+            const tenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
+            const tenants = me?.tenants ?? [];
+            const matchedTenant = tenants.find((t: { id: string }) => t.id === tenantId);
+            if (tenantId && !matchedTenant) {
+                removeWorkspaceItem('tenant_id');
+                removeWorkspaceItem('store_id');
+                removeWorkspaceItem('subscription_plan_code');
+                // One shop left is unambiguous; several is a choice only the
+                // user can make, so `/select-account` takes it from here.
+                if (tenants.length === 1) applyTenantContext(tenants[0]);
+                setWorkspaceEpoch((epoch) => epoch + 1);
+            }
+            const sessionTenant = matchedTenant || (tenants.length === 1 ? tenants[0] : undefined);
             syncLocalePreferenceFromSession(me, { overwrite: false });
             if (sessionTenant) {
                 const stored = localStorage.getItem('locale');
@@ -157,16 +180,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, []);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);
-    // workspaceEpoch bumps after we restore a shop context from localStorage.
+    // workspaceEpoch bumps after we restore this tab's shop context.
     void workspaceEpoch;
-    const activeContext = globalThis.window === undefined ? null : localStorage.getItem('active_context');
-    const activeTenantId = globalThis.window === undefined ? null : localStorage.getItem('tenant_id');
+    const activeContext = globalThis.window === undefined ? null : getWorkspaceItem('active_context');
+    const activeTenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
     // Platform admins choose between the admin console and any shop they belong
     // to. In admin-console mode we never resolve a shop/tenant so the dashboard
     // shows only platform-admin options.
     const inPlatformAdminMode = Boolean(user?.is_platform_admin) && activeContext === 'platform-admin';
     const inRefereeMode = Boolean(user?.referee?.is_active) && activeContext === 'referee';
-    // `activeContext` alone is not enough: it is a localStorage value a user can
+    // `activeContext` alone is not enough: it is a stored value a user can
     // set by hand. Pairing it with `user.employee` — which only the server can
     // populate — means faking the context yields an employee shell with no data
     // rather than any access they did not already have.
@@ -295,7 +318,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     useEffect(() => {
         if (!hasResolvedUser || !user?.referee?.is_active) return;
         if (!pathname.startsWith(routes.referralsPortal.root)) return;
-        if (localStorage.getItem('active_context') === 'referee') return;
+        if (getWorkspaceItem('active_context') === 'referee') return;
         applyRefereeContext();
         setWorkspaceEpoch((epoch) => epoch + 1);
     }, [hasResolvedUser, pathname, user]);
@@ -304,29 +327,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // context (active_context=platform-admin). Restore the last shop workspace automatically.
     useEffect(() => {
         if (!hasResolvedUser || !user) return;
-        if (localStorage.getItem('active_context') !== 'platform-admin') return;
+        if (getWorkspaceItem('active_context') !== 'platform-admin') return;
         if (!isShopWorkspacePath(pathname)) return;
 
         const tenants = user.tenants ?? [];
         if (tenants.length === 0) return;
 
-        const rememberedTenantId = localStorage.getItem('last_tenant_id') || localStorage.getItem('tenant_id');
-        const tenant = tenants.find((entry: { id: string }) => entry.id === rememberedTenantId) || tenants[0];
-        applyTenantContext(tenant);
+        const rememberedTenantId = getWorkspaceItem('tenant_id') || getLastTenantId();
+        const tenant = tenants.find((entry: { id: string }) => entry.id === rememberedTenantId);
+        // No remembered shop and more than one to choose from: dropping the user
+        // into whichever happens to be first is exactly the surprise this is
+        // meant to prevent. Let them pick.
+        if (!tenant && tenants.length > 1) {
+            router.replace(routes.selectAccount);
+            return;
+        }
+        applyTenantContext(tenant ?? tenants[0]);
         setWorkspaceEpoch((epoch) => epoch + 1);
     }, [hasResolvedUser, pathname, user]);
 
     useEffect(() => {
         if (!activeTenant) return;
 
-        const savedStoreId = localStorage.getItem('store_id');
+        const savedStoreId = getWorkspaceItem('store_id');
         const hasSavedStore = tenantStores.some((store: any) => store.id === savedStoreId);
         const resolvedStoreId = hasSavedStore ? savedStoreId : tenantStores[0]?.id;
 
         if (resolvedStoreId) {
             setActiveStoreId(resolvedStoreId);
             if (resolvedStoreId !== savedStoreId) {
-                localStorage.setItem('store_id', resolvedStoreId);
+                setWorkspaceItem('store_id', resolvedStoreId);
             }
         }
     }, [activeTenant, tenantStores]);
@@ -410,7 +440,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
-        localStorage.setItem('store_id', storeId);
+        setWorkspaceItem('store_id', storeId);
         router.refresh();
     };
 

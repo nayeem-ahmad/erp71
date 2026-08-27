@@ -30,6 +30,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 import { api } from '@/lib/api';
+import { resetWorkspaceBootstrapForTests, setWorkspaceItem } from '@/lib/session-store';
 
 const mockApi = api as jest.Mocked<typeof api>;
 
@@ -38,30 +39,22 @@ const sampleCounters = [
     { id: 'c2', name: 'Express Lane', counter_number: 2, status: 'INACTIVE', store_id: 'store-1' },
 ];
 
-function setupLocalStorage(storeId = 'store-1') {
-    Object.defineProperty(window, 'localStorage', {
-        value: {
-            getItem: jest.fn((key) => {
-                if (key === 'store_id') return storeId;
-                return null;
-            }),
-            setItem: jest.fn(),
-            removeItem: jest.fn(),
-            clear: jest.fn(),
-        },
-        writable: true,
-    });
+/** The active store is scoped to the tab, so seed it where the page reads it. */
+function setupActiveStore(storeId = 'store-1') {
+    sessionStorage.clear();
+    resetWorkspaceBootstrapForTests();
+    if (storeId) setWorkspaceItem('store_id', storeId);
 }
 
 beforeEach(() => {
     jest.clearAllMocks();
     useToastStore.setState({ toasts: [] });
-    setupLocalStorage('store-1');
+    setupActiveStore('store-1');
 });
 
 describe('CountersPage — no store selected', () => {
-    it('shows a message when no store_id in localStorage', async () => {
-        setupLocalStorage('');
+    it('shows a message when this tab has no store selected', async () => {
+        setupActiveStore('');
         renderPage();
         expect(screen.getByText(/No store selected/)).toBeInTheDocument();
     });

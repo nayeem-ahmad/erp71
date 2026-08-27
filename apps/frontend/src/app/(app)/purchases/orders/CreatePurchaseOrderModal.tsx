@@ -9,6 +9,7 @@ import { Button } from '@/components/ui';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 interface Product {
     id: string;
@@ -128,7 +129,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
         setLoading(true);
         setError('');
         try {
-            const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+            const storeId = typeof window !== 'undefined' ? getWorkspaceItem('store_id') : null;
             await api.createPurchaseOrder({
                 storeId: storeId || '',
                 supplierId: supplierId || undefined,

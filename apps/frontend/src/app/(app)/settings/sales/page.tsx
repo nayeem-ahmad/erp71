@@ -10,6 +10,7 @@ import type { PaperSize } from '@/lib/sales-invoice-printer';
 import { isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
 import { Button, Checkbox, Field, Input, PageShell, Select } from '@/components/ui';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
     { value: 'A4', label: 'A4 (210 × 297 mm)' },
@@ -33,7 +34,7 @@ export default function SalesSettingsPage() {
     const loadSettings = useCallback(async () => {
         try {
             const [data, me] = await Promise.all([api.getSalesSettings(), api.getMe()]);
-            const tenantId = localStorage.getItem('tenant_id');
+            const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsShopOwner(isOwner(tenant?.role));
 

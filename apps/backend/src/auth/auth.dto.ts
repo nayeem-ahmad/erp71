@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import {
     BUSINESS_TYPE_VALUES,
     ENABLED_LOCALE_CODES,
@@ -175,4 +175,10 @@ export class ChangePasswordDto {
     @IsString()
     @MinLength(8, { message: 'Password must be at least 8 characters.' })
     newPassword: string;
+}
+
+export class RefreshTokenDto {
+    @IsString()
+    @IsNotEmpty({ message: 'A refresh token is required.' })
+    refresh_token: string;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { hasPermission } from '@/lib/permissions';
+import { getWorkspaceItem } from './session-store';
 
 export type ReportScopeMode = 'branch' | 'company' | 'compare';
 
@@ -160,7 +161,7 @@ export function useReportStores() {
                     return;
                 }
 
-                const tenantId = localStorage.getItem('tenant_id');
+                const tenantId = getWorkspaceItem('tenant_id');
                 const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
                 setStores(tenant?.stores ?? []);
                 setCanConsolidate(canViewConsolidatedReports(tenant?.role, tenant?.permissions));

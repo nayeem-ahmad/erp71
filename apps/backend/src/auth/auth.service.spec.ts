@@ -10,10 +10,23 @@ import { AuditService } from '../audit/audit.service';
 import { TotpService } from './totp.service';
 import { GoogleTokenService } from './google-token.service';
 import { FirebaseTokenService } from './firebase-token.service';
+import { RefreshTokenService } from './refresh-token.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { StorePermission } from '@erp71/shared-types';
+
+/**
+ * Plain functions rather than `jest.fn()`: the suite calls `jest.resetAllMocks()`,
+ * which strips implementations globally, and every sign-in path issues a refresh
+ * token before it can return an auth payload.
+ */
+const refreshTokens = {
+    issue: async () => ({ token: 'refresh-token', expiresAt: new Date('2026-09-26T00:00:00Z') }),
+    rotate: async () => ({ userId: 'user-1', token: 'refresh-token', expiresAt: new Date('2026-09-26T00:00:00Z') }),
+    revoke: async () => {},
+    revokeAllForUser: async () => {},
+};
 
 jest.mock('bcrypt', () => ({
     hash: jest.fn().mockResolvedValue('hashed-password'),
@@ -199,6 +212,7 @@ describe('AuthService', () => {
                 { provide: ReferralsService, useValue: referralsService },
                 { provide: GoogleTokenService, useValue: googleTokenService },
                 { provide: FirebaseTokenService, useValue: firebaseTokenService },
+                { provide: RefreshTokenService, useValue: refreshTokens },
                 PlanEntitlementsService,
             ],
         }).compile();
@@ -704,7 +718,7 @@ describe('AuthService.getSignupDefaults', () => {
     const service = new AuthService(
         {} as any, {} as any, {} as any, {} as any, {} as any,
         {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-        {} as any,
+        {} as any, {} as any,
     );
 
     beforeEach(() => jest.clearAllMocks());
@@ -738,7 +752,7 @@ describe('AuthService.signup', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, {} as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            {} as any,
+            {} as any, refreshTokens as any,
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
@@ -815,7 +829,7 @@ describe('AuthService.googleSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, google as any,
-            {} as any,
+            {} as any, refreshTokens as any,
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
@@ -990,7 +1004,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            firebase as any,
+            firebase as any, refreshTokens as any,
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });

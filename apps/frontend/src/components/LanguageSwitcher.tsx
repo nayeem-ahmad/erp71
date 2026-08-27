@@ -6,6 +6,7 @@ import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { localeRegistry } from '@/lib/localization/config';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { getAccessToken } from '@/lib/session-store';
 
 export default function LanguageSwitcher() {
     const { locale, setLocale, t } = useI18n();
@@ -18,7 +19,7 @@ export default function LanguageSwitcher() {
         const selectedLocale = locales.find((entry) => entry.code === event.target.value);
         if (selectedLocale) {
             setLocale(selectedLocale.code);
-            if (globalThis.window !== undefined && localStorage.getItem('access_token')) {
+            if (globalThis.window !== undefined && getAccessToken()) {
                 void api.updateProfile({ preferred_locale: selectedLocale.code }).catch(() => null);
             }
         }

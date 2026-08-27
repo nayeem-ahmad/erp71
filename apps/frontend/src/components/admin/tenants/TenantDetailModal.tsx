@@ -16,6 +16,7 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import TenantMessagingIdentityCard from './TenantMessagingIdentityCard';
+import { setCredentials, setWorkspaceItem } from '@/lib/session-store';
 
 type Props = {
     tenantId: string | null;
@@ -474,8 +475,10 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         setError('');
         try {
             const res: { access_token: string; impersonated_user: { email: string } } = await api.impersonateTenant(tenant.id);
-            localStorage.setItem('access_token', res.access_token);
-            localStorage.setItem('tenant_id', tenant.id);
+            // No refresh token comes back with an impersonation grant — it is a
+            // short, deliberately expiring window, not a session to keep alive.
+            setCredentials(res);
+            setWorkspaceItem('tenant_id', tenant.id);
             onToast(formatMessage(m.impersonateToast, { email: res.impersonated_user.email }));
             setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
         } catch (err: unknown) {

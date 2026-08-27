@@ -12,6 +12,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Input, Select, Field } from '@/components/ui';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { getWorkspaceItem } from '@/lib/session-store';
 
 type Line = { productId: string; quantity: string; unitPriceFc: string };
 
@@ -74,7 +75,7 @@ export default function NewImportShipmentPage() {
         setSubmitting(true);
         try {
             const shipment = await api.createImportShipment({
-                storeId: localStorage.getItem('store_id') || '',
+                storeId: getWorkspaceItem('store_id') || '',
                 supplierId: supplierId || undefined,
                 currency,
                 fxRateAtOpen: currency === 'BDT' ? undefined : Number(fxRate),

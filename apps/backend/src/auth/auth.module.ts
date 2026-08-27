@@ -6,6 +6,7 @@ import { PlatformSettingsModule } from '../platform-settings/platform-settings.m
 import { ReferralsModule } from '../referrals/referrals.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
 import { AuthService } from './auth.service';
+import { RefreshTokenService } from './refresh-token.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -34,6 +35,7 @@ import { FirebaseTokenService } from './firebase-token.service';
     ],
     providers: [
         AuthService,
+        RefreshTokenService,
         JwtStrategy,
         JwtAuthGuard,
         OptionalJwtAuthGuard,

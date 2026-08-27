@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { redirectTo } from '@/lib/browser';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell } from '@/components/ui';
+import { setWorkspaceItem } from '@/lib/session-store';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -99,7 +100,7 @@ function BillingPageContent() {
             const nextSummary = await api.getBillingSummary();
             setSummary(nextSummary);
             if (nextSummary.subscription?.plan?.code) {
-                localStorage.setItem('subscription_plan_code', nextSummary.subscription.plan.code);
+                setWorkspaceItem('subscription_plan_code', nextSummary.subscription.plan.code);
             }
 
             const queryPlan = searchParams.get('plan');
@@ -208,7 +209,7 @@ function BillingPageContent() {
                 reference: activeReference,
                 addonCodes: selectedAddonCodes,
             });
-            localStorage.setItem('subscription_plan_code', selectedPlanCode);
+            setWorkspaceItem('subscription_plan_code', selectedPlanCode);
             setCheckout(null);
             setSelectedAddonCodes([]);
             router.replace('/billing');

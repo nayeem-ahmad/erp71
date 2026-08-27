@@ -66,6 +66,13 @@ export class PasswordResetService {
                 },
             });
             await tx.passwordResetToken.update({ where: { id: record.id }, data: { used_at: new Date() } });
+            // Refresh tokens are checked against their own row, not `token_version`,
+            // so the bump above would otherwise leave every session able to mint
+            // itself a fresh access token straight after the reset.
+            await tx.refreshToken.updateMany({
+                where: { user_id: record.user_id, revoked_at: null },
+                data: { revoked_at: new Date() },
+            });
             if (!user?.email_verified_at) {
                 await tx.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } });
             }
