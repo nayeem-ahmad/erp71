@@ -26,8 +26,9 @@ export default function CrmHubPage() {
             ? [
                 { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-primary-light text-blue-700 border-primary-border' },
                 { href: routes.crm.contacts, key: 'contacts', icon: Contact, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-                { href: routes.crm.conversations, key: 'crmConversations', icon: MessageSquare, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-                { href: routes.crm.followUps, key: 'crmFollowUps', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+                // One tile where there were two: the conversations and follow-ups
+                // lists merged into /crm/activities.
+                { href: routes.crm.activities, key: 'crmActivities', icon: ListChecks, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
             ]
             : [];
         const result: HubSectionConfig[] = [];
