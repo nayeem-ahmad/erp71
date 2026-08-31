@@ -382,6 +382,9 @@ export const crmHrMessages = {
             allOwners: 'Semua pemilik',
             myTodaysActions: 'Senarai tindakan saya hari ini',
             myTodaysActionsEmpty: 'Tiada prospek dengan langkah seterusnya ditugaskan kepada anda untuk hari ini.',
+            openPipeline: 'Saluran terbuka',
+            noActivityFilter: 'Tiada aktiviti dalam {days} hari',
+            noActivityEmpty: 'Tiada prospek tanpa aktiviti selama {days} hari.',
             statuses: {
                 NEW: 'Baharu',
                 CONTACTED: 'Dihubungi',

@@ -382,6 +382,9 @@ export const crmHrMessages = {
             allOwners: 'All owners',
             myTodaysActions: "My today's action list",
             myTodaysActionsEmpty: 'No leads with next steps assigned to you for today.',
+            openPipeline: 'Open pipeline',
+            noActivityFilter: 'No activity in {days} days',
+            noActivityEmpty: 'No leads have gone {days} days without activity.',
             statuses: {
                 NEW: 'New',
                 CONTACTED: 'Contacted',

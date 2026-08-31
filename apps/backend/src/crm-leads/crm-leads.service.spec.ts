@@ -5,7 +5,7 @@ import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
-import { LeadBulkAction, LeadStatus, UNASSIGNED_OWNER_FILTER } from './crm-leads.dto';
+import { LeadBulkAction, LeadStatus, OPEN_LEAD_STATUS_FILTER, UNASSIGNED_OWNER_FILTER } from './crm-leads.dto';
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 
@@ -875,6 +875,84 @@ describe('CrmLeadsService', () => {
             await service.findAll('tenant-1', {} as any);
 
             expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('assigned_to');
+        });
+    });
+
+    /**
+     * The CRM dashboard's attention tiles link into this list, so the filters
+     * behind those links must reproduce the counts the tiles rendered — the
+     * dashboard builds its own counts from the same exported helpers.
+     */
+    describe('findAll — open pipeline and stale filters', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        it('expands the open sentinel to the three working stages', async () => {
+            await service.findAll('tenant-1', { status: OPEN_LEAD_STATUS_FILTER } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where.status).toEqual({
+                in: ['NEW', 'CONTACTED', 'QUALIFIED'],
+            });
+        });
+
+        it('still filters to a single stage when given a real status', async () => {
+            await service.findAll('tenant-1', { status: 'QUALIFIED' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where.status).toBe('QUALIFIED');
+        });
+
+        it('matches leads last contacted before the window, and those never contacted', async () => {
+            jest.useFakeTimers().setSystemTime(new Date('2026-08-31T09:00:00.000Z'));
+            try {
+                await service.findAll('tenant-1', { staleDays: 14 } as any);
+            } finally {
+                jest.useRealTimers();
+            }
+
+            const cutoff = new Date('2026-08-17T09:00:00.000Z');
+            expect(db.lead.findMany.mock.calls[0][0].where.AND).toEqual([
+                {
+                    OR: [
+                        { last_contacted_at: { lt: cutoff } },
+                        // A bare `last_contacted_at: { lt: cutoff }` excludes NULL in
+                        // SQL, dropping every never-contacted lead — the strongest
+                        // neglect signal there is. created_at keeps a lead filed
+                        // this morning out of it.
+                        { last_contacted_at: null, created_at: { lt: cutoff } },
+                    ],
+                },
+            ]);
+        });
+
+        it('honours a window other than the default', async () => {
+            jest.useFakeTimers().setSystemTime(new Date('2026-08-31T09:00:00.000Z'));
+            try {
+                await service.findAll('tenant-1', { staleDays: 30 } as any);
+            } finally {
+                jest.useRealTimers();
+            }
+
+            const [branch] = db.lead.findMany.mock.calls[0][0].where.AND;
+            expect(branch.OR[0].last_contacted_at.lt).toEqual(new Date('2026-08-01T09:00:00.000Z'));
+        });
+
+        it('keeps the stale clause out of the search OR', async () => {
+            // Merged into the top-level OR, "matches the search AND is stale"
+            // would quietly widen into "matches the search OR is stale".
+            await service.findAll('tenant-1', { staleDays: 14, search: 'karim' } as any);
+
+            const { where } = db.lead.findMany.mock.calls[0][0];
+            expect(where.OR).toHaveLength(4);
+            expect(where.OR.every((clause: any) => !('last_contacted_at' in clause))).toBe(true);
+            expect(where.AND).toHaveLength(1);
+        });
+
+        it('does not filter on staleness when no window is given', async () => {
+            await service.findAll('tenant-1', {} as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('AND');
         });
     });
 
