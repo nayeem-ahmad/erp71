@@ -382,6 +382,9 @@ export const crmHrMessages = {
             allOwners: 'تمام مالکان',
             myTodaysActions: 'میری آج کی فہرستِ کارروائی',
             myTodaysActionsEmpty: 'آج آپ کو تفویض شدہ اگلے قدم والی کوئی لیڈ نہیں۔',
+            openPipeline: 'کھلی پائپ لائن',
+            noActivityFilter: '{days} دنوں میں کوئی سرگرمی نہیں',
+            noActivityEmpty: '{days} دن سے سرگرمی کے بغیر کوئی لیڈ نہیں۔',
             statuses: {
                 NEW: 'نئی',
                 CONTACTED: 'رابطہ ہوا',
