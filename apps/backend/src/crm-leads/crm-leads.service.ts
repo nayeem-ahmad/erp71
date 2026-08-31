@@ -4,7 +4,7 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import { CustomFieldEntity } from '@prisma/client';
+import { CustomFieldEntity, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
@@ -13,6 +13,7 @@ import {
     CreateLeadDto,
     isClosedStatus,
     LeadBulkAction,
+    LeadEmailPresence,
     LeadPriority,
     LeadStatus,
     OPEN_LEAD_STATUS_FILTER,
@@ -78,6 +79,18 @@ const LEAD_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
 };
 const LEAD_DEFAULT_ORDER = [{ next_step_date: 'asc' as const }, { updated_at: 'desc' as const }];
+
+/**
+ * A lead with no usable email address.
+ *
+ * Covers `''` as well as NULL: every write path normalises a blank email to NULL
+ * (`emptyToUndefined` on the DTOs, and the CSV importer's own `|| null`), but
+ * rows that predate that — and anything written straight to the database — can
+ * still hold an empty string, and those are exactly the leads this filter exists
+ * to surface. `HAS` is its negation, so the two halves can never disagree about
+ * what counts as an email.
+ */
+const EMPTY_EMAIL_WHERE: Prisma.LeadWhereInput = { OR: [{ email: null }, { email: '' }] };
 
 @Injectable()
 export class CrmLeadsService {
@@ -384,6 +397,7 @@ export class CrmLeadsService {
             category?: string;
             priority?: string;
             assignedTo?: string;
+            emailPresence?: string;
             staleDays?: number;
             myActionsToday?: boolean;
             userId?: string;
@@ -414,6 +428,15 @@ export class CrmLeadsService {
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo === UNASSIGNED_OWNER_FILTER) where.assigned_to = null;
         else if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        // Goes in `AND` rather than beside the scalars because it is itself an
+        // OR, and the top-level `OR` below already belongs to free-text search.
+        const emailClause: Prisma.LeadWhereInput | null =
+            opts.emailPresence === LeadEmailPresence.EMPTY
+                ? EMPTY_EMAIL_WHERE
+                : opts.emailPresence === LeadEmailPresence.HAS
+                  ? { NOT: EMPTY_EMAIL_WHERE }
+                  : null;
+        if (emailClause) where.AND = [...(where.AND ?? []), emailClause];
         if (opts.myActionsToday && opts.userId) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -432,8 +455,12 @@ export class CrmLeadsService {
         }
         // Nested under AND, not merged into the top-level OR above: staleness is
         // itself an OR, and dropping it there would turn "matches the search AND
-        // is stale" into "matches the search OR is stale".
-        if (opts.staleDays) where.AND = [staleLeadWhere(staleLeadCutoff(opts.staleDays))];
+        // is stale" into "matches the search OR is stale". Appended rather than
+        // assigned, or it would drop whatever the email-presence filter above
+        // put there.
+        if (opts.staleDays) {
+            where.AND = [...(where.AND ?? []), staleLeadWhere(staleLeadCutoff(opts.staleDays))];
+        }
 
         const [items, total] = await Promise.all([
             this.db.lead.findMany({

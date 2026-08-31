@@ -101,6 +101,15 @@ function readStatusParam(value: string | null): string {
     return LEAD_STATUSES.includes(value as (typeof LEAD_STATUSES)[number]) ? (value as string) : '';
 }
 
+/** Mirrors LeadEmailPresence in crm-leads.dto.ts; anything else means no filter. */
+const EMAIL_PRESENCE_VALUES = ['has', 'empty'] as const;
+
+function readEmailPresenceParam(value: string | null): string {
+    return EMAIL_PRESENCE_VALUES.includes(value as (typeof EMAIL_PRESENCE_VALUES)[number])
+        ? (value as string)
+        : '';
+}
+
 function readStaleDaysParam(value: string | null): number | null {
     const days = Number(value);
     return Number.isInteger(days) && days > 0 && days <= MAX_STALE_DAYS ? days : null;
@@ -147,6 +156,11 @@ function LeadsPage() {
     const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('assignedTo') ?? '');
+    // Seeded from the URL like the filters above, so a link can open the leads
+    // that have no address — the same shape the dashboard's tiles link with.
+    const [emailFilter, setEmailFilter] = useState(
+        () => readEmailPresenceParam(searchParams.get('emailPresence')),
+    );
     // Held apart from the toggle so switching the filter off and on again keeps
     // the window the link asked for, rather than snapping back to the default.
     const [staleDays] = useState(() => staleDaysParam ?? DEFAULT_STALE_DAYS);
@@ -192,6 +206,7 @@ function LeadsPage() {
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
                         assignedTo: ownerFilter || undefined,
+                        emailPresence: emailFilter || undefined,
                         staleDays: staleOnly ? staleDays : undefined,
                         myActionsToday: myTodaysActions || undefined,
                         page: p,
@@ -202,7 +217,7 @@ function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -216,6 +231,7 @@ function LeadsPage() {
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
                 assignedTo: ownerFilter || undefined,
+                emailPresence: emailFilter || undefined,
                 staleDays: staleOnly ? staleDays : undefined,
                 myActionsToday: myTodaysActions || undefined,
                 page,
@@ -234,14 +250,14 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, staleOnly, staleDays, myTodaysActions, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -309,6 +325,14 @@ function LeadsPage() {
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
+        columnHelper.accessor('email', {
+            header: m.fields.email,
+            cell: (info) => info.getValue() || '—',
+            // Not in the backend's LEAD_SORTABLE allowlist, so a sort request on
+            // it would silently fall back to the default order.
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
         // Explicit `id`s: an accessor function has no inferable key, and the id
         // is what DataTable emits as `sortBy` for the server-side sort.
         columnHelper.accessor((row) => row.categoryOption?.name ?? row.category ?? '', {
@@ -526,6 +550,14 @@ function LeadsPage() {
                         them to distribute is the main use of this filter. */}
                     <option value="unassigned">{m.fields.unassigned}</option>
                     {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
+                {/* Presence, not a value match — free-text search already covers
+                    the address itself. "No email" is the one that earns the
+                    control: it lists the leads no campaign can reach. */}
+                <Select value={emailFilter} onChange={(e) => setEmailFilter(e.target.value)} className="w-auto max-w-[180px]">
+                    <option value="">{m.allEmails}</option>
+                    <option value="has">{m.hasEmail}</option>
+                    <option value="empty">{m.noEmail}</option>
                 </Select>
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>

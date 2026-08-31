@@ -878,6 +878,66 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    describe('findAll — email presence filter', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        /** Both halves match `''` as well as NULL — see EMPTY_EMAIL_WHERE. */
+        const NO_EMAIL = { OR: [{ email: null }, { email: '' }] };
+
+        it('filters to leads with no email at all', async () => {
+            await service.findAll('tenant-1', { emailPresence: 'empty' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where.AND).toEqual([NO_EMAIL]);
+        });
+
+        it('filters to leads that do have one', async () => {
+            await service.findAll('tenant-1', { emailPresence: 'has' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where.AND).toEqual([{ NOT: NO_EMAIL }]);
+        });
+
+        it('does not filter on email at all when none is given', async () => {
+            await service.findAll('tenant-1', {} as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('AND');
+        });
+
+        it('leaves free-text search its own OR, so the two combine rather than clobber', async () => {
+            await service.findAll('tenant-1', { emailPresence: 'empty', search: 'karim' } as any);
+
+            const where = db.lead.findMany.mock.calls[0][0].where;
+            expect(where.AND).toEqual([NO_EMAIL]);
+            expect(where.OR).toEqual(
+                expect.arrayContaining([{ name: { contains: 'karim', mode: 'insensitive' } }]),
+            );
+        });
+
+        it('counts the same filtered set it lists', async () => {
+            await service.findAll('tenant-1', { emailPresence: 'empty' } as any);
+
+            expect(db.lead.count.mock.calls[0][0].where).toEqual(
+                db.lead.findMany.mock.calls[0][0].where,
+            );
+        });
+
+        /**
+         * Both this filter and the staleness one live under `AND`, and the
+         * second used to *assign* it rather than append — safe only while it was
+         * the sole occupant. Asking for both silently dropped this one.
+         */
+        it('survives alongside the staleness filter, which shares the AND', async () => {
+            await service.findAll('tenant-1', { emailPresence: 'empty', staleDays: 14 } as any);
+
+            const { where } = db.lead.findMany.mock.calls[0][0];
+            expect(where.AND).toHaveLength(2);
+            expect(where.AND[0]).toEqual(NO_EMAIL);
+            expect(where.AND[1].OR[0]).toHaveProperty('last_contacted_at');
+        });
+    });
+
     /**
      * The CRM dashboard's attention tiles link into this list, so the filters
      * behind those links must reproduce the counts the tiles rendered — the
