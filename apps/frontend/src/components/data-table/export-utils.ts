@@ -1,6 +1,7 @@
 import type { Column, Table } from '@tanstack/react-table';
 import { SIMPLE_DOC_STYLES, openPrintWindow } from '@/lib/print';
 import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
+import { isPinnedColumnId } from './column-order';
 
 export type ExportColumnSpec<T> = {
     id: string;
@@ -42,8 +43,9 @@ export function exportableColumnLabel(column: { id: string; columnDef: { header?
     return typeof column.columnDef.header === 'string' ? column.columnDef.header : column.id;
 }
 
+/** The two structural columns carry no value worth exporting. */
 export function isExportableColumnId(id: string): boolean {
-    return id !== 'actions' && id !== 'select';
+    return !isPinnedColumnId(id);
 }
 
 export function valueFromColumn<T>(column: Column<T, unknown>, record: T): unknown {
