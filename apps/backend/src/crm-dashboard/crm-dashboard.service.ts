@@ -7,11 +7,15 @@ import {
     startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
-import { LeadStatus, OPEN_LEAD_STATUSES } from '../crm-leads/crm-leads.dto';
+import {
+    LeadStatus,
+    OPEN_LEAD_STATUSES,
+    STALE_AFTER_DAYS,
+    staleLeadCutoff,
+    staleLeadWhere,
+} from '../crm-leads/crm-leads.dto';
 import { CrmDashboardQueryDto } from './crm-dashboard.dto';
 
-/** A lead with no contact for this long is going cold. */
-const STALE_AFTER_DAYS = 14;
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
 const RECENT_CAMPAIGNS = 5;
@@ -55,8 +59,7 @@ export class CrmDashboardService {
      * on it would answer a question nobody asked. Only the flows below are dated.
      */
     private async getPipeline(tenantId: string, window: DateWindow) {
-        const staleBefore = new Date();
-        staleBefore.setDate(staleBefore.getDate() - STALE_AFTER_DAYS);
+        const staleBefore = staleLeadCutoff();
 
         const openStatuses = [...OPEN_LEAD_STATUSES];
         const closedInWindow = { gte: window.fromDate, lte: window.toDate };
@@ -84,12 +87,10 @@ export class CrmDashboardService {
                 where: {
                     tenant_id: tenantId,
                     status: { in: openStatuses },
-                    // A lead nobody has contacted yet is only stale once it has been
-                    // sitting there — a lead created this morning is not neglected.
-                    OR: [
-                        { last_contacted_at: { lt: staleBefore } },
-                        { last_contacted_at: null, created_at: { lt: staleBefore } },
-                    ],
+                    // Shared with GET /crm/leads?staleDays=N, so the tile's "View
+                    // all" opens exactly the rows counted here rather than a list
+                    // built from a second, quietly divergent copy of the rule.
+                    ...staleLeadWhere(staleBefore),
                 },
             }),
         ]);

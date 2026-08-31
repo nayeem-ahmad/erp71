@@ -1,5 +1,5 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { UpdateLeadDto } from './crm-leads.dto';
+import { ListLeadsDto, UpdateLeadDto } from './crm-leads.dto';
 
 /**
  * The lead edit form used to POST the next-step rollup columns. Those keys
@@ -56,6 +56,35 @@ describe('UpdateLeadDto', () => {
                 },
                 metadata,
             ),
+        ).rejects.toThrow(BadRequestException);
+    });
+});
+
+/**
+ * Query params arrive as strings, and the leads list sends every filter it has
+ * on every request — including the ones sitting at their "no filter" default.
+ */
+describe('ListLeadsDto — emailPresence', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'query' as const, metatype: ListLeadsDto };
+
+    it('accepts the two presence values', async () => {
+        await expect(pipe.transform({ emailPresence: 'empty' }, metadata)).resolves.toEqual(
+            expect.objectContaining({ emailPresence: 'empty' }),
+        );
+        await expect(pipe.transform({ emailPresence: 'has' }, metadata)).resolves.toEqual(
+            expect.objectContaining({ emailPresence: 'has' }),
+        );
+    });
+
+    it('treats the unset filter as no filter rather than a 400', async () => {
+        const result: any = await pipe.transform({ emailPresence: '' }, metadata);
+        expect(result.emailPresence).toBeUndefined();
+    });
+
+    it('rejects a value outside the two, so a stale bookmark 400s instead of 500ing', async () => {
+        await expect(
+            pipe.transform({ emailPresence: 'maybe' }, metadata),
         ).rejects.toThrow(BadRequestException);
     });
 });

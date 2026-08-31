@@ -53,6 +53,13 @@ import { useCompactUi } from '@/contexts/CompactUiContext';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { useTablePreferences } from './useTablePreferences';
+import {
+    columnDefId,
+    isPinnedColumnId,
+    reconcileColumnOrder,
+    PINNED_FIRST_COLUMN_ID,
+    PINNED_LAST_COLUMN_ID,
+} from './column-order';
 import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn } from './export-utils';
 import { renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -141,16 +148,58 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
 const SERVER_MAX_PAGE_SIZE = 100;
 
 /* --------------------------------------------------------------- */
-/*  Sortable Header Cell                                            */
+/*  Header Cells                                                    */
 /* --------------------------------------------------------------- */
+
+/** The label and its sort control — identical whether the cell is draggable. */
+function HeaderLabel({ header }: { header: any }) {
+    const canSort = header.column.getCanSort();
+    const sorted = header.column.getIsSorted();
+
+    return (
+        <button
+            onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+            className={`flex items-center space-x-1 rtl:space-x-reverse ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
+        >
+            <span>
+                {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+            </span>
+            {canSort && (
+                <span className="ms-0.5">
+                    {sorted === 'asc' ? (
+                        <ChevronUp className="w-3 h-3 text-blue-600" />
+                    ) : sorted === 'desc' ? (
+                        <ChevronDown className="w-3 h-3 text-blue-600" />
+                    ) : (
+                        <ChevronsUpDown className="w-3 h-3 opacity-30" />
+                    )}
+                </span>
+            )}
+        </button>
+    );
+}
+
+/** The resize grip on the cell's end edge, for a column that allows it. */
+function ResizeHandle({ header }: { header: any }) {
+    if (!header.column.getCanResize()) return null;
+    return (
+        <div
+            onMouseDown={header.getResizeHandler()}
+            onTouchStart={header.getResizeHandler()}
+            className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none hover:bg-blue-400 transition-colors ${
+                header.column.getIsResizing() ? 'bg-blue-500' : 'bg-transparent'
+            }`}
+        />
+    );
+}
 
 function SortableHeader({
     header,
-    children,
     headerClassName,
 }: {
     header: any;
-    children: React.ReactNode;
     headerClassName: string;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -178,18 +227,39 @@ function SortableHeader({
                 <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
                     <GripVertical className="w-3 h-3" />
                 </span>
-                {children}
+                <HeaderLabel header={header} />
             </div>
-            {/* Column resize handle */}
-            {header.column.getCanResize() && (
-                <div
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
-                    className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none hover:bg-blue-400 transition-colors ${
-                        header.column.getIsResizing() ? 'bg-blue-500' : 'bg-transparent'
-                    }`}
-                />
-            )}
+            <ResizeHandle header={header} />
+        </th>
+    );
+}
+
+/**
+ * The actions header: same cell as a draggable one minus the grip, since the
+ * column is pinned to the end edge. It keeps the resize handle — most tables
+ * leave their actions column resizable, and the gutter is exactly the width
+ * people adjust.
+ */
+function PinnedHeader({
+    header,
+    headerClassName,
+}: {
+    header: any;
+    headerClassName: string;
+}) {
+    return (
+        <th
+            style={{
+                position: 'relative',
+                width: header.getSize(),
+                minWidth: header.getSize(),
+            }}
+            className={headerClassName}
+        >
+            <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                <HeaderLabel header={header} />
+            </div>
+            <ResizeHandle header={header} />
         </th>
     );
 }
@@ -281,8 +351,11 @@ export default function DataTable<T>({
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
         savedPrefs?.columnVisibility ?? {},
     );
+    // Holds only what has been saved or dragged. The order the table actually
+    // renders in is `effectiveColumnOrder` below, which reconciles this against
+    // the columns currently declared — an empty state is simply "declared order".
     const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(
-        savedPrefs?.columnOrder ?? effectiveColumns.map((c) => (c as any).accessorKey ?? (c as any).id ?? ''),
+        savedPrefs?.columnOrder ?? [],
     );
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(
         savedPrefs?.columnWidths ?? {},
@@ -309,6 +382,21 @@ export default function DataTable<T>({
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor),
+    );
+
+    const declaredColumnIds = useMemo(
+        () => effectiveColumns.map(columnDefId),
+        [effectiveColumns],
+    );
+
+    /**
+     * What the table renders. Derived rather than stored so it re-settles when
+     * the column set changes mid-session — the leads list, for one, grows its
+     * custom-field columns after a fetch resolves.
+     */
+    const effectiveColumnOrder = useMemo(
+        () => reconcileColumnOrder(columnOrder, declaredColumnIds),
+        [columnOrder, declaredColumnIds],
     );
 
     const effectiveColumnVisibility = useMemo(() => {
@@ -354,7 +442,7 @@ export default function DataTable<T>({
             columnFilters,
             globalFilter,
             columnVisibility: effectiveColumnVisibility,
-            columnOrder,
+            columnOrder: effectiveColumnOrder,
             columnSizing,
             rowSelection,
             pagination: { pageIndex: effectivePageIndex, pageSize: effectivePageSize },
@@ -422,8 +510,8 @@ export default function DataTable<T>({
     }, [columnVisibility]);
 
     useEffect(() => {
-        prefs.setColumnOrder(tableId, columnOrder);
-    }, [columnOrder]);
+        prefs.setColumnOrder(tableId, effectiveColumnOrder);
+    }, [effectiveColumnOrder]);
 
     // Persist the size actually in use, not the client-mode state — in server mode the size
     // lives in `serverPagination` and the local `pageSize` is an unread default, so writing
@@ -474,7 +562,7 @@ export default function DataTable<T>({
             observer?.disconnect();
             window.removeEventListener('resize', updateScrollState);
         };
-    }, [data, effectiveColumnVisibility, isLoading, columnOrder]);
+    }, [data, effectiveColumnVisibility, isLoading, effectiveColumnOrder]);
 
     // Click outside handlers
     useEffect(() => {
@@ -491,18 +579,27 @@ export default function DataTable<T>({
     const handleDragEnd = useCallback(
         (event: DragEndEvent) => {
             const { active, over } = event;
-            if (active && over && active.id !== over.id) {
-                setColumnOrder((prev) => {
-                    const oldIndex = prev.indexOf(active.id as string);
-                    const newIndex = prev.indexOf(over.id as string);
-                    const newOrder = [...prev];
-                    newOrder.splice(oldIndex, 1);
-                    newOrder.splice(newIndex, 0, active.id as string);
-                    return newOrder;
-                });
-            }
+            if (!active || !over || active.id === over.id) return;
+            const activeId = String(active.id);
+            const overId = String(over.id);
+            // Neither edge column can be dragged or dropped onto. The headers
+            // below already withhold their grips and leave them out of the
+            // sortable set, so this is the belt to that pair of braces.
+            if (isPinnedColumnId(activeId) || isPinnedColumnId(overId)) return;
+            setColumnOrder((prev) => {
+                // Reconciled first: the saved order can predate a column, and
+                // splicing at an index of -1 would drop the last one instead.
+                const current = reconcileColumnOrder(prev, declaredColumnIds);
+                const from = current.indexOf(activeId);
+                const to = current.indexOf(overId);
+                if (from === -1 || to === -1) return prev;
+                const next = [...current];
+                next.splice(from, 1);
+                next.splice(to, 0, activeId);
+                return next;
+            });
         },
-        [],
+        [declaredColumnIds],
     );
 
     // Routed through the table so both modes take the single path in `onPaginationChange`
@@ -524,7 +621,7 @@ export default function DataTable<T>({
 
     // Advanced filter state for individual columns
     const filterableColumns = table.getAllLeafColumns().filter(
-        (c) => c.id !== 'actions' && c.id !== 'select' && c.getCanFilter(),
+        (c) => !isPinnedColumnId(c.id) && c.getCanFilter(),
     );
 
     const totalRows = isServer
@@ -535,10 +632,11 @@ export default function DataTable<T>({
     const startRow = currentPage * effectivePageSize + 1;
     const endRow = Math.min((currentPage + 1) * effectivePageSize, totalRows);
 
+    /** Drop targets for the header drag — the pinned edges are not among them. */
     const columnIds = useMemo(
-        () => table.getVisibleLeafColumns().map((c) => c.id),
+        () => table.getVisibleLeafColumns().map((c) => c.id).filter((id) => !isPinnedColumnId(id)),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [columnOrder, columnVisibility],
+        [effectiveColumnOrder, columnVisibility],
     );
 
     const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
@@ -560,7 +658,7 @@ export default function DataTable<T>({
                     visible: c.getIsVisible(),
                 })),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [columnVisibility, columnOrder, effectiveColumns, isMdUp],
+        [columnVisibility, effectiveColumnOrder, effectiveColumns, isMdUp],
     );
 
     const pageRowCount = table.getPaginationRowModel().rows.length;
@@ -672,7 +770,7 @@ export default function DataTable<T>({
                             {showColumnSelector && (
                                 <div className="absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
                                     {table.getAllLeafColumns()
-                                        .filter((c) => c.id !== 'select')
+                                        .filter((c) => c.id !== PINNED_FIRST_COLUMN_ID)
                                         .map((column) => (
                                             <label
                                                 key={column.id}
@@ -839,13 +937,11 @@ export default function DataTable<T>({
                                             strategy={horizontalListSortingStrategy}
                                         >
                                             {headerGroup.headers.map((header) => {
-                                                const canSort = header.column.getCanSort();
-                                                const sorted = header.column.getIsSorted();
-
-                                                // Selection checkbox column: render a plain, non-draggable
-                                                // header so the "select all" box lines up with the row
-                                                // checkboxes instead of being offset by the drag grip.
-                                                if (header.column.id === 'select') {
+                                                // Selection checkbox: pinned to the start edge, and the
+                                                // one header with no label — a bare cell, so the "select
+                                                // all" box lines up with the row checkboxes below it
+                                                // rather than being offset by a drag grip.
+                                                if (header.column.id === PINNED_FIRST_COLUMN_ID) {
                                                     return (
                                                         <th
                                                             key={header.id}
@@ -859,30 +955,17 @@ export default function DataTable<T>({
                                                     );
                                                 }
 
+                                                // Row actions: pinned to the end edge, so the same cell
+                                                // as a draggable one minus the grip. It keeps its resize
+                                                // handle — most tables leave this column resizable.
+                                                if (header.column.id === PINNED_LAST_COLUMN_ID) {
+                                                    return (
+                                                        <PinnedHeader key={header.id} header={header} headerClassName={d.headerCell} />
+                                                    );
+                                                }
+
                                                 return (
-                                                    <SortableHeader key={header.id} header={header} headerClassName={d.headerCell}>
-                                                        <button
-                                                            onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                                                            className={`flex items-center space-x-1 rtl:space-x-reverse ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
-                                                        >
-                                                            <span>
-                                                                {header.isPlaceholder
-                                                                    ? null
-                                                                    : flexRender(header.column.columnDef.header, header.getContext())}
-                                                            </span>
-                                                            {canSort && (
-                                                                <span className="ms-0.5">
-                                                                    {sorted === 'asc' ? (
-                                                                        <ChevronUp className="w-3 h-3 text-blue-600" />
-                                                                    ) : sorted === 'desc' ? (
-                                                                        <ChevronDown className="w-3 h-3 text-blue-600" />
-                                                                    ) : (
-                                                                        <ChevronsUpDown className="w-3 h-3 opacity-30" />
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                    </SortableHeader>
+                                                    <SortableHeader key={header.id} header={header} headerClassName={d.headerCell} />
                                                 );
                                             })}
                                         </SortableContext>

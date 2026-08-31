@@ -4,7 +4,7 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import { CustomFieldEntity } from '@prisma/client';
+import { CustomFieldEntity, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
@@ -13,14 +13,29 @@ import {
     CreateLeadDto,
     isClosedStatus,
     LeadBulkAction,
+    LeadEmailPresence,
     LeadPriority,
     LeadStatus,
+    OPEN_LEAD_STATUS_FILTER,
+    OPEN_LEAD_STATUSES,
+    staleLeadCutoff,
+    staleLeadWhere,
     UNASSIGNED_OWNER_FILTER,
     UpdateLeadDto,
 } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
+import {
+    identityDedupeKeys,
+    identityMatchArms,
+    labelForDedupeKey,
+    LeadIdentity,
+    LEAD_IDENTITY_FIELDS,
+    LEAD_IDENTITY_LABELS,
+    leadIdentityOf,
+    leadIdentityPatch,
+} from '@erp71/shared-types';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
@@ -74,6 +89,18 @@ const LEAD_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
 };
 const LEAD_DEFAULT_ORDER = [{ next_step_date: 'asc' as const }, { updated_at: 'desc' as const }];
+
+/**
+ * A lead with no usable email address.
+ *
+ * Covers `''` as well as NULL: every write path normalises a blank email to NULL
+ * (`emptyToUndefined` on the DTOs, and the CSV importer's own `|| null`), but
+ * rows that predate that — and anything written straight to the database — can
+ * still hold an empty string, and those are exactly the leads this filter exists
+ * to surface. `HAS` is its negation, so the two halves can never disagree about
+ * what counts as an email.
+ */
+const EMPTY_EMAIL_WHERE: Prisma.LeadWhereInput = { OR: [{ email: null }, { email: '' }] };
 
 @Injectable()
 export class CrmLeadsService {
@@ -217,16 +244,57 @@ export class CrmLeadsService {
         }
     }
 
-    async create(tenantId: string, userId: string, dto: CreateLeadDto) {
-        if (dto.mobile) {
-            const existing = await this.db.lead.findUnique({
-                where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
-                select: { id: true },
-            });
-            if (existing) {
-                throw new BadRequestException('A lead with this mobile number already exists.');
-            }
+    /**
+     * The lead already holding any of this one's identity keys, and which key it
+     * was — or null when this lead is nobody else.
+     *
+     * One query across all three keys, rather than one per key: an import runs
+     * this for every row of a file that may hold 5000 of them.
+     */
+    private async findIdentityMatch(
+        tenantId: string,
+        identity: Partial<LeadIdentity>,
+        exceptId?: string,
+    ): Promise<{ id: string; field: keyof LeadIdentity } | null> {
+        const arms = identityMatchArms(identity);
+        // A lead with no mobile, email or LinkedIn cannot be matched against
+        // anything. `OR: []` would match no rows, but returning early says so.
+        if (!arms.length) return null;
+
+        const existing = await this.db.lead.findFirst({
+            where: {
+                tenant_id: tenantId,
+                ...(exceptId ? { id: { not: exceptId } } : {}),
+                OR: arms,
+            },
+            select: { id: true, mobile_norm: true, email_norm: true, linkedin_norm: true },
+        });
+        if (!existing) return null;
+
+        // Which key actually matched, so the message can name it. A lead can
+        // match on several at once; the first is enough to tell the user why.
+        const field = LEAD_IDENTITY_FIELDS.find(
+            (key) => identity[key] != null && existing[key] === identity[key],
+        );
+        return { id: existing.id, field: field ?? 'mobile_norm' };
+    }
+
+    private async assertIdentityFree(
+        tenantId: string,
+        identity: Partial<LeadIdentity>,
+        exceptId?: string,
+    ) {
+        const match = await this.findIdentityMatch(tenantId, identity, exceptId);
+        if (match) {
+            throw new BadRequestException(
+                `A lead with this ${LEAD_IDENTITY_LABELS[match.field]} already exists.`,
+            );
         }
+    }
+
+    async create(tenantId: string, userId: string, dto: CreateLeadDto) {
+        const identity = leadIdentityOf(dto);
+        await this.assertIdentityFree(tenantId, identity);
 
         const status = dto.status ?? LeadStatus.NEW;
         if (status === LeadStatus.LOST && !dto.lost_reason) {
@@ -274,6 +342,7 @@ export class CrmLeadsService {
                 mobile: dto.mobile,
                 email: dto.email,
                 address: dto.address,
+                ...identity,
                 category_id: categoryRow?.id ?? null,
                 category: coerceLegacyCategory(categoryRow?.code),
                 priority,
@@ -380,6 +449,8 @@ export class CrmLeadsService {
             category?: string;
             priority?: string;
             assignedTo?: string;
+            emailPresence?: string;
+            staleDays?: number;
             myActionsToday?: boolean;
             userId?: string;
             search?: string;
@@ -398,7 +469,10 @@ export class CrmLeadsService {
         const where: any = { tenant_id: tenantId };
         const created = createdAtRange(opts.createdFrom, opts.createdTo);
         if (created) where.created_at = created;
-        if (opts.status) where.status = opts.status;
+        // The "open pipeline" sentinel stands for the three non-terminal stages at
+        // once, which no single status value can express.
+        if (opts.status === OPEN_LEAD_STATUS_FILTER) where.status = { in: [...OPEN_LEAD_STATUSES] };
+        else if (opts.status) where.status = opts.status;
         // Filters carry a taxonomy row id. A stale bookmarked filter naming a
         // deleted row simply matches nothing, rather than erroring.
         if (opts.source) where.source_id = opts.source;
@@ -406,6 +480,15 @@ export class CrmLeadsService {
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo === UNASSIGNED_OWNER_FILTER) where.assigned_to = null;
         else if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        // Goes in `AND` rather than beside the scalars because it is itself an
+        // OR, and the top-level `OR` below already belongs to free-text search.
+        const emailClause: Prisma.LeadWhereInput | null =
+            opts.emailPresence === LeadEmailPresence.EMPTY
+                ? EMPTY_EMAIL_WHERE
+                : opts.emailPresence === LeadEmailPresence.HAS
+                  ? { NOT: EMPTY_EMAIL_WHERE }
+                  : null;
+        if (emailClause) where.AND = [...(where.AND ?? []), emailClause];
         if (opts.myActionsToday && opts.userId) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -421,6 +504,14 @@ export class CrmLeadsService {
                 { email: { contains: opts.search, mode: 'insensitive' } },
                 { remarks: { contains: opts.search, mode: 'insensitive' } },
             ];
+        }
+        // Nested under AND, not merged into the top-level OR above: staleness is
+        // itself an OR, and dropping it there would turn "matches the search AND
+        // is stale" into "matches the search OR is stale". Appended rather than
+        // assigned, or it would drop whatever the email-presence filter above
+        // put there.
+        if (opts.staleDays) {
+            where.AND = [...(where.AND ?? []), staleLeadWhere(staleLeadCutoff(opts.staleDays))];
         }
 
         const [items, total] = await Promise.all([
@@ -487,17 +578,14 @@ export class CrmLeadsService {
             throw new BadRequestException('Converted leads cannot be edited.');
         }
 
-        if (dto.mobile && dto.mobile !== existing.mobile) {
-            const mobileTaken = await this.db.lead.findUnique({
-                where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
-                select: { id: true },
-            });
-            if (mobileTaken) {
-                throw new BadRequestException('A lead with this mobile number already exists.');
-            }
-        }
+        // Only the identity fields the patch actually names — an edit that never
+        // mentions the email must not clear `email_norm`, which would strip the
+        // lead of its protection against a later duplicate.
+        const identity = leadIdentityPatch(dto);
+        await this.assertIdentityFree(tenantId, identity, id);
 
         const data = this.mapLeadData(dto);
+        Object.assign(data, identity);
 
         const photo = this.resolvePhoto(tenantId, dto);
         if (photo.url !== undefined) data.photo_url = photo.url;
@@ -674,7 +762,7 @@ export class CrmLeadsService {
                 if (rawStatus === LeadStatus.LOST) {
                     throw new Error('status LOST requires a lost_reason, which import does not support — set status after import instead');
                 }
-                return {
+                const row = {
                     name: String(raw.name ?? '').trim(),
                     mobile: String(raw.mobile ?? '').trim() || null,
                     email: raw.email ? String(raw.email).trim() || null : null,
@@ -714,14 +802,17 @@ export class CrmLeadsService {
                         return acc;
                     }, {}),
                 };
+                // Derived from the cast row rather than from `raw`, so import
+                // compares exactly the values it is about to store.
+                return { ...row, identity: leadIdentityOf(row) };
             },
+            // Two rows of the same file describing one lead: the database cannot
+            // see it in `skip` mode, because the first row was never written.
+            dedupeKeys: (row) => identityDedupeKeys(row.identity),
+            describeDedupeKey: labelForDedupeKey,
             findDuplicate: async (row) => {
-                if (!row.mobile) return null;
-                const existing = await this.db.lead.findUnique({
-                    where: { tenant_id_mobile: { tenant_id: tenantId, mobile: row.mobile } },
-                    select: { id: true },
-                });
-                return existing?.id ?? null;
+                const match = await this.findIdentityMatch(tenantId, row.identity);
+                return match?.id ?? null;
             },
             create: async (row) => {
                 const source = row.source ?? fallbackSource;
@@ -741,6 +832,7 @@ export class CrmLeadsService {
                         name: row.name,
                         mobile: row.mobile ?? undefined,
                         email: row.email ?? undefined,
+                        ...row.identity,
                         address: row.address ?? undefined,
                         remarks: row.remarks ?? undefined,
                         category_id: row.category?.id ?? null,
@@ -780,8 +872,17 @@ export class CrmLeadsService {
                     where: { id },
                     data: {
                         name: row.name,
+                        // Each normalized column is written under exactly the
+                        // condition its raw column is, or the two would drift and
+                        // the unique indexes would guard a stale value.
+                        //
+                        // An upsert whose email belongs to a *different* lead than
+                        // the one matched here still trips the unique index; that
+                        // surfaces as a row error ("duplicate value for …") rather
+                        // than one lead quietly absorbing another's identity.
                         mobile: row.mobile,
-                        ...(row.email    !== null      ? { email: row.email }       : {}),
+                        mobile_norm: row.identity.mobile_norm,
+                        ...(row.email    !== null      ? { email: row.email, email_norm: row.identity.email_norm } : {}),
                         ...(row.address  !== null      ? { address: row.address }   : {}),
                         ...(row.remarks  !== null      ? { remarks: row.remarks }   : {}),
                         ...(row.category !== null
@@ -804,7 +905,9 @@ export class CrmLeadsService {
                         // way still counts in the all-time totals, just not in
                         // won-this-period until someone edits it for real.
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
-                        ...(row.linkedin_url !== null ? { linkedin_url: row.linkedin_url } : {}),
+                        ...(row.linkedin_url !== null
+                            ? { linkedin_url: row.linkedin_url, linkedin_norm: row.identity.linkedin_norm }
+                            : {}),
                         ...(row.fb_url       !== null ? { fb_url: row.fb_url }             : {}),
                         ...(row.x_url        !== null ? { x_url: row.x_url }               : {}),
                         ...(row.website_url  !== null ? { website_url: row.website_url }   : {}),

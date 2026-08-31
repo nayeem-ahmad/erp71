@@ -94,6 +94,38 @@ describe('CrmDashboard', () => {
         expect(screen.getByText('3 leads with no owner')).toBeInTheDocument();
     });
 
+    /**
+     * A tile that counts 3 and opens a list of 300 is worse than no link at all —
+     * the count silently stops meaning anything. Both tiles restrict to the open
+     * pipeline because that is what their counts restrict to; the receiving half
+     * of these links is covered in crm/leads/page.test.tsx.
+     */
+    it('links each attention tile at exactly the leads it counted', async () => {
+        render(<CrmDashboard {...identity} />);
+
+        const unowned = await screen.findByText('3 leads with no owner');
+        expect(unowned.closest('a')).toHaveAttribute(
+            'href',
+            '/crm/leads?status=open&assignedTo=unassigned',
+        );
+
+        const stale = screen.getByText('5 leads untouched for 14 days');
+        // The window comes from the response, so the list filters by the same
+        // number the label just claimed.
+        expect(stale.closest('a')).toHaveAttribute('href', '/crm/leads?status=open&staleDays=14');
+    });
+
+    it('carries a changed stale window through to the link', async () => {
+        (api.getCrmDashboardOverview as jest.Mock).mockResolvedValue(overview({
+            pipeline: { ...overview().pipeline, stale_after_days: 30 },
+        }));
+
+        render(<CrmDashboard {...identity} />);
+
+        const stale = await screen.findByText('5 leads untouched for 30 days');
+        expect(stale.closest('a')).toHaveAttribute('href', '/crm/leads?status=open&staleDays=30');
+    });
+
     it('says nothing needs attention rather than showing an empty strip', async () => {
         (api.getCrmDashboardOverview as jest.Mock).mockResolvedValue(overview({
             pipeline: { ...overview().pipeline, unassigned: 0, stale: 0 },

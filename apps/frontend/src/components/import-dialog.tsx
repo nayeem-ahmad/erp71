@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Upload, ChevronRight, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
+import { Upload, ChevronRight, CheckCircle, AlertCircle, Copy, RotateCcw } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { parseSpreadsheetFile, autoMapHeaders } from '@/lib/spreadsheet';
@@ -17,6 +17,12 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: string[];
+  /**
+   * Rows skipped because an earlier row in the same file described the same
+   * record. Shown apart from `errors`: nothing failed and there is nothing to
+   * fix — the file simply listed someone twice.
+   */
+  duplicates?: string[];
 }
 
 interface ImportDialogProps {
@@ -238,6 +244,21 @@ export function ImportDialog({
                 <span className="font-semibold text-gray-500">{result.skipped}</span> skipped
               </p>
             </div>
+            {(result.duplicates?.length ?? 0) > 0 && (
+              <div className="p-4 bg-warning-light rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Copy className="w-4 h-4 text-warning" />
+                  <span className="text-xs font-semibold uppercase text-warning-text">
+                    {result.duplicates!.length} duplicate row{result.duplicates!.length !== 1 ? 's' : ''} in the file
+                  </span>
+                </div>
+                <ul className="space-y-1 max-h-48 overflow-y-auto">
+                  {result.duplicates!.map((d, i) => (
+                    <li key={i} className="text-xs text-warning-text font-medium">{d}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {result.errors.length > 0 && (
               <div className="p-4 bg-danger-light rounded-lg">
                 <div className="flex items-center gap-2 mb-2">

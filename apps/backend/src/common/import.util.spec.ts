@@ -16,6 +16,66 @@ function makeConfig(overrides: Partial<ImportConfig<Row>> = {}): ImportConfig<Ro
   };
 }
 
+describe('runImport — duplicates within one file', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const keyed = (overrides: Partial<ImportConfig<Row>> = {}) =>
+    makeConfig({
+      dedupeKeys: (row) => (row.description ? [`email:${row.description}`] : []),
+      describeDedupeKey: (key) => key.split(':', 1)[0],
+      ...overrides,
+    });
+
+  it('skips a row an earlier row already claimed, and says which row', () => {
+    // findDuplicate cannot see this: in skip mode the earlier row was never written.
+    return runImport(
+      [{ name: 'A', description: 'a@b.com' }, { name: 'B', description: 'a@b.com' }],
+      'skip',
+      'tenant-1',
+      keyed(),
+    ).then((result) => {
+      expect(result.created).toBe(1);
+      expect(result.skipped).toBe(1);
+      expect(result.errors).toEqual([]);
+      expect(result.duplicates).toEqual(['Row 3: same email as row 2 — skipped']);
+    });
+  });
+
+  it('lets the later row win in upsert mode instead of skipping it', async () => {
+    const config = keyed({
+      // The record row 2 created is committed by the time row 3 is checked.
+      findDuplicate: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('id-1'),
+    });
+
+    const result = await runImport(
+      [{ name: 'A', description: 'a@b.com' }, { name: 'B', description: 'a@b.com' }],
+      'upsert',
+      'tenant-1',
+      config,
+    );
+
+    expect(result).toEqual({ created: 1, updated: 1, skipped: 0, errors: [] });
+    expect(config.update).toHaveBeenCalledWith('id-1', expect.objectContaining({ name: 'B' }), 'tenant-1');
+  });
+
+  it('leaves rows carrying no key alone', async () => {
+    const result = await runImport(
+      [{ name: 'A', description: '' }, { name: 'B', description: '' }],
+      'skip',
+      'tenant-1',
+      keyed(),
+    );
+
+    expect(result.created).toBe(2);
+    expect(result.duplicates).toBeUndefined();
+  });
+
+  it('omits the field entirely when an importer supplies no keys', async () => {
+    const result = await runImport([{ name: 'A', description: 'x' }], 'skip', 'tenant-1', makeConfig());
+    expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+  });
+});
+
 describe('runImport', () => {
   beforeEach(() => jest.clearAllMocks());
 

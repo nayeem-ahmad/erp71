@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, Clock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
@@ -72,6 +73,48 @@ const leadStatusTone: Record<string, StatusBadgeTone> = {
     CONVERTED: 'success',
 };
 
+/**
+ * Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts — the sentinel standing for
+ * NEW + CONTACTED + QUALIFIED at once. The CRM dashboard's attention tiles count
+ * open leads, so their "View all" links need a filter that says exactly that.
+ */
+const OPEN_STATUS_FILTER = 'open';
+
+/**
+ * Fallback window for the "no activity" toggle when the URL does not name one.
+ * A deep link from the dashboard carries the days the tile actually rendered
+ * (`stale_after_days`), and that number is what gets queried *and* labelled — so
+ * this default only applies to someone switching the filter on by hand here.
+ */
+const DEFAULT_STALE_DAYS = 14;
+
+/** Upper bound the API enforces on `staleDays`; beyond it the request is a 400. */
+const MAX_STALE_DAYS = 3650;
+
+/**
+ * Both param readers drop anything the API would reject, so a hand-edited or
+ * long-outdated URL opens an unfiltered list rather than an empty one behind a
+ * failed request.
+ */
+function readStatusParam(value: string | null): string {
+    if (value === OPEN_STATUS_FILTER) return value;
+    return LEAD_STATUSES.includes(value as (typeof LEAD_STATUSES)[number]) ? (value as string) : '';
+}
+
+/** Mirrors LeadEmailPresence in crm-leads.dto.ts; anything else means no filter. */
+const EMAIL_PRESENCE_VALUES = ['has', 'empty'] as const;
+
+function readEmailPresenceParam(value: string | null): string {
+    return EMAIL_PRESENCE_VALUES.includes(value as (typeof EMAIL_PRESENCE_VALUES)[number])
+        ? (value as string)
+        : '';
+}
+
+function readStaleDaysParam(value: string | null): number | null {
+    const days = Number(value);
+    return Number.isInteger(days) && days > 0 && days <= MAX_STALE_DAYS ? days : null;
+}
+
 const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'mobile', label: 'Mobile', required: false },
@@ -90,20 +133,38 @@ const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'next_step_date', label: 'Next Step Date', required: false },
 ];
 
-export default function LeadsPage() {
-    const { t, locale } = useI18n();
+function LeadsPage() {
+    const { t, locale, fmt } = useI18n();
     const m = t.crm.leads;
     const c = t.common;
+
+    // Filters can arrive in the URL so another screen can link at a specific
+    // slice — the CRM dashboard's "leads with no owner" and "leads untouched for
+    // N days" tiles both do, and their counts only mean anything if the list
+    // they open holds precisely the rows that were counted. Read once, as the
+    // initial state: from here on the controls own these, so changing one is not
+    // undone by the query string it was seeded from.
+    const searchParams = useSearchParams();
+    const staleDaysParam = readStaleDaysParam(searchParams.get('staleDays'));
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState(() => readStatusParam(searchParams.get('status')));
     const [categoryFilter, setCategoryFilter] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
-    const [ownerFilter, setOwnerFilter] = useState('');
+    const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('assignedTo') ?? '');
+    // Seeded from the URL like the filters above, so a link can open the leads
+    // that have no address — the same shape the dashboard's tiles link with.
+    const [emailFilter, setEmailFilter] = useState(
+        () => readEmailPresenceParam(searchParams.get('emailPresence')),
+    );
+    // Held apart from the toggle so switching the filter off and on again keeps
+    // the window the link asked for, rather than snapping back to the default.
+    const [staleDays] = useState(() => staleDaysParam ?? DEFAULT_STALE_DAYS);
+    const [staleOnly, setStaleOnly] = useState(() => staleDaysParam !== null);
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
@@ -145,6 +206,8 @@ export default function LeadsPage() {
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
                         assignedTo: ownerFilter || undefined,
+                        emailPresence: emailFilter || undefined,
+                        staleDays: staleOnly ? staleDays : undefined,
                         myActionsToday: myTodaysActions || undefined,
                         page: p,
                         limit,
@@ -154,7 +217,7 @@ export default function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -168,6 +231,8 @@ export default function LeadsPage() {
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
                 assignedTo: ownerFilter || undefined,
+                emailPresence: emailFilter || undefined,
+                staleDays: staleOnly ? staleDays : undefined,
                 myActionsToday: myTodaysActions || undefined,
                 page,
                 limit: pageSize,
@@ -185,14 +250,14 @@ export default function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -260,6 +325,14 @@ export default function LeadsPage() {
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
+        columnHelper.accessor('email', {
+            header: m.fields.email,
+            cell: (info) => info.getValue() || '—',
+            // Not in the backend's LEAD_SORTABLE allowlist, so a sort request on
+            // it would silently fall back to the default order.
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
         // Explicit `id`s: an accessor function has no inferable key, and the id
         // is what DataTable emits as `sortBy` for the server-side sort.
         columnHelper.accessor((row) => row.categoryOption?.name ?? row.category ?? '', {
@@ -424,6 +497,23 @@ export default function LeadsPage() {
                     <ListChecks className="w-4 h-4" />
                     {m.myTodaysActions}
                 </button>
+                {/* The dashboard's stale tile links straight here. A visible,
+                    togglable control rather than an invisible URL filter, so a
+                    shortened list always says why it is short — and can be
+                    widened again without editing the address bar. */}
+                <button
+                    type="button"
+                    onClick={() => setStaleOnly((v) => !v)}
+                    aria-pressed={staleOnly}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                        staleOnly
+                            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <Clock className="w-4 h-4" />
+                    {fmt(m.noActivityFilter, { days: staleDays })}
+                </button>
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <Input
@@ -435,6 +525,10 @@ export default function LeadsPage() {
                 </div>
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
+                    {/* Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts. The
+                        three working stages as one choice — what the dashboard's
+                        attention tiles count, and so what their links open. */}
+                    <option value={OPEN_STATUS_FILTER}>{m.openPipeline}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                 </Select>
                 <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-auto max-w-[180px]">
@@ -456,6 +550,14 @@ export default function LeadsPage() {
                         them to distribute is the main use of this filter. */}
                     <option value="unassigned">{m.fields.unassigned}</option>
                     {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
+                {/* Presence, not a value match — free-text search already covers
+                    the address itself. "No email" is the one that earns the
+                    control: it lists the leads no campaign can reach. */}
+                <Select value={emailFilter} onChange={(e) => setEmailFilter(e.target.value)} className="w-auto max-w-[180px]">
+                    <option value="">{m.allEmails}</option>
+                    <option value="has">{m.hasEmail}</option>
+                    <option value="empty">{m.noEmail}</option>
                 </Select>
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
@@ -480,7 +582,13 @@ export default function LeadsPage() {
                 enableRowSelection
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
-                emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
+                emptyMessage={
+                    myTodaysActions
+                        ? m.myTodaysActionsEmpty
+                        : staleOnly
+                            ? fmt(m.noActivityEmpty, { days: staleDays })
+                            : m.emptyMessage
+                }
                 clearSelectionSignal={selectionEpoch}
                 bulkActions={bulkActions}
                 bulkActionsDisabled={bulkBusy}
@@ -520,5 +628,15 @@ export default function LeadsPage() {
                 onSuccess={() => void loadLeads()}
             />
         </PageShell>
+    );
+}
+
+export default function LeadsPageWrapper() {
+    // useSearchParams needs a Suspense boundary to keep the route statically
+    // renderable under the app router.
+    return (
+        <Suspense fallback={null}>
+            <LeadsPage />
+        </Suspense>
     );
 }

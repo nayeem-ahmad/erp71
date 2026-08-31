@@ -2292,6 +2292,17 @@ model Lead {
   custom_fields         Json?
   email                 String?
   address               String?
+  /// Normalized copies of `mobile` / `email` / `linkedin_url`, carrying the
+  /// per-tenant unique indexes below. They exist because the raw columns cannot
+  /// be compared usefully — `01712-345678`, `+8801712345678` and `01712345678`
+  /// are three strings and one phone number. Written ONLY via
+  /// packages/shared-types/lead-identity.ts; never displayed, never edited directly.
+  ///
+  /// `fb_url` / `x_url` / `website_url` get no such column on purpose: they are
+  /// company-level and legitimately shared across many leads at one firm.
+  mobile_norm           String?
+  email_norm            String?
+  linkedin_norm         String?
   // `category`/`source` are the legacy enum columns. They are kept in lockstep
   // with `category_id`/`source_id` (dual-written on every create/update) so a
   // rollback to the previous release still finds sane data. They are dropped in
@@ -2354,7 +2365,13 @@ model Lead {
   projects           Project[]
   campaignRecipients CrmCampaignRecipient[]
 
-  @@unique([tenant_id, mobile])
+  // Identity uniqueness, per tenant. Postgres treats NULLs as distinct, so any
+  // number of leads may be missing a mobile or an email; two that carry the
+  // same one cannot both exist. Supersedes the old @@unique([tenant_id, mobile]),
+  // which compared raw strings and so let every alternate spelling through.
+  @@unique([tenant_id, mobile_norm])
+  @@unique([tenant_id, email_norm])
+  @@unique([tenant_id, linkedin_norm])
   @@index([tenant_id, status])
   @@index([tenant_id, category])
   @@index([tenant_id, priority])
