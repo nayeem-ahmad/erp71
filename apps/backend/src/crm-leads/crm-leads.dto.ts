@@ -274,6 +274,18 @@ export class UpdateLeadDto {
  */
 export const UNASSIGNED_OWNER_FILTER = 'unassigned';
 
+/**
+ * `emailPresence` filter for GET /crm/leads — "does this lead have an email at
+ * all", not a match on its value (free-text `search` already covers that).
+ *
+ * EMPTY is the one people actually reach for: it lists the leads that no email
+ * campaign can ever reach, so someone can go and collect the missing addresses.
+ */
+export enum LeadEmailPresence {
+    HAS = 'has',
+    EMPTY = 'empty',
+}
+
 export class ListLeadsDto {
     @IsOptional()
     @Transform(emptyToUndefined)
@@ -297,6 +309,11 @@ export class ListLeadsDto {
     @Transform(emptyToUndefined)
     @IsString()
     assignedTo?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsEnum(LeadEmailPresence)
+    emailPresence?: LeadEmailPresence;
 
     @IsOptional()
     @Transform(({ value }) => value === true || value === 'true' || value === '1')

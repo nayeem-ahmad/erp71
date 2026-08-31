@@ -380,6 +380,9 @@ export const crmHrMessages = {
             allCategories: "সব বিভাগ",
             allPriorities: "সব অগ্রাধিকার",
             allOwners: "সব ওনার",
+            allEmails: "সব ইমেইল",
+            hasEmail: "ইমেইল আছে",
+            noEmail: "ইমেইল নেই",
             myTodaysActions: "আজকের আমার কাজের তালিকা",
             myTodaysActionsEmpty: "আজ আপনার জন্য নির্ধারিত পরবর্তী পদক্ষেপ সহ কোনো লিড নেই।",
             statuses: {

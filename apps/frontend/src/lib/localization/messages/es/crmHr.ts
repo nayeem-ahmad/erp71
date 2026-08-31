@@ -380,6 +380,9 @@ export const crmHrMessages = {
             allCategories: "Todas las categorías",
             allPriorities: "Todas las prioridades",
             allOwners: "Todos los propietarios",
+            allEmails: "Todos los correos",
+            hasEmail: "Con correo",
+            noEmail: "Sin correo",
             myTodaysActions: "Mi lista de acciones de hoy",
             myTodaysActionsEmpty: "No hay oportunidades con próximos pasos asignados a ti para hoy.",
             statuses: {

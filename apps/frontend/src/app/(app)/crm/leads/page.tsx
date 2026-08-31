@@ -104,6 +104,7 @@ export default function LeadsPage() {
     const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [ownerFilter, setOwnerFilter] = useState('');
+    const [emailFilter, setEmailFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
@@ -145,6 +146,7 @@ export default function LeadsPage() {
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
                         assignedTo: ownerFilter || undefined,
+                        emailPresence: emailFilter || undefined,
                         myActionsToday: myTodaysActions || undefined,
                         page: p,
                         limit,
@@ -154,7 +156,7 @@ export default function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, myTodaysActions, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -168,6 +170,7 @@ export default function LeadsPage() {
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
                 assignedTo: ownerFilter || undefined,
+                emailPresence: emailFilter || undefined,
                 myActionsToday: myTodaysActions || undefined,
                 page,
                 limit: pageSize,
@@ -185,14 +188,14 @@ export default function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, myTodaysActions, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, myTodaysActions, createdRange, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, myTodaysActions, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -260,6 +263,14 @@ export default function LeadsPage() {
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
+        columnHelper.accessor('email', {
+            header: m.fields.email,
+            cell: (info) => info.getValue() || '—',
+            // Not in the backend's LEAD_SORTABLE allowlist, so a sort request on
+            // it would silently fall back to the default order.
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
         // Explicit `id`s: an accessor function has no inferable key, and the id
         // is what DataTable emits as `sortBy` for the server-side sort.
         columnHelper.accessor((row) => row.categoryOption?.name ?? row.category ?? '', {
@@ -456,6 +467,15 @@ export default function LeadsPage() {
                         them to distribute is the main use of this filter. */}
                     <option value="unassigned">{m.fields.unassigned}</option>
                     {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                </Select>
+                {/* Presence, not a value match — free-text search already covers
+                    the address itself. "No email" is the one that earns the
+                    control: it lists the leads no campaign can reach. Values
+                    mirror LeadEmailPresence in crm-leads.dto.ts. */}
+                <Select value={emailFilter} onChange={(e) => setEmailFilter(e.target.value)} className="w-auto max-w-[180px]">
+                    <option value="">{m.allEmails}</option>
+                    <option value="has">{m.hasEmail}</option>
+                    <option value="empty">{m.noEmail}</option>
                 </Select>
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>

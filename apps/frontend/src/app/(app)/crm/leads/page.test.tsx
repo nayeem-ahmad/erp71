@@ -50,7 +50,7 @@ const baseLead = {
 };
 
 const leads = [
-    { ...baseLead, id: 'lead-1', name: 'Karim Traders', assigned_to: 'user-2', assignee: { id: 'user-2', name: 'Rifat' } },
+    { ...baseLead, id: 'lead-1', name: 'Karim Traders', email: 'karim@example.com', assigned_to: 'user-2', assignee: { id: 'user-2', name: 'Rifat' } },
     { ...baseLead, id: 'lead-2', name: 'Rahim Stores', assigned_to: null, assignee: null },
 ];
 
@@ -104,6 +104,60 @@ describe('LeadsPage — lead owner', () => {
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'unassigned' })),
+        );
+    });
+});
+
+describe('LeadsPage — email', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([]);
+    });
+
+    it('shows an Email column with the address, and a dash where there is none', async () => {
+        render(<LeadsPage />);
+
+        expect(await screen.findByText('Karim Traders')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /email/i })).toBeInTheDocument();
+
+        const emailColumn = screen
+            .getAllByRole('columnheader')
+            .findIndex((h) => /email/i.test(h.textContent ?? ''));
+        const withEmail = screen.getByRole('cell', { name: 'Karim Traders' }).closest('tr')!;
+        const without = screen.getByRole('cell', { name: 'Rahim Stores' }).closest('tr')!;
+        expect(withEmail.querySelectorAll('td')[emailColumn]).toHaveTextContent('karim@example.com');
+        expect(without.querySelectorAll('td')[emailColumn]).toHaveTextContent('—');
+    });
+
+    it('filters the list to leads with no email', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All emails'), { target: { value: 'empty' } });
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ emailPresence: 'empty' })),
+        );
+    });
+
+    it('filters the list to leads that have one', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All emails'), { target: { value: 'has' } });
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ emailPresence: 'has' })),
+        );
+    });
+
+    it('sends no email filter while the control sits at its default', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(api.getLeads).toHaveBeenCalledWith(
+            expect.objectContaining({ emailPresence: undefined }),
         );
     });
 });
