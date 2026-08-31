@@ -309,3 +309,71 @@ describe('LeadsPage — filters arriving in the URL', () => {
         );
     });
 });
+
+describe('LeadsPage — address, remarks and web links', () => {
+    const detailed = [
+        {
+            ...baseLead,
+            id: 'lead-3',
+            name: 'Karim Traders',
+            address: '14/B Gulshan Avenue, Dhaka',
+            remarks: 'Asked for a quote on 50 units',
+            linkedin_url: 'https://www.linkedin.com/in/karim/',
+            fb_url: null,
+            x_url: null,
+            // Stored as free text, so it can arrive without a scheme.
+            website_url: 'karimtraders.com.bd',
+            assignee: null,
+        },
+        { ...baseLead, id: 'lead-4', name: 'Rahim Stores', assignee: null },
+    ];
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: detailed, total: 2 });
+        api.getTeamMembers.mockResolvedValue([]);
+    });
+
+    /** The cell under a header, on the row whose Name cell reads `leadName`. */
+    function cellUnder(header: RegExp, leadName: string): HTMLElement {
+        const index = screen
+            .getAllByRole('columnheader')
+            .findIndex((h) => header.test(h.textContent ?? ''));
+        const row = screen.getByRole('cell', { name: leadName }).closest('tr')!;
+        return row.querySelectorAll('td')[index] as HTMLElement;
+    }
+
+    it('shows the address and remarks, and a dash where there are none', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(cellUnder(/^address$/i, 'Karim Traders')).toHaveTextContent('14/B Gulshan Avenue, Dhaka');
+        expect(cellUnder(/^remarks$/i, 'Karim Traders')).toHaveTextContent('Asked for a quote on 50 units');
+        expect(cellUnder(/^address$/i, 'Rahim Stores')).toHaveTextContent('—');
+        expect(cellUnder(/^remarks$/i, 'Rahim Stores')).toHaveTextContent('—');
+    });
+
+    it('links each web column out, and dashes the ones the lead has not got', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        const linkedin = cellUnder(/^linkedin$/i, 'Karim Traders').querySelector('a')!;
+        expect(linkedin).toHaveAttribute('href', 'https://www.linkedin.com/in/karim/');
+        expect(linkedin).toHaveAttribute('rel', 'noopener noreferrer');
+        // The scheme and the `www.` are dropped from the label, not the href.
+        expect(linkedin).toHaveTextContent('linkedin.com/in/karim');
+
+        expect(cellUnder(/^facebook$/i, 'Karim Traders')).toHaveTextContent('—');
+        expect(cellUnder(/x \(twitter\)/i, 'Karim Traders')).toHaveTextContent('—');
+    });
+
+    it('sends a scheme-less website out to the web, not to a route inside the app', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        const website = cellUnder(/^website$/i, 'Karim Traders').querySelector('a')!;
+        expect(website).toHaveAttribute('href', 'https://karimtraders.com.bd');
+        expect(website).toHaveTextContent('karimtraders.com.bd');
+    });
+});
