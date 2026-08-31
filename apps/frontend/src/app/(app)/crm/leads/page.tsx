@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, Clock } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, Clock, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
@@ -31,6 +31,7 @@ interface Lead {
     name: string;
     mobile: string;
     email: string | null;
+    address: string | null;
     /** Legacy enum value; `categoryOption` is authoritative once backfilled. */
     category: string | null;
     categoryOption: TaxonomyRef;
@@ -46,6 +47,11 @@ interface Lead {
     /** The lead's owner. `nextStepAssignee` below is the *activity* assignee. */
     assignee: { id: string; name: string } | null;
     nextStepAssignee: { id: string; name: string } | null;
+    remarks: string | null;
+    linkedin_url: string | null;
+    fb_url: string | null;
+    x_url: string | null;
+    website_url: string | null;
     custom_fields: Record<string, string> | null;
     created_at: string;
 }
@@ -63,6 +69,54 @@ function scoreBadgeColor(score: number): string {
     if (score >= 70) return 'bg-emerald-50 text-emerald-700';
     if (score >= 40) return 'bg-amber-50 text-amber-700';
     return 'bg-gray-100 text-gray-600';
+}
+
+/**
+ * A free-text column's cell. The table lays out with a fixed width per column,
+ * so an address or a paragraph of remarks would otherwise wrap the row several
+ * lines tall; truncating keeps the row height uniform and the full text stays
+ * reachable through the tooltip and the detail page.
+ */
+function TextCell({ value }: { value: string | null }) {
+    if (!value) return <>—</>;
+    return (
+        <span className="block truncate text-gray-700" title={value}>
+            {value}
+        </span>
+    );
+}
+
+/**
+ * These are stored as free text (the DTO validates them as strings, not URLs),
+ * so a lead may well carry `linkedin.com/in/someone` with no scheme. Left as-is
+ * that resolves against the app's own origin, so the link would navigate inside
+ * the ERP instead of out to the profile.
+ */
+function externalHref(url: string): string {
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+/** The scheme and a leading `www.` carry no information at this width. */
+function linkLabel(url: string): string {
+    return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+}
+
+/** A web/social column's cell. Exports still carry the raw URL — they read the
+ *  accessor value, not this. */
+function LinkCell({ url }: { url: string | null }) {
+    if (!url) return <>—</>;
+    return (
+        <a
+            href={externalHref(url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={url}
+            className="inline-flex max-w-full items-center gap-1 text-blue-600 hover:text-blue-800"
+        >
+            <ExternalLink className="w-3 h-3 shrink-0" />
+            <span className="truncate">{linkLabel(url)}</span>
+        </a>
+    );
 }
 
 const leadStatusTone: Record<string, StatusBadgeTone> = {
@@ -333,6 +387,15 @@ function LeadsPage() {
             enableSorting: false,
             meta: { hideOnMobile: true },
         }),
+        columnHelper.accessor('address', {
+            header: m.fields.address,
+            cell: (info) => <TextCell value={info.getValue()} />,
+            // Like every column added below, absent from the backend's
+            // LEAD_SORTABLE allowlist — a sort request would be ignored and the
+            // list would silently come back in the default order.
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
         // Explicit `id`s: an accessor function has no inferable key, and the id
         // is what DataTable emits as `sortBy` for the server-side sort.
         columnHelper.accessor((row) => row.categoryOption?.name ?? row.category ?? '', {
@@ -395,6 +458,39 @@ function LeadsPage() {
             header: m.columns.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
             enableSorting: false,
+        }),
+        // Free text and the web links land at the end of the declared order:
+        // they are the widest columns and the least often scanned. Whoever wants
+        // them earlier can drag them, and the table remembers it.
+        columnHelper.accessor('remarks', {
+            header: m.fields.remarks,
+            cell: (info) => <TextCell value={info.getValue()} />,
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('linkedin_url', {
+            header: m.fields.linkedinUrl,
+            cell: (info) => <LinkCell url={info.getValue()} />,
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('fb_url', {
+            header: m.fields.fbUrl,
+            cell: (info) => <LinkCell url={info.getValue()} />,
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('x_url', {
+            header: m.fields.xUrl,
+            cell: (info) => <LinkCell url={info.getValue()} />,
+            enableSorting: false,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('website_url', {
+            header: m.fields.websiteUrl,
+            cell: (info) => <LinkCell url={info.getValue()} />,
+            enableSorting: false,
+            meta: { hideOnMobile: true },
         }),
         ...customFieldDefs.map((def) =>
             columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
