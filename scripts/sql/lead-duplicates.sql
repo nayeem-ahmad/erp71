@@ -7,13 +7,16 @@
 -- Get it onto the box first (it is not in the deployed branch):
 --     scp scripts/sql/lead-duplicates.sql root@66.116.236.127:/tmp/
 --
+-- `tenant_id` is exact and is what you should normally use — tenant NAMES ARE
+-- NOT UNIQUE (production has two tenants both named "Outsource to BD").
+--
 --   REPORT (read-only, always safe) — on the VPS, from /opt/erp71:
 --     docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml \
 --       exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
---       -v tenant="%outsource%bd%" -v confirm=no -f -' < /tmp/lead-duplicates.sql
+--       -v tenant_id="3f7d7826-fa79-4512-9e20-f5916a9821d9" -v confirm=no -f -' < /tmp/lead-duplicates.sql
 --
 --   DELETE — same command with confirm=yes:
---       ... -v tenant="%outsource%bd%" -v confirm=yes -f -' < /tmp/lead-duplicates.sql
+--       ... -v tenant_id="3f7d7826-fa79-4512-9e20-f5916a9821d9" -v confirm=yes -f -' < /tmp/lead-duplicates.sql
 --
 -- The inner single quotes matter: POSTGRES_USER/POSTGRES_DB are set inside the
 -- db container, not in the host shell, so the expansion has to happen there.
@@ -43,9 +46,10 @@
 \else
   \set confirm no
 \endif
-\if :{?tenant}
+\if :{?tenant_id}
+\elif :{?tenant}
 \else
-  \echo '!! No -v tenant=<pattern> given. Aborting.'
+  \echo '!! Give -v tenant_id=<uuid> (exact, preferred) or -v tenant=<name pattern>. Aborting.'
   \quit
 \endif
 
@@ -79,8 +83,16 @@ $fn$ LANGUAGE plpgsql IMMUTABLE;
 
 \echo ''
 \echo '=== 1. Tenant match ========================================================'
+-- Prefer the exact id: tenant names are not unique. Production carries two
+-- tenants both literally named "Outsource to BD", so a name pattern cannot
+-- address one of them and the single-tenant guard below would refuse the delete.
+\if :{?tenant_id}
+CREATE TEMP TABLE t_tenants AS
+SELECT id, name FROM "Tenant" WHERE id = :'tenant_id';
+\else
 CREATE TEMP TABLE t_tenants AS
 SELECT id, name FROM "Tenant" WHERE name ILIKE :'tenant';
+\endif
 SELECT id, name FROM t_tenants ORDER BY name;
 
 CREATE TEMP TABLE t_leads AS
