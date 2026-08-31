@@ -21,7 +21,23 @@ export type VoiceNavTargetId =
     | 'products'
     | 'customers'
     | 'suppliers'
-    | 'inventory';
+    | 'inventory'
+    | 'crm'
+    | 'leads'
+    | 'lead-entry'
+    | 'contacts'
+    | 'crm-activities'
+    | 'crm-campaigns'
+    | 'projects'
+    | 'tasks'
+    | 'sprints'
+    | 'project-boards'
+    | 'hour-logs'
+    | 'hr'
+    | 'employees'
+    | 'attendance'
+    | 'leaves'
+    | 'salary-payments';
 
 export interface VoiceNavRoute {
     id: VoiceNavTargetId;
@@ -188,5 +204,110 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         id: 'inventory',
         path: '/inventory',
         aliases: ['inventory', 'stock', 'ইনভেন্টরি', 'স্টক', 'inventori'],
+    },
+    {
+        id: 'crm',
+        path: '/crm',
+        aliases: ['crm', 'crm dashboard', 'সিআরএম'],
+    },
+    {
+        id: 'leads',
+        path: '/crm/leads',
+        aliases: ['leads', 'lead', 'lead list', 'all leads', 'লিড', 'লিড তালিকা', 'prospek'],
+    },
+    {
+        id: 'lead-entry',
+        path: '/crm/leads/new',
+        aliases: [
+            'new lead',
+            'add lead',
+            'create lead',
+            'lead entry',
+            'নতুন লিড',
+            'লিড এন্ট্রি',
+            'prospek baharu',
+        ],
+    },
+    {
+        id: 'contacts',
+        path: '/crm/contacts',
+        aliases: ['contacts', 'contact', 'contact list', 'কন্টাক্ট', 'kenalan'],
+    },
+    {
+        id: 'crm-activities',
+        path: '/crm/activities',
+        aliases: [
+            'activities',
+            'activity',
+            'crm activities',
+            'follow up',
+            'follow ups',
+            'ফলো আপ',
+            'কার্যক্রম',
+        ],
+    },
+    {
+        id: 'crm-campaigns',
+        path: '/crm/campaigns',
+        aliases: ['campaigns', 'campaign', 'ক্যাম্পেইন', 'kempen'],
+    },
+    {
+        id: 'projects',
+        path: '/projects',
+        aliases: ['projects', 'project', 'project list', 'all projects', 'প্রকল্প', 'প্রজেক্ট', 'projek'],
+    },
+    {
+        id: 'tasks',
+        path: '/projects/tasks',
+        aliases: ['tasks', 'task', 'task list', 'my tasks', 'টাস্ক', 'কাজ', 'tugasan'],
+    },
+    {
+        id: 'sprints',
+        path: '/projects/sprints',
+        aliases: ['sprints', 'sprint', 'স্প্রিন্ট'],
+    },
+    {
+        id: 'project-boards',
+        path: '/projects/boards',
+        aliases: ['boards', 'board', 'project board', 'project boards', 'kanban', 'বোর্ড'],
+    },
+    {
+        id: 'hour-logs',
+        path: '/projects/hour-logs',
+        aliases: [
+            'hour log',
+            'hour logs',
+            'time log',
+            'time logs',
+            'timesheet',
+            'log hours',
+            'ঘণ্টা লগ',
+            'log jam',
+        ],
+    },
+    {
+        id: 'hr',
+        path: '/hr',
+        aliases: ['hr', 'human resources', 'এইচআর'],
+    },
+    {
+        id: 'employees',
+        path: '/hr/employees',
+        aliases: ['employees', 'employee', 'employee list', 'staff', 'কর্মচারী', 'pekerja'],
+    },
+    {
+        id: 'attendance',
+        path: '/hr/attendance',
+        aliases: ['attendance', 'উপস্থিতি', 'হাজিরা', 'kehadiran'],
+    },
+    {
+        id: 'leaves',
+        path: '/hr/leaves',
+        aliases: ['leaves', 'leave', 'leave request', 'ছুটি', 'cuti'],
+    },
+    {
+        id: 'salary-payments',
+        path: '/hr/salary-payments',
+        aliases: ['salary payment', 'salary payments', 'payroll', 'salary', 'বেতন', 'বেতন প্রদান', 'gaji'],
     },
 ];
