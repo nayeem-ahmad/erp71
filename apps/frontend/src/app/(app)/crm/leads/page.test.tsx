@@ -270,6 +270,34 @@ describe('LeadsPage — filters arriving in the URL', () => {
         expect(selectByOption('All statuses').value).toBe('');
     });
 
+    it('opens showing only the leads with no email address', async () => {
+        searchParams = new URLSearchParams('emailPresence=empty');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(
+                expect.objectContaining({ emailPresence: 'empty' }),
+            ),
+        );
+        // Visible in its control, like the filters above — the list says why it
+        // is short and can be widened without editing the address bar.
+        expect(selectByOption('All emails').value).toBe('empty');
+    });
+
+    it('ignores an email presence value the API would reject', async () => {
+        searchParams = new URLSearchParams('emailPresence=maybe');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(
+                expect.objectContaining({ emailPresence: undefined }),
+            ),
+        );
+        expect(selectByOption('All emails').value).toBe('');
+    });
+
     it('leaves every filter open when no params are given', async () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
