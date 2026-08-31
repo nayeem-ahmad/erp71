@@ -1245,7 +1245,7 @@ export const api = {
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; emailPresence?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.source) query.set('source', params.source);
@@ -1253,6 +1253,7 @@ export const api = {
         if (params?.priority) query.set('priority', params.priority);
         if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
         if (params?.emailPresence) query.set('emailPresence', params.emailPresence);
+        if (params?.staleDays) query.set('staleDays', String(params.staleDays));
         if (params?.myActionsToday) query.set('myActionsToday', 'true');
         if (params?.search) query.set('search', params.search);
         if (params?.page) query.set('page', String(params.page));

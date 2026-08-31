@@ -385,6 +385,9 @@ export const crmHrMessages = {
             noEmail: 'بلا بريد إلكتروني',
             myTodaysActions: 'قائمة مهامي اليوم',
             myTodaysActionsEmpty: 'لا يوجد عملاء محتملون بخطوات تالية مسنَدة إليك اليوم.',
+            openPipeline: 'المسار المفتوح',
+            noActivityFilter: 'لا نشاط منذ {days} يومًا',
+            noActivityEmpty: 'لا يوجد عملاء محتملون بدون نشاط منذ {days} يومًا.',
             statuses: {
                 NEW: 'جديد',
                 CONTACTED: 'تم التواصل',

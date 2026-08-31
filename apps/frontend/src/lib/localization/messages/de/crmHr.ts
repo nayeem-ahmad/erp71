@@ -385,6 +385,9 @@ export const crmHrMessages = {
             noEmail: "Ohne E-Mail",
             myTodaysActions: "Meine Aufgabenliste für heute",
             myTodaysActionsEmpty: "Keine Leads mit nächsten Schritten, die Ihnen für heute zugewiesen sind.",
+            openPipeline: "Offene Pipeline",
+            noActivityFilter: "Keine Aktivität seit {days} Tagen",
+            noActivityEmpty: "Keine Leads ohne Aktivität seit {days} Tagen.",
             statuses: {
                 NEW: "Neu",
                 CONTACTED: "Kontaktiert",

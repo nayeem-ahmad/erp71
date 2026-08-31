@@ -385,6 +385,9 @@ export const crmHrMessages = {
             noEmail: "ইমেইল নেই",
             myTodaysActions: "আজকের আমার কাজের তালিকা",
             myTodaysActionsEmpty: "আজ আপনার জন্য নির্ধারিত পরবর্তী পদক্ষেপ সহ কোনো লিড নেই।",
+            openPipeline: "চলমান পাইপলাইন",
+            noActivityFilter: "{days} দিনে কোনো কার্যক্রম নেই",
+            noActivityEmpty: "{days} দিন ধরে কার্যক্রমহীন কোনো লিড নেই।",
             statuses: {
                 NEW: "নতুন",
                 CONTACTED: "যোগাযোগ করা",

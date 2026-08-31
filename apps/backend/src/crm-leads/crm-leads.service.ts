@@ -16,6 +16,10 @@ import {
     LeadEmailPresence,
     LeadPriority,
     LeadStatus,
+    OPEN_LEAD_STATUS_FILTER,
+    OPEN_LEAD_STATUSES,
+    staleLeadCutoff,
+    staleLeadWhere,
     UNASSIGNED_OWNER_FILTER,
     UpdateLeadDto,
 } from './crm-leads.dto';
@@ -394,6 +398,7 @@ export class CrmLeadsService {
             priority?: string;
             assignedTo?: string;
             emailPresence?: string;
+            staleDays?: number;
             myActionsToday?: boolean;
             userId?: string;
             search?: string;
@@ -412,7 +417,10 @@ export class CrmLeadsService {
         const where: any = { tenant_id: tenantId };
         const created = createdAtRange(opts.createdFrom, opts.createdTo);
         if (created) where.created_at = created;
-        if (opts.status) where.status = opts.status;
+        // The "open pipeline" sentinel stands for the three non-terminal stages at
+        // once, which no single status value can express.
+        if (opts.status === OPEN_LEAD_STATUS_FILTER) where.status = { in: [...OPEN_LEAD_STATUSES] };
+        else if (opts.status) where.status = opts.status;
         // Filters carry a taxonomy row id. A stale bookmarked filter naming a
         // deleted row simply matches nothing, rather than erroring.
         if (opts.source) where.source_id = opts.source;
@@ -444,6 +452,14 @@ export class CrmLeadsService {
                 { email: { contains: opts.search, mode: 'insensitive' } },
                 { remarks: { contains: opts.search, mode: 'insensitive' } },
             ];
+        }
+        // Nested under AND, not merged into the top-level OR above: staleness is
+        // itself an OR, and dropping it there would turn "matches the search AND
+        // is stale" into "matches the search OR is stale". Appended rather than
+        // assigned, or it would drop whatever the email-presence filter above
+        // put there.
+        if (opts.staleDays) {
+            where.AND = [...(where.AND ?? []), staleLeadWhere(staleLeadCutoff(opts.staleDays))];
         }
 
         const [items, total] = await Promise.all([

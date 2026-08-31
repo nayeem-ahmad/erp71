@@ -211,7 +211,10 @@ export default function CrmDashboard({
                     count: pipeline.stale,
                     days: pipeline.stale_after_days,
                 }),
-                href: routes.crm.leads,
+                // Both halves of what was counted: open leads, untouched for the
+                // window the label just named. "View all" landing on the whole
+                // lead list would show a number the tile never claimed.
+                href: `${routes.crm.leads}?status=open&staleDays=${pipeline.stale_after_days}`,
                 cta: crm.viewAll,
             });
         }
@@ -221,7 +224,10 @@ export default function CrmDashboard({
                 tone: 'blue',
                 value: String(pipeline.unassigned),
                 label: formatMessage(crm.attnUnassignedLeads, { count: pipeline.unassigned }),
-                href: routes.crm.leads,
+                // `unassigned` is the owner-filter sentinel the leads list already
+                // understands; `status=open` matches the count, which ignores
+                // leads that were converted or lost while nobody owned them.
+                href: `${routes.crm.leads}?status=open&assignedTo=unassigned`,
                 cta: crm.viewAll,
             });
         }
