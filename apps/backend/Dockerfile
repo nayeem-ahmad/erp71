@@ -105,10 +105,20 @@ ENV GIT_SHA=$GIT_SHA
 # any tenant that already has a schedule and any employee that already has an
 # assignment, so it never overrides a deliberate change.
 #
+# sync:lead-identity backfills Lead.mobile_norm/email_norm/linkedin_norm, the
+# normalized columns carrying the per-tenant unique indexes that stop duplicate
+# leads. It is REQUIRED, not a nicety: production applies schema with `db push`
+# below, never `prisma migrate deploy`, so the migration that backfills these
+# columns never runs here. Without this step the columns stay NULL on every
+# existing lead, the indexes guard nothing, and the old raw-mobile unique that
+# db push drops is not replaced. Only the oldest lead claiming a value is filled
+# in, so pre-existing duplicates cannot make it throw. See
+# prisma/sync-lead-identity.ts.
+#
 # sync:salary-components seeds the standard Bangladeshi salary split (HRIS
 # Phase 5) for tenants that have none, so the structure screen opens with
 # something recognisable rather than blank. It deliberately does NOT backfill
 # per-employee structures — resolveStructure already falls back to
 # Employee.basic_salary, and stamping a structure nobody chose would silently
 # stop that field affecting pay. See prisma/sync-salary-components.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
