@@ -13,6 +13,15 @@ export function normalizeVoicePhrase(text: string): string {
         .trim();
 }
 
+/**
+ * Whole-word containment. A plain `includes` lets a short alias match the middle of an
+ * unrelated word — `hr` inside “three”, `pos` inside “post the sale” — and short aliases
+ * are exactly what people speak for the newer modules (hr, crm, lead, task).
+ */
+function containsPhrase(haystack: string, needle: string): boolean {
+    return ` ${haystack} `.includes(` ${needle} `);
+}
+
 function aliasMatchScore(transcript: string, alias: string): number {
     const normalizedAlias = normalizeVoicePhrase(alias);
     if (!normalizedAlias || normalizedAlias.length < 2) return 0;
@@ -21,7 +30,7 @@ function aliasMatchScore(transcript: string, alias: string): number {
         return 10_000 + normalizedAlias.length;
     }
 
-    if (transcript.includes(normalizedAlias)) {
+    if (containsPhrase(transcript, normalizedAlias)) {
         return 5_000 + normalizedAlias.length;
     }
 
