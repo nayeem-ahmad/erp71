@@ -124,6 +124,64 @@ describe('CrmActivitiesService', () => {
                 }),
             );
         });
+
+        /**
+         * The neglected-leads tile reads `last_activity_at`. Scheduling the next
+         * call is exactly the work it should credit, and before this the only
+         * thing that moved a lead out of the count was marking it Lost.
+         */
+        it('stamps the lead as worked when planning, without claiming contact', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call Karim',
+                due_at: '2026-08-20T10:00:00Z',
+            } as any);
+
+            const touch = db.lead.update.mock.calls.find(
+                ([args]: [any]) => args.data.last_activity_at !== undefined,
+            );
+            expect(touch[0].data.last_activity_at).toBeInstanceOf(Date);
+            // Planning a call is not making one.
+            expect(touch[0].data.last_contacted_at).toBeUndefined();
+        });
+
+        /**
+         * Logging a call that already happened is the quickest path in the UI and
+         * used to stamp nothing: only complete() marked contact, so the lead read
+         * as never contacted, scored nothing for recency, and stayed in the stale
+         * list until somebody marked it Lost.
+         */
+        it('stamps contact as well when the activity is logged already done', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW', priority: 'MEDIUM' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.count.mockResolvedValue(1);
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch-call',
+                code: 'CALL',
+                name: 'Call',
+                is_active: true,
+            });
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                status: 'DONE',
+                summary: 'Spoke to Karim',
+                channel: 'CALL',
+            } as any);
+
+            const stamp = db.lead.update.mock.calls.find(
+                ([args]: [any]) => args.data.last_contacted_at !== undefined,
+            );
+            expect(stamp[0].data.last_contacted_at).toBeInstanceOf(Date);
+            // Contact is a kind of activity, so both move together — a lead we
+            // just spoke to can never read as untouched.
+            expect(stamp[0].data.last_activity_at).toEqual(stamp[0].data.last_contacted_at);
+        });
     });
 
     describe('create() — assignee', () => {

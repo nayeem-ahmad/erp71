@@ -100,7 +100,7 @@ export const adminMessages = {
             },
             remindersPage: {
                 title: "পেমেন্ট রিমাইন্ডার",
-                subtitle: "টেন্যান্টদের পাঠানো পেমেন্ট রিমাইন্ডার (লেজার লেনদেন নয়)",
+                subtitle: "টেন্যান্টদের পাঠানো রিমাইন্ডার সাইকেলের ইমেইল — পেমেন্ট রিমাইন্ডার ও সব পরিশোধিত নোট (লেজার লেনদেন নয়)",
                 allTenants: "সব টেন্যান্ট",
                 noReminders: "এখনও কোনো পেমেন্ট রিমাইন্ডার নেই।",
                 loadFailed: "রিমাইন্ডার লোড করতে ব্যর্থ।",
@@ -114,6 +114,7 @@ export const adminMessages = {
                 eventType: {
                     PAYMENT_RETRY_REMINDER: "সাবস্ক্রিপশন রিমাইন্ডার",
                     ADDON_PAYMENT_RETRY_REMINDER: "অ্যাড-অন রিমাইন্ডার",
+                    SUBSCRIPTION_GOOD_STANDING: "সব পরিশোধিত",
                 },
             },
             loadFailed: "টেন্যান্ট লোড করতে ব্যর্থ।",

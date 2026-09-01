@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: 'تذكيرات الدفع',
-            subtitle: 'تذكيرات إعادة محاولة الدفع المرسلة إلى المنشآت (وليست حركات دفترية)',
+            subtitle: 'رسائل دورة التذكير المرسلة إلى المنشآت — إعادة محاولة الدفع وإشعارات عدم وجود مستحقات (وليست حركات دفترية)',
             allTenants: 'كل المنشآت',
             noReminders: 'لا توجد تذكيرات دفع بعد.',
             loadFailed: 'تعذّر تحميل التذكيرات.',
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: 'تذكير اشتراك',
                 ADDON_PAYMENT_RETRY_REMINDER: 'تذكير إضافة',
+                SUBSCRIPTION_GOOD_STANDING: 'لا مستحقات',
             },
         },
         loadFailed: 'تعذّر تحميل المنشآت.',

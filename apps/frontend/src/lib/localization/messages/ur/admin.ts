@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: 'ادائیگی کی یاد دہانیاں',
-            subtitle: 'ٹیننٹ کو بھیجی گئی ادائیگی کی یاد دہانیاں (کھاتے کے لین دین نہیں)',
+            subtitle: 'ٹیننٹ کو بھیجی گئی یاد دہانی سائیکل کی ای میلز — ادائیگی کی یاد دہانیاں اور تمام ادائیگی مکمل نوٹس (کھاتے کے لین دین نہیں)',
             allTenants: 'تمام ٹیننٹ',
             noReminders: 'ابھی کوئی ادائیگی کی یاد دہانی نہیں۔',
             loadFailed: 'یاد دہانیاں لوڈ نہیں ہو سکیں۔',
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: 'سبسکرپشن کی یاد دہانی',
                 ADDON_PAYMENT_RETRY_REMINDER: 'ایڈ آن کی یاد دہانی',
+                SUBSCRIPTION_GOOD_STANDING: 'تمام ادائیگی مکمل',
             },
         },
         loadFailed: 'ٹیننٹ لوڈ نہیں ہو سکے۔',

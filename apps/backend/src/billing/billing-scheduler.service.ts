@@ -8,12 +8,28 @@ import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { NotificationsService } from '../notifications/notifications.service';
 import { applySubscriptionDiscount } from './discount.util';
 
+/** The slice of a subscription the good-standing note needs, shared by both passes. */
+interface ReminderCycleSubscription {
+    tenant_id: string;
+    current_period_end: Date;
+    plan: { name: string; monthly_price: unknown } | null;
+    tenant: { name: string; owner: { id: string; email: string | null } | null } | null;
+}
+
 @Injectable()
 export class BillingSchedulerService {
     private readonly logger = new Logger(BillingSchedulerService.name);
 
     private get graceDays(): number {
         return parseInt(process.env.DUNNING_GRACE_DAYS ?? '7', 10);
+    }
+
+    /**
+     * How often a tenant with nothing outstanding hears the good-standing note.
+     * Roughly one per billing cycle by default; 0 (or less) turns the note off.
+     */
+    private get goodStandingIntervalDays(): number {
+        return parseInt(process.env.SUBSCRIPTION_GOOD_STANDING_DAYS ?? '30', 10);
     }
 
     constructor(
@@ -24,7 +40,9 @@ export class BillingSchedulerService {
         private readonly notifications: NotificationsService,
     ) {}
 
-    // Run daily at 08:00 — remind PAST_DUE tenants to retry payment before dunning cancels them
+    // Run daily at 08:00 — the subscription reminder cycle: PAST_DUE tenants are asked to
+    // retry payment before dunning cancels them; tenants with nothing due get a
+    // good-standing note instead of a payment knock.
     @Cron('0 8 * * *')
     async retryFailedPayments(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.BILLING_RETRY, () => this.retryFailedPaymentsImpl());
@@ -49,6 +67,21 @@ export class BillingSchedulerService {
 
         for (const sub of retryCandidates) {
             try {
+                // What the tenant actually owes this cycle, after any admin-granted
+                // discount — the same figure the period-fee job posted to the ledger.
+                const amount = applySubscriptionDiscount(
+                    Number(sub.plan?.monthly_price ?? 0),
+                    sub.discount_type,
+                    sub.discount_value != null ? Number(sub.discount_value) : null,
+                );
+
+                // Nothing is owed (a fully discounted plan) — thank them instead of
+                // knocking for a payment that isn't due.
+                if (amount <= 0) {
+                    await this.sendGoodStandingNote(sub);
+                    continue;
+                }
+
                 const recentReminder = await this.db.billingEvent.findFirst({
                     where: {
                         tenant_id: sub.tenant_id,
@@ -61,7 +94,6 @@ export class BillingSchedulerService {
                     continue;
                 }
 
-                const amount = Number(sub.plan?.monthly_price ?? 0);
                 const ownerEmail = sub.tenant?.owner?.email;
 
                 await this.db.billingEvent.create({
@@ -78,7 +110,7 @@ export class BillingSchedulerService {
                     },
                 });
 
-                if (ownerEmail && amount > 0) {
+                if (ownerEmail) {
                     await this.email.sendPaymentRetryReminder(
                         ownerEmail,
                         sub.tenant.name,
@@ -89,7 +121,7 @@ export class BillingSchedulerService {
                 }
 
                 const owner = sub.tenant?.owner;
-                if (owner?.id && amount > 0) {
+                if (owner?.id) {
                     const formattedAmount = amount.toFixed(2);
                     await this.notifications.create(
                         sub.tenant_id,
@@ -106,6 +138,106 @@ export class BillingSchedulerService {
                 this.logger.error(`Payment retry reminder failed for tenant ${sub.tenant_id}: ${err}`);
             }
         }
+
+        await this.sendGoodStandingNotesImpl();
+    }
+
+    /**
+     * The other half of the reminder cycle: tenants on a paid plan who are settled up
+     * hear something positive — what they're on, when it renews — rather than nothing
+     * at all. Free-plan tenants stay out of it; they are never billed, so a
+     * “you're all paid up” note would be noise.
+     */
+    private async sendGoodStandingNotesImpl(): Promise<void> {
+        if (this.goodStandingIntervalDays <= 0) return;
+
+        const settledSubscriptions = await this.db.tenantSubscription.findMany({
+            where: {
+                status: { in: ['ACTIVE', 'TRIALING'] },
+                // A subscription winding down gets its own cancellation mail, not a
+                // note promising the next renewal.
+                cancel_at_period_end: false,
+                plan: { monthly_price: { gt: 0 } },
+            },
+            include: {
+                tenant: { include: { owner: true } },
+                plan: true,
+            },
+        });
+
+        for (const sub of settledSubscriptions) {
+            try {
+                await this.sendGoodStandingNote(sub);
+            } catch (err) {
+                this.logger.error(`Good-standing note failed for tenant ${sub.tenant_id}: ${err}`);
+            }
+        }
+    }
+
+    /**
+     * Sends the positive counterpart of a payment reminder, at most once per
+     * `SUBSCRIPTION_GOOD_STANDING_DAYS`. Logged as a BillingEvent like the payment
+     * reminders are, both for that dedup and for the admin reminder log — with no
+     * amount, because nothing is owed.
+     */
+    private async sendGoodStandingNote(sub: ReminderCycleSubscription): Promise<void> {
+        if (this.goodStandingIntervalDays <= 0) return;
+        if (Number(sub.plan?.monthly_price ?? 0) <= 0) return;
+
+        const owner = sub.tenant?.owner;
+        if (!owner?.id && !owner?.email) return;
+
+        const sentSince = new Date(Date.now() - this.goodStandingIntervalDays * 24 * 60 * 60 * 1000);
+        const recentNote = await this.db.billingEvent.findFirst({
+            where: {
+                tenant_id: sub.tenant_id,
+                event_type: 'SUBSCRIPTION_GOOD_STANDING',
+                created_at: { gte: sentSince },
+            },
+        });
+        if (recentNote) return;
+
+        const planName = sub.plan?.name ?? 'subscription';
+        const renewsAt = sub.current_period_end;
+
+        await this.db.billingEvent.create({
+            data: {
+                tenant_id: sub.tenant_id,
+                provider_name: 'manual',
+                external_event_id: `good_standing:${sub.tenant_id}:${new Date().toISOString().slice(0, 10)}`,
+                event_type: 'SUBSCRIPTION_GOOD_STANDING',
+                status: 'SENT',
+                amount: null,
+                currency: 'BDT',
+                payload: {
+                    plan_name: planName,
+                    renews_at: renewsAt.toISOString(),
+                    interval_days: this.goodStandingIntervalDays,
+                },
+            },
+        });
+
+        if (owner?.email) {
+            await this.email.sendSubscriptionGoodStanding(
+                owner.email,
+                sub.tenant!.name,
+                planName,
+                renewsAt,
+            );
+        }
+
+        if (owner?.id) {
+            await this.notifications.create(
+                sub.tenant_id,
+                owner.id,
+                'SUBSCRIPTION_GOOD_STANDING',
+                'Your subscription is all set',
+                `Nothing is due for ${sub.tenant!.name}. Your ${planName} plan is paid up and renews on ${renewsAt.toDateString()}.`,
+                '/billing',
+            );
+        }
+
+        this.logger.log(`Good-standing note sent for tenant ${sub.tenant_id}`);
     }
 
     /** Add-on analog of retryFailedPaymentsImpl — reminds tenants with a PAST_DUE add-on subscription. */

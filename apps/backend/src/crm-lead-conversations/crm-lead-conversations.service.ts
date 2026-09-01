@@ -6,6 +6,7 @@ import {
 } from './crm-lead-conversations.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
+import { touchLeadActivity } from '../crm-leads/lead-activity.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
@@ -126,7 +127,9 @@ export class CrmLeadConversationsService {
         // earliest PLANNED CrmActivity in R1 — CrmActivitiesService.recalculateRollup
         // is its sole writer, and a hand-typed value here would drift from the
         // activity list the columns are supposed to cache.
-        const leadUpdate: Record<string, unknown> = { last_contacted_at: now };
+        // `last_activity_at` alongside it: contact is a kind of activity, and the
+        // neglected-leads tile reads the wider column.
+        const leadUpdate: Record<string, unknown> = { last_contacted_at: now, last_activity_at: now };
 
         const conversationCount = await this.db.leadConversation.count({ where: { lead_id: dto.lead_id } });
         leadUpdate.score = computeLeadScore(
@@ -281,6 +284,13 @@ export class CrmLeadConversationsService {
         if (!existing) throw new NotFoundException('Lead conversation not found');
 
         const channel = dto.type ? await this.resolveChannel(tenantId, dto.type) : null;
+
+        // Rewriting what was said is working the lead, so it counts as activity —
+        // but not as contact: correcting yesterday's summary today is not a second
+        // conversation, and stamping `last_contacted_at` here would let a lead be
+        // kept permanently "warm", and permanently top-scored, without anyone
+        // picking up the phone.
+        await touchLeadActivity(this.db, existing.lead_id);
 
         return this.db.leadConversation.update({
             where: { id },

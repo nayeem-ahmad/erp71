@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: "Recordatorios de pago",
-            subtitle: "Recordatorios de reintento de pago enviados a los espacios (no son apuntes del libro mayor)",
+            subtitle: "Correos del ciclo de recordatorios enviados a los espacios: reintentos de pago y avisos de todo pagado (no son apuntes del libro mayor)",
             allTenants: "Todos los espacios",
             noReminders: "Aún no hay recordatorios de pago.",
             loadFailed: "No se pudieron cargar los recordatorios.",
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: "Recordatorio de suscripción",
                 ADDON_PAYMENT_RETRY_REMINDER: "Recordatorio de complemento",
+                SUBSCRIPTION_GOOD_STANDING: "Todo pagado",
             },
         },
         loadFailed: "No se pudieron cargar los espacios.",

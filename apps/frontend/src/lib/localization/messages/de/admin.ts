@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: "Zahlungserinnerungen",
-            subtitle: "An Mandanten gesendete Erinnerungen zu Zahlungswiederholungen (keine Kontobuchungen)",
+            subtitle: "E-Mails des Erinnerungslaufs an Mandanten — Zahlungswiederholungen und Alles-bezahlt-Hinweise (keine Kontobuchungen)",
             allTenants: "Alle Mandanten",
             noReminders: "Noch keine Zahlungserinnerungen.",
             loadFailed: "Die Erinnerungen konnten nicht geladen werden.",
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: "Abo-Erinnerung",
                 ADDON_PAYMENT_RETRY_REMINDER: "Add-on-Erinnerung",
+                SUBSCRIPTION_GOOD_STANDING: "Alles bezahlt",
             },
         },
         loadFailed: "Die Mandanten konnten nicht geladen werden.",

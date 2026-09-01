@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CreateCrmFollowUpDto, UpdateCrmFollowUpDto } from './crm-follow-ups.dto';
 import { paginate } from '../common/pagination.dto';
+import { touchLeadActivity } from '../crm-leads/lead-activity.util';
 
 /**
  * Legacy CRM follow-ups. The birthday and reorder crons that used to live here
@@ -46,6 +47,11 @@ export class CrmFollowUpsService {
 
     async create(tenantId: string, userId: string, dto: CreateCrmFollowUpDto) {
         const target = await this.validateFollowUpTarget(tenantId, dto.customer_id, dto.lead_id);
+
+        // Scheduling the next touch is working the lead, so the neglected-leads
+        // tile has to see it — even from this legacy table, which stays writable
+        // through R2 and so can still be the only trace of a lead being worked.
+        await touchLeadActivity(this.db, target.lead_id);
 
         return this.db.crmFollowUp.create({
             data: {
@@ -137,6 +143,12 @@ export class CrmFollowUpsService {
         const data: any = { ...dto };
         if (dto.due_at) data.due_at = new Date(dto.due_at);
         if (dto.status === 'DONE') data.completed_at = new Date();
+
+        // Rescheduling or closing it is activity too. Not contact, even on DONE:
+        // this table records only that the prompt was cleared, never whether
+        // anyone was actually reached — CrmActivity.complete() is the path that
+        // knows that, and it is the one that stamps `last_contacted_at`.
+        await touchLeadActivity(this.db, existing.lead_id);
 
         return this.db.crmFollowUp.update({
             where: { id },

@@ -11,6 +11,7 @@ describe('BillingSchedulerService', () => {
     const email = {
         sendSubscriptionCancelled: jest.fn().mockResolvedValue(undefined),
         sendPaymentRetryReminder: jest.fn().mockResolvedValue(undefined),
+        sendSubscriptionGoodStanding: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     const audit = {
@@ -55,7 +56,13 @@ describe('BillingSchedulerService', () => {
         jobTracker.track.mockImplementation((_name: string, fn: () => any) => fn());
         service = new BillingSchedulerService(db, email, audit, jobTracker, notifications);
         delete process.env.DUNNING_GRACE_DAYS;
+        delete process.env.SUBSCRIPTION_GOOD_STANDING_DAYS;
 
+        email.sendPaymentRetryReminder.mockResolvedValue(undefined);
+        email.sendSubscriptionGoodStanding.mockResolvedValue(undefined);
+        // The reminder cycle queries subscriptions twice: PAST_DUE candidates, then
+        // settled ones. Tests seed the first pass with mockResolvedValueOnce.
+        db.tenantSubscription.findMany.mockResolvedValue([]);
         db.subscriptionPlan.findUnique.mockResolvedValue(freePlan);
         db.tenantSubscription.update.mockResolvedValue({});
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
@@ -66,7 +73,7 @@ describe('BillingSchedulerService', () => {
     });
 
     it('sends payment retry reminders for PAST_DUE subscriptions within the grace window', async () => {
-        db.tenantSubscription.findMany.mockResolvedValue([
+        db.tenantSubscription.findMany.mockResolvedValueOnce([
             makeSubscription({
                 current_period_end: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
             }),
@@ -95,13 +102,148 @@ describe('BillingSchedulerService', () => {
     });
 
     it('skips payment retry reminders when one was sent in the last 24 hours', async () => {
-        db.tenantSubscription.findMany.mockResolvedValue([makeSubscription()]);
+        db.tenantSubscription.findMany.mockResolvedValueOnce([makeSubscription()]);
         db.billingEvent.findFirst.mockResolvedValueOnce({ id: 'recent-reminder' });
 
         await service.retryFailedPayments();
 
         expect(db.billingEvent.create).not.toHaveBeenCalled();
         expect(email.sendPaymentRetryReminder).not.toHaveBeenCalled();
+    });
+
+    describe('good-standing note', () => {
+        const settled = (overrides?: Record<string, unknown>) => makeSubscription({
+            status: 'ACTIVE',
+            current_period_end: new Date('2026-10-01T00:00:00Z'),
+            plan: { id: 'plan-premium', code: 'PREMIUM', name: 'Premium', monthly_price: 3999 },
+            ...overrides,
+        });
+
+        it('sends a positive note — no amount, no payment knock — to a settled tenant', async () => {
+            db.tenantSubscription.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([settled()]);
+
+            await service.retryFailedPayments();
+
+            expect(db.billingEvent.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    event_type: 'SUBSCRIPTION_GOOD_STANDING',
+                    status: 'SENT',
+                    amount: null,
+                }),
+            });
+            expect(email.sendSubscriptionGoodStanding).toHaveBeenCalledWith(
+                'owner@example.com',
+                'Tenant One',
+                'Premium',
+                new Date('2026-10-01T00:00:00Z'),
+            );
+            expect(email.sendPaymentRetryReminder).not.toHaveBeenCalled();
+            expect(notifications.create).toHaveBeenCalledWith(
+                'tenant-1',
+                'user-1',
+                'SUBSCRIPTION_GOOD_STANDING',
+                'Your subscription is all set',
+                expect.stringContaining('Premium'),
+                '/billing',
+            );
+        });
+
+        it('queries only settled, non-cancelling subscriptions on a paid plan', async () => {
+            db.tenantSubscription.findMany.mockResolvedValue([]);
+
+            await service.retryFailedPayments();
+
+            expect(db.tenantSubscription.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+                where: expect.objectContaining({
+                    status: { in: ['ACTIVE', 'TRIALING'] },
+                    cancel_at_period_end: false,
+                    plan: { monthly_price: { gt: 0 } },
+                }),
+            }));
+        });
+
+        it('sends at most one note per interval', async () => {
+            db.tenantSubscription.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([settled()]);
+            db.billingEvent.findFirst.mockResolvedValue({ id: 'recent-note' });
+
+            await service.retryFailedPayments();
+
+            expect(db.billingEvent.create).not.toHaveBeenCalled();
+            expect(email.sendSubscriptionGoodStanding).not.toHaveBeenCalled();
+        });
+
+        it('is switched off by SUBSCRIPTION_GOOD_STANDING_DAYS=0', async () => {
+            process.env.SUBSCRIPTION_GOOD_STANDING_DAYS = '0';
+            db.tenantSubscription.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([settled()]);
+
+            await service.retryFailedPayments();
+
+            expect(db.tenantSubscription.findMany).toHaveBeenCalledTimes(1);
+            expect(email.sendSubscriptionGoodStanding).not.toHaveBeenCalled();
+        });
+
+        it('greets a PAST_DUE tenant whose discount leaves nothing owed instead of chasing payment', async () => {
+            db.tenantSubscription.findMany.mockResolvedValueOnce([
+                makeSubscription({
+                    current_period_end: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    plan: { id: 'plan-premium', code: 'PREMIUM', name: 'Premium', monthly_price: 3999 },
+                    discount_type: 'PERCENTAGE',
+                    discount_value: 100,
+                } as any),
+            ]);
+
+            await service.retryFailedPayments();
+
+            expect(email.sendPaymentRetryReminder).not.toHaveBeenCalled();
+            expect(email.sendSubscriptionGoodStanding).toHaveBeenCalledWith(
+                'owner@example.com',
+                'Tenant One',
+                'Premium',
+                expect.any(Date),
+            );
+        });
+
+        it('leaves free-plan tenants out of the cycle entirely', async () => {
+            db.tenantSubscription.findMany.mockResolvedValueOnce([
+                makeSubscription({
+                    current_period_end: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    plan: { id: 'plan-free', code: 'FREE', name: 'Free', monthly_price: 0 },
+                }),
+            ]);
+
+            await service.retryFailedPayments();
+
+            expect(db.billingEvent.create).not.toHaveBeenCalled();
+            expect(email.sendPaymentRetryReminder).not.toHaveBeenCalled();
+            expect(email.sendSubscriptionGoodStanding).not.toHaveBeenCalled();
+        });
+
+        it('reminds for the discounted amount, not the list price', async () => {
+            db.tenantSubscription.findMany.mockResolvedValueOnce([
+                makeSubscription({
+                    current_period_end: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    discount_type: 'PERCENTAGE',
+                    discount_value: 25,
+                } as any),
+            ]);
+
+            await service.retryFailedPayments();
+
+            expect(email.sendPaymentRetryReminder).toHaveBeenCalledWith(
+                'owner@example.com',
+                'Tenant One',
+                2999.25,
+                'BDT',
+                7,
+            );
+        });
     });
 
     it('cancels overdue PAST_DUE subscriptions and sends cancellation email', async () => {

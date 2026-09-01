@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: 'Payment Reminders',
-            subtitle: 'Payment retry reminders sent to tenants (not ledger transactions)',
+            subtitle: 'Reminder-cycle emails sent to tenants — payment retries and all-paid-up notes (not ledger transactions)',
             allTenants: 'All tenants',
             noReminders: 'No payment reminders yet.',
             loadFailed: 'Failed to load reminders.',
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: 'Subscription reminder',
                 ADDON_PAYMENT_RETRY_REMINDER: 'Add-on reminder',
+                SUBSCRIPTION_GOOD_STANDING: 'All paid up',
             },
         },
         loadFailed: 'Failed to load tenants.',

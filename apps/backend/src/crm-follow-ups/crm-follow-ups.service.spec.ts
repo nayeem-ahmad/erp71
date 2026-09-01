@@ -12,7 +12,7 @@ describe('CrmFollowUpsService', () => {
     beforeEach(async () => {
         db = {
             customer: { findFirst: jest.fn(), findMany: jest.fn() },
-            lead: { findFirst: jest.fn() },
+            lead: { findFirst: jest.fn(), update: jest.fn() },
             crmFollowUp: {
                 create: jest.fn(),
                 findFirst: jest.fn(),
@@ -59,6 +59,64 @@ describe('CrmFollowUpsService', () => {
                     due_at: '2026-08-01',
                 }),
             ).rejects.toThrow(NotFoundException);
+        });
+
+        /**
+         * This table is legacy — CrmActivity replaced it in R1 — but it stays
+         * writable through R2, so it can still be the only record of a lead being
+         * worked. The neglected-leads tile reads `last_activity_at`, so a
+         * follow-up scheduled here has to move it or the lead reads as untouched.
+         */
+        it('stamps the lead as worked when a follow-up is scheduled', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'lead-1', status: 'NEW' });
+            db.crmFollowUp.create.mockResolvedValue({ id: 'fu-1' });
+
+            await service.create('tenant-1', 'user-1', {
+                lead_id: 'lead-1',
+                type: 'GENERAL' as any,
+                title: 'Chase the quote',
+                due_at: '2026-09-10',
+            });
+
+            expect(db.lead.update).toHaveBeenCalledWith({
+                where: { id: 'lead-1' },
+                data: { last_activity_at: expect.any(Date) },
+            });
+        });
+
+        it('leaves a customer-targeted follow-up alone', async () => {
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1' });
+            db.crmFollowUp.create.mockResolvedValue({ id: 'fu-1' });
+
+            await service.create('tenant-1', 'user-1', {
+                customer_id: 'cust-1',
+                type: 'GENERAL' as any,
+                title: 'Chase the quote',
+                due_at: '2026-09-10',
+            });
+
+            // Customers carry no `last_activity_at` — nothing reads a neglect
+            // signal off them, so there is nothing to stamp.
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('update()', () => {
+        it('stamps the lead as worked when a follow-up is rescheduled or closed', async () => {
+            db.crmFollowUp.findFirst.mockResolvedValue({
+                id: 'fu-1',
+                tenant_id: 'tenant-1',
+                lead_id: 'lead-1',
+            });
+            db.crmFollowUp.update.mockResolvedValue({ id: 'fu-1' });
+
+            await service.update('tenant-1', 'fu-1', { status: 'DONE' } as any);
+
+            const leadUpdate = db.lead.update.mock.calls[0][0];
+            expect(leadUpdate.data.last_activity_at).toBeInstanceOf(Date);
+            // Not contact, even on DONE: this table records only that the prompt
+            // was cleared, never whether anyone was actually reached.
+            expect(leadUpdate.data.last_contacted_at).toBeUndefined();
         });
     });
 

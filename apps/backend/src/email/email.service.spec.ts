@@ -81,6 +81,26 @@ describe('EmailService', () => {
         ).rejects.toThrow('Brevo API 401');
     });
 
+    it('sends a good-standing note with no amount and no payment ask', async () => {
+        process.env.BREVO_API_KEY = 'xkeysib-test-key';
+        process.env.EMAIL_FROM = 'notify@erp71.com';
+        process.env.FRONTEND_URL = 'https://app.erp71.com';
+        (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 201, text: async () => '' });
+
+        await service.sendSubscriptionGoodStanding(
+            'owner@example.com',
+            'Tenant One',
+            'Premium',
+            new Date('2026-10-01T00:00:00Z'),
+        );
+
+        const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(body.subject).toContain('nothing due');
+        expect(body.htmlContent).toContain('Premium');
+        expect(body.htmlContent).toContain('https://app.erp71.com/billing');
+        expect(body.htmlContent).not.toMatch(/retry payment|outstanding payment|pay now/i);
+    });
+
     describe('tenant sender identity', () => {
         const brevoBody = () => JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
 

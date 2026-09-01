@@ -12,11 +12,23 @@ import { createdAtRange, dhakaDayRange } from '../common/created-range.util';
 import { UNASSIGNED_OWNER_FILTER } from '../crm-leads/crm-leads.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
+import { touchLeadActivity } from '../crm-leads/lead-activity.util';
 import {
     CompleteCrmActivityDto,
     CreateCrmActivityDto,
     UpdateCrmActivityDto,
 } from './crm-activities.dto';
+
+/**
+ * The lead behind an activity target, or null for a customer one.
+ *
+ * `resolveTarget` returns `{ lead_id }` or `{ customer_id }` — a union, so
+ * neither key can be read off it directly. This keeps the narrowing in one place
+ * rather than at every call site that only cares about leads.
+ */
+function leadIdOf(target: { lead_id?: string } | { customer_id?: string }): string | null {
+    return 'lead_id' in target ? (target.lead_id ?? null) : null;
+}
 
 export const ACTIVITY_INCLUDES = {
     lead: { select: { id: true, name: true, mobile: true } },
@@ -206,6 +218,20 @@ export class CrmActivitiesService {
             include: ACTIVITY_INCLUDES,
         });
 
+        // Planning one, logging one, or editing the next step are all "somebody
+        // worked this lead" — the signal the neglected-leads tile reads.
+        //
+        // A DONE row is contact as well, and used to be missed here: only
+        // complete() stamped `last_contacted_at`, so logging a call that had
+        // already happened — the quickest path in the UI — left the lead reading
+        // as never contacted, unscored for recency and stuck in the stale list.
+        if (status === 'DONE') {
+            await this.stampLastContacted(this.db, target, now);
+            await this.rescoreLead(this.db, tenantId, leadIdOf(target));
+        } else {
+            await touchLeadActivity(this.db, leadIdOf(target), now);
+        }
+
         await this.recalculateRollup(this.db, tenantId, target);
         await this.notifyAssignee(tenantId, userId, activity);
         return activity;
@@ -300,6 +326,9 @@ export class CrmActivitiesService {
         const target = existing.lead_id
             ? { lead_id: existing.lead_id }
             : { customer_id: existing.customer_id };
+        // Rescheduling the follow-up or rewriting the next step is activity, not
+        // contact — nobody has spoken to anyone by editing a plan.
+        await touchLeadActivity(this.db, existing.lead_id);
         await this.recalculateRollup(this.db, tenantId, target);
         return updated;
     }
@@ -380,13 +409,21 @@ export class CrmActivitiesService {
     }
 
     /**
-     * Completion now counts as contact. Before the merge only logging a
-     * conversation did, so the reorder cron re-fired at customers the team had
-     * called and marked done.
+     * Completion counts as contact, and so does logging an already-done activity
+     * — create() calls this too. Before the merge only logging a conversation
+     * did, so the reorder cron re-fired at customers the team had called and
+     * marked done.
      */
     private async stampLastContacted(tx: any, target: any, at: Date) {
         if (target.lead_id) {
-            await tx.lead.update({ where: { id: target.lead_id }, data: { last_contacted_at: at } });
+            // Both columns in one write: contact is a kind of activity, so a lead
+            // we just spoke to can never show up in the "no activity" list.
+            // Customers below have no `last_activity_at` — nothing reads a
+            // neglect signal off them, the reorder cron watches contact instead.
+            await tx.lead.update({
+                where: { id: target.lead_id },
+                data: { last_contacted_at: at, last_activity_at: at },
+            });
             return;
         }
         await tx.customer.update({

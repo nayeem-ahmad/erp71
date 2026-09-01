@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: "भुगतान रिमाइंडर",
-            subtitle: "टेनेंट को भेजे गए भुगतान पुनःप्रयास रिमाइंडर (खाता-बही लेन-देन नहीं)",
+            subtitle: "टेनेंट को भेजे गए रिमाइंडर साइकिल के ईमेल — भुगतान पुनःप्रयास और सब भुगतान हो गया सूचनाएं (खाता-बही लेन-देन नहीं)",
             allTenants: "सभी टेनेंट",
             noReminders: "अभी कोई भुगतान रिमाइंडर नहीं।",
             loadFailed: "रिमाइंडर लोड नहीं हो सके।",
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: "सदस्यता रिमाइंडर",
                 ADDON_PAYMENT_RETRY_REMINDER: "ऐड-ऑन रिमाइंडर",
+                SUBSCRIPTION_GOOD_STANDING: "सब भुगतान हो गया",
             },
         },
         loadFailed: "टेनेंट लोड नहीं हो सके।",
