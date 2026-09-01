@@ -183,20 +183,21 @@ export default function AdminSupportPage() {
 
     return (
         <div className="h-full flex flex-col overflow-hidden bg-canvas">
-            <div className="flex-1 flex overflow-hidden p-4 gap-4 min-h-0">
+            <PageHeader
+                title={m.title}
+                subtitle={formatMessage(m.subtitle, { total })}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.admin,
+                    m.title,
+                    'admin',
+                )}
+                className="shrink-0 px-3 md:px-4 pt-3 md:pt-4"
+            />
+
+            <div className="flex-1 flex overflow-hidden p-3 md:p-4 gap-4 min-h-0">
                 {/* Thread list */}
                 <div className="w-80 shrink-0 flex flex-col gap-3 overflow-hidden">
-                    <PageHeader
-                        title={m.title}
-                        subtitle={formatMessage(m.subtitle, { total })}
-                        breadcrumbs={modulePageBreadcrumbs(
-                            t.dashboardHome.breadcrumbHome,
-                            t.sidebar.modules.admin,
-                            m.title,
-                            'admin',
-                        )}
-                    />
-
                     {error && (
                         <div className="rounded-md border border-danger bg-danger-light px-3 py-2 text-xs font-semibold text-danger-text">
                             {error}
