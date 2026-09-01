@@ -1172,7 +1172,7 @@ describe('CrmLeadsService', () => {
             const { where } = db.lead.findMany.mock.calls[0][0];
             expect(where.AND).toHaveLength(2);
             expect(where.AND[0]).toEqual(NO_EMAIL);
-            expect(where.AND[1].OR[0]).toHaveProperty('last_contacted_at');
+            expect(where.AND[1].OR[0]).toHaveProperty('last_activity_at');
         });
     });
 
@@ -1201,7 +1201,7 @@ describe('CrmLeadsService', () => {
             expect(db.lead.findMany.mock.calls[0][0].where.status).toBe('QUALIFIED');
         });
 
-        it('matches leads last contacted before the window, and those never contacted', async () => {
+        it('matches leads last worked before the window, and those never worked', async () => {
             jest.useFakeTimers().setSystemTime(new Date('2026-08-31T09:00:00.000Z'));
             try {
                 await service.findAll('tenant-1', { staleDays: 14 } as any);
@@ -1213,12 +1213,15 @@ describe('CrmLeadsService', () => {
             expect(db.lead.findMany.mock.calls[0][0].where.AND).toEqual([
                 {
                     OR: [
-                        { last_contacted_at: { lt: cutoff } },
-                        // A bare `last_contacted_at: { lt: cutoff }` excludes NULL in
-                        // SQL, dropping every never-contacted lead — the strongest
+                        // `last_activity_at`, not `last_contacted_at`: scheduling a
+                        // follow-up or rewriting the next step is working the lead,
+                        // and the tile this backs is labelled "no activity".
+                        { last_activity_at: { lt: cutoff } },
+                        // A bare `last_activity_at: { lt: cutoff }` excludes NULL in
+                        // SQL, dropping every never-worked lead — the strongest
                         // neglect signal there is. created_at keeps a lead filed
                         // this morning out of it.
-                        { last_contacted_at: null, created_at: { lt: cutoff } },
+                        { last_activity_at: null, created_at: { lt: cutoff } },
                     ],
                 },
             ]);
@@ -1233,7 +1236,7 @@ describe('CrmLeadsService', () => {
             }
 
             const [branch] = db.lead.findMany.mock.calls[0][0].where.AND;
-            expect(branch.OR[0].last_contacted_at.lt).toEqual(new Date('2026-08-01T09:00:00.000Z'));
+            expect(branch.OR[0].last_activity_at.lt).toEqual(new Date('2026-08-01T09:00:00.000Z'));
         });
 
         it('keeps the stale clause out of the search OR', async () => {
@@ -1243,7 +1246,7 @@ describe('CrmLeadsService', () => {
 
             const { where } = db.lead.findMany.mock.calls[0][0];
             expect(where.OR).toHaveLength(4);
-            expect(where.OR.every((clause: any) => !('last_contacted_at' in clause))).toBe(true);
+            expect(where.OR.every((clause: any) => !('last_activity_at' in clause))).toBe(true);
             expect(where.AND).toHaveLength(1);
         });
 

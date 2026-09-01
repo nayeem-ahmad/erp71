@@ -246,6 +246,49 @@ describe('CrmLeadConversationsService', () => {
             expect(leadUpdate.last_contacted_at).toBeInstanceOf(Date);
             expect(leadUpdate.score).toEqual(expect.any(Number));
         });
+
+        // Contact is a kind of activity, so both columns move together. Without
+        // this, a lead phoned this morning could still be counted by a tile
+        // labelled "no activity in 14 days".
+        it('stamps last_activity_at alongside last_contacted_at', async () => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue(callChannel);
+
+            await service.create('tenant-1', 'user-1', {
+                lead_id: 'lead-1',
+                type: 'CALL',
+                summary: 's',
+            } as any);
+
+            const leadUpdate = db.lead.update.mock.calls[0][0].data;
+            expect(leadUpdate.last_activity_at).toEqual(leadUpdate.last_contacted_at);
+        });
+    });
+
+    describe('update()', () => {
+        /**
+         * Correcting the conversation history is working the lead, and the
+         * neglected-leads tile has to see it — the user-visible symptom was a
+         * lead whose notes were rewritten weekly sitting in the 14-day count
+         * with no way out short of marking it Lost.
+         */
+        it('stamps the lead as worked when the summary is edited', async () => {
+            db.leadConversation.findFirst.mockResolvedValue({
+                id: 'conv-1',
+                tenant_id: 'tenant-1',
+                lead_id: 'lead-1',
+            });
+            db.leadConversation.update.mockResolvedValue({ id: 'conv-1' });
+
+            await service.update('tenant-1', 'conv-1', { summary: 'corrected' } as any);
+
+            const leadUpdate = db.lead.update.mock.calls[0][0];
+            expect(leadUpdate.where).toEqual({ id: 'lead-1' });
+            expect(leadUpdate.data.last_activity_at).toBeInstanceOf(Date);
+            // Not contact: rewriting yesterday's note is not a second call, and
+            // stamping it would keep the lead permanently top-scored for recency
+            // without anyone picking up the phone.
+            expect(leadUpdate.data.last_contacted_at).toBeUndefined();
+        });
     });
 
     describe('getSummary()', () => {

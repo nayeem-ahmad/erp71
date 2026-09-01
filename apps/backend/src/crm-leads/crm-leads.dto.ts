@@ -47,16 +47,23 @@ export function staleLeadCutoff(days: number = STALE_AFTER_DAYS, now: Date = new
  *
  * Shared by the leads list filter and the CRM dashboard's stale tile so the two
  * cannot drift: the tile's count and the list its "View all" opens are the same
- * query. A bare `last_contacted_at: { lt: cutoff }` would be wrong on its own —
- * in SQL that EXCLUDES NULL, dropping every lead nobody has ever contacted,
- * which is the strongest neglect signal there is. The second branch falls back
- * to `created_at` so a lead filed this morning is not immediately flagged.
+ * query. A bare `last_activity_at: { lt: cutoff }` would be wrong on its own —
+ * in SQL that EXCLUDES NULL, dropping every lead nobody has ever worked, which
+ * is the strongest neglect signal there is. The second branch falls back to
+ * `created_at` so a lead filed this morning is not immediately flagged.
+ *
+ * Reads `last_activity_at`, not `last_contacted_at`. The tile has always been
+ * labelled "No activity in N days" but used to ask "have we spoken to them?",
+ * so a lead whose owner had rewritten the conversation notes, scheduled a
+ * follow-up and lined up a next step still sat in the count with nothing the
+ * user could do about it short of marking it Lost. Every contact also stamps
+ * `last_activity_at`, so this is a superset of the old rule, never a narrowing.
  */
 export function staleLeadWhere(cutoff: Date) {
     return {
         OR: [
-            { last_contacted_at: { lt: cutoff } },
-            { last_contacted_at: null, created_at: { lt: cutoff } },
+            { last_activity_at: { lt: cutoff } },
+            { last_activity_at: null, created_at: { lt: cutoff } },
         ],
     };
 }

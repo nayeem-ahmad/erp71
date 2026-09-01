@@ -128,4 +128,11 @@ ENV GIT_SHA=$GIT_SHA
 # this every pre-existing thread reads as "Unknown user" in Admin > Inbox and the
 # per-user filter finds only threads opened after the deploy. The opener is taken
 # from the thread's earliest message. See prisma/sync-support-thread-creators.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:lead-activity backfills Lead.last_activity_at, "when did anyone last work
+# this lead" — the column behind the CRM dashboard's 14-day neglected-leads tile
+# and GET /crm/leads?staleDays=N. REQUIRED for the same reason as the two above:
+# db push adds the column, never the migration that fills it, so without this the
+# column is NULL everywhere and the tile counts the whole back catalogue as
+# neglected until each lead is next touched. See prisma/sync-lead-activity.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

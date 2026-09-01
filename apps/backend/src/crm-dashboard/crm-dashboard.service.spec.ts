@@ -80,14 +80,14 @@ describe('CrmDashboardService', () => {
             expect(result.pipeline.avg_days_to_convert).toBeNull();
         });
 
-        it('counts a never-contacted lead as stale only once it has aged', async () => {
+        it('counts a never-worked lead as stale only once it has aged', async () => {
             await service.getOverview(TENANT, {});
 
             const staleCall = db.lead.count.mock.calls.find(
                 ([args]: [any]) => Array.isArray(args?.where?.OR),
             );
             expect(staleCall).toBeDefined();
-            const [untouched] = staleCall[0].where.OR.filter((c: any) => c.last_contacted_at === null);
+            const [untouched] = staleCall[0].where.OR.filter((c: any) => c.last_activity_at === null);
             expect(untouched.created_at.lt).toBeInstanceOf(Date);
         });
 

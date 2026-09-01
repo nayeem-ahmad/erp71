@@ -2342,7 +2342,24 @@ model Lead {
   /// to resolve, and the rollup only ever needs the id.
   next_activity_id      String?
   assigned_to           String?
+  /// When somebody last actually reached the person behind this lead. Written by
+  /// the paths that record real contact — logging a conversation, completing or
+  /// logging a done activity — and read by lead scoring's recency weight. Do NOT
+  /// widen it to cover record edits: `last_activity_at` below exists for those.
   last_contacted_at     DateTime?
+  /// When somebody last *worked* this lead: logged or edited a conversation,
+  /// created or edited an activity, scheduled a follow-up, or completed one.
+  /// A superset of `last_contacted_at` — every contact is also activity.
+  ///
+  /// Kept apart from `last_contacted_at` because the two answer different
+  /// questions. "Has anyone touched this?" drives the dashboard's 14-day
+  /// neglected-leads tile and `GET /crm/leads?staleDays=N`; "have we spoken to
+  /// them?" drives the score. Folding them together would let typing a next step
+  /// score a lead as freshly engaged when nobody has called it in months.
+  ///
+  /// NULL on a lead nobody has worked since it was filed; the stale query falls
+  /// back to `created_at` there, so a lead created this morning is not flagged.
+  last_activity_at      DateTime?
   /// When the lead reached a terminal status (CONVERTED or LOST); null while it is
   /// still open. `status` says which of the two it was, so one column serves both.
   /// Written by every path that sets a terminal status and cleared when a lead is
