@@ -21,8 +21,12 @@ jest.mock('@/lib/api', () => ({
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         getTeamMembers: jest.fn(),
         getMe: jest.fn(),
+        getLeads: jest.fn(),
+        searchCustomers: jest.fn(),
+        createCrmActivity: jest.fn(),
     },
 }));
+jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { api } = require('@/lib/api');
@@ -181,5 +185,68 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
 
         expect(screen.getByRole('button', { name: /created · any time/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /^due · /i })).toBeInTheDocument();
+    });
+});
+
+
+/**
+ * The list is where a salesperson already is when they finish a call, so the two
+ * write actions live here too — the composer asks which lead or customer it is
+ * against rather than making them open the record first.
+ */
+describe('CrmActivitiesPage — logging and scheduling without opening the lead', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+        api.getLeads.mockResolvedValue({ items: [{ id: 'lead-1', name: 'Karim Traders', mobile: '01700000000' }] });
+        api.searchCustomers.mockResolvedValue([]);
+        api.createCrmActivity.mockResolvedValue({ id: 'new' });
+    });
+
+    it('offers both write actions in the page header', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(screen.getByRole('button', { name: /log activity/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /schedule activity/i })).toBeInTheDocument();
+    });
+
+    it('asks which lead or customer, since the list spans every record', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(screen.getByRole('button', { name: /schedule activity/i }));
+
+        expect(await screen.findByPlaceholderText('Search by name or phone')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    it('reloads the list and the counters once something is filed', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        const listCalls = api.getAllCrmActivities.mock.calls.length;
+
+        fireEvent.click(screen.getByRole('button', { name: /schedule activity/i }));
+        fireEvent.change(await screen.findByPlaceholderText('Search by name or phone'), {
+            target: { value: 'Karim' },
+        });
+        fireEvent.click(await screen.findByRole('button', { name: /Karim Traders/ }));
+        fireEvent.change(screen.getByPlaceholderText(/Call about the outstanding/), {
+            target: { value: 'Call Karim' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ lead_id: 'lead-1', subject: 'Call Karim' }),
+        );
+        // The row it just created has to appear without a manual refresh.
+        await waitFor(() =>
+            expect(api.getAllCrmActivities.mock.calls.length).toBeGreaterThan(listCalls),
+        );
+        expect(api.getCrmActivitySummary.mock.calls.length).toBeGreaterThan(1);
     });
 });

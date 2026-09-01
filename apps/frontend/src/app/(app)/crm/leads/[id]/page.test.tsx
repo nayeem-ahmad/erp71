@@ -107,10 +107,12 @@ describe('LeadDetailPage — owner and address', () => {
         ]);
     });
 
-    it('names the owner in the record header, without opening the editor', async () => {
+    it('names the owner in the contact column, without opening the editor', async () => {
         render(<LeadDetailPage />);
 
-        expect(await screen.findByText(/Lead Owner: Rifat/)).toBeInTheDocument();
+        // Label and value are separate <dt>/<dd> nodes in the narrow left column.
+        expect(await screen.findByText('Lead Owner')).toBeInTheDocument();
+        expect(screen.getByText('Rifat')).toBeInTheDocument();
         expect(screen.getByText('12 Gulshan Ave, Dhaka')).toBeInTheDocument();
     });
 
