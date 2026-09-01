@@ -100,7 +100,7 @@ export const adminMessages = {
         },
         remindersPage: {
             title: "Rappels de paiement",
-            subtitle: "Rappels de relance de paiement envoyés aux espaces (et non des écritures du grand livre)",
+            subtitle: "E-mails du cycle de rappel envoyés aux espaces : relances de paiement et notes « tout est réglé » (et non des écritures du grand livre)",
             allTenants: "Tous les espaces",
             noReminders: "Aucun rappel de paiement pour le moment.",
             loadFailed: "Impossible de charger les rappels.",
@@ -114,6 +114,7 @@ export const adminMessages = {
             eventType: {
                 PAYMENT_RETRY_REMINDER: "Rappel d'abonnement",
                 ADDON_PAYMENT_RETRY_REMINDER: "Rappel de module complémentaire",
+                SUBSCRIPTION_GOOD_STANDING: "Tout est réglé",
             },
         },
         loadFailed: "Impossible de charger les espaces.",

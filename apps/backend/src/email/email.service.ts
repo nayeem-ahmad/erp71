@@ -284,6 +284,28 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
         });
     }
 
+    /**
+     * The positive half of the reminder cycle — sent to a tenant who owes nothing,
+     * in place of a payment reminder. Deliberately carries no amount and no
+     * "pay now" call to action.
+     */
+    async sendSubscriptionGoodStanding(to: string, tenantName: string, planName: string, renewsAt: Date): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        await this.send({
+            to,
+            subject: `${tenantName} is all set — nothing due`,
+            html: `<h2>You're all paid up</h2>
+<p>Thank you for staying with ERP71. There is nothing outstanding on <strong>${escapeHtml(tenantName)}</strong> — your <strong>${escapeHtml(planName)}</strong> plan is active and renews on <strong>${renewsAt.toDateString()}</strong>.</p>
+<p>Nothing to do here. If it helps, here are a few places to get more out of your workspace:</p>
+<ul>
+  <li><a href="${frontendUrl}/dashboard">Today's sales and stock at a glance</a></li>
+  <li><a href="${frontendUrl}/sales/reports">Sales reports — see how the month is tracking</a></li>
+  <li><a href="${frontendUrl}/billing">Your plan and billing history</a></li>
+</ul>
+<p>Questions or ideas? Just reply to this email — we read every one.</p>`,
+        });
+    }
+
     async sendSubscriptionFeePosted(
         to: string,
         tenantName: string,

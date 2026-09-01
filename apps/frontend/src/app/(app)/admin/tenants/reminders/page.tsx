@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { BellRing, Loader2 } from 'lucide-react';
+import { BellRing, CheckCircle2, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
@@ -63,9 +63,12 @@ export default function AdminTenantRemindersPage() {
             header: rp.columns.type,
             cell: (info) => {
                 const type = info.getValue();
+                // The good-standing note is the one reminder that isn't a payment knock.
+                const isGoodStanding = type === 'SUBSCRIPTION_GOOD_STANDING';
+                const Icon = isGoodStanding ? CheckCircle2 : BellRing;
                 return (
-                    <StatusBadge tone="warning" className="gap-1">
-                        <BellRing className="w-2.5 h-2.5" />
+                    <StatusBadge tone={isGoodStanding ? 'success' : 'warning'} className="gap-1">
+                        <Icon className="w-2.5 h-2.5" />
                         {(rp.eventType as Record<string, string>)[type] ?? type}
                     </StatusBadge>
                 );

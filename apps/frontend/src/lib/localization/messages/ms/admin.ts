@@ -100,7 +100,7 @@ export const adminMessages = {
             },
             remindersPage: {
                 title: 'Peringatan Pembayaran',
-                subtitle: 'Peringatan cuba semula pembayaran yang dihantar kepada penyewa (bukan transaksi lejar)',
+                subtitle: 'E-mel kitaran peringatan kepada penyewa — cuba semula pembayaran dan nota semua telah dibayar (bukan transaksi lejar)',
                 allTenants: 'Semua penyewa',
                 noReminders: 'Belum ada peringatan pembayaran.',
                 loadFailed: 'Gagal memuatkan peringatan.',
@@ -114,6 +114,7 @@ export const adminMessages = {
                 eventType: {
                     PAYMENT_RETRY_REMINDER: 'Peringatan langganan',
                     ADDON_PAYMENT_RETRY_REMINDER: 'Peringatan add-on',
+                    SUBSCRIPTION_GOOD_STANDING: 'Semua telah dibayar',
                 },
             },
             loadFailed: 'Gagal memuatkan penyewa.',
