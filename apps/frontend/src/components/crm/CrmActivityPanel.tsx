@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, Pencil, PhoneCall, X } from 'lucide-react';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import CrmActivityComposer from './CrmActivityComposer';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -38,8 +39,6 @@ type Props = {
     onDraftConsumed?: () => void;
 };
 
-const emptyPlan = { subject: '', due_at: '', purpose: '', notes: '', assigned_to: '' };
-const emptyLog = { channel: '', summary: '', outcome: '' };
 const emptyComplete = {
     channel: '',
     summary: '',
@@ -88,11 +87,11 @@ export default function CrmActivityPanel({
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [planning, setPlanning] = useState(false);
-    const [plan, setPlan] = useState(emptyPlan);
-
-    const [logging, setLogging] = useState(false);
-    const [log, setLog] = useState(emptyLog);
+    // The Log / Schedule forms live in CrmActivityComposer, which the activities
+    // list also opens without a lead in hand. This panel only says which one.
+    const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
+    const [composerDraft, setComposerDraft] =
+        useState<{ channelCode?: string; summary: string } | null>(null);
 
     const [completing, setCompleting] = useState<CrmActivity | null>(null);
     const [done, setDone] = useState(emptyComplete);
@@ -103,7 +102,6 @@ export default function CrmActivityPanel({
 
     const { options: memberOptions, currentUserId } = useTeamMemberOptions(m.fields.me);
 
-    const planAssigneeId = useId();
     const editAssigneeId = useId();
     const nextSubjectId = useId();
     const nextDueId = useId();
@@ -130,11 +128,10 @@ export default function CrmActivityPanel({
 
     useEffect(() => {
         if (!draft) return;
-        const match = channels.find((c) => c.code === draft.channelCode);
-        setLog({ channel: match?.id ?? channels[0]?.id ?? '', summary: draft.summary, outcome: '' });
-        setLogging(true);
+        setComposerDraft(draft);
+        setComposing('log');
         onDraftConsumed?.();
-    }, [draft, channels, onDraftConsumed]);
+    }, [draft, onDraftConsumed]);
 
     const planned = rows
         .filter((r) => r.status === 'PLANNED')
@@ -142,51 +139,6 @@ export default function CrmActivityPanel({
     const history = rows
         .filter((r) => r.status !== 'PLANNED')
         .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
-
-    const savePlan = async () => {
-        if (!plan.subject.trim()) return;
-        setSaving(true);
-        try {
-            await api.createCrmActivity({
-                ...target,
-                subject: plan.subject.trim(),
-                due_at: plan.due_at || undefined,
-                purpose: plan.purpose || undefined,
-                notes: plan.notes || undefined,
-                assigned_to: plan.assigned_to || undefined,
-            });
-            setPlan(emptyPlan);
-            setPlanning(false);
-            toast.success(m.toast.scheduled);
-            await load();
-        } catch {
-            toast.error(m.toast.failed);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const saveLog = async () => {
-        if (!log.channel || !log.summary.trim()) return;
-        setSaving(true);
-        try {
-            await api.createCrmActivity({
-                ...target,
-                status: 'DONE',
-                channel: log.channel,
-                summary: log.summary.trim(),
-                outcome: log.outcome || undefined,
-            });
-            setLog(emptyLog);
-            setLogging(false);
-            toast.success(m.toast.logged);
-            await load();
-        } catch {
-            toast.error(m.toast.failed);
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const saveComplete = async () => {
         if (!completing || !done.channel || !done.summary.trim()) return;
@@ -287,16 +239,13 @@ export default function CrmActivityPanel({
             <div className="flex flex-wrap justify-end gap-2">
                 <Button
                     variant="secondary"
-                    onClick={() => { setLogging(true); setLog({ ...emptyLog, channel: channels[0]?.id ?? '' }); }}
+                    onClick={() => { setComposerDraft(null); setComposing('log'); }}
                     icon={<PhoneCall className="w-4 h-4" />}
                 >
                     {m.logActivity}
                 </Button>
                 <Button
-                    onClick={() => {
-                        setPlan({ ...emptyPlan, assigned_to: currentUserId ?? '' });
-                        setPlanning(true);
-                    }}
+                    onClick={() => { setComposerDraft(null); setComposing('schedule'); }}
                     icon={<CalendarPlus className="w-4 h-4" />}
                 >
                     {m.schedule}
@@ -412,90 +361,14 @@ export default function CrmActivityPanel({
                 </>
             )}
 
-            {planning && (
-                <ModalShell onBackdropClick={() => setPlanning(false)}>
-                    <ModalHeader title={m.schedule} onClose={() => setPlanning(false)} />
-                    <div className="space-y-3 p-4">
-                        <Field label={m.fields.subject} required>
-                            <Input
-                                value={plan.subject}
-                                onChange={(e) => setPlan({ ...plan, subject: e.target.value })}
-                                placeholder={m.fields.subjectPlaceholder}
-                            />
-                        </Field>
-                        <Field label={m.fields.dueAt}>
-                            <Input
-                                type="datetime-local"
-                                value={plan.due_at}
-                                onChange={(e) => setPlan({ ...plan, due_at: e.target.value })}
-                            />
-                        </Field>
-                        <Field label={m.fields.purpose}>
-                            <Select value={plan.purpose} onChange={(e) => setPlan({ ...plan, purpose: e.target.value })}>
-                                <option value="">{m.fields.noPurpose}</option>
-                                {purposes.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field label={m.fields.assignedTo} htmlFor={planAssigneeId}>
-                            <Select
-                                id={planAssigneeId}
-                                value={plan.assigned_to}
-                                onChange={(e) => setPlan({ ...plan, assigned_to: e.target.value })}
-                            >
-                                {memberOptions.map((mem) => (
-                                    <option key={mem.id} value={mem.id}>{mem.label}</option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field label={m.fields.notes}>
-                            <Textarea
-                                rows={2}
-                                value={plan.notes}
-                                onChange={(e) => setPlan({ ...plan, notes: e.target.value })}
-                            />
-                        </Field>
-                    </div>
-                    <ModalFooter>
-                        <Button variant="secondary" onClick={() => setPlanning(false)}>{t.common.cancel}</Button>
-                        <Button onClick={savePlan} loading={saving} disabled={!plan.subject.trim()}>
-                            {m.fields.save}
-                        </Button>
-                    </ModalFooter>
-                </ModalShell>
-            )}
-
-            {logging && (
-                <ModalShell onBackdropClick={() => setLogging(false)}>
-                    <ModalHeader title={m.logActivity} onClose={() => setLogging(false)} />
-                    <div className="space-y-3 p-4">
-                        <Field label={m.fields.channel} required>
-                            <Select value={log.channel} onChange={(e) => setLog({ ...log, channel: e.target.value })}>
-                                {channels.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field label={m.fields.summary} required>
-                            <Textarea
-                                rows={3}
-                                value={log.summary}
-                                onChange={(e) => setLog({ ...log, summary: e.target.value })}
-                                placeholder={m.fields.summaryPlaceholder}
-                            />
-                        </Field>
-                        <Field label={m.fields.outcome}>
-                            <Input value={log.outcome} onChange={(e) => setLog({ ...log, outcome: e.target.value })} />
-                        </Field>
-                    </div>
-                    <ModalFooter>
-                        <Button variant="secondary" onClick={() => setLogging(false)}>{t.common.cancel}</Button>
-                        <Button onClick={saveLog} loading={saving} disabled={!log.channel || !log.summary.trim()}>
-                            {m.fields.save}
-                        </Button>
-                    </ModalFooter>
-                </ModalShell>
+            {composing && (
+                <CrmActivityComposer
+                    mode={composing}
+                    target={target}
+                    draft={composerDraft}
+                    onClose={() => { setComposing(null); setComposerDraft(null); }}
+                    onSaved={load}
+                />
             )}
 
             {completing && (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Eye, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, Eye, PhoneCall, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -25,6 +25,7 @@ import {
     type StatusBadgeTone,
 } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import CrmActivityComposer from '@/components/crm/CrmActivityComposer';
 
 interface CrmActivityRow {
     id: string;
@@ -82,6 +83,9 @@ export default function CrmActivitiesPage() {
     const [assigneeFilter, setAssigneeFilter] = useState('');
     const [overdueOnly, setOverdueOnly] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    // Logging a call or planning one from here, rather than opening the lead
+    // first: the composer asks which lead or customer it is against.
+    const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
     // Opens on today's agenda. `createdRangeFromPreset` resolves the Dhaka
     // calendar day, so a shopkeeper's "today" is not UTC's.
     const [dueRange, setDueRange] = useState<CreatedRange | null>(() =>
@@ -232,11 +236,27 @@ export default function CrmActivitiesPage() {
                     'crm',
                 )}
                 actions={
-                    <Button
-                        variant="secondary"
-                        onClick={() => { void load(); loadSummary(); }}
-                        leftIcon={<RefreshCw className="h-4 w-4" />}
-                    />
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => { void load(); loadSummary(); }}
+                            leftIcon={<RefreshCw className="h-4 w-4" />}
+                            aria-label={t.common.refresh}
+                        />
+                        <Button
+                            variant="secondary"
+                            onClick={() => setComposing('log')}
+                            leftIcon={<PhoneCall className="h-4 w-4" />}
+                        >
+                            {t.crm.activities.logActivity}
+                        </Button>
+                        <Button
+                            onClick={() => setComposing('schedule')}
+                            leftIcon={<CalendarPlus className="h-4 w-4" />}
+                        >
+                            {t.crm.activities.scheduleActivity}
+                        </Button>
+                    </>
                 }
             />
 
@@ -311,6 +331,14 @@ export default function CrmActivitiesPage() {
                     data={rows}
                     title={m.title}
                     emptyMessage={m.emptyMessage}
+                />
+            )}
+
+            {composing && (
+                <CrmActivityComposer
+                    mode={composing}
+                    onClose={() => setComposing(null)}
+                    onSaved={() => { void load(); loadSummary(); }}
                 />
             )}
         </PageShell>
