@@ -4132,6 +4132,13 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** Spreadsheet import. Rows name a project, a board column and an assignee in words. */
+    importProjectTasks: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-tasks/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     updateProjectTask: (id: string, data: Record<string, unknown>) =>
         fetchWithAuth(`/project-tasks/${id}`, {
             method: 'PATCH',
@@ -4216,6 +4223,13 @@ export const api = {
         fetchWithAuth('/project-time', {
             method: 'POST',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Spreadsheet import. Every row is logged under the signed-in user's own name. */
+    importProjectTimeEntries: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-time/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
     updateProjectTimeEntry: (

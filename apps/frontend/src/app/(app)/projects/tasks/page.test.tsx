@@ -9,6 +9,7 @@ jest.mock('@/lib/api', () => ({
         getProjects: jest.fn().mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'P1' }] }),
         getProjectTasks: (...args: unknown[]) => getProjectTasks(...args),
         createProjectTask: jest.fn(),
+        importProjectTasks: jest.fn(),
     },
 }));
 
@@ -37,6 +38,9 @@ beforeEach(() => {
     getProjectTasks.mockResolvedValue({ items: [task()], total: 1, page: 1, limit: 25, pages: 1 });
     api.getProjects.mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'P1' }] });
     api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-new' });
+    api.importProjectTasks.mockReset().mockResolvedValue({
+        created: 0, updated: 0, skipped: 0, errors: [],
+    });
 });
 
 describe('Tasks page', () => {
@@ -90,6 +94,21 @@ describe('Tasks page', () => {
         // A new task has no assignee, so the default "assigned to me" list cannot
         // show it — it opens instead, rather than seeming to vanish.
         expect(await screen.findByTestId('task-detail-panel')).toHaveTextContent('task-new');
+    });
+
+    /**
+     * The rest of the module imports its lists through the shared dialog; a
+     * screen that can only be filled a row at a time is the odd one out.
+     */
+    it('offers the standard spreadsheet import', async () => {
+        render(<TasksPage />);
+        await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+
+        fireEvent.click(screen.getByRole('button', { name: /^import$/i }));
+
+        expect(await screen.findByText(/map fields/i)).toBeInTheDocument();
+        // The file names its columns in words, so nothing has to hold an id.
+        expect(screen.getByText(/upload/i)).toBeInTheDocument();
     });
 
     it('flags a missing project and title inline rather than posting them', async () => {

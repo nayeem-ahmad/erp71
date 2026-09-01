@@ -577,4 +577,145 @@ describe('ProjectTimeService', () => {
             expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
         });
     });
+
+    describe('importRows', () => {
+        beforeEach(() => {
+            db.project = {
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'project-1', code: 'ACME', short_name: null, name: 'Acme rebuild' },
+                ]),
+            };
+            db.projectTimeTag.findMany.mockResolvedValue([{ id: 'tag-1', name: 'Billable' }]);
+            db.projectTask.findFirst.mockResolvedValue(task);
+            // Nothing logged yet, so every row below is a create.
+            db.projectTimeEntry.findFirst.mockResolvedValue(null);
+        });
+
+        const run = (rows: Record<string, unknown>[], mode: 'skip' | 'upsert' = 'skip') =>
+            service.importRows(OWNER, rows, mode);
+
+        it('resolves a project code and a task title, and logs under the importer', async () => {
+            const result = await run([
+                {
+                    project: 'acme',
+                    task: 'Wire the till',
+                    workDate: '2026-08-03',
+                    hours: '3.5',
+                    note: 'Second pass',
+                    tags: 'billable',
+                },
+            ]);
+
+            expect(result).toMatchObject({ created: 1, errors: [] });
+            expect(db.projectTimeEntry.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        task_id: 'task-1',
+                        user_id: 'user-1',
+                        hours: 3.5,
+                        note: 'Second pass',
+                    }),
+                }),
+            );
+        });
+
+        it('derives the hours from a span, ignoring any figure beside it', async () => {
+            await run([
+                {
+                    project: 'ACME',
+                    task: 'Wire the till',
+                    workDate: '2026-08-03',
+                    hours: '99',
+                    startTime: '9:00',
+                    endTime: '11:30',
+                },
+            ]);
+
+            expect(db.projectTimeEntry.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ hours: 2.5 }) }),
+            );
+        });
+
+        it('refuses a row carrying neither hours nor a span', async () => {
+            const result = await run([
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-03' },
+            ]);
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual([
+                'Row 2: give hours, or both a start and an end time',
+            ]);
+        });
+
+        it('fails the row when no task on that project carries the title', async () => {
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            const result = await run([
+                { project: 'ACME', task: 'Ghost task', workDate: '2026-08-03', hours: 1 },
+            ]);
+
+            expect(result.errors).toEqual([
+                'Row 2: no task named "Ghost task" on that project',
+            ]);
+        });
+
+        it('resolves a title once however many rows name it', async () => {
+            await run([
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-03', hours: 1 },
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-04', hours: 2 },
+            ]);
+
+            // The import's own lookup is the one asking for nothing but the id;
+            // `create` makes its own richer read per entry, which is not what
+            // the cache is there to spare.
+            const titleLookups = db.projectTask.findFirst.mock.calls.filter(
+                ([args]: [any]) => args?.where?.title !== undefined,
+            );
+            expect(titleLookups).toHaveLength(1);
+        });
+
+        /**
+         * An hour log has no natural key, so its identity is the task, the day
+         * and the note together — which is what makes running the same file
+         * twice skip rather than double the hours.
+         */
+        it('skips an entry already logged for that task, day and note', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue({ id: 'entry-1' });
+
+            const result = await run([
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-03', hours: 1 },
+            ]);
+
+            expect(result).toMatchObject({ created: 0, skipped: 1 });
+            expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
+        });
+
+        it('only looks for a duplicate among the importer\'s own hours', async () => {
+            await run([
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-03', hours: 1 },
+            ]);
+
+            expect(db.projectTimeEntry.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        tenant_id: 'tenant-1',
+                        user_id: 'user-1',
+                        task_id: 'task-1',
+                    }),
+                }),
+            );
+        });
+
+        it('leaves a project the viewer cannot open out of the lookup entirely', async () => {
+            db.project.findMany.mockResolvedValue([]);
+
+            const result = await run([
+                { project: 'ACME', task: 'Wire the till', workDate: '2026-08-03', hours: 1 },
+            ]);
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual(['Row 2: no project matches "ACME"']);
+        });
+    });
+
 });

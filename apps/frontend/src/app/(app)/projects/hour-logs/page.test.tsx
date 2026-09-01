@@ -20,7 +20,16 @@ jest.mock('@/lib/api', () => ({
         logProjectTime: jest.fn(),
         updateProjectTimeEntry: jest.fn(),
         deleteProjectTimeEntry: jest.fn(),
+        importProjectTimeEntries: jest.fn(),
     },
+}));
+
+// The writers reach for Blob/URL plumbing jsdom has no use for; what matters
+// here is the matrix they are handed.
+const exportToCSV = jest.fn();
+jest.mock('@/components/data-table/export-utils', () => ({
+    ...jest.requireActual('@/components/data-table/export-utils'),
+    exportToCSV: (...args: unknown[]) => exportToCSV(...args),
 }));
 
 const toastError = jest.fn();
@@ -98,6 +107,10 @@ beforeEach(() => {
     api.deleteProjectTimeEntry.mockReset().mockResolvedValue({ success: true });
     api.updateProjectTimeEntry.mockReset().mockResolvedValue({});
     api.logProjectTime.mockReset().mockResolvedValue({});
+    api.importProjectTimeEntries.mockReset().mockResolvedValue({
+        created: 0, updated: 0, skipped: 0, errors: [],
+    });
+    exportToCSV.mockReset();
 });
 
 describe('Hour logs page', () => {
@@ -473,6 +486,60 @@ describe('Hour logs page', () => {
             render(<HourLogsPage />);
 
             expect(await screen.findByText('Billable')).toBeInTheDocument();
+        });
+    });
+
+    describe('import and export', () => {
+        it('offers the standard spreadsheet import', async () => {
+            render(<HourLogsPage />);
+            await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+            fireEvent.click(screen.getByRole('button', { name: /^import$/i }));
+
+            expect(await screen.findByText(/map fields/i)).toBeInTheDocument();
+        });
+
+        /**
+         * The day list folds sittings together and drops the quieter fields on a
+         * narrow screen. An export has to be the flat record behind it, or it is
+         * not the same data anyone was looking at.
+         */
+        it('exports one line per entry with the fields the rows fold away', async () => {
+            render(<HourLogsPage />);
+            await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+            fireEvent.click(screen.getByRole('button', { name: /^export$/i }));
+            fireEvent.click(await screen.findByRole('button', { name: /download/i }));
+
+            await waitFor(() => expect(exportToCSV).toHaveBeenCalled());
+            const [title, headers, rows] = exportToCSV.mock.calls[0];
+            expect(title).toBe('Hour Logs');
+            expect(headers).toEqual([
+                'Date', 'Project', 'Task', 'Person', 'Duration',
+                'Start time', 'End time', 'Tags', 'Note',
+            ]);
+            expect(rows).toEqual([
+                ['2026-08-03', 'PRJ-0001', 'Wire the meter', 'Rina', '3.50', '', '', '', 'Ran the conduit'],
+            ]);
+        });
+
+        /**
+         * A range of hours is nearly always more than one page, so the default
+         * scope walks the filtered query rather than exporting whatever page
+         * happens to be on screen.
+         */
+        it('walks the whole filtered range rather than the page in view', async () => {
+            render(<HourLogsPage />);
+            await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+            getProjectTimeEntries.mockClear();
+
+            fireEvent.click(screen.getByRole('button', { name: /^export$/i }));
+            fireEvent.click(await screen.findByRole('button', { name: /download/i }));
+
+            await waitFor(() => expect(exportToCSV).toHaveBeenCalled());
+            expect(getProjectTimeEntries).toHaveBeenCalledWith(
+                expect.objectContaining({ page: 1, limit: 100 }),
+            );
         });
     });
 });
