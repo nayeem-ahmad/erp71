@@ -138,6 +138,9 @@ describe('ProjectTimeController permission-to-route mapping', () => {
         create: [StorePermission.LOG_PROJECT_TIME],
         update: [StorePermission.LOG_PROJECT_TIME],
         remove: [StorePermission.LOG_PROJECT_TIME],
+        // An import writes the caller's own hours and nobody else's, so it asks
+        // for exactly what logging one by hand asks for.
+        importRows: [StorePermission.LOG_PROJECT_TIME],
 
         // The clock writes hour logs, so it needs the same permission writing
         // one by hand does — never merely the permission to read them.

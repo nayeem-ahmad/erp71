@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
+import { runImport, type ImportResult } from '../common/import.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { ProjectSettingsService } from './project-settings.service';
@@ -11,9 +12,19 @@ import {
     CreateTaskDto,
     ListTasksDto,
     MoveTaskDto,
+    ProjectPriorityDto,
     UpdateChecklistItemDto,
     UpdateTaskDto,
 } from './project.dto';
+import {
+    importDate,
+    importEnum,
+    importNumber,
+    importText,
+    lookup,
+    nameIndex,
+    requiredText,
+} from './project-import.util';
 
 const TASK_SORTABLE: SortableMap = {
     title: (dir) => ({ title: dir }),
@@ -194,6 +205,135 @@ export class ProjectTasksService {
         }
 
         return this.findOne(viewer, task.id);
+    }
+
+    /**
+     * Spreadsheet import for tasks.
+     *
+     * The columns are the words a person already uses — a project code, a board
+     * column's name, a colleague's email — not the ids the API takes, so every
+     * lookup the file can name is loaded once here and each row is resolved
+     * against it. A value matching nothing fails that row by name and leaves
+     * the rest of the file to import.
+     *
+     * Rows go through `create`/`update` rather than straight to Prisma, so an
+     * imported task opens with the same remaining hours, activity entry and
+     * watchers as one typed into the form. A task is recognised by its title
+     * within its project, which is also what `skip` skips and `upsert` updates.
+     */
+    async importRows(
+        viewer: ProjectViewer,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        const tenantId = viewer.tenantId;
+        // Only the projects this viewer may open, so an import cannot reach a
+        // project the list would never have shown them.
+        const projects = await this.db.project.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.projectFilter(viewer)),
+            } as never,
+            select: { id: true, code: true, short_name: true, name: true },
+        });
+        const statuses = await this.db.projectTaskStatus.findMany({
+            where: { tenant_id: tenantId, is_active: true },
+            select: { id: true, name: true, project_id: true },
+        });
+        const members = await this.db.tenantUser.findMany({
+            where: { tenant_id: tenantId },
+            select: { user: { select: { id: true, name: true, email: true } } },
+        });
+
+        const projectIndex = nameIndex(
+            projects,
+            (project) => [project.code, project.short_name, project.name],
+            (project) => project.id,
+        );
+        const assigneeIndex = nameIndex(
+            members,
+            ({ user }) => [user.email, user.name],
+            ({ user }) => user.id,
+        );
+
+        /**
+         * A column of that name on that project, or — for the tenant-wide
+         * statuses that predate per-project boards — one belonging to no
+         * project at all.
+         */
+        const statusFor = (projectId: string, name: string): string => {
+            const wanted = name.toLowerCase();
+            const match =
+                statuses.find(
+                    (s) => s.project_id === projectId && s.name.trim().toLowerCase() === wanted,
+                )
+                ?? statuses.find(
+                    (s) => s.project_id === null && s.name.trim().toLowerCase() === wanted,
+                );
+            if (!match) throw new Error(`no board column named "${name}" on that project`);
+            return match.id;
+        };
+
+        return runImport<TaskImportRow>(rows, mode, tenantId, {
+            requiredFields: ['project', 'title'],
+            castRow: (raw) => {
+                const projectId = lookup(
+                    projectIndex,
+                    requiredText(raw.project, 'Project'),
+                    'no project matches',
+                );
+                const status = importText(raw.status);
+                const assignee = importText(raw.assignee);
+                return {
+                    projectId,
+                    title: requiredText(raw.title, 'Title'),
+                    description: importText(raw.description),
+                    statusId: status ? statusFor(projectId, status) : null,
+                    priority: importEnum(
+                        raw.priority,
+                        Object.values(ProjectPriorityDto),
+                        'Priority',
+                    ),
+                    assigneeId: assignee
+                        ? lookup(assigneeIndex, assignee, 'no team member matches')
+                        : null,
+                    startDate: importDate(raw.startDate, 'Start date'),
+                    dueDate: importDate(raw.dueDate, 'Due date'),
+                    estimateHours: importNumber(raw.estimateHours, 'Estimate hours'),
+                };
+            },
+            dedupeKeys: (row) => [`title:${row.projectId}:${row.title.toLowerCase()}`],
+            describeDedupeKey: () => 'title on the same project',
+            findDuplicate: async (row) => {
+                const existing = await this.db.projectTask.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        project_id: row.projectId,
+                        deleted_at: null,
+                        title: { equals: row.title, mode: 'insensitive' },
+                    },
+                    select: { id: true },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                await this.create(viewer, {
+                    projectId: row.projectId,
+                    title: row.title,
+                    ...taskFieldsFrom(row),
+                } as CreateTaskDto);
+            },
+            // A blank cell leaves the stored value alone rather than clearing
+            // it: a file carrying three columns is an update to those three,
+            // not an instruction to empty everything it does not mention.
+            update: async (id, row) => {
+                await this.update(viewer, id, {
+                    title: row.title,
+                    ...taskFieldsFrom(row),
+                } as UpdateTaskDto);
+            },
+        });
     }
 
     async update(viewer: ProjectViewer, taskId: string, dto: UpdateTaskDto) {
@@ -752,6 +892,35 @@ export class ProjectTasksService {
         if (!sprint) throw new NotFoundException('Sprint not found');
         return sprint;
     }
+}
+
+/** One row of a task import file, after every name in it has become an id. */
+interface TaskImportRow {
+    projectId: string;
+    title: string;
+    description: string | null;
+    statusId: string | null;
+    priority: ProjectPriorityDto | null;
+    assigneeId: string | null;
+    startDate: string | null;
+    dueDate: string | null;
+    estimateHours: number | null;
+}
+
+/**
+ * The optional half of an imported row, as the create and update DTOs want it.
+ * Absent keys are what both paths read as "not mentioned in this file".
+ */
+function taskFieldsFrom(row: TaskImportRow) {
+    return {
+        ...(row.description !== null ? { description: row.description } : {}),
+        ...(row.statusId !== null ? { statusId: row.statusId } : {}),
+        ...(row.priority !== null ? { priority: row.priority } : {}),
+        ...(row.assigneeId !== null ? { assigneeId: row.assigneeId } : {}),
+        ...(row.startDate !== null ? { startDate: row.startDate } : {}),
+        ...(row.dueDate !== null ? { dueDate: row.dueDate } : {}),
+        ...(row.estimateHours !== null ? { estimateHours: row.estimateHours } : {}),
+    };
 }
 
 interface TaskRow {

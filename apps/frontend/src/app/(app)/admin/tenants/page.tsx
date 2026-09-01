@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, MessageSquare, Pencil, Plus, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -8,17 +10,18 @@ import { PageShell, Button } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
 import CreateTenantModal from '@/components/admin/tenants/CreateTenantModal';
-import TenantDetailModal from '@/components/admin/tenants/TenantDetailModal';
 import TenantSellCreditsModal from '@/components/admin/tenants/TenantSellCreditsModal';
 import type { TenantRecord } from '@/components/admin/tenants/types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 
 const columnHelper = createColumnHelper<TenantRecord>();
 
 export default function AdminTenantsPage() {
+    const router = useRouter();
     const { t } = useI18n();
     const m = t.admin.tenants;
     const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -28,7 +31,6 @@ export default function AdminTenantsPage() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
     const [sellCreditsTenant, setSellCreditsTenant] = useState<TenantRecord | null>(null);
     const [sellCreditsKind, setSellCreditsKind] = useState<'sms' | 'ai'>('sms');
 
@@ -113,15 +115,14 @@ export default function AdminTenantsPage() {
                 const tenant = row.original;
                 return (
                     <div className="flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={() => setDetailTenantId(tenant.id)}
-                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                        <Link
+                            href={routes.admin.tenantDetail(tenant.id)}
+                            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
                             title={m.actions.viewEdit}
                             aria-label={m.actions.viewEdit}
                         >
                             <Pencil className="w-4 h-4" />
-                        </button>
+                        </Link>
                         <button
                             type="button"
                             onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('sms'); }}
@@ -220,15 +221,8 @@ export default function AdminTenantsPage() {
                     setShowCreateModal(false);
                     toast.success(formatMessage(m.createModal.successToast, { name: tenantName }));
                     void loadTenants();
-                    setDetailTenantId(tenantId);
+                    router.push(routes.admin.tenantDetail(tenantId));
                 }}
-            />
-
-            <TenantDetailModal
-                tenantId={detailTenantId}
-                onClose={() => setDetailTenantId(null)}
-                onChanged={() => void loadTenants()}
-                onToast={(msg) => toast.success(msg)}
             />
 
             <TenantSellCreditsModal

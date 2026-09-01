@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -13,6 +13,18 @@ import {
     ConfirmDialog,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import ExportDialog, {
+    type ExportFormat,
+    type ExportRowScope,
+} from '@/components/data-table/ExportDialog';
+import {
+    buildExportMatrix,
+    exportToCSV,
+    exportToExcel,
+    exportToPDF,
+    type ExportColumnSpec,
+} from '@/components/data-table/export-utils';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import HourLogCaptureBar, {
     type ManualLogInput,
@@ -60,6 +72,63 @@ interface ReportRow {
     entries: number;
 }
 
+/**
+ * The columns an import file may carry. A row names its project and task in
+ * words, and the server resolves them, so a timesheet exported from wherever
+ * the hours used to live can be brought over without anyone pasting ids.
+ *
+ * Every row is logged under the signed-in user's own name — there is
+ * deliberately no `user` column, because recording your own hours is all the
+ * permission this screen asks for.
+ */
+const IMPORT_FIELDS: ImportField[] = [
+    { key: 'project', label: 'Project (code or name)', required: true },
+    { key: 'task', label: 'Task title', required: true },
+    { key: 'workDate', label: 'Work date', required: true },
+    { key: 'hours', label: 'Hours', required: false },
+    { key: 'startTime', label: 'Start time (HH:mm)', required: false },
+    { key: 'endTime', label: 'End time (HH:mm)', required: false },
+    { key: 'note', label: 'Note', required: false },
+    { key: 'tags', label: 'Tags (comma separated)', required: false },
+];
+
+/**
+ * What an exported hour log carries. The day list folds sittings together and
+ * hides the quieter fields on a narrow screen; an export is the flat record
+ * behind it, one line per entry with every field it holds.
+ */
+function exportColumnsFor(labels: {
+    date: string;
+    project: string;
+    task: string;
+    person: string;
+    duration: string;
+    start: string;
+    end: string;
+    tags: string;
+    note: string;
+}): ExportColumnSpec<HourLogEntry>[] {
+    return [
+        { id: 'date', header: labels.date, getValue: (e) => e.work_date.slice(0, 10) },
+        { id: 'project', header: labels.project, getValue: (e) => e.project?.code ?? '' },
+        { id: 'task', header: labels.task, getValue: (e) => e.task?.title ?? '' },
+        {
+            id: 'person',
+            header: labels.person,
+            getValue: (e) => e.user?.name || e.user?.email || '',
+        },
+        { id: 'hours', header: labels.duration, getValue: (e) => hoursOf(e).toFixed(2) },
+        { id: 'startTime', header: labels.start, getValue: (e) => e.start_time ?? '' },
+        { id: 'endTime', header: labels.end, getValue: (e) => e.end_time ?? '' },
+        {
+            id: 'tags',
+            header: labels.tags,
+            getValue: (e) => (e.tags ?? []).map((tag) => tag.name).join(', '),
+        },
+        { id: 'note', header: labels.note, getValue: (e) => e.note ?? '' },
+    ];
+}
+
 const EMPTY_FORM = {
     projectId: '',
     taskId: '',
@@ -96,6 +165,12 @@ export default function HourLogsPage() {
     const [summary, setSummary] = useState<ReportSummary | null>(null);
     const [dayTotals, setDayTotals] = useState<Record<string, DayTotal>>({});
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exportBusy, setExportBusy] = useState(false);
+    const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(
+        null,
+    );
 
     // The capture bar's own project/task pair, separate from the filter above
     // the list: narrowing what you are reading should not change what you are
@@ -238,6 +313,60 @@ export default function HourLogsPage() {
         await reload();
         loadSummary();
     }, [reload, loadSummary]);
+
+    const exportColumns = useMemo(
+        () =>
+            exportColumnsFor({
+                date: m.time.workDate,
+                project: m.fields.project,
+                task: m.task.title,
+                person: hl.person,
+                duration: hl.duration,
+                start: hl.startTime,
+                end: hl.endTime,
+                tags: hl.tags,
+                note: m.time.note,
+            }),
+        [m, hl],
+    );
+
+    /**
+     * "Complete list" walks the same filtered query the page is showing rather
+     * than exporting the rows in view: a range of hours is almost always more
+     * than one page, and an export of page 3 of 9 is a report nobody wants.
+     */
+    const runExport = async (opts: {
+        format: ExportFormat;
+        rowScope: ExportRowScope;
+        columnIds: string[];
+    }) => {
+        const specs = exportColumns.filter((column) => opts.columnIds.includes(column.id));
+        try {
+            let records = items;
+            if (opts.rowScope === 'all' && serverPagination.fetchAllRows) {
+                setExportBusy(true);
+                setExportProgress({ loaded: 0, total });
+                const result = await serverPagination.fetchAllRows((loaded, all) =>
+                    setExportProgress({ loaded, total: all }),
+                );
+                records = result.items;
+            }
+            const matrix = buildExportMatrix(records, specs);
+            if (opts.format === 'csv') {
+                exportToCSV(hl.title, matrix.headers, matrix.rows);
+            } else if (opts.format === 'excel') {
+                await exportToExcel(hl.title, matrix.headers, matrix.rows);
+            } else {
+                await exportToPDF(hl.title, matrix.headers, matrix.rows);
+            }
+            setExportOpen(false);
+        } catch (error) {
+            toast.error(errorText(error, t.common.dataTable.exportFailed));
+        } finally {
+            setExportBusy(false);
+            setExportProgress(null);
+        }
+    };
 
     const days = useMemo(() => groupByDay(items), [items]);
     // Only worth a column when there is more than one person to tell apart.
@@ -498,12 +627,30 @@ export default function HourLogsPage() {
                     'projects',
                 )}
                 actions={
-                    <Link href={routes.projects.hourLogReport}>
-                        <Button variant="secondary" className="min-h-touch">
-                            <BarChart3 className="h-4 w-4" />
-                            {hl.openReport}
+                    <>
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setImportOpen(true)}
+                        >
+                            <Upload className="h-4 w-4" />
+                            {t.common.import}
                         </Button>
-                    </Link>
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setExportOpen(true)}
+                        >
+                            <Download className="h-4 w-4" />
+                            {t.common.export}
+                        </Button>
+                        <Link href={routes.projects.hourLogReport}>
+                            <Button variant="secondary" className="min-h-touch">
+                                <BarChart3 className="h-4 w-4" />
+                                {hl.openReport}
+                            </Button>
+                        </Link>
+                    </>
                 }
             />
 
@@ -681,6 +828,31 @@ export default function HourLogsPage() {
                     </div>
                 </nav>
             ) : null}
+
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                entityLabel={hl.title}
+                fields={IMPORT_FIELDS}
+                importFn={(rows, mode) => api.importProjectTimeEntries(rows, mode)}
+                onSuccess={() => void refresh()}
+            />
+
+            <ExportDialog
+                open={exportOpen}
+                title={hl.title}
+                pageCount={items.length}
+                totalCount={total}
+                columns={exportColumns.map((column) => ({
+                    id: column.id,
+                    label: column.header,
+                    visible: true,
+                }))}
+                busy={exportBusy}
+                progress={exportProgress}
+                onClose={() => setExportOpen(false)}
+                onConfirm={runExport}
+            />
 
             {formOpen && (
                 <ModalShell onBackdropClick={() => setFormOpen(false)}>

@@ -16,6 +16,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { ImportRowsDto } from '../common/import.dto';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
 import { ProjectSettingsService } from './project-settings.service';
@@ -114,6 +115,16 @@ export class ProjectTimeController {
     @RequireStorePermission(StorePermission.LOG_PROJECT_TIME)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTimeEntryDto) {
         return this.time.create(tenant, dto);
+    }
+
+    /**
+     * Every imported row is logged under the caller's own name, which is why
+     * this needs no more than the permission to log time.
+     */
+    @Post('import')
+    @RequireStorePermission(StorePermission.LOG_PROJECT_TIME)
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.time.importRows(tenant, body.rows, body.mode);
     }
 
     @Patch(':id')

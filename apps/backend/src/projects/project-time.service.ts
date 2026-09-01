@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
+import { runImport, type ImportResult } from '../common/import.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import {
     CreateTimeEntryDto,
@@ -18,6 +19,16 @@ import {
     spanTimes,
 } from './project-time-span.util';
 import { liveTagIds } from './project-time-tags.util';
+import {
+    importDate,
+    importList,
+    importNumber,
+    importText,
+    importTimeOfDay,
+    lookup,
+    nameIndex,
+    requiredText,
+} from './project-import.util';
 
 /** What a rejected span means, in words a shopkeeper can act on. */
 const SPAN_ERRORS: Record<SpanError, string> = {
@@ -37,6 +48,29 @@ interface TagRow {
     id: string;
     name: string;
     color: string;
+}
+
+/** One row of an hour-log import file, after every name in it has been read. */
+interface TimeImportRow {
+    projectId: string;
+    taskTitle: string;
+    workDate: string;
+    hours: number | null;
+    startTime: string | null;
+    endTime: string | null;
+    note: string | null;
+    tagIds: string[];
+}
+
+/**
+ * The span half of an imported row. Both ends or neither — half a span is
+ * refused by the service, and a file that gives only one end is better read as
+ * giving none than as an error nobody can act on.
+ */
+function timeSpanFrom(row: TimeImportRow) {
+    return row.startTime && row.endTime
+        ? { startTime: row.startTime, endTime: row.endTime }
+        : {};
 }
 
 /** What `prisma.groupBy` hands back, narrowed to the keys this file reads. */
@@ -322,6 +356,159 @@ export class ProjectTimeService {
         });
 
         return this.present(entry);
+    }
+
+    /**
+     * Spreadsheet import for hour logs — a timesheet exported from wherever the
+     * hours were kept before, brought in as entries.
+     *
+     * Every row lands on the importer's own name, the way every other write on
+     * this service does: `LOG_PROJECT_TIME` is the permission to record your
+     * own hours, and a file that could name a `user` column would be a way to
+     * write someone else's timesheet without holding anything more.
+     *
+     * A row is recognised as one already imported by its task, work date and
+     * note together. Two entries against one task on one day with the same note
+     * (or with none) are therefore read as the same entry — the cost of giving
+     * a record with no natural key an identity at all, and what makes re-running
+     * a file skip rather than double the hours.
+     *
+     * Rows go through `create`/`update`, so an imported entry gets the same
+     * derived hours from a span, the same overlap check and the same
+     * remaining-hours write as one logged by hand. An entry that overlaps time
+     * already logged fails that row with the overlap message rather than
+     * quietly landing on top of it.
+     */
+    async importRows(
+        viewer: ProjectViewer,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        const tenantId = viewer.tenantId;
+        const projects = await this.db.project.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.projectFilter(viewer)),
+            } as never,
+            select: { id: true, code: true, short_name: true, name: true },
+        });
+        const tags = await this.db.projectTimeTag.findMany({
+            where: { tenant_id: tenantId },
+            select: { id: true, name: true },
+        });
+
+        const projectIndex = nameIndex(
+            projects,
+            (project) => [project.code, project.short_name, project.name],
+            (project) => project.id,
+        );
+        const tagIndex = nameIndex(tags, (tag) => [tag.name], (tag) => tag.id);
+
+        /**
+         * Task titles resolve against the database rather than a preloaded map:
+         * a workspace's tasks are unbounded where its projects and tags are not.
+         * Cached per title so a file with fifty rows against one task asks once,
+         * and so the lookup is free by the time `create` needs the same id.
+         */
+        const taskIds = new Map<string, Promise<string | null>>();
+        const resolveTask = (row: TimeImportRow): Promise<string | null> => {
+            const key = `${row.projectId}::${row.taskTitle.toLowerCase()}`;
+            let hit = taskIds.get(key);
+            if (!hit) {
+                hit = this.db.projectTask
+                    .findFirst({
+                        where: {
+                            tenant_id: tenantId,
+                            project_id: row.projectId,
+                            deleted_at: null,
+                            title: { equals: row.taskTitle, mode: 'insensitive' },
+                        },
+                        select: { id: true },
+                    })
+                    .then((task) => task?.id ?? null);
+                taskIds.set(key, hit);
+            }
+            return hit;
+        };
+
+        const requireTask = async (row: TimeImportRow): Promise<string> => {
+            const id = await resolveTask(row);
+            if (!id) throw new Error(`no task named "${row.taskTitle}" on that project`);
+            return id;
+        };
+
+        return runImport<TimeImportRow>(rows, mode, tenantId, {
+            requiredFields: ['project', 'task', 'workDate'],
+            castRow: (raw) => {
+                const projectId = lookup(
+                    projectIndex,
+                    requiredText(raw.project, 'Project'),
+                    'no project matches',
+                );
+                const startTime = importTimeOfDay(raw.startTime, 'Start time');
+                const endTime = importTimeOfDay(raw.endTime, 'End time');
+                const hours = importNumber(raw.hours, 'Hours');
+                // A span carries its own hours; without one the figure is the
+                // entry and there is nothing to fall back on.
+                if (hours === null && !(startTime && endTime)) {
+                    throw new Error('give hours, or both a start and an end time');
+                }
+                return {
+                    projectId,
+                    taskTitle: requiredText(raw.task, 'Task'),
+                    workDate: importDate(raw.workDate, 'Work date')!,
+                    hours,
+                    startTime,
+                    endTime,
+                    note: importText(raw.note),
+                    tagIds: importList(raw.tags).map((name) =>
+                        lookup(tagIndex, name, 'no tag named'),
+                    ),
+                };
+            },
+            dedupeKeys: (row) => [
+                `entry:${row.projectId}:${row.taskTitle.toLowerCase()}:${row.workDate}:${row.note ?? ''}`,
+            ],
+            describeDedupeKey: () => 'task, date and note',
+            findDuplicate: async (row) => {
+                const taskId = await requireTask(row);
+                const existing = await this.db.projectTimeEntry.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        user_id: viewer.userId,
+                        task_id: taskId,
+                        work_date: new Date(row.workDate),
+                        note: row.note,
+                    },
+                    select: { id: true },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                await this.create(viewer, {
+                    taskId: await requireTask(row),
+                    workDate: row.workDate,
+                    // Ignored whenever a span is present, but the DTO is typed
+                    // as always carrying a figure.
+                    hours: row.hours ?? 0.01,
+                    ...timeSpanFrom(row),
+                    ...(row.note !== null ? { note: row.note } : {}),
+                    tagIds: row.tagIds,
+                } as CreateTimeEntryDto);
+            },
+            update: async (id, row) => {
+                await this.update(viewer, id, {
+                    workDate: row.workDate,
+                    ...(row.hours !== null && !(row.startTime && row.endTime)
+                        ? { hours: row.hours }
+                        : {}),
+                    ...timeSpanFrom(row),
+                    ...(row.note !== null ? { note: row.note } : {}),
+                    tagIds: row.tagIds,
+                } as UpdateTimeEntryDto);
+            },
+        });
     }
 
     /**

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import DataTable from '@/components/data-table/DataTable';
+import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
@@ -42,6 +43,24 @@ const CATEGORY_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'info'> 
     IN_PROGRESS: 'info',
     DONE: 'success',
 };
+
+/**
+ * The columns an import file may carry. Project, board column and assignee are
+ * named the way a person writes them — a project code, the column's name, an
+ * email — and the server resolves each one, so nobody has to paste an id into a
+ * spreadsheet.
+ */
+const IMPORT_FIELDS: ImportField[] = [
+    { key: 'project', label: 'Project (code or name)', required: true },
+    { key: 'title', label: 'Title', required: true },
+    { key: 'description', label: 'Description', required: false },
+    { key: 'status', label: 'Board column', required: false },
+    { key: 'priority', label: 'Priority (LOW/MEDIUM/HIGH/URGENT)', required: false },
+    { key: 'assignee', label: 'Assignee (email or name)', required: false },
+    { key: 'startDate', label: 'Start date', required: false },
+    { key: 'dueDate', label: 'Due date', required: false },
+    { key: 'estimateHours', label: 'Estimate hours', required: false },
+];
 
 const EMPTY_FORM = {
     projectId: '',
@@ -76,6 +95,7 @@ export default function TasksPage() {
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
     const [formErrors, setFormErrors] = useState<{ projectId?: string; title?: string }>({});
@@ -249,10 +269,20 @@ export default function TasksPage() {
                     'projects',
                 )}
                 actions={
-                    <Button className="min-h-touch" onClick={openCreate}>
-                        <Plus className="h-4 w-4" />
-                        {m.task.newTask}
-                    </Button>
+                    <>
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setImportOpen(true)}
+                        >
+                            <Upload className="h-4 w-4" />
+                            {t.common.import}
+                        </Button>
+                        <Button className="min-h-touch" onClick={openCreate}>
+                            <Plus className="h-4 w-4" />
+                            {m.task.newTask}
+                        </Button>
+                    </>
                 }
             />
 
@@ -306,6 +336,15 @@ export default function TasksPage() {
                 // sift the page already fetched, which reads as the same control.
                 showSearch={false}
                 emptyMessage={m.tasks.empty}
+            />
+
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                entityLabel={m.tasks.title}
+                fields={IMPORT_FIELDS}
+                importFn={(rows, mode) => api.importProjectTasks(rows, mode)}
+                onSuccess={() => void reload()}
             />
 
             {creating && (

@@ -16,6 +16,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { ImportRowsDto } from '../common/import.dto';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectCommentsService } from './project-comments.service';
@@ -54,6 +55,13 @@ export class ProjectTasksController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTaskDto) {
         return this.tasks.create(tenant, dto);
+    }
+
+    /** Declared before `:id` so `/project-tasks/import` is never read as a task id. */
+    @Post('import')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.tasks.importRows(tenant, body.rows, body.mode);
     }
 
     @Get(':id')

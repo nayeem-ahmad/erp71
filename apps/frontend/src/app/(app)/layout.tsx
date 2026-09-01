@@ -206,16 +206,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // already applied; the account-level set is the fallback outside a workspace.
     const platformFeatures: PlatformFeatures = activeTenant?.platform_features ?? accountPlatformFeatures;
 
+    const primaryRole = activeTenant?.role;
+    const owner = isOwner(primaryRole);
+
     // Setup is dismissed per workspace (server-side), so a new browser or a teammate's
     // first login never re-opens it. The localStorage flag is only a same-tab shortcut
     // for the moment between dismissing and /auth/me catching up.
     const onboardingDismissed = activeTenant?.onboarding_dismissed === true;
 
+    // Only the owner is prompted to run store setup — staff can't create the shop
+    // and shouldn't be nagged about it. Recomputed (rather than only ever switched
+    // on) so the banner disappears again once /auth/me reports the workspace as
+    // dismissed: before the user resolves, `onboardingDismissed` is still false.
     useEffect(() => {
-        if (inPlatformAdminMode || inRefereeMode) return;
+        if (!hasResolvedUser || inPlatformAdminMode || inRefereeMode || !owner) {
+            setShowOnboardingBanner(false);
+            return;
+        }
         const done = onboardingDismissed || localStorage.getItem('onboarding_complete');
-        if (!done && pathname === routes.home) setShowOnboardingBanner(true);
-    }, [pathname, inPlatformAdminMode, inRefereeMode, onboardingDismissed]);
+        setShowOnboardingBanner(!done && pathname === routes.home);
+    }, [hasResolvedUser, pathname, inPlatformAdminMode, inRefereeMode, onboardingDismissed, owner]);
 
     const refreshSalesSettings = useCallback(() => {
         if (inPlatformAdminMode || inRefereeMode) {
@@ -260,15 +270,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             if (pathname === routes.home) router.replace(routes.referralsPortal.root);
             return;
         }
+        // Same rule as the banner: setup is the owner's job, so staff land on the
+        // dashboard instead of a wizard they can't finish.
+        if (!owner) return;
         const done = onboardingDismissed || localStorage.getItem('onboarding_complete');
         if (done) return;
         if (pathname === routes.home) {
             router.replace(routes.onboarding);
         }
-    }, [hasResolvedUser, pathname, router, inPlatformAdminMode, inRefereeMode, onboardingDismissed]);
+    }, [hasResolvedUser, pathname, router, inPlatformAdminMode, inRefereeMode, onboardingDismissed, owner]);
 
     const tenantStores = activeTenant?.stores || [];
-    const primaryRole = activeTenant?.role;
     const activePlan = activeTenant?.subscription?.plan ?? null;
     const activePlanCode = activePlan?.code || null;
     const activePlanLabel = formatPlanDisplayName(activePlan);
@@ -286,7 +298,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const perms = activeTenant?.permissions ?? [];
-    const owner = isOwner(primaryRole);
     // Off by default platform-wide; a tenant override switches it on for one
     // workspace without exposing it to everyone else. Gated on the permission as
     // well as the flag: every /projects endpoint requires VIEW_PROJECTS, so
@@ -608,6 +619,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 onClick={() => {
                                     localStorage.setItem('onboarding_complete', '1');
                                     setShowOnboardingBanner(false);
+                                    // Flip the cached workspace flag too, so a later
+                                    // /auth/me refresh in this session doesn't hand the
+                                    // banner effect a stale `onboarding_dismissed: false`.
+                                    setUser((current: any) => (current?.tenants
+                                        ? {
+                                            ...current,
+                                            tenants: current.tenants.map((tenant: any) => (
+                                                tenant.id === activeTenant?.id
+                                                    ? { ...tenant, onboarding_dismissed: true }
+                                                    : tenant
+                                            )),
+                                        }
+                                        : current));
                                     api.dismissOnboarding().catch(() => { /* retried on the next dismiss */ });
                                 }}
                                 className="text-blue-200 hover:text-white transition-colors"

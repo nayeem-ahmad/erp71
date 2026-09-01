@@ -741,6 +741,130 @@ describe('ProjectTasksService', () => {
         });
     });
 
+    describe('importRows', () => {
+        beforeEach(() => {
+            db.project.findMany = jest.fn().mockResolvedValue([
+                { id: 'project-1', code: 'ACME', short_name: 'ACM', name: 'Acme rebuild' },
+            ]);
+            db.projectTaskStatus.findMany = jest
+                .fn()
+                .mockResolvedValue([
+                    { id: 'status-doing', name: 'In progress', project_id: 'project-1' },
+                ]);
+            db.tenantUser = {
+                findMany: jest.fn().mockResolvedValue([
+                    { user: { id: 'user-9', name: 'Karim', email: 'karim@acme.test' } },
+                ]),
+            };
+            // `create` re-reads whatever status id it is handed. Echoing the id
+            // back is what lets the assertions below see the column the import
+            // resolved, rather than the module-level default.
+            db.projectTaskStatus.findFirst.mockImplementation(async (args: any) => ({
+                id: args.where.id,
+                name: 'In progress',
+                category: 'IN_PROGRESS',
+                project_id: 'project-1',
+            }));
+            // `findFirst` serves two callers here: the duplicate check, which
+            // asks for `select: { id }`, and the read-back at the end of
+            // `create`, which asks with `include`. Answering "no such task" to
+            // the first and the created task to the second is what makes these
+            // rows creates.
+            db.projectTask.findFirst.mockImplementation(async (args: any) =>
+                args?.select ? null : task(),
+            );
+        });
+
+        const run = (rows: Record<string, unknown>[], mode: 'skip' | 'upsert' = 'skip') =>
+            service.importRows(OWNER, rows, mode);
+
+        it('resolves a project code, a column name and an email into ids', async () => {
+            const result = await run([
+                {
+                    project: 'acme',
+                    title: 'Wire the till',
+                    status: 'in progress',
+                    priority: 'high',
+                    assignee: 'karim@acme.test',
+                    dueDate: '2026-09-30',
+                    estimateHours: '4.5',
+                },
+            ]);
+
+            expect(result).toMatchObject({ created: 1, updated: 0, skipped: 0, errors: [] });
+            expect(db.projectTask.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        project_id: 'project-1',
+                        title: 'Wire the till',
+                        status_id: 'status-doing',
+                        priority: 'HIGH',
+                        assignee_id: 'user-9',
+                        estimate_hours: 4.5,
+                    }),
+                }),
+            );
+        });
+
+        it('fails only the row whose project is unknown', async () => {
+            const result = await run([
+                { project: 'nope', title: 'Orphan' },
+                { project: 'ACME', title: 'Fine' },
+            ]);
+
+            expect(result.created).toBe(1);
+            expect(result.errors).toEqual(['Row 2: no project matches "nope"']);
+        });
+
+        it('reports a missing required cell rather than writing a blank task', async () => {
+            const result = await run([{ project: 'ACME', title: '  ' }]);
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual([
+                'Row 2: missing required field(s): title',
+            ]);
+            expect(db.projectTask.create).not.toHaveBeenCalled();
+        });
+
+        it('skips a title the project already carries, and updates it in upsert mode', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task());
+            db.projectTask.findMany.mockResolvedValue([]);
+
+            const skipped = await run([{ project: 'ACME', title: 'Wire the till' }]);
+            expect(skipped).toMatchObject({ created: 0, skipped: 1 });
+            expect(db.projectTask.create).not.toHaveBeenCalled();
+
+            const upserted = await run([{ project: 'ACME', title: 'Wire the till' }], 'upsert');
+            expect(upserted).toMatchObject({ created: 0, updated: 1 });
+            expect(db.projectTask.update).toHaveBeenCalled();
+        });
+
+        /**
+         * The database cannot catch this one: in `skip` mode the first row was
+         * never written, so there is nothing for `findDuplicate` to find.
+         */
+        it('folds two rows of one file describing the same task', async () => {
+            const result = await run([
+                { project: 'ACME', title: 'Wire the till' },
+                { project: 'acme', title: 'wire the till' },
+            ]);
+
+            expect(result).toMatchObject({ created: 1, skipped: 1 });
+            expect(result.duplicates).toEqual([
+                'Row 3: same title on the same project as row 2 — skipped',
+            ]);
+        });
+
+        it('leaves a project the viewer cannot open out of the lookup entirely', async () => {
+            db.project.findMany.mockResolvedValue([]);
+
+            const result = await run([{ project: 'ACME', title: 'Wire the till' }]);
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual(['Row 2: no project matches "ACME"']);
+        });
+    });
+
     it('scopes every task lookup to the tenant', async () => {
         db.projectTask.findFirst.mockResolvedValue(null);
         await expect(service.findOne(OWNER, 'task-1')).rejects.toBeInstanceOf(NotFoundException);
