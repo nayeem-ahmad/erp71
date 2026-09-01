@@ -61,6 +61,17 @@ export default function AdminSupportPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /** Latest filters, so the poll interval never reads a stale closure. */
+    const filtersRef = useRef({ search, statusFilter, categoryFilter });
+    filtersRef.current = { search, statusFilter, categoryFilter };
+    /** Last message we scrolled to, so a poll that changes nothing does not re-scroll. */
+    const scrolledForRef = useRef<string | null>(null);
+
+    /** Cheap identity of a payload — lets a poll keep the existing state object when nothing moved. */
+    const threadsSignature = (list: Thread[]) =>
+        list.map((th) => `${th.id}:${th.status}:${th.updatedAt}:${th.messageCount}`).join('|');
+    const messagesSignature = (list: Message[]) =>
+        list.map((msg) => `${msg.id}:${msg.body}`).join('|');
 
     const categoryLabel = (category: string) => {
         if (category === 'support') return m.types.support;
@@ -69,36 +80,54 @@ export default function AdminSupportPage() {
         return m.types.general;
     };
 
-    const loadThreads = async (opts?: { search?: string; status?: string; category?: string }) => {
-        setIsLoading(true);
+    /** `silent` is for the background poll: no spinner, no error banner, no state churn. */
+    const loadThreads = async (opts?: {
+        search?: string;
+        status?: string;
+        category?: string;
+        silent?: boolean;
+    }) => {
+        const silent = opts?.silent ?? false;
+        if (!silent) setIsLoading(true);
         try {
-            const nextCategory = opts?.category ?? categoryFilter;
+            const filters = filtersRef.current;
+            const nextCategory = opts?.category ?? filters.categoryFilter;
             const res: any = await api.getAdminSupportThreads({
-                search: (opts?.search ?? search) || undefined,
-                status: (opts?.status ?? statusFilter) || undefined,
+                search: (opts?.search ?? filters.search) || undefined,
+                status: (opts?.status ?? filters.statusFilter) || undefined,
                 category: nextCategory && nextCategory !== 'feedback' ? nextCategory : undefined,
                 kind: nextCategory === 'feedback' ? 'feedback' : undefined,
                 limit: 50,
             });
-            setThreads(res.data ?? []);
+            const next: Thread[] = res.data ?? [];
+            setThreads((prev) =>
+                threadsSignature(prev) === threadsSignature(next) ? prev : next,
+            );
             setTotal(res.total ?? 0);
         } catch (err: any) {
-            setError(err.message || m.loadFailed);
+            if (!silent) setError(err.message || m.loadFailed);
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
-    const loadMessages = async (threadId: string) => {
-        setLoadingMessages(true);
+    const loadMessages = async (threadId: string, opts?: { silent?: boolean }) => {
+        const silent = opts?.silent ?? false;
+        if (!silent) setLoadingMessages(true);
         try {
             const res: any = await api.getAdminSupportMessages(threadId);
-            setMessages(res.messages ?? []);
-            setThreadInfo(res.thread ?? null);
+            const next: Message[] = res.messages ?? [];
+            setMessages((prev) =>
+                messagesSignature(prev) === messagesSignature(next) ? prev : next,
+            );
+            setThreadInfo((prev) => {
+                const incoming = res.thread ?? null;
+                return JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming;
+            });
         } catch (err: any) {
-            setError(err.message || m.loadFailed);
+            if (!silent) setError(err.message || m.loadFailed);
         } finally {
-            setLoadingMessages(false);
+            if (!silent) setLoadingMessages(false);
         }
     };
 
@@ -115,8 +144,8 @@ export default function AdminSupportPage() {
 
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = setInterval(() => {
-            void loadMessages(activeThreadId);
-            void loadThreads();
+            void loadMessages(activeThreadId, { silent: true });
+            void loadThreads({ silent: true });
         }, 10000);
 
         return () => {
@@ -125,7 +154,12 @@ export default function AdminSupportPage() {
     }, [activeThreadId]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const lastId = messages[messages.length - 1]?.id ?? null;
+        if (!lastId || scrolledForRef.current === lastId) return;
+        // Jump straight to the bottom when a thread opens; animate only for genuinely new messages.
+        const behavior = scrolledForRef.current === null ? 'auto' : 'smooth';
+        scrolledForRef.current = lastId;
+        messagesEndRef.current?.scrollIntoView({ behavior });
     }, [messages]);
 
     const handleSearch = (value: string) => {
@@ -144,7 +178,11 @@ export default function AdminSupportPage() {
     };
 
     const selectThread = (id: string) => {
+        if (id === activeThreadId) return;
         setActiveThreadId(id);
+        setMessages([]);
+        setThreadInfo(null);
+        scrolledForRef.current = null;
         setError('');
     };
 
@@ -240,7 +278,7 @@ export default function AdminSupportPage() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-100">
-                        {isLoading ? (
+                        {isLoading && threads.length === 0 ? (
                             <div className="p-6 flex justify-center text-sm text-gray-400">
                                 <Loader2 className="w-4 h-4 animate-spin" />
                             </div>
