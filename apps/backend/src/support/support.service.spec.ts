@@ -69,6 +69,7 @@ describe('SupportService.createKnock', () => {
                 tenantId: 'ten-1',
                 category: 'support',
                 feedbackId: null,
+                createdById: 'user-1',
                 page: null,
                 subject: 'The receipt printer is jammed.',
                 messages: {
@@ -176,6 +177,7 @@ describe('SupportService.backfillFeedbackThreads', () => {
                 tenantId: 'ten-1',
                 category: 'feature',
                 feedbackId: 'fb-old',
+                createdById: 'user-1',
                 page: '/inventory',
                 subject: 'Feature on /inventory',
                 messages: {

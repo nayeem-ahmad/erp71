@@ -868,6 +868,10 @@ export const adminMessages = {
         allStatuses: "सभी स्थितियाँ",
         allTypes: "सभी प्रकार",
         kindFeedback: "प्रतिक्रिया",
+        allTenants: "सभी टेनेंट",
+        allUsers: "सभी उपयोगकर्ता",
+        unknownUser: "अज्ञात उपयोगकर्ता",
+        startedBy: "{user} द्वारा शुरू किया गया",
         types: {
             support: "मदद",
             bug: "बग",

@@ -868,6 +868,10 @@ export const adminMessages = {
         allStatuses: 'كل الحالات',
         allTypes: 'كل الأنواع',
         kindFeedback: 'ملاحظات',
+        allTenants: 'كل المستأجرين',
+        allUsers: 'كل المستخدمين',
+        unknownUser: 'مستخدم غير معروف',
+        startedBy: 'بدأها {user}',
         types: {
             support: 'مساعدة',
             bug: 'خلل',

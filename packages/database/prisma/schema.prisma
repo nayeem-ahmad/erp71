@@ -380,6 +380,7 @@ model User {
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
   supportMessages                   SupportMessage[]            @relation("SupportMessageSender")
+  supportThreadsStarted             SupportThread[]             @relation("SupportThreadCreator")
   notifications                     Notification[]
   storefrontCustomers               Customer[]
   storefrontOrders                  StorefrontOrder[]
@@ -5725,15 +5726,21 @@ model SupportThread {
   category   String   @default("support")
   page       String?
   feedbackId String?  @unique
+  /// The shop user who opened the thread. Nullable because the user row may be
+  /// removed, and because pre-2026-09 threads are backfilled from their first
+  /// message's sender — a thread with no messages has nobody to attribute it to.
+  createdById String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  feedback Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)
-  messages SupportMessage[]
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feedback  Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)
+  createdBy User?            @relation("SupportThreadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  messages  SupportMessage[]
 
   @@index([tenantId, status])
   @@index([tenantId, category])
+  @@index([createdById])
   @@map("support_threads")
 }
 

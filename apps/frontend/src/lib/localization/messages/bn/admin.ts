@@ -861,6 +861,10 @@ export const adminMessages = {
             allStatuses: "সব স্ট্যাটাস",
             allTypes: "সব ধরন",
             kindFeedback: "ফিডব্যাক",
+            allTenants: "সব টেন্যান্ট",
+            allUsers: "সব ব্যবহারকারী",
+            unknownUser: "অজানা ব্যবহারকারী",
+            startedBy: "শুরু করেছেন {user}",
             types: {
                 support: "সাহায্য",
                 bug: "বাগ",

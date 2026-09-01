@@ -18,6 +18,7 @@
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:work-schedules": "tsx prisma/sync-work-schedules.ts",
     "sync:salary-components": "tsx prisma/sync-salary-components.ts",
+    "sync:support-thread-creators": "tsx prisma/sync-support-thread-creators.ts",
     "backfill:product-costs": "tsx prisma/backfill-product-costs.ts",
     "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
     "retag:parties": "tsx prisma/retag-party-ledger.ts",

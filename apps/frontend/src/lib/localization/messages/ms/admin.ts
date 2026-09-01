@@ -861,6 +861,10 @@ export const adminMessages = {
             allStatuses: "Semua status",
             allTypes: "Semua jenis",
             kindFeedback: "Maklum balas",
+            allTenants: "Semua penyewa",
+            allUsers: "Semua pengguna",
+            unknownUser: "Pengguna tidak diketahui",
+            startedBy: "Dimulakan oleh {user}",
             types: {
                 support: "Bantuan",
                 bug: "Pepijat",
