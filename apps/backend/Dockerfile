@@ -121,4 +121,11 @@ ENV GIT_SHA=$GIT_SHA
 # per-employee structures — resolveStructure already falls back to
 # Employee.basic_salary, and stamping a structure nobody chose would silently
 # stop that field affecting pay. See prisma/sync-salary-components.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:support-thread-creators backfills SupportThread.createdById, the shop user
+# who opened each inbox thread. REQUIRED for the same reason as sync:lead-identity:
+# db push adds the column but never runs the migration that fills it, so without
+# this every pre-existing thread reads as "Unknown user" in Admin > Inbox and the
+# per-user filter finds only threads opened after the deploy. The opener is taken
+# from the thread's earliest message. See prisma/sync-support-thread-creators.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

@@ -868,6 +868,10 @@ export const adminMessages = {
         allStatuses: "Tous les statuts",
         allTypes: "Tous les types",
         kindFeedback: "Retour",
+        allTenants: "Tous les locataires",
+        allUsers: "Tous les utilisateurs",
+        unknownUser: "Utilisateur inconnu",
+        startedBy: "Ouvert par {user}",
         types: {
             support: "Aide",
             bug: "Anomalie",

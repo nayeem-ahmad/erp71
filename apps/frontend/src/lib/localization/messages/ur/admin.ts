@@ -868,6 +868,10 @@ export const adminMessages = {
         allStatuses: 'تمام حیثیتیں',
         allTypes: 'تمام اقسام',
         kindFeedback: 'فیڈ بیک',
+        allTenants: 'تمام ٹیننٹس',
+        allUsers: 'تمام صارفین',
+        unknownUser: 'نامعلوم صارف',
+        startedBy: '{user} نے شروع کیا',
         types: {
             support: 'مدد',
             bug: 'بگ',

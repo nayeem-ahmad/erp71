@@ -9,6 +9,8 @@ import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
 
+type ThreadUser = { id: string; name: string; email: string };
+
 type Thread = {
     id: string;
     subject: string;
@@ -16,12 +18,17 @@ type Thread = {
     category: string;
     page: string | null;
     feedbackId: string | null;
+    tenantId: string;
     tenant: string;
+    createdBy: ThreadUser | null;
     createdAt: string;
     updatedAt: string;
     messageCount: number;
     lastMessage: { body: string; senderRole: string; createdAt: string } | null;
 };
+
+type TenantOption = { id: string; name: string; threadCount: number };
+type UserOption = { id: string; name: string; email: string; threadCount: number };
 
 type Message = {
     id: string;
@@ -40,6 +47,10 @@ export default function AdminSupportPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+    const [tenantFilter, setTenantFilter] = useState('');
+    const [userFilter, setUserFilter] = useState('');
+    const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+    const [userOptions, setUserOptions] = useState<UserOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -49,6 +60,8 @@ export default function AdminSupportPage() {
         subject: string;
         status: string;
         tenant: string;
+        tenantId?: string;
+        createdBy?: ThreadUser | null;
         category?: string;
         page?: string | null;
         feedbackId?: string | null;
@@ -62,8 +75,8 @@ export default function AdminSupportPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     /** Latest filters, so the poll interval never reads a stale closure. */
-    const filtersRef = useRef({ search, statusFilter, categoryFilter });
-    filtersRef.current = { search, statusFilter, categoryFilter };
+    const filtersRef = useRef({ search, statusFilter, categoryFilter, tenantFilter, userFilter });
+    filtersRef.current = { search, statusFilter, categoryFilter, tenantFilter, userFilter };
     /** Last message we scrolled to, so a poll that changes nothing does not re-scroll. */
     const scrolledForRef = useRef<string | null>(null);
 
@@ -85,6 +98,8 @@ export default function AdminSupportPage() {
         search?: string;
         status?: string;
         category?: string;
+        tenantId?: string;
+        userId?: string;
         silent?: boolean;
     }) => {
         const silent = opts?.silent ?? false;
@@ -97,6 +112,8 @@ export default function AdminSupportPage() {
                 status: (opts?.status ?? filters.statusFilter) || undefined,
                 category: nextCategory && nextCategory !== 'feedback' ? nextCategory : undefined,
                 kind: nextCategory === 'feedback' ? 'feedback' : undefined,
+                tenantId: (opts?.tenantId ?? filters.tenantFilter) || undefined,
+                userId: (opts?.userId ?? filters.userFilter) || undefined,
                 limit: 50,
             });
             const next: Thread[] = res.data ?? [];
@@ -131,11 +148,28 @@ export default function AdminSupportPage() {
         }
     };
 
+    /**
+     * Dropdown options come from the threads themselves, so the lists only ever
+     * show tenants and people who have actually written in. Narrowing by tenant
+     * re-fetches so the user list holds just that tenant's people.
+     */
+    const loadFilterOptions = async (tenantId?: string) => {
+        try {
+            const res: any = await api.getAdminSupportFilters(tenantId || undefined);
+            setTenantOptions(res.tenants ?? []);
+            setUserOptions(res.users ?? []);
+        } catch {
+            // Filters are an affordance, not the page — a failure here leaves the
+            // dropdowns empty rather than blocking the inbox.
+        }
+    };
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const kind = params.get('kind') || params.get('category') || '';
         if (kind) setCategoryFilter(kind);
         void loadThreads({ category: kind || undefined });
+        void loadFilterOptions();
     }, []);
 
     useEffect(() => {
@@ -175,6 +209,19 @@ export default function AdminSupportPage() {
     const handleCategoryFilter = (value: string) => {
         setCategoryFilter(value);
         void loadThreads({ search, status: statusFilter, category: value });
+    };
+
+    const handleTenantFilter = (value: string) => {
+        setTenantFilter(value);
+        // A user picked under the previous tenant no longer belongs to this list.
+        setUserFilter('');
+        void loadThreads({ search, status: statusFilter, category: categoryFilter, tenantId: value, userId: '' });
+        void loadFilterOptions(value);
+    };
+
+    const handleUserFilter = (value: string) => {
+        setUserFilter(value);
+        void loadThreads({ search, status: statusFilter, category: categoryFilter, userId: value });
     };
 
     const selectThread = (id: string) => {
@@ -274,6 +321,30 @@ export default function AdminSupportPage() {
                                 <option value="feature">{m.types.feature}</option>
                                 <option value="general">{m.types.general}</option>
                             </select>
+                            <select
+                                value={tenantFilter}
+                                onChange={(e) => handleTenantFilter(e.target.value)}
+                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            >
+                                <option value="">{m.allTenants}</option>
+                                {tenantOptions.map((tenantOption) => (
+                                    <option key={tenantOption.id} value={tenantOption.id}>
+                                        {tenantOption.name} ({tenantOption.threadCount})
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                value={userFilter}
+                                onChange={(e) => handleUserFilter(e.target.value)}
+                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            >
+                                <option value="">{m.allUsers}</option>
+                                {userOptions.map((userOption) => (
+                                    <option key={userOption.id} value={userOption.id}>
+                                        {userOption.name} ({userOption.threadCount})
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -304,6 +375,9 @@ export default function AdminSupportPage() {
                                             {categoryLabel(thread.category)}
                                         </span>
                                     </div>
+                                    <p className="text-[10px] text-gray-400 truncate">
+                                        {thread.createdBy?.name ?? m.unknownUser}
+                                    </p>
                                     {thread.lastMessage && (
                                         <p className="text-xs text-gray-400 truncate mt-0.5">{thread.lastMessage.body}</p>
                                     )}
@@ -332,6 +406,13 @@ export default function AdminSupportPage() {
                                     {threadInfo?.tenant && (
                                         <p className="text-xs text-gray-500 font-semibold">{threadInfo.tenant}</p>
                                     )}
+                                    <p className="text-[11px] text-gray-500 truncate">
+                                        {formatMessage(m.startedBy, {
+                                            user: threadInfo?.createdBy
+                                                ? `${threadInfo.createdBy.name} (${threadInfo.createdBy.email})`
+                                                : m.unknownUser,
+                                        })}
+                                    </p>
                                     {threadInfo?.page && (
                                         <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
                                     )}

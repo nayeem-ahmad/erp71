@@ -2896,6 +2896,8 @@ export const api = {
         search?: string;
         category?: string;
         kind?: string;
+        tenantId?: string;
+        userId?: string;
         page?: number;
         limit?: number;
     }) => {
@@ -2904,10 +2906,14 @@ export const api = {
         if (params?.search) query.set('search', params.search);
         if (params?.category) query.set('category', params.category);
         if (params?.kind) query.set('kind', params.kind);
+        if (params?.tenantId) query.set('tenantId', params.tenantId);
+        if (params?.userId) query.set('userId', params.userId);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/admin/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    getAdminSupportFilters: (tenantId?: string) =>
+        fetchWithAuth(`/admin/support/filters${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
     getAdminSupportMessages: (threadId: string) =>
         fetchWithAuth(`/admin/support/threads/${threadId}/messages`),
     sendAdminSupportMessage: (threadId: string, body: string) =>

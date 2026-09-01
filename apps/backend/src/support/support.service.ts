@@ -86,6 +86,7 @@ export class SupportService {
                     category,
                     page,
                     feedbackId,
+                    createdById: input.userId,
                     messages: {
                         create: {
                             senderId: input.userId,
@@ -130,6 +131,7 @@ export class SupportService {
                     category,
                     page: fb.page,
                     feedbackId: fb.id,
+                    createdById: fb.userId,
                     createdAt: fb.createdAt,
                     updatedAt: fb.createdAt,
                     messages: {
