@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import AdminTenantsPage from './page';
 
 jest.mock('@/components/data-table', () => ({
@@ -165,63 +165,17 @@ describe('AdminTenantsPage', () => {
         expect(screen.getByText('All statuses')).toBeInTheDocument();
     });
 
-    it('opens tenant detail modal from actions column', async () => {
+    it('links each row to the tenant detail page', async () => {
         const { api } = require('@/lib/api');
         api.getAdminTenants.mockResolvedValue(mockTenants);
 
         render(<AdminTenantsPage />);
         await waitFor(() => screen.getByText('Acme Corp'));
 
-        fireEvent.click(screen.getByRole('button', { name: /view \/ edit tenant/i }));
-
-        await waitFor(() => {
-            expect(api.getAdminTenant).toHaveBeenCalledWith('tenant1');
-            expect(screen.getByRole('button', { name: /impersonate owner/i })).toBeInTheDocument();
-        });
-    });
-
-    it('saves per-tenant feature overrides as a tri-state, clearing on Inherit', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenantFeatures.mockResolvedValue({
-            platform_defaults: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
-            overrides: { aiChat: true },
-            effective: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: true },
-        });
-        api.updateAdminTenantFeatures.mockResolvedValue({
-            platform_defaults: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
-            overrides: { aiChat: true },
-            effective: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: true },
-        });
-
-        render(<AdminTenantsPage />);
-        await waitFor(() => screen.getByText('Acme Corp'));
-        fireEvent.click(screen.getByRole('button', { name: /view \/ edit tenant/i }));
-
-        await waitFor(() => expect(screen.getByText('Feature access')).toBeInTheDocument());
-
-        // The unset features show what Inherit currently resolves to, from the platform defaults.
-        expect(screen.getAllByText('Inheriting: On')).toHaveLength(1);   // manufacturing
-        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(6);  // feedback/support/help/voice/externalImport/projects
-        expect(screen.getAllByText('Overridden for this tenant.')).toHaveLength(1); // aiChat
-
-        // Pin Voice on for this tenant; every other feature keeps its current state.
-        const voiceRow = screen.getByText('Voice').closest('div')!.parentElement!;
-        fireEvent.click(within(voiceRow).getByRole('button', { name: 'On' }));
-        fireEvent.click(screen.getByRole('button', { name: /save features/i }));
-
-        await waitFor(() => {
-            expect(api.updateAdminTenantFeatures).toHaveBeenCalledWith('tenant1', {
-                feedback: null,
-                support: null,
-                help: null,
-                voice: true,
-                manufacturing: null,
-                aiChat: true,
-                externalImport: null,
-                projects: null,
-            });
-        });
+        expect(screen.getByRole('link', { name: /view \/ edit tenant/i }))
+            .toHaveAttribute('href', '/admin/tenants/tenant1');
+        // The list itself must not fetch tenant detail any more.
+        expect(api.getAdminTenant).not.toHaveBeenCalled();
     });
 
     it('shows New Tenant button in header', async () => {

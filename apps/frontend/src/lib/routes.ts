@@ -261,6 +261,7 @@ export const routes = {
     admin: {
         root: '/admin',
         tenants: '/admin/tenants',
+        tenantDetail: (tenantId: string) => `/admin/tenants/${tenantId}`,
         tenantPayments: '/admin/tenants/payments',
         tenantLedger: '/admin/tenants/ledger',
         users: '/admin/users',
