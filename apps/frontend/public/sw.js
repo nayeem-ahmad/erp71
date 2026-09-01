@@ -1,5 +1,9 @@
 // Service Worker for Retail POS Offline Support
-const CACHE_NAME = 'retail-pos-v3';
+// Bumped whenever the caching *strategy* changes, so the activate handler drops
+// the entries the old strategy left behind. v3 cached every public asset
+// cache-first and forever: a new logo or favicon only appeared on a hard reload
+// (which bypasses the SW) and the next ordinary reload served the old one back.
+const CACHE_NAME = 'retail-pos-v4';
 const STATIC_ASSETS = ['/', '/dashboard/pos'];
 
 // ── Install ─────────────────────────────────────────────────────────────────
@@ -84,24 +88,67 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first
+  // Branding assets — logo, favicons, app icons, the manifest. These live at
+  // stable, unhashed URLs, so cache-first pins whatever was fetched first and a
+  // rebrand never reaches anyone. Network-first instead: the cache is only a
+  // fallback for genuinely offline loads.
+  if (isBrandingAsset(url)) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse.ok && url.origin === self.location.origin) {
+            const cloned = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          }
+          return networkResponse;
+        })
+        .catch(() =>
+          caches
+            .match(request)
+            .then((cached) => cached || Response.error())
+        )
+    );
+    return;
+  }
+
+  // Everything else same-origin and unhashed: stale-while-revalidate. Serves
+  // instantly from cache (and offline), but always refreshes the entry in the
+  // background so a stale copy survives at most one load.
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((networkResponse) => {
-        // Only cache same-origin successful responses
-        if (
-          networkResponse.ok &&
-          url.origin === self.location.origin
-        ) {
-          const cloned = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
-        }
-        return networkResponse;
-      });
+      const network = fetch(request)
+        .then((networkResponse) => {
+          // Only cache same-origin successful responses
+          if (
+            networkResponse.ok &&
+            url.origin === self.location.origin
+          ) {
+            const cloned = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          }
+          return networkResponse;
+        })
+        .catch((err) => {
+          if (cached) return cached;
+          throw err;
+        });
+
+      return cached || network;
     })
   );
 });
+
+// Stable-URL brand artwork that must never be pinned to a stale copy.
+function isBrandingAsset(url) {
+  if (url.origin !== self.location.origin) return false;
+  const path = url.pathname;
+  return (
+    path.startsWith('/logo/') ||
+    path === '/favicon.ico' ||
+    path === '/manifest.webmanifest' ||
+    /^\/(apple-)?icon(-\d+x?\d*)?\.(png|svg|ico)$/.test(path)
+  );
+}
 
 // ── Message ───────────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
