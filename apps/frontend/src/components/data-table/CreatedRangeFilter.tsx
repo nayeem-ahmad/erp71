@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -26,12 +26,20 @@ type CreatedRangeFilterProps = {
 
 const PRESETS: CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
 
+/** Must match the popover's `w-64`. */
+const PANEL_WIDTH = 256;
+const VIEWPORT_MARGIN = 8;
+
+/** SSR has no layout to measure, and useLayoutEffect warns there. */
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export default function CreatedRangeFilter({ value, onChange, now, label }: CreatedRangeFilterProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
     const [open, setOpen] = useState(false);
     const [from, setFrom] = useState(value?.from ?? '');
     const [to, setTo] = useState(value?.to ?? '');
+    const [alignEnd, setAlignEnd] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
     const fromId = useId();
     const toId = useId();
@@ -40,6 +48,22 @@ export default function CreatedRangeFilter({ value, onChange, now, label }: Crea
         setFrom(value?.from ?? '');
         setTo(value?.to ?? '');
     }, [value]);
+
+    /* The trigger is the last chip in a wrapping filter bar, so it usually sits
+       at the right edge — a start-anchored panel would run off screen. Measure on
+       open and flip it to hang off the other edge when it does not fit. */
+    useIsomorphicLayoutEffect(() => {
+        if (!open) return;
+        const root = rootRef.current;
+        if (!root) return;
+        const rect = root.getBoundingClientRect();
+        const rtl = getComputedStyle(root).direction === 'rtl';
+        setAlignEnd(
+            rtl
+                ? rect.right - PANEL_WIDTH < VIEWPORT_MARGIN
+                : rect.left + PANEL_WIDTH > window.innerWidth - VIEWPORT_MARGIN,
+        );
+    }, [open]);
 
     useEffect(() => {
         if (!open) return;
@@ -90,7 +114,9 @@ export default function CreatedRangeFilter({ value, onChange, now, label }: Crea
                 <div
                     role="dialog"
                     aria-label={fieldLabel}
-                    className="absolute z-50 mt-1 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg space-y-3"
+                    className={`absolute z-50 mt-1 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg space-y-3 ${
+                        alignEnd ? 'end-0' : 'start-0'
+                    }`}
                 >
                     <div className="grid grid-cols-2 gap-1.5">
                         {PRESETS.map((preset) => (

@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, Clock, ExternalLink } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
@@ -219,7 +219,6 @@ function LeadsPage() {
     // the window the link asked for, rather than snapping back to the default.
     const [staleDays] = useState(() => staleDaysParam ?? DEFAULT_STALE_DAYS);
     const [staleOnly, setStaleOnly] = useState(() => staleDaysParam !== null);
-    const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
@@ -262,7 +261,6 @@ function LeadsPage() {
                         assignedTo: ownerFilter || undefined,
                         emailPresence: emailFilter || undefined,
                         staleDays: staleOnly ? staleDays : undefined,
-                        myActionsToday: myTodaysActions || undefined,
                         page: p,
                         limit,
                         sortBy,
@@ -271,7 +269,7 @@ function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort],
+        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -287,7 +285,6 @@ function LeadsPage() {
                 assignedTo: ownerFilter || undefined,
                 emailPresence: emailFilter || undefined,
                 staleDays: staleOnly ? staleDays : undefined,
-                myActionsToday: myTodaysActions || undefined,
                 page,
                 limit: pageSize,
                 sortBy: sort?.id,
@@ -304,14 +301,14 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, myTodaysActions, createdRange, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -581,18 +578,15 @@ function LeadsPage() {
             />
 
             <div className="flex flex-wrap gap-3 items-center">
-                <button
-                    type="button"
-                    onClick={() => setMyTodaysActions((v) => !v)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                        myTodaysActions
-                            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
-                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
-                >
-                    <ListChecks className="w-4 h-4" />
-                    {m.myTodaysActions}
-                </button>
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={m.searchPlaceholder}
+                        className="ps-9"
+                    />
+                </div>
                 {/* The dashboard's stale tile links straight here. A visible,
                     togglable control rather than an invisible URL filter, so a
                     shortened list always says why it is short — and can be
@@ -610,15 +604,6 @@ function LeadsPage() {
                     <Clock className="w-4 h-4" />
                     {fmt(m.noActivityFilter, { days: staleDays })}
                 </button>
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <Input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={m.searchPlaceholder}
-                        className="ps-9"
-                    />
-                </div>
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {/* Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts. The
@@ -679,11 +664,9 @@ function LeadsPage() {
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
                 emptyMessage={
-                    myTodaysActions
-                        ? m.myTodaysActionsEmpty
-                        : staleOnly
-                            ? fmt(m.noActivityEmpty, { days: staleDays })
-                            : m.emptyMessage
+                    staleOnly
+                        ? fmt(m.noActivityEmpty, { days: staleDays })
+                        : m.emptyMessage
                 }
                 clearSelectionSignal={selectionEpoch}
                 bulkActions={bulkActions}
