@@ -202,8 +202,10 @@ describe('CrmDashboard', () => {
         render(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('Activity calendar')).toBeInTheDocument();
-        expect(await screen.findAllByTestId('heatmap-cell-done')).toHaveLength(14);
-        expect(screen.getAllByTestId('heatmap-cell-planned')).toHaveLength(14);
+        // One square per day now, split into a completed half and a planned one.
+        expect(await screen.findAllByTestId('heatmap-cell')).toHaveLength(14);
+        expect(screen.getAllByTestId('heatmap-half-done')).toHaveLength(14);
+        expect(screen.getAllByTestId('heatmap-half-planned')).toHaveLength(14);
 
         // The window it asked for is its own — whole weeks either side of today,
         // never the `today` the tabs default to.

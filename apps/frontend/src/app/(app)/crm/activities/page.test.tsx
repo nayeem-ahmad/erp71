@@ -1,7 +1,7 @@
 'use client';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ActivitiesPage from './page';
-import { dhakaDateOnly } from '@/lib/created-range';
+import { tenantDateOnly } from '@/lib/created-range';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -84,7 +84,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         render(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
-        const today = dhakaDateOnly();
+        const today = tenantDateOnly();
         expect(lastCall()).toEqual(
             expect.objectContaining({ dueFrom: today, dueTo: today }),
         );

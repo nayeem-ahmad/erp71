@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { ActivityHeatmap, rampLevel, type ActivityHeatmapPoint } from './ActivityHeatmap';
+import { ActivityHeatmap, rampLevel, toMonths, type ActivityHeatmapPoint } from './ActivityHeatmap';
 
 const labels = {
     title: 'Activity calendar',
@@ -29,6 +29,23 @@ function days(
         return { date: at.toISOString().slice(0, 10), done: 0, planned: 0, ...counts(index) };
     });
 }
+
+/**
+ * Real rects for the frame and the hovered cells. jsdom reports zeroes for
+ * everything, which would collapse every tooltip position to the same case.
+ */
+function stubGeometry(cellLefts: Record<string, number>, frameWidth = 400, cellTop = 90) {
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+    ) {
+        if (this.dataset.testid === 'heatmap-frame') {
+            return { left: 0, top: 0, width: frameWidth, height: 200 } as DOMRect;
+        }
+        return { left: cellLefts[this.dataset.date ?? ''] ?? 0, top: cellTop, width: 20, height: 24 } as DOMRect;
+    });
+}
+
+afterEach(() => jest.restoreAllMocks());
 
 function renderHeatmap(props: Partial<React.ComponentProps<typeof ActivityHeatmap>> = {}) {
     // 2026-07-05 is a Sunday, so the window starts cleanly on a column boundary.
@@ -65,28 +82,70 @@ describe('rampLevel', () => {
     });
 });
 
-describe('ActivityHeatmap', () => {
-    it('draws one square per day in each of the two bands', () => {
-        renderHeatmap();
 
-        expect(screen.getAllByTestId('heatmap-cell-done')).toHaveLength(14);
-        expect(screen.getAllByTestId('heatmap-cell-planned')).toHaveLength(14);
+describe('toMonths', () => {
+    it('puts each calendar month in its own block', () => {
+        const months = toMonths(days('2026-06-28', 40));
+
+        expect(months.map((month) => month.key)).toEqual(['2026-06', '2026-07', '2026-08']);
     });
 
-    it('gives each series its own hue', () => {
+    it('splits a week that straddles a boundary rather than filing it under one month', () => {
+        // 2026-06-28 is a Sunday, so Jun 28-30 and Jul 1-4 share a calendar week.
+        const [june, july] = toMonths(days('2026-06-28', 10));
+
+        // June keeps Sun-Tue of that week; the rest of the column is padding.
+        expect(june.weeks).toHaveLength(1);
+        expect(june.weeks[0].filter(Boolean).map((point) => point!.date)).toEqual([
+            '2026-06-28',
+            '2026-06-29',
+            '2026-06-30',
+        ]);
+        // July picks the same week up at Wednesday, in the right weekday rows.
+        expect(july.weeks[0][2]).toBeNull();
+        expect(july.weeks[0][3]?.date).toBe('2026-07-01');
+    });
+
+    it('keeps every day exactly once across the blocks', () => {
+        const points = days('2026-06-28', 40);
+        const laid = toMonths(points).flatMap((month) => month.weeks.flat()).filter(Boolean);
+
+        expect(laid.map((point) => point!.date)).toEqual(points.map((point) => point.date));
+    });
+});
+
+describe('ActivityHeatmap', () => {
+    it('draws one square per day, carrying both series', () => {
         renderHeatmap();
 
-        const done = screen.getAllByTestId('heatmap-cell-done')[1];
-        const planned = screen.getAllByTestId('heatmap-cell-planned')[1];
+        expect(screen.getAllByTestId('heatmap-cell')).toHaveLength(14);
+        // Each cell is split, so both halves exist on every day.
+        expect(screen.getAllByTestId('heatmap-half-done')).toHaveLength(14);
+        expect(screen.getAllByTestId('heatmap-half-planned')).toHaveLength(14);
+    });
+
+    it('gives each half of a cell its own hue', () => {
+        renderHeatmap();
+
+        const done = screen.getAllByTestId('heatmap-half-done')[1];
+        const planned = screen.getAllByTestId('heatmap-half-planned')[1];
 
         expect(done.className).toContain('bg-primary');
         expect(planned.className).toContain('bg-series-2');
     });
 
+    it('stacks completed above planned within the day', () => {
+        renderHeatmap();
+
+        const cell = screen.getAllByTestId('heatmap-cell')[1];
+        const halves = [...cell.children].map((child) => (child as HTMLElement).dataset.testid);
+        expect(halves).toEqual(['heatmap-half-done', 'heatmap-half-planned']);
+    });
+
     it('leaves a day with nothing on it grey rather than tinted', () => {
         renderHeatmap();
 
-        const [first] = screen.getAllByTestId('heatmap-cell-done');
+        const [first] = screen.getAllByTestId('heatmap-half-done');
         expect(first).toHaveAttribute('data-level', '0');
         expect(first.className).toContain('bg-gray-100');
     });
@@ -95,7 +154,7 @@ describe('ActivityHeatmap', () => {
         renderHeatmap();
 
         const byDate = (series: string, date: string) =>
-            screen.getAllByTestId(`heatmap-cell-${series}`).find((cell) => cell.dataset.date === date)!;
+            screen.getAllByTestId(`heatmap-half-${series}`).find((cell) => cell.dataset.date === date)!;
 
         // 2026-07-14 is after `today`; the work has not had a chance to happen.
         expect(byDate('done', '2026-07-14')).toHaveAttribute('data-level', 'unreached');
@@ -107,7 +166,7 @@ describe('ActivityHeatmap', () => {
         renderHeatmap();
 
         const todayCells = screen
-            .getAllByTestId('heatmap-cell-done')
+            .getAllByTestId('heatmap-cell')
             .filter((cell) => cell.className.includes('ring-gray-500'));
 
         expect(todayCells).toHaveLength(1);
@@ -117,7 +176,7 @@ describe('ActivityHeatmap', () => {
     it('names both counts on a cell, whichever band is hovered', () => {
         renderHeatmap();
 
-        const cell = screen.getAllByTestId('heatmap-cell-planned')[1];
+        const cell = screen.getAllByTestId('heatmap-cell')[1];
         expect(cell).toHaveAttribute('title', 'Jul 6 — 4 completed · 1 planned');
 
         fireEvent.mouseEnter(cell);
@@ -127,6 +186,65 @@ describe('ActivityHeatmap', () => {
 
         fireEvent.mouseLeave(cell);
         expect(screen.queryByTestId('heatmap-tooltip')).not.toBeInTheDocument();
+    });
+
+
+    it('draws a separate labelled block per month', () => {
+        renderHeatmap({
+            points: days('2026-06-28', 40, (i) => (i === 5 ? { done: 2 } : {})),
+            max: { done: 2, planned: 0 },
+        });
+
+        const blocks = screen.getAllByTestId('heatmap-month');
+        expect(blocks.map((block) => block.dataset.month)).toEqual(['2026-06', '2026-07', '2026-08']);
+        expect(blocks[0]).toHaveTextContent('Jun');
+        expect(blocks[1]).toHaveTextContent('Jul');
+    });
+
+    /**
+     * The tooltip used to live inside the `overflow-x-auto` scroller, which clips
+     * on both axes — a cell near the left edge had its tooltip sheared in half.
+     * It now hangs by whichever edge it is near rather than always by its centre.
+     *
+     * jsdom gives every element a zero rect, so the geometry is stubbed: without
+     * it the maths is never exercised and every case reads as "centre".
+     */
+    it('anchors the tooltip by whichever edge its cell is near', () => {
+        // A 400px frame; cells near the left edge, in the middle, and near the right.
+        stubGeometry({ '2026-07-05': 6, '2026-07-06': 200, '2026-07-18': 386 });
+        renderHeatmap();
+
+        const at = (date: string) =>
+            screen.getAllByTestId('heatmap-cell').find((cell) => cell.dataset.date === date)!;
+
+        fireEvent.mouseEnter(at('2026-07-05'));
+        expect(screen.getByTestId('heatmap-tooltip')).toHaveAttribute('data-align', 'start');
+        fireEvent.mouseLeave(at('2026-07-05'));
+
+        fireEvent.mouseEnter(at('2026-07-06'));
+        expect(screen.getByTestId('heatmap-tooltip')).toHaveAttribute('data-align', 'center');
+        fireEvent.mouseLeave(at('2026-07-06'));
+
+        fireEvent.mouseEnter(at('2026-07-18'));
+        expect(screen.getByTestId('heatmap-tooltip')).toHaveAttribute('data-align', 'end');
+    });
+
+    it('drops the tooltip below a cell in the top rows rather than off the top', () => {
+        stubGeometry({ '2026-07-06': 200 }, 400, 10);
+        renderHeatmap();
+
+        fireEvent.mouseEnter(screen.getAllByTestId('heatmap-cell')[1]);
+        // Hanging upwards from 10px would put it above the card.
+        expect(screen.getByTestId('heatmap-tooltip').className).not.toContain('-translate-y-full');
+    });
+
+    it('keeps the tooltip out of the scrolling element entirely', () => {
+        renderHeatmap();
+
+        fireEvent.mouseEnter(screen.getAllByTestId('heatmap-cell')[1]);
+        const tooltip = screen.getByTestId('heatmap-tooltip');
+
+        expect(tooltip.closest('.overflow-x-auto')).toBeNull();
     });
 
     it('carries the same numbers in a table for anyone who cannot read a square', () => {
@@ -149,14 +267,14 @@ describe('ActivityHeatmap', () => {
         renderHeatmap({ points: days('2026-07-05', 14), max: { done: 0, planned: 0 } });
 
         expect(screen.getByText(labels.empty)).toBeInTheDocument();
-        expect(screen.queryAllByTestId('heatmap-cell-done')).toHaveLength(0);
+        expect(screen.queryAllByTestId('heatmap-cell')).toHaveLength(0);
     });
 
     it('shows a skeleton while the window is still loading', () => {
         renderHeatmap({ loading: true });
 
         expect(screen.getByTestId('heatmap-skeleton')).toBeInTheDocument();
-        expect(screen.queryAllByTestId('heatmap-cell-done')).toHaveLength(0);
+        expect(screen.queryAllByTestId('heatmap-cell')).toHaveLength(0);
     });
 
     it('pads a window that does not start on a Sunday instead of shifting the week', () => {
@@ -166,7 +284,7 @@ describe('ActivityHeatmap', () => {
             max: { done: 0, planned: 1 },
         });
 
-        const cells = screen.getAllByTestId('heatmap-cell-planned');
+        const cells = screen.getAllByTestId('heatmap-cell');
         expect(cells).toHaveLength(7);
         expect(cells[0].dataset.date).toBe('2026-07-08');
     });

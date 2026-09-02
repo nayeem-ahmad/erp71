@@ -60,3 +60,40 @@ export function currentTimeInZone(timeZone: string, locale?: string): string | n
         return null;
     }
 }
+
+/**
+ * Minutes east of UTC in `timeZone` at `at` — DST-aware, unlike a stored offset.
+ *
+ * The client has to agree with the server about where a day starts, and the
+ * server resolves the offset per instant (`common/tenant-time.util.ts`). A fixed
+ * shift here would drift from it for an hour twice a year in any zone that
+ * observes DST.
+ */
+export function zoneOffsetMinutes(timeZone: string, at: Date): number {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    }).formatToParts(at);
+    const read = (type: Intl.DateTimeFormatPartTypes) =>
+        Number(parts.find((part) => part.type === type)?.value ?? 0);
+    const wall = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour') % 24, read('minute'), read('second'));
+    return Math.round((wall - at.getTime()) / 60_000);
+}
+
+/**
+ * The UTC instant at which local midnight of `y-m-d` occurs in `timeZone`.
+ *
+ * Two passes, because the offset needed to make the conversion depends on the
+ * instant it produces; away from a transition they agree.
+ */
+export function startOfZonedDay(year: number, month: number, day: number, timeZone: string): Date {
+    const reading = Date.UTC(year, month, day);
+    const first = reading - zoneOffsetMinutes(timeZone, new Date(reading)) * 60_000;
+    return new Date(reading - zoneOffsetMinutes(timeZone, new Date(first)) * 60_000);
+}
