@@ -29,6 +29,7 @@ import {
 } from '@erp71/shared-types';
 import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { isAccountingAdvancedReportPath } from '@/lib/plan-gated-paths';
+import { isPlatformAdminOnlyPath } from '@/lib/platform-admin-paths';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
@@ -180,6 +181,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, []);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);
+
+    // Platform-admin-only surfaces (`/admin/*`, `/status`) must not render their
+    // shell before we know who is looking. The redirect effect below only runs
+    // after hydration and `/auth/me`, so without this gate a tenant user — or a
+    // signed-out visitor — sees the whole platform console, and its panels fire
+    // their (403ing) admin API calls, for as long as that round trip takes.
+    const canRenderChildren = !isPlatformAdminOnlyPath(pathname)
+        || (hasResolvedUser && Boolean(user?.is_platform_admin));
     // workspaceEpoch bumps after we restore this tab's shop context.
     void workspaceEpoch;
     const activeContext = globalThis.window === undefined ? null : getWorkspaceItem('active_context');
@@ -646,7 +655,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {/* Page content */}
                 <main className="flex-1 overflow-hidden">
                     <CompactUiProvider density="compact">
-                        {children}
+                        {canRenderChildren ? children : null}
                     </CompactUiProvider>
                 </main>
             </div>
