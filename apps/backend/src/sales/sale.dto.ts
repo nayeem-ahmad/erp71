@@ -62,6 +62,20 @@ export class CreateSaleDto {
     @IsString()
     referenceNumber?: string; // User-editable reference number
 
+    /**
+     * Source document this entry was converted from, set by the "convert to
+     * sale" action on the quotations and sales-orders lists. Both are stored on
+     * the sale as real foreign keys — `referenceNumber` above is the tenant's
+     * own invoice numbering and cannot double as a pointer to another document.
+     */
+    @IsOptional()
+    @IsString()
+    quotationId?: string;
+
+    @IsOptional()
+    @IsString()
+    salesOrderId?: string;
+
     @IsOptional()
     @IsDateString()
     saleDate?: string;

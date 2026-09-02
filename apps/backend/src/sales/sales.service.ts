@@ -52,6 +52,7 @@ export class SalesService {
 
         const result = await this.db.$transaction(async (tx) => {
             const prep = await this.prepareSale(tx, tenantId, dto);
+            const source = await this.resolveSourceDocuments(tx, tenantId, dto);
 
             // 1. Generate Serial Number (Simplified for v0.1)
             const serialNumber = `SL-${Date.now()}`;
@@ -70,6 +71,8 @@ export class SalesService {
                     customer_id: dto.customerId,
                     serial_number: serialNumber,
                     reference_number: referenceNumber,
+                    quotation_id: source.quotationId,
+                    sales_order_id: source.salesOrderId,
                     total_amount: prep.computedTotal,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
@@ -86,6 +89,8 @@ export class SalesService {
                 },
             });
 
+            await this.markQuotationConverted(tx, tenantId, source.quotationId);
+
             return this.applySalePostings(tx, tenantId, userId, dto, sale, prep);
         });
 
@@ -97,6 +102,63 @@ export class SalesService {
         }
 
         return result;
+    }
+
+    /**
+     * Resolves the quotation / sales order a "convert to sale" entry came from.
+     *
+     * Both ids arrive from the client, so both are re-read inside the tenant
+     * before they are written: an id belonging to another workspace would
+     * otherwise be stored verbatim and then leak that document's number back
+     * out on the sale's detail page.
+     *
+     * Deliberately no "already invoiced" check. Part-invoicing one order over
+     * several deliveries is normal retail, and the quotation → order → sale
+     * chain would fail such a check on its second hop even for a single
+     * invoice.
+     */
+    private async resolveSourceDocuments(tx: any, tenantId: string, dto: CreateSaleDto) {
+        const [quotation, salesOrder] = await Promise.all([
+            dto.quotationId
+                ? tx.quotation.findFirst({
+                    where: { id: dto.quotationId, tenant_id: tenantId },
+                    select: { id: true },
+                })
+                : null,
+            dto.salesOrderId
+                ? tx.salesOrder.findFirst({
+                    where: { id: dto.salesOrderId, tenant_id: tenantId },
+                    select: { id: true },
+                })
+                : null,
+        ]);
+
+        if (dto.quotationId && !quotation) {
+            throw new NotFoundException('Quotation not found');
+        }
+        if (dto.salesOrderId && !salesOrder) {
+            throw new NotFoundException('Sales order not found');
+        }
+
+        return {
+            quotationId: quotation?.id ?? null,
+            salesOrderId: salesOrder?.id ?? null,
+        };
+    }
+
+    /**
+     * A quotation invoiced directly is converted, exactly as one turned into an
+     * order is. Left alone once it already reads CONVERTED so the natural
+     * quote → order → sale chain does not have to unwind anything, and so a
+     * second invoice against the same quote cannot rewrite its history.
+     */
+    private async markQuotationConverted(tx: any, tenantId: string, quotationId: string | null) {
+        if (!quotationId) return;
+
+        await tx.quotation.updateMany({
+            where: { id: quotationId, tenant_id: tenantId, status: { not: 'CONVERTED' } },
+            data: { status: 'CONVERTED' },
+        });
     }
 
     /**
@@ -436,6 +498,11 @@ export class SalesService {
                 ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
                 : await this.generateReferenceNumber(tenantId, tx);
 
+            // The link is recorded, but the quotation is deliberately *not*
+            // marked CONVERTED here: a parked draft posts nothing, so the quote
+            // is still live until the draft is finalised.
+            const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
@@ -444,6 +511,8 @@ export class SalesService {
                     customer_id: dto.customerId,
                     serial_number: `SL-${Date.now()}`,
                     reference_number: referenceNumber,
+                    quotation_id: source.quotationId,
+                    sales_order_id: source.salesOrderId,
                     total_amount: dto.totalAmount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
@@ -575,6 +644,10 @@ export class SalesService {
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                 },
             });
+
+            // The draft carried the source document across; posting it is the
+            // moment the quotation behind it is genuinely converted.
+            await this.markQuotationConverted(tx, tenantId, draft.quotation_id);
 
             return this.applySalePostings(tx, tenantId, userId, saleDto, sale, prep);
         });
@@ -720,6 +793,10 @@ export class SalesService {
                 items: { include: { product: true, returns: true } },
                 payments: true,
                 customer: true,
+                // Just enough to name the document this entry was converted
+                // from and link back to it.
+                quotation: { select: { id: true, quote_number: true, doc_kind: true } },
+                salesOrder: { select: { id: true, order_number: true } },
             },
         });
 

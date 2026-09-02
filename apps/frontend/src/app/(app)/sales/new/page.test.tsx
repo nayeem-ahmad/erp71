@@ -18,12 +18,34 @@ jest.mock('@/lib/api', () => ({
         getCustomers: jest.fn(),
         searchProductsByQuantity: jest.fn(),
         getPaymentMethods: jest.fn(),
+        getQuotation: jest.fn(),
+        getOrder: jest.fn(),
     },
 }));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
+const mockReplace = jest.fn();
+let searchParams: Record<string, string> = {};
+
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: mockReplace }),
+    usePathname: () => '/sales/new',
+    useSearchParams: () => ({ get: (key: string) => searchParams[key] ?? null }),
+    useParams: () => ({}),
+}));
+
+/** `?quotationId=…` / `?salesOrderId=…`, as the convert buttons pass them. */
+const setSearchParams = (next: Record<string, string> = {}) => {
+    searchParams = next;
+};
 
 describe('NewSalePage — editable sale date', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        setSearchParams();
         (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
@@ -101,6 +123,7 @@ describe('NewSalePage — editable sale date', () => {
 describe('NewSalePage — product staging and drafts', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        setSearchParams();
         (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
@@ -197,5 +220,155 @@ describe('NewSalePage — product staging and drafts', () => {
                 expect.objectContaining({ isDraft: true, amountPaid: 0 }),
             );
         });
+    });
+});
+
+describe('NewSalePage — converting a quotation or sales order', () => {
+    const quotation = {
+        id: 'quote-1',
+        quote_number: 'QUO-00001',
+        currency: 'BDT',
+        exchange_rate: null,
+        notes: 'Deliver before Eid',
+        customer_id: 'cust-1',
+        customer: { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: '0' },
+        items: [
+            { product_id: 'prod-1', quantity: 2, unit_price: '150', product: { name: 'Rice 5kg' } },
+        ],
+    };
+
+    const salesOrder = {
+        id: 'order-1',
+        order_number: 'ORD-00001',
+        amount_paid: '500',
+        customer_id: 'cust-1',
+        customer: { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: '0' },
+        items: [
+            { product_id: 'prod-1', quantity: 3, price_at_order: '200', product: { name: 'Rice 5kg' } },
+        ],
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([]);
+        (api.getQuotation as jest.Mock).mockResolvedValue(quotation);
+        (api.getOrder as jest.Mock).mockResolvedValue(salesOrder);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+    });
+
+    it('loads the quotation lines, customer and note into the entry form', async () => {
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalledWith('quote-1'));
+
+        expect(screen.getByText('Rice 5kg')).toBeInTheDocument();
+        expect(screen.getByText('Alice Corp')).toBeInTheDocument();
+        expect(screen.getByLabelText('Note')).toHaveValue('Deliver before Eid');
+        // 2 × 150
+        const lineTotal = screen.getAllByRole('cell').find((cell) => cell.textContent === '৳300.00');
+        expect(lineTotal).toBeDefined();
+    });
+
+    it('names the quotation it is converting and links back to it', async () => {
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalled());
+
+        expect(screen.getByRole('link', { name: 'QUO-00001' }))
+            .toHaveAttribute('href', '/sales/quotes/quote-1');
+    });
+
+    it('sends quotationId with the sale so the invoice records its source', async () => {
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalled());
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '300' } });
+
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(
+                expect.objectContaining({ quotationId: 'quote-1', salesOrderId: undefined }),
+            );
+        });
+    });
+
+    it('translates a foreign-currency proforma at the rate written on it', async () => {
+        (api.getQuotation as jest.Mock).mockResolvedValue({
+            ...quotation,
+            currency: 'USD',
+            exchange_rate: '120',
+            items: [{ product_id: 'prod-1', quantity: 2, unit_price: '10', product: { name: 'Rice 5kg' } }],
+        });
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalled());
+
+        // 2 × (10 USD × 120)
+        const lineTotal = screen.getAllByRole('cell').find((cell) => cell.textContent === '৳2400.00');
+        expect(lineTotal).toBeDefined();
+    });
+
+    it('refuses a foreign-currency proforma that carries no exchange rate', async () => {
+        const { toast } = require('@/lib/toast');
+        (api.getQuotation as jest.Mock).mockResolvedValue({
+            ...quotation,
+            currency: 'USD',
+            exchange_rate: null,
+        });
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalled());
+
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('no exchange rate'));
+        expect(screen.queryByText('Rice 5kg')).not.toBeInTheDocument();
+    });
+
+    it('loads a sales order and sends salesOrderId with the sale', async () => {
+        setSearchParams({ salesOrderId: 'order-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getOrder).toHaveBeenCalledWith('order-1'));
+
+        // 3 × 200
+        const lineTotal = screen.getAllByRole('cell').find((cell) => cell.textContent === '৳600.00');
+        expect(lineTotal).toBeDefined();
+        // Deposits already taken on the order are surfaced, not silently applied.
+        expect(screen.getByText(/Deposits already collected/)).toBeInTheDocument();
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '600' } });
+
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(
+                expect.objectContaining({ salesOrderId: 'order-1', quotationId: undefined }),
+            );
+        });
+    });
+
+    it('drops the source document once its sale is saved', async () => {
+        setSearchParams({ quotationId: 'quote-1' });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getQuotation).toHaveBeenCalled());
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '300' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sales/new'));
     });
 });

@@ -336,6 +336,7 @@ export const salesMessages = {
                 saveAllChanges: "সংরক্ষণ সব Changes",
                 saving: "সংরক্ষণ হচ্ছে...",
                 draftBanner: "এটি একটি খসড়া — স্টক বা হিসাবে এখনও কিছু যোগ হয়নি।",
+                convertedFrom: "{document} থেকে রূপান্তরিত",
                 completeSale: "বিক্রয় সম্পন্ন করুন",
                 completing: "সম্পন্ন হচ্ছে...",
                 completed: "খসড়া সম্পন্ন হয়েছে — স্টক ও হিসাব আপডেট হয়েছে।",
@@ -380,6 +381,7 @@ export const salesMessages = {
                 onlineOrders: "অনলাইন অর্ডার",
             },
             newOrder: "নতুন অর্ডার",
+            convertToSale: "বিক্রয়ে রূপান্তর করুন",
             columns: {
                 orderNumber: "অর্ডার #",
                 date: "তারিখ",
@@ -434,6 +436,7 @@ export const salesMessages = {
             title: "বিক্রয় Quotations",
             subtitle: "প্রাক্কলন তৈরি করুন ও মেয়াদ পর্যবেক্ষণ করুন",
             newQuotation: "নতুন কোটেশন",
+            convertToSale: "বিক্রয়ে রূপান্তর করুন",
             newProforma: "নতুন প্রোফর্মা ইনভয়েস",
             columns: {
                 quoteNumber: "কোট #",
