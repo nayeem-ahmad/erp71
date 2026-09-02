@@ -423,6 +423,9 @@ function BomTab() {
     }
 
     const recipeCountLabel = fmt(t.manufacturing.recipeCount, { count: boms.length });
+    // A recipe that consumed its own output would decrement the finished goods it
+    // just produced, so the output product is not on offer as a component.
+    const componentOptions = products.filter((product) => product.id !== form.productId);
 
     return (
         <>
@@ -516,7 +519,16 @@ function BomTab() {
                             <Select
                                 id="bom-output-product"
                                 value={form.productId}
-                                onChange={(e) => setForm((f) => ({ ...f, productId: e.target.value }))}
+                                onChange={(e) =>
+                                    setForm((f) => ({
+                                        ...f,
+                                        productId: e.target.value,
+                                        // Clear any component row that has just become the output.
+                                        components: f.components.map((c) =>
+                                            c.productId === e.target.value ? { ...c, productId: '' } : c,
+                                        ),
+                                    }))
+                                }
                                 disabled={!!editingId}
                             >
                                 <option value="">{t.manufacturing.placeholders.productId}</option>
@@ -580,7 +592,7 @@ function BomTab() {
                                                 className="flex-1 min-w-0"
                                             >
                                                 <option value="">{t.manufacturing.placeholders.componentProductId}</option>
-                                                {products.map((product) => (
+                                                {componentOptions.map((product) => (
                                                     <option key={product.id} value={product.id}>
                                                         {productLabel(product)}
                                                     </option>

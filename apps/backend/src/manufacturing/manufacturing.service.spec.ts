@@ -657,6 +657,18 @@ describe('ManufacturingService', () => {
         });
     });
 
+    describe('updateBom()', () => {
+        it('rejects components that include the recipe\'s own output product', async () => {
+            db.bomRecipe.findFirst.mockResolvedValue(recipe);
+
+            await expect(
+                service.updateBom('tenant-1', 'recipe-1', {
+                    components: [{ productId: 'product-out', quantity: 1 }],
+                } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
     describe('deleteBom()', () => {
         it('refuses a recipe that production jobs still reference, instead of tripping a FK error', async () => {
             db.bomRecipe.findFirst.mockResolvedValue(recipe);
@@ -669,6 +681,19 @@ describe('ManufacturingService', () => {
     });
 
     describe('createBom()', () => {
+        it('rejects a recipe that lists its own output as a component', async () => {
+            db.product.findFirst = jest.fn().mockResolvedValue({ id: 'product-out' });
+            db.bomRecipe.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.createBom('tenant-1', {
+                    productId: 'product-out',
+                    outputQty: 1,
+                    components: [{ productId: 'product-out', quantity: 1 }],
+                } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
         it('rejects a second recipe for a product that already has one', async () => {
             db.product.findFirst = jest.fn().mockResolvedValue({ id: 'product-out' });
             db.bomRecipe.findFirst.mockResolvedValue({ id: 'recipe-1' });
