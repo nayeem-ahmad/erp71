@@ -56,3 +56,41 @@ export function rangeToWindow(range: DashboardRange, now: Date = new Date()): { 
     if (range === 'week') return { from: localMidnightUtc(y, m, d - 6), to };
     return { from: localMidnightUtc(y, m, 1), to };
 }
+
+/**
+ * Weeks of history and of lookahead the CRM activity heatmap covers, either side
+ * of the current week — 13 columns in all.
+ */
+export const HEATMAP_WEEKS_BACK = 10;
+export const HEATMAP_WEEKS_AHEAD = 2;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The activity heatmap's own window: whole Sunday-to-Saturday weeks, so every
+ * column of the grid is a full week.
+ *
+ * It deliberately ignores the range switcher, twice over. A calendar of "today"
+ * is one square; and the window has to run *past* today, because a PLANNED
+ * activity is normally in the future and a window ending today would hide almost
+ * every one of them.
+ */
+export function activityHeatmapWindow(now: Date = new Date()): { from: string; to: string } {
+    const [year, month, day] = dhakaDate(now).split('-').map(Number);
+    const today = Date.UTC(year, month - 1, day);
+    // Sunday-indexed, read off a UTC date so it matches the grid's row order.
+    const weekday = new Date(today).getUTCDay();
+
+    const from = today - (weekday + HEATMAP_WEEKS_BACK * 7) * DAY_MS;
+    const to = today + (6 - weekday + HEATMAP_WEEKS_AHEAD * 7) * DAY_MS;
+
+    return {
+        from: new Date(from).toISOString().slice(0, 10),
+        to: new Date(to).toISOString().slice(0, 10),
+    };
+}
+
+/** The Dhaka calendar day it is now, as `YYYY-MM-DD`. */
+export function todayInDhaka(now: Date = new Date()): string {
+    return dhakaDate(now);
+}

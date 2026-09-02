@@ -1,11 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
+import {
+    activityHeatmapWindow,
+    todayInDhaka,
+    HEATMAP_WEEKS_AHEAD,
+    HEATMAP_WEEKS_BACK,
+} from '@/lib/dashboard-range';
 import { routes } from '@/lib/routes';
 import ModuleDashboard, {
     AttentionSection,
@@ -17,6 +23,7 @@ import ModuleDashboard, {
 import { type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { PipelineFunnel, type FunnelStage } from '@/components/dashboard/PipelineFunnel';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
+import { ActivityHeatmap, type ActivityHeatmapPoint } from '@/components/dashboard/ActivityHeatmap';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import type { DashboardIdentity } from './dashboard-identity';
 
@@ -70,6 +77,13 @@ type OverviewResponse = {
             failed_count: number;
         }>;
     };
+};
+
+type HeatmapResponse = {
+    filters: { from: string; to: string };
+    points: ActivityHeatmapPoint[];
+    max: { done: number; planned: number };
+    totals: { done: number; planned: number };
 };
 
 type TrendPoint = {
@@ -132,6 +146,33 @@ export default function CrmDashboard({
         fetchTrends: (window) => api.getCrmDashboardTrends(window),
         unavailableMessage: crm.overviewUnavailable,
     });
+
+    /**
+     * The heatmap runs on its own window and so on its own request: it reaches
+     * back further than "this month" and forward past today, and neither end
+     * moves when the range tabs do. A failure here costs the calendar and
+     * nothing else — same rule `useModuleDashboard` applies to the trends.
+     */
+    const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null);
+    const [heatmapLoading, setHeatmapLoading] = useState(true);
+    const today = useMemo(() => todayInDhaka(), []);
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const result = await api.getCrmDashboardActivityHeatmap(activityHeatmapWindow());
+                if (!cancelled) setHeatmap(result);
+            } catch {
+                if (!cancelled) setHeatmap(null);
+            } finally {
+                if (!cancelled) setHeatmapLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const pipeline = overview?.pipeline;
     const followUps = overview?.follow_ups;
@@ -339,6 +380,37 @@ export default function CrmDashboard({
                         emptyLabel={crm.sourcesEmpty}
                     />
                 </div>
+            </DashboardSection>
+
+            <DashboardSection label={crm.sectionRhythm}>
+                <ActivityHeatmap
+                    points={heatmap?.points ?? []}
+                    max={heatmap?.max ?? { done: 0, planned: 0 }}
+                    today={today}
+                    loading={heatmapLoading}
+                    locale={locale}
+                    labels={{
+                        title: crm.heatmapTitle,
+                        subtitle: formatMessage(crm.heatmapSubtitle, {
+                            back: HEATMAP_WEEKS_BACK,
+                            ahead: HEATMAP_WEEKS_AHEAD,
+                        }),
+                        done: crm.heatmapDone,
+                        planned: crm.heatmapPlanned,
+                        less: crm.heatmapLess,
+                        more: crm.heatmapMore,
+                        empty: crm.heatmapEmpty,
+                        today: crm.heatmapToday,
+                        dayCounts: crm.heatmapDayCounts,
+                        summary: formatMessage(crm.heatmapSummary, {
+                            done: heatmap?.totals.done ?? 0,
+                            planned: heatmap?.totals.planned ?? 0,
+                            days: heatmap?.points.length ?? 0,
+                        }),
+                        tableCaption: crm.heatmapTableCaption,
+                        tableDate: crm.heatmapTableDate,
+                    }}
+                />
             </DashboardSection>
 
             <DashboardSection label={crm.sectionTeam}>

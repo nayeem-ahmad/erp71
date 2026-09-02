@@ -253,4 +253,90 @@ describe('CrmDashboardService', () => {
             expect(result.points.every((point) => point.leads_created === 0)).toBe(true);
         });
     });
+
+    describe('getActivityHeatmap', () => {
+        /** `findMany` is called once per series; route each call by its status. */
+        const activities = (done: any[], planned: any[]) => {
+            db.crmActivity.findMany.mockImplementation(({ where }: any) =>
+                Promise.resolve(where?.status === 'DONE' ? done : planned),
+            );
+        };
+
+        it('emits a square for every day in the window, including empty ones', async () => {
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            expect(result.points).toHaveLength(5);
+            expect(result.points[0]).toEqual({ date: '2026-07-01', done: 0, planned: 0 });
+            expect(result.max).toEqual({ done: 0, planned: 0 });
+        });
+
+        it('dates each series by the column that means "this day" for it', async () => {
+            activities(
+                [{ completed_at: new Date(2026, 6, 2, 14, 0) }],
+                [{ due_at: new Date(2026, 6, 4, 9, 0) }, { due_at: new Date(2026, 6, 4, 17, 0) }],
+            );
+
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            const byDate = Object.fromEntries(result.points.map((p) => [p.date, p]));
+            expect(byDate['2026-07-02']).toEqual({ date: '2026-07-02', done: 1, planned: 0 });
+            expect(byDate['2026-07-04']).toEqual({ date: '2026-07-04', done: 0, planned: 2 });
+        });
+
+        it('buckets a late-evening row onto that evening, not the next UTC day', async () => {
+            activities([{ completed_at: new Date(2026, 6, 3, 23, 30) }], []);
+
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            const byDate = Object.fromEntries(result.points.map((p) => [p.date, p]));
+            expect(byDate['2026-07-03'].done).toBe(1);
+            expect(byDate['2026-07-04'].done).toBe(0);
+        });
+
+        it('counts every DONE and PLANNED row, not the narrowed sets the KPI cards use', async () => {
+            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            for (const call of db.crmActivity.findMany.mock.calls) {
+                expect(call[0].where).not.toHaveProperty('channel_id');
+                expect(call[0].where).not.toHaveProperty('subject');
+            }
+        });
+
+        it('leaves CANCELLED rows out of both series', async () => {
+            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            const statuses = db.crmActivity.findMany.mock.calls.map((call: any[]) => call[0].where.status);
+            expect(statuses).toEqual(['DONE', 'PLANNED']);
+        });
+
+        it('reports each series own busiest day, so the client can step its own ramp', async () => {
+            activities(
+                [
+                    { completed_at: new Date(2026, 6, 2, 9, 0) },
+                    { completed_at: new Date(2026, 6, 2, 10, 0) },
+                    { completed_at: new Date(2026, 6, 3, 9, 0) },
+                ],
+                [{ due_at: new Date(2026, 6, 4, 9, 0) }],
+            );
+
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+
+            expect(result.max).toEqual({ done: 2, planned: 1 });
+            expect(result.totals).toEqual({ done: 3, planned: 1 });
+        });
+
+        it('drops the oldest weeks rather than the newest when the window is over-long', async () => {
+            const result = await service.getActivityHeatmap(TENANT, { from: '2020-01-01', to: '2026-07-05' });
+
+            expect(result.points).toHaveLength(371);
+            expect(result.points.at(-1)!.date).toBe('2026-07-05');
+            expect(result.filters).toEqual({ from: result.points[0].date, to: '2026-07-05' });
+        });
+
+        it('leaves a window inside the ceiling exactly as asked', async () => {
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-04-13', to: '2026-07-05' });
+
+            expect(result.filters).toEqual({ from: '2026-04-13', to: '2026-07-05' });
+        });
+    });
 });

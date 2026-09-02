@@ -33,4 +33,14 @@ export class CrmDashboardController {
     getTrends(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
         return this.service.getTrends(tenant.tenantId, query);
     }
+
+    /**
+     * Its own route rather than another field on `trends`, because it runs on its
+     * own window: the dashboard's range switcher offers today / this week / this
+     * month, and a calendar of one day is one square.
+     */
+    @Get('activity-heatmap')
+    getActivityHeatmap(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.service.getActivityHeatmap(tenant.tenantId, query);
+    }
 }
