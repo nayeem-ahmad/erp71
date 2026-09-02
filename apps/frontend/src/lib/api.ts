@@ -1852,6 +1852,12 @@ export const api = {
             return tenant?.stores ?? [];
         });
     },
+    createStore: (data: { name: string; address?: string }) =>
+        fetchWithAuth('/stores', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     updateStore: (id: string, data: { name: string }) =>
         fetchWithAuth(`/stores/${id}`, {
             method: 'PATCH',
