@@ -15,7 +15,7 @@ import {
     normalizeMobileToE164,
     normalizePlanFeatures,
     parseTenantFeatureOverrides,
-    PLATFORM_FEATURE_KEYS,
+    TENANT_OVERRIDABLE_FEATURE_KEYS,
     resolveAiCreditsMonthly,
     resolveTenantFeatures,
     SubscriptionPlanCode,
@@ -51,7 +51,11 @@ import {
     SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
-const ACTIVE_TENANT_FILTER = { deleted_at: null } as const;
+// Excludes the platform's own internal workspace (`is_platform_workspace`): it
+// is a tenant row only so the project module can be scoped to it, and it has no
+// owner to bill, no plan and no stores. It belongs in none of the customer
+// listings or metrics built from this filter.
+const ACTIVE_TENANT_FILTER = { deleted_at: null, is_platform_workspace: false } as const;
 
 @Injectable()
 export class AdminTenantsService {
@@ -422,7 +426,7 @@ export class AdminTenantsService {
 
         // `null` clears an override (back to inherit); an omitted key is left alone.
         const overrides: TenantFeatureOverrides = parseTenantFeatureOverrides(tenant.feature_overrides);
-        for (const key of PLATFORM_FEATURE_KEYS) {
+        for (const key of TENANT_OVERRIDABLE_FEATURE_KEYS) {
             const value = dto[key];
             if (value === undefined) continue;
             if (value === null) delete overrides[key];

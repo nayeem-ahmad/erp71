@@ -519,6 +519,10 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
  * `addNavNodesToLayout` will not reparent items already on a saved layout.
  * If a custom `platform_admin_layout` exists, reset it from Navigation settings
  * to pick up the new tree; an unset layout already uses this default.
+ *
+ * The 2026-09-02 platform project workspace added the `projects` module and its
+ * seven links here. For a saved layout:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects,projects.list,projects.boards,projects.tasks,projects.sprints,projects.hour-logs,projects.hour-log-report,projects.setup`
  */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
@@ -561,8 +565,20 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.platform-settings.ai', 'admin.platform', 7),
   layoutNode('admin.platform-settings.feedback-automation', 'admin.platform', 8),
 
-  layoutNode('whats-new', null, 1),
-  layoutNode('help', null, 2),
+  // The platform team's own project workspace. Same nodes as the tenant module —
+  // one set of pages serves both — hung off the admin console instead of a shop
+  // sidebar. Hidden unless the `platformProjects` switch is on.
+  layoutNode('projects', null, 1),
+  layoutNode('projects.list', 'projects', 0),
+  layoutNode('projects.boards', 'projects', 1),
+  layoutNode('projects.tasks', 'projects', 2),
+  layoutNode('projects.sprints', 'projects', 3),
+  layoutNode('projects.hour-logs', 'projects', 4),
+  layoutNode('projects.hour-log-report', 'projects', 5),
+  layoutNode('projects.setup', 'projects', 6),
+
+  layoutNode('whats-new', null, 2),
+  layoutNode('help', null, 3),
 ];
 
 export function getDefaultNavLayout(scope: NavScope): NavLayoutNode[] {

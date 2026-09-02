@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PLATFORM_FEATURE_KEYS, type PlatformFeatureKey } from '@erp71/shared-types';
+import { TENANT_OVERRIDABLE_FEATURE_KEYS, type PlatformFeatureKey } from '@erp71/shared-types';
 import { api, type AdminTenantFeatures, type AdminTenantAddonSubscription } from '@/lib/api';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
 
@@ -17,7 +17,12 @@ export type DemoBatch = {
 /** Tri-state per feature: follow the platform default, or pin it on/off for this tenant. */
 export type FeatureChoice = 'inherit' | 'on' | 'off';
 
-export type FeatureDraft = Record<PlatformFeatureKey, FeatureChoice>;
+/**
+ * One tri-state per switch a tenant may override. Platform-scoped switches are
+ * not in `TENANT_OVERRIDABLE_FEATURE_KEYS` and so are absent here: the tenant
+ * detail screen has no opinion to record about them.
+ */
+export type FeatureDraft = Partial<Record<PlatformFeatureKey, FeatureChoice>>;
 
 export type AddonCatalogEntry = { id: string; code: string; name: string; is_active: boolean };
 
@@ -38,7 +43,7 @@ export type TenantNavKind = 'none' | 'custom' | 'pinned_default';
 
 export function toFeatureDraft(features: AdminTenantFeatures | null): FeatureDraft {
     const draft = {} as FeatureDraft;
-    for (const key of PLATFORM_FEATURE_KEYS) {
+    for (const key of TENANT_OVERRIDABLE_FEATURE_KEYS) {
         const override = features?.overrides?.[key];
         draft[key] = override === undefined ? 'inherit' : override ? 'on' : 'off';
     }
@@ -182,7 +187,7 @@ export function useTenantDetail(tenantId: string) {
             || localizationEdit.secondary_locale !== localizationBase.secondary_locale);
 
     const featuresDirty = featureEdit !== null
-        && PLATFORM_FEATURE_KEYS.some((key) => featureEdit[key] !== featureBase[key]);
+        && TENANT_OVERRIDABLE_FEATURE_KEYS.some((key) => featureEdit[key] !== featureBase[key]);
 
     // An empty business type is the "not set yet" placeholder, never something
     // to save over a real one.

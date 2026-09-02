@@ -677,6 +677,10 @@ export const adminMessages = {
                     label: "Pengurusan Projek",
                     hint: "Projek, tugasan, log masa, kanban dan sprint. Dimatikan secara lalai.",
                 },
+                platformProjects: {
+                    label: "Projek Platform",
+                    hint: "Pengurusan projek untuk pasukan platform, di dalam konsol admin, dalam ruang kerja ERP71 sendiri. Bukan ciri kedai. Dihidupkan secara lalai.",
+                },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {

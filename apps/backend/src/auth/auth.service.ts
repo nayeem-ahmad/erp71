@@ -626,7 +626,9 @@ export class AuthService {
             where: { id: userId },
             include: {
                 tenantMembers: {
-                    where: { tenant: { deleted_at: null } },
+                    // Same exclusion as `getMe`: the platform's own workspace is
+                    // not one of the shops this identity can sign into.
+                    where: { tenant: { deleted_at: null, is_platform_workspace: false } },
                     include: {
                         tenant: {
                             include: {
@@ -686,7 +688,13 @@ export class AuthService {
             where: { id: userId },
             include: {
                 tenantMembers: {
-                    where: { tenant: { deleted_at: null } },
+                    // The platform's own workspace is a tenant row a platform
+                    // admin is a member of, but it is not a shop they can enter:
+                    // it exists so the project module has somewhere to live, and
+                    // it is reached from the admin console. Listing it here would
+                    // put "ERP71 Platform" in the account chooser next to real
+                    // shops and give it a sidebar full of sales and inventory.
+                    where: { tenant: { deleted_at: null, is_platform_workspace: false } },
                     include: {
                         tenant: {
                             include: {

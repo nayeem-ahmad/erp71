@@ -600,6 +600,13 @@ model Tenant {
   onboarding_dismissed_at  DateTime?
   deleted_at               DateTime?
 
+  /// Marks the single internal workspace the platform team runs its own work in
+  /// (Admin console › Projects). It is a real tenant so the whole project
+  /// module — projects, tasks, boards, sprints, hour logs — works unchanged, but
+  /// it is not a customer: it is excluded from tenant listings, platform metrics
+  /// and the account chooser. Provisioned on demand by PlatformWorkspaceService.
+  is_platform_workspace    Boolean   @default(false)
+
   /// Per-tenant overrides of the platform feature switches, e.g. `{"voice": true}`.
   /// A missing key inherits the platform default; an explicit boolean wins over it.
   feature_overrides Json @default("{}")
@@ -800,6 +807,7 @@ model Tenant {
   chatConversations          ChatConversation[]
 
   @@index([deleted_at])
+  @@index([is_platform_workspace])
 }
 
 /// Platform-admin managed sender identity for one tenant's outbound messages.

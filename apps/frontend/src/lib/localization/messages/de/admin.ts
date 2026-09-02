@@ -684,6 +684,10 @@ export const adminMessages = {
                 label: "Projektmanagement",
                 hint: "Projekte, Aufgaben, Zeiterfassung, Kanban und Sprints. Standardmäßig aus.",
             },
+            platformProjects: {
+                label: "Plattform-Projekte",
+                hint: "Projektmanagement für das Plattform-Team, in der Admin-Konsole, im eigenen Arbeitsbereich von ERP71. Keine Shop-Funktion. Standardmäßig an.",
+            },
             saved: "Einstellungen der Mandantenfunktionen gespeichert.",
         },
         sms: {

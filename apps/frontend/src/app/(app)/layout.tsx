@@ -71,6 +71,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const [tenantNavLayout, setTenantNavLayout] = useState<NavLayoutNode[]>(DEFAULT_TENANT_NAV_LAYOUT);
     const [platformAdminNavLayout, setPlatformAdminNavLayout] = useState<NavLayoutNode[]>(DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
     const [posEnabled, setPosEnabled] = useState(true);
+    // The platform team's own workspace. Resolved lazily, and only in the admin
+    // console — it is what scopes the project pages there, in place of a shop.
+    // Starts false even when the id is already parked in this tab's store: the
+    // effect below flips it on the first commit, and reading storage during
+    // render would make the server and client disagree about what to draw.
+    const [platformWorkspaceReady, setPlatformWorkspaceReady] = useState(false);
 
     const refreshNavLayouts = useCallback(() => {
         Promise.all([
@@ -187,7 +193,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // after hydration and `/auth/me`, so without this gate a tenant user — or a
     // signed-out visitor — sees the whole platform console, and its panels fire
     // their (403ing) admin API calls, for as long as that round trip takes.
-    const canRenderChildren = !isPlatformAdminOnlyPath(pathname)
+    const canRenderChildrenForRole = !isPlatformAdminOnlyPath(pathname)
         || (hasResolvedUser && Boolean(user?.is_platform_admin));
     // workspaceEpoch bumps after we restore this tab's shop context.
     void workspaceEpoch;
@@ -210,6 +216,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
         : user?.tenants?.find((tenant: any) => tenant.id === activeTenantId) || user?.tenants?.[0];
+
+    // `/projects` in the admin console must not render until the platform
+    // workspace id is in hand. Without it the request carries no `x-tenant-id`,
+    // and `TenantInterceptor` falls back to auto-resolving the caller's own
+    // membership — so an admin who also owns a shop would be shown *that shop's*
+    // projects inside the platform console for as long as the round trip takes.
+    const awaitingPlatformWorkspace = inPlatformAdminMode
+        && pathname.startsWith(routes.projects.root)
+        && !platformWorkspaceReady;
+    const canRenderChildren = canRenderChildrenForRole && !awaitingPlatformWorkspace;
 
     // Each tenant carries the platform switches with its own super-admin overrides
     // already applied; the account-level set is the fallback outside a workspace.
@@ -306,13 +322,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         platformFeatures.manufacturing && hasPlanEntitlement(planFeatures, 'premiumManufacturing');
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
+    // The admin console's own copy of the project module, backed by the platform
+    // workspace instead of a shop. Gated on its own platform switch rather than
+    // `projects`: that one decides what shops are sold, this one whether the
+    // operator's staff have somewhere to run their own work.
+    const canAccessPlatformProjects =
+        inPlatformAdminMode && Boolean(accountPlatformFeatures.platformProjects);
     const perms = activeTenant?.permissions ?? [];
     // Off by default platform-wide; a tenant override switches it on for one
     // workspace without exposing it to everyone else. Gated on the permission as
     // well as the flag: every /projects endpoint requires VIEW_PROJECTS, so
     // without this a cashier sees the module and gets a 403 behind every page.
-    const canAccessProjects =
-        Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
+    const canAccessProjects = inPlatformAdminMode
+        ? canAccessPlatformProjects
+        : Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
@@ -365,6 +388,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         applyTenantContext(tenant ?? tenants[0]);
         setWorkspaceEpoch((epoch) => epoch + 1);
     }, [hasResolvedUser, pathname, user]);
+
+    // Resolve (and, on first ever use, provision) the platform team's workspace.
+    // Only in the admin console, and only once per tab: the id is parked in the
+    // per-tab workspace store, which is where `resolveTenantHeader` reads it.
+    useEffect(() => {
+        if (!hasResolvedUser || !inPlatformAdminMode || !canAccessPlatformProjects) return;
+        if (getWorkspaceItem('platform_workspace_id')) {
+            setPlatformWorkspaceReady(true);
+            return;
+        }
+
+        let cancelled = false;
+        api.getPlatformWorkspace()
+            .then((workspace) => {
+                if (cancelled || !workspace?.id) return;
+                setWorkspaceItem('platform_workspace_id', workspace.id);
+                setPlatformWorkspaceReady(true);
+                // Re-runs the reads that were issued without a tenant header.
+                setWorkspaceEpoch((epoch) => epoch + 1);
+            })
+            // Silent: the switch may have been turned off between `/auth/me` and
+            // here, and the nav entry is already hidden in that case. Leaving
+            // `platformWorkspaceReady` false keeps the pages from rendering
+            // against the wrong tenant, which is the failure that matters.
+            .catch(() => null);
+
+        return () => { cancelled = true; };
+    }, [hasResolvedUser, inPlatformAdminMode, canAccessPlatformProjects]);
 
     useEffect(() => {
         if (!activeTenant) return;

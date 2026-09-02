@@ -6,7 +6,7 @@ import AccountGroupsPage from './page';
 
 function renderPage() {
     return render(
-        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, manufacturing: true, aiChat: false, externalImport: false, projects: false }}>
+        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, manufacturing: true, aiChat: false, externalImport: false, projects: false, platformProjects: false }}>
             <AccountGroupsPage />
         </PlatformFeaturesProvider>,
     );

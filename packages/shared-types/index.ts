@@ -976,6 +976,12 @@ export interface PlatformFeatures {
   externalImport: boolean;
   /** Project management: projects, tasks, time logging, kanban and sprints. */
   projects: boolean;
+  /**
+   * The same project module for the platform's own team, inside the admin
+   * console, backed by the internal platform workspace. Independent of
+   * `projects`, which decides whether *shop* users see the module.
+   */
+  platformProjects: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -987,6 +993,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   aiChat: false,
   externalImport: false,
   projects: false,
+  platformProjects: false,
 };
 
 export type PlatformFeatureKey = keyof PlatformFeatures;
@@ -1000,7 +1007,20 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
   'aiChat',
   'externalImport',
   'projects',
+  'platformProjects',
 ];
+
+/**
+ * The switches a single tenant may override.
+ *
+ * Platform-scoped switches govern the admin console rather than a shop, so an
+ * "override for this tenant" would be meaningless for them: `platformProjects`
+ * decides whether the platform team's own workspace exists, which no customer
+ * workspace has an opinion about.
+ */
+export const TENANT_OVERRIDABLE_FEATURE_KEYS: PlatformFeatureKey[] = PLATFORM_FEATURE_KEYS.filter(
+  (key) => key !== 'platformProjects',
+);
 
 /**
  * Per-tenant overrides of the platform-wide feature switches.
@@ -1015,7 +1035,7 @@ export function parseTenantFeatureOverrides(raw: unknown): TenantFeatureOverride
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const source = raw as Record<string, unknown>;
   const overrides: TenantFeatureOverrides = {};
-  for (const key of PLATFORM_FEATURE_KEYS) {
+  for (const key of TENANT_OVERRIDABLE_FEATURE_KEYS) {
     if (typeof source[key] === 'boolean') overrides[key] = source[key] as boolean;
   }
   return overrides;
@@ -1038,6 +1058,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   aiChat: 'ai_chat_enabled',
   externalImport: 'external_import_enabled',
   projects: 'projects_enabled',
+  platformProjects: 'platform_projects_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -1053,6 +1074,7 @@ export function parsePlatformFeatures(
     aiChat: settings[PLATFORM_FEATURE_SETTING_KEYS.aiChat] === 'true',
     externalImport: settings[PLATFORM_FEATURE_SETTING_KEYS.externalImport] === 'true',
     projects: settings[PLATFORM_FEATURE_SETTING_KEYS.projects] === 'true',
+    platformProjects: settings[PLATFORM_FEATURE_SETTING_KEYS.platformProjects] === 'true',
   };
 }
 

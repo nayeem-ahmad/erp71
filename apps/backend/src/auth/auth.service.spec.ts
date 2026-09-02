@@ -511,6 +511,35 @@ describe('AuthService', () => {
         expect(result.tenants[0].permissions).toEqual(Object.values(StorePermission));
     });
 
+    // The platform's own workspace is a tenant a platform admin belongs to, but
+    // it is not a shop: listing it here would put it in the account chooser
+    // beside real workspaces and hand it a sidebar full of sales and inventory.
+    it('getMe never lists the internal platform workspace as a shop', async () => {
+        db.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'admin@example.com',
+            name: 'Admin',
+            preferred_locale: 'en',
+            token_version: 0,
+            email_verified_at: null,
+            storeAccess: [],
+            storePermissions: [],
+            tenantMembers: [],
+        });
+
+        await service.getMe('user-1');
+
+        expect(db.user.findUnique).toHaveBeenCalledWith(
+            expect.objectContaining({
+                include: expect.objectContaining({
+                    tenantMembers: expect.objectContaining({
+                        where: { tenant: { deleted_at: null, is_platform_workspace: false } },
+                    }),
+                }),
+            }),
+        );
+    });
+
     it('updates preferred locale through updateProfile', async () => {
         db.user.update.mockResolvedValue({
             id: 'user-1',

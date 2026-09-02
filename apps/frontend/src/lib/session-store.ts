@@ -33,12 +33,21 @@ const ACCESS_EXPIRY_KEY = 'access_token_expires_at';
 
 export const CREDENTIAL_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, ACCESS_EXPIRY_KEY] as const;
 
-/** Which workspace this tab is looking at. Always sessionStorage. */
+/**
+ * Which workspace this tab is looking at. Always sessionStorage.
+ *
+ * `platform_workspace_id` is the odd one out: it is a tenant id like
+ * `tenant_id`, but it names the platform team's own internal workspace rather
+ * than a shop the user chose. It is kept apart because the app shell validates
+ * `tenant_id` against the shops in `/auth/me` and clears it when there is no
+ * match — and the platform workspace is deliberately not in that list.
+ */
 export const WORKSPACE_KEYS = [
     'tenant_id',
     'store_id',
     'subscription_plan_code',
     'active_context',
+    'platform_workspace_id',
 ] as const;
 
 export type WorkspaceKey = (typeof WORKSPACE_KEYS)[number];
