@@ -1451,7 +1451,7 @@ export const crmHrMessages = {
         "jobActionConfirm": "{action} cet ordre de fabrication ?",
         "emptyBoms": "Aucune recette de nomenclature pour l'instant. Créez-en une pour commencer.",
         "emptyJobs": "Aucun ordre de fabrication pour l'instant.",
-        "productIdRequired": "L'ID du produit est obligatoire.",
+        "productIdRequired": "Veuillez sélectionner le produit à fabriquer.",
         "outputQtyMin": "La quantité produite doit être d'au moins 1.",
         "recipeIdRequired": "Veuillez sélectionner un produit à fabriquer.",
         "quantityMin": "La quantité doit être d'au moins 1.",
@@ -1470,7 +1470,7 @@ export const crmHrMessages = {
         "editBomRecipe": "Modifier la recette de nomenclature",
         "newBomRecipe": "Nouvelle recette de nomenclature",
         "newProductionJob": "Nouvel ordre de fabrication",
-        "outputProductId": "ID du produit fabriqué *",
+        "outputProductId": "Produit fabriqué *",
         "outputQuantity": "Quantité produite *",
         "outputQtyHint": "Nombre d'unités produites par cycle de fabrication",
         "componentsLabel": "Composants / matières premières",
@@ -1508,8 +1508,8 @@ export const crmHrMessages = {
             "completed": "Terminé"
         },
         "placeholders": {
-            "productId": "ID du produit fabriqué",
-            "componentProductId": "ID du produit composant",
+            "productId": "Sélectionnez le produit fabriqué…",
+            "componentProductId": "Sélectionnez un composant…",
             "qty": "Qté"
         },
         "jobActions": {
@@ -1534,6 +1534,7 @@ export const crmHrMessages = {
             "addCost": "Ajouter un coût",
             "costType": "Type de coût",
             "amount": "Montant",
+            "amountRequired": "Saisissez un montant supérieur à zéro.",
             "notes": "Notes",
             "notesPlaceholder": "p. ex. référence de la facture d'impression",
             "add": "Ajouter",

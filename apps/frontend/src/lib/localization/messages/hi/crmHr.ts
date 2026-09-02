@@ -1451,7 +1451,7 @@ export const crmHrMessages = {
         "jobActionConfirm": "यह उत्पादन कार्य {action}?",
         "emptyBoms": "अभी कोई BOM नुस्खा नहीं। शुरू करने के लिए एक बनाएँ।",
         "emptyJobs": "अभी कोई उत्पादन कार्य नहीं।",
-        "productIdRequired": "उत्पाद ID आवश्यक है।",
+        "productIdRequired": "कृपया निर्मित किया जाने वाला उत्पाद चुनें।",
         "outputQtyMin": "उत्पादन मात्रा कम से कम 1 होनी चाहिए।",
         "recipeIdRequired": "कृपया निर्माण के लिए एक उत्पाद चुनें।",
         "quantityMin": "मात्रा कम से कम 1 होनी चाहिए।",
@@ -1470,7 +1470,7 @@ export const crmHrMessages = {
         "editBomRecipe": "BOM नुस्खा संपादित करें",
         "newBomRecipe": "नया BOM नुस्खा",
         "newProductionJob": "नया उत्पादन कार्य",
-        "outputProductId": "उत्पादित उत्पाद ID *",
+        "outputProductId": "उत्पादित उत्पाद *",
         "outputQuantity": "उत्पादन मात्रा *",
         "outputQtyHint": "प्रति उत्पादन चक्र उत्पादित इकाइयों की संख्या",
         "componentsLabel": "घटक / कच्चा माल",
@@ -1508,8 +1508,8 @@ export const crmHrMessages = {
             "completed": "पूर्ण"
         },
         "placeholders": {
-            "productId": "निर्मित वस्तु का उत्पाद ID",
-            "componentProductId": "घटक उत्पाद ID",
+            "productId": "निर्मित उत्पाद चुनें…",
+            "componentProductId": "एक घटक चुनें…",
             "qty": "मात्रा"
         },
         "jobActions": {
@@ -1534,6 +1534,7 @@ export const crmHrMessages = {
             "addCost": "लागत जोड़ें",
             "costType": "लागत प्रकार",
             "amount": "राशि",
+            "amountRequired": "शून्य से बड़ी राशि दर्ज करें।",
             "notes": "टिप्पणियाँ",
             "notesPlaceholder": "जैसे प्रिंटर चालान संदर्भ",
             "add": "जोड़ें",

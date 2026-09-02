@@ -58,7 +58,8 @@ export function FinancialKpiTile({
 }: {
     title: string;
     value: string;
-    helper: string;
+    /** Omit for a bare number tile — an empty string would leave a hanging gap. */
+    helper?: string;
     tone: 'positive' | 'negative' | 'neutral';
     Icon: LucideIcon;
 }) {
@@ -74,7 +75,7 @@ export function FinancialKpiTile({
                     <Icon className="h-4 w-4" />
                 </div>
             </div>
-            <p className="mt-2 text-xs text-gray-600 leading-snug">{helper}</p>
+            {helper ? <p className="mt-2 text-xs text-gray-600 leading-snug">{helper}</p> : null}
         </div>
     );
 }
