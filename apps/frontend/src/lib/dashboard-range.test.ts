@@ -1,8 +1,12 @@
 import {
+    activityHeatmapWindow,
     previousDateWindow,
     previousWindow,
     rangeToDateWindow,
     rangeToWindow,
+    todayInDhaka,
+    HEATMAP_WEEKS_AHEAD,
+    HEATMAP_WEEKS_BACK,
 } from './dashboard-range';
 
 describe('rangeToWindow', () => {
@@ -73,5 +77,37 @@ describe('previousDateWindow', () => {
         const days = (w: { from: string; to: string }) =>
             (Date.parse(`${w.to}T00:00:00Z`) - Date.parse(`${w.from}T00:00:00Z`)) / 86_400_000;
         expect(days(previous)).toBe(days(current));
+    });
+});
+
+describe('activityHeatmapWindow', () => {
+    // 21:00 UTC on the 10th is already the 11th in Dhaka — a Saturday.
+    const evening = new Date('2026-07-10T21:00:00.000Z');
+
+    it('runs from a Sunday to a Saturday, so every column is a whole week', () => {
+        const { from, to } = activityHeatmapWindow(evening);
+
+        expect(new Date(`${from}T00:00:00Z`).getUTCDay()).toBe(0);
+        expect(new Date(`${to}T00:00:00Z`).getUTCDay()).toBe(6);
+    });
+
+    it('spans the weeks behind, the current one, and the weeks ahead', () => {
+        const { from, to } = activityHeatmapWindow(evening);
+
+        const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+        expect(days).toBe((HEATMAP_WEEKS_BACK + 1 + HEATMAP_WEEKS_AHEAD) * 7);
+    });
+
+    it('reaches past today, because planned work is normally in the future', () => {
+        const { to } = activityHeatmapWindow(evening);
+
+        expect(to > todayInDhaka(evening)).toBe(true);
+    });
+
+    it('reads the Dhaka calendar day, not the UTC one', () => {
+        // 21:00 UTC is 03:00 the next morning in Dhaka; the window has to move
+        // with the shopkeeper's day, not with London's.
+        expect(todayInDhaka(evening)).toBe('2026-07-11');
+        expect(todayInDhaka(new Date('2026-07-10T17:00:00.000Z'))).toBe('2026-07-10');
     });
 });

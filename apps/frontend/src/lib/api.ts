@@ -1460,6 +1460,9 @@ export const api = {
     // (`/crm/leads/summary` and friends) still serve their own list screens.
     getCrmDashboardOverview: dashboardWindowFetcher('/crm/dashboard/overview'),
     getCrmDashboardTrends: dashboardWindowFetcher('/crm/dashboard/trends'),
+    // Its own window rather than the range switcher's: a calendar of "today" is
+    // one square, so the heatmap always asks for its own trailing weeks.
+    getCrmDashboardActivityHeatmap: dashboardWindowFetcher('/crm/dashboard/activity-heatmap'),
     // Module Overview dashboards — same contract, one per module.
     getInventoryDashboardOverview: dashboardWindowFetcher('/inventory/dashboard/overview'),
     getInventoryDashboardTrends: dashboardWindowFetcher('/inventory/dashboard/trends'),
