@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Factory, Plus, RefreshCw, Cog, Trash2, CheckCircle2, Package, Wallet, Calculator } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { api, fetchAllPages, fetchWithAuth } from '@/lib/api';
 import { formatDate, formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, Field, Input, Select, Alert } from '@/components/ui';
+import { PageShell, Button, Field, Input, Select, Alert, StatusBadge } from '@/components/ui';
+import type { StatusBadgeTone } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 // ------------------------------------------------------------------ //
@@ -171,16 +172,27 @@ interface ProductPLReport {
     totals: { quantityProduced: number; totalProductionCost: number; revenue: number; grossProfit: number };
 }
 
+/** The slice of a product the BOM pickers need. */
+interface PickerProduct {
+    id: string;
+    name: string;
+    sku?: string | null;
+}
+
 // ------------------------------------------------------------------ //
 //  Constants                                                          //
 // ------------------------------------------------------------------ //
 
-const JOB_STATUS_COLORS: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-700',
-    IN_PROGRESS: 'bg-blue-100 text-blue-700',
-    COMPLETED: 'bg-green-100 text-green-700',
-    CANCELLED: 'bg-red-100 text-red-700',
+const JOB_STATUS_TONES: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    IN_PROGRESS: 'info',
+    COMPLETED: 'success',
+    CANCELLED: 'danger',
 };
+
+function productLabel(product: PickerProduct): string {
+    return product.sku ? `${product.name} (${product.sku})` : product.name;
+}
 
 const EMPTY_BOM_FORM = {
     productId: '',
@@ -290,13 +302,17 @@ function BomTab() {
     const [form, setForm] = useState({ ...EMPTY_BOM_FORM });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
+    const [products, setProducts] = useState<PickerProduct[]>([]);
+
+    useEffect(() => {
+        api.getProducts().then(setProducts).catch(() => setProducts([]));
+    }, []);
 
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const data = await fetchWithAuth('/manufacturing/bom?limit=200');
-            setBoms(data?.items ?? []);
+            setBoms(await fetchAllPages<BomRecipe>('/manufacturing/bom'));
         } catch {
             setError(t.manufacturing.loadBomsFailed);
         } finally {
@@ -315,6 +331,7 @@ function BomTab() {
 
     async function openEdit(bom: BomRecipe) {
         setSaveError('');
+        setError('');
         try {
             const detail: BomRecipeDetail = await fetchWithAuth(`/manufacturing/bom/${bom.id}`);
             setEditingId(bom.id);
@@ -329,7 +346,7 @@ function BomTab() {
             });
             setShowModal(true);
         } catch {
-            alert(t.manufacturing.loadBomDetailFailed);
+            setError(t.manufacturing.loadBomDetailFailed);
         }
     }
 
@@ -371,11 +388,14 @@ function BomTab() {
 
     async function handleDelete(id: string) {
         if (!confirm(t.manufacturing.deleteBomConfirm)) return;
+        setError('');
         try {
             await fetchWithAuth(`/manufacturing/bom/${id}`, { method: 'DELETE' });
             load();
-        } catch {
-            alert(t.manufacturing.deleteBomFailed);
+        } catch (e: any) {
+            // The API explains *why* a recipe cannot go (jobs still reference it);
+            // that beats a generic failure line.
+            setError(e?.message || t.manufacturing.deleteBomFailed);
         }
     }
 
@@ -409,19 +429,20 @@ function BomTab() {
             <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">{recipeCountLabel}</span>
                 <div className="flex gap-2">
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="md"
                         onClick={load}
-                        className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                    </button>
+                        aria-label={t.common.refresh}
+                        icon={<RefreshCw className="h-4 w-4" />}
+                    />
                     <Button variant="primary" size="md" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
                         {t.manufacturing.newBom}
                     </Button>
                 </div>
             </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+            {error && <Alert tone="danger">{error}</Alert>}
 
             {loading ? (
                 <div className="text-center py-12 text-gray-500">{t.common.loading}</div>
@@ -491,14 +512,20 @@ function BomTab() {
                     <div className="p-4 space-y-4 overflow-y-auto">
                         {saveError && <Alert tone="danger">{saveError}</Alert>}
 
-                        <Field label={t.manufacturing.outputProductId}>
-                            <Input
-                                type="text"
+                        <Field label={t.manufacturing.outputProductId} htmlFor="bom-output-product">
+                            <Select
+                                id="bom-output-product"
                                 value={form.productId}
                                 onChange={(e) => setForm((f) => ({ ...f, productId: e.target.value }))}
-                                placeholder={t.manufacturing.placeholders.productId}
                                 disabled={!!editingId}
-                            />
+                            >
+                                <option value="">{t.manufacturing.placeholders.productId}</option>
+                                {products.map((product) => (
+                                    <option key={product.id} value={product.id}>
+                                        {productLabel(product)}
+                                    </option>
+                                ))}
+                            </Select>
                         </Field>
 
                         <Field label={t.manufacturing.outputQuantity} hint={t.manufacturing.outputQtyHint}>
@@ -544,15 +571,21 @@ function BomTab() {
                                 <div className="space-y-2">
                                     {form.components.map((comp, i) => (
                                         <div key={i} className="flex gap-2 items-center">
-                                            <Input
-                                                type="text"
+                                            <Select
+                                                aria-label={t.manufacturing.placeholders.componentProductId}
                                                 value={comp.productId}
                                                 onChange={(e) =>
                                                     updateComponent(i, 'productId', e.target.value)
                                                 }
-                                                placeholder={t.manufacturing.placeholders.componentProductId}
-                                                className="flex-1"
-                                            />
+                                                className="flex-1 min-w-0"
+                                            >
+                                                <option value="">{t.manufacturing.placeholders.componentProductId}</option>
+                                                {products.map((product) => (
+                                                    <option key={product.id} value={product.id}>
+                                                        {productLabel(product)}
+                                                    </option>
+                                                ))}
+                                            </Select>
                                             <Input
                                                 type="number"
                                                 min={0.0001}
@@ -670,8 +703,7 @@ function JobsTab() {
         setShowModal(true);
         setBomsLoading(true);
         try {
-            const data = await fetchWithAuth('/manufacturing/bom?limit=200');
-            setBoms(data?.items ?? []);
+            setBoms(await fetchAllPages<BomRecipe>('/manufacturing/bom'));
         } catch {
             setBoms([]);
         } finally {
@@ -824,7 +856,7 @@ function JobsTab() {
     async function handleAddCost(jobId: string) {
         const amount = parseFloat(costForm.amount);
         if (!amount || amount <= 0) {
-            setAddCostError(t.manufacturing.jobCosts.amount);
+            setAddCostError(t.manufacturing.jobCosts.amountRequired);
             return;
         }
         setAddingCost(true);
@@ -914,12 +946,13 @@ function JobsTab() {
             <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">{jobCountLabel}</span>
                 <div className="flex gap-2">
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="md"
                         onClick={load}
-                        className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                    </button>
+                        aria-label={t.common.refresh}
+                        icon={<RefreshCw className="h-4 w-4" />}
+                    />
                     <Button variant="primary" size="md" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
                         {t.manufacturing.newJob}
                     </Button>
@@ -942,10 +975,8 @@ function JobsTab() {
                 ))}
             </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
-            {actionError && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{actionError}</div>
-            )}
+            {error && <Alert tone="danger">{error}</Alert>}
+            {actionError && <Alert tone="danger">{actionError}</Alert>}
 
             {loading ? (
                 <div className="text-center py-12 text-gray-500">{t.common.loading}</div>
@@ -988,13 +1019,9 @@ function JobsTab() {
                                     </td>
                                     <td className="px-4 py-3 text-gray-700">{job.quantity}</td>
                                     <td className="px-4 py-3">
-                                        <span
-                                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                JOB_STATUS_COLORS[job.status] ?? 'bg-gray-100 text-gray-600'
-                                            }`}
-                                        >
+                                        <StatusBadge tone={JOB_STATUS_TONES[job.status] ?? 'neutral'}>
                                             {getJobStatusLabel(job.status)}
-                                        </span>
+                                        </StatusBadge>
                                     </td>
                                     <td className="px-4 py-3 text-gray-500">
                                         {job.startedAt ? formatDate(job.startedAt) : '—'}
@@ -1018,7 +1045,7 @@ function JobsTab() {
                                             {job.status === 'IN_PROGRESS' && (
                                                 <button
                                                     onClick={() => openCompleteModal(job)}
-                                                    className="text-green-600 hover:text-green-800 text-xs font-medium"
+                                                    className="text-emerald-700 hover:text-emerald-800 text-xs font-medium"
                                                 >
                                                     {t.manufacturing.jobActions.complete}
                                                 </button>
@@ -1067,9 +1094,7 @@ function JobsTab() {
                                                     </div>
                                                 </div>
 
-                                                {jobCostsError && (
-                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{jobCostsError}</div>
-                                                )}
+                                                {jobCostsError && <Alert tone="danger">{jobCostsError}</Alert>}
 
                                                 {jobCostsLoading && !jobCosts[job.id] ? (
                                                     <div className="text-xs text-gray-500">{t.common.loading}</div>
@@ -1112,7 +1137,8 @@ function JobsTab() {
 
                                                 {job.status !== 'CANCELLED' && (
                                                     <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200">
-                                                        <select
+                                                        <Select
+                                                            aria-label={t.manufacturing.jobCosts.noBillLink}
                                                             value={costForm.sourcePurchaseItemId}
                                                             onChange={(e) => {
                                                                 const source = costSources.find((s) => s.id === e.target.value);
@@ -1122,7 +1148,7 @@ function JobsTab() {
                                                                     amount: source ? String(source.remainingAmount) : f.amount,
                                                                 }));
                                                             }}
-                                                            className="border rounded px-2 py-1.5 text-xs w-full sm:w-auto sm:max-w-[220px]"
+                                                            className="w-full sm:w-auto sm:max-w-[220px]"
                                                         >
                                                             <option value="">{t.manufacturing.jobCosts.noBillLink}</option>
                                                             {costSources.map((source) => (
@@ -1130,48 +1156,49 @@ function JobsTab() {
                                                                     {source.purchaseNumber} — {source.productName} ({formatBDT(source.remainingAmount)} {t.manufacturing.jobCosts.remaining})
                                                                 </option>
                                                             ))}
-                                                        </select>
-                                                        <select
+                                                        </Select>
+                                                        <Select
+                                                            aria-label={t.manufacturing.jobCosts.costType}
                                                             value={costForm.costType}
                                                             onChange={(e) =>
                                                                 setCostForm((f) => ({ ...f, costType: e.target.value as any }))
                                                             }
-                                                            className="border rounded px-2 py-1.5 text-xs"
+                                                            className="w-full sm:w-auto"
                                                         >
                                                             {ADDABLE_JOB_COST_TYPES.map((type) => (
                                                                 <option key={type} value={type}>
                                                                     {t.manufacturing.jobCosts.costTypes[type]}
                                                                 </option>
                                                             ))}
-                                                        </select>
-                                                        <input
+                                                        </Select>
+                                                        <Input
                                                             type="number"
                                                             min="0"
                                                             step="0.01"
+                                                            aria-label={t.manufacturing.jobCosts.amount}
                                                             placeholder={t.manufacturing.jobCosts.amount}
                                                             value={costForm.amount}
                                                             onChange={(e) => setCostForm((f) => ({ ...f, amount: e.target.value }))}
-                                                            className="border rounded px-2 py-1.5 text-xs w-28"
+                                                            className="w-28"
                                                         />
-                                                        <input
+                                                        <Input
                                                             type="text"
+                                                            aria-label={t.manufacturing.jobCosts.notes}
                                                             placeholder={t.manufacturing.jobCosts.notesPlaceholder}
                                                             value={costForm.notes}
                                                             onChange={(e) => setCostForm((f) => ({ ...f, notes: e.target.value }))}
-                                                            className="border rounded px-2 py-1.5 text-xs flex-1 min-w-[140px]"
+                                                            className="flex-1 min-w-[140px]"
                                                         />
-                                                        <button
+                                                        <Button
+                                                            variant="primary"
                                                             onClick={() => handleAddCost(job.id)}
-                                                            disabled={addingCost}
-                                                            className="px-3 py-1.5 bg-gray-800 text-white rounded text-xs font-medium disabled:opacity-50"
+                                                            loading={addingCost}
                                                         >
                                                             {addingCost ? t.manufacturing.jobCosts.adding : t.manufacturing.jobCosts.add}
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 )}
-                                                {addCostError && (
-                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{addCostError}</div>
-                                                )}
+                                                {addCostError && <Alert tone="danger">{addCostError}</Alert>}
 
                                                 <div className="pt-3 border-t border-gray-200 space-y-2">
                                                     <h5 className="text-xs font-semibold text-gray-700">{t.manufacturing.pricing.title}</h5>
@@ -1181,10 +1208,14 @@ function JobsTab() {
                                                         <>
                                                             <div className="flex flex-wrap items-end gap-2">
                                                                 <div>
-                                                                    <label className="block text-[10px] text-gray-500 mb-0.5">
+                                                                    <label
+                                                                        htmlFor={`margin-${job.id}`}
+                                                                        className="block text-xs text-gray-500 mb-0.5"
+                                                                    >
                                                                         {t.manufacturing.pricing.marginLabel}
                                                                     </label>
-                                                                    <input
+                                                                    <Input
+                                                                        id={`margin-${job.id}`}
                                                                         type="number"
                                                                         min="0"
                                                                         step="1"
@@ -1192,16 +1223,16 @@ function JobsTab() {
                                                                         onChange={(e) =>
                                                                             setMarginPct((prev) => ({ ...prev, [job.id]: e.target.value }))
                                                                         }
-                                                                        className="border rounded px-2 py-1.5 text-xs w-20"
+                                                                        className="w-20"
                                                                     />
                                                                 </div>
-                                                                <button
+                                                                <Button
+                                                                    variant="secondary"
                                                                     onClick={() => handleSuggestPrice(job.id)}
-                                                                    disabled={pricingLoading}
-                                                                    className="px-3 py-1.5 border border-gray-300 rounded text-xs font-medium disabled:opacity-50"
+                                                                    loading={pricingLoading}
                                                                 >
                                                                     {pricingLoading ? t.manufacturing.pricing.suggesting : t.manufacturing.pricing.suggest}
-                                                                </button>
+                                                                </Button>
                                                             </div>
 
                                                             {pricingSuggestion[job.id] && (
@@ -1224,20 +1255,18 @@ function JobsTab() {
                                                                             {formatBDT(pricingSuggestion[job.id]!.suggestedPrice)}
                                                                         </span>
                                                                     </span>
-                                                                    <button
+                                                                    <Button
+                                                                        variant="primary"
                                                                         onClick={() => handleApplyPrice(job.id)}
-                                                                        disabled={applyingPrice}
-                                                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-medium disabled:opacity-50"
+                                                                        loading={applyingPrice}
                                                                     >
                                                                         {applyingPrice ? t.manufacturing.pricing.applying : t.manufacturing.pricing.apply}
-                                                                    </button>
+                                                                    </Button>
                                                                 </div>
                                                             )}
                                                         </>
                                                     )}
-                                                    {pricingError && (
-                                                        <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{pricingError}</div>
-                                                    )}
+                                                    {pricingError && <Alert tone="danger">{pricingError}</Alert>}
                                                 </div>
                                             </div>
                                         </td>
@@ -1252,23 +1281,23 @@ function JobsTab() {
 
             {pages > 1 && (
                 <div className="flex justify-center gap-2">
-                    <button
+                    <Button
+                        variant="secondary"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50"
                     >
                         {t.common.prevPage}
-                    </button>
+                    </Button>
                     <span className="px-3 py-1 text-sm text-gray-600">
                         {formatMessage(t.manufacturing.pageOf, { page, pages })}
                     </span>
-                    <button
+                    <Button
+                        variant="secondary"
                         onClick={() => setPage((p) => Math.min(pages, p + 1))}
                         disabled={page === pages}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50"
                     >
                         {t.common.nextPage}
-                    </button>
+                    </Button>
                 </div>
             )}
 
@@ -1389,7 +1418,7 @@ function JobsTab() {
                         <p className="text-xs text-gray-500">{t.manufacturing.wastageHint}</p>
 
                         <div className="space-y-3">
-                            {completingJob.recipe.components.map((comp) => (
+                            {(completingJob.recipe?.components ?? []).map((comp) => (
                                 <div key={comp.productId} className="flex items-center gap-3">
                                     <label htmlFor={`wastage-${comp.productId}`} className="flex-1 text-sm text-gray-700">
                                         {comp.product.name}
@@ -1458,7 +1487,7 @@ function AnalyticsTab() {
     }
 
     if (error) {
-        return <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>;
+        return <Alert tone="danger">{error}</Alert>;
     }
 
     if (!data || data.totalCompletedJobs === 0) {
@@ -1478,28 +1507,24 @@ function AnalyticsTab() {
                 <FinancialKpiTile
                     title={t.manufacturing.analytics.completedJobs}
                     value={String(data.totalCompletedJobs)}
-                    helper=""
                     tone="neutral"
                     Icon={CheckCircle2}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.analytics.unitsProduced}
                     value={String(data.totalUnitsProduced)}
-                    helper=""
                     tone="neutral"
                     Icon={Package}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.analytics.totalMaterialCost}
                     value={formatBDT(data.totalMaterialCost)}
-                    helper=""
                     tone="neutral"
                     Icon={Wallet}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.analytics.avgUnitCost}
                     value={formatBDT(data.avgUnitProductionCost)}
-                    helper=""
                     tone="neutral"
                     Icon={Calculator}
                 />
@@ -1595,7 +1620,7 @@ function ProductPLTab() {
     }
 
     if (error) {
-        return <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>;
+        return <Alert tone="danger">{error}</Alert>;
     }
 
     if (!data || data.products.length === 0) {
@@ -1613,28 +1638,24 @@ function ProductPLTab() {
                 <FinancialKpiTile
                     title={t.manufacturing.productPL.quantityProduced}
                     value={String(data.totals.quantityProduced)}
-                    helper=""
                     tone="neutral"
                     Icon={Package}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.productPL.totalProductionCost}
                     value={formatBDT(data.totals.totalProductionCost)}
-                    helper=""
                     tone="neutral"
                     Icon={Wallet}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.productPL.revenue}
                     value={formatBDT(data.totals.revenue)}
-                    helper=""
                     tone="neutral"
                     Icon={Calculator}
                 />
                 <FinancialKpiTile
                     title={t.manufacturing.productPL.grossProfit}
                     value={formatBDT(data.totals.grossProfit)}
-                    helper=""
                     tone={data.totals.grossProfit >= 0 ? 'positive' : 'negative'}
                     Icon={Calculator}
                 />

@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, CreateJobCostDto, WastageItemDto } from './manufacturing.dto';
 import { applyInventoryMovement, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
+import { resolveZone, zonedDateString } from '../common/tenant-time.util';
 
 @Injectable()
 export class ManufacturingService {
@@ -71,6 +72,20 @@ export class ManufacturingService {
             select: { id: true },
         });
         if (!product) throw new BadRequestException('Product not found or does not belong to this tenant');
+
+        // `BomRecipe.productId` is unique platform-wide, so a second recipe for the
+        // same product surfaces as a raw Prisma constraint error (a 500 naming
+        // `bom_recipes_productId_key`). Answer the real question instead. The lookup
+        // is deliberately not tenant-scoped: the constraint isn't either, and the
+        // product was just confirmed to belong to this tenant, so any recipe found
+        // here is this tenant's own.
+        const existing = await this.db.bomRecipe.findFirst({
+            where: { productId: dto.productId },
+            select: { id: true },
+        });
+        if (existing) {
+            throw new BadRequestException('This product already has a BOM recipe - edit that one instead.');
+        }
 
         // Validate all component products belong to tenant
         if (dto.components.length > 0) {
@@ -171,6 +186,16 @@ export class ManufacturingService {
 
     async deleteBom(tenantId: string, id: string) {
         await this.getBom(tenantId, id);
+
+        // Production jobs keep a hard reference to their recipe, so deleting one
+        // that has been used trips a foreign-key error. Say why, rather than 500.
+        const jobCount = await this.db.productionJob.count({ where: { tenantId, recipeId: id } });
+        if (jobCount > 0) {
+            throw new BadRequestException(
+                `This recipe is used by ${jobCount} production job(s) and cannot be deleted.`,
+            );
+        }
+
         await this.db.bomRecipe.delete({ where: { id } });
     }
 
@@ -193,6 +218,14 @@ export class ManufacturingService {
                     recipe: {
                         include: {
                             product: { select: { id: true, name: true, sku: true } },
+                            // The list feeds the "complete job" dialog, which asks for a
+                            // wastage quantity per component. Without them the dialog has
+                            // nothing to render.
+                            components: {
+                                include: {
+                                    product: { select: { id: true, name: true, sku: true } },
+                                },
+                            },
                         },
                     },
                 },
@@ -785,7 +818,9 @@ export class ManufacturingService {
      * cost per completed job, unit production cost, and a daily production
      * volume trend.
      */
-    async getAnalytics(tenantId: string) {
+    async getAnalytics(tenantId: string, timeZone?: string) {
+        const zone = resolveZone(timeZone);
+
         const jobs = await this.db.productionJob.findMany({
             where: { tenantId, status: 'COMPLETED' },
             orderBy: { completedAt: 'asc' },
@@ -841,7 +876,9 @@ export class ManufacturingService {
             totalUnitsProduced += outputQty;
             totalMaterialCost += actual;
 
-            const dateKey = (job.completedAt ?? job.created_at).toISOString().slice(0, 10);
+            // Bucketed on the workspace's own calendar day, so a job finished at
+            // 11pm in Dhaka lands on that day and not on tomorrow's UTC one.
+            const dateKey = zonedDateString(job.completedAt ?? job.created_at, zone);
             volumeByDate.set(dateKey, (volumeByDate.get(dateKey) ?? 0) + outputQty);
 
             return {

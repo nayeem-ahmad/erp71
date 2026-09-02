@@ -622,5 +622,60 @@ describe('ManufacturingService', () => {
                 { date: '2026-07-02', quantityProduced: 10 },
             ]);
         });
+
+        it('buckets the volume trend on the workspace calendar day, not the UTC one', async () => {
+            db.productionJob.findMany.mockResolvedValue([
+                {
+                    id: 'job-late',
+                    tenantId: 'tenant-1',
+                    quantity: 3,
+                    // 1 July 23:00 in Dhaka is already 2 July in UTC.
+                    completedAt: new Date('2026-07-01T17:00:00Z'),
+                    created_at: new Date('2026-07-01T10:00:00Z'),
+                    recipe: { outputQty: 2, product: { id: 'product-out', name: 'Bread Loaf', sku: 'BRD-1' } },
+                },
+            ]);
+            db.inventoryMovement.findMany.mockResolvedValue([]);
+
+            const result = await service.getAnalytics('tenant-1', 'Asia/Dhaka');
+
+            expect(result.volumeTrend).toEqual([{ date: '2026-07-01', quantityProduced: 6 }]);
+        });
+    });
+
+    describe('listJobs()', () => {
+        it('hydrates each job recipe with its components, which the completion dialog needs', async () => {
+            db.productionJob.findMany.mockResolvedValue([]);
+            db.productionJob.count = jest.fn().mockResolvedValue(0);
+
+            await service.listJobs('tenant-1', 1, 20);
+
+            const args = db.productionJob.findMany.mock.calls[0][0];
+            expect(args.include.recipe.include.components).toEqual({
+                include: { product: { select: { id: true, name: true, sku: true } } },
+            });
+        });
+    });
+
+    describe('deleteBom()', () => {
+        it('refuses a recipe that production jobs still reference, instead of tripping a FK error', async () => {
+            db.bomRecipe.findFirst.mockResolvedValue(recipe);
+            db.productionJob.count = jest.fn().mockResolvedValue(3);
+            db.bomRecipe.delete = jest.fn();
+
+            await expect(service.deleteBom('tenant-1', 'recipe-1')).rejects.toThrow(BadRequestException);
+            expect(db.bomRecipe.delete).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('createBom()', () => {
+        it('rejects a second recipe for a product that already has one', async () => {
+            db.product.findFirst = jest.fn().mockResolvedValue({ id: 'product-out' });
+            db.bomRecipe.findFirst.mockResolvedValue({ id: 'recipe-1' });
+
+            await expect(
+                service.createBom('tenant-1', { productId: 'product-out', outputQty: 1, components: [] } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
     });
 });

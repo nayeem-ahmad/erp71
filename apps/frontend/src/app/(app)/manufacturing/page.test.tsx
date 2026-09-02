@@ -4,6 +4,8 @@ import ManufacturingPage from './page';
 
 jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn(),
+    fetchAllPages: jest.fn(),
+    api: { getProducts: jest.fn() },
 }));
 
 jest.mock('@/lib/format', () => ({
@@ -36,9 +38,18 @@ jest.mock('lucide-react', () => ({
 // fetchWithAuth already parses the response and unwraps the `{ data: T }`
 // envelope, so mocks resolve directly to the payload (not a Response).
 const mockFetchWithAuth = require('@/lib/api').fetchWithAuth as jest.Mock;
+// BOM lists go through `fetchAllPages`, which walks the paginated endpoint and
+// resolves to a flat array — the API caps `limit` at 100, so the page cannot ask
+// for every recipe in one request.
+const mockFetchAllPages = require('@/lib/api').fetchAllPages as jest.Mock;
+const mockGetProducts = require('@/lib/api').api.getProducts as jest.Mock;
 
-const makeBomsPage = (items: object[]) => ({ items, total: items.length, page: 1, limit: 200, pages: 1 });
 const makeJobsPage = (items: object[]) => ({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+
+const sampleProducts = [
+    { id: 'prod-1', name: 'Widget A', sku: 'WGT-001' },
+    { id: 'prod-flour', name: 'Flour', sku: 'FLR-1' },
+];
 
 const sampleBoms = [
     {
@@ -108,7 +119,9 @@ describe('ManufacturingPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // Default: BOM tab loads empty; Jobs tab loads empty
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
+        mockGetProducts.mockResolvedValue(sampleProducts);
+        mockFetchWithAuth.mockResolvedValue(makeJobsPage([]));
     });
 
     it('renders the Manufacturing heading', async () => {
@@ -130,7 +143,7 @@ describe('ManufacturingPage', () => {
     });
 
     it('displays BOM recipes when loaded', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage(sampleBoms));
+        mockFetchAllPages.mockResolvedValue(sampleBoms);
         render(<ManufacturingPage />);
         await waitFor(() => {
             expect(screen.getByText('Widget A')).toBeInTheDocument();
@@ -141,7 +154,7 @@ describe('ManufacturingPage', () => {
     });
 
     it('shows "1 recipe" for a single BOM', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([sampleBoms[0]]));
+        mockFetchAllPages.mockResolvedValue([sampleBoms[0]]);
         render(<ManufacturingPage />);
         await waitFor(() => {
             expect(screen.getByText('1 recipe')).toBeInTheDocument();
@@ -149,7 +162,7 @@ describe('ManufacturingPage', () => {
     });
 
     it('shows error message when BOM fetch fails', async () => {
-        mockFetchWithAuth.mockRejectedValue(new Error('Network error'));
+        mockFetchAllPages.mockRejectedValue(new Error('Network error'));
         render(<ManufacturingPage />);
         await waitFor(() => {
             expect(screen.getByText('Failed to load BOMs')).toBeInTheDocument();
@@ -157,16 +170,19 @@ describe('ManufacturingPage', () => {
     });
 
     it('opens New BOM modal when button clicked', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
         expect(screen.getByText('New BOM Recipe')).toBeInTheDocument();
-        expect(screen.getByPlaceholderText('Product ID of the manufactured item')).toBeInTheDocument();
+        expect(screen.getByLabelText('Output Product *')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
+        });
     });
 
     it('closes the BOM modal when Cancel is clicked', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
@@ -175,46 +191,45 @@ describe('ManufacturingPage', () => {
     });
 
     it('shows validation error in BOM modal when productId is empty', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('Create'));
-        expect(screen.getByText('Product ID is required.')).toBeInTheDocument();
+        expect(screen.getByText('Please select the product to manufacture.')).toBeInTheDocument();
     });
 
     it('adds a component row in the BOM modal', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('Add Component'));
-        expect(screen.getByPlaceholderText('Component Product ID')).toBeInTheDocument();
+        expect(screen.getByLabelText('Select a component…')).toBeInTheDocument();
     });
 
     it('removes a component row from the BOM modal', async () => {
-        mockFetchWithAuth.mockResolvedValue(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValue([]);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('Add Component'));
-        expect(screen.getByPlaceholderText('Component Product ID')).toBeInTheDocument();
+        expect(screen.getByLabelText('Select a component…')).toBeInTheDocument();
         // Remove it via the trash button
         const trashButtons = screen.getAllByTestId('icon-trash');
         fireEvent.click(trashButtons[0]);
-        expect(screen.queryByPlaceholderText('Component Product ID')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Select a component…')).not.toBeInTheDocument();
     });
 
     it('submits BOM creation successfully', async () => {
-        mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))  // initial load
-            .mockResolvedValueOnce({ id: 'bom-new' })  // save POST
-            .mockResolvedValueOnce(makeBomsPage(sampleBoms)); // reload after save
+        mockFetchWithAuth.mockResolvedValueOnce({ id: 'bom-new' }); // save POST
+        mockFetchAllPages.mockResolvedValueOnce([]).mockResolvedValueOnce(sampleBoms);
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        fireEvent.change(screen.getByPlaceholderText('Product ID of the manufactured item'), {
-            target: { value: 'new-product-id' },
+        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        fireEvent.change(screen.getByLabelText('Output Product *'), {
+            target: { value: 'prod-1' },
         });
         await act(async () => {
             fireEvent.click(screen.getByText('Create'));
@@ -228,14 +243,13 @@ describe('ManufacturingPage', () => {
     });
 
     it('shows save error when BOM creation fails', async () => {
-        mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
-            .mockRejectedValueOnce(new Error('Product not found'));
+        mockFetchWithAuth.mockRejectedValueOnce(new Error('Product not found'));
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        fireEvent.change(screen.getByPlaceholderText('Product ID of the manufactured item'), {
-            target: { value: 'bad-id' },
+        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        fireEvent.change(screen.getByLabelText('Output Product *'), {
+            target: { value: 'prod-1' },
         });
         await act(async () => {
             fireEvent.click(screen.getByText('Create'));
@@ -256,7 +270,6 @@ describe('ManufacturingPage', () => {
 
     it('loads and displays production jobs', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))  // BOM tab initial load
             .mockResolvedValueOnce(makeJobsPage(sampleJobs)); // Jobs tab
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -269,7 +282,6 @@ describe('ManufacturingPage', () => {
 
     it('shows "1 job" for a single job', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockResolvedValueOnce(makeJobsPage([sampleJobs[0]]));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -280,7 +292,6 @@ describe('ManufacturingPage', () => {
 
     it('shows error when jobs fetch fails', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockRejectedValueOnce(new Error('Network error'));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -291,7 +302,6 @@ describe('ManufacturingPage', () => {
 
     it('shows Start button for DRAFT jobs', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockResolvedValueOnce(makeJobsPage([sampleJobs[0]]));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -302,7 +312,6 @@ describe('ManufacturingPage', () => {
 
     it('shows Complete button for IN_PROGRESS jobs', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockResolvedValueOnce(makeJobsPage([sampleJobs[1]]));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -322,7 +331,6 @@ describe('ManufacturingPage', () => {
             },
         };
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockResolvedValueOnce(makeJobsPage([jobWithComponents]))
             .mockResolvedValueOnce({ status: 'COMPLETED' }) // complete POST
             .mockResolvedValueOnce(makeJobsPage([])); // reload after complete
@@ -349,10 +357,8 @@ describe('ManufacturingPage', () => {
     });
 
     it('opens New Job modal and populates the recipe dropdown', async () => {
-        mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([])) // BOM tab initial load
-            .mockResolvedValueOnce(makeJobsPage([])) // Jobs tab load
-            .mockResolvedValueOnce(makeBomsPage(sampleBoms)); // boms fetched when opening the modal
+        mockFetchWithAuth.mockResolvedValueOnce(makeJobsPage([])); // Jobs tab load
+        mockFetchAllPages.mockResolvedValueOnce([]).mockResolvedValueOnce(sampleBoms); // boms on modal open
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
         await waitFor(() => screen.getByText('New Job'));
@@ -366,10 +372,7 @@ describe('ManufacturingPage', () => {
     });
 
     it('validates recipe selection in the job modal', async () => {
-        mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
-            .mockResolvedValueOnce(makeJobsPage([]))
-            .mockResolvedValueOnce(makeBomsPage([]));
+        mockFetchWithAuth.mockResolvedValueOnce(makeJobsPage([]));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
         await waitFor(() => screen.getByText('New Job'));
@@ -381,10 +384,9 @@ describe('ManufacturingPage', () => {
     });
 
     it('shows a material requirements preview with an insufficient-stock warning', async () => {
+        mockFetchAllPages.mockResolvedValueOnce([]).mockResolvedValueOnce(sampleBoms); // boms on modal open
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([])) // BOM tab initial load
             .mockResolvedValueOnce(makeJobsPage([])) // Jobs tab load
-            .mockResolvedValueOnce(makeBomsPage(sampleBoms)) // boms fetched when opening the modal
             .mockResolvedValueOnce({
                 recipeId: 'bom-1',
                 quantity: 1,
@@ -419,7 +421,6 @@ describe('ManufacturingPage', () => {
 
     it('shows an empty state on the Analytics tab when there are no completed jobs', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([])) // BOM tab initial load
             .mockResolvedValueOnce({
                 totalCompletedJobs: 0,
                 totalUnitsProduced: 0,
@@ -437,7 +438,6 @@ describe('ManufacturingPage', () => {
 
     it('shows KPI tiles, a volume trend, and a cost table on the Analytics tab', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([])) // BOM tab initial load
             .mockResolvedValueOnce({
                 totalCompletedJobs: 2,
                 totalUnitsProduced: 30,
@@ -476,7 +476,6 @@ describe('ManufacturingPage', () => {
 
     it('filters jobs by status tab', async () => {
         mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage([]))
             .mockResolvedValue(makeJobsPage([]));
         render(<ManufacturingPage />);
         fireEvent.click(screen.getByText('Production Jobs'));
@@ -489,12 +488,36 @@ describe('ManufacturingPage', () => {
         });
     });
 
+    it('asks for BOM pages within the API\'s limit cap', async () => {
+        mockFetchAllPages.mockResolvedValue(sampleBoms);
+        render(<ManufacturingPage />);
+        await waitFor(() => screen.getByText('Widget A'));
+        // The endpoint validates `limit` at Max(100); a hand-built `?limit=200`
+        // came back 400 and the tab rendered nothing but "Failed to load BOMs".
+        expect(mockFetchAllPages).toHaveBeenCalledWith('/manufacturing/bom');
+        for (const [url] of mockFetchWithAuth.mock.calls) {
+            expect(String(url)).not.toContain('limit=200');
+        }
+    });
+
+    it('opens the complete modal for a job whose recipe carries no components', async () => {
+        const { components, ...recipeWithoutComponents } = sampleJobs[1].recipe;
+        mockFetchWithAuth.mockResolvedValueOnce(
+            makeJobsPage([{ ...sampleJobs[1], recipe: recipeWithoutComponents }]),
+        );
+        render(<ManufacturingPage />);
+        fireEvent.click(screen.getByText('Production Jobs'));
+        await waitFor(() => screen.getByText('Complete'));
+        await act(async () => {
+            fireEvent.click(screen.getByText('Complete'));
+        });
+        expect(screen.getByText('Complete Production Job')).toBeInTheDocument();
+    });
+
     it('deletes a BOM after confirmation', async () => {
         const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
-        mockFetchWithAuth
-            .mockResolvedValueOnce(makeBomsPage(sampleBoms))
-            .mockResolvedValueOnce({})
-            .mockResolvedValueOnce(makeBomsPage([]));
+        mockFetchAllPages.mockResolvedValueOnce(sampleBoms).mockResolvedValueOnce([]);
+        mockFetchWithAuth.mockResolvedValueOnce({});
         render(<ManufacturingPage />);
         await waitFor(() => screen.getByText('Widget A'));
         const deleteButtons = screen.getAllByText('Delete');

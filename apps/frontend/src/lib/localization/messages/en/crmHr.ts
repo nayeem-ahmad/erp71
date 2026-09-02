@@ -1451,7 +1451,7 @@ export const crmHrMessages = {
         "jobActionConfirm": "{action} this production job?",
         "emptyBoms": "No BOM recipes yet. Create one to get started.",
         "emptyJobs": "No production jobs yet.",
-        "productIdRequired": "Product ID is required.",
+        "productIdRequired": "Please select the product to manufacture.",
         "outputQtyMin": "Output quantity must be at least 1.",
         "recipeIdRequired": "Please select a product to manufacture.",
         "quantityMin": "Quantity must be at least 1.",
@@ -1470,7 +1470,7 @@ export const crmHrMessages = {
         "editBomRecipe": "Edit BOM Recipe",
         "newBomRecipe": "New BOM Recipe",
         "newProductionJob": "New Production Job",
-        "outputProductId": "Output Product ID *",
+        "outputProductId": "Output Product *",
         "outputQuantity": "Output Quantity *",
         "outputQtyHint": "Number of output units produced per production run",
         "componentsLabel": "Components / Raw Materials",
@@ -1508,8 +1508,8 @@ export const crmHrMessages = {
             "completed": "Completed"
         },
         "placeholders": {
-            "productId": "Product ID of the manufactured item",
-            "componentProductId": "Component Product ID",
+            "productId": "Select the manufactured product…",
+            "componentProductId": "Select a component…",
             "qty": "Qty"
         },
         "jobActions": {
@@ -1534,6 +1534,7 @@ export const crmHrMessages = {
             "addCost": "Add Cost",
             "costType": "Cost Type",
             "amount": "Amount",
+            "amountRequired": "Enter an amount greater than zero.",
             "notes": "Notes",
             "notesPlaceholder": "e.g. printer invoice reference",
             "add": "Add",

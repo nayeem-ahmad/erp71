@@ -194,7 +194,7 @@ export class ManufacturingController {
 
     @Get('analytics')
     getAnalytics(@Tenant() tenant: TenantContext) {
-        return this.manufacturingService.getAnalytics(tenant.tenantId);
+        return this.manufacturingService.getAnalytics(tenant.tenantId, tenant.timezone);
     }
 
     @Get('reports/product-pl')

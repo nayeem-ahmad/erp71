@@ -1451,7 +1451,7 @@ export const crmHrMessages = {
         "jobActionConfirm": "Diesen Produktionsauftrag {action}?",
         "emptyBoms": "Noch keine Stücklisten-Rezepturen. Erstellen Sie eine, um loszulegen.",
         "emptyJobs": "Noch keine Produktionsaufträge.",
-        "productIdRequired": "Die Produkt-ID ist erforderlich.",
+        "productIdRequired": "Bitte wählen Sie das zu fertigende Produkt.",
         "outputQtyMin": "Die Ausbringungsmenge muss mindestens 1 betragen.",
         "recipeIdRequired": "Bitte wählen Sie ein zu fertigendes Produkt.",
         "quantityMin": "Die Menge muss mindestens 1 betragen.",
@@ -1470,7 +1470,7 @@ export const crmHrMessages = {
         "editBomRecipe": "Stücklisten-Rezeptur bearbeiten",
         "newBomRecipe": "Neue Stücklisten-Rezeptur",
         "newProductionJob": "Neuer Produktionsauftrag",
-        "outputProductId": "Produkt-ID der Ausbringung *",
+        "outputProductId": "Ausbringungsprodukt *",
         "outputQuantity": "Ausbringungsmenge *",
         "outputQtyHint": "Anzahl der pro Produktionslauf hergestellten Einheiten",
         "componentsLabel": "Komponenten / Rohstoffe",
@@ -1508,8 +1508,8 @@ export const crmHrMessages = {
             "completed": "Abgeschlossen"
         },
         "placeholders": {
-            "productId": "Produkt-ID des gefertigten Artikels",
-            "componentProductId": "Produkt-ID der Komponente",
+            "productId": "Gefertigtes Produkt wählen…",
+            "componentProductId": "Komponente wählen…",
             "qty": "Menge"
         },
         "jobActions": {
@@ -1534,6 +1534,7 @@ export const crmHrMessages = {
             "addCost": "Kosten hinzufügen",
             "costType": "Kostenart",
             "amount": "Betrag",
+            "amountRequired": "Geben Sie einen Betrag größer als null ein.",
             "notes": "Notizen",
             "notesPlaceholder": "z. B. Referenz der Druckereirechnung",
             "add": "Hinzufügen",
