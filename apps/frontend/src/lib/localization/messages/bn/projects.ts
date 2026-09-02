@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'এই ঘণ্টাগুলো মিলে যাচ্ছে',
         overlapPrompt: 'তবুও দুটো এন্ট্রিই রাখবেন?',
         overlapKeepBoth: 'দুটোই রাখুন',
+
+        view: 'ভিউ',
+        viewDay: 'দিনভিত্তিক ভিউ',
+        viewList: 'তালিকা ভিউ',
     },
 
     hourLogReport: {

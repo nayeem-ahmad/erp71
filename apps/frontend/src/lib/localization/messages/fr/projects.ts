@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'Ces heures se chevauchent',
         overlapPrompt: 'Garder les deux saisies malgré tout ?',
         overlapKeepBoth: 'Garder les deux',
+
+        view: 'Vue',
+        viewDay: 'Vue par jour',
+        viewList: 'Vue liste',
     },
 
     hourLogReport: {

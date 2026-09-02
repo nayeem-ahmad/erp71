@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'Diese Stunden überschneiden sich',
         overlapPrompt: 'Beide Einträge trotzdem behalten?',
         overlapKeepBoth: 'Beide behalten',
+
+        view: 'Ansicht',
+        viewDay: 'Tagesansicht',
+        viewList: 'Listenansicht',
     },
 
     hourLogReport: {

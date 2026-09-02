@@ -382,6 +382,12 @@ export const projectsMessages = {
         overlapTitle: 'These hours overlap',
         overlapPrompt: 'Keep both entries anyway?',
         overlapKeepBoth: 'Keep both',
+
+        // The two shapes the same hours can be read in: grouped under their
+        // day, or flat with a column per field.
+        view: 'View',
+        viewDay: 'Day view',
+        viewList: 'List view',
     },
 
     hourLogReport: {

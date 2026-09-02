@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
+import {
+    BarChart3,
+    CalendarDays,
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Rows3,
+    Upload,
+} from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -31,6 +39,7 @@ import HourLogCaptureBar, {
     type RunningTimer,
 } from '@/components/projects/HourLogCaptureBar';
 import HourLogDayList, { type DayTotal } from '@/components/projects/HourLogDayList';
+import HourLogList from '@/components/projects/HourLogList';
 import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/components/projects/hour-log-day';
 import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
@@ -129,6 +138,43 @@ function exportColumnsFor(labels: {
     ];
 }
 
+/**
+ * Which shape the hours are read in. The day ledger answers "did I do a full
+ * day?"; the flat list answers "where did these particular hours go".
+ */
+type HourLogView = 'day' | 'list';
+
+const VIEW_STORAGE_KEY = 'hour-log-view';
+
+/**
+ * Remembered between visits, because a switcher that resets on every
+ * navigation is one somebody has to press every single time. Read after mount
+ * rather than during the first render: the server has no localStorage, and
+ * seeding state from it directly is a hydration mismatch.
+ */
+function useRememberedView(): [HourLogView, (view: HourLogView) => void] {
+    const [view, setView] = useState<HourLogView>('day');
+
+    useEffect(() => {
+        try {
+            if (localStorage.getItem(VIEW_STORAGE_KEY) === 'list') setView('list');
+        } catch {
+            // Storage blocked or unavailable — the default view is fine.
+        }
+    }, []);
+
+    const choose = useCallback((next: HourLogView) => {
+        setView(next);
+        try {
+            localStorage.setItem(VIEW_STORAGE_KEY, next);
+        } catch {
+            // Not remembering the choice is better than failing to make it.
+        }
+    }, []);
+
+    return [view, choose];
+}
+
 const EMPTY_FORM = {
     projectId: '',
     taskId: '',
@@ -152,6 +198,7 @@ export default function HourLogsPage() {
     const m = t.projects;
     const hl = m.hourLogs;
 
+    const [view, setView] = useRememberedView();
     const [preset, setPreset] = useState<HourLogRangePreset>('30');
     const [range, setRange] = useState<HourLogRange>(() => hourLogPresetRange('30'));
     const [search, setSearch] = useState('');
@@ -767,41 +814,93 @@ export default function HourLogsPage() {
                         ))}
                     </Select>
                 ) : null}
+
+                <div
+                    role="group"
+                    aria-label={hl.view}
+                    className="flex overflow-hidden rounded-md border border-gray-200 bg-white md:ms-auto"
+                >
+                    <ViewButton
+                        active={view === 'day'}
+                        label={hl.viewDay}
+                        onClick={() => setView('day')}
+                        icon={<CalendarDays className="h-4 w-4" aria-hidden="true" />}
+                    />
+                    <ViewButton
+                        active={view === 'list'}
+                        label={hl.viewList}
+                        onClick={() => setView('list')}
+                        icon={<Rows3 className="h-4 w-4" aria-hidden="true" />}
+                    />
+                </div>
             </div>
 
             {!valid && <p className="text-sm text-red-600">{hl.rangeInvalid}</p>}
 
-            <HourLogDayList
-                days={days}
-                dayTotals={dayTotals}
-                showPerson={showPerson}
-                loading={loading}
-                labels={{
-                    today: hl.today,
-                    yesterday: hl.yesterday,
-                    total: hl.total,
-                    addDescription: hl.addDescription,
-                    logAgain: hl.logAgain,
-                    editEntry: hl.editEntry,
-                    deleteEntry: hl.deleteEntry,
-                    expand: hl.expandGroup,
-                    collapse: hl.collapseGroup,
-                    // "Duration", not "Hours": the capture bar above already
-                    // owns that name for the box you type a figure into, and two
-                    // controls with one accessible name is a screen nobody can
-                    // navigate by label.
-                    hours: hl.duration,
-                    note: m.time.note,
-                    unattributed: hl.unattributed,
-                    empty: hl.empty,
-                    partialDay: hl.partialDay,
-                }}
-                onLogAgain={logAgain}
-                onEdit={openEdit}
-                onDelete={setPendingDelete}
-                onPatch={patchEntry}
-                onOpenTask={setOpenTaskId}
-            />
+            {view === 'day' ? (
+                <HourLogDayList
+                    days={days}
+                    dayTotals={dayTotals}
+                    showPerson={showPerson}
+                    loading={loading}
+                    labels={{
+                        today: hl.today,
+                        yesterday: hl.yesterday,
+                        total: hl.total,
+                        addDescription: hl.addDescription,
+                        logAgain: hl.logAgain,
+                        editEntry: hl.editEntry,
+                        deleteEntry: hl.deleteEntry,
+                        expand: hl.expandGroup,
+                        collapse: hl.collapseGroup,
+                        // "Duration", not "Hours": the capture bar above already
+                        // owns that name for the box you type a figure into, and two
+                        // controls with one accessible name is a screen nobody can
+                        // navigate by label.
+                        hours: hl.duration,
+                        note: m.time.note,
+                        unattributed: hl.unattributed,
+                        empty: hl.empty,
+                        partialDay: hl.partialDay,
+                    }}
+                    onLogAgain={logAgain}
+                    onEdit={openEdit}
+                    onDelete={setPendingDelete}
+                    onPatch={patchEntry}
+                    onOpenTask={setOpenTaskId}
+                />
+            ) : (
+                <HourLogList
+                    entries={items}
+                    loading={loading}
+                    labels={{
+                        date: m.time.workDate,
+                        project: m.fields.project,
+                        task: m.task.title,
+                        description: m.fields.description,
+                        startTime: hl.startTime,
+                        endTime: hl.endTime,
+                        duration: hl.duration,
+                        actions: m.fields.actions,
+                        empty: hl.empty,
+                        addDescription: hl.addDescription,
+                        // The cell's accessible name matches the column above
+                        // it: a screen read column by column and a screen read
+                        // control by control should not disagree about what the
+                        // field is called.
+                        note: m.fields.description,
+                        hours: hl.duration,
+                        logAgain: hl.logAgain,
+                        editEntry: hl.editEntry,
+                        deleteEntry: hl.deleteEntry,
+                    }}
+                    onLogAgain={logAgain}
+                    onEdit={openEdit}
+                    onDelete={setPendingDelete}
+                    onPatch={patchEntry}
+                    onOpenTask={setOpenTaskId}
+                />
+            )}
 
             {lastPage > 1 ? (
                 <nav className="flex items-center justify-between gap-3" aria-label={hl.title}>
@@ -1075,5 +1174,36 @@ function SummaryTile({ label, value, accent }: { label: string; value: string; a
                 {value}
             </div>
         </div>
+    );
+}
+
+/**
+ * One segment of the view switcher. Icon and word together: the icons alone
+ * would be a guess, and the words alone would take a third of the filter row.
+ */
+function ViewButton({
+    active,
+    label,
+    icon,
+    onClick,
+}: {
+    active: boolean;
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            title={label}
+            className={`flex min-h-touch items-center gap-1.5 px-3 text-sm font-medium transition-colors md:min-h-0 md:py-1.5 ${
+                active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+        >
+            {icon}
+            {label}
+        </button>
     );
 }
