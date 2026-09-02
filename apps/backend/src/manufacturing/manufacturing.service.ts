@@ -87,6 +87,8 @@ export class ManufacturingService {
             throw new BadRequestException('This product already has a BOM recipe - edit that one instead.');
         }
 
+        this.assertNoSelfComponent(dto.productId, dto.components);
+
         // Validate all component products belong to tenant
         if (dto.components.length > 0) {
             const componentProductIds = dto.components.map((c) => c.productId);
@@ -132,7 +134,12 @@ export class ManufacturingService {
     }
 
     async updateBom(tenantId: string, id: string, dto: UpdateBomDto) {
-        await this.getBom(tenantId, id);
+        const recipe = await this.getBom(tenantId, id);
+
+        if (dto.components !== undefined) {
+            // The output product cannot change on edit, so it is the stored one.
+            this.assertNoSelfComponent(recipe.productId, dto.components);
+        }
 
         return this.db.$transaction(async (tx) => {
             // If components provided, replace all
@@ -182,6 +189,18 @@ export class ManufacturingService {
                 },
             });
         });
+    }
+
+    /**
+     * A recipe listing its own output as a component would, on completion,
+     * consume the finished goods it had just produced — the same product both
+     * sides of one movement. Nothing downstream is built to unpick that, so it
+     * is refused at the door rather than reconciled later.
+     */
+    private assertNoSelfComponent(productId: string, components: Array<{ productId: string }>) {
+        if (components.some((c) => c.productId === productId)) {
+            throw new BadRequestException('A recipe cannot list its own output product as a component.');
+        }
     }
 
     async deleteBom(tenantId: string, id: string) {

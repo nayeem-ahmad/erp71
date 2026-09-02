@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import ManufacturingPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -486,6 +486,40 @@ describe('ManufacturingPage', () => {
             const lastCall = calls[calls.length - 1];
             expect(lastCall[0]).toContain('status=DRAFT');
         });
+    });
+
+    it('keeps the output product out of the component picker', async () => {
+        mockFetchAllPages.mockResolvedValue([]);
+        render(<ManufacturingPage />);
+        await waitFor(() => screen.getByText('New BOM'));
+        fireEvent.click(screen.getByText('New BOM'));
+        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        fireEvent.click(screen.getByText('Add Component'));
+
+        const componentPicker = screen.getByLabelText('Select a component…');
+        expect(within(componentPicker).getByText('Widget A (WGT-001)')).toBeInTheDocument();
+
+        // Choosing Widget A as the output takes it off the component list: a
+        // recipe cannot consume the goods it produces.
+        fireEvent.change(screen.getByLabelText('Output Product *'), { target: { value: 'prod-1' } });
+        expect(within(componentPicker).queryByText('Widget A (WGT-001)')).not.toBeInTheDocument();
+        expect(within(componentPicker).getByText('Flour (FLR-1)')).toBeInTheDocument();
+    });
+
+    it('clears a component row that the new output product has just become', async () => {
+        mockFetchAllPages.mockResolvedValue([]);
+        render(<ManufacturingPage />);
+        await waitFor(() => screen.getByText('New BOM'));
+        fireEvent.click(screen.getByText('New BOM'));
+        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        fireEvent.click(screen.getByText('Add Component'));
+
+        const componentPicker = screen.getByLabelText('Select a component…') as HTMLSelectElement;
+        fireEvent.change(componentPicker, { target: { value: 'prod-flour' } });
+        expect(componentPicker.value).toBe('prod-flour');
+
+        fireEvent.change(screen.getByLabelText('Output Product *'), { target: { value: 'prod-flour' } });
+        expect(componentPicker.value).toBe('');
     });
 
     it('asks for BOM pages within the API\'s limit cap', async () => {
