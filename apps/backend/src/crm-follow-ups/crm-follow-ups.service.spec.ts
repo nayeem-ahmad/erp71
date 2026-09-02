@@ -127,7 +127,7 @@ describe('CrmFollowUpsService', () => {
                 .mockResolvedValueOnce(5) // overdue
                 .mockResolvedValueOnce(9); // total pending
 
-            await expect(service.getTodaySummary('tenant-1')).resolves.toEqual({
+            await expect(service.getTodaySummary('tenant-1', 'Asia/Dhaka')).resolves.toEqual({
                 dueToday: 2,
                 overdue: 5,
                 total: 9,

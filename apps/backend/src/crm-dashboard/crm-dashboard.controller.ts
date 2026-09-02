@@ -26,12 +26,12 @@ export class CrmDashboardController {
 
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query);
+        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query);
+        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
     }
 
     /**
@@ -41,6 +41,6 @@ export class CrmDashboardController {
      */
     @Get('activity-heatmap')
     getActivityHeatmap(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getActivityHeatmap(tenant.tenantId, query);
+        return this.service.getActivityHeatmap(tenant.tenantId, query, tenant.timezone);
     }
 }

@@ -809,6 +809,12 @@ export const coreMessages = {
             disabledByAdmin: "Le changement de langue n'est pas activé pour cet espace de travail. Contactez l'administrateur de votre plateforme pour ajouter une seconde langue.",
             profileSaved: "Langue préférée enregistrée avec succès.",
             profileSaveFailed: "Échec de l'enregistrement de la langue préférée.",
+            timezoneLabel: 'Fuseau horaire de l\'espace de travail',
+            timezoneHelp: 'Chaque filtre de dates, liste « à faire aujourd\'hui » et rapport est calculé dans ce fuseau. Réglez-le sur le lieu où l\'entreprise opère réellement.',
+            saveTimezone: 'Enregistrer le fuseau horaire',
+            timezoneSaved: 'Fuseau horaire de l\'espace de travail enregistré.',
+            timezoneSaveFailed: 'Échec de l\'enregistrement du fuseau horaire.',
+            timezoneCurrent: 'Il est actuellement {time} dans ce fuseau.',
         },
         dashboardChoice: {
             title: "Tableau de bord",

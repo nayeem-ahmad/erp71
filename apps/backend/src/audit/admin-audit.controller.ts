@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AuditService } from './audit.service';
 import { NoAudit } from './no-audit.decorator';
+import { DEFAULT_TENANT_TIMEZONE } from '../common/tenant-time.util';
 
 /**
  * The platform-side reader for the audit trail.
@@ -49,6 +50,10 @@ export class AdminAuditController {
         @Query('offset') offset?: string,
     ) {
         return this.auditService.query({
+            // Platform scope spans every tenant, so no single workspace's
+            // calendar applies. The platform's own zone is the honest choice;
+            // this endpoint filters on `fromDate`/`toDate` instants anyway.
+            timezone: DEFAULT_TENANT_TIMEZONE,
             platformOnly: scope !== 'tenant' && scope !== 'all',
             tenantId: scope === 'tenant' ? tenantId : undefined,
             entity,

@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
 
 describe('TenantsService — dashboard settings', () => {
     let service: TenantsService;
@@ -20,6 +21,15 @@ describe('TenantsService — dashboard settings', () => {
             providers: [
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
+                {
+                    provide: TenantTimezoneService,
+                    useValue: {
+                        for: jest.fn(async () => 'Asia/Dhaka'),
+                        forMany: jest.fn(async () => new Map()),
+                        prime: jest.fn(),
+                        invalidate: jest.fn(),
+                    },
+                },
             ],
         }).compile();
 

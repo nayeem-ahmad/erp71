@@ -23,11 +23,11 @@ export class SalesDashboardController {
 
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: SalesDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query);
+        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: SalesDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query);
+        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
     }
 }

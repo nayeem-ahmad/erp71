@@ -30,7 +30,7 @@ export class SalesController {
         @Query('createdTo') createdTo?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
-        return this.salesService.findAll(tenant.tenantId, {
+        return this.salesService.findAll(tenant.tenantId, { timezone: tenant.timezone,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             createdBy: mineOnly ? tenant.userId : undefined,

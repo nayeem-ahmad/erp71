@@ -65,7 +65,10 @@ export class WarehouseTransfersService {
         });
     }
 
-    async findAll(tenantId: string, query?: ListWarehouseTransfersQueryDto) {
+    async findAll(
+        tenantId: string,
+        query?: ListWarehouseTransfersQueryDto & { timezone?: string },
+    ) {
         return this.db.warehouseTransfer.findMany({
             where: {
                 tenant_id: tenantId,
@@ -73,7 +76,7 @@ export class WarehouseTransfersService {
                 ...(query?.sourceWarehouseId ? { source_warehouse_id: query.sourceWarehouseId } : {}),
                 ...(query?.destinationWarehouseId ? { destination_warehouse_id: query.destinationWarehouseId } : {}),
                 ...(query?.productId ? { items: { some: { product_id: query.productId } } } : {}),
-                ...buildTransferDateRange(query?.from, query?.to),
+                ...buildTransferDateRange(query?.from, query?.to, query?.timezone),
             },
             include: this.transferInclude(),
             orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
@@ -276,7 +279,7 @@ export class WarehouseTransfersService {
     }
 }
 
-function buildTransferDateRange(from?: string, to?: string) {
-    const created = createdAtRange(from, to);
+function buildTransferDateRange(from: string | undefined, to: string | undefined, timezone: string | undefined) {
+    const created = createdAtRange(from, to, timezone);
     return created ? { created_at: created } : {};
 }

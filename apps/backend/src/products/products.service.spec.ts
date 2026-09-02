@@ -167,7 +167,7 @@ describe('ProductsService', () => {
       db.product.findMany.mockResolvedValue([{ id: 'p1', name: 'A', stocks: [] }]);
       db.product.count.mockResolvedValue(4213);
 
-      const result = await service.findAll('tenant-1', { page: 1, limit: 20 });
+      const result = await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', page: 1, limit: 20 });
 
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(4213);
@@ -178,7 +178,7 @@ describe('ProductsService', () => {
       db.product.findMany.mockResolvedValue([]);
       db.product.count.mockResolvedValue(0);
 
-      await service.findAll('tenant-1', { search: 'rice' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', search: 'rice' });
 
       expect(db.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -197,7 +197,7 @@ describe('ProductsService', () => {
       db.product.count.mockResolvedValue(0);
 
       // OUT uses `none` so a product with no stock row at all still counts as out of stock.
-      await service.findAll('tenant-1', { stockStatus: 'OUT' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', stockStatus: 'OUT' });
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -206,7 +206,7 @@ describe('ProductsService', () => {
         }),
       );
 
-      await service.findAll('tenant-1', { stockStatus: 'LOW' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', stockStatus: 'LOW' });
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -215,7 +215,7 @@ describe('ProductsService', () => {
         }),
       );
 
-      await service.findAll('tenant-1', { stockStatus: 'IN' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', stockStatus: 'IN' });
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -229,12 +229,12 @@ describe('ProductsService', () => {
       db.product.findMany.mockResolvedValue([]);
       db.product.count.mockResolvedValue(0);
 
-      await service.findAll('tenant-1', { sortBy: 'price', sortDir: 'desc' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'price', sortDir: 'desc' });
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({ orderBy: { price: 'desc' } }),
       );
 
-      await service.findAll('tenant-1', { sortBy: 'no_such_column', sortDir: 'desc' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'no_such_column', sortDir: 'desc' });
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({ orderBy: { name: 'asc' } }),
       );
@@ -244,7 +244,7 @@ describe('ProductsService', () => {
       db.product.findMany.mockResolvedValue([]);
       db.product.count.mockResolvedValue(0);
 
-      await service.findAll('tenant-1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
 
       expect(db.product.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({

@@ -4,14 +4,13 @@ import { TenantContext } from '../database/tenant.decorator';
 import { canViewPayroll } from '../common/payroll-visibility';
 import {
     emptyDailyBuckets,
-    formatDate,
     money,
     percent,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import { HrDashboardQueryDto } from './hr-dashboard.dto';
+import { startOfZonedToday } from '../common/tenant-time.util';
 
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
@@ -42,7 +41,8 @@ export class HrDashboardService {
     }
 
     async getOverview(tenant: TenantContext, query: HrDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+        const timezone = tenant.timezone;
+        const window = resolveDateWindow(query, timezone);
         const tenantId = tenant.tenantId;
 
         const [canSeeMoney, headcount, attendance, leave, departments] = await Promise.all([
@@ -94,7 +94,7 @@ export class HrDashboardService {
     }
 
     private async getAttendance(tenantId: string, window: DateWindow) {
-        const today = startOfDay(new Date());
+        const today = startOfZonedToday(window.timezone);
 
         const [grouped, absentToday, activeCount] = await Promise.all([
             this.db.attendanceRecord.groupBy({
@@ -129,7 +129,7 @@ export class HrDashboardService {
     }
 
     private async getLeave(tenantId: string, window: DateWindow) {
-        const today = startOfDay(new Date());
+        const today = startOfZonedToday(window.timezone);
 
         const [pending, approvedDays, onLeaveToday] = await Promise.all([
             this.db.leaveRequest.count({
@@ -243,8 +243,8 @@ export class HrDashboardService {
     }
 
     /** Daily present/absent counts, feeding the KPI sparklines. */
-    async getTrends(tenantId: string, query: HrDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(tenantId: string, query: HrDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const records = await this.db.attendanceRecord.findMany({
             where: { tenant_id: tenantId, date: { gte: window.fromDate, lte: window.toDate } },
@@ -254,7 +254,7 @@ export class HrDashboardService {
         const buckets = emptyDailyBuckets(window, () => ({ present: 0, absent: 0, on_leave: 0 }));
 
         for (const record of records) {
-            const bucket = buckets.get(formatDate(startOfDay(record.date)));
+            const bucket = buckets.get(window.dayOf(record.date));
             if (!bucket) continue;
             if (record.status === 'PRESENT' || record.status === 'HALF_DAY') bucket.present += 1;
             else if (record.status === 'ABSENT') bucket.absent += 1;

@@ -810,6 +810,12 @@ export const coreMessages = {
                 disabledByAdmin: "Pertukaran bahasa tidak didayakan untuk ruang kerja ini. Hubungi pentadbir platform untuk menambah bahasa kedua.",
                 profileSaved: "Bahasa pilihan berjaya disimpan.",
                 profileSaveFailed: "Gagal menyimpan bahasa pilihan.",
+                timezoneLabel: 'Zon waktu ruang kerja',
+                timezoneHelp: 'Setiap penapis tarikh, senarai "perlu hari ini" dan laporan diukur dalam zon ini. Tetapkan ke tempat perniagaan sebenarnya beroperasi.',
+                saveTimezone: 'Simpan zon waktu',
+                timezoneSaved: 'Zon waktu ruang kerja berjaya disimpan.',
+                timezoneSaveFailed: 'Gagal menyimpan zon waktu ruang kerja.',
+                timezoneCurrent: 'Sekarang pukul {time} di zon ini.',
             },
             dashboardChoice: {
                 title: "Papan Pemuka",

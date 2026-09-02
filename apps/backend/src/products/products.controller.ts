@@ -162,7 +162,7 @@ export class ProductsController {
                 limit: parsedLimit,
             });
         }
-        return this.productsService.findAll(tenant.tenantId, {
+        return this.productsService.findAll(tenant.tenantId, { timezone: tenant.timezone,
             groupId,
             subgroupId,
             uncategorized: uncategorized === 'true',

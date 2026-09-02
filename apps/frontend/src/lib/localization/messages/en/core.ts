@@ -809,6 +809,12 @@ export const coreMessages = {
             disabledByAdmin: 'Language switching is not enabled for this workspace. Contact your platform administrator to add a second language.',
             profileSaved: 'Preferred language saved successfully.',
             profileSaveFailed: 'Failed to save preferred language.',
+            timezoneLabel: 'Workspace timezone',
+            timezoneHelp: 'Every date filter, "due today" list and report is measured in this zone. Set it to where the business actually trades.',
+            saveTimezone: 'Save timezone',
+            timezoneSaved: 'Workspace timezone saved successfully.',
+            timezoneSaveFailed: 'Failed to save workspace timezone.',
+            timezoneCurrent: 'Right now it is {time} in this zone.',
         },
         dashboardChoice: {
             title: 'Dashboard',

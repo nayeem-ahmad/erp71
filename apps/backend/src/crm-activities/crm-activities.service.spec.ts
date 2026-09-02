@@ -7,6 +7,7 @@ import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
 
 describe('CrmActivitiesService', () => {
     let service: CrmActivitiesService;
@@ -17,7 +18,12 @@ describe('CrmActivitiesService', () => {
         db = {
             lead: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
             customer: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
-            tenant: { findUnique: jest.fn().mockResolvedValue({ owner_id: 'owner-1' }) },
+            tenant: {
+                findUnique: jest.fn().mockResolvedValue({ owner_id: 'owner-1' }),
+                // The birthday sweep asks which tenants exist so it can group
+                // them by their own local date before querying birthdays.
+                findMany: jest.fn().mockResolvedValue([{ id: 't1' }, { id: 't2' }]),
+            },
             crmActivity: {
                 create: jest.fn(),
                 findFirst: jest.fn(),
@@ -46,6 +52,17 @@ describe('CrmActivitiesService', () => {
                     useValue: { track: (_n: string, fn: () => Promise<unknown>) => fn() },
                 },
                 { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue(undefined) } },
+                {
+                    provide: TenantTimezoneService,
+                    useValue: {
+                        for: jest.fn(async () => 'Asia/Dhaka'),
+                        forMany: jest.fn(async (ids: string[]) =>
+                            new Map(ids.map((id) => [id, 'Asia/Dhaka'])),
+                        ),
+                        prime: jest.fn(),
+                        invalidate: jest.fn(),
+                    },
+                },
             ],
         }).compile();
 
@@ -55,12 +72,12 @@ describe('CrmActivitiesService', () => {
     describe('create()', () => {
         it('rejects both lead_id and customer_id', async () => {
             await expect(
-                service.create('t1', 'u1', { lead_id: 'l1', customer_id: 'c1', subject: 'x' } as any),
+                service.create('t1', 'u1', { lead_id: 'l1', customer_id: 'c1', subject: 'x' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
         });
 
         it('rejects neither lead_id nor customer_id', async () => {
-            await expect(service.create('t1', 'u1', { subject: 'x' } as any)).rejects.toThrow(
+            await expect(service.create('t1', 'u1', { subject: 'x' } as any, 'Asia/Dhaka')).rejects.toThrow(
                 BadRequestException,
             );
         });
@@ -68,22 +85,68 @@ describe('CrmActivitiesService', () => {
         it('404s an unknown lead', async () => {
             db.lead.findFirst.mockResolvedValue(null);
             await expect(
-                service.create('t1', 'u1', { lead_id: 'nope', subject: 'x' } as any),
+                service.create('t1', 'u1', { lead_id: 'nope', subject: 'x' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(NotFoundException);
         });
 
         it('requires a subject when planning', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
             await expect(
-                service.create('t1', 'u1', { lead_id: 'l1', status: 'PLANNED' } as any),
+                service.create('t1', 'u1', { lead_id: 'l1', status: 'PLANNED' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
         });
 
         it('requires summary and channel when logging directly', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
             await expect(
-                service.create('t1', 'u1', { lead_id: 'l1', status: 'DONE', subject: 'x' } as any),
+                service.create('t1', 'u1', { lead_id: 'l1', status: 'DONE', subject: 'x' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
+        });
+
+        /**
+         * The write half of the timezone bug. `<input type="datetime-local">` posts
+         * `2026-09-01T20:00` with no offset, and `new Date()` reads an offsetless
+         * datetime in the *process* zone — UTC in the container. A shopkeeper
+         * scheduling an 8pm follow-up got one stored at 2am the next day in Dhaka:
+         * the wrong calendar day, before any filter had a chance to be wrong too.
+         */
+        it('reads an offsetless due_at as the tenant\'s wall clock, not the server\'s', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call Karim',
+                due_at: '2026-09-01T20:00',
+            } as any, 'Asia/Dhaka');
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        // 8pm in Dhaka, not 8pm UTC (which would be 2am on the 2nd).
+                        due_at: new Date('2026-09-01T14:00:00.000Z'),
+                    }),
+                }),
+            );
+        });
+
+        it('leaves a due_at that already names its offset alone', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                subject: 'Call Karim',
+                due_at: '2026-09-01T20:00:00Z',
+            } as any, 'Asia/Dhaka');
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ due_at: new Date('2026-09-01T20:00:00.000Z') }),
+                }),
+            );
         });
 
         it('creates a planned activity and recalculates the rollup', async () => {
@@ -101,7 +164,7 @@ describe('CrmActivitiesService', () => {
                 subject: 'Call Karim',
                 due_at: '2026-08-20T10:00:00Z',
                 assigned_to: 'u2',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -139,7 +202,7 @@ describe('CrmActivitiesService', () => {
                 lead_id: 'l1',
                 subject: 'Call Karim',
                 due_at: '2026-08-20T10:00:00Z',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const touch = db.lead.update.mock.calls.find(
                 ([args]: [any]) => args.data.last_activity_at !== undefined,
@@ -172,7 +235,7 @@ describe('CrmActivitiesService', () => {
                 status: 'DONE',
                 summary: 'Spoke to Karim',
                 channel: 'CALL',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const stamp = db.lead.update.mock.calls.find(
                 ([args]: [any]) => args.data.last_contacted_at !== undefined,
@@ -197,7 +260,7 @@ describe('CrmActivitiesService', () => {
          * makes the assignee filter blind to it and `notifyAssignee` a no-op.
          */
         it('files a new activity against its creator when no assignee is named', async () => {
-            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any);
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.create.mock.calls[0][0].data).toEqual(
                 expect.objectContaining({ assigned_to: 'u1' }),
@@ -209,7 +272,7 @@ describe('CrmActivitiesService', () => {
                 lead_id: 'l1',
                 subject: 'Call',
                 assigned_to: 'u2',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.create.mock.calls[0][0].data).toEqual(
                 expect.objectContaining({ assigned_to: 'u2' }),
@@ -221,7 +284,7 @@ describe('CrmActivitiesService', () => {
         it('scopes to the tenant and paginates', async () => {
             db.crmActivity.findMany.mockResolvedValue([]);
             db.crmActivity.count.mockResolvedValue(0);
-            const res = await service.findAll('t1', { leadId: 'l1', page: 2, limit: 10 });
+            const res = await service.findAll('t1', { timezone: 'Asia/Dhaka', leadId: 'l1', page: 2, limit: 10 });
             expect(db.crmActivity.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({ tenant_id: 't1', lead_id: 'l1' }),
@@ -235,7 +298,7 @@ describe('CrmActivitiesService', () => {
         it('overdue means PLANNED and past due', async () => {
             db.crmActivity.findMany.mockResolvedValue([]);
             db.crmActivity.count.mockResolvedValue(0);
-            await service.findAll('t1', { overdue: true });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', overdue: true });
             const where = db.crmActivity.findMany.mock.calls[0][0].where;
             expect(where.status).toBe('PLANNED');
             expect(where.due_at.lt).toBeInstanceOf(Date);
@@ -244,7 +307,7 @@ describe('CrmActivitiesService', () => {
         it('filters created_at to the inclusive Dhaka day range', async () => {
             db.crmActivity.findMany.mockResolvedValue([]);
             db.crmActivity.count.mockResolvedValue(0);
-            await service.findAll('t1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
             expect(db.crmActivity.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
@@ -265,7 +328,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('filters to activities whose lead is owned by the named user', async () => {
-            await service.findAll('t1', { leadOwner: 'user-9' });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', leadOwner: 'user-9' });
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
                 expect.objectContaining({ lead: { assigned_to: 'user-9' } }),
@@ -273,7 +336,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('filters to activities on leads nobody owns for the unassigned sentinel', async () => {
-            await service.findAll('t1', { leadOwner: UNASSIGNED_OWNER_FILTER });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', leadOwner: UNASSIGNED_OWNER_FILTER });
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
                 expect.objectContaining({ lead: { assigned_to: null } }),
@@ -281,13 +344,13 @@ describe('CrmActivitiesService', () => {
         });
 
         it('does not constrain the lead relation when no owner is given', async () => {
-            await service.findAll('t1', {});
+            await service.findAll('t1', { timezone: 'Asia/Dhaka',});
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where).not.toHaveProperty('lead');
         });
 
         it('leaves the activity assignee filter independent of the lead owner', async () => {
-            await service.findAll('t1', { leadOwner: 'user-9', assignedTo: 'user-3' });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', leadOwner: 'user-9', assignedTo: 'user-3' });
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(
                 expect.objectContaining({
@@ -305,7 +368,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('filters due_at to the inclusive Dhaka day range', async () => {
-            await service.findAll('t1', { dueFrom: '2026-08-19', dueTo: '2026-08-19' });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', dueFrom: '2026-08-19', dueTo: '2026-08-19' });
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
                 gte: new Date('2026-08-18T18:00:00.000Z'),
@@ -314,7 +377,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('accepts an open-ended range', async () => {
-            await service.findAll('t1', { dueFrom: '2026-08-19' });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', dueFrom: '2026-08-19' });
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
                 gte: new Date('2026-08-18T18:00:00.000Z'),
@@ -322,7 +385,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('does not filter on due_at when the range is empty', async () => {
-            await service.findAll('t1', {});
+            await service.findAll('t1', { timezone: 'Asia/Dhaka',});
 
             expect(db.crmActivity.findMany.mock.calls[0][0].where).not.toHaveProperty('due_at');
         });
@@ -333,7 +396,7 @@ describe('CrmActivitiesService', () => {
          * for, so the two windows intersect.
          */
         it('intersects the range with the overdue window rather than overwriting it', async () => {
-            await service.findAll('t1', { dueFrom: '2026-08-19', dueTo: '2036-01-01', overdue: true });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', dueFrom: '2026-08-19', dueTo: '2036-01-01', overdue: true });
 
             const where = db.crmActivity.findMany.mock.calls[0][0].where;
             expect(where.status).toBe('PLANNED');
@@ -344,7 +407,7 @@ describe('CrmActivitiesService', () => {
         });
 
         it('keeps the tighter upper bound when the range ends before today', async () => {
-            await service.findAll('t1', { dueTo: '2020-01-01', overdue: true });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', dueTo: '2020-01-01', overdue: true });
 
             const where = db.crmActivity.findMany.mock.calls[0][0].where;
             expect(where.due_at.lte).toEqual(new Date('2020-01-01T17:59:59.999Z'));
@@ -352,13 +415,57 @@ describe('CrmActivitiesService', () => {
         });
 
         it('intersects the range with the dueToday window', async () => {
-            await service.findAll('t1', { dueFrom: '2030-01-01', dueToday: true });
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', dueFrom: '2030-01-01', dueToday: true });
 
             const where = db.crmActivity.findMany.mock.calls[0][0].where;
             expect(where.status).toBe('PLANNED');
             // The range's lower bound is the later of the two, so it survives.
             expect(where.due_at.gte).toEqual(new Date('2029-12-31T18:00:00.000Z'));
             expect(where.due_at.lt).toBeInstanceOf(Date);
+        });
+
+        /**
+         * The bug this whole change exists for. `dueToday` used to be built with
+         * `setHours(0, 0, 0, 0)`, which measures midnight in the *server's* zone —
+         * UTC in the container, since nothing sets `TZ`. For a Dhaka shop that made
+         * "due today" run 6am-to-6am local, so a follow-up scheduled for 7am
+         * tomorrow already counted as today's and one due at 5am this morning had
+         * silently become overdue.
+         */
+        it('measures "due today" from the tenant\'s midnight, not the server\'s', async () => {
+            // 05:00 UTC is 11am on the 1st in Dhaka and 1am on the 1st in New York.
+            jest.useFakeTimers().setSystemTime(new Date('2026-09-01T05:00:00Z'));
+            try {
+                await service.findAll('t1', { timezone: 'Asia/Dhaka', dueToday: true });
+                expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
+                    gte: new Date('2026-08-31T18:00:00.000Z'),
+                    lt: new Date('2026-09-01T18:00:00.000Z'),
+                });
+
+                db.crmActivity.findMany.mockClear();
+                await service.findAll('t1', { timezone: 'America/New_York', dueToday: true });
+                expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
+                    gte: new Date('2026-09-01T04:00:00.000Z'),
+                    lt: new Date('2026-09-02T04:00:00.000Z'),
+                });
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('rolls the tenant day over before the UTC day does', async () => {
+            // 20:00 UTC on the 1st is already 2am on the 2nd in Dhaka, so "today"
+            // is the 2nd there while the server calendar still reads the 1st.
+            jest.useFakeTimers().setSystemTime(new Date('2026-09-01T20:00:00Z'));
+            try {
+                await service.findAll('t1', { timezone: 'Asia/Dhaka', dueToday: true });
+                expect(db.crmActivity.findMany.mock.calls[0][0].where.due_at).toEqual({
+                    gte: new Date('2026-09-01T18:00:00.000Z'),
+                    lt: new Date('2026-09-02T18:00:00.000Z'),
+                });
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 
@@ -375,7 +482,7 @@ describe('CrmActivitiesService', () => {
             db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
             db.crmActivity.findFirst.mockResolvedValue(null);
 
-            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any);
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call' } as any, 'Asia/Dhaka');
 
             expect(db.lead.update).toHaveBeenCalledWith({
                 where: { id: 'l1' },
@@ -401,7 +508,7 @@ describe('CrmActivitiesService', () => {
                 assigned_to: null,
             });
 
-            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Earliest' } as any);
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Earliest' } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -432,7 +539,7 @@ describe('CrmActivitiesService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValueOnce({ id: 'a3', subject: 'Someday', due_at: null, assigned_to: null });
 
-            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Someday' } as any);
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Someday' } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.findFirst).toHaveBeenCalledTimes(2);
             expect(db.lead.update).toHaveBeenCalledWith({
@@ -456,7 +563,7 @@ describe('CrmActivitiesService', () => {
                 assigned_to: null,
             });
 
-            await service.create('t1', 'u1', { customer_id: 'c1', subject: 'Reorder call' } as any);
+            await service.create('t1', 'u1', { customer_id: 'c1', subject: 'Reorder call' } as any, 'Asia/Dhaka');
 
             expect(db.customer.update).toHaveBeenCalledWith({
                 where: { id: 'c1' },
@@ -488,21 +595,21 @@ describe('CrmActivitiesService', () => {
         it('400s an already-completed activity', async () => {
             db.crmActivity.findFirst.mockResolvedValue({ ...planned, status: 'DONE' });
             await expect(
-                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
         });
 
         it('400s a cancelled activity', async () => {
             db.crmActivity.findFirst.mockResolvedValue({ ...planned, status: 'CANCELLED' });
             await expect(
-                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
         });
 
         it('404s an unknown id', async () => {
             db.crmActivity.findFirst.mockResolvedValue(null);
             await expect(
-                service.complete('t1', 'u1', 'nope', { channel: 'CALL', summary: 's' } as any),
+                service.complete('t1', 'u1', 'nope', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(NotFoundException);
         });
 
@@ -514,7 +621,7 @@ describe('CrmActivitiesService', () => {
                 channel: 'CALL',
                 summary: 'Spoke to Karim',
                 outcome: 'Promised Thursday',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -546,7 +653,7 @@ describe('CrmActivitiesService', () => {
                 channel: 'CALL',
                 summary: 'Spoke to Karim',
                 next: { subject: 'Confirm payment', due_at: '2026-08-15T10:00:00Z' },
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -567,7 +674,7 @@ describe('CrmActivitiesService', () => {
                 .mockResolvedValue(null);
             db.crmActivity.update.mockResolvedValue({ status: 'DONE' });
 
-            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka');
 
             expect(db.customer.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -586,7 +693,7 @@ describe('CrmActivitiesService', () => {
             });
 
             await expect(
-                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any),
+                service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
         });
     });
@@ -598,7 +705,7 @@ describe('CrmActivitiesService', () => {
                 .mockResolvedValue(null);
             db.crmActivity.update.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
 
-            await service.update('t1', 'a1', { due_at: '2026-09-01T00:00:00Z' } as any);
+            await service.update('t1', 'a1', { due_at: '2026-09-01T00:00:00Z' } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -610,14 +717,14 @@ describe('CrmActivitiesService', () => {
 
         it('refuses to edit a completed activity', async () => {
             db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'DONE' });
-            await expect(service.update('t1', 'a1', { subject: 'x' } as any)).rejects.toThrow(
+            await expect(service.update('t1', 'a1', { subject: 'x' } as any, 'Asia/Dhaka')).rejects.toThrow(
                 BadRequestException,
             );
         });
 
         it('404s an unknown id', async () => {
             db.crmActivity.findFirst.mockResolvedValue(null);
-            await expect(service.update('t1', 'nope', { subject: 'x' } as any)).rejects.toThrow(
+            await expect(service.update('t1', 'nope', { subject: 'x' } as any, 'Asia/Dhaka')).rejects.toThrow(
                 NotFoundException,
             );
         });
@@ -669,7 +776,7 @@ describe('CrmActivitiesService', () => {
                 .mockResolvedValueOnce(3)
                 .mockResolvedValueOnce(5)
                 .mockResolvedValueOnce(11);
-            const res = await service.summary('t1');
+            const res = await service.summary('t1', 'Asia/Dhaka');
             expect(res).toEqual({ dueToday: 3, overdue: 5, total: 11 });
         });
     });
@@ -702,7 +809,7 @@ describe('CrmActivitiesService', () => {
                 is_active: true,
             });
 
-            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.count).toHaveBeenCalledWith({
                 where: { tenant_id: 't1', lead_id: 'l1', status: 'DONE' },
@@ -723,7 +830,7 @@ describe('CrmActivitiesService', () => {
                 id: 'ch1', code: 'CALL', name: 'Call', is_active: true,
             });
 
-            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any);
+            await service.complete('t1', 'u1', 'a1', { channel: 'CALL', summary: 's' } as any, 'Asia/Dhaka');
 
             expect(db.lead.findFirst).not.toHaveBeenCalled();
         });
@@ -846,7 +953,7 @@ describe('CrmActivitiesService', () => {
                 lead_id: 'l1',
                 subject: 'Call',
                 assigned_to: 'u2',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const notifications = (service as any).notifications;
             expect(notifications.create).toHaveBeenCalledWith(
@@ -868,7 +975,7 @@ describe('CrmActivitiesService', () => {
                 lead_id: 'l1',
                 subject: 'Call',
                 assigned_to: 'u1',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const notifications = (service as any).notifications;
             expect(notifications.create).not.toHaveBeenCalled();
@@ -882,7 +989,7 @@ describe('CrmActivitiesService', () => {
             (service as any).notifications.create.mockRejectedValue(new Error('smtp down'));
 
             await expect(
-                service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call', assigned_to: 'u2' } as any),
+                service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call', assigned_to: 'u2' } as any, 'Asia/Dhaka'),
             ).resolves.toBeDefined();
         });
     });

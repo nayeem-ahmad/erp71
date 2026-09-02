@@ -103,7 +103,7 @@ describe('CustomersService', () => {
     db.customer.findMany.mockResolvedValue([]);
     db.customer.count.mockResolvedValue(0);
 
-    await service.findAll('t1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+    await service.findAll('t1', { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
 
     expect(db.customer.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -287,7 +287,7 @@ describe('CustomersService', () => {
       ]);
       db.customerCreditTransaction.count.mockResolvedValue(1);
 
-      const result = await service.listCreditPayments('tenant-1', {
+      const result = await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka',
         page: 1,
         limit: 20,
         customerId: 'c1',
@@ -315,7 +315,7 @@ describe('CustomersService', () => {
       db.customerCreditTransaction.findMany.mockResolvedValue([]);
       db.customerCreditTransaction.count.mockResolvedValue(0);
 
-      await service.listCreditPayments('tenant-1', {
+      await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka',
         page: 1,
         limit: 20,
         to: '2026-06-24',

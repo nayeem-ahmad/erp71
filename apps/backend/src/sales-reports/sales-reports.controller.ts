@@ -36,7 +36,7 @@ export class SalesReportsController {
 
     @Get('summary')
     getSalesSummary(@Tenant() tenant: TenantContext, @Query() query: GetSalesSummaryDto) {
-        return this.service.getSalesSummary(tenant.tenantId, query);
+        return this.service.getSalesSummary(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('by-product')
@@ -73,24 +73,24 @@ export class SalesReportsController {
 
     @Get('trend')
     getSalesTrend(@Tenant() tenant: TenantContext, @Query() query: GetSalesTrendDto) {
-        return this.service.getSalesTrend(tenant.tenantId, query);
+        return this.service.getSalesTrend(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('breakdown')
     getSalesBreakdown(@Tenant() tenant: TenantContext, @Query() query: GetSalesBreakdownDto) {
-        return this.service.getSalesBreakdown(tenant.tenantId, query);
+        return this.service.getSalesBreakdown(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('top-movers')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
     getTopMovers(@Tenant() tenant: TenantContext, @Query() query: GetTopMoversDto) {
-        return this.service.getTopMovers(tenant.tenantId, query);
+        return this.service.getTopMovers(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('returns-analysis')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
     getReturnsAnalysis(@Tenant() tenant: TenantContext, @Query() query: GetReturnsAnalysisDto) {
-        return this.service.getReturnsAnalysis(tenant.tenantId, query);
+        return this.service.getReturnsAnalysis(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('customer-retention')

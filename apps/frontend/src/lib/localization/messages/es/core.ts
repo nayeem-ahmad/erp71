@@ -809,6 +809,12 @@ export const coreMessages = {
             disabledByAdmin: "El cambio de idioma no está habilitado en este espacio de trabajo. Contacta con el administrador de la plataforma para añadir un segundo idioma.",
             profileSaved: "Idioma preferido guardado correctamente.",
             profileSaveFailed: "No se pudo guardar el idioma preferido.",
+            timezoneLabel: 'Zona horaria del espacio de trabajo',
+            timezoneHelp: 'Cada filtro de fechas, lista de "vence hoy" e informe se mide en esta zona. Configúrela donde el negocio opera realmente.',
+            saveTimezone: 'Guardar zona horaria',
+            timezoneSaved: 'Zona horaria del espacio de trabajo guardada correctamente.',
+            timezoneSaveFailed: 'No se pudo guardar la zona horaria del espacio de trabajo.',
+            timezoneCurrent: 'Ahora mismo son las {time} en esta zona.',
         },
         dashboardChoice: {
             title: "Panel",

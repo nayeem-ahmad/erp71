@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminDashboardQueryDto } from './admin-dashboard.dto';
+import { DEFAULT_TENANT_TIMEZONE } from '../common/tenant-time.util';
 
 /**
  * Platform-scoped, so `PlatformAdminGuard` and deliberately **no**
@@ -17,11 +18,11 @@ export class AdminDashboardController {
 
     @Get('overview')
     getOverview(@Query() query: AdminDashboardQueryDto) {
-        return this.service.getOverview(query);
+        return this.service.getOverview(query, DEFAULT_TENANT_TIMEZONE);
     }
 
     @Get('trends')
     getTrends(@Query() query: AdminDashboardQueryDto) {
-        return this.service.getTrends(query);
+        return this.service.getTrends(query, DEFAULT_TENANT_TIMEZONE);
     }
 }

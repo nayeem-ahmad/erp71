@@ -46,7 +46,7 @@ describe('CrmDashboardService', () => {
         it('zero-fills every stage a tenant has no leads in', async () => {
             db.lead.groupBy.mockResolvedValue([{ status: LeadStatus.NEW, _count: { _all: 3 } }]);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             expect(result.pipeline.counts).toEqual({
                 NEW: 3, CONTACTED: 0, QUALIFIED: 0, LOST: 0, CONVERTED: 0,
@@ -63,7 +63,7 @@ describe('CrmDashboardService', () => {
             ]);
             db.lead.count.mockResolvedValue(1);
 
-            const result = await service.getOverview(TENANT, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getOverview(TENANT, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.pipeline.converted_in_period).toBe(3);
             expect(result.pipeline.conversion_rate_pct).toBe(75);
@@ -74,14 +74,14 @@ describe('CrmDashboardService', () => {
             db.lead.findMany.mockResolvedValue([]);
             db.lead.count.mockResolvedValue(0);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             expect(result.pipeline.conversion_rate_pct).toBeNull();
             expect(result.pipeline.avg_days_to_convert).toBeNull();
         });
 
         it('counts a never-worked lead as stale only once it has aged', async () => {
-            await service.getOverview(TENANT, {});
+            await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             const staleCall = db.lead.count.mock.calls.find(
                 ([args]: [any]) => Array.isArray(args?.where?.OR),
@@ -97,7 +97,7 @@ describe('CrmDashboardService', () => {
         it('counts planned activities, so materialised next steps reach the card', async () => {
             db.crmActivity.count.mockResolvedValue(3);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             const plannedCalls = db.crmActivity.count.mock.calls.filter(
                 ([args]: [any]) => args?.where?.status === 'PLANNED',
@@ -111,7 +111,7 @@ describe('CrmDashboardService', () => {
         // them measuring different things rather than printing the same number
         // under two labels.
         it('separates planned work from logged touches by subject and channel', async () => {
-            await service.getOverview(TENANT, {});
+            await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             const completed = db.crmActivity.count.mock.calls.find(
                 ([args]: [any]) => args?.where?.status === 'DONE',
@@ -131,7 +131,7 @@ describe('CrmDashboardService', () => {
             ]);
             db.conversationChannel.findMany.mockResolvedValue([{ code: 'CALL', name: 'Phone call' }]);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             // Ordered by volume, and an unmatched code falls back to itself rather
             // than disappearing from the panel.
@@ -155,7 +155,7 @@ describe('CrmDashboardService', () => {
                 { id: 'user-2', name: '', email: 'karim@example.com' },
             ]);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             expect(result.owners).toEqual([
                 { user_id: 'user-1', name: 'Rahim', open_leads: 7, converted_in_period: 0, overdue_follow_ups: 0 },
@@ -177,7 +177,7 @@ describe('CrmDashboardService', () => {
             });
             db.leadSourceOption.findMany.mockResolvedValue([{ id: 'src-1', name: 'Referral' }]);
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             expect(result.sources).toEqual([
                 { id: 'src-1', name: 'Referral', leads: 8, converted: 2, conversion_rate_pct: 25 },
@@ -197,7 +197,7 @@ describe('CrmDashboardService', () => {
                 },
             });
 
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             expect(result.campaigns.sent_in_period).toBe(2);
             expect(result.campaigns.attributed_revenue).toBe(4500.5);
@@ -205,7 +205,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('defaults to the last 30 days and echoes the window back', async () => {
-            const result = await service.getOverview(TENANT, {});
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
             const from = new Date(`${result.filters.from}T00:00:00`);
             const to = new Date(`${result.filters.to}T00:00:00`);
@@ -216,7 +216,7 @@ describe('CrmDashboardService', () => {
 
     describe('getTrends', () => {
         it('emits a point for every day in the window, including empty ones', async () => {
-            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.points).toHaveLength(5);
             expect(result.points[0]).toEqual({
@@ -237,7 +237,7 @@ describe('CrmDashboardService', () => {
                 ),
             );
 
-            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             const byDate = Object.fromEntries(result.points.map((p) => [p.date, p]));
             // A 23:30 row belongs to that evening, not the next UTC day.
@@ -248,7 +248,7 @@ describe('CrmDashboardService', () => {
         it('ignores rows that fall outside the requested window', async () => {
             db.lead.findMany.mockResolvedValue([{ created_at: new Date(2026, 7, 20, 12, 0) }]);
 
-            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.points.every((point) => point.leads_created === 0)).toBe(true);
         });
@@ -263,7 +263,7 @@ describe('CrmDashboardService', () => {
         };
 
         it('emits a square for every day in the window, including empty ones', async () => {
-            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.points).toHaveLength(5);
             expect(result.points[0]).toEqual({ date: '2026-07-01', done: 0, planned: 0 });
@@ -276,7 +276,7 @@ describe('CrmDashboardService', () => {
                 [{ due_at: new Date(2026, 6, 4, 9, 0) }, { due_at: new Date(2026, 6, 4, 17, 0) }],
             );
 
-            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             const byDate = Object.fromEntries(result.points.map((p) => [p.date, p]));
             expect(byDate['2026-07-02']).toEqual({ date: '2026-07-02', done: 1, planned: 0 });
@@ -286,7 +286,7 @@ describe('CrmDashboardService', () => {
         it('buckets a late-evening row onto that evening, not the next UTC day', async () => {
             activities([{ completed_at: new Date(2026, 6, 3, 23, 30) }], []);
 
-            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             const byDate = Object.fromEntries(result.points.map((p) => [p.date, p]));
             expect(byDate['2026-07-03'].done).toBe(1);
@@ -294,7 +294,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('counts every DONE and PLANNED row, not the narrowed sets the KPI cards use', async () => {
-            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             for (const call of db.crmActivity.findMany.mock.calls) {
                 expect(call[0].where).not.toHaveProperty('channel_id');
@@ -303,7 +303,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('leaves CANCELLED rows out of both series', async () => {
-            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             const statuses = db.crmActivity.findMany.mock.calls.map((call: any[]) => call[0].where.status);
             expect(statuses).toEqual(['DONE', 'PLANNED']);
@@ -319,14 +319,14 @@ describe('CrmDashboardService', () => {
                 [{ due_at: new Date(2026, 6, 4, 9, 0) }],
             );
 
-            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.max).toEqual({ done: 2, planned: 1 });
             expect(result.totals).toEqual({ done: 3, planned: 1 });
         });
 
         it('drops the oldest weeks rather than the newest when the window is over-long', async () => {
-            const result = await service.getActivityHeatmap(TENANT, { from: '2020-01-01', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2020-01-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.points).toHaveLength(371);
             expect(result.points.at(-1)!.date).toBe('2026-07-05');
@@ -334,7 +334,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('leaves a window inside the ceiling exactly as asked', async () => {
-            const result = await service.getActivityHeatmap(TENANT, { from: '2026-04-13', to: '2026-07-05' });
+            const result = await service.getActivityHeatmap(TENANT, { from: '2026-04-13', to: '2026-07-05' }, 'Asia/Dhaka');
 
             expect(result.filters).toEqual({ from: '2026-04-13', to: '2026-07-05' });
         });

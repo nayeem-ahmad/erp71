@@ -203,7 +203,7 @@ describe('PurchasesService', () => {
         db.purchase.count = jest.fn().mockResolvedValue(0);
         db.voucher.findMany.mockResolvedValue([]);
 
-        await service.findAll('tenant-1', 1, 20, {
+        await service.findAll('tenant-1', 1, 20, { timezone: 'Asia/Dhaka',
             createdFrom: '2026-08-19',
             createdTo: '2026-08-19',
         });

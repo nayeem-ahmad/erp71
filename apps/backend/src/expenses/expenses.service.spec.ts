@@ -17,7 +17,7 @@ describe('ExpensesService', () => {
     });
 
     it('listEntries() should filter created_at to the inclusive Dhaka day range', async () => {
-        await service.listEntries('tenant-1', {
+        await service.listEntries('tenant-1', { timezone: 'Asia/Dhaka',
             page: 1,
             limit: 20,
             createdFrom: '2026-08-19',

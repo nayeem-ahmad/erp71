@@ -24,7 +24,7 @@ export class PurchaseReturnsController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.purchaseReturnsService.findAll(tenant.tenantId, query.page, query.limit, {
+        return this.purchaseReturnsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom,
             createdTo,
         });

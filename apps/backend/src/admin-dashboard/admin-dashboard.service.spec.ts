@@ -35,7 +35,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('counts only live tenants, never the soft-deleted ones', async () => {
-        await service.getOverview({});
+        await service.getOverview({}, 'Asia/Dhaka');
 
         for (const call of db.tenant.count.mock.calls) {
             expect(call[0].where.deleted_at).toBeNull();
@@ -49,7 +49,7 @@ describe('AdminDashboardService', () => {
             { status: 'PAST_DUE', _count: { status: 3 } },
         ]);
 
-        const result = await service.getOverview({});
+        const result = await service.getOverview({}, 'Asia/Dhaka');
 
         expect(result.subscriptions.active).toBe(40);
         expect(result.subscriptions.trialing).toBe(7);
@@ -72,7 +72,7 @@ describe('AdminDashboardService', () => {
             { plan: { monthly_price: 5_000 } },
         ]);
 
-        const result = await service.getOverview({});
+        const result = await service.getOverview({}, 'Asia/Dhaka');
 
         // The field is `mrr_ceiling`, not `mrr` — discounts are stored as a type
         // and a value, and resolving them here would fork billing arithmetic.
@@ -80,7 +80,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('counts only successful billing events as revenue', async () => {
-        await service.getOverview({});
+        await service.getOverview({}, 'Asia/Dhaka');
 
         expect(db.billingEvent.aggregate).toHaveBeenCalledWith(
             expect.objectContaining({ where: expect.objectContaining({ status: 'SUCCESS' }) }),
@@ -94,7 +94,7 @@ describe('AdminDashboardService', () => {
             { id: 't3', messages: [] },
         ]);
 
-        const result = await service.getOverview({});
+        const result = await service.getOverview({}, 'Asia/Dhaka');
 
         expect(result.support.open_threads).toBe(3);
         expect(result.support.awaiting_reply).toBe(1);
@@ -110,7 +110,7 @@ describe('AdminDashboardService', () => {
             { id: 'b', name: 'Beta Store', subscription: { plan: { code: 'PREMIUM' } } },
         ]);
 
-        const result = await service.getOverview({});
+        const result = await service.getOverview({}, 'Asia/Dhaka');
 
         expect(result.top_tenants.map((row) => row.name)).toEqual(['Beta Store', 'Alpha Shop']);
         expect(result.top_tenants[0].plan).toBe('PREMIUM');
@@ -121,7 +121,7 @@ describe('AdminDashboardService', () => {
             { id: 't1', name: 'New Shop', created_at: new Date(), subscription: null },
         ]);
 
-        const result = await service.getOverview({});
+        const result = await service.getOverview({}, 'Asia/Dhaka');
 
         expect(result.recent_signups[0]).toMatchObject({ name: 'New Shop', plan: null, status: null });
     });
@@ -132,7 +132,7 @@ describe('AdminDashboardService', () => {
             { created_at: new Date(2026, 7, 2, 20), amount: 2_000 },
         ]);
 
-        const result = await service.getTrends({ from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends({ from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points.map((point) => point.date)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         expect(result.points[1]).toEqual({ date: '2026-08-02', signups: 1, billed: 2_000 });

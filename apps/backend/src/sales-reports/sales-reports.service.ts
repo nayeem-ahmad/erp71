@@ -6,7 +6,6 @@ import {
     bucketStart,
     percentChange,
     resolveComparisonRange,
-    toDhakaParts,
     WEEKDAY_NAMES,
     type DateRange,
     type Granularity,
@@ -40,6 +39,7 @@ import {
     type ReturnForMargin,
     type SaleForMargin,
 } from './gross-profit.utils';
+import { zonedParts } from '../common/tenant-time.util';
 
 /**
  * Which figures an aggregate was built from. Line-item and invoice totals do
@@ -184,7 +184,7 @@ export class SalesReportsService {
         };
     }
 
-    async getSalesSummary(tenantId: string, query: GetSalesSummaryDto) {
+    async getSalesSummary(tenantId: string, query: GetSalesSummaryDto, timezone: string) {
         const { sales, returns, rawSales, rawReturns } = await this.loadMarginSource(tenantId, query);
 
         const totalRevenue = rawSales.reduce((sum: number, s: any) => sum + Number(s.total_amount), 0);
@@ -192,10 +192,10 @@ export class SalesReportsService {
         const transactionCount = rawSales.length;
         const avgOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
 
-        // Day is taken in Dhaka time, not UTC: a sale rung up at 1am local falls
-        // on the previous day under toISOString, which puts the evening's takings
-        // in the wrong row for every tenant this product serves.
-        const dayOf = (date: Date) => toDhakaParts(date).date;
+        // Day is taken in the shop's own time, not UTC: a sale rung up at 1am
+        // local falls on the previous day under toISOString, which puts the
+        // evening's takings in the wrong row.
+        const dayOf = (date: Date) => zonedParts(date, timezone).date;
         const saleDay = new Map(rawSales.map((s: any) => [s.id, dayOf(s.sale_date)]));
         const returnDay = new Map(rawReturns.map((r: any) => [r.id, dayOf(r.created_at)]));
 
@@ -891,15 +891,15 @@ export class SalesReportsService {
      * buckets are filled with zeros — a "which month was worst" question is
      * wrong if a month with no sales is simply missing from the series.
      */
-    async getSalesTrend(tenantId: string, query: GetSalesTrendDto) {
+    async getSalesTrend(tenantId: string, query: GetSalesTrendDto, timezone: string) {
         const granularity: Granularity = query.granularity ?? 'day';
         const range: DateRange = { from: query.from, to: query.to };
 
-        const current = await this.getSalesSummary(tenantId, {
-            from: range.from,
-            to: range.to,
-            storeId: query.storeId,
-        });
+        const current = await this.getSalesSummary(
+            tenantId,
+            { from: range.from, to: range.to, storeId: query.storeId },
+            timezone,
+        );
 
         const buckets = buildBuckets(range, granularity, current.rows);
 
@@ -907,11 +907,11 @@ export class SalesReportsService {
         if (query.compareTo) {
             const previousRange = resolveComparisonRange(range, query.compareTo);
             if (previousRange) {
-                const previous = await this.getSalesSummary(tenantId, {
-                    from: previousRange.from,
-                    to: previousRange.to,
-                    storeId: query.storeId,
-                });
+                const previous = await this.getSalesSummary(
+                    tenantId,
+                    { from: previousRange.from, to: previousRange.to, storeId: query.storeId },
+                    timezone,
+                );
                 comparison = {
                     mode: query.compareTo,
                     period: previousRange,
@@ -939,19 +939,19 @@ export class SalesReportsService {
      * assistant at once, which is the point — a per-dimension endpoint per
      * question does not scale past the first few questions.
      */
-    async getSalesBreakdown(tenantId: string, query: GetSalesBreakdownDto) {
+    async getSalesBreakdown(tenantId: string, query: GetSalesBreakdownDto, timezone: string) {
         const range: DateRange = { from: query.from, to: query.to };
         const limit = query.limit ?? 50;
         const offset = query.offset ?? 0;
 
-        const current = await this.aggregateBreakdown(tenantId, range, query.groupBy, query.storeId);
+        const current = await this.aggregateBreakdown(tenantId, range, query.groupBy, timezone, query.storeId);
 
         let previousByKey = new Map<string, BreakdownRow>();
         let previousRange: DateRange | null = null;
         if (query.compareTo) {
             previousRange = resolveComparisonRange(range, query.compareTo);
             if (previousRange) {
-                const previous = await this.aggregateBreakdown(tenantId, previousRange, query.groupBy, query.storeId);
+                const previous = await this.aggregateBreakdown(tenantId, previousRange, query.groupBy, timezone, query.storeId);
                 previousByKey = new Map(previous.rows.map((row) => [row.key, row]));
             }
         }
@@ -999,16 +999,16 @@ export class SalesReportsService {
      * revenue drop means pulling two breakdowns and diffing them by hand, which
      * is exactly the kind of arithmetic a caller should not be doing.
      */
-    async getTopMovers(tenantId: string, query: GetTopMoversDto) {
+    async getTopMovers(tenantId: string, query: GetTopMoversDto, timezone: string) {
         const dimension = query.dimension ?? 'product';
         const mode = query.compareTo ?? 'previous_period';
         const limit = query.limit ?? 10;
         const range: DateRange = { from: query.from, to: query.to };
         const previousRange = resolveComparisonRange(range, mode);
 
-        const current = await this.aggregateBreakdown(tenantId, range, dimension, query.storeId);
+        const current = await this.aggregateBreakdown(tenantId, range, dimension, timezone, query.storeId);
         const previous = previousRange
-            ? await this.aggregateBreakdown(tenantId, previousRange, dimension, query.storeId)
+            ? await this.aggregateBreakdown(tenantId, previousRange, dimension, timezone, query.storeId)
             : { basis: current.basis, rows: [], totalRevenue: 0, totalOrders: 0 };
 
         const previousByKey = new Map(previous.rows.map((row) => [row.key, row]));
@@ -1061,7 +1061,7 @@ export class SalesReportsService {
      * reason, product and branch. The rate is the number that matters: ৳50,000
      * of returns means nothing without the revenue it came out of.
      */
-    async getReturnsAnalysis(tenantId: string, query: GetReturnsAnalysisDto) {
+    async getReturnsAnalysis(tenantId: string, query: GetReturnsAnalysisDto, timezone: string) {
         const range: DateRange = { from: query.from, to: query.to };
 
         const [returns, sales] = await Promise.all([
@@ -1086,7 +1086,7 @@ export class SalesReportsService {
                     },
                 },
             }),
-            this.getSalesSummary(tenantId, { from: range.from, to: range.to, storeId: query.storeId }),
+            this.getSalesSummary(tenantId, { from: range.from, to: range.to, storeId: query.storeId }, timezone),
         ]);
 
         const totalRefund = returns.reduce((sum, r) => sum + Number(r.total_refund), 0);
@@ -1589,6 +1589,7 @@ export class SalesReportsService {
         tenantId: string,
         range: DateRange,
         groupBy: SalesBreakdownDimension,
+        timezone: string,
         storeId?: string,
     ): Promise<BreakdownAggregate> {
         const saleWhere = {
@@ -1604,7 +1605,7 @@ export class SalesReportsService {
         if (groupBy === 'payment_method') {
             return this.aggregateByPaymentMethod(saleWhere);
         }
-        return this.aggregateByInvoice(saleWhere, groupBy);
+        return this.aggregateByInvoice(saleWhere, groupBy, timezone);
     }
 
     private async aggregateByLine(
@@ -1673,6 +1674,7 @@ export class SalesReportsService {
     private async aggregateByInvoice(
         saleWhere: Record<string, unknown>,
         groupBy: 'branch' | 'customer' | 'staff' | 'hour_of_day' | 'day_of_week',
+        timezone: string,
     ): Promise<BreakdownAggregate> {
         const sales = await this.db.sale.findMany({
             where: saleWhere,
@@ -1719,13 +1721,13 @@ export class SalesReportsService {
                     label = sale.created_by ? staffNames.get(sale.created_by) ?? 'Removed user' : 'Not recorded';
                     break;
                 case 'hour_of_day': {
-                    const { hour } = toDhakaParts(sale.sale_date);
+                    const { hour } = zonedParts(sale.sale_date, timezone);
                     key = String(hour).padStart(2, '0');
                     label = `${key}:00–${key}:59`;
                     break;
                 }
                 default: {
-                    const { weekday } = toDhakaParts(sale.sale_date);
+                    const { weekday } = zonedParts(sale.sale_date, timezone);
                     key = String(weekday);
                     label = WEEKDAY_NAMES[weekday];
                 }

@@ -24,7 +24,7 @@ export class SalesReturnsController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.returnsService.findAll(tenant.tenantId, query.page, query.limit, {
+        return this.returnsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom,
             createdTo,
         });

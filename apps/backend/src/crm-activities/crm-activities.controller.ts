@@ -37,13 +37,13 @@ export class CrmActivitiesController {
     @Get('summary')
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
     summary(@Tenant() tenant: TenantContext) {
-        return this.service.summary(tenant.tenantId);
+        return this.service.summary(tenant.tenantId, tenant.timezone);
     }
 
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_CRM_TASKS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateCrmActivityDto) {
-        return this.service.create(tenant.tenantId, tenant.userId, dto);
+        return this.service.create(tenant.tenantId, tenant.userId, dto, tenant.timezone);
     }
 
     @Get()
@@ -69,7 +69,7 @@ export class CrmActivitiesController {
         @Query('sortBy') sortBy?: string,
         @Query('sortDir') sortDir?: string,
     ) {
-        return this.service.findAll(tenant.tenantId, {
+        return this.service.findAll(tenant.tenantId, { timezone: tenant.timezone,
             leadId,
             customerId,
             target,
@@ -104,7 +104,7 @@ export class CrmActivitiesController {
         @Param('id') id: string,
         @Body() dto: UpdateCrmActivityDto,
     ) {
-        return this.service.update(tenant.tenantId, id, dto);
+        return this.service.update(tenant.tenantId, id, dto, tenant.timezone);
     }
 
     @Post(':id/complete')
@@ -114,7 +114,7 @@ export class CrmActivitiesController {
         @Param('id') id: string,
         @Body() dto: CompleteCrmActivityDto,
     ) {
-        return this.service.complete(tenant.tenantId, tenant.userId, id, dto);
+        return this.service.complete(tenant.tenantId, tenant.userId, id, dto, tenant.timezone);
     }
 
     @Post(':id/cancel')

@@ -1,52 +1,22 @@
-import { DHAKA_UTC_OFFSET_MINUTES } from './period.util';
+import { zonedDayRange, type ZonedDayFilter } from './tenant-time.util';
 
-export type CreatedAtPrismaFilter = { gte?: Date; lte?: Date };
-
-const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Dhaka midnight for a `YYYY-MM-DD` calendar day, as a UTC Date. */
-function dhakaDayStart(value: string | undefined): Date | null {
-    if (!value) return null;
-    const match = DATE_ONLY.exec(value.trim());
-    if (!match) return null;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    const utcMidnight = Date.UTC(year, month - 1, day);
-    const check = new Date(utcMidnight);
-    if (
-        check.getUTCFullYear() !== year ||
-        check.getUTCMonth() !== month - 1 ||
-        check.getUTCDate() !== day
-    ) {
-        return null;
-    }
-    return new Date(utcMidnight - DHAKA_UTC_OFFSET_MINUTES * 60 * 1000);
-}
+export type CreatedAtPrismaFilter = ZonedDayFilter;
 
 /**
  * Inclusive Prisma `created_at` filter for shopkeeper-picked calendar days.
  *
- * Bounds are `YYYY-MM-DD` in Asia/Dhaka. `to` includes the whole last day —
- * `new Date(to)` would be UTC midnight and drop almost everything entered on
- * that day in Bangladesh.
+ * Bounds are `YYYY-MM-DD` in the tenant's own zone, and `to` covers the whole
+ * last day — `new Date(to)` would be UTC midnight and drop almost everything
+ * entered on that day anywhere east of Greenwich.
+ *
+ * The zone argument is required rather than defaulted on purpose. This filter
+ * decides which rows a shopkeeper sees, and a silent default is exactly how the
+ * platform ended up measuring every workspace's day in Dhaka. Callers on a
+ * request take it from `@Tenant()`; the scheduled sweeps take it from
+ * `TenantTimezoneService`.
+ *
+ * The name is kept because most callers filter that column; the range logic is
+ * about calendar days, not about which column they are compared against. For
+ * any other column, `zonedDayRange` is the same function under a neutral name.
  */
-export function dhakaDayRange(
-    from?: string,
-    to?: string,
-): CreatedAtPrismaFilter | undefined {
-    const start = dhakaDayStart(from);
-    const endStart = dhakaDayStart(to);
-    const filter: CreatedAtPrismaFilter = {};
-    if (start) filter.gte = start;
-    if (endStart) filter.lte = new Date(endStart.getTime() + DAY_MS - 1);
-    return Object.keys(filter).length > 0 ? filter : undefined;
-}
-
-/**
- * The `created_at` spelling, kept because most callers filter that column. Same
- * function — the range logic is about calendar days, not about which column
- * they are compared against.
- */
-export const createdAtRange = dhakaDayRange;
+export const createdAtRange = zonedDayRange;

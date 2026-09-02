@@ -17,12 +17,12 @@ export class CrmLeadsController {
 
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateLeadDto) {
-        return this.service.create(tenant.tenantId, tenant.userId, dto);
+        return this.service.create(tenant.tenantId, tenant.userId, dto, tenant.timezone);
     }
 
     @Post('import')
     importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
-        return this.service.importRows(tenant.tenantId, body.rows, body.mode);
+        return this.service.importRows(tenant.tenantId, body.rows, body.mode, tenant.timezone);
     }
 
     @Post('bulk-actions')
@@ -32,7 +32,7 @@ export class CrmLeadsController {
 
     @Get()
     findAll(@Tenant() tenant: TenantContext, @Query() query: ListLeadsDto) {
-        return this.service.findAll(tenant.tenantId, {
+        return this.service.findAll(tenant.tenantId, { timezone: tenant.timezone,
             ...query,
             userId: tenant.userId,
         });

@@ -31,7 +31,11 @@ export class ProductDemandsService {
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
-    async findAll(tenantId: string, query: ListProductDemandsQueryDto = {}, requesterId?: string) {
+    async findAll(
+        tenantId: string,
+        query: ListProductDemandsQueryDto & { timezone?: string } = {},
+        requesterId?: string,
+    ) {
         return this.db.productDemand.findMany({
             where: {
                 tenant_id: tenantId,
@@ -42,7 +46,7 @@ export class ProductDemandsService {
                 // `mine` without a caller would silently widen to everyone's, so
                 // it resolves to a filter that matches nothing instead.
                 ...(query.mine === 'true' ? { requested_by: requesterId ?? '__no_requester__' } : {}),
-                ...buildDemandDateRange(query.from, query.to),
+                ...buildDemandDateRange(query.from, query.to, query.timezone),
             },
             include: this.demandInclude(),
             orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
@@ -346,7 +350,7 @@ export class ProductDemandsService {
     }
 }
 
-function buildDemandDateRange(from?: string, to?: string) {
-    const created = createdAtRange(from, to);
+function buildDemandDateRange(from: string | undefined, to: string | undefined, timezone: string | undefined) {
+    const created = createdAtRange(from, to, timezone);
     return created ? { created_at: created } : {};
 }

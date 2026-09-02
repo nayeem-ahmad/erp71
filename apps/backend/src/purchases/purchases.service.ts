@@ -220,9 +220,9 @@ export class PurchasesService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; sortBy?: string; sortDir?: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchase.findMany({

@@ -3048,7 +3048,7 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
-    updateTenantLocalizationSettings: (data: { default_locale: SupportedLocaleCode }) => fetchWithAuth('/tenants/localization-settings', {
+    updateTenantLocalizationSettings: (data: { default_locale?: SupportedLocaleCode; timezone?: string }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

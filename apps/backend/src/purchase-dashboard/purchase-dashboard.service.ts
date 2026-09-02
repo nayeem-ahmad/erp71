@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
     emptyDailyBuckets,
-    formatDate,
     money,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import { PurchaseDashboardQueryDto } from './purchase-dashboard.dto';
@@ -34,8 +32,8 @@ const OPEN_RFQ_STATUSES = ['DRAFT', 'SENT', 'RECEIVED', 'ACCEPTED'];
 export class PurchaseDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    async getOverview(tenantId: string, query: PurchaseDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getOverview(tenantId: string, query: PurchaseDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [spend, payables, orders, quotations, suppliers, products, recent] = await Promise.all([
             this.getSpend(tenantId, window),
@@ -253,8 +251,8 @@ export class PurchaseDashboardService {
     }
 
     /** Daily spend and purchase count, feeding the KPI sparklines. */
-    async getTrends(tenantId: string, query: PurchaseDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(tenantId: string, query: PurchaseDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const purchases = await this.db.purchase.findMany({
             where: { tenant_id: tenantId, created_at: { gte: window.fromDate, lte: window.toDate } },
@@ -264,7 +262,7 @@ export class PurchaseDashboardService {
         const buckets = emptyDailyBuckets(window, () => ({ spend: 0, purchases: 0 }));
 
         for (const row of purchases) {
-            const bucket = buckets.get(formatDate(startOfDay(row.created_at)));
+            const bucket = buckets.get(window.dayOf(row.created_at));
             if (!bucket) continue;
             bucket.spend += Number(row.total_amount);
             bucket.purchases += 1;

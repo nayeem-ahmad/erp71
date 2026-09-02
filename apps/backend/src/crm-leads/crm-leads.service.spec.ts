@@ -264,7 +264,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01712345678'));
 
             await expect(
-                service.create('tenant-1', 'user-1', { name: 'Karim', mobile: '+880 1712-345678' } as any),
+                service.create('tenant-1', 'user-1', { name: 'Karim', mobile: '+880 1712-345678' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow('A lead with this mobile number already exists.');
             expect(db.lead.create).not.toHaveBeenCalled();
         });
@@ -278,7 +278,7 @@ describe('CrmLeadsService', () => {
             });
 
             await expect(
-                service.create('tenant-1', 'user-1', { name: 'Karim', email: 'Karim@Shop.com' } as any),
+                service.create('tenant-1', 'user-1', { name: 'Karim', email: 'Karim@Shop.com' } as any, 'Asia/Dhaka'),
             ).rejects.toThrow('A lead with this email already exists.');
         });
 
@@ -291,7 +291,7 @@ describe('CrmLeadsService', () => {
                 mobile: '01712345678',
                 email: 'Karim@Shop.com',
                 linkedin_url: 'https://www.linkedin.com/in/Karim/',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.lead.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -315,7 +315,7 @@ describe('CrmLeadsService', () => {
                 name: 'Karim',
                 mobile: '01712-345678',
                 email: ' Karim@Shop.com ',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const created = db.lead.create.mock.calls[0][0].data;
             expect(created.mobile).toBe('01712-345678');   // what the user typed
@@ -327,7 +327,7 @@ describe('CrmLeadsService', () => {
         it('runs no duplicate query for a lead carrying no identity field at all', async () => {
             db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
 
-            await service.create('tenant-1', 'user-1', { name: 'Walk-in customer' } as any);
+            await service.create('tenant-1', 'user-1', { name: 'Walk-in customer' } as any, 'Asia/Dhaka');
 
             expect(db.lead.findFirst).not.toHaveBeenCalled();
             expect(db.lead.create).toHaveBeenCalled();
@@ -373,7 +373,7 @@ describe('CrmLeadsService', () => {
                 next_step: 'Call back Thursday',
                 next_step_date: '2026-09-01T00:00:00Z',
                 next_step_assigned_to: 'user-2',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             // The columns are a rollup now — create() must not write them directly.
             const created = db.lead.create.mock.calls[0][0].data;
@@ -412,7 +412,7 @@ describe('CrmLeadsService', () => {
             await service.create('tenant-1', 'user-1', {
                 name: 'Karim',
                 mobile: '01722222222',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.crmActivity.create).not.toHaveBeenCalled();
             expect(db.lead.update).not.toHaveBeenCalled();
@@ -424,7 +424,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-30' });
 
-            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any);
+            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any, 'Asia/Dhaka');
 
             expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-1');
         });
@@ -433,7 +433,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-31' });
 
-            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: 'user-9' } as any);
+            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: 'user-9' } as any, 'Asia/Dhaka');
 
             expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-9');
         });
@@ -442,7 +442,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-32' });
 
-            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: null } as any);
+            await service.create('tenant-1', 'user-1', { name: 'Rahim', assigned_to: null } as any, 'Asia/Dhaka');
 
             expect(db.lead.create.mock.calls[0][0].data.assigned_to).toBe('user-1');
         });
@@ -479,7 +479,7 @@ describe('CrmLeadsService', () => {
                     name: 'Bad Lead',
                     mobile: '01711111111',
                     status: LeadStatus.LOST,
-                } as any),
+                } as any, 'Asia/Dhaka'),
             ).rejects.toThrow(BadRequestException);
             expect(db.lead.create).not.toHaveBeenCalled();
         });
@@ -493,7 +493,7 @@ describe('CrmLeadsService', () => {
                 mobile: '01711111111',
                 status: LeadStatus.LOST,
                 lost_reason: 'Went with a competitor',
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(db.lead.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -513,7 +513,7 @@ describe('CrmLeadsService', () => {
                 name: 'Custom Field Lead',
                 mobile: '01733333333',
                 custom_fields: { cf_1: 'gold  ', unknown_key: 'nope' },
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             expect(customFieldsService.sanitizeValues).toHaveBeenCalledWith(
                 'tenant-1',
@@ -690,7 +690,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', mobile: '01800000001', email: 'alice@example.com' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -719,6 +719,7 @@ describe('CrmLeadsService', () => {
                 'tenant-1',
                 [{ name: 'Alice', mobile: '01800000001', next_step: 'Call back', next_step_date: '2026-09-01' }],
                 'skip',
+                'Asia/Dhaka',
             );
 
             const created = db.lead.create.mock.calls[0][0].data;
@@ -750,7 +751,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-11' });
 
-            await service.importRows('tenant-1', [{ name: 'Bob', mobile: '01800000003' }], 'skip');
+            await service.importRows('tenant-1', [{ name: 'Bob', mobile: '01800000003' }], 'skip', 'Asia/Dhaka');
 
             expect(db.crmActivity.create).not.toHaveBeenCalled();
         });
@@ -766,6 +767,7 @@ describe('CrmLeadsService', () => {
                 'tenant-1',
                 [{ name: 'Bob', mobile: '01800000002', next_step: 'Call back', next_step_date: '2026-09-01' }],
                 'upsert',
+                'Asia/Dhaka',
             );
 
             expect(db.crmActivity.create).not.toHaveBeenCalled();
@@ -776,7 +778,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Bob', mobile: '01800000002' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
             expect(db.lead.update).not.toHaveBeenCalled();
@@ -788,7 +790,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Bob Updated', mobile: '01800000002', priority: 'HIGH' },
-            ], 'upsert');
+            ], 'upsert', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
             expect(db.lead.update).toHaveBeenCalledWith(
@@ -805,7 +807,7 @@ describe('CrmLeadsService', () => {
 
             await service.importRows('tenant-1', [
                 { name: 'Bob', mobile: '01800000002' },  // no email, address, remarks, category, priority, source, status
-            ], 'upsert');
+            ], 'upsert', 'Asia/Dhaka');
 
             const updateCall = db.lead.update.mock.calls[0][0];
             expect(updateCall.data).not.toHaveProperty('email');
@@ -823,7 +825,7 @@ describe('CrmLeadsService', () => {
 
             await service.importRows('tenant-1', [
                 { name: 'Bob', mobile: '01800000003' },  // no status, priority, source
-            ], 'upsert');
+            ], 'upsert', 'Asia/Dhaka');
 
             const updateCall = db.lead.update.mock.calls[0][0];
             expect(updateCall.data).not.toHaveProperty('status');
@@ -843,7 +845,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', email: 'ALICE@example.com' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
             expect(db.lead.create).not.toHaveBeenCalled();
@@ -859,7 +861,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', linkedin_url: 'https://www.LinkedIn.com/in/Alice/?utm_source=x' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.skipped).toBe(1);
             expect(db.lead.create).not.toHaveBeenCalled();
@@ -874,7 +876,7 @@ describe('CrmLeadsService', () => {
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', email: 'alice@example.com' },
                 { name: 'Alice Rahman', email: 'ALICE@Example.com ' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(result.skipped).toBe(1);
@@ -900,7 +902,7 @@ describe('CrmLeadsService', () => {
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', email: 'alice@example.com' },
                 { name: 'Alice Rahman', email: 'alice@example.com' },
-            ], 'upsert');
+            ], 'upsert', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 1, updated: 1, skipped: 0, errors: [] });
             expect(db.lead.update).toHaveBeenCalledWith(
@@ -918,7 +920,7 @@ describe('CrmLeadsService', () => {
             const result = await service.importRows('tenant-1', [
                 { name: 'Walk-in one' },
                 { name: 'Walk-in two' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(2);
             expect(result.duplicates).toBeUndefined();
@@ -929,7 +931,7 @@ describe('CrmLeadsService', () => {
             db.lead.create.mockResolvedValueOnce({ id: 'lead-10' });
             await service.importRows('tenant-1', [
                 { name: 'Alice', mobile: '01800-000001', email: 'Alice@Example.com' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
             expect(db.lead.create.mock.calls[0][0].data).toEqual(
                 expect.objectContaining({
                     mobile_norm: '+8801800000001',
@@ -941,7 +943,7 @@ describe('CrmLeadsService', () => {
             db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
             await service.importRows('tenant-1', [
                 { name: 'Alice', mobile: '01800-000001', email: 'Alice@Example.com' },
-            ], 'upsert');
+            ], 'upsert', 'Asia/Dhaka');
             expect(db.lead.update.mock.calls[0][0].data).toEqual(
                 expect.objectContaining({
                     mobile_norm: '+8801800000001',
@@ -957,7 +959,7 @@ describe('CrmLeadsService', () => {
             const result = await service.importRows('tenant-1', [
                 { name: '', mobile: '' },
                 { name: 'Carol', mobile: '01800000003' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(result.errors).toEqual(['Row 2: missing required field(s): name']);
@@ -969,7 +971,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Dana', mobile: '01800000004', priority: 'not-a-priority' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -985,7 +987,7 @@ describe('CrmLeadsService', () => {
             // used to report success while destroying the lead's provenance.
             const result = await service.importRows('tenant-1', [
                 { name: 'Dana', mobile: '01800000004', source: 'nope' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(0);
             expect(result.errors).toEqual([
@@ -1007,7 +1009,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Dana', mobile: '01800000004', source: 'walk-in' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -1020,7 +1022,7 @@ describe('CrmLeadsService', () => {
         it('rejects a row with status LOST since lost_reason is not importable', async () => {
             const result = await service.importRows('tenant-1', [
                 { name: 'Evan', mobile: '01800000005', status: 'LOST' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(0);
             expect(result.errors).toEqual([
@@ -1038,7 +1040,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Farah', mobile: '01800000006', Region: 'Dhaka' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -1057,7 +1059,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', mobile: '01900000001', REGION: 'Dhaka' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -1076,7 +1078,7 @@ describe('CrmLeadsService', () => {
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', mobile: '01900000002', cf_1: 'Dhaka' },
-            ], 'skip');
+            ], 'skip', 'Asia/Dhaka');
 
             expect(result.created).toBe(1);
             expect(db.lead.create).toHaveBeenCalledWith(
@@ -1264,25 +1266,25 @@ describe('CrmLeadsService', () => {
         });
 
         it('passes an allowlisted sort to orderBy', async () => {
-            await service.findAll('tenant-1', { sortBy: 'name', sortDir: 'desc' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'name', sortDir: 'desc' });
             const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
             expect(arg.orderBy).toEqual({ name: 'desc' });
         });
 
         it('falls back to default order for an unknown sort key', async () => {
-            await service.findAll('tenant-1', { sortBy: 'password', sortDir: 'asc' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'password', sortDir: 'asc' });
             const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
             expect(arg.orderBy).toEqual([{ next_step_date: 'asc' }, { updated_at: 'desc' }]);
         });
 
         it('falls back to default order when no sort is given', async () => {
-            await service.findAll('tenant-1', {});
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka',});
             const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
             expect(arg.orderBy).toEqual([{ next_step_date: 'asc' }, { updated_at: 'desc' }]);
         });
 
         it('filters created_at to the inclusive Dhaka day range', async () => {
-            await service.findAll('tenant-1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
             const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
             expect(arg.where.created_at).toEqual({
                 gte: new Date('2026-08-18T18:00:00.000Z'),
@@ -1318,7 +1320,7 @@ describe('CrmLeadsService', () => {
                 name: 'Rahim',
                 photo_url: 'https://cdn.example/rahim.jpg',
                 photo_storage_key: KEY,
-            } as any);
+            } as any, 'Asia/Dhaka');
 
             const created = db.lead.create.mock.calls[0][0].data;
             expect(created.photo_url).toBe('https://cdn.example/rahim.jpg');
@@ -1329,7 +1331,7 @@ describe('CrmLeadsService', () => {
             db.lead.findFirst.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
 
-            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any);
+            await service.create('tenant-1', 'user-1', { name: 'Rahim' } as any, 'Asia/Dhaka');
 
             const created = db.lead.create.mock.calls[0][0].data;
             expect(created.photo_url).toBeNull();
@@ -1344,7 +1346,7 @@ describe('CrmLeadsService', () => {
                     name: 'Rahim',
                     photo_url: 'https://cdn.example/rahim.jpg',
                     photo_storage_key: 'retail/tenant-2/crm-photos/rahim',
-                } as any),
+                } as any, 'Asia/Dhaka'),
             ).rejects.toBeInstanceOf(BadRequestException);
             expect(db.lead.create).not.toHaveBeenCalled();
         });

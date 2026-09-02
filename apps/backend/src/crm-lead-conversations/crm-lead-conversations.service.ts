@@ -10,6 +10,7 @@ import { touchLeadActivity } from '../crm-leads/lead-activity.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
+import { addCalendarDays, zonedDateString, zonedDayStart } from '../common/tenant-time.util';
 
 const conversationIncludes = {
     lead: { select: { id: true, name: true, mobile: true, status: true, assigned_to: true } },
@@ -71,6 +72,8 @@ function buildCreatedAtFilter(dateFrom?: string, dateTo?: string): Record<string
 }
 
 export interface FindAllConversationsOpts {
+    /** IANA zone the rolling week window is measured in. */
+    timezone: string;
     leadId?: string;
     search?: string;
     type?: string;
@@ -234,9 +237,12 @@ export class CrmLeadConversationsService {
     async getSummary(tenantId: string, opts: FindAllConversationsOpts) {
         const where = this.buildWhere(tenantId, opts);
 
-        const weekStart = new Date();
-        weekStart.setHours(0, 0, 0, 0);
-        weekStart.setDate(weekStart.getDate() - 6);
+        // Seven tenant days ending today, so "this week" starts at a local
+        // midnight rather than 6am wherever the server happens to be.
+        const weekStart = zonedDayStart(
+            addCalendarDays(zonedDateString(new Date(), opts.timezone), -6),
+            opts.timezone,
+        ) as Date;
 
         const [total, thisWeek, byType, leadsTouched] = await Promise.all([
             this.db.leadConversation.count({ where }),

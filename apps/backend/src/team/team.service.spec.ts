@@ -36,8 +36,8 @@ const audit = {
 };
 const invitations = { invite: jest.fn().mockResolvedValue(undefined) };
 
-const owner: TenantContext = { tenantId: 't1', userId: 'owner', userRole: UserRole.OWNER, storeId: 's1' };
-const cashier: TenantContext = { tenantId: 't1', userId: 'cash', userRole: UserRole.CASHIER, storeId: 's1' };
+const owner: TenantContext = { tenantId: 't1', userId: 'owner', userRole: UserRole.OWNER, storeId: 's1', timezone: 'Asia/Dhaka' };
+const cashier: TenantContext = { tenantId: 't1', userId: 'cash', userRole: UserRole.CASHIER, storeId: 's1', timezone: 'Asia/Dhaka' };
 
 describe('TeamService', () => {
     let service: TeamService;

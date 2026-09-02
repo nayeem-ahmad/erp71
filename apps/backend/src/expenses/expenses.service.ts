@@ -81,7 +81,7 @@ export class ExpensesService {
 
     async listEntries(
         tenantId: string,
-        query: ListExpenseEntriesQueryDto,
+        query: ListExpenseEntriesQueryDto & { timezone: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -254,7 +254,7 @@ export class ExpensesService {
         };
     }
 
-    private buildEntryWhere(tenantId: string, query: ListExpenseEntriesQueryDto) {
+    private buildEntryWhere(tenantId: string, query: ListExpenseEntriesQueryDto & { timezone: string }) {
         const where: Record<string, any> = { tenant_id: tenantId };
         if (query.categoryId) where.category_id = query.categoryId;
         if (query.storeId) where.store_id = query.storeId;
@@ -264,7 +264,7 @@ export class ExpensesService {
             where.expense_date = dateFilter;
         }
 
-        const created = createdAtRange(query.createdFrom, query.createdTo);
+        const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         if (created) where.created_at = created;
 
         return where;

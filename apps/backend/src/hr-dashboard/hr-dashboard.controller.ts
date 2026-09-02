@@ -32,6 +32,6 @@ export class HrDashboardController {
 
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: HrDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query);
+        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
     }
 }

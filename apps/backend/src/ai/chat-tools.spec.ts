@@ -7,6 +7,7 @@ const ctx: ChatToolContext = {
     userId: 'user-1',
     userRole: 'OWNER',
     storeId: 'store-1',
+    timezone: 'Asia/Dhaka',
     stores: [
         { id: 'store-1', name: 'Gulshan' },
         { id: 'store-2', name: 'Dhanmondi' },
@@ -253,11 +254,11 @@ describe('sales_summary', () => {
 
         await run('sales_summary', { from: '2026-07-01', to: '2026-07-31', tenantId: 'other-tenant' }, deps);
 
-        expect(getSalesSummary).toHaveBeenCalledWith('tenant-1', {
-            from: '2026-07-01',
-            to: '2026-07-31',
-            storeId: undefined,
-        });
+        expect(getSalesSummary).toHaveBeenCalledWith(
+            'tenant-1',
+            { from: '2026-07-01', to: '2026-07-31', storeId: undefined },
+            'Asia/Dhaka',
+        );
     });
 
     it('rounds money to 2dp and percentages to 1dp', async () => {
@@ -275,7 +276,7 @@ describe('sales_summary', () => {
 
         const result: any = await run('sales_summary', { from: '2026-07-01', to: '2026-07-31', storeId: 'store-2' }, deps);
 
-        expect(getSalesSummary).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ storeId: 'store-2' }));
+        expect(getSalesSummary).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ storeId: 'store-2' }), 'Asia/Dhaka');
         expect(result.note).toBeUndefined();
     });
 
@@ -289,7 +290,7 @@ describe('sales_summary', () => {
             deps,
         );
 
-        expect(getSalesSummary).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ storeId: undefined }));
+        expect(getSalesSummary).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ storeId: undefined }), 'Asia/Dhaka');
         expect(result.note).toMatch(/Unknown branch id/);
     });
 
@@ -321,7 +322,7 @@ describe('sales_summary', () => {
         );
 
         expect(getSalesSummary).not.toHaveBeenCalled();
-        expect(getSalesTrend).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ compareTo: 'previous_period' }));
+        expect(getSalesTrend).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ compareTo: 'previous_period' }), 'Asia/Dhaka');
         expect(result.comparison.change.netRevenuePct).toBe(20);
     });
 
@@ -464,7 +465,7 @@ describe('top_movers', () => {
 
         await run('top_movers', { from: 'a', to: 'b', limit: 5000 }, deps);
 
-        expect(getTopMovers).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ limit: 20 }));
+        expect(getTopMovers).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ limit: 20 }), 'Asia/Dhaka');
     });
 });
 

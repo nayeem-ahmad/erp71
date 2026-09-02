@@ -91,7 +91,7 @@ export class AuditService {
         );
     }
 
-    async query(options: AuditQueryOptions) {
+    async query(options: AuditQueryOptions & { timezone: string }) {
         const limit = Math.min(options.limit ?? 50, 200);
         const offset = options.offset ?? 0;
 
@@ -102,7 +102,7 @@ export class AuditService {
         if (options.entity) where.entity = options.entity;
         if (options.entityId) where.entity_id = options.entityId;
         if (options.action) where.action = options.action;
-        const created = createdAtRange(options.from, options.to);
+        const created = createdAtRange(options.from, options.to, options.timezone);
         if (created) {
             where.created_at = created;
         } else if (options.fromDate || options.toDate) {

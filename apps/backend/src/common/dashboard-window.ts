@@ -1,66 +1,84 @@
+import {
+    addCalendarDays,
+    isCalendarDate,
+    startOfZonedToday,
+    zonedDateString,
+    zonedDayStart,
+} from './tenant-time.util';
+
 /**
  * The date window every module dashboard endpoint takes, resolved the same way
  * by all of them.
  *
- * The whole point of this file is that neither end goes through `toISOString()`.
- * ERP71 serves Dhaka (UTC+6): `new Date('2026-08-04')` is *UTC* midnight, which
- * is already 6am locally, and formatting a local evening back through
- * `toISOString()` moves it into the previous day. Either mistake silently
- * re-dates a figure by one day, which on a "today" window means it covers the
- * wrong day entirely.
+ * Neither end goes through `toISOString()` and neither goes through `setHours`.
+ * Both are wrong, in opposite directions: `new Date('2026-08-04')` is *UTC*
+ * midnight, which is already 6am in Dhaka, while `setHours` measures the day in
+ * whatever zone the server process happens to run in — UTC in the container,
+ * which is nobody's working day. Either mistake silently re-dates a figure, and
+ * on a "today" window it covers the wrong day entirely.
+ *
+ * The window carries its own zone so callers cannot bucket rows in one zone
+ * after resolving bounds in another. Ask it for `dayOf(instant)` rather than
+ * formatting a date yourself.
  */
-export type DateWindow = { from: string; to: string; fromDate: Date; toDate: Date };
+export type DateWindow = {
+    from: string;
+    to: string;
+    fromDate: Date;
+    toDate: Date;
+    /** The tenant zone every bound and bucket in this window is measured in. */
+    timezone: string;
+    /** The `YYYY-MM-DD` bucket an instant belongs to, in this window's zone. */
+    dayOf: (instant: Date) => string;
+};
 
 export type DateWindowQuery = { from?: string; to?: string };
 
 /** How far back a window reaches when the client sends no bounds. */
 const DEFAULT_WINDOW_DAYS = 30;
 
-export function startOfDay(value: Date): Date {
-    const date = new Date(value);
-    date.setHours(0, 0, 0, 0);
-    return date;
-}
-
-/** Reads a `YYYY-MM-DD` bound as *local* midnight. */
-export function parseDateOnly(value: string | undefined): Date | null {
-    if (!value) return null;
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
-}
-
-/** `YYYY-MM-DD` from local calendar parts. */
-export function formatDate(value: Date): string {
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${value.getFullYear()}-${month}-${day}`;
-}
-
 /** Defaults to the last 30 days when the client sends no window. */
-export function resolveDateWindow(query: DateWindowQuery): DateWindow {
-    const today = startOfDay(new Date());
-    const defaultFrom = new Date(today);
-    defaultFrom.setDate(defaultFrom.getDate() - (DEFAULT_WINDOW_DAYS - 1));
+export function resolveDateWindow(query: DateWindowQuery, timezone: string): DateWindow {
+    const todayStart = startOfZonedToday(timezone);
+    const today = zonedDateString(todayStart, timezone);
 
-    const fromDate = parseDateOnly(query.from) ?? defaultFrom;
-    const toDate = parseDateOnly(query.to) ?? new Date(today);
-    toDate.setHours(23, 59, 59, 999);
+    const from = normaliseBound(query.from) ?? addCalendarDays(today, -(DEFAULT_WINDOW_DAYS - 1));
+    const to = normaliseBound(query.to) ?? today;
 
-    return { from: formatDate(fromDate), to: formatDate(toDate), fromDate, toDate };
+    const fromDate = zonedDayStart(from, timezone) as Date;
+    // The last millisecond of `to`, reached from the start of the following day
+    // so that a DST-shortened or -lengthened day is still exactly one day.
+    const toDate = new Date((zonedDayStart(addCalendarDays(to, 1), timezone) as Date).getTime() - 1);
+
+    return {
+        from,
+        to,
+        fromDate,
+        toDate,
+        timezone,
+        dayOf: (instant: Date) => zonedDateString(instant, timezone),
+    };
 }
 
-/** One bucket per calendar day in the window, zero-filled. */
+/** Keeps only a well-formed `YYYY-MM-DD`, so a junk bound falls back to the default. */
+function normaliseBound(value: string | undefined): string | null {
+    if (!value) return null;
+    // Tolerates a full ISO timestamp by taking its date part, as the old
+    // `parseDateOnly` regex did — some clients send one.
+    const trimmed = value.trim().slice(0, 10);
+    return isCalendarDate(trimmed) ? trimmed : null;
+}
+
+/** One bucket per calendar day in the window, zero-filled, in the window's zone. */
 export function emptyDailyBuckets<T extends Record<string, number>>(
     window: DateWindow,
     zero: () => T,
 ): Map<string, T> {
     const buckets = new Map<string, T>();
-    const cursor = startOfDay(window.fromDate);
-    const last = startOfDay(window.toDate);
-    while (cursor <= last) {
-        buckets.set(formatDate(cursor), zero());
-        cursor.setDate(cursor.getDate() + 1);
+    let cursor = window.from;
+    while (cursor <= window.to) {
+        buckets.set(cursor, zero());
+        cursor = addCalendarDays(cursor, 1);
     }
     return buckets;
 }

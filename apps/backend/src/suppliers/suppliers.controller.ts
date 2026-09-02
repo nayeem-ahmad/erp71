@@ -47,7 +47,7 @@ export class SuppliersController {
         @Tenant() tenant: TenantContext,
         @Query() query: ListSupplierCreditPaymentsQueryDto,
     ) {
-        return this.suppliersService.listCreditPayments(tenant.tenantId, query);
+        return this.suppliersService.listCreditPayments(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get('credit/payments/:paymentId')

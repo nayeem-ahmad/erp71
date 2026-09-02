@@ -131,13 +131,13 @@ export class CrmContactsService {
         });
     }
 
-    async findAll(tenantId: string, opts: ListContactsDto) {
+    async findAll(tenantId: string, opts: ListContactsDto & { timezone: string }) {
         const page = opts.page ?? 1;
         const limit = Math.min(opts.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = { tenant_id: tenantId };
-        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        const created = createdAtRange(opts.createdFrom, opts.createdTo, opts.timezone);
         if (created) where.created_at = created;
         if (opts.company) where.company = { contains: opts.company, mode: 'insensitive' };
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;

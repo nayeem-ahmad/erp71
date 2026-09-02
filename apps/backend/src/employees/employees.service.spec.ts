@@ -691,6 +691,7 @@ describe('EmployeesService', () => {
       userId: 'user-1',
       storeId: opts.storeId === undefined ? 'store-1' : opts.storeId,
       userRole: opts.role,
+      timezone: 'Asia/Dhaka',
     });
 
     beforeEach(() => {

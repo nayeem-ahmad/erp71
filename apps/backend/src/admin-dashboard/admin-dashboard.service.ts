@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
     emptyDailyBuckets,
-    formatDate,
     money,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import { AdminDashboardQueryDto } from './admin-dashboard.dto';
@@ -31,8 +29,8 @@ const LIVE_TENANT = { deleted_at: null } as const;
 export class AdminDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    async getOverview(query: AdminDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getOverview(query: AdminDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [tenants, subscriptions, revenue, support, topTenants, recentSignups, plans] = await Promise.all([
             this.getTenants(window),
@@ -253,8 +251,8 @@ export class AdminDashboardService {
     }
 
     /** Daily signups and billed amount, feeding the KPI sparklines. */
-    async getTrends(query: AdminDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(query: AdminDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
         const inWindow = { gte: window.fromDate, lte: window.toDate };
 
         const [tenants, payments] = await Promise.all([
@@ -271,11 +269,11 @@ export class AdminDashboardService {
         const buckets = emptyDailyBuckets(window, () => ({ signups: 0, billed: 0 }));
 
         for (const tenant of tenants) {
-            const bucket = buckets.get(formatDate(startOfDay(tenant.created_at)));
+            const bucket = buckets.get(window.dayOf(tenant.created_at));
             if (bucket) bucket.signups += 1;
         }
         for (const payment of payments) {
-            const bucket = buckets.get(formatDate(startOfDay(payment.created_at)));
+            const bucket = buckets.get(window.dayOf(payment.created_at));
             if (bucket) bucket.billed += Number(payment.amount ?? 0);
         }
 

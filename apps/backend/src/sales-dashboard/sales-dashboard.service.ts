@@ -2,11 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
     emptyDailyBuckets,
-    formatDate,
     money,
     percent,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import { SalesDashboardQueryDto } from './sales-dashboard.dto';
@@ -37,8 +35,8 @@ const OPEN_DELIVERY_STATUSES = ['PENDING', 'ASSIGNED', 'IN_TRANSIT'];
 export class SalesDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    async getOverview(tenantId: string, query: SalesDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getOverview(tenantId: string, query: SalesDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [sales, margin, receivables, fulfilment, products, customers, recent] = await Promise.all([
             this.getSales(tenantId, window),
@@ -316,8 +314,8 @@ export class SalesDashboardService {
     }
 
     /** Daily net sales and order count, feeding the KPI sparklines. */
-    async getTrends(tenantId: string, query: SalesDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(tenantId: string, query: SalesDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [sales, returns] = await Promise.all([
             this.db.sale.findMany({
@@ -338,14 +336,14 @@ export class SalesDashboardService {
         for (const sale of sales) {
             // Local calendar day, not `toISOString()` — the sales *reports* still
             // bucket by UTC, which files every Dhaka evening under the day before.
-            const bucket = buckets.get(formatDate(startOfDay(sale.sale_date)));
+            const bucket = buckets.get(window.dayOf(sale.sale_date));
             if (!bucket) continue;
             bucket.net_sales += Number(sale.total_amount);
             bucket.orders += 1;
         }
 
         for (const refund of returns) {
-            const bucket = buckets.get(formatDate(startOfDay(refund.created_at)));
+            const bucket = buckets.get(window.dayOf(refund.created_at));
             if (!bucket) continue;
             bucket.net_sales -= Number(refund.total_refund);
             bucket.returns += Number(refund.total_refund);

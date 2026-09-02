@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Loader2 } from 'lucide-react';
+import { Clock, Globe, Loader2 } from 'lucide-react';
 
 import { api } from '@/lib/api';
 import { localeRegistry, type SupportedLocaleCode } from '@/lib/localization/config';
@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
 import { Button, PageShell, Select } from '@/components/ui';
+import { currentTimeInZone, DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from '@/lib/timezones';
 
 type LocaleOption = SupportedLocaleCode;
 
@@ -26,6 +27,9 @@ export default function LocalizationSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [savingTenant, setSavingTenant] = useState(false);
     const [savingProfile, setSavingProfile] = useState(false);
+    const [timezone, setTimezone] = useState<string>(DEFAULT_TIMEZONE);
+    const [savingTimezone, setSavingTimezone] = useState(false);
+    const zoneClock = useMemo(() => currentTimeInZone(timezone, locale), [timezone, locale]);
 
     useEffect(() => {
         let active = true;
@@ -38,6 +42,7 @@ export default function LocalizationSettingsPage() {
                     setLocale(me.preferred_locale);
                 }
                 setTenantLocale((tenantSettings?.default_locale || 'en') as LocaleOption);
+                setTimezone(tenantSettings?.timezone || DEFAULT_TIMEZONE);
             })
             .catch(() => {
                 if (!active) return;
@@ -61,6 +66,18 @@ export default function LocalizationSettingsPage() {
             toast.error(error?.message || t.settings.localization.tenantSaveFailed);
         } finally {
             setSavingTenant(false);
+        }
+    };
+
+    const saveTimezone = async () => {
+        setSavingTimezone(true);
+        try {
+            await api.updateTenantLocalizationSettings({ timezone });
+            toast.success(t.settings.localization.timezoneSaved);
+        } catch (error: any) {
+            toast.error(error?.message || t.settings.localization.timezoneSaveFailed);
+        } finally {
+            setSavingTimezone(false);
         }
     };
 
@@ -103,6 +120,38 @@ export default function LocalizationSettingsPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
                     {t.settings.localization.disabledByAdmin}
                 </div>
+
+            <section className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-4 mt-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900">{t.settings.localization.timezoneLabel}</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">{t.settings.localization.timezoneHelp}</p>
+                    </div>
+                </div>
+
+                <div className="max-w-md space-y-2">
+                    <Select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
+                        {TIMEZONE_OPTIONS.map((zone) => (
+                            <option key={zone.value} value={zone.value}>
+                                {zone.label}
+                            </option>
+                        ))}
+                    </Select>
+                    {/* The clock, not the name, is what tells you the choice is right. */}
+                    {zoneClock && (
+                        <p className="text-xs text-gray-500">
+                            {t.settings.localization.timezoneCurrent.replace('{time}', zoneClock)}
+                        </p>
+                    )}
+                </div>
+
+                <Button onClick={saveTimezone} disabled={savingTimezone} loading={savingTimezone}>
+                    {t.settings.localization.saveTimezone}
+                </Button>
+            </section>
             </PageShell>
         );
     }
@@ -185,6 +234,38 @@ export default function LocalizationSettingsPage() {
                     </Button>
                 </section>
             </div>
+
+            <section className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-4 mt-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900">{t.settings.localization.timezoneLabel}</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">{t.settings.localization.timezoneHelp}</p>
+                    </div>
+                </div>
+
+                <div className="max-w-md space-y-2">
+                    <Select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
+                        {TIMEZONE_OPTIONS.map((zone) => (
+                            <option key={zone.value} value={zone.value}>
+                                {zone.label}
+                            </option>
+                        ))}
+                    </Select>
+                    {/* The clock, not the name, is what tells you the choice is right. */}
+                    {zoneClock && (
+                        <p className="text-xs text-gray-500">
+                            {t.settings.localization.timezoneCurrent.replace('{time}', zoneClock)}
+                        </p>
+                    )}
+                </div>
+
+                <Button onClick={saveTimezone} disabled={savingTimezone} loading={savingTimezone}>
+                    {t.settings.localization.saveTimezone}
+                </Button>
+            </section>
         </PageShell>
     );
 }

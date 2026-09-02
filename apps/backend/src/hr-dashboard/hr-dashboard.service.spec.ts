@@ -2,8 +2,8 @@ import { Test } from '@nestjs/testing';
 import { HrDashboardService } from './hr-dashboard.service';
 import { DatabaseService } from '../database/database.service';
 
-const OWNER = { tenantId: 'tenant-1', userId: 'u1', storeId: 'store-1', userRole: 'OWNER' };
-const STAFF = { tenantId: 'tenant-1', userId: 'u2', storeId: 'store-1', userRole: 'MANAGER' };
+const OWNER = { tenantId: 'tenant-1', userId: 'u1', storeId: 'store-1', userRole: 'OWNER', timezone: 'Asia/Dhaka' };
+const STAFF = { tenantId: 'tenant-1', userId: 'u2', storeId: 'store-1', userRole: 'MANAGER', timezone: 'Asia/Dhaka' };
 
 describe('HrDashboardService', () => {
     let service: HrDashboardService;
@@ -78,7 +78,7 @@ describe('HrDashboardService', () => {
     });
 
     it('refuses payroll when there is no store context to check a grant against', async () => {
-        const result = await service.getOverview({ ...STAFF, storeId: undefined }, {});
+        const result = await service.getOverview({ timezone: 'Asia/Dhaka', ...STAFF, storeId: undefined }, {});
 
         expect(result.can_view_payroll).toBe(false);
     });
@@ -147,7 +147,7 @@ describe('HrDashboardService', () => {
             { date: new Date(2026, 7, 2), status: 'ABSENT' },
         ]);
 
-        const result = await service.getTrends('tenant-1', { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends('tenant-1', { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points.map((point) => point.date)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         expect(result.points[1]).toEqual({ date: '2026-08-02', present: 1, absent: 1, on_leave: 0 });

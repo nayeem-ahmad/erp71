@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateCrmFollowUpDto, UpdateCrmFollowUpDto } from './crm-follow-ups.dto';
 import { paginate } from '../common/pagination.dto';
 import { touchLeadActivity } from '../crm-leads/lead-activity.util';
+import { zonedTodayWindow } from '../common/tenant-time.util';
 
 /**
  * Legacy CRM follow-ups. The birthday and reorder crons that used to live here
@@ -84,6 +85,8 @@ export class CrmFollowUpsService {
             page?: number;
             limit?: number;
             dueToday?: boolean;
+            /** IANA zone "due today" is measured in. */
+            timezone: string;
         },
     ) {
         const page = opts.page ?? 1;
@@ -97,11 +100,7 @@ export class CrmFollowUpsService {
         if (opts.target === 'lead') where.lead_id = { not: null };
         if (opts.status) where.status = opts.status;
         if (opts.dueToday) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            where.due_at = { gte: today, lt: tomorrow };
+            where.due_at = zonedTodayWindow(opts.timezone);
             where.status = 'PENDING';
         }
 
@@ -168,11 +167,8 @@ export class CrmFollowUpsService {
         return { success: true };
     }
 
-    async getTodaySummary(tenantId: string) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+    async getTodaySummary(tenantId: string, timezone: string) {
+        const { gte: today, lt: tomorrow } = zonedTodayWindow(timezone);
 
         const [dueToday, overdue, total] = await Promise.all([
             this.db.crmFollowUp.count({

@@ -4,6 +4,8 @@ import { BlockList, isIP } from 'node:net';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { AiService, type WebCitation } from './ai.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { startOfZonedToday } from '../common/tenant-time.util';
 
 /**
  * Outside-world lookups for the data chatbot.
@@ -103,6 +105,7 @@ export class WebSearchService {
         private readonly db: DatabaseService,
         private readonly ai: AiService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly timezones: TenantTimezoneService,
     ) {}
 
     /** Whether the platform operator has turned paid web lookups on at all. */
@@ -221,8 +224,7 @@ export class WebSearchService {
         const cap = Number(raw ?? 50);
         if (!Number.isFinite(cap) || cap <= 0) return;
 
-        const since = new Date();
-        since.setHours(0, 0, 0, 0);
+        const since = startOfZonedToday(await this.timezones.for(tenantId));
         const used = await this.db.aiUsageLog.count({
             where: { tenant_id: tenantId, feature: 'web_search', created_at: { gte: since } },
         });

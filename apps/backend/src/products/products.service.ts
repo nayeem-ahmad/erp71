@@ -114,6 +114,8 @@ export class ProductsService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** IANA zone the calendar-day bounds above are measured in. */
+            timezone: string;
         },
     ): Promise<PaginatedResult<any>> {
         const page = filters?.page ?? 1;
@@ -330,9 +332,12 @@ export class ProductsService {
             stockStatus?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** IANA zone the calendar-day bounds above are measured in. Only
+             *  consulted when there are bounds, so the cursor path may omit it. */
+            timezone?: string;
         },
     ) {
-        const created = createdAtRange(filters?.createdFrom, filters?.createdTo);
+        const created = createdAtRange(filters?.createdFrom, filters?.createdTo, filters?.timezone);
         return {
             tenant_id: tenantId,
             deleted_at: null,

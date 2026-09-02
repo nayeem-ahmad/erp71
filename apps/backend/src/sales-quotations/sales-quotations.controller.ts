@@ -33,7 +33,7 @@ export class SalesQuotationsController {
         // caller gets to write.
         @Query('docKind') docKind?: string,
     ) {
-        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, {
+        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom,
             createdTo,
             docKind: QUOTATION_DOC_KINDS.includes(docKind as never) ? docKind : undefined,

@@ -17,6 +17,8 @@ import { AnomalyDetectionService } from './anomaly-detection.service';
 import { buildNavigationSection } from './app-navigation';
 import { ChatDataService } from './chat-data.service';
 import { WebSearchService } from './web-search.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { startOfZonedToday } from '../common/tenant-time.util';
 import {
     CHAT_TOOLS,
     CHAT_TOOLS_BY_NAME,
@@ -45,8 +47,7 @@ const MAX_HISTORY_MESSAGES = 10;
 /** Hard ceiling on a serialized tool result, as a backstop to the per-tool row caps. */
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const MAX_TITLE_LENGTH = 80;
-/** Bangladesh has a single timezone; there is no per-tenant timezone column yet. */
-const TENANT_TIMEZONE = 'Asia/Dhaka';
+
 
 export interface ChatTurnResult {
     conversationId: string;
@@ -77,6 +78,7 @@ export class ChatService {
         private readonly chatData: ChatDataService,
         private readonly webSearch: WebSearchService,
         private readonly anomalyDetection: AnomalyDetectionService,
+        private readonly timezones: TenantTimezoneService,
     ) {}
 
     private get deps(): ChatToolDeps {
@@ -253,6 +255,7 @@ export class ChatService {
             userId: ctx.userId,
             userRole: ctx.userRole,
             storeId: ctx.storeId,
+            timezone: ctx.timezone,
             stores,
             hasConsolidatedAccess,
             fetchableUrls,
@@ -260,7 +263,7 @@ export class ChatService {
         };
 
         const messages: ChatCompletionMessage[] = [
-            { role: 'system', content: this.buildSystemPrompt(tools, modules, stores, locale) },
+            { role: 'system', content: this.buildSystemPrompt(tools, modules, stores, ctx.timezone, locale) },
             ...history,
             { role: 'user', content: message },
         ];
@@ -452,8 +455,7 @@ export class ChatService {
         const cap = Number(raw ?? 200);
         if (!Number.isFinite(cap) || cap <= 0) return;
 
-        const since = new Date();
-        since.setHours(0, 0, 0, 0);
+        const since = startOfZonedToday(await this.timezones.for(tenantId));
         const used = await this.db.aiUsageLog.count({
             where: { tenant_id: tenantId, feature: 'data_chat', created_at: { gte: since } },
         });
@@ -468,12 +470,13 @@ export class ChatService {
         tools: ChatTool[],
         modules: Set<ChatToolModule>,
         stores: Array<{ id: string; name: string }>,
+        timezone: string,
         locale?: string,
     ): string {
         const hasWeb = tools.some((tool) => tool.featureFlag === 'webSearch');
         const hasHelp = tools.some((tool) => tool.name === 'search_help');
         const navigation = buildNavigationSection(modules);
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: TENANT_TIMEZONE });
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
         const branchList = stores.length
             ? stores.map((s) => `- ${s.name} (id: ${s.id})`).join('\n')
             : '- (this business has no branches configured)';
@@ -534,7 +537,7 @@ export class ChatService {
                       '',
                   ]
                 : []),
-            `Today is ${today} (timezone ${TENANT_TIMEZONE}). Resolve relative dates like "last month" or "this week" against that date, and pass explicit YYYY-MM-DD ranges to tools.`,
+            `Today is ${today} (timezone ${timezone}). Resolve relative dates like "last month" or "this week" against that date, and pass explicit YYYY-MM-DD ranges to tools.`,
             '',
             'Branches in this business:',
             branchList,

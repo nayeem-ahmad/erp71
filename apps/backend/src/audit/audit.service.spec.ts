@@ -78,7 +78,7 @@ describe('AuditService', () => {
 
     describe('query', () => {
         it('scopes to the tenant and caps the page size', async () => {
-            await service.query({ tenantId: 't1', limit: 5000 });
+            await service.query({ timezone: 'Asia/Dhaka', tenantId: 't1', limit: 5000 });
 
             const args = db.auditLog.findMany.mock.calls[0][0];
             expect(args.where).toEqual({ tenant_id: 't1' });
@@ -90,7 +90,7 @@ describe('AuditService', () => {
             const from = new Date('2026-01-01T00:00:00.000Z');
             const to = new Date('2026-01-31T00:00:00.000Z');
 
-            await service.query({ tenantId: 't1', fromDate: from, toDate: to, action: 'sales.create' });
+            await service.query({ timezone: 'Asia/Dhaka', tenantId: 't1', fromDate: from, toDate: to, action: 'sales.create' });
 
             expect(db.auditLog.findMany.mock.calls[0][0].where).toEqual({
                 tenant_id: 't1',
@@ -100,7 +100,7 @@ describe('AuditService', () => {
         });
 
         it('maps YYYY-MM-DD from/to through the inclusive Dhaka day range', async () => {
-            await service.query({ tenantId: 't1', from: '2026-08-19', to: '2026-08-19' });
+            await service.query({ timezone: 'Asia/Dhaka', tenantId: 't1', from: '2026-08-19', to: '2026-08-19' });
 
             expect(db.auditLog.findMany.mock.calls[0][0].where).toEqual({
                 tenant_id: 't1',

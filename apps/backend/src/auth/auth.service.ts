@@ -1093,6 +1093,9 @@ export class AuthService {
             onboarding_dismissed: !!membership.tenant.onboarding_dismissed_at,
             localization_enabled: membership.tenant.localization_enabled,
             secondary_locale: membership.tenant.secondary_locale,
+            // The client renders dates in this zone so the list it reads back
+            // agrees with the filters the server applied to build it.
+            timezone: membership.tenant.timezone,
             // Feeds `resolveDashboardVariant` on the client, so the dashboard picks
             // its variant from this response rather than a second round-trip.
             dashboard_preference: membership.tenant.dashboard_preference ?? 'AUTO',

@@ -149,7 +149,7 @@ describe('FundTransfersService', () => {
     it('lists transfers for tenant', async () => {
         db.fundTransfer.findMany.mockResolvedValue([{ id: 'ft-1' }]);
 
-        const result = await service.list('tenant-1', { status: 'IN_TRANSIT' });
+        const result = await service.list('tenant-1', { timezone: 'Asia/Dhaka', status: 'IN_TRANSIT' });
 
         expect(db.fundTransfer.findMany).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -199,7 +199,7 @@ describe('SalesReturnsService', () => {
     db.salesReturn.findMany.mockResolvedValue([]);
     db.salesReturn.count.mockResolvedValue(0);
 
-    await service.findAll('tenant-1', 1, 20, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+    await service.findAll('tenant-1', 1, 20, { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
 
     expect(db.salesReturn.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

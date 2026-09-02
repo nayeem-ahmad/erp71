@@ -22,6 +22,13 @@ const makeContext = (overrides: {
 
 const next = { handle: () => of('ok') } as any;
 
+const timezones = {
+    for: jest.fn(async () => 'Asia/Dhaka'),
+    forMany: jest.fn(async () => new Map()),
+    prime: jest.fn(),
+    invalidate: jest.fn(),
+};
+
 describe('TenantInterceptor', () => {
     let db: any;
     let interceptor: TenantInterceptor;
@@ -31,7 +38,7 @@ describe('TenantInterceptor', () => {
             tenantUser: { findFirst: jest.fn(), findMany: jest.fn() },
             userStoreAccess: { findUnique: jest.fn(), findMany: jest.fn() },
         };
-        interceptor = new TenantInterceptor(db);
+        interceptor = new TenantInterceptor(db, timezones as any);
         jest.resetAllMocks();
     });
 

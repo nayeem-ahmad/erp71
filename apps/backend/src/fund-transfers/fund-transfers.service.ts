@@ -121,8 +121,8 @@ export class FundTransfersService {
         });
     }
 
-    async list(tenantId: string, query: ListFundTransfersQueryDto = {}) {
-        const created = createdAtRange(query.from, query.to);
+    async list(tenantId: string, query: ListFundTransfersQueryDto & { timezone: string }) {
+        const created = createdAtRange(query.from, query.to, query.timezone);
         return this.db.fundTransfer.findMany({
             where: {
                 tenant_id: tenantId,

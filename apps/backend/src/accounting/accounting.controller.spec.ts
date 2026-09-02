@@ -12,6 +12,7 @@ import { StorePermission } from '@erp71/shared-types';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { DatabaseService } from '../database/database.service';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
 
 describe('AccountingController — Story 30.1', () => {
     let app: INestApplication;
@@ -181,6 +182,17 @@ describe('AccountingController — Story 30.1', () => {
                 {
                     provide: DatabaseService,
                     useValue: db,
+                },
+                // The real TenantInterceptor is declared on the controller, so
+                // Nest resolves its dependencies even though it is overridden.
+                {
+                    provide: TenantTimezoneService,
+                    useValue: {
+                        for: jest.fn(async () => 'Asia/Dhaka'),
+                        forMany: jest.fn(async () => new Map()),
+                        prime: jest.fn(),
+                        invalidate: jest.fn(),
+                    },
                 },
             ],
         });

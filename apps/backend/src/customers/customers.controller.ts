@@ -50,7 +50,7 @@ export class CustomersController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.customersService.findAll(tenant.tenantId, {
+        return this.customersService.findAll(tenant.tenantId, { timezone: tenant.timezone,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             search,
@@ -68,7 +68,7 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Query() query: ListCustomerCreditPaymentsQueryDto,
     ) {
-        return this.customersService.listCreditPayments(tenant.tenantId, query);
+        return this.customersService.listCreditPayments(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get('credit/payments/:paymentId')

@@ -128,7 +128,7 @@ describe('CrmContactsService', () => {
 
     describe('findAll', () => {
         it('searches name, company, designation, and every contact channel', async () => {
-            await service.findAll(TENANT, { search: 'karim' });
+            await service.findAll(TENANT, { timezone: 'Asia/Dhaka', search: 'karim' });
 
             const where = db.crmContact.findMany.mock.calls[0][0].where;
             expect(where.tenant_id).toBe(TENANT);
@@ -144,17 +144,17 @@ describe('CrmContactsService', () => {
         });
 
         it('caps the page size at 100 however large a limit is asked for', async () => {
-            await service.findAll(TENANT, { limit: 5000 });
+            await service.findAll(TENANT, { timezone: 'Asia/Dhaka', limit: 5000 });
             expect(db.crmContact.findMany.mock.calls[0][0].take).toBe(100);
         });
 
         it('falls back to name order for an unknown sort key', async () => {
-            await service.findAll(TENANT, { sortBy: 'DROP TABLE', sortDir: 'desc' });
+            await service.findAll(TENANT, { timezone: 'Asia/Dhaka', sortBy: 'DROP TABLE', sortDir: 'desc' });
             expect(db.crmContact.findMany.mock.calls[0][0].orderBy).toEqual([{ name: 'asc' }]);
         });
 
         it('filters created_at to the inclusive Dhaka day range', async () => {
-            await service.findAll(TENANT, { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+            await service.findAll(TENANT, { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
             expect(db.crmContact.findMany.mock.calls[0][0].where.created_at).toEqual({
                 gte: new Date('2026-08-18T18:00:00.000Z'),
                 lte: new Date('2026-08-19T17:59:59.999Z'),

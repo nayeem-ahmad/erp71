@@ -809,6 +809,12 @@ export const coreMessages = {
             disabledByAdmin: "Der Sprachwechsel ist für diesen Arbeitsbereich nicht aktiviert. Wenden Sie sich an Ihren Plattformadministrator, um eine zweite Sprache hinzuzufügen.",
             profileSaved: "Bevorzugte Sprache erfolgreich gespeichert.",
             profileSaveFailed: "Bevorzugte Sprache konnte nicht gespeichert werden.",
+            timezoneLabel: 'Zeitzone des Arbeitsbereichs',
+            timezoneHelp: 'Jeder Datumsfilter, jede "Heute fällig"-Liste und jeder Bericht wird in dieser Zeitzone berechnet. Stellen Sie sie auf den Ort ein, an dem das Geschäft tatsächlich stattfindet.',
+            saveTimezone: 'Zeitzone speichern',
+            timezoneSaved: 'Zeitzone des Arbeitsbereichs erfolgreich gespeichert.',
+            timezoneSaveFailed: 'Zeitzone des Arbeitsbereichs konnte nicht gespeichert werden.',
+            timezoneCurrent: 'In dieser Zeitzone ist es jetzt {time}.',
         },
         dashboardChoice: {
             title: "Übersicht",
