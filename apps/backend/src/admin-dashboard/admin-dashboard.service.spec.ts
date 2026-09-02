@@ -127,9 +127,9 @@ describe('AdminDashboardService', () => {
     });
 
     it('buckets trends by local calendar day and zero-fills the quiet ones', async () => {
-        db.tenant.findMany.mockResolvedValue([{ created_at: new Date(2026, 7, 2, 20) }]);
+        db.tenant.findMany.mockResolvedValue([{ created_at: new Date('2026-08-02T20:00:00+06:00') }]);
         db.billingEvent.findMany.mockResolvedValue([
-            { created_at: new Date(2026, 7, 2, 20), amount: 2_000 },
+            { created_at: new Date('2026-08-02T20:00:00+06:00'), amount: 2_000 },
         ]);
 
         const result = await service.getTrends({ from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');

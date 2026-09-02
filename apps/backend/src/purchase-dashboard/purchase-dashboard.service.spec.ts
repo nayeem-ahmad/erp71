@@ -157,7 +157,7 @@ describe('PurchaseDashboardService', () => {
 
     it('reads the window bounds as local days, not as UTC instants', async () => {
         db.purchase.findMany.mockResolvedValue([
-            { created_at: new Date(2026, 7, 2, 22, 15), total_amount: 750 },
+            { created_at: new Date('2026-08-02T22:15:00+06:00'), total_amount: 750 },
         ]);
 
         const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');

@@ -169,10 +169,10 @@ describe('SalesDashboardService', () => {
 
     it('subtracts a refund from the day it was recorded, not from the day of the sale', async () => {
         db.sale.findMany.mockResolvedValue([
-            { sale_date: new Date(2026, 7, 1, 12), total_amount: 1_000 },
+            { sale_date: new Date('2026-08-01T12:00:00+06:00'), total_amount: 1_000 },
         ]);
         db.salesReturn.findMany.mockResolvedValue([
-            { created_at: new Date(2026, 7, 3, 12), total_refund: 400 },
+            { created_at: new Date('2026-08-03T12:00:00+06:00'), total_refund: 400 },
         ]);
 
         const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
@@ -184,7 +184,7 @@ describe('SalesDashboardService', () => {
 
     it('buckets by local calendar day, unlike the sales reports it replaces', async () => {
         db.sale.findMany.mockResolvedValue([
-            { sale_date: new Date(2026, 7, 2, 23, 45), total_amount: 500 },
+            { sale_date: new Date('2026-08-02T23:45:00+06:00'), total_amount: 500 },
         ]);
 
         const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');

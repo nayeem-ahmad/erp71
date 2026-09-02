@@ -44,7 +44,17 @@ export function tenantLocalToIso(localValue: string): string | null {
     return `${withSeconds}${offsetSuffix(Number.isNaN(near.getTime()) ? new Date() : near)}`;
 }
 
-/** The inverse: an instant rendered for a `datetime-local` input, in workspace time. */
+/**
+ * The inverse: an instant rendered for a `datetime-local` input, in workspace
+ * time.
+ *
+ * The zone is resolved through `activeZone()` rather than left to
+ * `toDatetimeLocal`'s ambient fallback, so that both directions agree when no
+ * workspace zone has been set yet. They did not: reading fell back to the
+ * device's zone while `tenantLocalToIso` stamped the default, so a value opened
+ * and saved untouched before the tenant loaded came back moved by the
+ * difference between the two.
+ */
 export function isoToTenantLocal(iso: string | null): string {
     if (!iso) return '';
     const parsed = new Date(iso);
@@ -52,5 +62,5 @@ export function isoToTenantLocal(iso: string | null): string {
     // invalid Date throws RangeError, which would take the whole modal down
     // over one bad row of data.
     if (Number.isNaN(parsed.getTime())) return '';
-    return toDatetimeLocal(parsed);
+    return toDatetimeLocal(parsed, activeZone());
 }
