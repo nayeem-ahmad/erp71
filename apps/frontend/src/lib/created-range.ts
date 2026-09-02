@@ -1,11 +1,24 @@
-/** Bangladesh has a single DST-free offset, so a fixed shift is exact. */
-const DHAKA_OFFSET_MINUTES = 6 * 60;
+import { DEFAULT_TIMEZONE } from '@/lib/timezones';
+import { getActiveTimeZone } from '@/lib/format';
 
 export type CreatedRange = { from?: string; to?: string };
 export type CreatedRangePreset = 'today' | 'yesterday' | 'last7' | 'thisMonth';
 
-export function dhakaDateOnly(at: Date = new Date()): string {
-    return new Date(at.getTime() + DHAKA_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
+/**
+ * Today, as the workspace's own calendar reads it.
+ *
+ * These presets are sent to the server as `YYYY-MM-DD` and read there against
+ * `Tenant.timezone`, so the day the client names has to be the day the server
+ * would name. A fixed Dhaka shift was right only while every tenant was
+ * Bangladeshi. `en-CA` because it formats as `YYYY-MM-DD`.
+ */
+export function tenantDateOnly(at: Date = new Date()): string {
+    const zone = getActiveTimeZone() ?? DEFAULT_TIMEZONE;
+    try {
+        return at.toLocaleDateString('en-CA', { timeZone: zone });
+    } catch {
+        return at.toLocaleDateString('en-CA', { timeZone: DEFAULT_TIMEZONE });
+    }
 }
 
 function addCalendarDays(ymd: string, days: number): string {
@@ -17,7 +30,7 @@ export function createdRangeFromPreset(
     preset: CreatedRangePreset,
     now: Date = new Date(),
 ): CreatedRange {
-    const today = dhakaDateOnly(now);
+    const today = tenantDateOnly(now);
     if (preset === 'today') return { from: today, to: today };
     if (preset === 'yesterday') {
         const yesterday = addCalendarDays(today, -1);

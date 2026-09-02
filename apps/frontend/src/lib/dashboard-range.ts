@@ -1,7 +1,6 @@
 import type { DashboardRange } from '@/components/dashboard/DashboardHeader';
-
-// ERP71 serves Bangladeshi retailers; day boundaries are Asia/Dhaka (UTC+6).
-const DHAKA_OFFSET_MINUTES = 360;
+import { getActiveTimeZone } from '@/lib/format';
+import { DEFAULT_TIMEZONE, startOfZonedDay } from '@/lib/timezones';
 
 /**
  * The equally long window immediately before `window`, so a KPI can be compared
@@ -14,9 +13,26 @@ export function previousWindow(window: { from: string; to: string }): { from: st
     return { from: new Date(from - span).toISOString(), to: window.from };
 }
 
-/** The Dhaka calendar day `at` falls on, as `YYYY-MM-DD`. */
-function dhakaDate(at: Date): string {
-    return new Date(at.getTime() + DHAKA_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
+/**
+ * The calendar day `at` falls on in the workspace's own zone, as `YYYY-MM-DD`.
+ *
+ * Must agree with the server, which measures every window and "today" filter in
+ * `Tenant.timezone`. A fixed Dhaka offset here was right only while every tenant
+ * was Bangladeshi: for anyone else it asked the dashboard for one day and then
+ * drew a "today" ring on another. `en-CA` because it formats as `YYYY-MM-DD`.
+ */
+function activeZone(): string {
+    const zone = getActiveTimeZone() ?? DEFAULT_TIMEZONE;
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: zone });
+        return zone;
+    } catch {
+        return DEFAULT_TIMEZONE;
+    }
+}
+
+function tenantDate(at: Date): string {
+    return at.toLocaleDateString('en-CA', { timeZone: activeZone() });
 }
 
 /**
@@ -28,7 +44,7 @@ function dhakaDate(at: Date): string {
  */
 export function rangeToDateWindow(range: DashboardRange, now: Date = new Date()): { from: string; to: string } {
     const window = rangeToWindow(range, now);
-    return { from: dhakaDate(new Date(window.from)), to: dhakaDate(new Date(window.to)) };
+    return { from: tenantDate(new Date(window.from)), to: tenantDate(new Date(window.to)) };
 }
 
 /** The equally long date-only window immediately before `window`. */
@@ -43,18 +59,15 @@ export function previousDateWindow(window: { from: string; to: string }): { from
 
 export function rangeToWindow(range: DashboardRange, now: Date = new Date()): { from: string; to: string } {
     const to = now.toISOString();
-    // Shift into Dhaka local time to read the local calendar day...
-    const local = new Date(now.getTime() + DHAKA_OFFSET_MINUTES * 60_000);
-    const y = local.getUTCFullYear();
-    const m = local.getUTCMonth();
-    const d = local.getUTCDate();
+    // Read the workspace's calendar day...
+    const [y, m, d] = tenantDate(now).split('-').map(Number);
     // ...then map a local midnight back to the UTC instant it occurs at.
     const localMidnightUtc = (yy: number, mm: number, dd: number) =>
-        new Date(Date.UTC(yy, mm, dd) - DHAKA_OFFSET_MINUTES * 60_000).toISOString();
+        startOfZonedDay(yy, mm, dd, activeZone()).toISOString();
 
-    if (range === 'today') return { from: localMidnightUtc(y, m, d), to };
-    if (range === 'week') return { from: localMidnightUtc(y, m, d - 6), to };
-    return { from: localMidnightUtc(y, m, 1), to };
+    if (range === 'today') return { from: localMidnightUtc(y, m - 1, d), to };
+    if (range === 'week') return { from: localMidnightUtc(y, m - 1, d - 6), to };
+    return { from: localMidnightUtc(y, m - 1, 1), to };
 }
 
 /**
@@ -76,7 +89,7 @@ const DAY_MS = 86_400_000;
  * every one of them.
  */
 export function activityHeatmapWindow(now: Date = new Date()): { from: string; to: string } {
-    const [year, month, day] = dhakaDate(now).split('-').map(Number);
+    const [year, month, day] = tenantDate(now).split('-').map(Number);
     const today = Date.UTC(year, month - 1, day);
     // Sunday-indexed, read off a UTC date so it matches the grid's row order.
     const weekday = new Date(today).getUTCDay();
@@ -90,7 +103,7 @@ export function activityHeatmapWindow(now: Date = new Date()): { from: string; t
     };
 }
 
-/** The Dhaka calendar day it is now, as `YYYY-MM-DD`. */
-export function todayInDhaka(now: Date = new Date()): string {
-    return dhakaDate(now);
+/** The calendar day it is now in the workspace's zone, as `YYYY-MM-DD`. */
+export function todayInTenantZone(now: Date = new Date()): string {
+    return tenantDate(now);
 }

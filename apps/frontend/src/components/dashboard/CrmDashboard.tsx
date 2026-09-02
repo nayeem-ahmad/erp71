@@ -8,7 +8,7 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
 import {
     activityHeatmapWindow,
-    todayInDhaka,
+    todayInTenantZone,
     HEATMAP_WEEKS_AHEAD,
     HEATMAP_WEEKS_BACK,
 } from '@/lib/dashboard-range';
@@ -155,7 +155,7 @@ export default function CrmDashboard({
      */
     const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null);
     const [heatmapLoading, setHeatmapLoading] = useState(true);
-    const today = useMemo(() => todayInDhaka(), []);
+    const today = useMemo(() => todayInTenantZone(), []);
 
     useEffect(() => {
         let cancelled = false;
@@ -364,7 +364,10 @@ export default function CrmDashboard({
             </DashboardSection>
 
             <DashboardSection label={crm.sectionPipeline}>
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
+                {/* Three panels on one row. `minmax(0, …)` on every track because
+                    the calendar's grid is `w-max` and would otherwise widen its
+                    column past the row instead of scrolling inside it. */}
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)_minmax(0,3fr)]">
                     <PipelineFunnel
                         title={crm.funnelTitle}
                         subtitle={crm.funnelSubtitle}
@@ -379,38 +382,35 @@ export default function CrmDashboard({
                         items={sourceItems}
                         emptyLabel={crm.sourcesEmpty}
                     />
+                    <ActivityHeatmap
+                        points={heatmap?.points ?? []}
+                        max={heatmap?.max ?? { done: 0, planned: 0 }}
+                        today={today}
+                        loading={heatmapLoading}
+                        locale={locale}
+                        labels={{
+                            title: crm.heatmapTitle,
+                            subtitle: formatMessage(crm.heatmapSubtitle, {
+                                back: HEATMAP_WEEKS_BACK,
+                                ahead: HEATMAP_WEEKS_AHEAD,
+                            }),
+                            done: crm.heatmapDone,
+                            planned: crm.heatmapPlanned,
+                            less: crm.heatmapLess,
+                            more: crm.heatmapMore,
+                            empty: crm.heatmapEmpty,
+                            today: crm.heatmapToday,
+                            dayCounts: crm.heatmapDayCounts,
+                            summary: formatMessage(crm.heatmapSummary, {
+                                done: heatmap?.totals.done ?? 0,
+                                planned: heatmap?.totals.planned ?? 0,
+                                days: heatmap?.points.length ?? 0,
+                            }),
+                            tableCaption: crm.heatmapTableCaption,
+                            tableDate: crm.heatmapTableDate,
+                        }}
+                    />
                 </div>
-            </DashboardSection>
-
-            <DashboardSection label={crm.sectionRhythm}>
-                <ActivityHeatmap
-                    points={heatmap?.points ?? []}
-                    max={heatmap?.max ?? { done: 0, planned: 0 }}
-                    today={today}
-                    loading={heatmapLoading}
-                    locale={locale}
-                    labels={{
-                        title: crm.heatmapTitle,
-                        subtitle: formatMessage(crm.heatmapSubtitle, {
-                            back: HEATMAP_WEEKS_BACK,
-                            ahead: HEATMAP_WEEKS_AHEAD,
-                        }),
-                        done: crm.heatmapDone,
-                        planned: crm.heatmapPlanned,
-                        less: crm.heatmapLess,
-                        more: crm.heatmapMore,
-                        empty: crm.heatmapEmpty,
-                        today: crm.heatmapToday,
-                        dayCounts: crm.heatmapDayCounts,
-                        summary: formatMessage(crm.heatmapSummary, {
-                            done: heatmap?.totals.done ?? 0,
-                            planned: heatmap?.totals.planned ?? 0,
-                            days: heatmap?.points.length ?? 0,
-                        }),
-                        tableCaption: crm.heatmapTableCaption,
-                        tableDate: crm.heatmapTableDate,
-                    }}
-                />
             </DashboardSection>
 
             <DashboardSection label={crm.sectionTeam}>

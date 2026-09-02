@@ -13,7 +13,7 @@ import { PageShell, PageHeader, Button, Input, Select, Textarea, Field, StatusBa
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { dhakaLocalToIso, isoToDhakaLocal } from '@/lib/schedule-time';
+import { tenantLocalToIso, isoToTenantLocal } from '@/lib/schedule-time';
 import UploadRecipients from './upload-recipients';
 
 interface Campaign {
@@ -150,7 +150,7 @@ export default function CrmCampaignsPage() {
                           recipient_source: 'UPLOAD',
                           body_format: form.body_format,
                           rows: uploadRows,
-                          scheduled_at: dhakaLocalToIso(form.scheduled_at) ?? undefined,
+                          scheduled_at: tenantLocalToIso(form.scheduled_at) ?? undefined,
                       }
                     : {
                           name: form.name,
@@ -161,7 +161,7 @@ export default function CrmCampaignsPage() {
                           subject: isEmail ? form.subject : undefined,
                           target_segment: form.target_segment,
                           message: form.message,
-                          scheduled_at: dhakaLocalToIso(form.scheduled_at) ?? undefined,
+                          scheduled_at: tenantLocalToIso(form.scheduled_at) ?? undefined,
                       },
             );
             toast.success(m.created);
@@ -178,7 +178,7 @@ export default function CrmCampaignsPage() {
     const handleSelect = async (campaign: Campaign) => {
         setSelected(campaign);
         setPreview(null);
-        setRescheduleValue(isoToDhakaLocal(campaign.scheduled_at));
+        setRescheduleValue(isoToTenantLocal(campaign.scheduled_at));
         setPreviewLoading(true);
         try {
             const full = await api.getCrmCampaign(campaign.id);
@@ -222,7 +222,7 @@ export default function CrmCampaignsPage() {
             // the server as "unschedule this", and an undefined key is dropped
             // from the PATCH body, making it a no-op.
             await api.updateCrmCampaign(selected.id, {
-                scheduled_at: dhakaLocalToIso(rescheduleValue),
+                scheduled_at: tenantLocalToIso(rescheduleValue),
             });
             toast.success(m.schedule.rescheduled);
             setSelected(null);

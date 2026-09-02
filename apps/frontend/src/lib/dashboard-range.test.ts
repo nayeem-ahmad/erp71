@@ -4,7 +4,7 @@ import {
     previousWindow,
     rangeToDateWindow,
     rangeToWindow,
-    todayInDhaka,
+    todayInTenantZone,
     HEATMAP_WEEKS_AHEAD,
     HEATMAP_WEEKS_BACK,
 } from './dashboard-range';
@@ -101,13 +101,13 @@ describe('activityHeatmapWindow', () => {
     it('reaches past today, because planned work is normally in the future', () => {
         const { to } = activityHeatmapWindow(evening);
 
-        expect(to > todayInDhaka(evening)).toBe(true);
+        expect(to > todayInTenantZone(evening)).toBe(true);
     });
 
     it('reads the Dhaka calendar day, not the UTC one', () => {
         // 21:00 UTC is 03:00 the next morning in Dhaka; the window has to move
         // with the shopkeeper's day, not with London's.
-        expect(todayInDhaka(evening)).toBe('2026-07-11');
-        expect(todayInDhaka(new Date('2026-07-10T17:00:00.000Z'))).toBe('2026-07-10');
+        expect(todayInTenantZone(evening)).toBe('2026-07-11');
+        expect(todayInTenantZone(new Date('2026-07-10T17:00:00.000Z'))).toBe('2026-07-10');
     });
 });
