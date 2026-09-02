@@ -22,7 +22,7 @@ export class InventoryShrinkageController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.service.findAll(tenant.tenantId, { createdFrom, createdTo });
+        return this.service.findAll(tenant.tenantId, { timezone: tenant.timezone, createdFrom, createdTo });
     }
 
     @Get(':id')

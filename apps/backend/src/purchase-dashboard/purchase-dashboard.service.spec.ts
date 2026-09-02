@@ -39,7 +39,7 @@ describe('PurchaseDashboardService', () => {
     it('averages spend across the purchases in the window', async () => {
         db.purchase.aggregate.mockResolvedValue({ _sum: { total_amount: 30_000 }, _count: { _all: 4 } });
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.spend.total).toBe(30_000);
         expect(result.spend.purchases).toBe(4);
@@ -47,7 +47,7 @@ describe('PurchaseDashboardService', () => {
     });
 
     it('reports no average rather than zero when nothing was bought', async () => {
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.spend.purchases).toBe(0);
         // 0 would read as "your average bill was nothing".
@@ -57,7 +57,7 @@ describe('PurchaseDashboardService', () => {
     it('takes payables from the whole book, not the window', async () => {
         db.supplier.aggregate.mockResolvedValue({ _sum: { due_balance: 84_500 } });
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.payables.outstanding).toBe(84_500);
         const call = db.supplier.aggregate.mock.calls[0][0];
@@ -66,7 +66,7 @@ describe('PurchaseDashboardService', () => {
     });
 
     it('counts a purchase order late only when it promised a date and missed it', async () => {
-        await service.getOverview(TENANT, {});
+        await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         const overdueCall = db.purchaseOrder.count.mock.calls
             .map((call: any[]) => call[0])
@@ -78,7 +78,7 @@ describe('PurchaseDashboardService', () => {
     });
 
     it('counts quotations expiring within the week separately from ones already expired', async () => {
-        await service.getOverview(TENANT, {});
+        await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         const [openCall, expiringCall, expiredCall] = db.purchaseQuotation.count.mock.calls.map((call: any[]) => call[0]);
 
@@ -103,7 +103,7 @@ describe('PurchaseDashboardService', () => {
             { id: 's2', name: 'Beta Supply', due_balance: 0 },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.suppliers.map((row) => row.name)).toEqual(['Beta Supply', 'Alpha Traders']);
         expect(result.suppliers[1].outstanding).toBe(400);
@@ -114,7 +114,7 @@ describe('PurchaseDashboardService', () => {
             { supplier_id: null, _sum: { total_amount: 900 }, _count: { _all: 1 } },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.suppliers).toHaveLength(1);
         expect(result.suppliers[0].name).toBe('No supplier');
@@ -131,7 +131,7 @@ describe('PurchaseDashboardService', () => {
             { id: 'dear', name: 'Freezer' },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.products.map((row) => row.name)).toEqual(['Freezer', 'Straws']);
     });
@@ -140,7 +140,7 @@ describe('PurchaseDashboardService', () => {
         db.purchase.aggregate.mockResolvedValue({ _sum: { total_amount: 10_000 }, _count: { _all: 2 } });
         db.purchaseReturn.aggregate.mockResolvedValue({ _sum: { total_amount: 1_500 }, _count: { _all: 1 } });
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         // Netting would hide both figures behind one that is neither.
         expect(result.spend.total).toBe(10_000);
@@ -149,7 +149,7 @@ describe('PurchaseDashboardService', () => {
     });
 
     it('buckets trends by local calendar day and zero-fills the quiet ones', async () => {
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points.map((point) => point.date)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         expect(result.points.every((point) => point.spend === 0)).toBe(true);
@@ -160,7 +160,7 @@ describe('PurchaseDashboardService', () => {
             { created_at: new Date(2026, 7, 2, 22, 15), total_amount: 750 },
         ]);
 
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points.find((point) => point.date === '2026-08-02')?.spend).toBe(750);
     });

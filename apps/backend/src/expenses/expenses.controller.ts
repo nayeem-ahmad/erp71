@@ -55,7 +55,7 @@ export class ExpensesController {
 
     @Get('entries')
     listEntries(@Tenant() tenant: TenantContext, @Query() query: ListExpenseEntriesQueryDto) {
-        return this.service.listEntries(tenant.tenantId, query);
+        return this.service.listEntries(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Post('entries')

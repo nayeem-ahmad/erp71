@@ -11,13 +11,13 @@ export class DeliveryService {
         tenantId: string,
         page: number,
         limit: number,
-        opts?: { status?: string; createdFrom?: string; createdTo?: string } | string,
+        opts?: { status?: string; createdFrom?: string; createdTo?: string; timezone?: string } | string,
     ) {
         const skip = (page - 1) * limit;
         const filters = typeof opts === 'string' ? { status: opts } : (opts ?? {});
         const where: any = { tenantId };
         if (filters.status) where.status = filters.status;
-        const created = createdAtRange(filters.createdFrom, filters.createdTo);
+        const created = createdAtRange(filters.createdFrom, filters.createdTo, filters.timezone);
         if (created) where.created_at = created;
 
         const [items, total] = await Promise.all([

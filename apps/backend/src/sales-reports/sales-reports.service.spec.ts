@@ -160,7 +160,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.summary.totalRevenue).toBe(0);
             expect(result.summary.totalReturns).toBe(0);
@@ -179,7 +179,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.summary.totalRevenue).toBe(3500);
             expect(result.summary.totalReturns).toBe(0);
@@ -197,7 +197,7 @@ describe('SalesReportsService', () => {
             ]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.summary.totalRevenue).toBe(1000);
             expect(result.summary.totalReturns).toBe(200);
@@ -214,7 +214,7 @@ describe('SalesReportsService', () => {
             ]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.rows).toHaveLength(2);
             const day1 = result.rows.find((r: any) => r.date === '2026-01-01');
@@ -234,7 +234,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.rows[0].date).toBe('2026-01-01');
             expect(result.rows[1].date).toBe('2026-01-02');
@@ -246,7 +246,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            await service.getSalesSummary(tenantId, { storeId: 'store-1' });
+            await service.getSalesSummary(tenantId, { storeId: 'store-1' }, 'Asia/Dhaka');
 
             expect(db.sale.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -260,7 +260,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' });
+            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' }, 'Asia/Dhaka');
 
             expect(db.sale.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -281,7 +281,7 @@ describe('SalesReportsService', () => {
             ]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesSummary(tenantId, {});
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
 
             expect(result.rows).toHaveLength(1);
             expect(result.rows[0].date).toBe('2026-01-05');
@@ -294,7 +294,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any);
+            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any, 'Asia/Dhaka');
 
             const whereArg = db.sale.findMany.mock.calls[0][0].where;
             expect(whereArg).toHaveProperty('sale_date');
@@ -306,7 +306,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any);
+            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any, 'Asia/Dhaka');
 
             const whereArg = db.salesReturn.findMany.mock.calls[0][0].where;
             expect(whereArg).toHaveProperty('created_at');
@@ -1153,7 +1153,7 @@ describe('SalesReportsService', () => {
                 from: '2026-01-01',
                 to: '2026-03-31',
                 granularity: 'month',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.buckets.map((b) => b.bucket)).toEqual(['2026-01', '2026-02', '2026-03']);
             expect(result.buckets[1].netRevenue).toBe(0);
@@ -1171,7 +1171,7 @@ describe('SalesReportsService', () => {
                 from: '2026-01-01',
                 to: '2026-02-28',
                 granularity: 'month',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.buckets[0].netRevenue).toBe(300);
             expect(result.buckets[0].transactions).toBe(2);
@@ -1185,7 +1185,7 @@ describe('SalesReportsService', () => {
                 from: '2026-01-01',
                 to: '2026-02-28',
                 granularity: 'month',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.buckets[0].changeFromPreviousPct).toBeNull();
             expect(result.buckets[1].changeFromPreviousPct).toBe(50);
@@ -1201,7 +1201,7 @@ describe('SalesReportsService', () => {
                 to: '2026-02-28',
                 granularity: 'month',
                 compareTo: 'previous_period',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.comparison.period).toEqual({ from: '2026-01-04', to: '2026-01-31' });
             expect(result.comparison.summary.totalRevenue).toBe(100);
@@ -1211,7 +1211,7 @@ describe('SalesReportsService', () => {
         it('leaves comparison null when none was requested', async () => {
             db.sale.findMany.mockResolvedValue([]);
 
-            const result = await service.getSalesTrend(tenantId, { from: '2026-01-01', to: '2026-01-31' });
+            const result = await service.getSalesTrend(tenantId, { from: '2026-01-01', to: '2026-01-31' }, 'Asia/Dhaka');
 
             expect(result.comparison).toBeNull();
         });
@@ -1233,7 +1233,7 @@ describe('SalesReportsService', () => {
                 from: '2026-07-01',
                 to: '2026-07-31',
                 groupBy: 'product',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.revenueBasis).toBe('sale_line_items');
             expect(result.rows[0]).toMatchObject({ label: 'Rice', revenue: 300, units: 3, orders: 2 });
@@ -1251,7 +1251,7 @@ describe('SalesReportsService', () => {
                 from: '2026-07-01',
                 to: '2026-07-31',
                 groupBy: 'branch',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.revenueBasis).toBe('invoice_totals');
             expect(result.rows.map((r) => r.label)).toEqual(['Dhanmondi', 'Gulshan']);
@@ -1275,7 +1275,7 @@ describe('SalesReportsService', () => {
                 from: '2026-07-01',
                 to: '2026-07-31',
                 groupBy: 'hour_of_day',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.rows.map((r) => r.key)).toEqual(['10', '22']);
             expect(result.rows[1].label).toBe('22:00–22:59');
@@ -1292,7 +1292,7 @@ describe('SalesReportsService', () => {
                 from: '2026-07-01',
                 to: '2026-07-31',
                 groupBy: 'payment_method',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.revenueBasis).toBe('payment_records');
             expect(result.rows[0]).toMatchObject({ label: 'bKash', revenue: 260, orders: 2 });
@@ -1310,7 +1310,7 @@ describe('SalesReportsService', () => {
                 from: '2026-07-01',
                 to: '2026-07-31',
                 groupBy: 'staff',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.rows.map((r) => r.label)).toEqual(['Rahim', 'Not recorded']);
         });
@@ -1332,7 +1332,7 @@ describe('SalesReportsService', () => {
                 groupBy: 'product',
                 limit: 2,
                 offset: 2,
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.rows.map((r) => r.label)).toEqual(['P2', 'P3']);
             expect(result.paging).toEqual({ limit: 2, offset: 2, totalRows: 5, hasMore: true });
@@ -1352,7 +1352,7 @@ describe('SalesReportsService', () => {
                 to: '2026-07-31',
                 groupBy: 'product',
                 compareTo: 'previous_period',
-            });
+            }, 'Asia/Dhaka');
 
             expect(result.rows[0].previousRevenue).toBe(200);
             expect(result.rows[0].revenueChange).toBe(100);
@@ -1378,7 +1378,7 @@ describe('SalesReportsService', () => {
                 .mockResolvedValueOnce([line('s1', 'p1', 'Rice', 300), line('s2', 'p2', 'Oil', 100)])
                 .mockResolvedValueOnce([line('s0', 'p1', 'Rice', 100), line('s3', 'p2', 'Oil', 400)]);
 
-            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.gainers[0]).toMatchObject({ label: 'Rice', revenueChange: 200 });
             expect(result.decliners[0]).toMatchObject({ label: 'Oil', revenueChange: -300 });
@@ -1394,7 +1394,7 @@ describe('SalesReportsService', () => {
                 .mockResolvedValueOnce([line('s1', 'p_new', 'New SKU', 500)])
                 .mockResolvedValueOnce([line('s0', 'p_gone', 'Discontinued', 200)]);
 
-            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.gainers[0]).toMatchObject({ label: 'New SKU', status: 'new' });
             expect(result.decliners[0]).toMatchObject({ label: 'Discontinued', status: 'disappeared' });
@@ -1405,7 +1405,7 @@ describe('SalesReportsService', () => {
                 .mockResolvedValueOnce([line('s1', 'p1', 'New SKU', 500)])
                 .mockResolvedValueOnce([]);
 
-            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.gainers[0].revenueChangePct).toBeNull();
         });
@@ -1435,7 +1435,7 @@ describe('SalesReportsService', () => {
             ]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.summary.totalRefund).toBe(100);
             expect(result.summary.grossRevenue).toBe(1000);
@@ -1459,7 +1459,7 @@ describe('SalesReportsService', () => {
             db.sale.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.byReason).toHaveLength(1);
             expect(result.byReason[0]).toMatchObject({ label: 'Unspecified', amount: 75, sharePct: 100 });
@@ -1470,7 +1470,7 @@ describe('SalesReportsService', () => {
             db.sale.findMany.mockResolvedValue([]);
             db.saleItem.findMany.mockResolvedValue([]);
 
-            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka');
 
             expect(result.summary.returnRatePct).toBe(0);
             expect(result.summary.avgRefund).toBe(0);

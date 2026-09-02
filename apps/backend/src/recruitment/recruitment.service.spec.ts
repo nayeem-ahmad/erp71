@@ -252,7 +252,7 @@ describe('RecruitmentService', () => {
                 .mockResolvedValueOnce(APPLICATION)
                 .mockResolvedValueOnce({ ...APPLICATION, stage: 'HIRED', hired_employee_id: 'emp-new' });
 
-            await service.hire('t1', 'app-1', { date_of_joining: '2026-09-01' }, {
+            await service.hire('t1', 'app-1', { date_of_joining: '2026-09-01' }, { timezone: 'Asia/Dhaka',
                 tenantId: 't1', userId: 'user-1',
             });
 

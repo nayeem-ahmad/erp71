@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import { isDashboardPreference } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { isValidTimeZone } from '../common/tenant-time.util';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
@@ -9,7 +11,10 @@ import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 
 @Injectable()
 export class TenantsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly timezones: TenantTimezoneService,
+    ) {}
 
     async updateStorefrontSettings(tenantId: string, dto: StorefrontSettingsDto) {
         // Validate slug format if provided
@@ -187,6 +192,7 @@ export class TenantsService {
                 default_locale: true,
                 localization_enabled: true,
                 secondary_locale: true,
+                timezone: true,
             },
         });
     }
@@ -365,7 +371,16 @@ export class TenantsService {
             throw new NotFoundException('Tenant not found');
         }
 
-        if (!tenant.localization_enabled) {
+        // The locale gate does not cover the timezone. A workspace that never
+        // turns on a second language still has a working day, and getting it
+        // wrong misfiles every "due today" and date-range filter in the product.
+        if (dto.timezone !== undefined && !isValidTimeZone(dto.timezone)) {
+            throw new BadRequestException(
+                'Timezone must be an IANA zone name, for example "Asia/Dhaka".',
+            );
+        }
+
+        if (dto.default_locale !== undefined && !tenant.localization_enabled) {
             throw new BadRequestException('Localization is not enabled for this tenant.');
         }
 
@@ -380,15 +395,23 @@ export class TenantsService {
 
         const data: Record<string, string> = {};
         if (dto.default_locale !== undefined) data.default_locale = dto.default_locale;
+        if (dto.timezone !== undefined) data.timezone = dto.timezone;
 
-        return this.db.tenant.update({
+        const updated = await this.db.tenant.update({
             where: { id: tenantId },
             data,
             select: {
                 default_locale: true,
                 localization_enabled: true,
                 secondary_locale: true,
+                timezone: true,
             },
         });
+
+        // Otherwise the next few minutes of requests keep measuring the day in
+        // the old zone, which reads as the setting not having saved.
+        if (dto.timezone !== undefined) this.timezones.invalidate(tenantId);
+
+        return updated;
     }
 }

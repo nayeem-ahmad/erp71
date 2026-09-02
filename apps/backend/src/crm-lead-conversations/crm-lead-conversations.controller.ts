@@ -38,6 +38,7 @@ export class CrmLeadConversationsController {
     /** `mine=true` resolves against the caller's own id, which never crosses the wire. */
     private toOpts(tenant: TenantContext, query: QueryLeadConversationsDto): FindAllConversationsOpts {
         return {
+            timezone: tenant.timezone,
             leadId: query.leadId,
             search: query.search,
             type: query.type,

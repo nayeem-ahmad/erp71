@@ -29,7 +29,7 @@ export class LoansController {
 
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: ListLoansQueryDto) {
-        return this.service.listLoans(tenant.tenantId, query);
+        return this.service.listLoans(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get('summary')

@@ -1,0 +1,12 @@
+-- Per-tenant timezone for every calendar-day filter, "today" window and report
+-- bucket in the platform.
+--
+-- The default is not cosmetic: every existing workspace is a Bangladeshi
+-- retailer, and Asia/Dhaka is exactly what the code already hardcoded, so this
+-- migration changes no query's meaning for anyone currently on the platform. It
+-- only makes the assumption a column instead of a constant.
+--
+-- Stored as an IANA name rather than an offset in minutes. An offset cannot
+-- express DST, so a stored `360` would be right for Dhaka and quietly wrong for
+-- an hour twice a year everywhere that observes it.
+ALTER TABLE "Tenant" ADD COLUMN "timezone" TEXT NOT NULL DEFAULT 'Asia/Dhaka';

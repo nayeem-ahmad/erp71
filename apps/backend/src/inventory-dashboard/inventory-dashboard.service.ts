@@ -4,10 +4,8 @@ import { DatabaseService } from '../database/database.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import {
     emptyDailyBuckets,
-    formatDate,
     money,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import { InventoryDashboardQueryDto } from './inventory-dashboard.dto';
@@ -58,8 +56,8 @@ export class InventoryDashboardService {
         private readonly entitlements: PlanEntitlementsService,
     ) {}
 
-    async getOverview(tenantId: string, query: InventoryDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getOverview(tenantId: string, query: InventoryDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [features, settings, products] = await Promise.all([
             this.entitlements.getFeaturesForTenant(tenantId),
@@ -317,8 +315,8 @@ export class InventoryDashboardService {
     }
 
     /** Daily in/out units, feeding the KPI sparklines. */
-    async getTrends(tenantId: string, query: InventoryDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(tenantId: string, query: InventoryDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const movements = await this.db.inventoryMovement.findMany({
             where: {
@@ -331,7 +329,7 @@ export class InventoryDashboardService {
         const buckets = emptyDailyBuckets(window, () => ({ units_in: 0, units_out: 0, movements: 0 }));
 
         for (const row of movements) {
-            const bucket = buckets.get(formatDate(startOfDay(row.created_at)));
+            const bucket = buckets.get(window.dayOf(row.created_at));
             if (!bucket) continue;
             if (row.quantity_delta > 0) bucket.units_in += row.quantity_delta;
             else bucket.units_out += Math.abs(row.quantity_delta);

@@ -27,7 +27,7 @@ export class CrmCampaignsController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.service.findAll(tenant.tenantId, {
+        return this.service.findAll(tenant.tenantId, { timezone: tenant.timezone,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             createdFrom,

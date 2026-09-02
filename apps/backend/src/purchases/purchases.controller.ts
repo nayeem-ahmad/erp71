@@ -26,7 +26,7 @@ export class PurchasesController {
         @Query('sortBy') sortBy?: string,
         @Query('sortDir') sortDir?: string,
     ) {
-        return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit, {
+        return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom,
             createdTo,
             sortBy,

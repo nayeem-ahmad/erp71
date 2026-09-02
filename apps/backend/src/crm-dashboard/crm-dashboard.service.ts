@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
-    formatDate,
+    emptyDailyBuckets,
     percent,
     resolveDateWindow,
-    startOfDay,
     type DateWindow,
 } from '../common/dashboard-window';
 import {
@@ -15,10 +14,49 @@ import {
     staleLeadWhere,
 } from '../crm-leads/crm-leads.dto';
 import { CrmDashboardQueryDto } from './crm-dashboard.dto';
+import {
+    addCalendarDays,
+    startOfZonedToday,
+    zonedDayStart,
+    zonedTodayWindow,
+} from '../common/tenant-time.util';
 
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
 const RECENT_CAMPAIGNS = 5;
+
+/**
+ * Ceiling on the heatmap window. The grid is one square per day and the rows are
+ * bucketed in JS, so an unbounded `from` would be both an unreadable chart and an
+ * unbounded scan. 53 weeks is a full year plus the partial week it starts in —
+ * more than the UI asks for, and the most that could ever be worth drawing.
+ */
+const HEATMAP_MAX_DAYS = 371;
+
+const DAY_MS = 86_400_000;
+
+/** Whole days from one `YYYY-MM-DD` to another. Both are plain calendar dates,
+ *  so this is UTC arithmetic on the labels and no zone enters into it. */
+function calendarDaysBetween(from: string, to: string): number {
+    return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+
+/**
+ * Pulls `from` forward so the window spans at most `maxDays` calendar days.
+ *
+ * `to` is the end the reader cares about — the grid runs up to today — so an
+ * over-long window loses its oldest weeks rather than its most recent ones.
+ *
+ * Measured on the window's date labels rather than by dividing the gap between
+ * its two instants: in a zone that observes DST a calendar day is 23 or 25 hours
+ * long, and the instant arithmetic drifts a day across the transition.
+ */
+function clampWindow(window: DateWindow, maxDays: number): DateWindow {
+    if (calendarDaysBetween(window.from, window.to) + 1 <= maxDays) return window;
+
+    const from = addCalendarDays(window.to, -(maxDays - 1));
+    return { ...window, from, fromDate: zonedDayStart(from, window.timezone) as Date };
+}
 
 /**
  * Aggregates for the CRM dashboard — the pipeline half of CRM, in one request.
@@ -31,8 +69,8 @@ const RECENT_CAMPAIGNS = 5;
 export class CrmDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    async getOverview(tenantId: string, query: CrmDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getOverview(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
 
         const [pipeline, followUps, activity, sources, owners, campaigns] = await Promise.all([
             this.getPipeline(tenantId, window),
@@ -123,9 +161,7 @@ export class CrmDashboardService {
     }
 
     private async getFollowUps(tenantId: string, window: DateWindow) {
-        const today = startOfDay(new Date());
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const { gte: today, lt: tomorrow } = zonedTodayWindow(window.timezone);
 
         // Reads CrmActivity, not CrmFollowUp, since R2. That is the point of the
         // merge for this card: a lead's `next_step` is a PLANNED activity now, so
@@ -270,7 +306,7 @@ export class CrmDashboardService {
     }
 
     private async getOwners(tenantId: string, window: DateWindow) {
-        const today = startOfDay(new Date());
+        const today = startOfZonedToday(window.timezone);
         const openStatuses = [...OPEN_LEAD_STATUSES];
 
         const [openGrouped, convertedGrouped, overdueGrouped] = await Promise.all([
@@ -379,8 +415,8 @@ export class CrmDashboardService {
      * with `date_trunc`, the same way the accounting trends do it: at CRM volumes
      * the row count is small, and it keeps day boundaries on one clock.
      */
-    async getTrends(tenantId: string, query: CrmDashboardQueryDto) {
-        const window = resolveDateWindow(query);
+    async getTrends(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+        const window = resolveDateWindow(query, timezone);
         const range = { gte: window.fromDate, lte: window.toDate };
 
         const [created, conversations, converted, completedFollowUps] = await Promise.all([
@@ -422,8 +458,10 @@ export class CrmDashboardService {
 
         // Every day in the window gets a point, so a quiet Friday reads as a zero
         // rather than closing the gap and flattering the line.
-        for (let day = new Date(window.fromDate); day <= window.toDate; day.setDate(day.getDate() + 1)) {
-            const key = formatDate(day);
+        // Walked as calendar strings, not by adding 24 hours to a Date: in a
+        // zone that observes DST one day in the window is 23 hours long, and the
+        // instant-based loop would skip or double a bucket around it.
+        for (let key = window.from; key <= window.to; key = addCalendarDays(key, 1)) {
             points.set(key, {
                 date: key,
                 leads_created: 0,
@@ -438,7 +476,7 @@ export class CrmDashboardService {
             field: 'leads_created' | 'conversations' | 'leads_converted' | 'follow_ups_completed',
         ) => {
             if (!at) return;
-            const point = points.get(formatDate(startOfDay(at)));
+            const point = points.get(window.dayOf(at));
             if (point) point[field] += 1;
         };
 
@@ -448,5 +486,67 @@ export class CrmDashboardService {
         for (const row of completedFollowUps) bucket(row.completed_at, 'follow_ups_completed');
 
         return { filters: { from: window.from, to: window.to }, points: [...points.values()] };
+    }
+
+    /**
+     * One square per calendar day, in two series: activities *completed* that day
+     * and activities *planned* for it.
+     *
+     * Deliberately wider than the two cards above. `getActivity` narrows to
+     * `channel_id != null` and `getFollowUps` to `subject != null`, because each is
+     * measuring one specific thing off the shared table; this counts every DONE and
+     * every PLANNED row, because "activity on a day" is the whole of it. The
+     * heatmap's totals therefore run above the "Conversations logged" tile, and
+     * that is the intended reading rather than a disagreement.
+     *
+     * Each series is dated by the column that means "this day" for it — DONE by
+     * `completed_at`, PLANNED by `due_at`. A PLANNED row with no due date has no
+     * day to sit on and is left out; CANCELLED rows are not activity at all.
+     */
+    async getActivityHeatmap(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+        const window = clampWindow(resolveDateWindow(query, timezone), HEATMAP_MAX_DAYS);
+        const range = { gte: window.fromDate, lte: window.toDate };
+
+        const [done, planned] = await Promise.all([
+            this.db.crmActivity.findMany({
+                where: { tenant_id: tenantId, status: 'DONE', completed_at: range },
+                select: { completed_at: true },
+            }),
+            this.db.crmActivity.findMany({
+                where: { tenant_id: tenantId, status: 'PLANNED', due_at: range },
+                select: { due_at: true },
+            }),
+        ]);
+
+        // Zero-filled, so an idle week reads as an empty run of squares rather
+        // than closing the gap and making the calendar denser than the work was.
+        const buckets = emptyDailyBuckets(window, () => ({ done: 0, planned: 0 }));
+
+        const bucket = (at: Date | null, field: 'done' | 'planned') => {
+            if (!at) return;
+            const point = buckets.get(window.dayOf(at));
+            if (point) point[field] += 1;
+        };
+
+        for (const row of done) bucket(row.completed_at, 'done');
+        for (const row of planned) bucket(row.due_at, 'planned');
+
+        const points = [...buckets.entries()].map(([date, counts]) => ({ date, ...counts }));
+
+        // The busiest day in each series, so the client can step its own ramp
+        // against real volume — a tenant logging three calls a day should still
+        // see contrast, not a uniformly pale grid scaled to somebody else's max.
+        return {
+            filters: { from: window.from, to: window.to },
+            points,
+            max: {
+                done: points.reduce((peak, point) => Math.max(peak, point.done), 0),
+                planned: points.reduce((peak, point) => Math.max(peak, point.planned), 0),
+            },
+            totals: {
+                done: done.length,
+                planned: planned.length,
+            },
+        };
     }
 }

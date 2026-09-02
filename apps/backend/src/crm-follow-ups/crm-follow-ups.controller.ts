@@ -16,7 +16,7 @@ export class CrmFollowUpsController {
 
     @Get('summary')
     getTodaySummary(@Tenant() tenant: TenantContext) {
-        return this.service.getTodaySummary(tenant.tenantId);
+        return this.service.getTodaySummary(tenant.tenantId, tenant.timezone);
     }
 
     @Post()
@@ -36,6 +36,7 @@ export class CrmFollowUpsController {
         @Query('limit') limit?: string,
     ) {
         return this.service.findAll(tenant.tenantId, {
+            timezone: tenant.timezone,
             customerId,
             leadId,
             target,

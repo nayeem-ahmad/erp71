@@ -95,8 +95,8 @@ export class InventoryShrinkageService {
         });
     }
 
-    async findAll(tenantId: string, opts?: { createdFrom?: string; createdTo?: string }) {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+    async findAll(tenantId: string, opts?: { createdFrom?: string; createdTo?: string; timezone: string }) {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return this.db.inventoryShrinkage.findMany({
             where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
             include: this.shrinkageInclude(),

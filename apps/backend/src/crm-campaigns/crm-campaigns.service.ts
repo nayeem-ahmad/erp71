@@ -109,11 +109,11 @@ export class CrmCampaignsService {
         return { ...campaign, recipient_count: written };
     }
 
-    async findAll(tenantId: string, opts?: { page?: number; limit?: number; createdFrom?: string; createdTo?: string }) {
+    async findAll(tenantId: string, opts?: { page?: number; limit?: number; createdFrom?: string; createdTo?: string; timezone: string }) {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const where = { tenant_id: tenantId, ...(created ? { created_at: created } : {}) };
 
         const [items, total] = await Promise.all([

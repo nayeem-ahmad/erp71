@@ -513,7 +513,7 @@ describe('AccountingService — Story 30.2', () => {
             },
         ]);
 
-        const result = await service.findVouchers('tenant-1', {
+        const result = await service.findVouchers('tenant-1', { timezone: 'Asia/Dhaka',
             voucherType: VoucherType.CASH_PAYMENT,
             from: '2026-03-01',
             to: '2026-03-31',
@@ -543,7 +543,7 @@ describe('AccountingService — Story 30.2', () => {
         db.voucher.count.mockResolvedValue(0);
         db.voucher.findMany.mockResolvedValue([]);
 
-        await service.findVouchers('tenant-1', {
+        await service.findVouchers('tenant-1', { timezone: 'Asia/Dhaka',
             createdFrom: '2026-08-19',
             createdTo: '2026-08-19',
         });

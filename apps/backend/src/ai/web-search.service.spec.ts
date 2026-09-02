@@ -26,11 +26,18 @@ function makeService(
         }),
     };
 
+const timezones: any = {
+    for: jest.fn(async () => 'Asia/Dhaka'),
+    forMany: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, 'Asia/Dhaka']))),
+    prime: jest.fn(),
+    invalidate: jest.fn(),
+};
+
     const platformSettings: any = {
         getRawValue: jest.fn((_group: string, key: string) => Promise.resolve(settings[key] ?? null)),
     };
 
-    return { service: new WebSearchService(db, ai, platformSettings), db, ai, platformSettings };
+    return { service: new WebSearchService(db, ai, platformSettings, timezones), db, ai, platformSettings };
 }
 
 /** A real Response so the service's own stream reading is exercised. */

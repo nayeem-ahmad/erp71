@@ -4,8 +4,8 @@ import { ChatService } from './chat.service';
 import { CHAT_TOOLS } from './chat-tools';
 import type { TenantContext } from '../database/tenant.decorator';
 
-const OWNER_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-1', storeId: 'store-1', userRole: 'OWNER' };
-const STAFF_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-2', storeId: 'store-1', userRole: 'CASHIER' };
+const OWNER_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-1', storeId: 'store-1', userRole: 'OWNER', timezone: 'Asia/Dhaka' };
+const STAFF_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-2', storeId: 'store-1', userRole: 'CASHIER', timezone: 'Asia/Dhaka' };
 
 function emptySummary() {
     return {
@@ -129,6 +129,12 @@ function makeService(overrides: {
         chatData,
         webSearch,
         anomalies,
+        {
+            for: jest.fn(async () => 'Asia/Dhaka'),
+            forMany: jest.fn(async () => new Map()),
+            prime: jest.fn(),
+            invalidate: jest.fn(),
+        } as any, // timezones
     );
 
     return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch, anomalies };
@@ -307,11 +313,11 @@ describe('ChatService.chat', () => {
 
         const result = await service.chat(OWNER_CTX, 'june sales?');
 
-        expect(salesReports.getSalesSummary).toHaveBeenCalledWith('tenant-1', {
-            from: '2026-06-01',
-            to: '2026-06-30',
-            storeId: undefined,
-        });
+        expect(salesReports.getSalesSummary).toHaveBeenCalledWith(
+            'tenant-1',
+            { from: '2026-06-01', to: '2026-06-30', storeId: undefined },
+            'Asia/Dhaka',
+        );
         expect(result.content).toBe('You sold ৳100 in June.');
         expect(result.toolCalls[0]).toMatchObject({ name: 'sales_summary' });
         // Second call carries the assistant tool_calls turn plus the tool result.

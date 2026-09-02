@@ -45,6 +45,8 @@ export interface ChatToolContext {
     userRole?: string;
     /** Currently selected store, used as the default scope for store-aware tools. */
     storeId?: string;
+    /** The workspace's IANA zone. Any tool that filters on calendar days must pass it on. */
+    timezone: string;
     /** Every store in the tenant — the allow-list for a model-supplied `storeId`. */
     stores: Array<{ id: string; name: string }>;
     /** True when the caller may see figures spanning every branch at once. */

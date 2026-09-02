@@ -81,6 +81,30 @@ export function formatBDT(
     return formatCurrency(amount, { ...options, currency: 'BDT' });
 }
 
+
+/**
+ * The workspace's IANA zone, set once by the app shell from the tenant record.
+ *
+ * Dates are rendered in the workspace's zone rather than the device's so that a
+ * list agrees with the filters the server applied to build it. A shopkeeper who
+ * opens the app from another country should still see their own shop's days —
+ * otherwise "due today" returns rows that render as yesterday.
+ *
+ * Ambient rather than threaded through every call because these formatters are
+ * already ambient: they resolve the locale the same way, and are called from
+ * hundreds of components that have no business knowing about either.
+ */
+let activeTimeZone: string | undefined;
+
+export function setActiveTimeZone(timeZone: string | null | undefined): void {
+    activeTimeZone = timeZone ?? undefined;
+}
+
+/** Undefined lets `Intl` fall back to the device zone, which is the old behaviour. */
+export function getActiveTimeZone(): string | undefined {
+    return activeTimeZone;
+}
+
 export function formatDate(
     date: string | Date | null | undefined,
     locale?: SupportedLocaleCode | string | null
@@ -93,6 +117,7 @@ export function formatDate(
     const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
 
     return d.toLocaleDateString(localeConfig.dateLocale, {
+        timeZone: activeTimeZone,
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -115,6 +140,7 @@ export function formatDateTime(
     const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
 
     return d.toLocaleString(localeConfig.dateLocale, {
+        timeZone: activeTimeZone,
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -135,8 +161,33 @@ export function resolveLocaleForFormatting(locale?: SupportedLocaleCode | string
     return resolveSupportedLocale(resolveFormatterLocale(locale));
 }
 
-// Formats a Date as a `datetime-local` input value (`yyyy-MM-ddTHH:mm`) in local time.
+/**
+ * Formats a Date as a `datetime-local` input value (`yyyy-MM-ddTHH:mm`).
+ *
+ * Rendered in the workspace zone, matching how the server reads the value back:
+ * an offsetless `datetime-local` is interpreted as the tenant's wall clock, so
+ * reopening a follow-up must show the time it was actually scheduled for rather
+ * than that instant translated into the device's zone.
+ */
 export function toDatetimeLocal(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0');
+
+    if (activeTimeZone) {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: activeTimeZone,
+            hour12: false,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).formatToParts(date);
+        const read = (type: Intl.DateTimeFormatPartTypes) =>
+            parts.find((part) => part.type === type)?.value ?? '00';
+        // `hour12: false` emits 24 for midnight in some engines.
+        const hour = String(Number(read('hour')) % 24).padStart(2, '0');
+        return `${read('year')}-${read('month')}-${read('day')}T${hour}:${read('minute')}`;
+    }
+
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

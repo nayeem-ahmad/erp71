@@ -21,11 +21,11 @@ export class InventoryDashboardController {
 
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query);
+        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query);
+        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
     }
 }

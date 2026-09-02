@@ -55,7 +55,7 @@ describe('InventoryDashboardService', () => {
             product({ id: 'd', stocks: [{ quantity: 90 }] }),
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.stock.out_of_stock).toBe(1);
         expect(result.stock.below_reorder).toBe(1);
@@ -70,12 +70,12 @@ describe('InventoryDashboardService', () => {
             product({ id: 'b', reorder_level: null, stocks: [{ quantity: 15 }] }),
         ]);
 
-        const withDefault = await service.getOverview(TENANT, {});
+        const withDefault = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
         expect(withDefault.stock.below_reorder).toBe(2);
         expect(withDefault.stock.unconfigured_policy).toBe(0);
 
         db.inventorySettings.findUnique.mockResolvedValue(null);
-        const withoutDefault = await service.getOverview(TENANT, {});
+        const withoutDefault = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
         expect(withoutDefault.stock.below_reorder).toBe(0);
         expect(withoutDefault.stock.unconfigured_policy).toBe(2);
     });
@@ -85,7 +85,7 @@ describe('InventoryDashboardService', () => {
             product({ stocks: [{ quantity: 3 }, { quantity: 5 }, { quantity: 2 }] }),
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.stock.total_units).toBe(10);
         expect(result.stock.total_value).toBe(5000);
@@ -95,7 +95,7 @@ describe('InventoryDashboardService', () => {
         entitlements.getFeaturesForTenant.mockResolvedValue({ premiumInventoryReports: false });
         db.product.findMany.mockResolvedValue([product({ stocks: [{ quantity: 4 }] })]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         // Null, not 0 — the tenant has stock, we are just not showing its worth.
         expect(result.stock.total_value).toBeNull();
@@ -115,7 +115,7 @@ describe('InventoryDashboardService', () => {
             { product_id: 'b', quantity_delta: -6 },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.movement).toEqual({
             in_units: 10,
@@ -131,7 +131,7 @@ describe('InventoryDashboardService', () => {
             product({ id: 'empty', name: 'Empty', reorder_level: 10, stocks: [{ quantity: 0 }] }),
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.low_stock.map((row) => row.id)).toEqual(['empty', 'near']);
         expect(result.low_stock[0].shortfall).toBe(10);
@@ -147,7 +147,7 @@ describe('InventoryDashboardService', () => {
             { product_id: 'moved', _max: { created_at: eightyDaysAgo } },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
         const byKey = Object.fromEntries((result.aging ?? []).map((row) => [row.key, row]));
 
         expect(byKey.days_61_90.units).toBe(2);
@@ -157,7 +157,7 @@ describe('InventoryDashboardService', () => {
     it('leaves out-of-stock products out of the aging buckets entirely', async () => {
         db.product.findMany.mockResolvedValue([product({ stocks: [{ quantity: 0 }] })]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect((result.aging ?? []).every((row) => row.units === 0)).toBe(true);
     });
@@ -170,7 +170,7 @@ describe('InventoryDashboardService', () => {
             { quantity_sent: 3, quantity_received: 4 },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.transfers.in_transit_units).toBe(6);
     });
@@ -180,7 +180,7 @@ describe('InventoryDashboardService', () => {
             { items: [{ quantity: 2, unit_cost: 50 }, { quantity: 1, unit_cost: null }] },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.shrinkage).toEqual({ events: 1, units: 3, value: 100 });
     });
@@ -191,7 +191,7 @@ describe('InventoryDashboardService', () => {
             product({ id: 'b', price: 100, stocks: [{ quantity: 1 }], group_id: null, group: null }),
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.categories).toEqual([
             { id: 'g1', name: 'Groceries', units: 2, value: 200 },
@@ -200,7 +200,7 @@ describe('InventoryDashboardService', () => {
     });
 
     it('buckets trends by local calendar day and zero-fills the quiet ones', async () => {
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points.map((point) => point.date)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         expect(result.points.every((point) => point.units_in === 0 && point.units_out === 0)).toBe(true);
@@ -210,7 +210,7 @@ describe('InventoryDashboardService', () => {
         const at = new Date(2026, 7, 2, 21, 30); // 9:30pm local on the 2nd
         db.inventoryMovement.findMany.mockResolvedValue([{ created_at: at, quantity_delta: 7 }]);
 
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         // toISOString() would have filed this under the 3rd in Dhaka.
         expect(result.points.find((point) => point.date === '2026-08-02')?.units_in).toBe(7);

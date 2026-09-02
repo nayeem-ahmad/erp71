@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { SmsCreditService } from './sms-credit.service';
 import { TenantContext } from '../database/tenant.decorator';
 
-const tenantCtx = (overrides: Partial<TenantContext> = {}): TenantContext => ({
+const tenantCtx = (overrides: Partial<TenantContext> = {}): TenantContext => ({ timezone: 'Asia/Dhaka',
     tenantId: 'tenant-1',
     userId: 'user-1',
     userRole: 'OWNER',

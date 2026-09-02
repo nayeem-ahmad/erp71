@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
 
 describe('TenantsService', () => {
     let service: TenantsService;
@@ -13,6 +14,13 @@ describe('TenantsService', () => {
         },
     };
 
+    const timezones = {
+        for: jest.fn(async () => 'Asia/Dhaka'),
+        forMany: jest.fn(async () => new Map()),
+        prime: jest.fn(),
+        invalidate: jest.fn(),
+    };
+
     beforeEach(async () => {
         jest.resetAllMocks();
 
@@ -20,6 +28,7 @@ describe('TenantsService', () => {
             providers: [
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: TenantTimezoneService, useValue: timezones },
             ],
         }).compile();
 
@@ -41,6 +50,7 @@ describe('TenantsService', () => {
                 default_locale: true,
                 localization_enabled: true,
                 secondary_locale: true,
+                timezone: true,
             },
         });
         expect(result).toEqual({
@@ -70,6 +80,7 @@ describe('TenantsService', () => {
                 default_locale: true,
                 localization_enabled: true,
                 secondary_locale: true,
+                timezone: true,
             },
         });
         expect(result).toEqual({
@@ -88,6 +99,46 @@ describe('TenantsService', () => {
         await expect(
             service.updateLocalizationSettings('tenant-1', { default_locale: 'bn' }),
         ).rejects.toThrow(BadRequestException);
+        expect(db.tenant.update).not.toHaveBeenCalled();
+    });
+
+    it('stores an IANA timezone and drops the cached one so the change takes effect at once', async () => {
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: false, secondary_locale: null });
+        db.tenant.update.mockResolvedValue({ timezone: 'America/New_York' });
+
+        await service.updateLocalizationSettings('tenant-1', { timezone: 'America/New_York' } as any);
+
+        expect(db.tenant.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: { timezone: 'America/New_York' } }),
+        );
+        expect(timezones.invalidate).toHaveBeenCalledWith('tenant-1');
+    });
+
+    it('sets the timezone even when the language switcher is disabled', async () => {
+        // Every workspace has a working day; only the second language is gated.
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: false, secondary_locale: null });
+        db.tenant.update.mockResolvedValue({ timezone: 'Asia/Kolkata' });
+
+        await expect(
+            service.updateLocalizationSettings('tenant-1', { timezone: 'Asia/Kolkata' } as any),
+        ).resolves.toBeDefined();
+    });
+
+    it('rejects a bare offset, which cannot express DST', async () => {
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: true, secondary_locale: 'bn' });
+
+        await expect(
+            service.updateLocalizationSettings('tenant-1', { timezone: '+06:00' } as any),
+        ).rejects.toThrow(/IANA/);
+        expect(db.tenant.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a zone the runtime does not know', async () => {
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: true, secondary_locale: 'bn' });
+
+        await expect(
+            service.updateLocalizationSettings('tenant-1', { timezone: 'Mars/Olympus' } as any),
+        ).rejects.toThrow(/IANA/);
         expect(db.tenant.update).not.toHaveBeenCalled();
     });
 });

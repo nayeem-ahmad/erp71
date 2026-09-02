@@ -11,6 +11,8 @@ import {
 export type TenantLocaleConfig = {
     localization_enabled?: boolean | null;
     secondary_locale?: string | null;
+    /** IANA zone the workspace's calendar days are measured in. */
+    timezone?: string | null;
 };
 
 const secondaryLocaleCodes = new Set<SupportedLocaleCode>(SECONDARY_LOCALE_CODES);

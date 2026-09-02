@@ -645,6 +645,8 @@ export class SalesService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** IANA zone the calendar-day bounds above are measured in. */
+            timezone: string;
         },
     ): Promise<PaginatedResult<any>> {
         const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
@@ -655,7 +657,7 @@ export class SalesService {
             .map((value) => value.trim())
             .filter(Boolean);
 
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const where: any = {
             tenant_id: tenantId,
             ...(created ? { created_at: created } : {}),

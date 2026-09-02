@@ -23,7 +23,7 @@ export class FundTransfersController {
 
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: ListFundTransfersQueryDto) {
-        return this.service.list(tenant.tenantId, query);
+        return this.service.list(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get(':id')

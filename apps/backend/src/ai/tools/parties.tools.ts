@@ -17,7 +17,11 @@ export const PARTY_TOOLS: ChatTool[] = [
             required: ['search'],
         },
         handler: async (ctx, args, deps) => {
-            const pageResult = await deps.customers.findAll(ctx.tenantId, { search: String(args.search), limit: 5 });
+            const pageResult = await deps.customers.findAll(ctx.tenantId, {
+                search: String(args.search),
+                limit: 5,
+                timezone: ctx.timezone,
+            });
             const matches = pageResult.items ?? [];
             if (matches.length === 0) {
                 return { matchCount: 0, rows: [], note: `No customer matched "${args.search}".` };

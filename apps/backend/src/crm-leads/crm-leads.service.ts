@@ -38,6 +38,7 @@ import {
 } from '@erp71/shared-types';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import { parseTenantDateTime, zonedTodayWindow } from '../common/tenant-time.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
@@ -292,7 +293,7 @@ export class CrmLeadsService {
         }
     }
 
-    async create(tenantId: string, userId: string, dto: CreateLeadDto) {
+    async create(tenantId: string, userId: string, dto: CreateLeadDto, timezone: string) {
         const identity = leadIdentityOf(dto);
         await this.assertIdentityFree(tenantId, identity);
 
@@ -315,7 +316,9 @@ export class CrmLeadsService {
             dto.category,
         );
 
-        const nextStepDate = dto.next_step_date ? new Date(dto.next_step_date) : null;
+        // A bare `2026-09-01T20:00` from a date picker means 8pm in the shop's
+        // own zone, not 8pm wherever the server happens to run.
+        const nextStepDate = parseTenantDateTime(dto.next_step_date, timezone);
         const score = computeLeadScore(
             {
                 status,
@@ -460,6 +463,8 @@ export class CrmLeadsService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** IANA zone the calendar-day bounds above are measured in. */
+            timezone: string;
         },
     ) {
         const page = opts.page ?? 1;
@@ -467,7 +472,7 @@ export class CrmLeadsService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId };
-        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        const created = createdAtRange(opts.createdFrom, opts.createdTo, opts.timezone);
         if (created) where.created_at = created;
         // The "open pipeline" sentinel stands for the three non-terminal stages at
         // once, which no single status value can express.
@@ -490,12 +495,8 @@ export class CrmLeadsService {
                   : null;
         if (emailClause) where.AND = [...(where.AND ?? []), emailClause];
         if (opts.myActionsToday && opts.userId) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
             where.next_step_assigned_to = opts.userId;
-            where.next_step_date = { gte: today, lt: tomorrow };
+            where.next_step_date = zonedTodayWindow(opts.timezone);
         }
         if (opts.search) {
             where.OR = [
@@ -736,6 +737,7 @@ export class CrmLeadsService {
         tenantId: string,
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
+        timezone: string,
     ): Promise<ImportResult> {
         const defs = await this.customFields.listDefinitions(
             tenantId,
@@ -784,12 +786,12 @@ export class CrmLeadsService {
                     x_url: raw.x_url ? String(raw.x_url).trim() || null : null,
                     website_url: raw.website_url ? String(raw.website_url).trim() || null : null,
                     next_step: raw.next_step ? String(raw.next_step).trim() || null : null,
-                    next_step_date: (() => {
-                        const v = raw.next_step_date;
-                        if (v == null || String(v).trim() === '') return null;
-                        const d = new Date(String(v).trim());
-                        return isNaN(d.getTime()) ? null : d;
-                    })(),
+                    // A spreadsheet column carries no offset either, so an
+                    // imported next step is read in the tenant's zone too.
+                    next_step_date: parseTenantDateTime(
+                        raw.next_step_date == null ? null : String(raw.next_step_date).trim(),
+                        timezone,
+                    ),
                     custom_fields: defs.reduce<Record<string, string>>((acc, def) => {
                         const target = def.label.trim().toLowerCase();
                         const matchKey = Object.keys(raw).find(

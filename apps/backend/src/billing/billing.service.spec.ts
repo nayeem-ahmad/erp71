@@ -3,7 +3,7 @@ import { BillingService } from './billing.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantContext } from '../database/tenant.decorator';
 
-const tenantCtx = (overrides: Partial<TenantContext> = {}): TenantContext => ({
+const tenantCtx = (overrides: Partial<TenantContext> = {}): TenantContext => ({ timezone: 'Asia/Dhaka',
     tenantId: 'tenant-1',
     userId: 'user-1',
     userRole: 'OWNER',

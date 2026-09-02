@@ -842,11 +842,11 @@ export class AccountingService {
         }
     }
 
-    async findVouchers(tenantId: string, query: ListVouchersQueryDto) {
+    async findVouchers(tenantId: string, query: ListVouchersQueryDto & { timezone: string }) {
         const page = Math.max(1, Number(query.page ?? 1));
         const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
         this.validateDateRange(query.from, query.to);
-        const created = createdAtRange(query.createdFrom, query.createdTo);
+        const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         const where = {
             tenant_id: tenantId,
             ...(query.voucherType ? { voucher_type: query.voucherType } : {}),

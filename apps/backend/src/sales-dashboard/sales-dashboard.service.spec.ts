@@ -45,7 +45,7 @@ describe('SalesDashboardService', () => {
         db.sale.aggregate.mockResolvedValue({ _sum: { total_amount: 100_000 }, _count: { _all: 20 } });
         db.salesReturn.aggregate.mockResolvedValue({ _sum: { total_refund: 8_000 }, _count: { _all: 3 } });
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.sales.gross).toBe(100_000);
         expect(result.sales.returns).toBe(8_000);
@@ -54,14 +54,14 @@ describe('SalesDashboardService', () => {
     });
 
     it('reports no average ticket rather than zero when nothing sold', async () => {
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.sales.count).toBe(0);
         expect(result.sales.avg_ticket).toBeNull();
     });
 
     it('counts only completed sales as revenue', async () => {
-        await service.getOverview(TENANT, {});
+        await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(db.sale.aggregate).toHaveBeenCalledWith(
             expect.objectContaining({ where: expect.objectContaining({ status: 'COMPLETED' }) }),
@@ -74,7 +74,7 @@ describe('SalesDashboardService', () => {
             { quantity: 1, price_at_sale: 500, unit_cost_at_sale: null },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         // The uncosted line is excluded from both sides, not treated as free stock.
         expect(result.margin.gross_profit).toBe(80);
@@ -90,7 +90,7 @@ describe('SalesDashboardService', () => {
             { quantity: 4, price_at_sale: 100, unit_cost_at_sale: null },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         // A margin over none of the basket is not a margin.
         expect(result.margin.gross_profit).toBeNull();
@@ -102,14 +102,14 @@ describe('SalesDashboardService', () => {
         db.customer.aggregate.mockResolvedValue({ _sum: { due_balance: 45_000 } });
         db.customer.count.mockResolvedValue(9);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.receivables).toEqual({ outstanding: 45_000, customers_owing: 9 });
         expect(db.customer.aggregate.mock.calls[0][0].where).not.toHaveProperty('sale_date');
     });
 
     it('counts an order late only when it promised a delivery date and missed it', async () => {
-        await service.getOverview(TENANT, {});
+        await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         const overdueCall = db.salesOrder.count.mock.calls
             .map((call: any[]) => call[0])
@@ -131,7 +131,7 @@ describe('SalesDashboardService', () => {
             { id: 'c', name: 'Pan', price: 900, group: null },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         // By revenue, not units: Rice 10×100, Pan 1×900, Dal 4×200.
         expect(result.products.map((row) => row.name)).toEqual(['Rice', 'Pan', 'Dal']);
@@ -148,7 +148,7 @@ describe('SalesDashboardService', () => {
             { customer_id: null, _sum: { total_amount: 3_000 }, _count: { _all: 6 } },
         ]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.customers[0].name).toBe('Walk-in');
         expect(result.customers[0].orders).toBe(6);
@@ -160,7 +160,7 @@ describe('SalesDashboardService', () => {
         ]);
         db.customer.findMany.mockResolvedValue([{ id: 'c1', name: 'Karim', due_balance: 1_200 }]);
 
-        const result = await service.getOverview(TENANT, {});
+        const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
 
         expect(result.customers[0]).toEqual({
             id: 'c1', name: 'Karim', revenue: 9_000, orders: 3, owed: 1_200,
@@ -175,7 +175,7 @@ describe('SalesDashboardService', () => {
             { created_at: new Date(2026, 7, 3, 12), total_refund: 400 },
         ]);
 
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         expect(result.points[0].net_sales).toBe(1_000);
         expect(result.points[2].net_sales).toBe(-400);
@@ -187,7 +187,7 @@ describe('SalesDashboardService', () => {
             { sale_date: new Date(2026, 7, 2, 23, 45), total_amount: 500 },
         ]);
 
-        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' });
+        const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
 
         // `toISOString()` would have filed a Dhaka 11:45pm under the 2nd's UTC
         // afternoon — right here, but wrong for any evening after 6pm.

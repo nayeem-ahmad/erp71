@@ -50,7 +50,7 @@ export class AuditController {
 
         const fromDate = from ? new Date(from) : undefined;
         const toDate = to ? new Date(to) : undefined;
-        return this.auditService.query({
+        return this.auditService.query({ timezone: tenant.timezone,
             tenantId: tenant.tenantId,
             entity,
             entityId,

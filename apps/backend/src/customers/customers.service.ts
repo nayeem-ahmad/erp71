@@ -246,6 +246,8 @@ export class CustomersService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** IANA zone the calendar-day bounds above are measured in. */
+            timezone: string;
         },
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
@@ -253,7 +255,7 @@ export class CustomersService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId, deleted_at: null };
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         if (created) where.created_at = created;
         if (opts?.search) {
             where.OR = [
@@ -584,7 +586,7 @@ export class CustomersService {
 
     async listCreditPayments(
         tenantId: string,
-        query: ListCustomerCreditPaymentsQueryDto,
+        query: ListCustomerCreditPaymentsQueryDto & { timezone: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -599,7 +601,7 @@ export class CustomersService {
             where.customer_id = query.customerId;
         }
 
-        const created = createdAtRange(query.from, query.to);
+        const created = createdAtRange(query.from, query.to, query.timezone);
         if (created) where.created_at = created;
 
         if (query.search) {

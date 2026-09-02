@@ -24,7 +24,7 @@ export class StockTakesController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
     ) {
-        return this.service.findAll(tenant.tenantId, query.page, query.limit, {
+        return this.service.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom,
             createdTo,
         });

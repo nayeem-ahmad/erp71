@@ -8,7 +8,16 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import { paginate } from '../common/pagination.dto';
-import { createdAtRange, dhakaDayRange } from '../common/created-range.util';
+import { createdAtRange } from '../common/created-range.util';
+import {
+    DEFAULT_TENANT_TIMEZONE,
+    parseTenantDateTime,
+    startOfZonedToday,
+    zonedDateString,
+    zonedDayRange,
+    zonedTodayWindow,
+} from '../common/tenant-time.util';
+import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { UNASSIGNED_OWNER_FILTER } from '../crm-leads/crm-leads.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
@@ -68,17 +77,13 @@ export type ListActivityOpts = {
     dueTo?: string;
     createdFrom?: string;
     createdTo?: string;
+    /** IANA zone the calendar-day bounds above are measured in. */
+    timezone: string;
     page?: number;
     limit?: number;
     sortBy?: string;
     sortDir?: string;
 };
-
-function startOfToday(): Date {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-}
 
 /** A Prisma `due_at` constraint. `lt` is exclusive (windows), `lte` inclusive (calendar days). */
 type DueWindow = { gte?: Date; lt?: Date; lte?: Date };
@@ -115,6 +120,7 @@ export class CrmActivitiesService {
         private readonly logger: AppLogger,
         private readonly notifications: NotificationsService,
         private readonly jobTracker: JobTrackerService,
+        private readonly timezones: TenantTimezoneService,
     ) {}
 
     /**
@@ -175,7 +181,7 @@ export class CrmActivitiesService {
         return purpose;
     }
 
-    async create(tenantId: string, userId: string, dto: CreateCrmActivityDto) {
+    async create(tenantId: string, userId: string, dto: CreateCrmActivityDto, timezone: string) {
         const target = await this.resolveTarget(tenantId, dto.lead_id, dto.customer_id);
         const status = dto.status ?? 'PLANNED';
 
@@ -198,7 +204,7 @@ export class CrmActivitiesService {
                 ...target,
                 subject: dto.subject ?? null,
                 status,
-                due_at: dto.due_at ? new Date(dto.due_at) : null,
+                due_at: parseTenantDateTime(dto.due_at, timezone),
                 completed_at: status === 'DONE' ? now : null,
                 purpose_id: purpose?.id ?? null,
                 channel_id: channel?.id ?? null,
@@ -257,21 +263,18 @@ export class CrmActivitiesService {
         if (opts.leadOwner === UNASSIGNED_OWNER_FILTER) where.lead = { assigned_to: null };
         else if (opts.leadOwner) where.lead = { assigned_to: opts.leadOwner };
 
-        let due = dhakaDayRange(opts.dueFrom, opts.dueTo) as DueWindow | undefined;
+        let due = zonedDayRange(opts.dueFrom, opts.dueTo, opts.timezone) as DueWindow | undefined;
         if (opts.dueToday) {
-            const today = startOfToday();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
             where.status = 'PLANNED';
-            due = intersectDueWindow(due, { gte: today, lt: tomorrow });
+            due = intersectDueWindow(due, zonedTodayWindow(opts.timezone));
         }
         if (opts.overdue) {
             where.status = 'PLANNED';
-            due = intersectDueWindow(due, { lt: startOfToday() });
+            due = intersectDueWindow(due, { lt: startOfZonedToday(opts.timezone) });
         }
         if (due) where.due_at = due;
 
-        const created = createdAtRange(opts.createdFrom, opts.createdTo);
+        const created = createdAtRange(opts.createdFrom, opts.createdTo, opts.timezone);
         if (created) where.created_at = created;
 
         const [items, total] = await Promise.all([
@@ -302,7 +305,7 @@ export class CrmActivitiesService {
         return activity;
     }
 
-    async update(tenantId: string, id: string, dto: UpdateCrmActivityDto) {
+    async update(tenantId: string, id: string, dto: UpdateCrmActivityDto, timezone: string) {
         const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
         if (!existing) throw new NotFoundException('Activity not found');
         if (existing.status !== 'PLANNED') {
@@ -312,7 +315,7 @@ export class CrmActivitiesService {
         const purpose = await this.resolvePurpose(tenantId, dto.purpose);
         const data: any = {};
         if (dto.subject !== undefined) data.subject = dto.subject;
-        if (dto.due_at !== undefined) data.due_at = dto.due_at ? new Date(dto.due_at) : null;
+        if (dto.due_at !== undefined) data.due_at = parseTenantDateTime(dto.due_at, timezone);
         if (dto.notes !== undefined) data.notes = dto.notes;
         if (dto.assigned_to !== undefined) data.assigned_to = dto.assigned_to;
         if (purpose) data.purpose_id = purpose.id;
@@ -339,7 +342,13 @@ export class CrmActivitiesService {
      * completing a follow-up and logging the call it produced were two writes to
      * two tables with nothing linking them.
      */
-    async complete(tenantId: string, userId: string, id: string, dto: CompleteCrmActivityDto) {
+    async complete(
+        tenantId: string,
+        userId: string,
+        id: string,
+        dto: CompleteCrmActivityDto,
+        timezone: string,
+    ) {
         const existing = await this.db.crmActivity.findFirst({
             where: { id, tenant_id: tenantId },
         });
@@ -386,7 +395,7 @@ export class CrmActivitiesService {
                         ...target,
                         subject: dto.next.subject,
                         status: 'PLANNED',
-                        due_at: new Date(dto.next.due_at),
+                        due_at: parseTenantDateTime(dto.next.due_at, timezone),
                         // Inherit the purpose and assignee of the activity being
                         // closed unless the caller overrode them — chasing the
                         // same invoice is still a COLLECTION.
@@ -496,10 +505,8 @@ export class CrmActivitiesService {
         return { success: true };
     }
 
-    async summary(tenantId: string) {
-        const today = startOfToday();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+    async summary(tenantId: string, timezone: string) {
+        const { gte: today, lt: tomorrow } = zonedTodayWindow(timezone);
 
         const [dueToday, overdue, total] = await Promise.all([
             this.db.crmActivity.count({
@@ -539,17 +546,40 @@ export class CrmActivitiesService {
     }
 
     private async autoCreateBirthdayActivitiesImpl() {
-        const today = new Date();
+        const now = new Date();
 
-        const birthdayCustomers = await this.db.$queryRaw<
-            { id: string; tenant_id: string; name: string }[]
-        >`
-            SELECT id, tenant_id, name FROM "Customer"
-            WHERE deleted_at IS NULL
-              AND birthday IS NOT NULL
-              AND EXTRACT(MONTH FROM birthday) = ${today.getMonth() + 1}
-              AND EXTRACT(DAY FROM birthday) = ${today.getDate()}
-        `;
+        // Whose birthday it is depends on whose calendar you read. The job fires
+        // once, but tenants either side of a date line are on different days at
+        // that moment, so the sweep is grouped by local date rather than run
+        // against one server-side `today`. In practice this is one or two dates.
+        const tenants = await this.db.tenant.findMany({
+            where: { deleted_at: null },
+            select: { id: true },
+        });
+        const zones = await this.timezones.forMany(tenants.map((t) => t.id));
+
+        const tenantsByLocalDate = new Map<string, string[]>();
+        for (const [tenantId, zone] of zones) {
+            const localDate = zonedDateString(now, zone);
+            const bucket = tenantsByLocalDate.get(localDate);
+            if (bucket) bucket.push(tenantId);
+            else tenantsByLocalDate.set(localDate, [tenantId]);
+        }
+
+        const birthdayCustomers: { id: string; tenant_id: string; name: string }[] = [];
+        for (const [localDate, tenantIds] of tenantsByLocalDate) {
+            const [, month, day] = localDate.split('-').map(Number);
+            birthdayCustomers.push(
+                ...(await this.db.$queryRaw<{ id: string; tenant_id: string; name: string }[]>`
+                    SELECT id, tenant_id, name FROM "Customer"
+                    WHERE deleted_at IS NULL
+                      AND birthday IS NOT NULL
+                      AND tenant_id = ANY(${tenantIds})
+                      AND EXTRACT(MONTH FROM birthday) = ${month}
+                      AND EXTRACT(DAY FROM birthday) = ${day}
+                `),
+            );
+        }
 
         let created = 0;
         for (const [tenantId, customers] of this.groupByTenant(birthdayCustomers)) {
@@ -557,6 +587,10 @@ export class CrmActivitiesService {
             // over every tenant's whole customer base.
             const purposeId = await this.cronPurposeId(tenantId, 'BIRTHDAY');
             if (!purposeId) continue;
+
+            // The greeting is due on the tenant's own day, not at the instant the
+            // job happened to run.
+            const today = startOfZonedToday(zones.get(tenantId) ?? DEFAULT_TENANT_TIMEZONE, now);
 
             for (const c of customers) {
                 const existing = await this.db.crmActivity.findFirst({

@@ -482,7 +482,7 @@ export class SuppliersService {
 
     async listCreditPayments(
         tenantId: string,
-        query: ListSupplierCreditPaymentsQueryDto,
+        query: ListSupplierCreditPaymentsQueryDto & { timezone: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -497,7 +497,7 @@ export class SuppliersService {
             where.supplier_id = query.supplierId;
         }
 
-        const created = createdAtRange(query.from, query.to);
+        const created = createdAtRange(query.from, query.to, query.timezone);
         if (created) where.created_at = created;
 
         if (query.search) {

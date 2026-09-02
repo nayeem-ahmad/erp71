@@ -52,7 +52,7 @@ export class CrmContactsController {
 
     @Get()
     findAll(@Tenant() tenant: TenantContext, @Query() query: ListContactsDto) {
-        return this.service.findAll(tenant.tenantId, query);
+        return this.service.findAll(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get(':id')

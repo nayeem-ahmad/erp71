@@ -16,6 +16,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getCrmDashboardOverview: jest.fn(),
         getCrmDashboardTrends: jest.fn(),
+        getCrmDashboardActivityHeatmap: jest.fn(),
     },
 }));
 
@@ -69,11 +70,23 @@ const overview = (patch: Record<string, unknown> = {}) => ({
 
 const identity = { greeting: 'Good morning 👋', tenantName: 'Pipeline Co', renewalEnd: null };
 
+/** A fortnight of squares, with one busy Monday in the middle of it. */
+const heatmap = () => {
+    const points = Array.from({ length: 14 }, (_, index) => ({
+        date: new Date(Date.UTC(2026, 6, 5 + index)).toISOString().slice(0, 10),
+        done: 0,
+        planned: 0,
+    }));
+    points[1] = { ...points[1], done: 4, planned: 2 };
+    return { filters: { from: points[0].date, to: points.at(-1)!.date }, points, max: { done: 4, planned: 2 }, totals: { done: 4, planned: 2 } };
+};
+
 describe('CrmDashboard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (api.getCrmDashboardOverview as jest.Mock).mockResolvedValue(overview());
         (api.getCrmDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
+        (api.getCrmDashboardActivityHeatmap as jest.Mock).mockResolvedValue(heatmap());
     });
 
     it('renders the pipeline KPIs once the overview lands', async () => {
@@ -183,6 +196,30 @@ describe('CrmDashboard', () => {
         render(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('CRM is down')).toBeInTheDocument();
+    });
+
+    it('draws the activity calendar on its own window, not the range switcher\'s', async () => {
+        render(<CrmDashboard {...identity} />);
+
+        expect(await screen.findByText('Activity calendar')).toBeInTheDocument();
+        expect(await screen.findAllByTestId('heatmap-cell-done')).toHaveLength(14);
+        expect(screen.getAllByTestId('heatmap-cell-planned')).toHaveLength(14);
+
+        // The window it asked for is its own — whole weeks either side of today,
+        // never the `today` the tabs default to.
+        const [window] = (api.getCrmDashboardActivityHeatmap as jest.Mock).mock.calls[0];
+        expect(new Date(`${window.from}T00:00:00Z`).getUTCDay()).toBe(0);
+        expect(new Date(`${window.to}T00:00:00Z`).getUTCDay()).toBe(6);
+    });
+
+    it('keeps painting when the activity calendar fails', async () => {
+        (api.getCrmDashboardActivityHeatmap as jest.Mock).mockRejectedValue(new Error('nope'));
+
+        render(<CrmDashboard {...identity} />);
+
+        expect(await screen.findByText('75%')).toBeInTheDocument();
+        expect(await screen.findByText('Nothing logged or planned in this window')).toBeInTheDocument();
+        expect(screen.queryByText('CRM figures are unavailable right now.')).not.toBeInTheDocument();
     });
 
     it('drops the greeting when embedded under the CRM hub header', async () => {

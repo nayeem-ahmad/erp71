@@ -8,10 +8,14 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { DatabaseService } from '../database/database.service';
+import { TenantTimezoneService } from './tenant-timezone.service';
 
 @Injectable()
 export class TenantInterceptor implements NestInterceptor {
-    constructor(private db: DatabaseService) { }
+    constructor(
+        private db: DatabaseService,
+        private timezones: TenantTimezoneService,
+    ) { }
 
     async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
         const request = context.switchToHttp().getRequest();
@@ -34,7 +38,11 @@ export class TenantInterceptor implements NestInterceptor {
                     user_id: userId,
                     tenant: { deleted_at: null },
                 },
-                select: { tenant_id: true, role: true },
+                // `timezone` rides along on a query that already runs. It is
+                // needed by nearly every endpoint downstream, so fetching it
+                // here costs a column on an existing join rather than a second
+                // round trip per request.
+                select: { tenant_id: true, role: true, tenant: { select: { timezone: true } } },
             });
 
             if (!membership) {
@@ -49,16 +57,18 @@ export class TenantInterceptor implements NestInterceptor {
 
             resolvedTenantId = tenantId as string;
             request.userRole = membership.role;
+            request.timezone = membership.tenant?.timezone ?? undefined;
         } else {
             const memberships = await this.db.tenantUser.findMany({
                 where: { user_id: userId, tenant: { deleted_at: null } },
-                select: { tenant_id: true, role: true },
+                select: { tenant_id: true, role: true, tenant: { select: { timezone: true } } },
                 take: 2,
             });
 
             if (memberships.length === 1) {
                 resolvedTenantId = memberships[0].tenant_id;
                 request.userRole = memberships[0].role;
+                request.timezone = memberships[0].tenant?.timezone ?? undefined;
             } else if (memberships.length > 1) {
                 throw new BadRequestException('Tenant context is required for this request.');
             } else {
@@ -67,6 +77,9 @@ export class TenantInterceptor implements NestInterceptor {
         }
 
         request.tenantId = resolvedTenantId;
+        // Seeds the shared cache so the cron paths and any service that resolves
+        // the zone by tenant id get this request's read for free.
+        if (request.timezone) this.timezones.prime(resolvedTenantId, request.timezone);
 
         // --- Resolve & validate store ---
         const isOwner = request.userRole === 'OWNER';

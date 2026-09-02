@@ -45,7 +45,7 @@ export const SALES_TOOLS: ChatTool[] = [
                     from: args.from,
                     to: args.to,
                     storeId,
-                });
+                }, ctx.timezone);
                 return {
                     ...(note ? { note } : {}),
                     period: { from: args.from, to: args.to },
@@ -60,7 +60,7 @@ export const SALES_TOOLS: ChatTool[] = [
                 storeId,
                 granularity: 'day',
                 compareTo,
-            });
+            }, ctx.timezone);
             const comparison = trend.comparison as any;
             return {
                 ...(note ? { note } : {}),
@@ -119,7 +119,7 @@ export const SALES_TOOLS: ChatTool[] = [
                 storeId,
                 granularity,
                 compareTo: asComparison(args.compareTo),
-            });
+            }, ctx.timezone);
 
             const buckets = result.buckets as any[];
             const withActivity = buckets.filter((b) => b.transactions > 0);
@@ -205,7 +205,7 @@ export const SALES_TOOLS: ChatTool[] = [
                 // The service pages the projected rows; ask it for the full
                 // ranking so the cap here is the only one that applies.
                 limit: 500,
-            });
+            }, ctx.timezone);
 
             const paged = page(result.rows as any[], args);
 
@@ -278,7 +278,7 @@ export const SALES_TOOLS: ChatTool[] = [
                 dimension: args.dimension,
                 compareTo: asComparison(args.compareTo),
                 limit,
-            });
+            }, ctx.timezone);
 
             const projectMover = (m: any) => ({
                 name: m.label,
@@ -325,7 +325,7 @@ export const SALES_TOOLS: ChatTool[] = [
                 from: args.from,
                 to: args.to,
                 storeId,
-            });
+            }, ctx.timezone);
 
             const projectTally = (rows: any[], take = 8) =>
                 rows.slice(0, take).map((r) => ({

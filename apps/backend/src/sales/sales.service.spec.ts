@@ -614,7 +614,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(1);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { createdBy: 'user-42' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', createdBy: 'user-42' });
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -628,7 +628,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(2238);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { page: 3, limit: 50 });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', page: 3, limit: 50 });
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 100, take: 50 }),
@@ -640,7 +640,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { search: 'XR-26' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', search: 'XR-26' });
 
       const { where } = db.sale.findMany.mock.calls[0][0];
       expect(where.OR).toEqual([
@@ -656,7 +656,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { status: 'DELIVERY_PENDING, AWAITING_DELIVERY' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', status: 'DELIVERY_PENDING, AWAITING_DELIVERY' });
 
       const { where } = db.sale.findMany.mock.calls[0][0];
       expect(where.status).toEqual({ in: ['DELIVERY_PENDING', 'AWAITING_DELIVERY'] });
@@ -667,7 +667,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { status: 'COMPLETED' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', status: 'COMPLETED' });
 
       const { where } = db.sale.findMany.mock.calls[0][0];
       expect(where.status).toBe('COMPLETED');
@@ -678,7 +678,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { sortBy: 'tenant_id', sortDir: 'asc' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'tenant_id', sortDir: 'asc' });
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: { created_at: 'desc' } }),
@@ -690,7 +690,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { sortBy: 'total_amount', sortDir: 'asc' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'total_amount', sortDir: 'asc' });
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: { total_amount: 'asc' } }),
@@ -702,7 +702,7 @@ describe('SalesService', () => {
       db.sale.count.mockResolvedValue(0);
       db.voucher.findMany.mockResolvedValue([]);
 
-      await service.findAll('tenant-1', { createdFrom: '2026-08-19', createdTo: '2026-08-19' });
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', createdFrom: '2026-08-19', createdTo: '2026-08-19' });
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

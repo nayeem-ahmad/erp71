@@ -14,7 +14,7 @@ import {
 export class LoansService {
     constructor(private db: DatabaseService) {}
 
-    async listLoans(tenantId: string, query: ListLoansQueryDto): Promise<PaginatedResult<any>> {
+    async listLoans(tenantId: string, query: ListLoansQueryDto & { timezone: string }): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
         const skip = (page - 1) * limit;
@@ -252,7 +252,7 @@ export class LoansService {
         return Number(aggregate._sum.amount ?? 0);
     }
 
-    private buildLoanWhere(tenantId: string, query: ListLoansQueryDto) {
+    private buildLoanWhere(tenantId: string, query: ListLoansQueryDto & { timezone: string }) {
         const where: Record<string, any> = { tenant_id: tenantId };
         if (query.direction) where.direction = query.direction;
         if (query.status) where.status = query.status;
@@ -260,7 +260,7 @@ export class LoansService {
         if (query.search?.trim()) {
             where.counterparty = { contains: query.search.trim(), mode: 'insensitive' };
         }
-        const created = createdAtRange(query.createdFrom, query.createdTo);
+        const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         if (created) where.created_at = created;
         return where;
     }

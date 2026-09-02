@@ -221,7 +221,7 @@ export class AccountingController {
 
     @Get('vouchers')
     findVouchers(@Tenant() tenant: TenantContext, @Query() query: ListVouchersQueryDto) {
-        return this.accountingService.findVouchers(tenant.tenantId, query);
+        return this.accountingService.findVouchers(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
     @Get('vouchers/next-number')

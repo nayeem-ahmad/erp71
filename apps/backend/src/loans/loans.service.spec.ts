@@ -181,7 +181,7 @@ describe('LoansService — list filters', () => {
         };
         const service = new LoansService(db as any);
 
-        await service.listLoans('tenant-1', {
+        await service.listLoans('tenant-1', { timezone: 'Asia/Dhaka',
             page: 1,
             limit: 20,
             createdFrom: '2026-08-19',

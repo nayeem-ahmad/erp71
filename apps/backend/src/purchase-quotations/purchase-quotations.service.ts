@@ -56,9 +56,9 @@ export class PurchaseQuotationsService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo);
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseQuotation.findMany({

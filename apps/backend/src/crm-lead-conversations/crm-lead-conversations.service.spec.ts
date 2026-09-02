@@ -50,12 +50,12 @@ describe('CrmLeadConversationsService', () => {
 
     describe('findAll() tenant scoping', () => {
         it('always scopes to the caller tenant', async () => {
-            await service.findAll('tenant-1', {});
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka',});
             expect(lastWhere()).toEqual({ tenant_id: 'tenant-1' });
         });
 
         it('counts with the same where clause it queries with', async () => {
-            await service.findAll('tenant-1', { type: 'CALL' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', type: 'CALL' });
             const countWhere = (db.leadConversation.count as jest.Mock).mock.calls[0][0].where;
             expect(countWhere).toEqual(lastWhere());
         });
@@ -63,7 +63,7 @@ describe('CrmLeadConversationsService', () => {
 
     describe('findAll() filters', () => {
         it('filters by type, direction and creator', async () => {
-            await service.findAll('tenant-1', {
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka',
                 type: 'CALL',
                 direction: 'INBOUND',
                 createdBy: 'user-9',
@@ -77,7 +77,7 @@ describe('CrmLeadConversationsService', () => {
         });
 
         it('searches summary, outcome, lead name and lead mobile', async () => {
-            await service.findAll('tenant-1', { search: 'deposit' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', search: 'deposit' });
             expect(lastWhere().OR).toEqual([
                 { summary: { contains: 'deposit', mode: 'insensitive' } },
                 { outcome: { contains: 'deposit', mode: 'insensitive' } },
@@ -89,7 +89,7 @@ describe('CrmLeadConversationsService', () => {
         // Two separate `where.lead = {...}` assignments would silently drop the first
         // filter with no error, so assert both survive together.
         it('merges leadStatus and leadAssignedTo into a single lead filter', async () => {
-            await service.findAll('tenant-1', {
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka',
                 leadStatus: 'QUALIFIED',
                 leadAssignedTo: 'user-3',
             });
@@ -97,19 +97,19 @@ describe('CrmLeadConversationsService', () => {
         });
 
         it('omits the lead filter entirely when neither lead field is set', async () => {
-            await service.findAll('tenant-1', { type: 'SMS' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', type: 'SMS' });
             expect(lastWhere().lead).toBeUndefined();
         });
 
         it('leaves out absent filters rather than sending undefined', async () => {
-            await service.findAll('tenant-1', { type: undefined, search: '' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', type: undefined, search: '' });
             expect(lastWhere()).toEqual({ tenant_id: 'tenant-1' });
         });
     });
 
     describe('findAll() date range', () => {
         it('treats a bare dateTo as inclusive of that whole day', async () => {
-            await service.findAll('tenant-1', { dateFrom: '2026-07-01', dateTo: '2026-07-05' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', dateFrom: '2026-07-01', dateTo: '2026-07-05' });
             const createdAt = lastWhere().created_at;
             expect(createdAt.gte).toEqual(new Date('2026-07-01T00:00:00.000Z'));
             // `lte: 2026-07-05T00:00:00Z` would drop everything logged during the 5th.
@@ -118,58 +118,58 @@ describe('CrmLeadConversationsService', () => {
         });
 
         it('uses the instant as given when dateTo carries a time', async () => {
-            await service.findAll('tenant-1', { dateTo: '2026-07-05T09:30:00.000Z' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', dateTo: '2026-07-05T09:30:00.000Z' });
             const createdAt = lastWhere().created_at;
             expect(createdAt.lte).toEqual(new Date('2026-07-05T09:30:00.000Z'));
             expect(createdAt.lt).toBeUndefined();
         });
 
         it('ignores an unparseable date instead of sending Invalid Date to Prisma', async () => {
-            await service.findAll('tenant-1', { dateFrom: 'not-a-date' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', dateFrom: 'not-a-date' });
             expect(lastWhere().created_at).toBeUndefined();
         });
 
         it('supports an open-ended lower bound', async () => {
-            await service.findAll('tenant-1', { dateFrom: '2026-07-01' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', dateFrom: '2026-07-01' });
             expect(lastWhere().created_at).toEqual({ gte: new Date('2026-07-01T00:00:00.000Z') });
         });
     });
 
     describe('findAll() sorting and paging', () => {
         it('defaults to newest first', async () => {
-            await service.findAll('tenant-1', {});
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka',});
             expect(lastArgs().orderBy).toEqual({ created_at: 'desc' });
         });
 
         it('honours an allowlisted scalar sort', async () => {
-            await service.findAll('tenant-1', { sortBy: 'type', sortDir: 'asc' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'type', sortDir: 'asc' });
             expect(lastArgs().orderBy).toEqual({ type: 'asc' });
         });
 
         it('sorts by the lead name through the relation', async () => {
-            await service.findAll('tenant-1', { sortBy: 'lead', sortDir: 'desc' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'lead', sortDir: 'desc' });
             expect(lastArgs().orderBy).toEqual({ lead: { name: 'desc' } });
         });
 
         it('falls back to the default order for a non-allowlisted sort key', async () => {
-            await service.findAll('tenant-1', { sortBy: 'summary; DROP TABLE', sortDir: 'asc' });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', sortBy: 'summary; DROP TABLE', sortDir: 'asc' });
             expect(lastArgs().orderBy).toEqual({ created_at: 'desc' });
         });
 
         it('clamps limit to 100 so a caller cannot ask for the whole table', async () => {
-            await service.findAll('tenant-1', { limit: 5000 });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', limit: 5000 });
             expect(lastArgs().take).toBe(100);
         });
 
         it('skips by page', async () => {
-            await service.findAll('tenant-1', { page: 3, limit: 20 });
+            await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', page: 3, limit: 20 });
             expect(lastArgs().skip).toBe(40);
         });
 
         it('returns the pagination envelope', async () => {
             db.leadConversation.findMany.mockResolvedValueOnce([{ id: 'c1' }]);
             db.leadConversation.count.mockResolvedValueOnce(41);
-            const result = await service.findAll('tenant-1', { page: 1, limit: 20 });
+            const result = await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', page: 1, limit: 20 });
             expect(result).toEqual({ items: [{ id: 'c1' }], total: 41, page: 1, limit: 20, pages: 3 });
         });
     });
@@ -296,7 +296,7 @@ describe('CrmLeadConversationsService', () => {
         // channel list and reads a missing key as zero.
         it('keys the breakdown only by channels that actually occur', async () => {
             db.leadConversation.groupBy.mockResolvedValue([]);
-            const result = await service.getSummary('tenant-1', {});
+            const result = await service.getSummary('tenant-1', { timezone: 'Asia/Dhaka',});
             expect(result.countsByType).toEqual({});
         });
 
@@ -309,7 +309,7 @@ describe('CrmLeadConversationsService', () => {
                     ])
                     : Promise.resolve([]),
             );
-            const result = await service.getSummary('tenant-1', {});
+            const result = await service.getSummary('tenant-1', { timezone: 'Asia/Dhaka',});
             expect(result.countsByType.CALL).toBe(7);
             expect(result.countsByType.VISIT).toBe(2);
             expect(result.countsByType.SMS).toBeUndefined();
@@ -321,13 +321,13 @@ describe('CrmLeadConversationsService', () => {
                     ? Promise.resolve([{ lead_id: 'l1' }, { lead_id: 'l2' }, { lead_id: 'l3' }])
                     : Promise.resolve([]),
             );
-            const result = await service.getSummary('tenant-1', {});
+            const result = await service.getSummary('tenant-1', { timezone: 'Asia/Dhaka',});
             expect(result.leadsTouched).toBe(3);
             expect(db.leadConversation.findMany).not.toHaveBeenCalled();
         });
 
         it('applies the same filters as the list, so tiles describe the filtered set', async () => {
-            await service.getSummary('tenant-1', { type: 'CALL', leadStatus: 'QUALIFIED' });
+            await service.getSummary('tenant-1', { timezone: 'Asia/Dhaka', type: 'CALL', leadStatus: 'QUALIFIED' });
             const where = (db.leadConversation.count as jest.Mock).mock.calls[0][0].where;
             expect(where).toMatchObject({
                 tenant_id: 'tenant-1',
@@ -338,7 +338,7 @@ describe('CrmLeadConversationsService', () => {
 
         // The 7-day count must never exceed the total above it in the UI.
         it('intersects the 7-day window with an explicit date filter instead of replacing it', async () => {
-            await service.getSummary('tenant-1', { dateFrom: '2026-01-01', dateTo: '2026-01-31' });
+            await service.getSummary('tenant-1', { timezone: 'Asia/Dhaka', dateFrom: '2026-01-01', dateTo: '2026-01-31' });
             const weekWhere = (db.leadConversation.count as jest.Mock).mock.calls[1][0].where;
             expect(weekWhere.created_at).toEqual({
                 gte: new Date('2026-01-01T00:00:00.000Z'),
