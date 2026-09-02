@@ -258,7 +258,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_CONSOLIDATED_REPORTS]: "View consolidated reports",
   [StorePermission.MANAGE_USERS]: "Manage team members",
   [StorePermission.MANAGE_USER_STORE_ACCESS]: "Manage branch access",
-  [StorePermission.MANAGE_STORES]: "Rename stores",
+  [StorePermission.MANAGE_STORES]: "Add and rename branches",
   [StorePermission.MANAGE_COUNTERS]: "Manage POS counters",
   [StorePermission.VIEW_CRM_INTERACTIONS]: "View CRM interactions",
   [StorePermission.CREATE_CRM_INTERACTIONS]: "Log CRM interactions",
