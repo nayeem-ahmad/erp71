@@ -8,6 +8,14 @@ interface ProductSearchProps {
         product: any,
         options: { quantity: number; price: number; availableQty: number },
     ) => void;
+    /** What the staged amount means for this document — a cost, not a price, on a purchase. */
+    priceLabel?: string;
+    placeholder?: string;
+    /**
+     * Seed for the staged amount. Defaults to the product's sale price; a
+     * purchase passes the cost it wants to start from instead.
+     */
+    initialPriceOf?: (product: any) => number;
 }
 
 /** Stock on hand across every warehouse the product is stocked in. */
@@ -16,7 +24,12 @@ export function availableQtyOf(product: any): number {
     return product.stocks.reduce((sum: number, stock: any) => sum + Number(stock.quantity || 0), 0);
 }
 
-export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
+export default function ProductSearch({
+    onProductSelect,
+    priceLabel = 'Unit Price',
+    placeholder = 'Add product — search by name, SKU, or code…',
+    initialPriceOf,
+}: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -78,7 +91,8 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
 
     const handleSelectProduct = (product: any) => {
         setStaged(product);
-        setStagedPrice(String(Number(product.price) || 0));
+        const seededPrice = initialPriceOf ? initialPriceOf(product) : Number(product.price);
+        setStagedPrice(String(Number.isFinite(seededPrice) ? seededPrice : 0));
         setStagedQty('1');
         setQuery('');
         setShowDropdown(false);
@@ -155,7 +169,7 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                     }}
                     onFocus={() => setShowDropdown(true)}
                     onKeyDown={handleSearchKeyDown}
-                    placeholder="Add product — search by name, SKU, or code…"
+                    placeholder={placeholder}
                     className="w-full ps-8 pe-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 />
 
@@ -225,7 +239,7 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                         </div>
                     </div>
                     <label className="flex flex-col gap-0.5">
-                        <span className="text-[11px] text-gray-500">Unit Price</span>
+                        <span className="text-[11px] text-gray-500">{priceLabel}</span>
                         <input
                             ref={priceRef}
                             type="number"

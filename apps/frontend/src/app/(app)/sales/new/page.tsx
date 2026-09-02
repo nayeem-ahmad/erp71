@@ -5,7 +5,7 @@ import { Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { toDatetimeLocal } from '@/lib/format';
-import { availableQtyOf } from '../components/ProductSearch';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import SaleEntryLayout, {
     computeSaleTotals,

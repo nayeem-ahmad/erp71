@@ -16,7 +16,7 @@ import SaleEntryLayout, {
     EMPTY_ADJUSTMENTS,
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
-import { availableQtyOf } from '../components/ProductSearch';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { toast } from '@/lib/toast';
 

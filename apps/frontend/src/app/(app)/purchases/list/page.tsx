@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ClipboardList, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import CreatePurchaseModal from '../CreatePurchaseModal';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 
@@ -44,21 +44,23 @@ const columnHelper = createColumnHelper<Purchase>();
 
 export default function PurchasesPage() {
     const { t, locale } = useI18n();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         loadPurchases();
     }, [createdRange]);
 
+    // Recording a purchase is its own screen now; keep the old ?new=1 deep
+    // link (bookmarks, voice navigation) working by forwarding it there.
     useEffect(() => {
         if (searchParams.get('new') === '1') {
-            setIsModalOpen(true);
+            router.replace(routes.purchases.newPurchase);
         }
-    }, [searchParams]);
+    }, [router, searchParams]);
 
     const loadPurchases = async () => {
         setLoading(true);
@@ -165,20 +167,14 @@ export default function PurchasesPage() {
                         'purchases',
                     )}
                     actions={(
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
+                        <Link
+                            href={routes.purchases.newPurchase}
+                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
                         >
                             <Plus className="w-4 h-4 me-2" />
                             {t.purchases.recordPurchase}
-                        </button>
+                        </Link>
                     )}
-                />
-
-                <CreatePurchaseModal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    onSuccess={loadPurchases}
                 />
 
                 <div className="flex flex-wrap items-center gap-2">

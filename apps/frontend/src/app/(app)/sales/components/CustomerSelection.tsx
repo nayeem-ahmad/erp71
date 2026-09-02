@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { useDismissOnClickOutside } from '@/lib/click-outside';
-import { X, Search } from 'lucide-react';
+import PartySearchSelect, {
+    PartySummaryLine,
+    type PartyOption,
+} from '@/components/document-entry/PartySearchSelect';
 
 interface CustomerSelectionProps {
     customer: any;
@@ -9,200 +11,50 @@ interface CustomerSelectionProps {
     readOnly?: boolean;
 }
 
+/** The sale's customer picker: the shared party typeahead plus credit context. */
 export default function CustomerSelection({ customer, setCustomer, readOnly = false }: CustomerSelectionProps) {
-    const [query, setQuery] = useState('');
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
-    const [showDropdown, setShowDropdown] = useState(false);
+    const [customers, setCustomers] = useState<PartyOption[]>([]);
     const [loading, setLoading] = useState(false);
-    const [highlight, setHighlight] = useState(0);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
         // Nothing to pick from when the sale is only being viewed.
-        if (!readOnly) loadCustomers();
+        if (readOnly) return;
+
+        let cancelled = false;
+        setLoading(true);
+        api.getCustomers()
+            .then((data: PartyOption[]) => { if (!cancelled) setCustomers(data ?? []); })
+            .catch((error: unknown) => console.error('Failed to load customers', error))
+            .finally(() => { if (!cancelled) setLoading(false); });
+
+        return () => { cancelled = true; };
     }, [readOnly]);
 
-    const loadCustomers = async () => {
-        try {
-            setLoading(true);
-            const data = await api.getCustomers();
-            setCustomers(data);
-        } catch (error) {
-            console.error('Failed to load customers', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        const filtered = customers.filter((c) =>
-            c.name.toLowerCase().includes(query.toLowerCase()) ||
-            (c.phone?.includes(query) ?? false)
-        );
-        setFilteredCustomers(filtered);
-        setHighlight(0);
-    }, [query, customers]);
-
-    // Keep the highlighted row visible while arrowing through a long list.
-    useEffect(() => {
-        optionRefs.current[highlight]?.scrollIntoView({ block: 'nearest' });
-    }, [highlight]);
-
-    const isInside = useCallback(
-        (target: Node) =>
-            !!(
-                dropdownRef.current?.contains(target)
-                || inputRef.current?.contains(target)
-            ),
-        [],
-    );
-    useDismissOnClickOutside(showDropdown, isInside, () => setShowDropdown(false));
-
-    const handleSelectCustomer = (cust: any) => {
-        setCustomer(cust);
-        setQuery('');
-        setShowDropdown(false);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!showDropdown || filteredCustomers.length === 0) {
-            if (e.key === 'ArrowDown') {
-                setShowDropdown(true);
-                e.preventDefault();
-            }
-            return;
-        }
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlight((i) => (i + 1) % filteredCustomers.length);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlight((i) => (i - 1 + filteredCustomers.length) % filteredCustomers.length);
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            const cust = filteredCustomers[highlight];
-            if (cust) handleSelectCustomer(cust);
-        } else if (e.key === 'Escape') {
-            setShowDropdown(false);
-        }
-    };
-
-    const handleClearCustomer = () => {
-        setCustomer(null);
-        setQuery('');
-    };
-
-    if (readOnly) {
-        return (
-            <div className="rounded border bg-gray-50 px-2.5 py-1.5">
-                <div className="text-sm font-medium text-gray-900">
-                    {customer?.name ?? <span className="text-gray-400">Walk-in customer</span>}
-                </div>
-                {customer && (
-                    <div className="text-xs text-gray-500">
-                        {customer.phone}
-                        {customer.address ? ` · ${customer.address}` : ''}
-                    </div>
-                )}
-            </div>
-        );
-    }
-
     return (
-        <div className="flex flex-col gap-1">
-            <div className="relative">
-                <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => {
-                        setQuery(e.target.value);
-                        setShowDropdown(true);
-                    }}
-                    onFocus={() => setShowDropdown(true)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={customer ? customer.name : 'Customer — search by name or phone…'}
-                    className="w-full ps-8 pe-8 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+        <PartySearchSelect
+            parties={customers}
+            loading={loading}
+            selected={customer}
+            onSelect={setCustomer}
+            readOnly={readOnly}
+            readOnlyFallback="Walk-in customer"
+            placeholder="Customer — search by name or phone…"
+            noMatchLabel="No customers found"
+            clearLabel="Remove customer"
+            summary={(cust) => (
+                <PartySummaryLine
+                    parts={[
+                        <span key="name" className="font-medium text-gray-700">{cust.name}</span>,
+                        cust.phone,
+                        cust.address,
+                        Number(cust.due_balance ?? 0) > 0
+                            ? `Due ৳${Number(cust.due_balance).toLocaleString()}`
+                            : null,
+                        cust.credit_limit ? `Limit ৳${Number(cust.credit_limit).toLocaleString()}` : null,
+                        cust.loyalty_points ? `${cust.loyalty_points} pts` : null,
+                    ]}
                 />
-                {customer && (
-                    <button
-                        type="button"
-                        onClick={handleClearCustomer}
-                        className="absolute end-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                        title="Remove customer"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                )}
-
-                {showDropdown && (
-                    <div
-                        ref={dropdownRef}
-                        className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
-                    >
-                        {loading ? (
-                            <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>
-                        ) : filteredCustomers.length === 0 ? (
-                            <div className="p-3 text-center text-gray-500 text-sm">
-                                {query ? 'No customers found' : 'Start typing to search'}
-                            </div>
-                        ) : (
-                            filteredCustomers.map((cust, index) => (
-                                <div
-                                    key={cust.id}
-                                    ref={(el) => { optionRefs.current[index] = el; }}
-                                    onClick={() => handleSelectCustomer(cust)}
-                                    onMouseEnter={() => setHighlight(index)}
-                                    className={`px-3 py-2 cursor-pointer border-b last:border-b-0 ${index === highlight ? 'bg-blue-50' : ''}`}
-                                >
-                                    <div className="font-medium text-gray-900 text-sm">{cust.name}</div>
-                                    <div className="text-xs text-gray-500">
-                                        {cust.phone}
-                                        {cust.address ? ` · ${cust.address}` : ''}
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {customer && (
-                <div className="px-1 text-[11px] text-gray-500 leading-snug">
-                    <span className="font-medium text-gray-700">{customer.name}</span>
-                    {customer.phone && <span className="mx-1.5 text-gray-300">·</span>}
-                    {customer.phone && <span>{customer.phone}</span>}
-                    {customer.address ? (
-                        <>
-                            <span className="mx-1.5 text-gray-300">·</span>
-                            <span>{customer.address}</span>
-                        </>
-                    ) : null}
-                    {customer.due_balance != null && Number(customer.due_balance) > 0 ? (
-                        <>
-                            <span className="mx-1.5 text-gray-300">·</span>
-                            <span>Due ৳{Number(customer.due_balance).toLocaleString()}</span>
-                        </>
-                    ) : null}
-                    {customer.credit_limit ? (
-                        <>
-                            <span className="mx-1.5 text-gray-300">·</span>
-                            <span>Limit ৳{Number(customer.credit_limit).toLocaleString()}</span>
-                        </>
-                    ) : null}
-                    {customer.loyalty_points ? (
-                        <>
-                            <span className="mx-1.5 text-gray-300">·</span>
-                            <span>{customer.loyalty_points} pts</span>
-                        </>
-                    ) : null}
-                </div>
             )}
-        </div>
+        />
     );
 }

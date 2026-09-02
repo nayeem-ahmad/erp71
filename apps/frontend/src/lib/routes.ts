@@ -59,6 +59,7 @@ export const routes = {
     purchases: {
         root: '/purchases',
         list: '/purchases/list',
+        newPurchase: '/purchases/new',
         purchaseDetail: (id: string) => `/purchases/${id}` as const,
         purchaseInvoice: (id: string) => `/purchases/${id}/invoice` as const,
         supplierPayments: '/purchases/supplier-payments',

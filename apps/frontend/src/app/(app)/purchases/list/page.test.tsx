@@ -1,24 +1,26 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import PurchasesPage from './page';
-import { setWorkspaceItem } from '@/lib/session-store';
 
 jest.mock('@/lib/api', () => ({
     api: {
         getPurchases: jest.fn(),
-        getProducts: jest.fn(),
-        getSuppliers: jest.fn(),
-        createPurchase: jest.fn(),
     },
 }));
 
+const replace = jest.fn();
+let searchParams = new URLSearchParams();
+
 jest.mock('next/navigation', () => ({
-    useSearchParams: () => ({ get: jest.fn(() => null) }),
+    useRouter: () => ({ replace }),
+    useSearchParams: () => searchParams,
 }));
 
 describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
         const { api } = require('@/lib/api');
         api.getPurchases.mockResolvedValue([
             {
@@ -32,12 +34,6 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                 ],
             },
         ]);
-        api.getProducts.mockResolvedValue([
-            { id: 'prod-1', name: 'Coffee Beans', sku: 'CB-001', price: 10 },
-        ]);
-        api.getSuppliers.mockResolvedValue([{ id: 'sup-1', name: 'Fresh Farms' }]);
-        api.createPurchase.mockResolvedValue({ id: 'purchase-2' });
-        setWorkspaceItem('store_id', 'store-1');
     });
 
     it('renders purchases loaded from the API', async () => {
@@ -49,65 +45,17 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         });
     });
 
-    it('opens the purchase modal and posts a purchase', async () => {
-        const { api } = require('@/lib/api');
+    it('sends Record Purchase to the entry page', async () => {
         render(<PurchasesPage />);
 
-        fireEvent.click(screen.getByRole('button', { name: /record purchase/i }));
-
-        await waitFor(() => {
-            expect(screen.getByRole('heading', { name: 'Record Purchase' })).toBeInTheDocument();
-        });
-
-        fireEvent.change(screen.getByPlaceholderText(/search products by name or sku/i), {
-            target: { value: 'coffee' },
-        });
-
-        await waitFor(() => {
-            expect(screen.getAllByText('Coffee Beans').length).toBeGreaterThan(0);
-        });
-
-        fireEvent.click(screen.getAllByText('Coffee Beans')[0]);
-        fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
-
-        await waitFor(() => {
-            expect(api.createPurchase).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    storeId: 'store-1',
-                    items: [
-                        expect.objectContaining({ productId: 'prod-1', quantity: 1, unitCost: 10 }),
-                    ],
-                }),
-            );
-        });
+        const action = await screen.findByRole('link', { name: /record purchase/i });
+        expect(action).toHaveAttribute('href', '/purchases/new');
     });
 
-    it('supports inline supplier creation in the modal', async () => {
-        const { api } = require('@/lib/api');
+    it('forwards the legacy ?new=1 deep link to the entry page', async () => {
+        searchParams = new URLSearchParams('new=1');
         render(<PurchasesPage />);
 
-        fireEvent.click(screen.getByRole('button', { name: /record purchase/i }));
-        fireEvent.click(await screen.findByRole('button', { name: /new supplier/i }));
-
-        const nameInput = screen.getByPlaceholderText('Supplier name');
-        fireEvent.change(nameInput, { target: { value: 'New Source' } });
-        fireEvent.change(screen.getByPlaceholderText(/search products by name or sku/i), {
-            target: { value: 'coffee' },
-        });
-
-        await waitFor(() => {
-            expect(screen.getAllByText('Coffee Beans').length).toBeGreaterThan(0);
-        });
-
-        fireEvent.click(screen.getAllByText('Coffee Beans')[0]);
-        fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
-
-        await waitFor(() => {
-            expect(api.createPurchase).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    newSupplier: expect.objectContaining({ name: 'New Source' }),
-                }),
-            );
-        });
+        await waitFor(() => expect(replace).toHaveBeenCalledWith('/purchases/new'));
     });
 });

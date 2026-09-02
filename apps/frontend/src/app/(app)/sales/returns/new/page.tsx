@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
-import DocumentEntryLayout from '../../components/DocumentEntryLayout';
-import LineItemsTable from '../../components/LineItemsTable';
+import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
+import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import TotalsFooter from '../../components/TotalsFooter';
-import SalesHeader, { MetaField, metaFieldInputClass } from '../../components/SalesHeader';
+import DocumentMetaBar, { MetaField, metaFieldInputClass } from '@/components/document-entry/DocumentMetaBar';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import {
     applyVoiceEntryReturnQuantities,
@@ -233,7 +233,7 @@ export default function NewSalesReturnPage() {
             backHref={routes.sales.returns}
             onSubmit={handleSubmit}
             metaBar={
-                <SalesHeader
+                <DocumentMetaBar
                     docLabel="Return #"
                     currentUser={currentUser}
                     showRefNumber={false}
@@ -244,7 +244,7 @@ export default function NewSalesReturnPage() {
                             {sale?.serial_number || '—'}
                         </span>
                     </MetaField>
-                </SalesHeader>
+                </DocumentMetaBar>
             }
             picker={
                 sale ? (

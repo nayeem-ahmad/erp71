@@ -138,21 +138,20 @@ test.describe.serial('Core modules — sales, purchase, accounting, inventory', 
         await page.goto('/purchases/list');
         await expect(page.getByRole('heading', { name: /purchases/i })).toBeVisible({ timeout: 10_000 });
 
-        await page.getByRole('button', { name: /record purchase/i }).click();
+        await page.getByRole('link', { name: /record purchase/i }).click();
         await expect(page.getByRole('heading', { name: /record purchase/i })).toBeVisible({ timeout: 5_000 });
 
         const search = page.getByPlaceholder(/search products by name or sku/i);
         await search.fill(product.sku ?? product.name.slice(0, 5));
-        const productBtn = page.getByRole('button').filter({ hasText: product.name }).first();
-        await expect(productBtn).toBeVisible({ timeout: 10_000 });
-        await productBtn.click();
+        const option = page.getByText(product.name).first();
+        await expect(option).toBeVisible({ timeout: 10_000 });
+        await option.click();
+        // Picking a product stages it — the cost and quantity are confirmed first.
+        await page.getByRole('button', { name: /^add$/i }).click();
         await saveStepScreenshot(page, 'PU1-purchase-lines');
 
         await page.getByRole('button', { name: /post purchase/i }).click();
-        await page.waitForTimeout(1_500);
-        await expect(page.getByRole('heading', { name: /record purchase/i })).not.toBeVisible({
-            timeout: 10_000,
-        });
+        await expect(page).toHaveURL(/\/purchases\/list/, { timeout: 10_000 });
         await saveStepScreenshot(page, 'PU1-purchase-posted');
     });
 
