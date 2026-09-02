@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'ये घंटे आपस में टकरा रहे हैं',
         overlapPrompt: 'फिर भी दोनों प्रविष्टियाँ रखें?',
         overlapKeepBoth: 'दोनों रखें',
+
+        view: 'दृश्य',
+        viewDay: 'दिनवार दृश्य',
+        viewList: 'सूची दृश्य',
     },
 
     hourLogReport: {

@@ -1,8 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { labelClass } from './board-tasks';
+import {
+    InlineHours,
+    InlineNote,
+    RowActions,
+    type InlineFieldLabels,
+    type InlinePatch,
+    type RowActionLabels,
+} from './HourLogRowCells';
 import {
     dayHeading,
     formatDuration,
@@ -13,19 +21,13 @@ import {
     type HourLogRow,
 } from './hour-log-day';
 
-export interface DayListLabels {
+export interface DayListLabels extends InlineFieldLabels, RowActionLabels {
     today: string;
     yesterday: string;
     locale?: string;
     total: string;
-    addDescription: string;
-    logAgain: string;
-    editEntry: string;
-    deleteEntry: string;
     expand: string;
     collapse: string;
-    hours: string;
-    note: string;
     unattributed: string;
     empty: string;
     /** `{shown} of {total}` — said only when a page shows part of a day. */
@@ -57,8 +59,7 @@ interface Props {
     onLogAgain: (entry: HourLogEntry) => void;
     onEdit: (entry: HourLogEntry) => void;
     onDelete: (entry: HourLogEntry) => void;
-    /** An inline save. Rejecting restores what was on screen before. */
-    onPatch: (entry: HourLogEntry, patch: { hours?: number; note?: string }) => Promise<void>;
+    onPatch: InlinePatch;
     onOpenTask: (taskId: string) => void;
 }
 
@@ -338,189 +339,14 @@ function EntryRow({
                     onPatch={onPatch}
                 />
 
-                <div className="flex items-center gap-0.5">
-                    <button
-                        type="button"
-                        onClick={() => onLogAgain(entry)}
-                        aria-label={labels.logAgain}
-                        title={labels.logAgain}
-                        className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                        <Play className="mx-auto h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onEdit(entry)}
-                        aria-label={labels.editEntry}
-                        title={labels.editEntry}
-                        className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                        <Pencil className="mx-auto h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onDelete(entry)}
-                        aria-label={labels.deleteEntry}
-                        title={labels.deleteEntry}
-                        className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                        <Trash2 className="mx-auto h-4 w-4" aria-hidden="true" />
-                    </button>
-                </div>
+                <RowActions
+                    entry={entry}
+                    labels={labels}
+                    onLogAgain={onLogAgain}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                />
             </div>
         </div>
-    );
-}
-
-/**
- * The note, edited where it sits. An empty one reads as an invitation rather
- * than an em dash — a placeholder you can click is the difference between a
- * missing field and a dead cell.
- */
-function InlineNote({
-    entry,
-    labels,
-    editable,
-    onPatch,
-}: {
-    entry: HourLogEntry;
-    labels: DayListLabels;
-    editable: boolean;
-    onPatch: Props['onPatch'];
-}) {
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(entry.note ?? '');
-    const [saving, setSaving] = useState(false);
-
-    const commit = async () => {
-        const next = draft.trim();
-        setEditing(false);
-        if (next === (entry.note ?? '').trim()) return;
-        setSaving(true);
-        try {
-            await onPatch(entry, { note: next });
-        } catch {
-            // The page has already said what went wrong; put the stored text
-            // back rather than leaving an edit on screen that was not saved.
-            setDraft(entry.note ?? '');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (!editable || !editing) {
-        return (
-            <button
-                type="button"
-                disabled={!editable}
-                onClick={() => setEditing(true)}
-                className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-start text-sm min-h-touch md:min-h-0 ${
-                    entry.note ? 'text-gray-700' : 'text-gray-400'
-                } ${editable ? 'hover:bg-gray-100' : 'cursor-default'} ${saving ? 'opacity-60' : ''}`}
-                aria-label={labels.note}
-            >
-                {entry.note || (editable ? labels.addDescription : '—')}
-            </button>
-        );
-    }
-
-    return (
-        <input
-            autoFocus
-            value={draft}
-            maxLength={500}
-            aria-label={labels.note}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => void commit()}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') void commit();
-                if (e.key === 'Escape') {
-                    setDraft(entry.note ?? '');
-                    setEditing(false);
-                }
-            }}
-            className="min-w-0 flex-1 rounded-md border border-blue-300 bg-white px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
-    );
-}
-
-/**
- * The duration, edited in place. Saved on Enter or blur rather than on change:
- * a save-on-change number box commits `1` while somebody is still typing `12`.
- */
-function InlineHours({
-    entry,
-    hours,
-    labels,
-    editable,
-    onPatch,
-}: {
-    entry: HourLogEntry;
-    hours: number;
-    labels: DayListLabels;
-    editable: boolean;
-    onPatch: Props['onPatch'];
-}) {
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(String(hours));
-    const [saving, setSaving] = useState(false);
-
-    const commit = async () => {
-        setEditing(false);
-        const next = Number(draft);
-        if (!Number.isFinite(next) || next <= 0 || next > 24) {
-            setDraft(String(hours));
-            return;
-        }
-        if (next === hours) return;
-        setSaving(true);
-        try {
-            await onPatch(entry, { hours: next });
-        } catch {
-            setDraft(String(hours));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (!editable || !editing) {
-        return (
-            <button
-                type="button"
-                disabled={!editable}
-                onClick={() => {
-                    setDraft(String(hours));
-                    setEditing(true);
-                }}
-                aria-label={labels.hours}
-                className={`min-h-touch rounded px-1.5 text-sm font-semibold tabular-nums text-gray-900 md:min-h-0 md:py-1 ${
-                    editable ? 'hover:bg-gray-100' : 'cursor-default'
-                } ${saving ? 'opacity-60' : ''}`}
-            >
-                {formatDuration(hours)}
-            </button>
-        );
-    }
-
-    return (
-        <input
-            autoFocus
-            type="number"
-            min="0.25"
-            max="24"
-            step="0.25"
-            value={draft}
-            aria-label={labels.hours}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => void commit()}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') void commit();
-                if (e.key === 'Escape') {
-                    setDraft(String(hours));
-                    setEditing(false);
-                }
-            }}
-            className="w-20 rounded-md border border-blue-300 bg-white px-1.5 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
     );
 }

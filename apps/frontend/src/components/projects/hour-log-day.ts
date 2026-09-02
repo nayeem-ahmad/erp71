@@ -192,3 +192,28 @@ export function groupByDay(entries: HourLogEntry[]): HourLogDay[] {
     });
 }
 
+/**
+ * The calendar day a span *ends* on, given the day it began.
+ *
+ * An end earlier than its start is how the server records a sitting that ran
+ * past midnight — 22:00 to 02:00 is one late evening, filed under the evening.
+ * The flat list is the only place this matters enough to show: a row reading
+ * "22:00 → 02:00" with a single date on it is the one honest-looking way to
+ * misread four hours as minus twenty.
+ *
+ * Returns null when the span stays inside its own day, so a caller can say
+ * nothing rather than repeat the date it is already showing.
+ */
+export function spanEndDayKey(
+    dayKey: string,
+    startTime: string | null | undefined,
+    endTime: string | null | undefined,
+): string | null {
+    if (!startTime || !endTime || endTime >= startTime) return null;
+    // Stepped in UTC: the key is a calendar day, and adding a day through the
+    // local zone is how a Dhaka evening lands on the wrong date.
+    const next = new Date(`${dayKey}T00:00:00.000Z`);
+    if (Number.isNaN(next.getTime())) return null;
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+}

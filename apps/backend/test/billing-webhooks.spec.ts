@@ -4,6 +4,7 @@ import request from 'supertest';
 import { BillingController } from '../src/billing/billing.controller';
 import { BillingService } from '../src/billing/billing.service';
 import { DatabaseService } from '../src/database/database.service';
+import { TenantTimezoneService } from '../src/database/tenant-timezone.service';
 import { AuditService } from '../src/audit/audit.service';
 import { EmailService } from '../src/email/email.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
@@ -39,6 +40,18 @@ describe('Billing webhooks (HTTP)', () => {
                     },
                 },
                 CircuitBreakerRegistry,
+                // The real TenantInterceptor is declared on the controller, so
+                // Nest resolves its dependencies even though nothing here calls
+                // it. Same stub the unit controller specs use.
+                {
+                    provide: TenantTimezoneService,
+                    useValue: {
+                        for: jest.fn(async () => 'Asia/Dhaka'),
+                        forMany: jest.fn(async () => new Map()),
+                        prime: jest.fn(),
+                        invalidate: jest.fn(),
+                    },
+                },
             ],
         }).compile();
 

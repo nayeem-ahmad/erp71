@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'Estas horas se solapan',
         overlapPrompt: '¿Conservar ambas entradas de todos modos?',
         overlapKeepBoth: 'Conservar ambas',
+
+        view: 'Vista',
+        viewDay: 'Vista por día',
+        viewList: 'Vista de lista',
     },
 
     hourLogReport: {

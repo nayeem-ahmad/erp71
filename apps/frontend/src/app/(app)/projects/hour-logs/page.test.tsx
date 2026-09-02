@@ -111,6 +111,10 @@ beforeEach(() => {
         created: 0, updated: 0, skipped: 0, errors: [],
     });
     exportToCSV.mockReset();
+    // The view switcher remembers its choice, and jsdom keeps one storage
+    // for the whole file — without this, a test that switches to the list
+    // decides what every test after it opens on.
+    localStorage.clear();
 });
 
 describe('Hour logs page', () => {
@@ -228,6 +232,118 @@ describe('Hour logs page', () => {
             render(<HourLogsPage />);
 
             expect(await screen.findByText('Add description')).toBeInTheDocument();
+        });
+    });
+
+    describe('the view switcher', () => {
+        const spanned = entry({
+            start_time: '09:15',
+            end_time: '12:45',
+            started_at: null,
+            ended_at: null,
+        });
+
+        it('opens on the day ledger and swaps to the flat list on request', async () => {
+            getProjectTimeEntries.mockResolvedValue(listOf([spanned]));
+            render(<HourLogsPage />);
+
+            // The ledger heads its rows with a day; the table heads its columns.
+            await screen.findByText('Wire the meter');
+            expect(screen.queryByRole('columnheader', { name: 'Duration' })).toBeNull();
+
+            fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+
+            expect(
+                await screen.findByRole('columnheader', { name: 'Duration' }),
+            ).toBeInTheDocument();
+        });
+
+        it('gives the list a column for every field on the entry', async () => {
+            getProjectTimeEntries.mockResolvedValue(listOf([spanned]));
+            render(<HourLogsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+
+            for (const heading of [
+                'Date',
+                'Project',
+                'Task',
+                'Description',
+                'Start time',
+                'End time',
+                'Duration',
+                'Actions',
+            ]) {
+                expect(await screen.findByRole('columnheader', { name: heading })).toBeInTheDocument();
+            }
+
+            const row = (await screen.findByText('Wire the meter')).closest('tr')!;
+            // Not an exact string: the date order is the runtime locale's.
+            // The weekday is the canary — 3 Aug 2026 was a Monday, and a key
+            // read through the viewer's zone would come back as Sunday the 2nd.
+            expect(row).toHaveTextContent(/Aug/);
+            expect(row).toHaveTextContent(/2026/);
+            expect(row).toHaveTextContent('Mon');
+            expect(row).toHaveTextContent('PRJ-0001');
+            expect(row).toHaveTextContent('Fitout');
+            expect(row).toHaveTextContent('Ran the conduit');
+            expect(row).toHaveTextContent('09:15');
+            expect(row).toHaveTextContent('12:45');
+            expect(row).toHaveTextContent('3h 30m');
+        });
+
+        /**
+         * A row reading `22:00 → 02:00` under a single date is the one honest
+         * looking way to misread four hours as minus twenty.
+         */
+        it('dates the end only when the sitting ran past midnight', async () => {
+            getProjectTimeEntries.mockResolvedValue(
+                listOf([entry({ start_time: '22:00', end_time: '02:00' })]),
+            );
+            render(<HourLogsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+
+            const row = (await screen.findByText('Wire the meter')).closest('tr')!;
+            expect(row).toHaveTextContent(/4 Aug|Aug 4/);
+        });
+
+        it('keeps the three row actions the day ledger has', async () => {
+            render(<HourLogsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+
+            expect(
+                await screen.findByRole('button', { name: 'Start a timer on this again' }),
+            ).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Edit entry' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Delete entry' })).toBeInTheDocument();
+        });
+
+        it('edits a description in place from the list, as the ledger does', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            render(<HourLogsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Description' }));
+            const box = screen.getByRole('textbox', { name: 'Description' });
+            fireEvent.change(box, { target: { value: 'Pulled the cable' } });
+            fireEvent.blur(box);
+
+            await waitFor(() =>
+                expect(api.updateProjectTimeEntry).toHaveBeenCalledWith('e1', {
+                    note: 'Pulled the cable',
+                }),
+            );
+        });
+
+        it('remembers the view rather than asking for it again every visit', async () => {
+            const first = render(<HourLogsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByRole('columnheader', { name: 'Duration' });
+            first.unmount();
+
+            render(<HourLogsPage />);
+            expect(
+                await screen.findByRole('columnheader', { name: 'Duration' }),
+            ).toBeInTheDocument();
         });
     });
 

@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'Jam ini bertindih',
         overlapPrompt: 'Simpan kedua-dua entri juga?',
         overlapKeepBoth: 'Simpan kedua-duanya',
+
+        view: 'Paparan',
+        viewDay: 'Paparan harian',
+        viewList: 'Paparan senarai',
     },
 
     hourLogReport: {

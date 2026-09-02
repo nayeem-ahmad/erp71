@@ -168,13 +168,18 @@ export function resolveLocaleForFormatting(locale?: SupportedLocaleCode | string
  * an offsetless `datetime-local` is interpreted as the tenant's wall clock, so
  * reopening a follow-up must show the time it was actually scheduled for rather
  * than that instant translated into the device's zone.
+ *
+ * `timeZone` overrides the ambient one for a caller that has already resolved
+ * which zone it means. Without it the fallback is still the device zone, which
+ * is what the sales screens have always rendered in.
  */
-export function toDatetimeLocal(date: Date): string {
+export function toDatetimeLocal(date: Date, timeZone?: string): string {
     const pad = (n: number) => String(n).padStart(2, '0');
+    const zone = timeZone ?? activeTimeZone;
 
-    if (activeTimeZone) {
+    if (zone) {
         const parts = new Intl.DateTimeFormat('en-CA', {
-            timeZone: activeTimeZone,
+            timeZone: zone,
             hour12: false,
             year: 'numeric',
             month: '2-digit',

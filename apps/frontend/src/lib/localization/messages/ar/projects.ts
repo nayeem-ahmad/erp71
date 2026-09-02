@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'هذه الساعات متداخلة',
         overlapPrompt: 'هل تحتفظ بالسجلَّين رغم ذلك؟',
         overlapKeepBoth: 'احتفظ بالاثنين',
+
+        view: 'العرض',
+        viewDay: 'عرض يومي',
+        viewList: 'عرض قائمة',
     },
 
     hourLogReport: {

@@ -4,6 +4,7 @@ import {
     formatElapsed,
     groupByDay,
     projectDotClass,
+    spanEndDayKey,
     type HourLogEntry,
 } from './hour-log-day';
 
@@ -246,5 +247,24 @@ describe('dayHeading', () => {
     it('handles a month boundary crossing backwards', () => {
         const firstOfMonth = new Date(2026, 8, 1, 9, 0, 0);
         expect(dayHeading('2026-08-31', labels, firstOfMonth)).toBe('Yesterday');
+    });
+});
+
+describe('spanEndDayKey', () => {
+    it('says nothing when the span stays inside its own day', () => {
+        expect(spanEndDayKey('2026-08-18', '09:00', '17:30')).toBeNull();
+    });
+
+    it('names the next day when the sitting ran past midnight', () => {
+        expect(spanEndDayKey('2026-08-18', '22:00', '02:00')).toBe('2026-08-19');
+    });
+
+    it('steps over a month end', () => {
+        expect(spanEndDayKey('2026-08-31', '23:00', '01:00')).toBe('2026-09-01');
+    });
+
+    it('says nothing for half a span', () => {
+        expect(spanEndDayKey('2026-08-18', '22:00', null)).toBeNull();
+        expect(spanEndDayKey('2026-08-18', null, '02:00')).toBeNull();
     });
 });

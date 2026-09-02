@@ -382,6 +382,10 @@ export const projectsMessages = {
         overlapTitle: 'یہ گھنٹے آپس میں ٹکرا رہے ہیں',
         overlapPrompt: 'کیا پھر بھی دونوں اندراجات رکھیں؟',
         overlapKeepBoth: 'دونوں رکھیں',
+
+        view: 'منظر',
+        viewDay: 'روزانہ منظر',
+        viewList: 'فہرست منظر',
     },
 
     hourLogReport: {

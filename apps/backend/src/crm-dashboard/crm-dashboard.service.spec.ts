@@ -232,8 +232,8 @@ describe('CrmDashboardService', () => {
             db.lead.findMany.mockImplementation(({ where }: any) =>
                 Promise.resolve(
                     where?.status === LeadStatus.CONVERTED
-                        ? [{ closed_at: new Date(2026, 6, 3, 9, 0) }]
-                        : [{ created_at: new Date(2026, 6, 2, 23, 30) }, { created_at: new Date(2026, 6, 2, 8, 0) }],
+                        ? [{ closed_at: new Date('2026-07-03T09:00:00+06:00') }]
+                        : [{ created_at: new Date('2026-07-02T23:30:00+06:00') }, { created_at: new Date('2026-07-02T08:00:00+06:00') }],
                 ),
             );
 
@@ -246,7 +246,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('ignores rows that fall outside the requested window', async () => {
-            db.lead.findMany.mockResolvedValue([{ created_at: new Date(2026, 7, 20, 12, 0) }]);
+            db.lead.findMany.mockResolvedValue([{ created_at: new Date('2026-08-20T12:00:00+06:00') }]);
 
             const result = await service.getTrends(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
@@ -272,8 +272,8 @@ describe('CrmDashboardService', () => {
 
         it('dates each series by the column that means "this day" for it', async () => {
             activities(
-                [{ completed_at: new Date(2026, 6, 2, 14, 0) }],
-                [{ due_at: new Date(2026, 6, 4, 9, 0) }, { due_at: new Date(2026, 6, 4, 17, 0) }],
+                [{ completed_at: new Date('2026-07-02T14:00:00+06:00') }],
+                [{ due_at: new Date('2026-07-04T09:00:00+06:00') }, { due_at: new Date('2026-07-04T17:00:00+06:00') }],
             );
 
             const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
@@ -284,7 +284,7 @@ describe('CrmDashboardService', () => {
         });
 
         it('buckets a late-evening row onto that evening, not the next UTC day', async () => {
-            activities([{ completed_at: new Date(2026, 6, 3, 23, 30) }], []);
+            activities([{ completed_at: new Date('2026-07-03T23:30:00+06:00') }], []);
 
             const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');
 
@@ -312,11 +312,11 @@ describe('CrmDashboardService', () => {
         it('reports each series own busiest day, so the client can step its own ramp', async () => {
             activities(
                 [
-                    { completed_at: new Date(2026, 6, 2, 9, 0) },
-                    { completed_at: new Date(2026, 6, 2, 10, 0) },
-                    { completed_at: new Date(2026, 6, 3, 9, 0) },
+                    { completed_at: new Date('2026-07-02T09:00:00+06:00') },
+                    { completed_at: new Date('2026-07-02T10:00:00+06:00') },
+                    { completed_at: new Date('2026-07-03T09:00:00+06:00') },
                 ],
-                [{ due_at: new Date(2026, 6, 4, 9, 0) }],
+                [{ due_at: new Date('2026-07-04T09:00:00+06:00') }],
             );
 
             const result = await service.getActivityHeatmap(TENANT, { from: '2026-07-01', to: '2026-07-05' }, 'Asia/Dhaka');

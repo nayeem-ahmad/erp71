@@ -207,7 +207,7 @@ describe('InventoryDashboardService', () => {
     });
 
     it('reads the window bounds as local days, not as UTC instants', async () => {
-        const at = new Date(2026, 7, 2, 21, 30); // 9:30pm local on the 2nd
+        const at = new Date('2026-08-02T21:30:00+06:00'); // 9:30pm in Dhaka on the 2nd
         db.inventoryMovement.findMany.mockResolvedValue([{ created_at: at, quantity_delta: 7 }]);
 
         const result = await service.getTrends(TENANT, { from: '2026-08-01', to: '2026-08-03' }, 'Asia/Dhaka');
