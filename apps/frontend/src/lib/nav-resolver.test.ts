@@ -221,3 +221,28 @@ describe('nav-resolver', () => {
         expect(topLevelHrefs).not.toContain('/admin/platform-settings');
     });
 });
+describe('module-level entitlement', () => {
+    // Regression: `NAV_REGISTRY` declared `chat: { entitlement: 'teamChat' }` from
+    // the day team chat shipped, but resolution dropped the field, so the module
+    // rendered on every plan and 403'd on entry.
+    it('carries entitlement from the registry onto the resolved module', () => {
+        const layout = [
+            { id: 'chat', parentId: null, sortOrder: 0, visible: true },
+        ] as never;
+
+        const [chat] = buildNavModulesFromLayout(layout, {});
+
+        expect(chat.key).toBe('chat');
+        expect(chat.entitlement).toBe('teamChat');
+    });
+
+    it('leaves entitlement undefined for modules that declare none', () => {
+        const layout = [
+            { id: 'dashboard', parentId: null, sortOrder: 0, visible: true },
+        ] as never;
+
+        const [dashboard] = buildNavModulesFromLayout(layout, {});
+
+        expect(dashboard.entitlement).toBeUndefined();
+    });
+});

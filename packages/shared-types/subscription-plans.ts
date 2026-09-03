@@ -235,6 +235,14 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'ai',
   },
   {
+    key: 'premiumAiAnomaly',
+    type: 'boolean',
+    label: 'AI anomaly detection',
+    description: 'Flags unusual movements in sales and stock. The one AI capability held above the entry tier.',
+    defaultValue: false,
+    group: 'ai',
+  },
+  {
     key: 'premiumVoice',
     type: 'boolean',
     label: 'Voice navigation',
@@ -338,6 +346,30 @@ export const planFeaturesSchema = z
       }
     }
   });
+
+/**
+ * Keys in `features_json` that the registry does not define.
+ *
+ * `normalizePlanFeatures` and `mergeAddonFeatures` both iterate the registry and
+ * ignore anything else, so a plan or add-on carrying an unregistered key grants
+ * exactly nothing — silently. That is not hypothetical: the IMPORTS_LC add-on
+ * was sold at BDT 999/month for months while setting `premiumImports`, a key no
+ * registry entry, controller or guard has ever known about. Seeding calls this
+ * and refuses to write a row that would repeat it.
+ */
+export function unknownEntitlementKeys(features: Record<string, unknown>): string[] {
+  return Object.keys(features).filter((key) => !entitlementKeys.has(key));
+}
+
+export function assertKnownEntitlements(label: string, features: Record<string, unknown>): void {
+  const unknown = unknownEntitlementKeys(features);
+  if (unknown.length > 0) {
+    throw new Error(
+      `${label} declares entitlement key(s) absent from PLAN_ENTITLEMENT_REGISTRY: ${unknown.join(', ')}. ` +
+        'They would be dropped on merge and grant nothing. Register them or remove them.',
+    );
+  }
+}
 
 export function defaultPlanFeatures(): Record<string, boolean | number> {
   return Object.fromEntries(

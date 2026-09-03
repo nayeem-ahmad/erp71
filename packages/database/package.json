@@ -21,6 +21,7 @@
     "sync:salary-components": "tsx prisma/sync-salary-components.ts",
     "sync:support-thread-creators": "tsx prisma/sync-support-thread-creators.ts",
     "sync:lead-activity": "tsx prisma/sync-lead-activity.ts",
+    "sync:setup-fee-paid": "tsx prisma/sync-setup-fee-paid.ts",
     "backfill:product-costs": "tsx prisma/backfill-product-costs.ts",
     "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
     "retag:parties": "tsx prisma/retag-party-ledger.ts",

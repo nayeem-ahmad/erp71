@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 describe('TenantsService', () => {
     let service: TenantsService;
@@ -12,6 +13,10 @@ describe('TenantsService', () => {
             findUnique: jest.fn(),
             update: jest.fn(),
         },
+    };
+
+    const planEntitlements = {
+        assertEntitlement: jest.fn(),
     };
 
     const timezones = {
@@ -29,10 +34,49 @@ describe('TenantsService', () => {
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: TenantTimezoneService, useValue: timezones },
+                { provide: PlanEntitlementsService, useValue: planEntitlements },
             ],
         }).compile();
 
         service = module.get(TenantsService);
+    });
+
+    describe('storefront enable gate', () => {
+        it('requires premiumStorefront to switch the storefront on', async () => {
+            db.tenant.findUnique.mockResolvedValue({ storefront_enabled: false });
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateStorefrontSettings('tenant-1', { storefront_enabled: true } as never);
+
+            expect(planEntitlements.assertEntitlement).toHaveBeenCalledWith('tenant-1', 'premiumStorefront');
+        });
+
+        it('leaves a tenant whose storefront is already live alone', async () => {
+            // Grandfathering: the storefront shipped ungated, so enforcing it now
+            // must not take a live public shop offline.
+            db.tenant.findUnique.mockResolvedValue({ storefront_enabled: true });
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateStorefrontSettings('tenant-1', { storefront_enabled: true } as never);
+
+            expect(planEntitlements.assertEntitlement).not.toHaveBeenCalled();
+        });
+
+        it('always allows switching the storefront off', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateStorefrontSettings('tenant-1', { storefront_enabled: false } as never);
+
+            expect(planEntitlements.assertEntitlement).not.toHaveBeenCalled();
+        });
+
+        it('does not gate edits that leave the enabled flag alone', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateStorefrontSettings('tenant-1', { storefront_banner: 'x.png' } as never);
+
+            expect(planEntitlements.assertEntitlement).not.toHaveBeenCalled();
+        });
     });
 
     it('returns tenant localization settings', async () => {

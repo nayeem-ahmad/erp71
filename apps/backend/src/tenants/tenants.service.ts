@@ -3,6 +3,7 @@ import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import { isDashboardPreference } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { isValidTimeZone } from '../common/tenant-time.util';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
@@ -14,9 +15,32 @@ export class TenantsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly timezones: TenantTimezoneService,
+        private readonly planEntitlements: PlanEntitlementsService,
     ) {}
 
     async updateStorefrontSettings(tenantId: string, dto: StorefrontSettingsDto) {
+        // `premiumStorefront` gates *switching the storefront on*, and nothing else
+        // on this route. Two deliberate holes in that:
+        //
+        //  - A tenant whose storefront is already live keeps editing it, and keeps
+        //    it live, whatever their plan says. The storefront shipped ungated, so
+        //    enforcing it now would take a public shop offline for people who did
+        //    nothing wrong.
+        //  - Turning it *off* is always allowed. A plan gate that traps a tenant
+        //    with a storefront they cannot retract is a support ticket, not a sale.
+        //
+        // The public shopper routes in StorefrontController are untouched — they
+        // serve customers, not tenants, and must stay open.
+        if (dto.storefront_enabled === true) {
+            const current = await this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: { storefront_enabled: true },
+            });
+            if (!current?.storefront_enabled) {
+                await this.planEntitlements.assertEntitlement(tenantId, 'premiumStorefront');
+            }
+        }
+
         // Validate slug format if provided
         if (dto.storefront_slug !== undefined && dto.storefront_slug !== null && dto.storefront_slug !== '') {
             const slugRegex = /^[a-z0-9-]{1,50}$/;

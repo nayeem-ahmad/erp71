@@ -39,6 +39,16 @@ export interface ResolvedNavModule {
     soon?: boolean;
     moduleKey?: string;
     platformFeature?: 'help' | 'support';
+    /**
+     * Plan entitlement required for the whole module, from `NAV_REGISTRY`.
+     *
+     * This field used to be missing while the registry happily declared it — so
+     * `chat: { entitlement: 'teamChat' }` rendered on every plan and 403'd on
+     * entry, and every other module-level gate anyone wrote would have done the
+     * same. Subgroups and links already had `entitlement`; only the module lost
+     * it in resolution.
+     */
+    entitlement?: string;
 }
 
 function resolveLabel(messages: Record<string, unknown>, labelKey: string): string {
@@ -131,6 +141,7 @@ export function buildNavModulesFromLayout(
                 moduleKey: entry.moduleKey,
                 platformFeature: entry.platformFeature,
                 soon: entry.soon,
+                entitlement: entry.entitlement,
             });
             continue;
         }
@@ -145,6 +156,7 @@ export function buildNavModulesFromLayout(
                 moduleKey: entry.moduleKey,
                 platformFeature: entry.platformFeature,
                 soon: entry.soon,
+                entitlement: entry.entitlement,
             });
         }
     }
