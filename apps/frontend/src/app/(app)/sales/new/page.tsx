@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { toDatetimeLocal } from '@/lib/format';
-import { availableQtyOf } from '../components/ProductSearch';
+import { formatBDT, toDatetimeLocal } from '@/lib/format';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import SaleEntryLayout, {
     computeSaleTotals,
@@ -19,8 +20,15 @@ import { toast } from '@/lib/toast';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { routes } from '@/lib/routes';
+import {
+    exchangeRateOf,
+    seedFromQuotation,
+    seedFromSalesOrder,
+    type SaleSourceDocument,
+} from './source-document';
 
-export default function NewSalePage() {
+function NewSalePageContent() {
     const {
         items,
         customer,
@@ -34,6 +42,7 @@ export default function NewSalePage() {
         updateItem,
         removeItem,
         updatePayment,
+        loadCart,
         clearCart,
     } = useNewSaleCart();
 
@@ -48,9 +57,81 @@ export default function NewSalePage() {
     const printMenuRef = useRef<HTMLDivElement>(null);
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
 
+    // Set when the screen was opened by "Convert to Sale" on a quotation or a
+    // sales order. Held in state rather than read off the URL at submit time so
+    // clearing it after a successful sale also clears the banner.
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const quotationId = searchParams.get('quotationId');
+    const salesOrderId = searchParams.get('salesOrderId');
+    const [source, setSource] = useState<SaleSourceDocument | null>(null);
+    const [loadingSource, setLoadingSource] = useState(false);
+
     useEffect(() => {
         loadPageData();
     }, []);
+
+    // Seed the cart from the document being converted. Runs once per id: the
+    // user is free to edit the lines afterwards, and re-seeding would undo that.
+    useEffect(() => {
+        if (!quotationId && !salesOrderId) {
+            setSource(null);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingSource(true);
+
+        (async () => {
+            try {
+                const doc = quotationId
+                    ? await api.getQuotation(quotationId)
+                    : await api.getOrder(salesOrderId as string);
+
+                if (cancelled) return;
+
+                if (!doc) {
+                    toast.error('That document could not be found.');
+                    return;
+                }
+
+                if (quotationId && !exchangeRateOf(doc)) {
+                    // Same guard the server applies when a proforma becomes an
+                    // order: no rate means no defensible BDT figure to invoice.
+                    toast.error(
+                        `${doc.quote_number} is in ${doc.currency} but carries no exchange rate, so it cannot be converted.`,
+                    );
+                    return;
+                }
+
+                const seeded = quotationId ? seedFromQuotation(doc) : seedFromSalesOrder(doc);
+
+                loadCart({
+                    items: seeded.items,
+                    customer: seeded.customer,
+                    description: seeded.description,
+                });
+                setAdjustments(EMPTY_ADJUSTMENTS);
+                setSource(seeded.source);
+            } catch (error: any) {
+                console.error('Failed to load the document being converted', error);
+                if (!cancelled) toast.error(error.message || 'Failed to load that document');
+            } finally {
+                if (!cancelled) setLoadingSource(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [quotationId, salesOrderId, loadCart]);
+
+    /**
+     * Drop the source document once its sale has been saved. Clearing the query
+     * string is what resets `source`, so the screen is ready for the next entry
+     * instead of quietly attaching the same quotation to it.
+     */
+    const resetConversion = () => {
+        if (source) router.replace(routes.sales.new);
+    };
 
     const isInsidePrintMenu = useCallback(
         (target: Node) => !!printMenuRef.current?.contains(target),
@@ -190,6 +271,10 @@ export default function NewSalePage() {
         // (Owners have no currentUser.store_id, so don't rely on it.)
         storeId: getWorkspaceItem('store_id') || '',
         referenceNumber: refNumber || undefined,
+        // What this invoice was raised from, so the sale keeps a link back to
+        // the quotation or order it settles.
+        quotationId: source?.kind === 'quotation' ? source.id : undefined,
+        salesOrderId: source?.kind === 'salesOrder' ? source.id : undefined,
         customerId: customer?.id,
         items: items.map((item) => ({
             productId: item.productId,
@@ -225,6 +310,7 @@ export default function NewSalePage() {
             // Clear cart and show success
             clearCart();
             setAdjustments(EMPTY_ADJUSTMENTS);
+            resetConversion();
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
         } catch (error: any) {
             const errorMsg = error.message || 'Failed to create sale';
@@ -248,6 +334,7 @@ export default function NewSalePage() {
             const response = await api.createNewSale(buildSaleData(true));
             clearCart();
             setAdjustments(EMPTY_ADJUSTMENTS);
+            resetConversion();
             toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
         } catch (error: any) {
             console.error('Draft save error:', error);
@@ -257,14 +344,39 @@ export default function NewSalePage() {
         }
     };
 
-    if (loading) {
+    const sourceLabel = source?.kind === 'quotation' ? 'quotation' : 'sales order';
+
+    const conversionBanner = source ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <span>
+                Converting {sourceLabel}{' '}
+                <Link href={source.href} className="font-semibold underline">
+                    {source.number}
+                </Link>
+                . Lines and customer are prefilled — edit anything before saving.
+            </span>
+            {source.exchangeRate !== 1 && (
+                <span className="text-xs text-blue-700">
+                    Converted from {source.currency} at {source.exchangeRate}.
+                </span>
+            )}
+            {source.amountPaid > 0 && (
+                <span className="text-xs text-blue-700">
+                    Deposits already collected on this order: {formatBDT(source.amountPaid)}.
+                </span>
+            )}
+        </div>
+    ) : null;
+
+    if (loading || loadingSource) {
         return <div className="text-center py-8">Loading...</div>;
     }
 
     return (
         <SaleEntryLayout
-            title="New Sale"
-            backHref="/sales/list"
+            title={source ? `New Sale from ${source.number}` : 'New Sale'}
+            backHref={source ? source.href : routes.sales.list}
+            banner={conversionBanner}
             refNumber={refNumber}
             setRefNumber={setRefNumber}
             currentUser={currentUser}
@@ -288,7 +400,7 @@ export default function NewSalePage() {
             actions={
                 <>
                     <Link
-                        href="/sales/list"
+                        href={source ? source.href : routes.sales.list}
                         className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
                     >
                         Cancel
@@ -348,5 +460,17 @@ export default function NewSalePage() {
                 </>
             }
         />
+    );
+}
+
+/**
+ * `useSearchParams` bails out of prerendering without a Suspense boundary
+ * above it, so the screen itself is a child component.
+ */
+export default function NewSalePage() {
+    return (
+        <Suspense>
+            <NewSalePageContent />
+        </Suspense>
     );
 }

@@ -364,6 +364,52 @@ describe('fetchAllCursorPages', () => {
         expect(opts.headers.get('x-tenant-id')).toBeNull();
         expect(opts.headers.get('x-store-id')).toBeNull();
     });
+
+    // The admin console has no shop, so the project pages there are scoped to
+    // the platform's own workspace instead. Without this the request would carry
+    // no tenant at all and the backend would fall back to auto-resolving the
+    // caller's own membership — a shop's projects, shown in the platform console.
+    it('falls back to the platform workspace in the admin console', async () => {
+        localStorageMock._setAll({
+            access_token: 'tok',
+            active_context: 'platform-admin',
+            platform_workspace_id: 'platform-ws',
+        });
+        mockFetch.mockReturnValue(okJson({ data: null }));
+
+        await fetchWithAuth('/projects');
+
+        const [, opts] = mockFetch.mock.calls[0];
+        expect(opts.headers.get('x-tenant-id')).toBe('platform-ws');
+    });
+
+    it('prefers a selected shop over the platform workspace', async () => {
+        localStorageMock._setAll({
+            access_token: 'tok',
+            active_context: 'platform-admin',
+            tenant_id: 'tenant-abc',
+            platform_workspace_id: 'platform-ws',
+        });
+        mockFetch.mockReturnValue(okJson({ data: null }));
+
+        await fetchWithAuth('/projects');
+
+        const [, opts] = mockFetch.mock.calls[0];
+        expect(opts.headers.get('x-tenant-id')).toBe('tenant-abc');
+    });
+
+    it('never sends the platform workspace outside the admin console', async () => {
+        localStorageMock._setAll({
+            access_token: 'tok',
+            platform_workspace_id: 'platform-ws',
+        });
+        mockFetch.mockReturnValue(okJson({ data: null }));
+
+        await fetchWithAuth('/projects');
+
+        const [, opts] = mockFetch.mock.calls[0];
+        expect(opts.headers.get('x-tenant-id')).toBeNull();
+    });
 });
 
 // ===========================================================================

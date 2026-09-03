@@ -5,7 +5,7 @@ import {
     BUSINESS_TYPE_LABELS,
     BUSINESS_TYPE_VALUES,
     BUSINESS_TYPES_WITH_TEMPLATE,
-    PLATFORM_FEATURE_KEYS,
+    TENANT_OVERRIDABLE_FEATURE_KEYS,
 } from '@erp71/shared-types';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { Button, Field, Select, Checkbox } from '@/components/ui';
@@ -91,7 +91,7 @@ export default function ConfigurationPanel({
                 <p className="mt-0.5 text-xs text-gray-500">{fc.description}</p>
 
                 <div className="mt-3 space-y-2">
-                    {PLATFORM_FEATURE_KEYS.map((key) => {
+                    {TENANT_OVERRIDABLE_FEATURE_KEYS.map((key) => {
                         const choice = featureDraft[key];
                         const inheritedOn = features?.platform_defaults?.[key] ?? false;
                         return (

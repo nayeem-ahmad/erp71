@@ -9,14 +9,14 @@ import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatMessage } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import SaleEntryLayout, {
     computeSaleTotals,
     EMPTY_ADJUSTMENTS,
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
-import { availableQtyOf } from '../components/ProductSearch';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { toast } from '@/lib/toast';
 
@@ -311,6 +311,25 @@ function SaleDetailPageContent() {
                 >
                     {statusLabel}
                 </span>
+            )}
+
+            {/* Where this invoice came from, when it was raised by "Convert to
+                Sale" on a quotation or a sales order. */}
+            {sale.quotation && (
+                <Link
+                    href={`/sales/quotes/${sale.quotation.id}`}
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                    {formatMessage(t.sales.detail.convertedFrom, { document: sale.quotation.quote_number })}
+                </Link>
+            )}
+            {sale.salesOrder && (
+                <Link
+                    href={`/sales/orders/${sale.salesOrder.id}`}
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                    {formatMessage(t.sales.detail.convertedFrom, { document: sale.salesOrder.order_number })}
+                </Link>
             )}
 
             {isDraft && (

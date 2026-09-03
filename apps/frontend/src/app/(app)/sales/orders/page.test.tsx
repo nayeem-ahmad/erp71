@@ -16,7 +16,7 @@ jest.mock('@/lib/i18n', () => {
 }, { virtual: true });
 
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import OrdersPage from './page';
 
 jest.mock('next/navigation', () => ({
@@ -33,7 +33,9 @@ jest.mock('./StorefrontOrdersPanel', () => ({
 
 jest.mock('next/link', () => ({
     __esModule: true,
-    default: ({ children, href }: any) => <a href={href}>{children}</a>,
+    // Forwards the rest of the props: an icon-only action carries its label in
+    // `aria-label`/`title`, and a mock that drops those leaves it nameless.
+    default: ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a>,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -52,21 +54,27 @@ jest.mock('@/lib/format', () => ({
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, isLoading, emptyMessage, toolbarActions }: any) => (
-        <div data-testid="data-table">
-            {isLoading && <span>Loading...</span>}
-            {!isLoading && data.length === 0 && <span>{emptyMessage || 'No data'}</span>}
-            {!isLoading && data.map((row: any) => (
-                <div key={row.id} data-testid={`row-${row.id}`}>
-                    <span>{row.order_number}</span>
-                    <span>{row.status}</span>
-                    <span>{row.payment_status}</span>
-                    {row.customer && <span>{row.customer.name}</span>}
-                </div>
-            ))}
-            {toolbarActions && <div data-testid="toolbar">{toolbarActions}</div>}
-        </div>
-    ),
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions }: any) => {
+        // The row actions are a column definition, so render that cell too —
+        // otherwise the per-row buttons are invisible to every assertion.
+        const actions = columns?.find((column: any) => column.id === 'actions');
+        return (
+            <div data-testid="data-table">
+                {isLoading && <span>Loading...</span>}
+                {!isLoading && data.length === 0 && <span>{emptyMessage || 'No data'}</span>}
+                {!isLoading && data.map((row: any) => (
+                    <div key={row.id} data-testid={`row-${row.id}`}>
+                        <span>{row.order_number}</span>
+                        <span>{row.status}</span>
+                        <span>{row.payment_status}</span>
+                        {row.customer && <span>{row.customer.name}</span>}
+                        {actions?.cell({ row: { original: row } })}
+                    </div>
+                ))}
+                {toolbarActions && <div data-testid="toolbar">{toolbarActions}</div>}
+            </div>
+        );
+    },
 }));
 
 const mockOrders = [
@@ -198,5 +206,12 @@ describe('OrdersPage', () => {
             // The page should have some heading with "Order" in it
             expect(screen.getByRole('heading', { name: 'Sales Orders' })).toBeInTheDocument();
         });
+    });
+
+    it('offers a convert-to-sale action pointing at the seeded entry screen', async () => {
+        render(<OrdersPage />);
+        const row = await screen.findByTestId('row-ord-1');
+        const link = within(row).getByRole('link', { name: 'Convert to Sale' });
+        expect(link).toHaveAttribute('href', '/sales/new?salesOrderId=ord-1');
     });
 });

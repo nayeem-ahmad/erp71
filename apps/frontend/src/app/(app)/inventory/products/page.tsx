@@ -10,13 +10,13 @@ import AddProductModal from '../AddProductModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import CreatePurchaseModal from '../../purchases/CreatePurchaseModal';
 import ProductImage from '@/components/ProductImage';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { Button, Input, Select } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useServerList } from '@/hooks/useServerList';
+import { routes } from '@/lib/routes';
 
 interface Product {
     id: string;
@@ -47,8 +47,6 @@ export default function InventoryPage() {
     const [isImporting, setIsImporting] = useState(false);
     const csvInputRef = useRef<HTMLInputElement>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
     const [subgroups, setSubgroups] = useState<Array<{ id: string; name: string; group_id: string }>>([]);
@@ -133,11 +131,6 @@ export default function InventoryPage() {
         } catch (error: any) {
             alert(error.message || t.inventory.deleteFailed);
         }
-    };
-
-    const openAddStock = (product: Product) => {
-        setSelectedProduct(product);
-        setIsPurchaseModalOpen(true);
     };
 
     const openEditProduct = (product: Product) => {
@@ -314,13 +307,13 @@ export default function InventoryPage() {
                         >
                             <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                            onClick={() => openAddStock(info.row.original)}
+                        <Link
+                            href={`${routes.purchases.newPurchase}?productId=${info.row.original.id}&from=products`}
                             className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
                             title={t.inventory.actions.addStock}
                         >
                             <ShoppingBasket className="w-4 h-4" />
-                        </button>
+                        </Link>
                         <Link
                             href={`/inventory/transfers?productId=${info.row.original.id}`}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
@@ -523,25 +516,6 @@ export default function InventoryPage() {
                     mode="edit"
                     initialProduct={editingProduct}
                     onSubmit={handleUpdateProduct}
-                />
-
-                <CreatePurchaseModal
-                    isOpen={isPurchaseModalOpen}
-                    onClose={() => {
-                        setIsPurchaseModalOpen(false);
-                        setSelectedProduct(null);
-                    }}
-                    onSuccess={loadProducts}
-                    initialProduct={
-                        selectedProduct
-                            ? {
-                                  id: selectedProduct.id,
-                                  name: selectedProduct.name,
-                                  sku: selectedProduct.sku || '',
-                                  price: Number(selectedProduct.price || 0),
-                              }
-                            : undefined
-                    }
                 />
 
                 <DataTable<Product>

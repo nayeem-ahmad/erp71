@@ -1,13 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import DocumentEntryLayout from './DocumentEntryLayout';
+import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
+import ProductSearch from '@/components/document-entry/ProductSearch';
+import LineItemsTable from '@/components/document-entry/LineItemsTable';
+import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
 import CustomerSelection from './CustomerSelection';
-import ProductSearch from './ProductSearch';
-import LineItemsTable from './LineItemsTable';
 import TotalsFooter from './TotalsFooter';
 import PaymentSection from './PaymentSection';
-import SalesHeader from './SalesHeader';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
@@ -143,18 +143,18 @@ export default function SaleEntryLayout({
             banner={banner}
             onSubmit={onSubmit}
             metaBar={
-                <SalesHeader
+                <DocumentMetaBar
                     refNumber={refNumber}
                     setRefNumber={setRefNumber}
                     currentUser={currentUser}
-                    saleDate={saleDate}
-                    setSaleDate={setSaleDate}
+                    documentDate={saleDate}
+                    setDocumentDate={setSaleDate}
                     serialNumber={serialNumber}
                     readOnly={readOnly}
                     refReadOnly={refReadOnly}
                 />
             }
-            customerPicker={
+            partyPicker={
                 <CustomerSelection customer={customer} setCustomer={setCustomer} readOnly={readOnly} />
             }
             picker={

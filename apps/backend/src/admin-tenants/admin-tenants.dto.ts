@@ -51,11 +51,15 @@ export class UpdateAdminTenantLocalizationDto {
  * clears the override so the tenant inherits the platform default again. Keys
  * left out of the payload are untouched.
  *
- * Every key in `PLATFORM_FEATURE_KEYS` must appear here. The global pipe runs
- * with `forbidNonWhitelisted`, so a key the UI sends but this class does not
- * declare rejects the whole request — the save appears to do nothing and every
- * other feature silently reverts too. admin-tenants.dto.spec.ts pins the two
- * lists together.
+ * Every key in `TENANT_OVERRIDABLE_FEATURE_KEYS` must appear here. The global
+ * pipe runs with `forbidNonWhitelisted`, so a key the UI sends but this class
+ * does not declare rejects the whole request — the save appears to do nothing
+ * and every other feature silently reverts too. admin-tenants.dto.spec.ts pins
+ * the two lists together.
+ *
+ * Platform-scoped switches (`platformProjects`) are deliberately absent: they
+ * govern the admin console rather than a shop, so there is nothing for a single
+ * tenant to override, and `parseTenantFeatureOverrides` would drop them anyway.
  */
 export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() feedback?: boolean | null;

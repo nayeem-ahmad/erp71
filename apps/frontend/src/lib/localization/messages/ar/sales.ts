@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: 'حفظ كل التغييرات',
             saving: 'جارٍ الحفظ...',
             draftBanner: 'هذه مسودة — لم يُرحَّل شيء إلى المخزون أو الحسابات بعد.',
+            convertedFrom: 'محوَّل من {document}',
             completeSale: 'إتمام البيع',
             completing: 'جارٍ الإتمام...',
             completed: 'اكتملت المسودة — تم تحديث المخزون والحسابات.',
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: 'الطلبات الإلكترونية',
         },
         newOrder: 'طلب جديد',
+        convertToSale: 'تحويل إلى بيع',
         columns: {
             orderNumber: 'رقم الطلب',
             date: 'التاريخ',
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: 'عروض الأسعار',
         subtitle: 'أعِدّ التقديرات وتابع تواريخ انتهائها',
         newQuotation: 'عرض سعر جديد',
+        convertToSale: 'تحويل إلى بيع',
         newProforma: "فاتورة أولية جديدة",
         columns: {
             quoteNumber: 'رقم العرض',

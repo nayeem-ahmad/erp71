@@ -86,6 +86,11 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // the DB holds — every PlatformFeatures key needs an entry.
         external_import_enabled: { isSecret: false, default: 'false' },
         projects_enabled: { isSecret: false, default: 'false' },
+        // The platform team's own project workspace in the admin console. On by
+        // default: it is internal tooling for the operator, not something a
+        // customer is billed for, so this is a kill switch rather than a rollout
+        // gate. Independent of `projects_enabled`, which governs shop users.
+        platform_projects_enabled: { isSecret: false, default: 'true' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
     },
     navigation: {
