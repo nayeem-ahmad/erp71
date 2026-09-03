@@ -3,6 +3,7 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '../../../.env') });
 
 import { PrismaClient, SubscriptionPlan } from '@prisma/client';
+import { assertKnownEntitlements } from '@erp71/shared-types';
 
 /**
  * Platform reference data — the catalog rows the application itself is defined by.
@@ -75,6 +76,8 @@ export async function seedPlatformReferenceData(
         features_json: Record<string, unknown>;
         marketing_features_json?: string[];
     }) => {
+        assertKnownEntitlements(`Plan ${data.code}`, data.features_json);
+
         const isActive = data.is_active ?? true;
 
         const existing = await prisma.subscriptionPlan.findUnique({ where: { code: data.code } });
@@ -125,6 +128,7 @@ export async function seedPlatformReferenceData(
             accountingOnly: false,
             premiumAccountingAdvanced: false,
             premiumAi: false,
+            premiumAiAnomaly: false,
             premiumVoice: false,
             planRank: 0,
             aiCreditsMonthly: 0,
@@ -140,14 +144,14 @@ export async function seedPlatformReferenceData(
 
     const basic = await upsertPlan({
         code: 'BASIC',
-        name: 'Basic',
-        description: 'Core retail operations for growing single-branch businesses',
-        monthly_price: 499,
-        yearly_price: 4990,
+        name: 'Starter',
+        description: 'One counter, one owner, a couple of staff — ring up sales and know what is in stock',
+        monthly_price: 299,
+        yearly_price: 2990,
         features_json: {
             maxStores: 1,
-            maxUsers: 3,
-            maxSkus: 2000,
+            maxUsers: 2,
+            maxSkus: 500,
             premiumAccounting: false,
             premiumInventoryReports: false,
             premiumCrm: false,
@@ -155,7 +159,8 @@ export async function seedPlatformReferenceData(
             apiAccess: false,
             accountingOnly: false,
             premiumAccountingAdvanced: false,
-            premiumAi: false,
+            premiumAi: true,
+            premiumAiAnomaly: false,
             premiumVoice: false,
             planRank: 1,
             aiCreditsMonthly: 100,
@@ -189,7 +194,8 @@ export async function seedPlatformReferenceData(
             accountingOnly: true,
             accountingDashboard: true,
             premiumAccountingAdvanced: true,
-            premiumAi: false,
+            premiumAi: true,
+            premiumAiAnomaly: false,
             premiumVoice: false,
             planRank: 0,
             aiCreditsMonthly: 0,
@@ -207,14 +213,14 @@ export async function seedPlatformReferenceData(
 
     const standard = await upsertPlan({
         code: 'STANDARD',
-        name: 'Standard',
-        description: 'Advanced retail operations with multi-branch and analytics support',
+        name: 'Growth',
+        description: 'A real business with books to close, a second branch, and someone chasing customers',
         monthly_price: 999,
         yearly_price: 9990,
         features_json: {
-            maxStores: 3,
+            maxStores: 2,
             maxUsers: 10,
-            maxSkus: 20000,
+            maxSkus: 10000,
             premiumAccounting: true,
             premiumInventoryReports: true,
             premiumCrm: true,
@@ -222,10 +228,11 @@ export async function seedPlatformReferenceData(
             apiAccess: false,
             accountingOnly: false,
             premiumAccountingAdvanced: false,
-            premiumAi: false,
-            premiumVoice: false,
+            premiumAi: true,
+            premiumAiAnomaly: false,
+            premiumVoice: true,
             planRank: 2,
-            aiCreditsMonthly: 0,
+            aiCreditsMonthly: 500,
         },
         marketing_features_json: [
             'Everything in BASIC',
@@ -243,12 +250,12 @@ export async function seedPlatformReferenceData(
 
     const premium = await upsertPlan({
         code: 'PREMIUM',
-        name: 'Premium',
-        description: 'Full retail suite with advanced automation, accounting, and integrations',
-        monthly_price: 1499,
-        yearly_price: 14990,
+        name: 'Business',
+        description: 'Multi-branch operators who run payroll, manufacture, or import',
+        monthly_price: 2499,
+        yearly_price: 24990,
         features_json: {
-            maxStores: 10,
+            maxStores: 5,
             maxUsers: 30,
             maxSkus: -1,
             premiumAccounting: true,
@@ -260,6 +267,7 @@ export async function seedPlatformReferenceData(
             premiumAccountingAdvanced: true,
             premiumManufacturing: true,
             premiumAi: true,
+            premiumAiAnomaly: true,
             premiumVoice: true,
             planRank: 3,
             aiCreditsMonthly: 2000,
@@ -290,6 +298,8 @@ export async function seedPlatformReferenceData(
         sort_order: number;
         features_json: Record<string, unknown>;
     }) => {
+        assertKnownEntitlements(`Add-on ${data.code}`, data.features_json);
+
         const existing = await prisma.addonModule.findUnique({ where: { code: data.code } });
         if (!existing) {
             return prisma.addonModule.create({
@@ -328,17 +338,14 @@ export async function seedPlatformReferenceData(
         features_json: { premiumManufacturing: true },
     });
 
-    await upsertAddon({
-        code: 'IMPORTS_LC',
-        name: 'Imports (LC)',
-        description:
-            'Letter-of-credit import files, landed-cost allocation, duty and VAT tracking, and the LC register — for retailers who import rather than buy locally.',
-        category: 'operations',
-        monthly_price: 999,
-        yearly_price: 9990,
-        sort_order: 15,
-        features_json: { premiumImports: true },
-    });
+    // IMPORTS_LC is intentionally NOT seeded. It was sold at BDT 999/month while
+    // setting `premiumImports` — a key absent from PLAN_ENTITLEMENT_REGISTRY, so
+    // `mergeAddonFeatures` dropped it on every merge — and no controller has ever
+    // read it. There is also no LC or landed-cost model in the schema; `src/imports`
+    // is CSV import. It comes back when the module exists and the key is registered:
+    // see docs/lc-imports-and-proforma-invoice-plan.md and the Phase 6 table in
+    // docs/subscription-pricing-implementation-plan.md. Existing rows must be
+    // deactivated in the admin UI — this file never edits a row that already exists.
 
     await upsertAddon({
         code: 'TEAM_CHAT',

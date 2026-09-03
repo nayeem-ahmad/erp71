@@ -295,7 +295,10 @@ export default function Sidebar({
                 if (module.key === 'support') return supportEnabled;
                 if (module.key === 'manufacturing') return canAccessManufacturing;
                 if (module.key === 'projects') return canAccessProjects;
-                return true;
+                // Module-level entitlement from NAV_REGISTRY. Declared for `chat`
+                // since team chat shipped, but silently dropped in resolution until
+                // now, so the module rendered on every plan and 403'd on entry.
+                return isItemVisible(module, planFeatures);
             })
             .map((module) => {
                 if (!module.children) return module;

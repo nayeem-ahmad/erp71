@@ -157,6 +157,81 @@ describe('BillingService', () => {
         expect(upsertCall.create.payload.addon_codes).toEqual(['MANUFACTURING']);
     });
 
+    it('applies an admin-granted FIXED discount to the checkout plan price', async () => {
+        // Grandfathering works by discounting the subscription, because the price
+        // lives on the plan. Renewals honoured it already; checkout did not, so a
+        // lapsed tenant re-subscribing silently lost their old price.
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            discount_type: 'FIXED',
+            discount_value: 1000,
+        });
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+
+        await service.createCheckoutSession(tenantCtx(), {
+            planCode: 'STANDARD',
+            billingCycle: 'MONTHLY',
+        });
+
+        const upsertCall = db.billingEvent.upsert.mock.calls[0][0];
+        expect(upsertCall.create.amount).toBe(3999 - 1000);
+        expect(upsertCall.create.payload.line_items.plan.price).toBe(2999);
+    });
+
+    it('leaves add-ons out of the subscription discount', async () => {
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            discount_type: 'PERCENTAGE',
+            discount_value: 10,
+        });
+        addonModules.getActiveAddonsByCodes.mockResolvedValue([
+            { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500, yearly_price: 5000 },
+        ]);
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+
+        await service.createCheckoutSession(tenantCtx(), {
+            planCode: 'STANDARD',
+            billingCycle: 'MONTHLY',
+            addonCodes: ['manufacturing'],
+        });
+
+        const upsertCall = db.billingEvent.upsert.mock.calls[0][0];
+        // 3999 * 0.9 = 3599.10 on the plan, add-on untouched at 500.
+        expect(upsertCall.create.payload.line_items.plan.price).toBe(3599.1);
+        expect(upsertCall.create.amount).toBe(3599.1 + 500);
+    });
+
+    it('charges full price when the tenant has no admin discount', async () => {
+        db.tenantSubscription.findUnique.mockResolvedValue(null);
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+
+        await service.createCheckoutSession(tenantCtx(), {
+            planCode: 'STANDARD',
+            billingCycle: 'MONTHLY',
+        });
+
+        expect(db.billingEvent.upsert.mock.calls[0][0].create.amount).toBe(3999);
+    });
+
     it('rejects checkout when selecting the free plan', async () => {
         await expect(service.createCheckoutSession(tenantCtx(), {
             planCode: 'FREE',

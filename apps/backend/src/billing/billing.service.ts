@@ -20,6 +20,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
+import { applySubscriptionDiscount } from './discount.util';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { CircuitOpenError } from '../system-health/resilience/circuit-breaker';
 import * as Sentry from '@sentry/nestjs';
@@ -111,6 +112,28 @@ export class BillingService {
         if (referralSignup && referralSignup.status === 'PENDING' && Number(referralSignup.discount_pct) > 0) {
             const multiplier = (100 - Number(referralSignup.discount_pct)) / 100;
             planAmount = Math.round(planAmount * multiplier * 100) / 100;
+        }
+
+        // Then the admin-granted subscription discount, on the plan price only,
+        // exactly as `BillingSchedulerService` applies it on renewal. Without this
+        // a tenant grandfathered onto an old price by an admin — which is how
+        // repricing is absorbed, since the price lives on the plan and not on the
+        // subscription — pays the new full price the moment they lapse and check
+        // out again, while their scheduled renewals stay discounted. Referral
+        // first, then the admin discount, so a FIXED grant means the same taka
+        // off whatever the referral left.
+        const existingSubscription = await this.db.tenantSubscription.findUnique({
+            where: { tenant_id: ctx.tenantId },
+            select: { discount_type: true, discount_value: true },
+        });
+        if (existingSubscription) {
+            planAmount = applySubscriptionDiscount(
+                planAmount,
+                existingSubscription.discount_type,
+                existingSubscription.discount_value === null
+                    ? null
+                    : Number(existingSubscription.discount_value),
+            );
         }
 
         const addons = dto.addonCodes?.length

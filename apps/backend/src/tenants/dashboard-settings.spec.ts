@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 describe('TenantsService — dashboard settings', () => {
     let service: TenantsService;
@@ -21,6 +22,7 @@ describe('TenantsService — dashboard settings', () => {
             providers: [
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: PlanEntitlementsService, useValue: { assertEntitlement: jest.fn() } },
                 {
                     provide: TenantTimezoneService,
                     useValue: {
