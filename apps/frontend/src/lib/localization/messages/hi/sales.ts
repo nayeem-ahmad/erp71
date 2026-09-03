@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: "सभी परिवर्तन सहेजें",
             saving: "सहेजा जा रहा है...",
             draftBanner: "यह एक ड्राफ़्ट है — अभी स्टॉक या खातों में कुछ पोस्ट नहीं हुआ।",
+            convertedFrom: "{document} से परिवर्तित",
             completeSale: "बिक्री पूर्ण करें",
             completing: "पूर्ण किया जा रहा है...",
             completed: "ड्राफ़्ट पूर्ण — स्टॉक और खाते अपडेट हुए।",
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: "ऑनलाइन ऑर्डर",
         },
         newOrder: "नया ऑर्डर",
+        convertToSale: "बिक्री में बदलें",
         columns: {
             orderNumber: "ऑर्डर #",
             date: "तिथि",
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: "बिक्री कोटेशन",
         subtitle: "अनुमान बनाएँ और समाप्ति पर नज़र रखें",
         newQuotation: "नया कोटेशन",
+        convertToSale: "बिक्री में बदलें",
         newProforma: "नया प्रोफ़ॉर्मा इनवॉइस",
         columns: {
             quoteNumber: "कोट #",

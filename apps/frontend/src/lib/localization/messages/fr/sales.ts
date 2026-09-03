@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: "Enregistrer toutes les modifications",
             saving: "Enregistrement...",
             draftBanner: "Ceci est un brouillon — rien n'a encore été imputé au stock ni aux comptes.",
+            convertedFrom: "Converti depuis {document}",
             completeSale: "Finaliser la vente",
             completing: "Finalisation...",
             completed: "Brouillon finalisé — stock et comptes mis à jour.",
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: "Commandes en ligne",
         },
         newOrder: "Nouvelle commande",
+        convertToSale: "Convertir en vente",
         columns: {
             orderNumber: "N° de commande",
             date: "Date",
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: "Devis clients",
         subtitle: "Établissez des estimations et suivez les échéances",
         newQuotation: "Nouveau devis",
+        convertToSale: "Convertir en vente",
         newProforma: "Nouvelle facture proforma",
         columns: {
             quoteNumber: "N° de devis",

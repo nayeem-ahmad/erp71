@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: "Guardar todos los cambios",
             saving: "Guardando...",
             draftBanner: "Esto es un borrador: aún no se ha contabilizado nada en existencias ni en cuentas.",
+            convertedFrom: "Convertido desde {document}",
             completeSale: "Completar la venta",
             completing: "Completando...",
             completed: "Borrador completado: existencias y cuentas actualizadas.",
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: "Pedidos en línea",
         },
         newOrder: "Nuevo pedido",
+        convertToSale: "Convertir en venta",
         columns: {
             orderNumber: "N.º de pedido",
             date: "Fecha",
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: "Presupuestos de venta",
         subtitle: "Elabore estimaciones y controle las caducidades",
         newQuotation: "Nuevo presupuesto",
+        convertToSale: "Convertir en venta",
         newProforma: "Nueva factura proforma",
         columns: {
             quoteNumber: "N.º de presupuesto",
