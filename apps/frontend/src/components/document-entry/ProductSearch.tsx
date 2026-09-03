@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus, X } from 'lucide-react';
+import RateHistory, { type RateHistoryType } from './RateHistory';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -16,6 +17,15 @@ interface ProductSearchProps {
      * purchase passes the cost it wants to start from instead.
      */
     initialPriceOf?: (product: any) => number;
+    /**
+     * Show the last few rates the staged product traded at. Opt-in: quotation
+     * and order entry share this component and have not asked for the hint, so
+     * leaving it unset keeps them byte-for-byte as they were.
+     */
+    historyType?: RateHistoryType;
+    /** The customer/supplier on the document, so their own rates lead the list. */
+    historyPartyId?: string;
+    historyPartyName?: string;
 }
 
 /** Stock on hand across every warehouse the product is stocked in. */
@@ -29,6 +39,9 @@ export default function ProductSearch({
     priceLabel = 'Unit Price',
     placeholder = 'Add product — search by name, SKU, or code…',
     initialPriceOf,
+    historyType,
+    historyPartyId,
+    historyPartyName,
 }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
@@ -278,6 +291,25 @@ export default function ProductSearch({
                     >
                         <X className="w-4 h-4" />
                     </button>
+
+                    {/* The rate is being decided right here, so the evidence for
+                        it belongs in the same box. Clicking a rate fills the
+                        field above rather than adding a line — the operator
+                        still confirms quantity and presses Add. */}
+                    {historyType && (
+                        <div className="w-full border-t border-blue-200 pt-1.5">
+                            <RateHistory
+                                productId={staged.id}
+                                type={historyType}
+                                partyId={historyPartyId}
+                                partyName={historyPartyName}
+                                onPickRate={(rate) => {
+                                    setStagedPrice(String(rate));
+                                    priceRef.current?.select();
+                                }}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
         </div>

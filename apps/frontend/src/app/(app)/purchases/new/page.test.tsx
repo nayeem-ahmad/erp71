@@ -22,6 +22,7 @@ jest.mock('@/lib/api', () => ({
         getSuppliers: jest.fn(),
         getProduct: jest.fn(),
         searchProductsByQuantity: jest.fn(),
+        getProductRateHistory: jest.fn(),
         createPurchase: jest.fn(),
     },
 }));
@@ -34,6 +35,9 @@ const COFFEE = {
     stocks: [{ quantity: 4 }, { quantity: 2 }],
 };
 
+/** The rate hint renders on every staged product; most cases don't exercise it. */
+const EMPTY_RATE_HISTORY = { type: 'purchase', forParty: [], recent: [], summary: null };
+
 describe('NewPurchasePage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -44,6 +48,7 @@ describe('NewPurchasePage', () => {
         ]);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([COFFEE]);
         (api.getProduct as jest.Mock).mockResolvedValue(COFFEE);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.createPurchase as jest.Mock).mockResolvedValue({
             id: 'purchase-2',
             purchase_number: 'PUR-00002',

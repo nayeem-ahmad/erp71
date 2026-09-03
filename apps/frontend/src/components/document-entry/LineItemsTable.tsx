@@ -1,5 +1,7 @@
-import { Trash2, Minus, Plus } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { Trash2, Minus, Plus, History } from 'lucide-react';
 import { LineItem } from '@/lib/hooks/useNewSaleCart';
+import RateHistory, { type RateHistoryType } from './RateHistory';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
 import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
 
@@ -31,6 +33,15 @@ interface LineItemsTableProps {
      * counted in the base unit, and switching them is a separate decision.
      */
     showCompoundUnits?: boolean;
+    /**
+     * Offer a per-line "previous rates" panel. Opt-in for the same reason as on
+     * ProductSearch, and ignored while the price is frozen — there is nothing to
+     * adopt a historic rate into on a document you are only reading.
+     */
+    historyType?: RateHistoryType;
+    /** The customer/supplier on the document, so their own rates lead the list. */
+    historyPartyId?: string;
+    historyPartyName?: string;
 }
 
 export default function LineItemsTable({
@@ -46,9 +57,25 @@ export default function LineItemsTable({
     priceLabel = 'Price',
     availableLabel = 'Avail',
     showCompoundUnits = false,
+    historyType,
+    historyPartyId,
+    historyPartyName,
 }: LineItemsTableProps) {
     const priceFrozen = readOnly || readOnlyPrice;
-    const columnCount = 6 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
+    const showHistory = !!historyType && !priceFrozen;
+    // #, Name, Group, Price, Qty, Total and the remove button are always
+    // rendered; Avail and Disc % are the opt-in pair.
+    const columnCount = 7 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
+    // Which lines have their history panel open. A set rather than one id so a
+    // user can compare two lines side by side.
+    const [openHistory, setOpenHistory] = useState<Set<string>>(new Set());
+
+    const toggleHistory = (productId: string) =>
+        setOpenHistory((prev) => {
+            const next = new Set(prev);
+            if (!next.delete(productId)) next.add(productId);
+            return next;
+        });
 
     const handleQuantityChange = (productId: string, quantity: number) => {
         if (quantity <= 0) return;
@@ -99,107 +126,140 @@ export default function LineItemsTable({
                         </tr>
                     ) : (
                         items.map((item, index) => (
-                            <tr key={item.productId} className="border-b last:border-b-0 hover:bg-gray-50">
-                                <td className="px-2 py-1 text-gray-500">{index + 1}</td>
-                                <td className="px-2 py-1 text-gray-900 font-medium">{item.name}</td>
-                                <td className="px-2 py-1 text-gray-500 text-xs hidden md:table-cell">
-                                    {item.group}
-                                    {item.subgroup && ` → ${item.subgroup}`}
-                                </td>
-                                {showAvailable && (
-                                    <td className="px-2 py-1 text-end text-xs hidden md:table-cell">
-                                        {item.availableQty == null ? (
-                                            <span className="text-gray-400">—</span>
-                                        ) : (
-                                            <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
-                                                {item.availableQty}
-                                            </span>
-                                        )}
+                            <Fragment key={item.productId}>
+                                <tr className={`hover:bg-gray-50 ${showHistory && openHistory.has(item.productId) ? '' : 'border-b last:border-b-0'}`}>
+                                    <td className="px-2 py-1 text-gray-500">{index + 1}</td>
+                                    <td className="px-2 py-1 text-gray-900 font-medium">{item.name}</td>
+                                    <td className="px-2 py-1 text-gray-500 text-xs hidden md:table-cell">
+                                        {item.group}
+                                        {item.subgroup && ` → ${item.subgroup}`}
                                     </td>
-                                )}
-                                <td className="px-2 py-1 text-end">
-                                    {priceFrozen ? (
-                                        <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
-                                    ) : (
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={item.price}
-                                            onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
-                                            className="w-20 px-1.5 py-0.5 border rounded text-sm text-end"
-                                        />
+                                    {showAvailable && (
+                                        <td className="px-2 py-1 text-end text-xs hidden md:table-cell">
+                                            {item.availableQty == null ? (
+                                                <span className="text-gray-400">—</span>
+                                            ) : (
+                                                <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                                                    {item.availableQty}
+                                                </span>
+                                            )}
+                                        </td>
                                     )}
-                                </td>
-                                {showDiscount && (
                                     <td className="px-2 py-1 text-end">
-                                        {readOnly ? (
-                                            <span className="text-gray-700">{item.discount || 0}</span>
+                                        {priceFrozen ? (
+                                            <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
                                         ) : (
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={item.discount}
-                                                onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                                className="w-14 px-1.5 py-0.5 border rounded text-sm text-end"
-                                            />
+                                            <div className="flex items-center justify-end gap-1">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={item.price}
+                                                    onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
+                                                    className="w-20 px-1.5 py-0.5 border rounded text-sm text-end"
+                                                />
+                                                {showHistory && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleHistory(item.productId)}
+                                                        aria-expanded={openHistory.has(item.productId)}
+                                                        aria-label={`Previous rates for ${item.name}`}
+                                                        title="Previous rates"
+                                                        className={openHistory.has(item.productId) ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'}
+                                                    >
+                                                        <History className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
                                     </td>
-                                )}
-                                <td className="px-2 py-1">
-                                    {readOnly ? (
-                                        <div className="text-center text-gray-700">{item.quantity}</div>
-                                    ) : showCompoundUnits && isCompoundUnit(item.unitType ?? 'none') ? (
-                                        <CompoundUnitInput
-                                            unitType={item.unitType as CompoundUnitType}
-                                            value={item.quantity}
-                                            onChange={(value) => handleQuantityChange(item.productId, value)}
-                                            inputClassName="px-1.5 py-0.5 border rounded text-sm"
-                                        />
-                                    ) : (
-                                        <div className="flex items-center justify-center gap-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
-                                                className="text-gray-400 hover:text-gray-700"
-                                            >
-                                                <Minus className="w-3.5 h-3.5" />
-                                            </button>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max={maxQuantityOf?.(item)}
+                                    {showDiscount && (
+                                        <td className="px-2 py-1 text-end">
+                                            {readOnly ? (
+                                                <span className="text-gray-700">{item.discount || 0}</span>
+                                            ) : (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={item.discount}
+                                                    onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
+                                                    className="w-14 px-1.5 py-0.5 border rounded text-sm text-end"
+                                                />
+                                            )}
+                                        </td>
+                                    )}
+                                    <td className="px-2 py-1">
+                                        {readOnly ? (
+                                            <div className="text-center text-gray-700">{item.quantity}</div>
+                                        ) : showCompoundUnits && isCompoundUnit(item.unitType ?? 'none') ? (
+                                            <CompoundUnitInput
+                                                unitType={item.unitType as CompoundUnitType}
                                                 value={item.quantity}
-                                                onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
-                                                className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                                onChange={(value) => handleQuantityChange(item.productId, value)}
+                                                inputClassName="px-1.5 py-0.5 border rounded text-sm"
                                             />
+                                        ) : (
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
+                                                    className="text-gray-400 hover:text-gray-700"
+                                                >
+                                                    <Minus className="w-3.5 h-3.5" />
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max={maxQuantityOf?.(item)}
+                                                    value={item.quantity}
+                                                    onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
+                                                    className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
+                                                    className="text-gray-400 hover:text-gray-700"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-2 py-1 text-end text-gray-900 font-semibold whitespace-nowrap">
+                                        ৳{calculateLineTotal(item).toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
+                                        {!readOnly && (
                                             <button
                                                 type="button"
-                                                onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
-                                                className="text-gray-400 hover:text-gray-700"
+                                                onClick={() => onRemoveItem(item.productId)}
+                                                className="text-red-500 hover:text-red-700"
+                                                title="Remove item"
                                             >
-                                                <Plus className="w-3.5 h-3.5" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
-                                        </div>
-                                    )}
-                                </td>
-                                <td className="px-2 py-1 text-end text-gray-900 font-semibold whitespace-nowrap">
-                                    ৳{calculateLineTotal(item).toFixed(2)}
-                                </td>
-                                <td className="px-2 py-1 text-center">
-                                    {!readOnly && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onRemoveItem(item.productId)}
-                                            className="text-red-500 hover:text-red-700"
-                                            title="Remove item"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </td>
-                            </tr>
+                                        )}
+                                    </td>
+                                </tr>
+                                {/* Expanded inline rather than a popover: the table is
+                                    its own scroll container, where an anchored popover
+                                    drifts away from its trigger, and a row also works
+                                    at 360px without going off-screen. */}
+                                {showHistory && openHistory.has(item.productId) && (
+                                    <tr className="border-b last:border-b-0 bg-gray-50">
+                                        <td colSpan={columnCount} className="px-3 py-2">
+                                            <RateHistory
+                                                productId={item.productId}
+                                                type={historyType as RateHistoryType}
+                                                partyId={historyPartyId}
+                                                partyName={historyPartyName}
+                                                onPickRate={(rate) => handlePriceChange(item.productId, rate)}
+                                            />
+                                        </td>
+                                    </tr>
+                                )}
+                            </Fragment>
                         ))
                     )}
                 </tbody>

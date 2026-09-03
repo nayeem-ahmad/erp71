@@ -65,6 +65,8 @@ describe('ProductsService', () => {
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
       },
+      saleItem: { findMany: jest.fn().mockResolvedValue([]) },
+      purchaseItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
     const redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
@@ -353,6 +355,112 @@ describe('ProductsService', () => {
       expect(result[0].id).toBe('p2');
       expect(result[0].qty_sold).toBe(12);
       expect(result[1].qty_sold).toBe(5);
+    });
+  });
+
+  describe('getRateHistory()', () => {
+    const saleItem = (over: any = {}) => ({
+      quantity: 2,
+      price_at_sale: '100.00',
+      sale: {
+        id: 'sale-1',
+        serial_number: 'S-1',
+        reference_number: null,
+        sale_date: new Date('2026-08-12T00:00:00.000Z'),
+        customer_id: 'cus-1',
+        customer: { name: 'Rahim Traders' },
+        ...over,
+      },
+    });
+
+    beforeEach(() => {
+      db.product.findFirst.mockResolvedValue({ id: 'prod-1', name: 'Rice', stocks: [] });
+    });
+
+    it('validates ownership without fetching the full product include', async () => {
+      await service.getRateHistory('tenant-1', 'prod-1', { type: 'sale' });
+
+      // This runs on every staged product; pulling stocks joined to warehouses
+      // only to discard them would make the hint the most expensive thing on
+      // the screen.
+      expect(db.product.findFirst).toHaveBeenCalledWith({
+        where: { id: 'prod-1', tenant_id: 'tenant-1', deleted_at: null },
+        select: { id: true },
+      });
+    });
+
+    it('refuses a product belonging to another tenant', async () => {
+      db.product.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getRateHistory('tenant-1', 'prod-x', { type: 'sale' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(db.saleItem.findMany).not.toHaveBeenCalled();
+    });
+
+    it('excludes parked drafts — they moved no stock and took no money', async () => {
+      await service.getRateHistory('tenant-1', 'prod-1', { type: 'sale' });
+
+      expect(db.saleItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            product_id: 'prod-1',
+            sale: { tenant_id: 'tenant-1', status: 'COMPLETED' },
+          }),
+          take: 5,
+        }),
+      );
+    });
+
+    it('queries only the "everyone" section when no party is selected', async () => {
+      await service.getRateHistory('tenant-1', 'prod-1', { type: 'sale' });
+
+      expect(db.saleItem.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('splits the selected customer off, keeping walk-ins in the other section', async () => {
+      await service.getRateHistory('tenant-1', 'prod-1', { type: 'sale', partyId: 'cus-1' });
+
+      const [partyCall, otherCall] = db.saleItem.findMany.mock.calls;
+      expect(partyCall[0].where.sale).toMatchObject({ customer_id: 'cus-1' });
+      // `{ not: id }` alone would drop NULLs, hiding every walk-in sale the
+      // moment a customer is picked.
+      expect(otherCall[0].where.sale.OR).toEqual([
+        { customer_id: null },
+        { customer_id: { not: 'cus-1' } },
+      ]);
+    });
+
+    it('summarises across both sections and caps the limit', async () => {
+      db.saleItem.findMany
+        .mockResolvedValueOnce([saleItem({ }), ])
+        .mockResolvedValueOnce([
+          { ...saleItem({ id: 'sale-2', customer_id: 'cus-2', customer: { name: 'Karim Store' } }), price_at_sale: '130.00' },
+        ]);
+
+      const result = await service.getRateHistory('tenant-1', 'prod-1', {
+        type: 'sale',
+        partyId: 'cus-1',
+        limit: 999,
+      });
+
+      expect(db.saleItem.findMany.mock.calls[0][0].take).toBe(20);
+      expect(result.forParty).toHaveLength(1);
+      expect(result.recent).toHaveLength(1);
+      expect(result.summary).toMatchObject({ minRate: 100, maxRate: 130, avgRate: 115 });
+    });
+
+    it('reads purchases off the purchase side, ordered newest first', async () => {
+      await service.getRateHistory('tenant-1', 'prod-1', { type: 'purchase', partyId: 'sup-1' });
+
+      expect(db.saleItem.findMany).not.toHaveBeenCalled();
+      const [partyCall, otherCall] = db.purchaseItem.findMany.mock.calls;
+      expect(partyCall[0].where.purchase).toMatchObject({ tenant_id: 'tenant-1', supplier_id: 'sup-1' });
+      expect(partyCall[0].orderBy).toEqual({ purchase: { created_at: 'desc' } });
+      expect(otherCall[0].where.purchase.OR).toEqual([
+        { supplier_id: null },
+        { supplier_id: { not: 'sup-1' } },
+      ]);
     });
   });
 });

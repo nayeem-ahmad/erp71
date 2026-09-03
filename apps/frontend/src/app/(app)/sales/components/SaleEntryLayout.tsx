@@ -94,6 +94,13 @@ interface SaleEntryLayoutProps {
     payments: Payment[];
     onPaymentChange: (payments: Payment[]) => void;
 
+    /**
+     * Show the last few rates each product sold at, beside the price field.
+     * Opt-in so the sale detail page — which reads a posted sale rather than
+     * pricing a new one — is unaffected.
+     */
+    showRateHistory?: boolean;
+
     /** Buttons for the bottom of the end-hand panel. */
     actions: ReactNode;
     onSubmit?: (e: React.FormEvent) => void;
@@ -133,9 +140,20 @@ export default function SaleEntryLayout({
     adjustmentLabel,
     payments,
     onPaymentChange,
+    showRateHistory = false,
     actions,
     onSubmit,
 }: SaleEntryLayoutProps) {
+    // Only meaningful while a rate is still being decided, and the customer is
+    // what puts their own past rates at the top of the list.
+    const history = showRateHistory && !readOnly
+        ? {
+            historyType: 'sale' as const,
+            historyPartyId: customer?.id as string | undefined,
+            historyPartyName: customer?.name as string | undefined,
+        }
+        : {};
+
     return (
         <DocumentEntryLayout
             title={title}
@@ -162,10 +180,10 @@ export default function SaleEntryLayout({
                     <>
                         {onVoiceResult ? (
                             <VoiceEntryInput entryType="sale" onResult={onVoiceResult} inline>
-                                <ProductSearch onProductSelect={onAddProduct} />
+                                <ProductSearch onProductSelect={onAddProduct} {...history} />
                             </VoiceEntryInput>
                         ) : (
-                            <ProductSearch onProductSelect={onAddProduct} />
+                            <ProductSearch onProductSelect={onAddProduct} {...history} />
                         )}
                     </>
                 )
@@ -176,6 +194,7 @@ export default function SaleEntryLayout({
                     onUpdateItem={onUpdateItem}
                     onRemoveItem={onRemoveItem}
                     readOnly={readOnly}
+                    {...history}
                 />
             }
             note={
