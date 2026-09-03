@@ -122,6 +122,14 @@ ENV GIT_SHA=$GIT_SHA
 # Employee.basic_salary, and stamping a structure nobody chose would silently
 # stop that field affecting pay. See prisma/sync-salary-components.ts.
 #
+# sync:setup-fee-paid stamps TenantSubscription.setup_fee_paid_at on every
+# subscription that predates the one-time setup fee. Same reason as
+# sync:lead-identity above: db push carries the column but never the migration's
+# backfill, so the stamp lands NULL on every existing row. BillingService reads
+# NULL as "never paid", so the day an admin sets a non-zero setup_fee on a plan,
+# every tenant already on it is billed an onboarding fee at their next checkout —
+# for onboarding they had years ago. The stamp must exist before any fee does.
+#
 # sync:support-thread-creators backfills SupportThread.createdById, the shop user
 # who opened each inbox thread. REQUIRED for the same reason as sync:lead-identity:
 # db push adds the column but never runs the migration that fills it, so without
@@ -135,4 +143,4 @@ ENV GIT_SHA=$GIT_SHA
 # db push adds the column, never the migration that fills it, so without this the
 # column is NULL everywhere and the tile counts the whole back catalogue as
 # neglected until each lead is next touched. See prisma/sync-lead-activity.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
