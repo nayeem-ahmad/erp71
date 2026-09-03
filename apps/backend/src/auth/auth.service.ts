@@ -608,6 +608,10 @@ export class AuthService {
                 description: plan.description,
                 monthly_price: Number(plan.monthly_price),
                 yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
+                // The marketing pricing page renders this, so it has to come from
+                // the same row checkout charges from. It is 0 on every plan until
+                // an admin sets one, and the page hides a zero.
+                setup_fee: Number(plan.setup_fee),
                 features_json: plan.features_json,
                 marketing_features: Array.isArray(plan.marketing_features_json)
                     ? plan.marketing_features_json.filter((item): item is string => typeof item === 'string')

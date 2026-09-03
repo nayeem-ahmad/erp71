@@ -1,7 +1,8 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { Trash2, Minus, Plus, History } from 'lucide-react';
 import { LineItem } from '@/lib/hooks/useNewSaleCart';
-import RateHistory, { type RateHistoryType } from './RateHistory';
+import RateHistoryModal from './RateHistoryModal';
+import { type RateHistoryType } from './RateHistory';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
 import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
 
@@ -66,16 +67,8 @@ export default function LineItemsTable({
     // #, Name, Group, Price, Qty, Total and the remove button are always
     // rendered; Avail and Disc % are the opt-in pair.
     const columnCount = 7 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
-    // Which lines have their history panel open. A set rather than one id so a
-    // user can compare two lines side by side.
-    const [openHistory, setOpenHistory] = useState<Set<string>>(new Set());
-
-    const toggleHistory = (productId: string) =>
-        setOpenHistory((prev) => {
-            const next = new Set(prev);
-            if (!next.delete(productId)) next.add(productId);
-            return next;
-        });
+    // The line whose history modal is open, if any.
+    const [historyFor, setHistoryFor] = useState<LineItem | null>(null);
 
     const handleQuantityChange = (productId: string, quantity: number) => {
         if (quantity <= 0) return;
@@ -126,8 +119,7 @@ export default function LineItemsTable({
                         </tr>
                     ) : (
                         items.map((item, index) => (
-                            <Fragment key={item.productId}>
-                                <tr className={`hover:bg-gray-50 ${showHistory && openHistory.has(item.productId) ? '' : 'border-b last:border-b-0'}`}>
+                                <tr key={item.productId} className="border-b last:border-b-0 hover:bg-gray-50">
                                     <td className="px-2 py-1 text-gray-500">{index + 1}</td>
                                     <td className="px-2 py-1 text-gray-900 font-medium">{item.name}</td>
                                     <td className="px-2 py-1 text-gray-500 text-xs hidden md:table-cell">
@@ -161,11 +153,10 @@ export default function LineItemsTable({
                                                 {showHistory && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => toggleHistory(item.productId)}
-                                                        aria-expanded={openHistory.has(item.productId)}
+                                                        onClick={() => setHistoryFor(item)}
                                                         aria-label={`Previous rates for ${item.name}`}
                                                         title="Previous rates"
-                                                        className={openHistory.has(item.productId) ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'}
+                                                        className="text-gray-400 hover:text-blue-600"
                                                     >
                                                         <History className="w-3.5 h-3.5" />
                                                     </button>
@@ -242,29 +233,23 @@ export default function LineItemsTable({
                                         )}
                                     </td>
                                 </tr>
-                                {/* Expanded inline rather than a popover: the table is
-                                    its own scroll container, where an anchored popover
-                                    drifts away from its trigger, and a row also works
-                                    at 360px without going off-screen. */}
-                                {showHistory && openHistory.has(item.productId) && (
-                                    <tr className="border-b last:border-b-0 bg-gray-50">
-                                        <td colSpan={columnCount} className="px-3 py-2">
-                                            <RateHistory
-                                                productId={item.productId}
-                                                type={historyType as RateHistoryType}
-                                                partyId={historyPartyId}
-                                                partyName={historyPartyName}
-                                                onPickRate={(rate) => handlePriceChange(item.productId, rate)}
-                                            />
-                                        </td>
-                                    </tr>
-                                )}
-                            </Fragment>
                         ))
                     )}
                 </tbody>
             </table>
             </div>
+
+            {historyFor && historyType && (
+                <RateHistoryModal
+                    productId={historyFor.productId}
+                    productName={historyFor.name}
+                    type={historyType}
+                    partyId={historyPartyId}
+                    partyName={historyPartyName}
+                    onPickRate={(rate) => handlePriceChange(historyFor.productId, rate)}
+                    onClose={() => setHistoryFor(null)}
+                />
+            )}
         </div>
     );
 }

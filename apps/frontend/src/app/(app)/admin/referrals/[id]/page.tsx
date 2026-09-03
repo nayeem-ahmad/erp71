@@ -9,7 +9,13 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
 import RefereePaymentModal from '@/components/admin/referrals/RefereePaymentModal';
-import type { RefereeLedger, ReferralCommission, RefereePayment } from '@/components/admin/referrals/types';
+import PayoutRequestsPanel from '@/components/admin/referrals/PayoutRequestsPanel';
+import type {
+    RefereeLedger,
+    ReferralCommission,
+    RefereePayment,
+    RefereePayoutRequest,
+} from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -29,6 +35,13 @@ export default function AdminRefereeDetailPage() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [paymentOpen, setPaymentOpen] = useState(false);
+    /**
+     * Set when the payment modal was opened from a partner's request, so recording
+     * the money also settles the request — in one transaction, server-side.
+     */
+    const [settling, setSettling] = useState<RefereePayoutRequest | null>(null);
+    // Bumped after a payment lands so the requests panel picks up the new status.
+    const [payoutsVersion, setPayoutsVersion] = useState(0);
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -206,6 +219,18 @@ export default function AdminRefereeDetailPage() {
                     </div>
 
                     <div className="space-y-3">
+                        <h2 className="text-lg font-bold text-gray-900">{m.payoutRequests.title}</h2>
+                        <PayoutRequestsPanel
+                            refereeId={refereeId}
+                            refreshToken={payoutsVersion}
+                            onSettle={(request) => {
+                                setSettling(request);
+                                setPaymentOpen(true);
+                            }}
+                        />
+                    </div>
+
+                    <div className="space-y-3">
                         <h2 className="text-lg font-bold text-gray-900">{d.paymentsTitle}</h2>
                         <DataTable
                             tableId="admin-referral-payments"
@@ -219,12 +244,21 @@ export default function AdminRefereeDetailPage() {
             ) : null}
 
             <RefereePaymentModal
+                // Remounts per request so the amount field re-seeds from it rather
+                // than keeping whatever the previous open left behind.
+                key={settling?.id ?? 'ad-hoc'}
                 open={paymentOpen}
                 refereeId={refereeId}
-                defaultAmount={ledger?.summary.balance_due}
-                onClose={() => setPaymentOpen(false)}
+                defaultAmount={settling?.amount ?? ledger?.summary.balance_due}
+                payoutRequestId={settling?.id}
+                onClose={() => {
+                    setPaymentOpen(false);
+                    setSettling(null);
+                }}
                 onSuccess={(message) => {
                     toast.success(message);
+                    setSettling(null);
+                    setPayoutsVersion((version) => version + 1);
                     void load();
                 }}
             />

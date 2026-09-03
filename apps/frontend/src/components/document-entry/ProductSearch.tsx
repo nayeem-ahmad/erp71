@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
-import { Search, Plus, X } from 'lucide-react';
-import RateHistory, { type RateHistoryType } from './RateHistory';
+import { Search, Plus, X, History } from 'lucide-react';
+import RateHistoryModal from './RateHistoryModal';
+import { type RateHistoryType } from './RateHistory';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -52,6 +53,7 @@ export default function ProductSearch({
     const [staged, setStaged] = useState<any>(null);
     const [stagedPrice, setStagedPrice] = useState('');
     const [stagedQty, setStagedQty] = useState('1');
+    const [showHistory, setShowHistory] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -117,6 +119,7 @@ export default function ProductSearch({
         setStaged(null);
         setStagedPrice('');
         setStagedQty('1');
+        setShowHistory(false);
     };
 
     const handleAddStaged = () => {
@@ -169,148 +172,182 @@ export default function ProductSearch({
     const numberInput = 'px-2 py-1 border rounded text-sm text-end min-h-touch sm:min-h-0';
 
     return (
-        <div className="flex flex-col gap-1.5">
-            <div className="relative">
-                <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => {
-                        setQuery(e.target.value);
-                        setShowDropdown(true);
-                    }}
-                    onFocus={() => setShowDropdown(true)}
-                    onKeyDown={handleSearchKeyDown}
-                    placeholder={placeholder}
-                    className="w-full ps-8 pe-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
-                />
+        <div className="flex flex-col gap-1">
+            {/* One entry bar: product, unit amount, quantity, Add — and the
+                history icon at the end. Everything needed to commit a line is
+                on a single row, so the eye never leaves it. */}
+            <div className="flex flex-wrap sm:flex-nowrap items-end gap-1.5">
+                {/* Capped rather than free-growing: stretched across a wide
+                    work area it left the amount fields marooned at the far
+                    edge, visually detached from the product they price. */}
+                <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md">
+                    <span className="block text-[11px] text-gray-500 mb-0.5">Product</span>
+                    <Search className="absolute start-2.5 top-[26px] -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        // Once a product is staged the box shows what was picked
+                        // and stops being a search field; the X hands it back.
+                        value={staged ? staged.name : query}
+                        readOnly={!!staged}
+                        onChange={(e) => {
+                            setQuery(e.target.value);
+                            setShowDropdown(true);
+                        }}
+                        onFocus={() => { if (!staged) setShowDropdown(true); }}
+                        onKeyDown={handleSearchKeyDown}
+                        placeholder={placeholder}
+                        aria-label="Product"
+                        className={`w-full ps-8 ${staged ? 'pe-8' : 'pe-3'} py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent ${staged ? 'bg-blue-50 border-blue-200 font-medium text-gray-900' : ''}`}
+                    />
+                    {staged && (
+                        <button
+                            type="button"
+                            onClick={() => { clearStaged(); inputRef.current?.focus(); }}
+                            className="absolute end-2 top-[26px] -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                            title="Clear product"
+                            aria-label="Clear product"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
 
-                {/* Results Dropdown */}
-                {showDropdown && (
-                    <div
-                        ref={dropdownRef}
-                        className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
-                    >
-                        {loading ? (
-                            <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
-                        ) : products.length === 0 ? (
-                            <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
-                        ) : (
-                            <>
-                                {!query.trim() && (
-                                    <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
-                                        Popular products
-                                    </div>
-                                )}
-                                {products.map((product, index) => {
-                                    const stock = availableQtyOf(product);
-                                    return (
-                                        <div
-                                            key={product.id}
-                                            ref={(el) => { optionRefs.current[index] = el; }}
-                                            onClick={() => handleSelectProduct(product)}
-                                            onMouseEnter={() => setHighlight(index)}
-                                            className={`px-3 py-2 cursor-pointer border-b last:border-b-0 flex justify-between items-center gap-2 ${index === highlight ? 'bg-blue-50' : ''}`}
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
-                                                <div className="text-xs text-gray-600">
-                                                    SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
-                                                    <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
-                                                        Avail: {stock}
-                                                    </span>
-                                                    {product.qty_sold > 0 && (
-                                                        <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
-                                                    )}
-                                                    {product.subgroup && (
-                                                        <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    {/* Results Dropdown */}
+                    {showDropdown && !staged && (
+                        <div
+                            ref={dropdownRef}
+                            className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
+                        >
+                            {loading ? (
+                                <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
+                            ) : products.length === 0 ? (
+                                <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
+                            ) : (
+                                <>
+                                    {!query.trim() && (
+                                        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
+                                            Popular products
                                         </div>
-                                    );
-                                })}
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Staging row — confirm unit price and quantity before adding */}
-            {staged && (
-                <div className="flex flex-wrap items-end gap-2 rounded border border-blue-200 bg-blue-50 px-2 py-1.5">
-                    <div className="flex-1 min-w-[140px]">
-                        <div className="text-sm font-medium text-gray-900 truncate">{staged.name}</div>
-                        <div className="text-[11px] text-gray-600">
-                            SKU: {staged.sku || 'N/A'}
-                            <span className="mx-1.5 text-gray-300">·</span>
-                            <span className={stagedAvailable > 0 ? '' : 'text-red-600'}>
-                                Available {stagedAvailable}
-                            </span>
-                        </div>
-                    </div>
-                    <label className="flex flex-col gap-0.5">
-                        <span className="text-[11px] text-gray-500">{priceLabel}</span>
-                        <input
-                            ref={priceRef}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={stagedPrice}
-                            onChange={(e) => setStagedPrice(e.target.value)}
-                            onKeyDown={handleStagedKeyDown}
-                            className={`${numberInput} w-24`}
-                        />
-                    </label>
-                    <label className="flex flex-col gap-0.5">
-                        <span className="text-[11px] text-gray-500">Qty</span>
-                        <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={stagedQty}
-                            onChange={(e) => setStagedQty(e.target.value)}
-                            onKeyDown={handleStagedKeyDown}
-                            className={`${numberInput} w-20 ${stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
-                        />
-                    </label>
-                    <button
-                        type="button"
-                        onClick={handleAddStaged}
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 min-h-touch sm:min-h-0"
-                    >
-                        Add
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { clearStaged(); inputRef.current?.focus(); }}
-                        className="p-1.5 text-gray-400 hover:text-gray-700"
-                        title="Cancel"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-
-                    {/* The rate is being decided right here, so the evidence for
-                        it belongs in the same box. Clicking a rate fills the
-                        field above rather than adding a line — the operator
-                        still confirms quantity and presses Add. */}
-                    {historyType && (
-                        <div className="w-full border-t border-blue-200 pt-1.5">
-                            <RateHistory
-                                productId={staged.id}
-                                type={historyType}
-                                partyId={historyPartyId}
-                                partyName={historyPartyName}
-                                onPickRate={(rate) => {
-                                    setStagedPrice(String(rate));
-                                    priceRef.current?.select();
-                                }}
-                            />
+                                    )}
+                                    {products.map((product, index) => {
+                                        const stock = availableQtyOf(product);
+                                        return (
+                                            <div
+                                                key={product.id}
+                                                ref={(el) => { optionRefs.current[index] = el; }}
+                                                onClick={() => handleSelectProduct(product)}
+                                                onMouseEnter={() => setHighlight(index)}
+                                                className={`px-3 py-2 cursor-pointer border-b last:border-b-0 flex justify-between items-center gap-2 ${index === highlight ? 'bg-blue-50' : ''}`}
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+                                                    <div className="text-xs text-gray-600">
+                                                        SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
+                                                        <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
+                                                            Avail: {stock}
+                                                        </span>
+                                                        {product.qty_sold > 0 && (
+                                                            <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
+                                                        )}
+                                                        {product.subgroup && (
+                                                            <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                            </div>
+                                        );
+                                    })}
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
+
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-[11px] text-gray-500">{priceLabel}</span>
+                    <input
+                        ref={priceRef}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={stagedPrice}
+                        disabled={!staged}
+                        onChange={(e) => setStagedPrice(e.target.value)}
+                        onKeyDown={handleStagedKeyDown}
+                        aria-label={priceLabel}
+                        className={`${numberInput} w-24 disabled:bg-gray-50 disabled:text-gray-400`}
+                    />
+                </label>
+
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-[11px] text-gray-500">Qty</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={stagedQty}
+                        disabled={!staged}
+                        onChange={(e) => setStagedQty(e.target.value)}
+                        onKeyDown={handleStagedKeyDown}
+                        aria-label="Qty"
+                        className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
+                    />
+                </label>
+
+                <button
+                    type="button"
+                    onClick={handleAddStaged}
+                    disabled={!staged}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 min-h-touch sm:min-h-0"
+                >
+                    Add
+                </button>
+
+                {historyType && (
+                    <button
+                        type="button"
+                        onClick={() => setShowHistory(true)}
+                        disabled={!staged}
+                        title={staged ? 'Previous rates' : 'Pick a product to see its previous rates'}
+                        aria-label="Previous rates"
+                        className="px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-transparent min-h-touch sm:min-h-0"
+                    >
+                        <History className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+
+            {/* Stock line for the staged product — kept off the entry row so the
+                three inputs stay on one line at every width. */}
+            {staged && (
+                <div className="text-[11px] text-gray-600">
+                    SKU: {staged.sku || 'N/A'}
+                    <span className="mx-1.5 text-gray-300">·</span>
+                    <span className={stagedAvailable > 0 ? '' : 'text-red-600'}>
+                        Available {stagedAvailable}
+                    </span>
+                    {stagedQtyNum > stagedAvailable && (
+                        <span className="ms-1.5 text-amber-600">
+                            — entering more than is in stock
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {historyType && showHistory && staged && (
+                <RateHistoryModal
+                    productId={staged.id}
+                    productName={staged.name}
+                    type={historyType}
+                    partyId={historyPartyId}
+                    partyName={historyPartyName}
+                    onPickRate={(rate) => {
+                        setStagedPrice(String(rate));
+                        requestAnimationFrame(() => priceRef.current?.select());
+                    }}
+                    onClose={() => setShowHistory(false)}
+                />
             )}
         </div>
     );

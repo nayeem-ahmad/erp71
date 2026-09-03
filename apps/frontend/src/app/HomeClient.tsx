@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import {
     ArrowRight, CheckCircle2, PlayCircle, Receipt, Shield, Star, Zap,
 } from 'lucide-react';
@@ -9,7 +10,9 @@ import MarketingNav from '@/components/marketing/MarketingNav';
 import {
     FEATURES, HERO_STATS, MODULES, PAYMENT_METHODS,
 } from '@/lib/marketing/content';
-import { MARKETING_PLANS } from '@/lib/marketing/plans';
+import { buildMarketingPlansFromApi, type PublicPlanFromApi } from '@/lib/marketing/plans';
+import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 
 function HeroBackground() {
@@ -91,9 +94,24 @@ function DashboardPreview({ m }: { m: ReturnType<typeof useI18n>['t']['marketing
     );
 }
 
+/** Marketing prices are whole taka — formatBDT defaults to two decimals. */
+const money = (amount: number) =>
+    formatBDT(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
 export default function HomeClient() {
     const { t } = useI18n();
     const m = t.marketing.home;
+
+    // The pricing preview reads the same live plans as /pricing. It used to map
+    // the static constants directly, so the two pages disagreed the moment an
+    // admin changed a price — /pricing followed the API and this one did not.
+    const [apiPlans, setApiPlans] = useState<PublicPlanFromApi[]>([]);
+    useEffect(() => {
+        api.getSubscriptionPlans()
+            .then((plans) => setApiPlans(Array.isArray(plans) ? plans : []))
+            .catch(() => null);
+    }, []);
+    const displayPlans = useMemo(() => buildMarketingPlansFromApi(apiPlans), [apiPlans]);
 
     const statLabels = [
         m.stats.activeStores,
@@ -285,7 +303,7 @@ export default function HomeClient() {
                         <p className="text-gray-500 text-lg">{m.pricing.description}</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                        {MARKETING_PLANS.map((plan) => (
+                        {displayPlans.map((plan) => (
                             <div
                                 key={plan.id}
                                 className={`relative p-6 rounded-2xl border-2 flex flex-col ${
@@ -306,9 +324,11 @@ export default function HomeClient() {
                                 <p className="text-gray-500 text-sm mt-1 mb-4">{plan.tagline}</p>
                                 <div className="flex items-baseline gap-1 mb-4">
                                     <span className="text-3xl font-black">
-                                        {plan.monthlyPrice === 0 ? m.pricing.free : `৳${plan.monthlyPrice.toLocaleString()}`}
+                                        {plan.priceLabel ?? (plan.monthlyPrice === 0 ? m.pricing.free : money(plan.monthlyPrice))}
                                     </span>
-                                    {plan.monthlyPrice > 0 && <span className="text-gray-400 text-sm">{m.pricing.perMonth}</span>}
+                                    {!plan.priceLabel && plan.monthlyPrice > 0 && (
+                                        <span className="text-gray-400 text-sm">{m.pricing.perMonth}</span>
+                                    )}
                                 </div>
                                 <ul className="space-y-2 mb-6 flex-1">
                                     {plan.features.slice(0, 4).map((feature) => (
@@ -318,7 +338,14 @@ export default function HomeClient() {
                                         </li>
                                     ))}
                                 </ul>
-                                {plan.comingSoon ? (
+                                {plan.contactSales ? (
+                                    <Link
+                                        href="/contact"
+                                        className="block text-center font-bold py-3 rounded-xl bg-gray-900 hover:bg-gray-700 text-white transition-colors"
+                                    >
+                                        Talk to sales
+                                    </Link>
+                                ) : plan.comingSoon ? (
                                     <span className="block text-center font-bold py-3 rounded-xl bg-gray-200 text-gray-500 cursor-not-allowed">
                                         {m.pricing.comingSoon}
                                     </span>

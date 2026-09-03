@@ -70,15 +70,21 @@ export default function TermsClient() {
                         {/* 4 */}
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">4. Subscription &amp; Billing</h2>
-                            <p className="mb-3">
-                                ERP71 offers the following subscription tiers, priced in Bangladeshi Taka (BDT):
+                            {/* Deliberately no price table here. This document used to carry
+                                its own copy of the tiers, which drifted until every figure in
+                                it was wrong. Terms should state the billing rules; the prices
+                                themselves belong on one page that reads them from the same
+                                source checkout charges from. */}
+                            <p className="mb-4">
+                                ERP71 is offered on paid subscription tiers priced in Bangladeshi Taka (BDT),
+                                billed monthly or yearly. Current plans, inclusions, capacity limits and any
+                                one-time setup fee are listed on our{' '}
+                                <Link href="/pricing" className="text-blue-600 hover:underline font-medium">
+                                    pricing page
+                                </Link>
+                                , which is the authoritative statement of what each plan costs. The price
+                                shown at checkout is the price that applies to your subscription.
                             </p>
-                            <div className="bg-gray-50 rounded-xl p-4 text-sm mb-4 space-y-1">
-                                <p><strong>Free</strong> — ৳ 0/month (single store, limited features)</p>
-                                <p><strong>Basic</strong> — ৳ 1,499/month</p>
-                                <p><strong>Standard</strong> — ৳ 2,999/month</p>
-                                <p><strong>Premium</strong> — ৳ 3,999/month (unlimited stores and staff)</p>
-                            </div>
                             <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
                                     <strong>Activation.</strong> New workspaces require a paid plan and successful checkout

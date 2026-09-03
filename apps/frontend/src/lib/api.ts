@@ -8,7 +8,11 @@ import type {
     SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
-import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
+import type {
+    RefereePayoutMethod,
+    RefereePayoutRequestStatus,
+    ReferralCommissionStatus,
+} from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
 import { handleExpiredSession } from './session-expiry';
 import {
@@ -2870,12 +2874,51 @@ export const api = {
         reference?: string;
         notes?: string;
         commission_ids?: string[];
+        /** Settles the partner's own payout request in the same call. */
+        payout_request_id?: string;
     }) => fetchWithAuth(`/admin/referrals/referees/${id}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     }),
     getRefereePortalLedger: () => fetchWithAuth('/referrals/me/ledger'),
+    getRefereePayoutProfile: () => fetchWithAuth('/referrals/me/payout-profile'),
+    updateRefereePayoutProfile: (data: {
+        payout_method: RefereePayoutMethod;
+        payout_account_name?: string;
+        payout_account_number: string;
+        payout_bank_name?: string;
+        payout_branch?: string;
+    }) => fetchWithAuth('/referrals/me/payout-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    getRefereePayoutRequests: () => fetchWithAuth('/referrals/me/payout-requests'),
+    /** Omit `amount` to request the whole balance due. */
+    createRefereePayoutRequest: (data: { amount?: number; note?: string }) =>
+        fetchWithAuth('/referrals/me/payout-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    cancelRefereePayoutRequest: (id: string) =>
+        fetchWithAuth(`/referrals/me/payout-requests/${id}/cancel`, { method: 'POST' }),
+    getAdminPayoutRequests: (params?: { status?: RefereePayoutRequestStatus; referee_id?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.referee_id) query.set('referee_id', params.referee_id);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/referrals/payout-requests${suffix}`);
+    },
+    approveAdminPayoutRequest: (id: string) =>
+        fetchWithAuth(`/admin/referrals/payout-requests/${id}/approve`, { method: 'POST' }),
+    rejectAdminPayoutRequest: (id: string, reason: string) =>
+        fetchWithAuth(`/admin/referrals/payout-requests/${id}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason }),
+        }),
     sendAdminRefereeInvite: (id: string) =>
         fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
     /** Paged: returns `{ items, total, limit, offset, has_more }`, not a bare array. */

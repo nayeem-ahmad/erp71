@@ -23,18 +23,43 @@ import { storeAuthResponse } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 import { useHydrated } from '@/hooks/useHydrated';
 import { setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
+import { ACCOUNTING_EDITION, MARKETING_PLANS } from '@/lib/marketing/plans';
 
+/**
+ * Both the plan codes and the marketing slugs, because the pricing page links by
+ * slug and the ladder was renamed. The old slugs stay mapped indefinitely: they
+ * are in ad campaigns, bookmarks and anything already linking to us, and a stale
+ * `?plan=basic` should still land on the right plan rather than silently
+ * defaulting.
+ */
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
+    starter: 'BASIC',
     accounting: 'ACCOUNTING',
     standard: 'STANDARD',
+    growth: 'STANDARD',
     premium: 'PREMIUM',
+    business: 'PREMIUM',
 };
 
+/**
+ * Shown only when `GET /auth/plans` is unreachable. Derived from the marketing
+ * constants rather than retyped, because this used to be a second hardcoded
+ * price table that had already drifted from the first.
+ */
 const FALLBACK_PLANS: Plan[] = [
-    { code: 'BASIC', name: 'Basic', description: 'Core operations for small teams', monthly_price: 499 },
-    { code: 'ACCOUNTING', name: 'Accounting', description: 'Bookkeeping pack: accounting, reports, expenses & funds', monthly_price: 749 },
-    { code: 'STANDARD', name: 'Standard', description: 'Multi-branch operations with analytics', monthly_price: 999 },
+    ...MARKETING_PLANS.filter((plan) => plan.code && !plan.contactSales).map((plan) => ({
+        code: plan.code as Plan['code'],
+        name: plan.name,
+        description: plan.tagline,
+        monthly_price: plan.monthlyPrice,
+    })),
+    {
+        code: 'ACCOUNTING' as const,
+        name: ACCOUNTING_EDITION.name,
+        description: ACCOUNTING_EDITION.tagline,
+        monthly_price: ACCOUNTING_EDITION.monthlyPrice,
+    },
 ];
 
 type Plan = {

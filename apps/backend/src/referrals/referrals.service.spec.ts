@@ -13,6 +13,7 @@ describe('ReferralsService', () => {
     const tx = {
         refereePayment: { create: jest.fn() },
         referralSignup: { updateMany: jest.fn() },
+        refereePayoutRequest: { update: jest.fn() },
     };
 
     const db = {
@@ -31,7 +32,14 @@ describe('ReferralsService', () => {
             findMany: jest.fn(),
             updateMany: jest.fn(),
         },
-        refereePayment: { create: jest.fn(), findMany: jest.fn() },
+        refereePayment: { create: jest.fn(), findMany: jest.fn(), aggregate: jest.fn() },
+        refereePayoutRequest: {
+            create: jest.fn(),
+            findFirst: jest.fn(),
+            findMany: jest.fn(),
+            findUnique: jest.fn(),
+            update: jest.fn(),
+        },
         referralClick: { create: jest.fn(), count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
         user: { findUnique: jest.fn(), create: jest.fn() },
         $transaction: jest.fn(),
@@ -41,8 +49,11 @@ describe('ReferralsService', () => {
     const email = {
         sendRefereeCommissionEarned: jest.fn(),
         sendRefereePaymentRecorded: jest.fn(),
+        sendRefereePayoutRequested: jest.fn(),
+        sendRefereePayoutApproved: jest.fn(),
+        sendRefereePayoutRejected: jest.fn(),
     } as any;
-    const platformSettings = { getRawGroup: jest.fn() } as any;
+    const platformSettings = { getRawGroup: jest.fn(), getRawValue: jest.fn() } as any;
     const accounting = { createVoucher: jest.fn() } as any;
 
     let service: ReferralsService;
@@ -69,6 +80,7 @@ describe('ReferralsService', () => {
         email.sendRefereePaymentRecorded.mockResolvedValue(undefined);
         // Off unless a test turns it on — matching the production default.
         platformSettings.getRawGroup.mockResolvedValue({ enabled: 'false' });
+        platformSettings.getRawValue.mockResolvedValue('1000');
         accounting.createVoucher.mockResolvedValue({ id: 'voucher-1' });
         db.$transaction.mockImplementation(async (cb: any) => cb(tx));
         service = new ReferralsService(db, passwordReset, email, platformSettings, accounting);
@@ -118,11 +130,12 @@ describe('ReferralsService', () => {
                 where: { id: 'referee-1' },
                 data: { user_id: 'user-1' },
             });
-            expect(passwordReset.requestRefereeInvite).toHaveBeenCalledWith(
-                'rahman@example.com',
-                'Rahman Traders',
-                'RAHMA1B2C3',
-            );
+            expect(passwordReset.requestRefereeInvite).toHaveBeenCalledWith({
+                email: 'rahman@example.com',
+                name: 'Rahman Traders',
+                referralCode: 'RAHMA1B2C3',
+                phone: undefined,
+            });
             expect(result.commission_rate).toBe(10);
         });
 
@@ -1081,6 +1094,288 @@ describe('ReferralsService', () => {
 
             await expect(service.listReferees()).resolves.toEqual([]);
             expect(db.referralSignup.groupBy).not.toHaveBeenCalled();
+        });
+    });
+
+    // --- Payout self-service -----------------------------------------------------
+
+    /**
+     * The partner-facing half of getting paid. These guard the two ways it can go
+     * wrong with real money: a payout aimed at the wrong wallet, and a balance
+     * requested more than once because nothing reserves it.
+     */
+    describe('payouts', () => {
+        const activeReferee = (overrides: Record<string, unknown> = {}) => ({
+            id: 'referee-1',
+            name: 'Rahman Traders',
+            email: 'rahman@example.com',
+            is_active: true,
+            deleted_at: null,
+            payout_method: 'BKASH',
+            payout_account_name: 'Rahman',
+            payout_account_number: '01712345678',
+            payout_bank_name: null,
+            payout_branch: null,
+            ...overrides,
+        });
+
+        const withBalance = (earned: number, paid: number) => {
+            db.referralSignup.aggregate.mockResolvedValue({ _sum: { commission_amount: earned } });
+            db.refereePayment.aggregate.mockResolvedValue({ _sum: { amount: paid } });
+        };
+
+        describe('updatePayoutProfile', () => {
+            beforeEach(() => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.referee.update.mockResolvedValue({});
+            });
+
+            it('normalises a +880 wallet number to the local 01… form', async () => {
+                await service.updatePayoutProfile('referee-1', {
+                    payout_method: 'BKASH',
+                    payout_account_number: '+880 1712-345678',
+                } as any);
+
+                expect(db.referee.update).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        data: expect.objectContaining({ payout_account_number: '01712345678' }),
+                    }),
+                );
+            });
+
+            it('rejects a wallet number that is not a Bangladeshi mobile', async () => {
+                await expect(
+                    service.updatePayoutProfile('referee-1', {
+                        payout_method: 'NAGAD',
+                        payout_account_number: '0912345678',
+                    } as any),
+                ).rejects.toThrow(BadRequestException);
+                expect(db.referee.update).not.toHaveBeenCalled();
+            });
+
+            it('requires a bank name for a bank payout', async () => {
+                await expect(
+                    service.updatePayoutProfile('referee-1', {
+                        payout_method: 'BANK',
+                        payout_account_number: '1234567890',
+                    } as any),
+                ).rejects.toThrow(BadRequestException);
+            });
+
+            /**
+             * A wallet number is meaningless on a bank row and vice versa. Leaving the
+             * old value behind would leave an admin reading a bank name against a bKash
+             * payout.
+             */
+            it('clears bank fields when switching to a wallet', async () => {
+                await service.updatePayoutProfile('referee-1', {
+                    payout_method: 'BKASH',
+                    payout_account_number: '01712345678',
+                    payout_bank_name: 'Ignored Bank',
+                } as any);
+
+                expect(db.referee.update).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        data: expect.objectContaining({ payout_bank_name: null, payout_branch: null }),
+                    }),
+                );
+            });
+        });
+
+        describe('requestPayout', () => {
+            it('refuses until the partner has said where the money goes', async () => {
+                db.referee.findUnique.mockResolvedValue(
+                    activeReferee({ payout_method: null, payout_account_number: null }),
+                );
+
+                await expect(service.requestPayout('referee-1', {})).rejects.toThrow(
+                    /payout details/i,
+                );
+            });
+
+            /**
+             * Nothing reserves the balance, so two open requests would both look
+             * payable against the same money.
+             */
+            it('allows only one request in flight', async () => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.refereePayoutRequest.findFirst.mockResolvedValue({ id: 'req-1', status: 'PENDING' });
+
+                await expect(service.requestPayout('referee-1', {})).rejects.toThrow(
+                    /already have a payout request/i,
+                );
+            });
+
+            it('refuses a balance below the platform minimum', async () => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.refereePayoutRequest.findFirst.mockResolvedValue(null);
+                withBalance(400, 0);
+
+                await expect(service.requestPayout('referee-1', {})).rejects.toThrow(/minimum payout/i);
+            });
+
+            it('refuses to request more than is owed', async () => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.refereePayoutRequest.findFirst.mockResolvedValue(null);
+                withBalance(5000, 0);
+
+                await expect(service.requestPayout('referee-1', { amount: 9000 })).rejects.toThrow(
+                    /at most 5000/,
+                );
+            });
+
+            it('defaults to the whole balance and snapshots the destination', async () => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.refereePayoutRequest.findFirst.mockResolvedValue(null);
+                withBalance(5000, 1500);
+                db.refereePayoutRequest.create.mockImplementation(async ({ data }: any) => ({
+                    id: 'req-1',
+                    ...data,
+                    status: 'PENDING',
+                }));
+                email.sendRefereePayoutRequested.mockResolvedValue(undefined);
+
+                const result = await service.requestPayout('referee-1', {});
+
+                expect(result.amount).toBe(3500);
+                expect(db.refereePayoutRequest.create).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        data: expect.objectContaining({
+                            amount: 3500,
+                            method: 'BKASH',
+                            account_number: '01712345678',
+                        }),
+                    }),
+                );
+            });
+
+            /**
+             * The whole reason each request carries its own copy of the destination:
+             * a partner editing their wallet number must not redirect a payout that
+             * has already been approved against the old one.
+             */
+            it('does not follow a later profile edit', async () => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.refereePayoutRequest.findFirst.mockResolvedValue(null);
+                withBalance(5000, 0);
+                db.refereePayoutRequest.create.mockImplementation(async ({ data }: any) => ({
+                    id: 'req-1',
+                    ...data,
+                }));
+                email.sendRefereePayoutRequested.mockResolvedValue(undefined);
+
+                const request = await service.requestPayout('referee-1', {});
+
+                db.referee.findUnique.mockResolvedValue(
+                    activeReferee({ payout_account_number: '01999999999' }),
+                );
+                expect(request.account_number).toBe('01712345678');
+            });
+        });
+
+        describe('recordPayment settling a request', () => {
+            beforeEach(() => {
+                db.referee.findUnique.mockResolvedValue(activeReferee());
+                db.referralSignup.findMany.mockResolvedValue([
+                    signup({ id: 'c1', status: 'EARNED', commission_amount: 500 }),
+                ]);
+                tx.refereePayment.create.mockResolvedValue({
+                    id: 'pay-1',
+                    referee_id: 'referee-1',
+                    amount: 500,
+                });
+                tx.referralSignup.updateMany.mockResolvedValue({ count: 1 });
+                tx.refereePayoutRequest.update.mockResolvedValue({});
+                email.sendRefereePaymentRecorded.mockResolvedValue(undefined);
+            });
+
+            it('marks the request PAID in the same transaction as the payment', async () => {
+                db.refereePayoutRequest.findFirst.mockResolvedValue({ status: 'APPROVED' });
+
+                await service.recordPayment(
+                    'referee-1',
+                    { payout_request_id: 'req-1' } as any,
+                    'admin-1',
+                );
+
+                expect(tx.refereePayoutRequest.update).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        where: { id: 'req-1' },
+                        data: expect.objectContaining({ status: 'PAID', payment_id: 'pay-1' }),
+                    }),
+                );
+            });
+
+            it('refuses a request belonging to another referee', async () => {
+                db.refereePayoutRequest.findFirst.mockResolvedValue(null);
+
+                await expect(
+                    service.recordPayment('referee-1', { payout_request_id: 'req-9' } as any, 'admin-1'),
+                ).rejects.toThrow(/does not belong/i);
+                expect(tx.refereePayment.create).not.toHaveBeenCalled();
+            });
+
+            it('refuses to settle a request twice', async () => {
+                db.refereePayoutRequest.findFirst.mockResolvedValue({ status: 'PAID' });
+
+                await expect(
+                    service.recordPayment('referee-1', { payout_request_id: 'req-1' } as any, 'admin-1'),
+                ).rejects.toThrow(/already paid/i);
+            });
+        });
+
+        describe('admin review', () => {
+            it('approving moves no money and settles no commission', async () => {
+                db.refereePayoutRequest.findUnique.mockResolvedValue({
+                    id: 'req-1',
+                    status: 'PENDING',
+                    amount: 3500,
+                    referee: { name: 'Rahman', email: 'rahman@example.com' },
+                });
+                db.refereePayoutRequest.update.mockResolvedValue({ id: 'req-1', status: 'APPROVED' });
+                email.sendRefereePayoutApproved.mockResolvedValue(undefined);
+
+                await service.approvePayoutRequest('req-1', 'admin-1');
+
+                expect(db.referralSignup.updateMany).not.toHaveBeenCalled();
+                expect(db.refereePayment.create).not.toHaveBeenCalled();
+            });
+
+            it('will not approve a request that is not pending', async () => {
+                db.refereePayoutRequest.findUnique.mockResolvedValue({
+                    id: 'req-1',
+                    status: 'REJECTED',
+                    amount: 3500,
+                    referee: { name: 'Rahman', email: 'rahman@example.com' },
+                });
+
+                await expect(service.approvePayoutRequest('req-1', 'admin-1')).rejects.toThrow(
+                    BadRequestException,
+                );
+            });
+
+            it('will not reject a request that has already been paid', async () => {
+                db.refereePayoutRequest.findUnique.mockResolvedValue({
+                    id: 'req-1',
+                    status: 'PAID',
+                    amount: 3500,
+                    referee: { name: 'Rahman', email: 'rahman@example.com' },
+                });
+
+                await expect(
+                    service.rejectPayoutRequest('req-1', 'Wrong account', 'admin-1'),
+                ).rejects.toThrow(/already been paid/i);
+            });
+        });
+
+        describe('cancelPayoutRequest', () => {
+            it('only cancels while nobody has acted on it', async () => {
+                db.refereePayoutRequest.findFirst.mockResolvedValue({ id: 'req-1', status: 'APPROVED' });
+
+                await expect(service.cancelPayoutRequest('referee-1', 'req-1')).rejects.toThrow(
+                    BadRequestException,
+                );
+            });
         });
     });
 });

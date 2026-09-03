@@ -294,6 +294,8 @@ export const routes = {
         root: '/referrals',
         signups: '/referrals/signups',
         payments: '/referrals/payments',
+        /** Payout details the partner owns, plus raising and tracking requests. */
+        payouts: '/referrals/payouts',
     },
 
     /**

@@ -136,6 +136,16 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
      * ledger exactly as before and nothing is written to any chart of accounts.
      * That is the safe default: guessing an account is worse than not posting.
      */
+    /**
+     * Rules the referral programme runs by, as opposed to how its payouts are
+     * booked (see `referral_accounting` below).
+     */
+    referral_program: {
+        // Smallest balance a partner may raise a payout request for. Guards against
+        // a ৳40 request costing more in admin time and bKash fees than it moves.
+        min_payout_amount:          { isSecret: false, default: '1000' },
+    },
+
     referral_accounting: {
         enabled:                    { isSecret: false, default: 'false' },
         // Tenant whose books receive the entries — the operator's own workspace.

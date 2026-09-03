@@ -96,16 +96,20 @@ interface RateHistoryProps {
     type: RateHistoryType;
     /** The customer or supplier selected on the document, when there is one. */
     partyId?: string;
-    /** Name shown over the party's own rows. Falls back to a generic heading. */
-    partyName?: string;
     /** Adopt a historic rate. Omitted where the price is not editable. */
     onPickRate?: (rate: number) => void;
+    /**
+     * Drop the "Previous … rates" line. The modal puts that in its own header,
+     * and printing it twice reads as a rendering bug.
+     */
+    hideHeading?: boolean;
 }
 
 const LABELS = {
     sale: {
         heading: 'Previous sale rates',
         partyless: 'Walk-in',
+        thisParty: 'This customer',
         others: 'Other customers',
         empty: 'No previous sales of this item.',
         docHref: (id: string) => routes.sales.detail(id),
@@ -113,6 +117,7 @@ const LABELS = {
     purchase: {
         heading: 'Previous purchase rates',
         partyless: 'No supplier',
+        thisParty: 'This supplier',
         others: 'Other suppliers',
         empty: 'No previous purchases of this item.',
         docHref: (id: string) => routes.purchases.purchaseDetail(id),
@@ -166,16 +171,16 @@ function RateRow({
  * "What did this item last go out at, and to whom?" — rendered beside the rate
  * field while it is being decided, on both sale and purchase entry.
  *
- * The selected party's own rows come first under their name because "what did
- * I quote *this* customer last time" is the question actually being asked; a
- * merged list buries it. Clicking a rate adopts it.
+ * The selected party's own rows come first because "what did I quote *this*
+ * customer last time" is the question actually being asked; a merged list
+ * buries it. Clicking a rate adopts it.
  */
 export default function RateHistory({
     productId,
     type,
     partyId,
-    partyName,
     onPickRate,
+    hideHeading = false,
 }: RateHistoryProps) {
     const { data, loading } = useRateHistory(productId, type, partyId);
     const labels = LABELS[type];
@@ -198,7 +203,9 @@ export default function RateHistory({
     return (
         <div className="text-[11px] leading-relaxed">
             <div className="flex flex-wrap items-baseline gap-x-2 text-gray-500">
-                <span className="font-semibold uppercase tracking-wide">{labels.heading}</span>
+                {!hideHeading && (
+                    <span className="font-semibold uppercase tracking-wide">{labels.heading}</span>
+                )}
                 {data?.summary && (
                     <span className="text-gray-400">
                         avg {formatBDT(data.summary.avgRate)}
@@ -211,7 +218,9 @@ export default function RateHistory({
 
             {forParty.length > 0 && (
                 <>
-                    <div className="mt-0.5 text-gray-400">{partyName || 'This party'}</div>
+                    {/* Labelled by role, not by name: every row in this
+                        section already shows the party's name. */}
+                    <div className="mt-0.5 text-gray-400">{labels.thisParty}</div>
                     <ul>
                         {forParty.map((row) => (
                             <RateRow key={`${row.documentId}-${row.rate}`} row={row} labels={labels} onPickRate={onPickRate} />

@@ -181,6 +181,10 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'SmsPackage', exempt: 'Platform SMS-credit catalog.' },
     { model: 'Referee', exempt: 'Referral-program config (rates).' },
     { model: 'RefereePayment', exempt: 'Referral payout at the platform level, not the tenant GL.' },
+    // A request is an intent, not a movement: raising one changes no commission and
+    // moves no cash. The payout it asks for becomes real as a RefereePayment, which
+    // is the row that would post if referral payouts posted at all.
+    { model: 'RefereePayoutRequest', exempt: 'Partner-raised payout intent; the RefereePayment it settles is the money event.' },
     { model: 'ReferralSignup', exempt: 'Referral analytics/attribution.' },
     { model: 'CrmCampaign', exempt: 'Attributed-revenue analytics, not a ledger entry.' },
 
