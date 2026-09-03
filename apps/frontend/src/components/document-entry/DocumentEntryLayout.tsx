@@ -11,10 +11,10 @@ interface DocumentEntryLayoutProps {
     backLabel?: string;
     /** Full-width notice above the form (draft warning, edit-mode banner…). */
     banner?: ReactNode;
-    /** Meta row rendered beside the title — normally a SalesHeader. */
+    /** Meta row rendered beside the title — normally a DocumentMetaBar. */
     metaBar: ReactNode;
-    /** Customer picker, top-left of the work area. Omitted where there is none. */
-    customerPicker?: ReactNode;
+    /** Counterparty picker (customer or supplier), top-left of the work area. */
+    partyPicker?: ReactNode;
     /** Product search, source-document lookup, or whatever feeds the lines. */
     picker?: ReactNode;
     /** The line items table — the only scrolling region on desktop. */
@@ -34,17 +34,18 @@ interface DocumentEntryLayoutProps {
  * its actions to the bottom.
  *
  * This is the primitive. `SaleEntryLayout` composes it into the full sale
- * screen (customer + product search + totals + payment); quotation, order and
- * return entry fill the same slots with what those documents actually need.
- * Keeping one frame is the point — the four screens cannot drift apart.
+ * screen (customer + product search + totals + payment); quotation, order,
+ * return and purchase entry fill the same slots with what those documents
+ * actually need. Keeping one frame is the point — the screens cannot drift
+ * apart.
  */
 export default function DocumentEntryLayout({
     title,
     backHref,
-    backLabel = 'Back to sales',
+    backLabel = 'Back',
     banner,
     metaBar,
-    customerPicker,
+    partyPicker,
     picker,
     table,
     note,
@@ -79,10 +80,10 @@ export default function DocumentEntryLayout({
             <div className="flex flex-col lg:flex-1 lg:flex-row lg:overflow-hidden">
                 {/* Left work area */}
                 <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
-                    {(customerPicker || picker) && (
-                        <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
-                            {customerPicker && (
-                                <div className="sm:w-72 flex-shrink-0">{customerPicker}</div>
+                    {(partyPicker || picker) && (
+                        <div className="flex flex-col sm:flex-row items-start gap-2 flex-shrink-0">
+                            {partyPicker && (
+                                <div className="w-full sm:w-72 flex-shrink-0">{partyPicker}</div>
                             )}
                             {picker && <div className="flex-1 min-w-0">{picker}</div>}
                         </div>

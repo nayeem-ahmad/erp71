@@ -39,16 +39,6 @@ jest.mock('../AddProductModal', () => ({
         ) : null,
 }));
 
-jest.mock('../../purchases/CreatePurchaseModal', () => ({
-    __esModule: true,
-    default: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-        isOpen ? (
-            <div data-testid="create-purchase-modal">
-                <button onClick={onClose}>Close Purchase Modal</button>
-            </div>
-        ) : null,
-}));
-
 jest.mock('@/components/data-table', () => ({
     DataTable: ({
         title,

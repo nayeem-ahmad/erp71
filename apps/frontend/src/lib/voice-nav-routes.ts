@@ -139,7 +139,7 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
     },
     {
         id: 'purchase-entry',
-        path: '/purchases/list?new=1',
+        path: '/purchases/new',
         aliases: [
             'purchase entry',
             'new purchase',

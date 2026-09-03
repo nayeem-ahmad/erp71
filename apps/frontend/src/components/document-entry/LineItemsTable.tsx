@@ -1,5 +1,7 @@
 import { Trash2, Minus, Plus } from 'lucide-react';
 import { LineItem } from '@/lib/hooks/useNewSaleCart';
+import CompoundUnitInput from '@/components/CompoundUnitInput';
+import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
 
 interface LineItemsTableProps {
     items: LineItem[];
@@ -19,6 +21,16 @@ interface LineItemsTableProps {
     /** Hard cap per line, e.g. the un-returned quantity of a sale item. */
     maxQuantityOf?: (item: LineItem) => number | undefined;
     emptyMessage?: string;
+    /** Column heading for the per-unit amount — "Cost" where the document buys. */
+    priceLabel?: string;
+    /** Column heading for the stock-on-hand column. */
+    availableLabel?: string;
+    /**
+     * Enter the quantity of a compound-unit product in its two parts (3 kg
+     * 250 g) instead of the base unit. Opt-in: the sales screens have always
+     * counted in the base unit, and switching them is a separate decision.
+     */
+    showCompoundUnits?: boolean;
 }
 
 export default function LineItemsTable({
@@ -31,6 +43,9 @@ export default function LineItemsTable({
     readOnlyPrice = false,
     maxQuantityOf,
     emptyMessage,
+    priceLabel = 'Price',
+    availableLabel = 'Avail',
+    showCompoundUnits = false,
 }: LineItemsTableProps) {
     const priceFrozen = readOnly || readOnlyPrice;
     const columnCount = 6 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
@@ -65,9 +80,9 @@ export default function LineItemsTable({
                         <th className="px-2 py-1.5 text-start font-semibold">Name</th>
                         <th className="px-2 py-1.5 text-start font-semibold hidden md:table-cell">Group</th>
                         {showAvailable && (
-                            <th className="px-2 py-1.5 text-end font-semibold hidden md:table-cell">Avail</th>
+                            <th className="px-2 py-1.5 text-end font-semibold hidden md:table-cell">{availableLabel}</th>
                         )}
-                        <th className="px-2 py-1.5 text-end font-semibold">Price</th>
+                        <th className="px-2 py-1.5 text-end font-semibold">{priceLabel}</th>
                         {showDiscount && <th className="px-2 py-1.5 text-end font-semibold">Disc %</th>}
                         <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
                         <th className="px-2 py-1.5 text-end font-semibold">Total</th>
@@ -135,6 +150,13 @@ export default function LineItemsTable({
                                 <td className="px-2 py-1">
                                     {readOnly ? (
                                         <div className="text-center text-gray-700">{item.quantity}</div>
+                                    ) : showCompoundUnits && isCompoundUnit(item.unitType ?? 'none') ? (
+                                        <CompoundUnitInput
+                                            unitType={item.unitType as CompoundUnitType}
+                                            value={item.quantity}
+                                            onChange={(value) => handleQuantityChange(item.productId, value)}
+                                            inputClassName="px-1.5 py-0.5 border rounded text-sm"
+                                        />
                                     ) : (
                                         <div className="flex items-center justify-center gap-1">
                                             <button

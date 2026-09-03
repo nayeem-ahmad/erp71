@@ -11,6 +11,12 @@ export interface LineItem {
     /** Stock on hand when the product was picked — shown for reference only. */
     availableQty?: number;
     /**
+     * The product's unit type (`kg_g`, `dozen_pcs`, …). Only documents that opt
+     * into compound quantity entry read it; everything else counts in the base
+     * unit as before.
+     */
+    unitType?: string;
+    /**
      * Id of the line this one derives from, where the document is built from
      * another (a sales return carries the originating sale_item id here).
      */

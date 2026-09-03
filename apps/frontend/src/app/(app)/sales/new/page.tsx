@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, toDatetimeLocal } from '@/lib/format';
-import { availableQtyOf } from '../components/ProductSearch';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import SaleEntryLayout, {
     computeSaleTotals,

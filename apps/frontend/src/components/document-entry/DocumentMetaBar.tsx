@@ -16,25 +16,27 @@ export function MetaField({ label, children }: { label: string; children: ReactN
 /** Input styling for controls passed into MetaField. */
 export const metaFieldInputClass = FIELD_CLASS;
 
-interface SalesHeaderProps {
-    /** Label for the auto-assigned serial, e.g. "Sales #", "Quotation #". */
+interface DocumentMetaBarProps {
+    /** Label for the auto-assigned serial, e.g. "Sales #", "Purchase #". */
     docLabel?: string;
     refNumber?: string;
     setRefNumber?: (value: string) => void;
+    /** Label for the reference field — "Ref #" on a sale, "Bill #" on a purchase. */
+    refLabel?: string;
     currentUser: any;
-    saleDate?: string;
-    setSaleDate?: (value: string) => void;
+    documentDate?: string;
+    setDocumentDate?: (value: string) => void;
     /** Ref # is only offered where the document actually stores one. */
     showRefNumber?: boolean;
     /**
      * Document date. Off where the API assigns it server-side and accepts no
-     * override (quotations, sales orders, returns) — an editable date there
-     * would imply a back-dating the save silently ignores.
+     * override (quotations, sales orders, returns, purchases) — an editable
+     * date there would imply a back-dating the save silently ignores.
      */
     showDate?: boolean;
     /** Per-document extras (Valid Until, Delivery Date, source Sale #). */
     children?: ReactNode;
-    /** Assigned sale number — omitted on a new entry, where it reads "Auto". */
+    /** Assigned document number — omitted on a new entry, where it reads "Auto". */
     serialNumber?: string;
     readOnly?: boolean;
     /**
@@ -45,24 +47,26 @@ interface SalesHeaderProps {
     refReadOnly?: boolean;
 }
 
-// Renders the sale meta fields (sales #, reference, user, date) as a compact
-// inline row that lives in the page's top strip — no card, no heavy padding.
-export default function SalesHeader({
+// Renders the document meta fields (document #, reference, user, date) as a
+// compact inline row that lives in the page's top strip — no card, no heavy
+// padding. Shared by every entry screen so the strip cannot drift per module.
+export default function DocumentMetaBar({
     docLabel = 'Sales #',
     refNumber = '',
     setRefNumber,
+    refLabel = 'Ref #',
     currentUser,
-    saleDate = '',
-    setSaleDate,
+    documentDate = '',
+    setDocumentDate,
     showRefNumber = true,
     showDate = true,
     children,
     serialNumber,
     readOnly = false,
     refReadOnly = false,
-}: SalesHeaderProps) {
+}: DocumentMetaBarProps) {
     const labelClass = LABEL_CLASS;
-    const displayDate = saleDate ? new Date(saleDate).toLocaleString() : '—';
+    const displayDate = documentDate ? new Date(documentDate).toLocaleString() : '—';
 
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -76,7 +80,7 @@ export default function SalesHeader({
             </span>
             {showRefNumber && (
                 <label className="flex items-center gap-1">
-                    <span className={labelClass}>Ref #</span>
+                    <span className={labelClass}>{refLabel}</span>
                     {readOnly || refReadOnly ? (
                         <span className="text-gray-700 font-medium">{refNumber || '—'}</span>
                     ) : (
@@ -104,8 +108,8 @@ export default function SalesHeader({
                     ) : (
                         <input
                             type="datetime-local"
-                            value={saleDate}
-                            onChange={(e) => setSaleDate?.(e.target.value)}
+                            value={documentDate}
+                            onChange={(e) => setDocumentDate?.(e.target.value)}
                             className={FIELD_CLASS}
                         />
                     )}

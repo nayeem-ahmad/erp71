@@ -685,6 +685,8 @@ export const api = {
         if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/products${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /** One product with its stock rows — used to seed an entry form from a link. */
+    getProduct: (id: string) => fetchWithAuth(`/products/${id}`),
     createProduct: (data: any) => fetchWithAuth('/products', {
         method: 'POST',
         body: JSON.stringify(data),

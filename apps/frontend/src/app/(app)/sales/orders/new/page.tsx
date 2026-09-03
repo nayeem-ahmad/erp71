@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
-import DocumentEntryLayout from '../../components/DocumentEntryLayout';
+import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
 import CustomerSelection from '../../components/CustomerSelection';
-import ProductSearch from '../../components/ProductSearch';
-import LineItemsTable from '../../components/LineItemsTable';
+import ProductSearch from '@/components/document-entry/ProductSearch';
+import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import TotalsFooter from '../../components/TotalsFooter';
-import SalesHeader, { MetaField, metaFieldInputClass } from '../../components/SalesHeader';
+import DocumentMetaBar, { MetaField, metaFieldInputClass } from '@/components/document-entry/DocumentMetaBar';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
@@ -125,7 +125,7 @@ export default function NewSalesOrderPage() {
             backHref={routes.sales.orders}
             onSubmit={handleSubmit}
             metaBar={
-                <SalesHeader
+                <DocumentMetaBar
                     docLabel="Order #"
                     currentUser={currentUser}
                     showRefNumber={false}
@@ -139,9 +139,9 @@ export default function NewSalesOrderPage() {
                             className={metaFieldInputClass}
                         />
                     </MetaField>
-                </SalesHeader>
+                </DocumentMetaBar>
             }
-            customerPicker={<CustomerSelection customer={customer} setCustomer={setCustomer} />}
+            partyPicker={<CustomerSelection customer={customer} setCustomer={setCustomer} />}
             picker={
                 <VoiceEntryInput entryType="sales_order" onResult={handleVoiceOrder} inline>
                     <ProductSearch onProductSelect={handleAddItem} />
