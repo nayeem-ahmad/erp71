@@ -396,6 +396,7 @@ function NewSalePageContent() {
             tenantVatRate={vatRate}
             payments={payments}
             onPaymentChange={updatePayment}
+            showRateHistory
             onSubmit={handleSubmit}
             actions={
                 <>

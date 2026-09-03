@@ -17,6 +17,7 @@ jest.mock('@/lib/api', () => ({
         createNewSale: jest.fn(),
         getCustomers: jest.fn(),
         searchProductsByQuantity: jest.fn(),
+        getProductRateHistory: jest.fn(),
         getPaymentMethods: jest.fn(),
         getQuotation: jest.fn(),
         getOrder: jest.fn(),
@@ -26,6 +27,9 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+
+/** The rate hint renders on every staged product; most cases don't exercise it. */
+const EMPTY_RATE_HISTORY = { type: 'sale', forParty: [], recent: [], summary: null };
 
 const mockReplace = jest.fn();
 let searchParams: Record<string, string> = {};
@@ -50,6 +54,7 @@ describe('NewSalePage — editable sale date', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             {
                 id: 'prod-1',
@@ -128,6 +133,7 @@ describe('NewSalePage — product staging and drafts', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             {
                 id: 'prod-1',
@@ -255,6 +261,7 @@ describe('NewSalePage — converting a quotation or sales order', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([]);
         (api.getQuotation as jest.Mock).mockResolvedValue(quotation);
         (api.getOrder as jest.Mock).mockResolvedValue(salesOrder);

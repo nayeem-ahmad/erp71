@@ -3967,6 +3967,20 @@ export const api = {
         if (limit) q.set('limit', String(limit));
         return fetchWithAuth(`/products/search/by-quantity?${q}`);
     },
+    /**
+     * The last few rates a product traded at, split into the selected party's
+     * own rows and everyone else's. Feeds the rate hint on sale/purchase entry.
+     */
+    getProductRateHistory: (
+        productId: string,
+        params: { type: 'sale' | 'purchase'; partyId?: string; limit?: number },
+        init?: RequestInit,
+    ) => {
+        const q = new URLSearchParams({ type: params.type });
+        if (params.partyId) q.set('partyId', params.partyId);
+        if (params.limit) q.set('limit', String(params.limit));
+        return fetchWithAuth(`/products/${productId}/rate-history?${q}`, init);
+    },
     getCurrentUser: () => fetchWithAuth('/auth/me'),
 
     // ── Projects ───────────────────────────────────────────────────────────

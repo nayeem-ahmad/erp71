@@ -187,6 +187,30 @@ export class ProductsController {
         return this.productsService.searchByQuantitySold(tenant.tenantId, query || '', parsedLimit);
     }
 
+    /**
+     * The last few rates this product traded at, for the rate hint on the sale
+     * and purchase entry screens. Declared before `:id` only for readability —
+     * the two paths differ in segment count and cannot shadow each other.
+     */
+    @Get(':id/rate-history')
+    rateHistory(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('type') type?: string,
+        @Query('partyId') partyId?: string,
+        @Query('limit') limit?: string,
+    ) {
+        if (type !== 'sale' && type !== 'purchase') {
+            throw new BadRequestException("type must be 'sale' or 'purchase'");
+        }
+
+        return this.productsService.getRateHistory(tenant.tenantId, id, {
+            type,
+            partyId: partyId || undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+        });
+    }
+
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.productsService.findOne(tenant.tenantId, id);

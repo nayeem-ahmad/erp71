@@ -216,6 +216,9 @@ export default function NewPurchasePage() {
                         onProductSelect={addProduct}
                         priceLabel={t.purchaseShared.unitCost}
                         placeholder={t.purchaseShared.searchProducts}
+                        historyType="purchase"
+                        historyPartyId={supplier?.id}
+                        historyPartyName={supplier?.name}
                     />
                 </VoiceEntryInput>
             }
@@ -229,6 +232,9 @@ export default function NewPurchasePage() {
                     priceLabel={t.purchaseShared.unitCost}
                     availableLabel={t.purchaseShared.inStock}
                     emptyMessage={t.purchaseShared.noPurchaseLinesYet}
+                    historyType="purchase"
+                    historyPartyId={supplier?.id}
+                    historyPartyName={supplier?.name}
                 />
             }
             note={

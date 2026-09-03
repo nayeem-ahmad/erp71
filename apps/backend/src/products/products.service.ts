@@ -9,6 +9,14 @@ import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import {
+    clampRateHistoryLimit,
+    mapPurchaseItemToRateRow,
+    mapSaleItemToRateRow,
+    summariseRates,
+    type RateHistory,
+    type RateHistoryType,
+} from './rate-history';
 
 const CACHE_TTL = 60; // seconds
 
@@ -181,6 +189,124 @@ export class ProductsService {
         }
 
         return product;
+    }
+
+    /**
+     * The last few rates this product actually traded at, for the sale and
+     * purchase entry screens.
+     *
+     * Split into the selected party's own rows and everyone else's rather than
+     * one merged list: "what did I quote *this* customer last time" is the
+     * question being asked, and a merged list buries it. The two sections are
+     * disjoint, so the caller renders them back to back without de-duplicating.
+     *
+     * Tenant-wide, not store-scoped — a rate is a rate, and a shopkeeper
+     * comparing branches is exactly who this is for.
+     */
+    async getRateHistory(
+        tenantId: string,
+        productId: string,
+        opts: { type: RateHistoryType; partyId?: string; limit?: number },
+    ): Promise<RateHistory> {
+        // 404s when the product is another tenant's, which is also what keeps
+        // this endpoint from being a cross-tenant probe. Deliberately not
+        // `findOne` — this runs on every product an operator stages, and the
+        // full include (stocks joined to warehouses, brand, group, subgroup)
+        // would be fetched only to be thrown away.
+        const owned = await this.db.product.findFirst({
+            where: { id: productId, tenant_id: tenantId, deleted_at: null },
+            select: { id: true },
+        });
+        if (!owned) throw new NotFoundException('Product not found');
+
+        const take = clampRateHistoryLimit(opts.limit);
+        const partyId = opts.partyId || undefined;
+
+        const { forParty, recent } = opts.type === 'purchase'
+            ? await this.purchaseRateHistory(tenantId, productId, partyId, take)
+            : await this.saleRateHistory(tenantId, productId, partyId, take);
+
+        return {
+            type: opts.type,
+            forParty,
+            recent,
+            summary: summariseRates([...forParty, ...recent]),
+        };
+    }
+
+    private async saleRateHistory(
+        tenantId: string,
+        productId: string,
+        partyId: string | undefined,
+        take: number,
+    ) {
+        // Drafts are parked, not traded: they moved no stock and took no money,
+        // so their line prices are not evidence of anything.
+        const base = {
+            product_id: productId,
+            sale: { tenant_id: tenantId, status: 'COMPLETED' as const },
+        };
+        const query = {
+            include: {
+                sale: { select: { id: true, serial_number: true, reference_number: true, sale_date: true, customer_id: true, customer: { select: { name: true } } } },
+            },
+            orderBy: { sale: { sale_date: 'desc' as const } },
+            take,
+        };
+
+        const [partyItems, otherItems] = await Promise.all([
+            partyId
+                ? this.db.saleItem.findMany({ where: { ...base, sale: { ...base.sale, customer_id: partyId } }, ...query })
+                : Promise.resolve([]),
+            this.db.saleItem.findMany({
+                // Explicit OR rather than `{ not: partyId }`: SQL's `<>` drops
+                // NULLs, which would hide every walk-in sale the moment a
+                // customer is selected.
+                where: partyId
+                    ? { ...base, sale: { ...base.sale, OR: [{ customer_id: null }, { customer_id: { not: partyId } }] } }
+                    : base,
+                ...query,
+            }),
+        ]);
+
+        return {
+            forParty: partyItems.map(mapSaleItemToRateRow),
+            recent: otherItems.map(mapSaleItemToRateRow),
+        };
+    }
+
+    private async purchaseRateHistory(
+        tenantId: string,
+        productId: string,
+        partyId: string | undefined,
+        take: number,
+    ) {
+        const base = { product_id: productId, purchase: { tenant_id: tenantId } };
+        const query = {
+            include: {
+                purchase: { select: { id: true, purchase_number: true, reference_number: true, created_at: true, supplier_id: true, supplier: { select: { name: true } } } },
+            },
+            orderBy: { purchase: { created_at: 'desc' as const } },
+            take,
+        };
+
+        const [partyItems, otherItems] = await Promise.all([
+            partyId
+                ? this.db.purchaseItem.findMany({ where: { ...base, purchase: { ...base.purchase, supplier_id: partyId } }, ...query })
+                : Promise.resolve([]),
+            this.db.purchaseItem.findMany({
+                // See the sale side: `<>` would drop supplier-less purchases.
+                where: partyId
+                    ? { ...base, purchase: { ...base.purchase, OR: [{ supplier_id: null }, { supplier_id: { not: partyId } }] } }
+                    : base,
+                ...query,
+            }),
+        ]);
+
+        return {
+            forParty: partyItems.map(mapPurchaseItemToRateRow),
+            recent: otherItems.map(mapPurchaseItemToRateRow),
+        };
     }
 
     async update(tenantId: string, id: string, dto: UpdateProductDto) {

@@ -1794,6 +1794,10 @@ model PurchaseItem {
   product     Product              @relation(fields: [product_id], references: [id])
   returnItems PurchaseReturnItem[]
   jobCosts    ProductionJobCost[]
+
+  @@index([purchase_id])
+  /// Purchase entry looks up "what did we last pay for this, and to whom?".
+  @@index([product_id])
 }
 
 model PurchaseReturn {
@@ -3209,6 +3213,9 @@ model SaleItem {
   returns SalesReturnItem[]
 
   @@index([sale_id])
+  /// Sale entry looks up "what did this item last go out at, and to whom?".
+  /// Without this the lookup seq-scans the largest table in the schema.
+  @@index([product_id])
 }
 
 model SalesReturn {
