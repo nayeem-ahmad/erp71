@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
+import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2, ReceiptText } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
@@ -213,6 +213,17 @@ export default function OrdersPage() {
                             >
                                 <Edit2 className="w-4 h-4" />
                             </Link>
+                            {/* Opens the sale entry screen seeded from this
+                                order; the sale records the link back when it is
+                                saved. */}
+                            <Link
+                                href={`${routes.sales.new}?salesOrderId=${row.id}`}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                                title={t.orders.convertToSale}
+                                aria-label={t.orders.convertToSale}
+                            >
+                                <ReceiptText className="w-4 h-4" />
+                            </Link>
                             <button
                                 onClick={() => handlePrint(row)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -233,7 +244,7 @@ export default function OrdersPage() {
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 160,
+                size: 190,
             }),
         ],
         [t, locale],
