@@ -533,7 +533,7 @@ describe('AuthService', () => {
             expect.objectContaining({
                 include: expect.objectContaining({
                     tenantMembers: expect.objectContaining({
-                        where: { tenant: { deleted_at: null, is_platform_workspace: false } },
+                        where: { tenant: { deleted_at: null, platform_workspace_key: null } },
                     }),
                 }),
             }),

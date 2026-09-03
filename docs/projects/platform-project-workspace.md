@@ -31,20 +31,46 @@ means "this tenant *or* the platform". Two dozen migrations' worth of surface
 area, a nullable foreign key on the hottest filter in the module, and a new way
 for a missed `where` clause to leak one workspace's tasks into another's board.
 
-**Give the platform a workspace.** One real tenant row, flagged
-`is_platform_workspace`, that every platform admin belongs to as `OWNER`. The
+**Give the platform a workspace.** One real tenant row, marked by
+`platform_workspace_key`, that every platform admin belongs to as `OWNER`. The
 module then works exactly as it already does, because nothing about it changes.
 
-The second is what shipped. The flag buys one thing: the ability to keep this
+The second is what shipped. The marker buys one thing: the ability to keep this
 row out of every place that means *customer*.
 
 ---
 
-## What the flag excludes
+## Why the marker is a nullable key and not a boolean
 
-`Tenant.is_platform_workspace` is a boolean with a partial unique index — at most
-one live row can carry it, enforced by the database rather than by a service that
-could race with itself.
+`Tenant.platform_workspace_key` is a nullable `TEXT` with a `UNIQUE` constraint,
+holding the single constant `'platform'` on one row and `NULL` everywhere else.
+Every customer-facing query therefore reads `platform_workspace_key: null`, which
+is less obvious than `is_platform_workspace: false` would have been. The reason
+is worth stating, because the obvious version is a trap.
+
+"At most one platform workspace" over a boolean needs a **partial** unique index
+(`... WHERE is_platform_workspace = true`). Prisma's schema language cannot
+express one, so it would have lived only in `migration.sql` — and **production
+applies the schema with `prisma db push`, never `prisma migrate deploy`** (see
+the `CMD` in `apps/backend/Dockerfile`, and the `sync:*` scripts that exist
+precisely because migrations do not run there). The index would have existed in
+no deployed environment, and the "the database stops the race" claim below would
+have been false everywhere it mattered.
+
+Postgres allows any number of `NULL`s under a `UNIQUE` constraint and exactly one
+non-`NULL` value. That is the same guarantee, in a form `db push` reproduces from
+`schema.prisma` alone.
+
+One consequence to know about: the constraint spans *all* rows, deleted included.
+A workspace someone soft-deleted by hand would still hold the key and block every
+future create, so `provision` detects exactly that and raises a
+`ConflictException` naming the row and saying to clear its `deleted_at`. Nothing
+in the product can reach that state — the workspace is excluded from the admin
+delete path — which is why it is an error message rather than a recovery path.
+
+---
+
+## What the marker excludes
 
 | Excluded from | Where |
 |---|---|
@@ -148,9 +174,9 @@ tenant row that exists only because a migration ran is a row every "how many
 workspaces are there" query has to remember to exclude.
 
 Two admins opening the console at the same moment both see no workspace and both
-try to create one. The partial unique index means the loser's insert throws; it
-re-reads and returns the row the winner wrote, so both end up in the same
-workspace rather than one of them seeing an error.
+try to create one. The unique key means the loser's insert throws; it re-reads
+and returns the row the winner wrote, so both end up in the same workspace rather
+than one of them seeing an error.
 
 Project types and task statuses need no seeding — `ProjectSettingsService` seeds
 those from `DEFAULT_TASK_STATUSES` on first read, for any tenant.
@@ -179,9 +205,10 @@ npx tsx prisma/sync-nav-layout.ts --nodes=projects,projects.list,projects.boards
 
 - **No cross-workspace reporting.** The platform's hour logs and a tenant's hour
   logs are separate tenants and never roll up together.
-- **No second workspace.** The unique index allows exactly one. If the platform
-  ever wants per-team workspaces, that is a different change — and the flag would
-  have to become a kind rather than a boolean.
+- **No second workspace.** The unique key allows exactly one. If the platform
+  ever wants per-team workspaces, that is a different change — the key would have
+  to become a per-workspace slug, and every `platform_workspace_key: null` filter
+  would need re-reading as "not any platform workspace".
 - **No membership beyond platform admins.** A contractor who is not a platform
   admin cannot be added; `ProjectMember` can name an employee without a login,
   but the tenant membership itself follows the admin roster.

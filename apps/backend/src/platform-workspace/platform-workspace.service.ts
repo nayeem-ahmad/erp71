@@ -1,9 +1,17 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { platformAdminUserWhere } from '../auth/platform-admin.util';
 
 export const PLATFORM_WORKSPACE_NAME = 'ERP71 Platform';
+
+/**
+ * The one value `Tenant.platform_workspace_key` ever holds. Every other tenant
+ * leaves it NULL, and the column is UNIQUE, so the database allows exactly one
+ * platform workspace — see the column's note in schema.prisma for why this is a
+ * nullable key rather than the boolean it looks like it should be.
+ */
+export const PLATFORM_WORKSPACE_KEY = 'platform';
 
 export interface PlatformWorkspaceSummary {
     id: string;
@@ -22,9 +30,9 @@ export interface PlatformWorkspaceSummary {
  *
  * Teaching two dozen tables a second, tenant-less scope would have meant
  * touching every project query in the codebase for one internal use. Instead the
- * platform gets one real tenant, flagged `is_platform_workspace`, that every
+ * platform gets one real tenant, marked by `platform_workspace_key`, that every
  * platform admin belongs to as OWNER. The whole module then works unchanged, and
- * the flag is what keeps the row out of everything that means "customer":
+ * the marker is what keeps the row out of everything that means "customer":
  * tenant listings, platform metrics and the account chooser all exclude it.
  *
  * OWNER is deliberate rather than lazy. `StorePermissionGuard` and
@@ -45,7 +53,7 @@ export class PlatformWorkspaceService {
     /** The workspace, if it has ever been provisioned. Never creates one. */
     async find(): Promise<PlatformWorkspaceSummary | null> {
         return this.db.tenant.findFirst({
-            where: { is_platform_workspace: true, deleted_at: null },
+            where: { platform_workspace_key: PLATFORM_WORKSPACE_KEY, deleted_at: null },
             select: { id: true, name: true, timezone: true },
         });
     }
@@ -84,10 +92,10 @@ export class PlatformWorkspaceService {
     /**
      * Create the workspace, owned by whoever opened it first.
      *
-     * `is_platform_workspace` carries a partial unique index, so two admins
-     * racing here cannot both win: the loser's insert fails and it re-reads the
-     * row the winner wrote, which is why the catch swallows only a failure that
-     * a workspace now exists to explain.
+     * `platform_workspace_key` is UNIQUE, so two admins racing here cannot both
+     * win: the loser's insert fails and it re-reads the row the winner wrote,
+     * which is why the catch swallows only a failure that a live workspace now
+     * exists to explain.
      */
     private async provision(userId: string): Promise<PlatformWorkspaceSummary> {
         try {
@@ -95,7 +103,7 @@ export class PlatformWorkspaceService {
                 data: {
                     name: PLATFORM_WORKSPACE_NAME,
                     owner_id: userId,
-                    is_platform_workspace: true,
+                    platform_workspace_key: PLATFORM_WORKSPACE_KEY,
                     // The module is internal tooling, not a subscription: it is
                     // reached from the admin console rather than through a plan,
                     // so this workspace deliberately has no subscription, no
@@ -112,6 +120,24 @@ export class PlatformWorkspaceService {
         } catch (error) {
             const existing = await this.find();
             if (existing) return existing;
+
+            // Nothing live to explain the failure. One cause is worth naming
+            // rather than re-throwing a bare constraint violation: the key is
+            // unique across *all* rows, so a workspace someone soft-deleted by
+            // hand still holds it and blocks every future create. Nothing in the
+            // product can reach that state — the workspace is excluded from the
+            // admin delete path — so the fix is a database one, and the operator
+            // needs to be told which.
+            const softDeleted = await this.db.tenant.findFirst({
+                where: { platform_workspace_key: PLATFORM_WORKSPACE_KEY },
+                select: { id: true },
+            });
+            if (softDeleted) {
+                throw new ConflictException(
+                    `The platform workspace (${softDeleted.id}) is soft-deleted. Clear its deleted_at to restore it.`,
+                );
+            }
+
             throw error;
         }
     }

@@ -1,8 +1,12 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
-import { PlatformWorkspaceService, PLATFORM_WORKSPACE_NAME } from './platform-workspace.service';
+import {
+    PlatformWorkspaceService,
+    PLATFORM_WORKSPACE_KEY,
+    PLATFORM_WORKSPACE_NAME,
+} from './platform-workspace.service';
 
 describe('PlatformWorkspaceService', () => {
     let service: PlatformWorkspaceService;
@@ -54,7 +58,7 @@ describe('PlatformWorkspaceService', () => {
                     data: expect.objectContaining({
                         name: PLATFORM_WORKSPACE_NAME,
                         owner_id: 'admin-1',
-                        is_platform_workspace: true,
+                        platform_workspace_key: PLATFORM_WORKSPACE_KEY,
                     }),
                 }),
             );
@@ -94,6 +98,24 @@ describe('PlatformWorkspaceService', () => {
             await expect(service.resolveForAdmin('admin-1')).rejects.toThrow('connection reset');
         });
 
+        // The key is unique across all rows, so a workspace someone soft-deleted
+        // by hand keeps holding it and blocks every future create. Saying which
+        // row and what to do beats re-throwing a bare constraint violation.
+        it('names the soft-deleted workspace still holding the unique key', async () => {
+            db.tenant.findFirst
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'ws-gone' });
+            db.tenant.create.mockRejectedValue(new Error('Unique constraint failed'));
+
+            // One invocation, both assertions: a second call would run down the
+            // same `mockResolvedValueOnce` queue and take a different path.
+            const error = await service.resolveForAdmin('admin-1').catch((e) => e);
+
+            expect(error).toBeInstanceOf(ConflictException);
+            expect(error.message).toContain('ws-gone');
+        });
+
         it('makes the caller an OWNER member without disturbing an existing row', async () => {
             db.tenant.findFirst.mockResolvedValue(workspace);
 
@@ -123,7 +145,7 @@ describe('PlatformWorkspaceService', () => {
 
             expect(db.tenant.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: { is_platform_workspace: true, deleted_at: null },
+                    where: { platform_workspace_key: PLATFORM_WORKSPACE_KEY, deleted_at: null },
                 }),
             );
         });

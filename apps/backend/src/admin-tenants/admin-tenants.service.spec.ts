@@ -198,7 +198,7 @@ describe('AdminTenantsService', () => {
       expect(result[0].id).toBe('t-1');
       expect(result[0].name).toBe('Test Store');
       expect(db.tenant.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { deleted_at: null, is_platform_workspace: false } }),
+        expect.objectContaining({ where: { deleted_at: null, platform_workspace_key: null } }),
       );
     });
 
@@ -329,7 +329,7 @@ describe('AdminTenantsService', () => {
       expect(result.id).toBe('t-1');
       expect(result.name).toBe('Test Store');
       expect(db.tenant.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 't-1', deleted_at: null, is_platform_workspace: false } }),
+        expect.objectContaining({ where: { id: 't-1', deleted_at: null, platform_workspace_key: null } }),
       );
     });
 
@@ -1095,7 +1095,7 @@ describe('AdminTenantsService', () => {
               service.setBusinessType('nope', { businessType: 'SURGICAL_MEDICAL' }, 'admin1'),
           ).rejects.toBeInstanceOf(NotFoundException);
           expect(db.tenant.findFirst).toHaveBeenCalledWith(
-              expect.objectContaining({ where: { id: 'nope', deleted_at: null, is_platform_workspace: false } }),
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null, platform_workspace_key: null } }),
           );
           expect(db.tenant.update).not.toHaveBeenCalled();
       });
@@ -1242,7 +1242,7 @@ describe('AdminTenantsService', () => {
 
           await expect(service.importCatalog('nope', 'admin1')).rejects.toBeInstanceOf(NotFoundException);
           expect(db.tenant.findFirst).toHaveBeenCalledWith(
-              expect.objectContaining({ where: { id: 'nope', deleted_at: null, is_platform_workspace: false } }),
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null, platform_workspace_key: null } }),
           );
           expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
       });

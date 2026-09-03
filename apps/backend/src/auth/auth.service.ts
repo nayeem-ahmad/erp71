@@ -628,7 +628,7 @@ export class AuthService {
                 tenantMembers: {
                     // Same exclusion as `getMe`: the platform's own workspace is
                     // not one of the shops this identity can sign into.
-                    where: { tenant: { deleted_at: null, is_platform_workspace: false } },
+                    where: { tenant: { deleted_at: null, platform_workspace_key: null } },
                     include: {
                         tenant: {
                             include: {
@@ -694,7 +694,7 @@ export class AuthService {
                     // it is reached from the admin console. Listing it here would
                     // put "ERP71 Platform" in the account chooser next to real
                     // shops and give it a sidebar full of sales and inventory.
-                    where: { tenant: { deleted_at: null, is_platform_workspace: false } },
+                    where: { tenant: { deleted_at: null, platform_workspace_key: null } },
                     include: {
                         tenant: {
                             include: {

@@ -51,11 +51,11 @@ import {
     SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
-// Excludes the platform's own internal workspace (`is_platform_workspace`): it
-// is a tenant row only so the project module can be scoped to it, and it has no
-// owner to bill, no plan and no stores. It belongs in none of the customer
+// `platform_workspace_key: null` excludes the platform's own internal workspace:
+// it is a tenant row only so the project module can be scoped to it, and it has
+// no owner to bill, no plan and no stores. It belongs in none of the customer
 // listings or metrics built from this filter.
-const ACTIVE_TENANT_FILTER = { deleted_at: null, is_platform_workspace: false } as const;
+const ACTIVE_TENANT_FILTER = { deleted_at: null, platform_workspace_key: null } as const;
 
 @Injectable()
 export class AdminTenantsService {
