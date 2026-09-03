@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 jest.mock('next/link', () => {
     const MockLink = ({ href, children, ...rest }: { href: string; children: React.ReactNode; [key: string]: unknown }) =>
@@ -14,7 +14,25 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => new URLSearchParams(),
 }));
 
+const getSubscriptionPlans = jest.fn();
+
+jest.mock('@/lib/api', () => ({
+    api: {
+        getSubscriptionPlans: (...args: unknown[]) => getSubscriptionPlans(...args),
+    },
+}));
+
 import HomePage from './HomeClient';
+
+beforeEach(() => {
+    getSubscriptionPlans.mockReset();
+    // Mirrors production: three plans, PREMIUM omitted while it is coming soon.
+    getSubscriptionPlans.mockResolvedValue([
+        { code: 'BASIC', name: 'Starter', description: 'Live starter tagline', monthly_price: 299, yearly_price: 2990, setup_fee: 0 },
+        { code: 'ACCOUNTING', name: 'Accounting', description: 'Live accounting tagline', monthly_price: 749, yearly_price: 7490, setup_fee: 0 },
+        { code: 'STANDARD', name: 'Growth', description: 'Live growth tagline', monthly_price: 999, yearly_price: 9990, setup_fee: 4000 },
+    ]);
+});
 
 describe('HomePage', () => {
     it('renders the brand mark in the nav', () => {
@@ -85,12 +103,25 @@ describe('HomePage', () => {
         expect(screen.getByText('Rahim Uddin')).toBeInTheDocument();
     });
 
-    it('renders paid plan tiers in the pricing preview', () => {
+    it('renders the ladder tiers in the pricing preview', async () => {
         render(<HomePage />);
-        expect(screen.getAllByText('BASIC').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('ACCOUNTING').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('STANDARD').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('PREMIUM').length).toBeGreaterThan(0);
+        await waitFor(() => expect(screen.getAllByText('Starter').length).toBeGreaterThan(0));
+        expect(screen.getAllByText('Growth').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Business').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Enterprise').length).toBeGreaterThan(0);
+    });
+
+    it('shows the same live prices the pricing page does', async () => {
+        // The preview used to map the static constants, so it froze at the
+        // hardcoded numbers while /pricing followed the API.
+        render(<HomePage />);
+        await waitFor(() => expect(screen.getByText('Live starter tagline')).toBeInTheDocument());
+        expect(screen.getByText('Live growth tagline')).toBeInTheDocument();
+    });
+
+    it('sends Enterprise to sales rather than checkout', () => {
+        render(<HomePage />);
+        expect(screen.getByText('Talk to sales')).toBeInTheDocument();
     });
 
     it('marks Premium as coming soon on the homepage pricing preview', () => {
@@ -98,12 +129,15 @@ describe('HomePage', () => {
         expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
     });
 
-    it('renders plan prices aligned with backend seed', () => {
+    it('renders plan prices from the live plans endpoint', async () => {
         render(<HomePage />);
-        expect(screen.getByText('৳499')).toBeInTheDocument();
-        expect(screen.getByText('৳749')).toBeInTheDocument();
-        expect(screen.getByText('৳999')).toBeInTheDocument();
-        expect(screen.getByText('৳1,499')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText('৳ 299')).toBeInTheDocument());
+        expect(screen.getByText('৳ 999')).toBeInTheDocument();
+        // Business keeps its static price while the API omits it; Enterprise is
+        // quote-led. The accounting edition is off the ladder and not previewed
+        // here — it has its own block on /pricing.
+        expect(screen.getByText('৳ 2,499')).toBeInTheDocument();
+        expect(screen.getByText('Quote')).toBeInTheDocument();
     });
 
     it('renders the "See full pricing" link', () => {

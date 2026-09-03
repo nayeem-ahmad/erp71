@@ -96,6 +96,16 @@ export class UpdateSubscriptionPlanDto {
     @Max(10_000_000)
     yearly_price?: number | null;
 
+    /**
+     * One-time onboarding fee. Optional so an older client that omits it leaves
+     * the stored value alone rather than silently zeroing a fee an admin set.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(1_000_000)
+    setup_fee?: number;
+
     @IsBoolean()
     is_active!: boolean;
 

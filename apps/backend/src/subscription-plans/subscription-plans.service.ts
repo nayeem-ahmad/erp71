@@ -56,6 +56,10 @@ export class SubscriptionPlansService {
                 description: dto.description?.trim() || null,
                 monthly_price: dto.monthly_price,
                 yearly_price: dto.yearly_price ?? null,
+                // Omitted rather than nulled when absent: `setup_fee` is optional
+                // on the DTO so a client that predates the field cannot zero a fee
+                // an admin has already set.
+                ...(dto.setup_fee === undefined ? {} : { setup_fee: dto.setup_fee }),
                 is_active: dto.is_active,
                 features_json: featuresJson,
                 marketing_features_json: marketingFeatures,
@@ -78,6 +82,7 @@ export class SubscriptionPlansService {
                     description: existing.description,
                     monthly_price: Number(existing.monthly_price),
                     yearly_price: existing.yearly_price === null ? null : Number(existing.yearly_price),
+                    setup_fee: Number(existing.setup_fee),
                     is_active: existing.is_active,
                     features_json: normalizePlanFeatures(existing.features_json as Record<string, unknown>, code),
                     marketing_features: parseMarketingFeatures(existing.marketing_features_json),
@@ -87,6 +92,7 @@ export class SubscriptionPlansService {
                     description: updated.description,
                     monthly_price: Number(updated.monthly_price),
                     yearly_price: updated.yearly_price === null ? null : Number(updated.yearly_price),
+                    setup_fee: Number(updated.setup_fee),
                     is_active: updated.is_active,
                     features_json: featuresJson,
                     marketing_features: marketingFeatures,
@@ -134,6 +140,7 @@ export class SubscriptionPlansService {
         description: string | null;
         monthly_price: unknown;
         yearly_price: unknown;
+        setup_fee?: unknown;
         features_json: unknown;
         marketing_features_json?: unknown;
         is_active: boolean;
@@ -145,6 +152,7 @@ export class SubscriptionPlansService {
             description: plan.description,
             monthly_price: Number(plan.monthly_price),
             yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
+            setup_fee: Number(plan.setup_fee ?? 0),
             features_json: normalizePlanFeatures(plan.features_json as Record<string, unknown>, plan.code),
             marketing_features: parseMarketingFeatures(plan.marketing_features_json),
             is_active: plan.is_active,

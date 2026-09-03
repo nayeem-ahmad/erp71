@@ -63,9 +63,9 @@ export default function RefundClient() {
                             </ol>
                             <p className="mt-3">
                                 Your access to all paid features will continue until the end of the current billing
-                                period. After that date your account will revert to the Free plan. No data is deleted
-                                automatically on cancellation — you retain full access to your data on the Free plan
-                                and may export it at any time.
+                                period. After that date the workspace becomes read-only. No data is deleted
+                                automatically on cancellation — your records are retained for 90 days, during which
+                                you may export everything or resubscribe and pick up where you left off.
                             </p>
                             <div className="mt-4 bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
                                 <strong>No cancellation fees.</strong> We do not charge any fee for cancelling your
@@ -109,8 +109,11 @@ export default function RefundClient() {
                                     Voluntary cancellations made after the 7-day satisfaction window has elapsed.
                                 </li>
                                 <li>
-                                    Accounts on the Free (demo) plan. The Free plan carries no charge and therefore
-                                    no refund is applicable.
+                                    Demo workspaces, which carry no charge and therefore no refund.
+                                </li>
+                                <li>
+                                    One-time setup fees more than 30 days after they were charged. Within 30 days a
+                                    setup fee is refundable in full, separately from the 7-day subscription window.
                                 </li>
                                 <li>
                                     Fees charged for add-ons, SMS credits, or third-party integrations (bKash, Nagad,
