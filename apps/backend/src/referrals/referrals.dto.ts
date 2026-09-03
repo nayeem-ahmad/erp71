@@ -1,6 +1,6 @@
 import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { ReferralCommissionStatus } from '@prisma/client';
+import { RefereePayoutMethod, RefereePayoutRequestStatus, ReferralCommissionStatus } from '@prisma/client';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
@@ -122,6 +122,88 @@ export class RecordPaymentDto {
     @IsArray()
     @IsUUID(undefined, { each: true })
     commission_ids?: string[];
+
+    /**
+     * Settles the partner's own payout request. Optional because a payout an admin
+     * initiates unprompted is still a payout — the request is a convenience for the
+     * partner, never a precondition for paying them.
+     */
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsUUID()
+    payout_request_id?: string;
+}
+
+/**
+ * The partner's payout destination, which they own.
+ *
+ * Shape only here. The rules that actually matter depend on the method — a bKash
+ * wallet is a Bangladeshi mobile number, a bank account is not — and a decorator
+ * cannot see a sibling field, so `assertPayoutDestination` in the service enforces
+ * them. A typo in a wallet number sends real money to a stranger, which is why
+ * that check is not left to a `MaxLength`.
+ */
+export class UpdatePayoutProfileDto {
+    @IsEnum(RefereePayoutMethod)
+    payout_method: RefereePayoutMethod;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(120)
+    payout_account_name?: string;
+
+    @IsString()
+    @MaxLength(40)
+    payout_account_number: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(120)
+    payout_bank_name?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(120)
+    payout_branch?: string;
+}
+
+export class CreatePayoutRequestDto {
+    /**
+     * Optional — defaults to the whole balance due, which is what a partner
+     * pressing "request payout" means every time but one.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(1)
+    amount?: number;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(500)
+    note?: string;
+}
+
+export class RejectPayoutRequestDto {
+    /** Required: a decline the partner cannot act on is worse than no answer. */
+    @IsString()
+    @MaxLength(500)
+    reason: string;
+}
+
+export class ListPayoutRequestsQueryDto {
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsEnum(RefereePayoutRequestStatus)
+    status?: RefereePayoutRequestStatus;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsUUID()
+    referee_id?: string;
 }
 
 /**

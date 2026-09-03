@@ -4,6 +4,11 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 import { formatEmailAddress, parseEmailAddress } from './address.util';
+import {
+    renderRefereeInviteEmail,
+    resolveEmailLocale,
+    type EmailLocale,
+} from './templates/referee-invite';
 
 interface TransportConfig {
     from: string;
@@ -100,6 +105,16 @@ export class EmailService {
         };
     }
 
+    /**
+     * The public base URL links are built against. Exposed because SMS needs the
+     * same value the emails use, and it is resolved from platform settings with an
+     * env fallback rather than being readable from `process.env` alone.
+     */
+    async getFrontendUrl(): Promise<string> {
+        const { frontendUrl } = await this.getTransportConfig();
+        return frontendUrl;
+    }
+
     async sendWelcome(to: string, name: string): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({
@@ -136,28 +151,96 @@ export class EmailService {
         });
     }
 
-    async sendRefereeLoginInvite(to: string, name: string, token: string, referralCode: string): Promise<void> {
+    /**
+     * The partner's invite, in their own language.
+     *
+     * `expiryHours` is passed rather than hard-coded so the sentence in the email
+     * cannot drift from the TTL the token was actually issued with — the previous
+     * copy said "expires in 1 hour" because that was true of the reset tokens it
+     * borrowed, and it stayed true only by accident.
+     */
+    async sendRefereeLoginInvite(
+        to: string,
+        name: string,
+        token: string,
+        referralCode: string,
+        options: { locale?: string | null; expiryHours: number },
+    ): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
-        const setupLink = `${frontendUrl}/reset-password?token=${token}`;
-        const loginLink = `${frontendUrl}/login`;
-        const signupLink = `${frontendUrl}/signup?ref=${encodeURIComponent(referralCode)}`;
+        const locale: EmailLocale = resolveEmailLocale(options.locale);
+        const { subject, html } = renderRefereeInviteEmail(locale, {
+            name: name?.trim() ? name.trim() : to,
+            referralCode,
+            setupLink: `${frontendUrl}/reset-password?token=${token}`,
+            loginLink: `${frontendUrl}/login`,
+            signupLink: `${frontendUrl}/r/${encodeURIComponent(referralCode)}`,
+            expiryHours: options.expiryHours,
+        });
+        await this.send({ to, subject, html });
+    }
+
+    /** A partner asked to be paid; tell them it landed and what happens next. */
+    async sendRefereePayoutRequested(
+        to: string,
+        name: string,
+        amount: number,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const portalLink = `${frontendUrl}/referrals/payouts`;
         const greeting = name?.trim() ? name.trim() : to;
         await this.send({
             to,
-            subject: 'Your ERP71 Referral Partner portal is ready',
-            html: `<h2>Welcome to the ERP71 Referral Partner program</h2>
+            subject: 'We have received your ERP71 payout request',
+            html: `<h2>Payout request received</h2>
 <p>Hi ${greeting},</p>
-<p>You have been invited to access the ERP71 Referral Partner portal. From there you can:</p>
-<ul>
-  <li>View businesses that signed up with your referral code</li>
-  <li>Track commissions earned and payments received</li>
-  <li>Copy your referral code and signup link</li>
-</ul>
-<p><strong>Your referral code:</strong> ${referralCode}</p>
-<p><strong>Signup link for new customers:</strong> <a href="${signupLink}">${signupLink}</a></p>
-<p>To get started, set your password using the link below, then sign in at <a href="${loginLink}">${loginLink}</a>.</p>
-<p><a href="${setupLink}">Set up your password</a></p>
-<p>This setup link expires in 1 hour. If it expires, ask your ERP71 contact to resend the invite.</p>`,
+<p>Your request for <strong>BDT ${amount.toFixed(2)}</strong> has been received and is awaiting review.</p>
+<p>You will get another email when it is approved and paid. Your balance stays as it is until the payment is actually recorded.</p>
+<p><a href="${portalLink}">View your payout requests</a></p>`,
+        });
+    }
+
+    /** The request cleared review. The money has not moved yet — say so plainly. */
+    async sendRefereePayoutApproved(
+        to: string,
+        name: string,
+        amount: number,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const portalLink = `${frontendUrl}/referrals/payouts`;
+        const greeting = name?.trim() ? name.trim() : to;
+        await this.send({
+            to,
+            subject: 'Your ERP71 payout request has been approved',
+            html: `<h2>Payout approved</h2>
+<p>Hi ${greeting},</p>
+<p>Your request for <strong>BDT ${amount.toFixed(2)}</strong> has been approved and is being sent to the account on file.</p>
+<p>You will get a final confirmation once the payment is recorded against your commissions.</p>
+<p><a href="${portalLink}">View your payout requests</a></p>`,
+        });
+    }
+
+    /** Declined. The reason is the whole point of the email. */
+    async sendRefereePayoutRejected(
+        to: string,
+        name: string,
+        amount: number,
+        reason?: string | null,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const portalLink = `${frontendUrl}/referrals/payouts`;
+        const greeting = name?.trim() ? name.trim() : to;
+        const why = reason?.trim()
+            ? `<p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>`
+            : '';
+        await this.send({
+            to,
+            subject: 'Your ERP71 payout request was not approved',
+            html: `<h2>Payout request declined</h2>
+<p>Hi ${greeting},</p>
+<p>Your request for <strong>BDT ${amount.toFixed(2)}</strong> was not approved.</p>
+${why}
+<p>Your commission balance is unchanged — nothing has been deducted. You can raise a new request once the issue above is resolved.</p>
+<p><a href="${portalLink}">View your payout requests</a></p>`,
         });
     }
 

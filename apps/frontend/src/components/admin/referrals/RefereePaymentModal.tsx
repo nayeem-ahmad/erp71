@@ -11,11 +11,23 @@ type Props = {
     open: boolean;
     refereeId: string;
     defaultAmount?: number;
+    /**
+     * Settles the partner's own request in the same call that records the money, so
+     * a request can never read as PAID without a payment row behind it.
+     */
+    payoutRequestId?: string;
     onClose: () => void;
     onSuccess: (message: string) => void;
 };
 
-export default function RefereePaymentModal({ open, refereeId, defaultAmount, onClose, onSuccess }: Props) {
+export default function RefereePaymentModal({
+    open,
+    refereeId,
+    defaultAmount,
+    payoutRequestId,
+    onClose,
+    onSuccess,
+}: Props) {
     const { t } = useI18n();
     const m = t.admin.referrals.payment;
     const [amount, setAmount] = useState(defaultAmount ? String(defaultAmount) : '');
@@ -48,6 +60,7 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
                 method: method || undefined,
                 reference: reference || undefined,
                 notes: notes || undefined,
+                payout_request_id: payoutRequestId,
             });
             onSuccess(formatMessage(m.success, { amount: formatBDT(Number(payment.amount)) }));
             onClose();

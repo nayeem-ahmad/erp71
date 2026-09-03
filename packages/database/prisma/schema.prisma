@@ -435,13 +435,25 @@ model User {
   @@index([mobile])
 }
 
+/// Why the token was issued. A password reset and a partner invite are the same
+/// mechanism — prove you hold the mailbox, then set a password — but they are not
+/// the same event, and treating them as one gave the invite a reset's one-hour
+/// expiry. An invite is cold outreach: the partner reads it that evening, not
+/// while sitting at the login screen. The purpose is what lets the TTL, the
+/// delivery channel and the expired-link recovery differ.
+enum PasswordResetPurpose {
+  PASSWORD_RESET
+  REFEREE_INVITE
+}
+
 model PasswordResetToken {
-  id         String    @id @default(uuid())
+  id         String               @id @default(uuid())
   user_id    String
-  token_hash String    @unique
+  token_hash String               @unique
+  purpose    PasswordResetPurpose @default(PASSWORD_RESET)
   expires_at DateTime
   used_at    DateTime?
-  created_at DateTime  @default(now())
+  created_at DateTime             @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -5851,12 +5863,84 @@ model Referee {
   updated_at      DateTime  @updatedAt
   deleted_at      DateTime? // set when archived (ledger history retained)
 
-  user            User?            @relation(fields: [user_id], references: [id])
+  /// Where payouts go. Owned by the partner, not the admin — `RefereePayment.method`
+  /// is free text an admin types after the fact, which records what happened but
+  /// cannot tell anyone where to send the next one. Null until the partner fills
+  /// it in; `requestPayout` refuses to run without it.
+  payout_method         RefereePayoutMethod?
+  payout_account_name   String?
+  /// The bKash/Nagad/Rocket wallet number, or the bank account number.
+  payout_account_number String?
+  payout_bank_name      String?
+  payout_branch         String?
+  payout_updated_at     DateTime?
+
+  user            User?                  @relation(fields: [user_id], references: [id])
   referralSignups ReferralSignup[]
   payments        RefereePayment[]
   clicks          ReferralClick[]
+  payoutRequests  RefereePayoutRequest[]
 
   @@index([deleted_at])
+}
+
+/// Mobile financial services first, because that is how a Bangladeshi partner is
+/// actually paid. BANK is the fallback for anyone invoicing at scale.
+enum RefereePayoutMethod {
+  BKASH
+  NAGAD
+  ROCKET
+  BANK
+}
+
+enum RefereePayoutRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+/// A partner asking to be paid what the ledger says they are owed.
+///
+/// Until this existed `balance_due` simply sat on the dashboard and the partner's
+/// only move was to email someone. The request is deliberately *not* a ledger
+/// entry: no commission changes status here. It becomes money only when an admin
+/// records a real `RefereePayment` against it, which is the same path a payout has
+/// always taken.
+model RefereePayoutRequest {
+  id         String                     @id @default(uuid())
+  referee_id String
+  /// What was owed when the request was made. Kept even if the balance later
+  /// moves (a reversal, another payout), so the request stays auditable.
+  amount     Decimal                    @db.Decimal(10, 2)
+  status     RefereePayoutRequestStatus @default(PENDING)
+
+  /// Snapshot of the payout destination at request time. A partner who edits
+  /// their wallet number afterwards must not silently redirect a payout an admin
+  /// already approved against the old one.
+  method         RefereePayoutMethod
+  account_name   String?
+  account_number String
+  bank_name      String?
+  branch         String?
+
+  note          String? // partner's own message
+  decision_note String? // admin's reason on reject
+
+  requested_at DateTime  @default(now())
+  reviewed_at  DateTime?
+  reviewed_by  String? // platform admin user id
+  payment_id   String?   @unique
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  referee Referee         @relation(fields: [referee_id], references: [id], onDelete: Cascade)
+  payment RefereePayment? @relation(fields: [payment_id], references: [id])
+
+  @@index([referee_id, status])
+  @@index([status])
 }
 
 model ReferralSignup {
@@ -5923,8 +6007,9 @@ model RefereePayment {
   created_by String?
   created_at DateTime @default(now())
 
-  referee     Referee          @relation(fields: [referee_id], references: [id])
-  commissions ReferralSignup[]
+  referee       Referee               @relation(fields: [referee_id], references: [id])
+  commissions   ReferralSignup[]
+  payoutRequest RefereePayoutRequest?
 
   @@index([referee_id])
 }

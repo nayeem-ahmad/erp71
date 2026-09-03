@@ -24,12 +24,69 @@ function ResetPasswordContent() {
     const hydrated = useHydrated();
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    /**
+     * True only for an expired *invite*, which is the one dead link this page can
+     * fix by itself. An expired password reset stays on the existing
+     * "request a new link" path, because that flow already exists and asking for a
+     * password reset needs no proof beyond the mailbox.
+     */
+    const [canResendInvite, setCanResendInvite] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const [resent, setResent] = useState(false);
 
     useEffect(() => {
         if (!token) {
             setError(m.missingToken);
         }
     }, [token]);
+
+    /**
+     * Ask what the token is before rendering a form against it. The token is itself
+     * the secret, so describing the row it names leaks nothing to whoever holds it —
+     * and finding out on load beats finding out after the user has typed a password
+     * twice and pressed submit.
+     */
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        fetch(`${API_BASE}/auth/reset-token/${encodeURIComponent(token)}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((status) => {
+                if (cancelled || !status) return;
+                if (status.valid) return;
+                setCanResendInvite(!!status.canResend);
+                setError(status.canResend ? m.expiredInviteTitle : m.defaultError);
+            })
+            // An unreachable check must not block a token that would have worked;
+            // submitting is still the real test.
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [token, m.expiredInviteTitle, m.defaultError]);
+
+    const resendInvite = async () => {
+        if (!token) return;
+        setIsResending(true);
+        try {
+            const res = await fetch(`${API_BASE}/auth/invite/resend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            });
+            const body = await res.json().catch(() => null);
+            if (body?.resent) {
+                setResent(true);
+                setError(null);
+            } else {
+                setError(m.resendInviteFailed);
+            }
+        } catch {
+            setError(m.resendInviteFailed);
+        } finally {
+            setIsResending(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -70,15 +127,43 @@ function ResetPasswordContent() {
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
             <div className="w-full max-w-md">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10">
-                    {success ? (
+                    {success || resent ? (
                         <div className="flex flex-col items-center text-center">
                             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
                                 <CheckCircle className="text-green-600 w-6 h-6" />
                             </div>
-                            <h1 className="text-2xl font-bold tracking-tight">{m.successTitle}</h1>
+                            <h1 className="text-2xl font-bold tracking-tight">
+                                {success ? m.successTitle : m.resendInvite}
+                            </h1>
                             <p className="text-gray-500 mt-3 text-sm">
-                                {m.successDescription}
+                                {success ? m.successDescription : m.resendInviteSent}
                             </p>
+                        </div>
+                    ) : canResendInvite ? (
+                        // An expired invite is the one dead link this page can fix on
+                        // its own: the token proves who it was sent to, and the
+                        // replacement goes to the address on the partner's record.
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
+                                <AlertCircle className="text-amber-600 w-6 h-6" />
+                            </div>
+                            <h1 className="text-2xl font-bold tracking-tight">{m.expiredInviteTitle}</h1>
+                            <p className="text-gray-500 mt-3 text-sm">{m.expiredInviteBody}</p>
+                            <button
+                                type="button"
+                                onClick={() => void resendInvite()}
+                                disabled={!hydrated || isResending}
+                                className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isResending ? <Loader2 className="w-5 h-5 animate-spin" /> : m.resendInvite}
+                            </button>
+                            <Link
+                                href="/login"
+                                className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                {m.backToSignIn}
+                            </Link>
                         </div>
                     ) : (
                         <>

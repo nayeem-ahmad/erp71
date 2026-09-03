@@ -5,11 +5,14 @@ import { AccountingService } from '../accounting/accounting.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import {
+    CreatePayoutRequestDto,
     CreateRefereeDto,
     ListCommissionsQueryDto,
+    ListPayoutRequestsQueryDto,
     ListRefereesQueryDto,
     RecordPaymentDto,
     TrackClickDto,
+    UpdatePayoutProfileDto,
     UpdateRefereeDto,
 } from './referrals.dto';
 import * as bcrypt from 'bcrypt';
@@ -100,7 +103,12 @@ export class ReferralsService {
             });
         }
 
-        await this.passwordReset.requestRefereeInvite(user.email, referee.name, referee.referral_code);
+        await this.passwordReset.requestRefereeInvite({
+            email: user.email,
+            name: referee.name,
+            referralCode: referee.referral_code,
+            phone: referee.phone,
+        });
     }
 
     /** Resolve the active referee profile for a signed-in user, linking by email when needed. */
@@ -459,6 +467,24 @@ export class ReferralsService {
             );
         }
 
+        // A payout raised by the partner is settled by the same call that records the
+        // money, inside the same transaction — so a request can never read as PAID
+        // without a payment row behind it, or vice versa.
+        if (dto.payout_request_id) {
+            const request = await this.db.refereePayoutRequest.findFirst({
+                where: { id: dto.payout_request_id, referee_id: refereeId },
+                select: { status: true },
+            });
+            if (!request) {
+                throw new BadRequestException('That payout request does not belong to this referee');
+            }
+            if (request.status !== 'PENDING' && request.status !== 'APPROVED') {
+                throw new BadRequestException(
+                    `That payout request is already ${request.status.toLowerCase()} and cannot be settled again`,
+                );
+            }
+        }
+
         const payment = await this.db.$transaction(async (tx) => {
             const newPayment = await tx.refereePayment.create({
                 data: {
@@ -479,6 +505,18 @@ export class ReferralsService {
                     referee_payment_id: newPayment.id,
                 },
             });
+
+            if (dto.payout_request_id) {
+                await tx.refereePayoutRequest.update({
+                    where: { id: dto.payout_request_id },
+                    data: {
+                        status: 'PAID',
+                        payment_id: newPayment.id,
+                        reviewed_at: new Date(),
+                        reviewed_by: adminUserId,
+                    },
+                });
+            }
 
             return newPayment;
         });
@@ -534,7 +572,16 @@ export class ReferralsService {
     async getLedger(refereeId: string) {
         const referee = await this.db.referee.findUnique({
             where: { id: refereeId },
-            select: { id: true, name: true, email: true, referral_code: true, deleted_at: true },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                referral_code: true,
+                // The portal's printable one-pager states the discount the referred
+                // business gets, so it has to come from the same row the code does.
+                signup_discount: true,
+                deleted_at: true,
+            },
         });
         if (!referee) throw new NotFoundException('Referee not found');
 
@@ -580,7 +627,7 @@ export class ReferralsService {
         const totalPaid = this.round2(payments.reduce((sum, p) => sum + Number(p.amount), 0));
 
         return {
-            referee,
+            referee: { ...referee, signup_discount: Number(referee.signup_discount) },
             summary: {
                 ...this.conversionStats(clicks, commissions.length),
                 total_referrals: commissions.length,
@@ -608,6 +655,334 @@ export class ReferralsService {
                 ...this.mapPayment(p),
                 commissions: (p.commissions ?? []).map(this.mapSignup),
             })),
+        };
+    }
+
+
+    // ── Payouts ───────────────────────────────────────────────────────────────
+
+    /**
+     * Smallest balance a partner may raise a request for.
+     *
+     * A platform setting rather than a constant because the right floor depends on
+     * what a payout costs to make, and that is an operator decision — bKash fees and
+     * an admin's time make a ৳40 request cost more than it moves.
+     */
+    private async minPayoutAmount(): Promise<number> {
+        const raw = await this.platformSettings.getRawValue('referral_program', 'min_payout_amount');
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000;
+    }
+
+    /**
+     * Bangladeshi mobile wallets are all 11-digit numbers on a known operator
+     * prefix. Checking that here is not bureaucracy: `recordPayment` sends real
+     * money to whatever this says, and a transposed digit reaches a real stranger's
+     * wallet rather than bouncing.
+     *
+     * Bank accounts have no shared format across Bangladeshi banks, so those are
+     * length-checked and the bank name is required instead — an admin reading the
+     * payout row can resolve an ambiguous account number, but not an absent bank.
+     */
+    private assertPayoutDestination(dto: UpdatePayoutProfileDto) {
+        const digits = (dto.payout_account_number ?? '').replace(/[\s-]/g, '');
+
+        if (dto.payout_method === 'BANK') {
+            if (!dto.payout_bank_name?.trim()) {
+                throw new BadRequestException('Bank name is required for a bank payout');
+            }
+            if (!/^[A-Za-z0-9]{6,25}$/.test(digits)) {
+                throw new BadRequestException('Enter a valid bank account number (6–25 letters or digits)');
+            }
+            return digits;
+        }
+
+        // 01XXXXXXXXX, optionally written +880… or 880… as people actually type it.
+        const local = digits.replace(/^(?:\+?880)/, '0');
+        if (!/^01[3-9]\d{8}$/.test(local)) {
+            throw new BadRequestException(
+                'Enter a valid Bangladeshi mobile number for the wallet, e.g. 01712345678',
+            );
+        }
+        return local;
+    }
+
+    async getPayoutProfile(refereeId: string) {
+        const referee = await this.db.referee.findUnique({
+            where: { id: refereeId },
+            select: {
+                payout_method: true,
+                payout_account_name: true,
+                payout_account_number: true,
+                payout_bank_name: true,
+                payout_branch: true,
+                payout_updated_at: true,
+            },
+        });
+        if (!referee) throw new NotFoundException('Referee not found');
+
+        return {
+            ...referee,
+            is_complete: !!referee.payout_method && !!referee.payout_account_number,
+            min_payout_amount: await this.minPayoutAmount(),
+        };
+    }
+
+    /**
+     * A partner editing where their money goes.
+     *
+     * Deliberately does not touch requests already in flight: each request carries
+     * its own snapshot of the destination, so a partner who changes their wallet
+     * number cannot redirect a payout an admin has already approved against the old
+     * one. New requests pick up the new details.
+     */
+    async updatePayoutProfile(refereeId: string, dto: UpdatePayoutProfileDto) {
+        const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
+        if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('This partner account is archived');
+
+        const accountNumber = this.assertPayoutDestination(dto);
+
+        await this.db.referee.update({
+            where: { id: refereeId },
+            data: {
+                payout_method: dto.payout_method,
+                payout_account_name: dto.payout_account_name?.trim() || null,
+                payout_account_number: accountNumber,
+                payout_bank_name: dto.payout_method === 'BANK' ? dto.payout_bank_name!.trim() : null,
+                payout_branch: dto.payout_method === 'BANK' ? dto.payout_branch?.trim() || null : null,
+                payout_updated_at: new Date(),
+            },
+        });
+
+        return this.getPayoutProfile(refereeId);
+    }
+
+    /**
+     * What the partner is owed right now.
+     *
+     * Same arithmetic as `getLedger`'s summary and for the same reasons — REVERSED
+     * is not earned, and an overpayment nets against what is owed rather than being
+     * clamped away. Split out because a payout request must not load twelve months
+     * of activity to answer one question.
+     */
+    private async balanceDue(refereeId: string): Promise<number> {
+        const [earnedAgg, paidAgg] = await Promise.all([
+            this.db.referralSignup.aggregate({
+                where: { referee_id: refereeId, status: { in: ['EARNED', 'PAID'] } },
+                _sum: { commission_amount: true },
+            }),
+            this.db.refereePayment.aggregate({
+                where: { referee_id: refereeId },
+                _sum: { amount: true },
+            }),
+        ]);
+
+        const earned = this.round2(Number(earnedAgg._sum.commission_amount ?? 0));
+        const paid = this.round2(Number(paidAgg._sum.amount ?? 0));
+        return Math.max(0, this.round2(earned - paid));
+    }
+
+    async listPayoutRequests(refereeId: string) {
+        const requests = await this.db.refereePayoutRequest.findMany({
+            where: { referee_id: refereeId },
+            orderBy: { requested_at: 'desc' },
+        });
+        return requests.map(this.mapPayoutRequest);
+    }
+
+    /**
+     * A partner asking for what the ledger already says they are owed.
+     *
+     * Nothing about the ledger changes here. No commission is reserved, no balance
+     * is held: the request records an intent, and money moves only when an admin
+     * records a real `RefereePayment` — the same path payouts have always taken.
+     * The consequence worth stating is that two requests raised against one balance
+     * would both look payable, which is why only one may be open at a time.
+     */
+    async requestPayout(refereeId: string, dto: CreatePayoutRequestDto) {
+        const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
+        if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('This partner account is archived');
+        if (!referee.is_active) throw new BadRequestException('This partner account is not active');
+
+        if (!referee.payout_method || !referee.payout_account_number) {
+            throw new BadRequestException(
+                'Add your payout details before requesting a payout',
+            );
+        }
+
+        const open = await this.db.refereePayoutRequest.findFirst({
+            where: { referee_id: refereeId, status: { in: ['PENDING', 'APPROVED'] } },
+        });
+        if (open) {
+            throw new BadRequestException(
+                'You already have a payout request in progress. It has to be settled or declined before you can raise another.',
+            );
+        }
+
+        const [balance, minimum] = await Promise.all([
+            this.balanceDue(refereeId),
+            this.minPayoutAmount(),
+        ]);
+
+        if (balance < minimum) {
+            throw new BadRequestException(
+                `The minimum payout is ${minimum}. Your current balance is ${balance}.`,
+            );
+        }
+
+        const amount = dto.amount === undefined ? balance : this.round2(dto.amount);
+        if (amount > balance) {
+            throw new BadRequestException(
+                `You can request at most ${balance}, which is your current balance.`,
+            );
+        }
+        if (amount < minimum) {
+            throw new BadRequestException(`The minimum payout is ${minimum}.`);
+        }
+
+        const request = await this.db.refereePayoutRequest.create({
+            data: {
+                referee_id: refereeId,
+                amount,
+                method: referee.payout_method,
+                account_name: referee.payout_account_name,
+                account_number: referee.payout_account_number,
+                bank_name: referee.payout_bank_name,
+                branch: referee.payout_branch,
+                note: dto.note?.trim() || null,
+            },
+        });
+
+        // Same reasoning as every other notification here: the request is recorded,
+        // so a failed email is a warning rather than a rollback.
+        this.email.sendRefereePayoutRequested(referee.email, referee.name, amount).catch((err) => {
+            this.logger.warn(`Payout request ${request.id} recorded but the confirmation email failed: ${err}`);
+        });
+
+        return this.mapPayoutRequest(request);
+    }
+
+    /** A partner withdrawing their own request. Only while nobody has acted on it. */
+    async cancelPayoutRequest(refereeId: string, requestId: string) {
+        const request = await this.db.refereePayoutRequest.findFirst({
+            where: { id: requestId, referee_id: refereeId },
+        });
+        if (!request) throw new NotFoundException('Payout request not found');
+        if (request.status !== 'PENDING') {
+            throw new BadRequestException('Only a request that is still awaiting review can be cancelled');
+        }
+
+        const updated = await this.db.refereePayoutRequest.update({
+            where: { id: requestId },
+            data: { status: 'CANCELLED', reviewed_at: new Date() },
+        });
+        return this.mapPayoutRequest(updated);
+    }
+
+    // ── Payouts: admin side ───────────────────────────────────────────────────
+
+    async listAllPayoutRequests(query: ListPayoutRequestsQueryDto = {}) {
+        const requests = await this.db.refereePayoutRequest.findMany({
+            where: {
+                ...(query.status && { status: query.status }),
+                ...(query.referee_id && { referee_id: query.referee_id }),
+            },
+            orderBy: [{ status: 'asc' }, { requested_at: 'desc' }],
+            include: {
+                referee: { select: { id: true, name: true, email: true, referral_code: true } },
+            },
+        });
+
+        return requests.map((r) => ({
+            ...this.mapPayoutRequest(r),
+            referee: r.referee,
+        }));
+    }
+
+    /**
+     * Approve a request. This moves no money and settles no commission — it tells
+     * the partner their request cleared review and a transfer is being made. The
+     * ledger changes when `recordPayment` runs against the request.
+     */
+    async approvePayoutRequest(requestId: string, adminUserId: string) {
+        const request = await this.db.refereePayoutRequest.findUnique({
+            where: { id: requestId },
+            include: { referee: { select: { name: true, email: true } } },
+        });
+        if (!request) throw new NotFoundException('Payout request not found');
+        if (request.status !== 'PENDING') {
+            throw new BadRequestException(`This request is already ${request.status.toLowerCase()}`);
+        }
+
+        const updated = await this.db.refereePayoutRequest.update({
+            where: { id: requestId },
+            data: { status: 'APPROVED', reviewed_at: new Date(), reviewed_by: adminUserId },
+        });
+
+        this.email
+            .sendRefereePayoutApproved(request.referee.email, request.referee.name, Number(request.amount))
+            .catch((err) => {
+                this.logger.warn(`Payout request ${requestId} approved but the notification email failed: ${err}`);
+            });
+
+        return this.mapPayoutRequest(updated);
+    }
+
+    async rejectPayoutRequest(requestId: string, reason: string, adminUserId: string) {
+        const request = await this.db.refereePayoutRequest.findUnique({
+            where: { id: requestId },
+            include: { referee: { select: { name: true, email: true } } },
+        });
+        if (!request) throw new NotFoundException('Payout request not found');
+        if (request.status === 'PAID') {
+            throw new BadRequestException('This request has already been paid');
+        }
+        if (request.status !== 'PENDING' && request.status !== 'APPROVED') {
+            throw new BadRequestException(`This request is already ${request.status.toLowerCase()}`);
+        }
+
+        const updated = await this.db.refereePayoutRequest.update({
+            where: { id: requestId },
+            data: {
+                status: 'REJECTED',
+                decision_note: reason.trim(),
+                reviewed_at: new Date(),
+                reviewed_by: adminUserId,
+            },
+        });
+
+        this.email
+            .sendRefereePayoutRejected(
+                request.referee.email,
+                request.referee.name,
+                Number(request.amount),
+                reason,
+            )
+            .catch((err) => {
+                this.logger.warn(`Payout request ${requestId} rejected but the notification email failed: ${err}`);
+            });
+
+        return this.mapPayoutRequest(updated);
+    }
+
+    private mapPayoutRequest(r: any) {
+        return {
+            id: r.id,
+            referee_id: r.referee_id,
+            amount: Number(r.amount),
+            status: r.status,
+            method: r.method,
+            account_name: r.account_name,
+            account_number: r.account_number,
+            bank_name: r.bank_name,
+            branch: r.branch,
+            note: r.note,
+            decision_note: r.decision_note,
+            requested_at: r.requested_at,
+            reviewed_at: r.reviewed_at,
+            payment_id: r.payment_id,
         };
     }
 

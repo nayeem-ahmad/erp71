@@ -9,6 +9,7 @@ import { PageShell, Button, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
 import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
 import RefereeDeleteModal from '@/components/admin/referrals/RefereeDeleteModal';
+import PayoutRequestsPanel from '@/components/admin/referrals/PayoutRequestsPanel';
 import type { RefereeRecord } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
@@ -301,6 +302,18 @@ export default function AdminReferralsPage() {
                     emptyMessage={m.noReferees}
                 />
             )}
+
+            {/*
+              * Requests across every partner, above the fold rather than buried one
+              * click into each referee — an unreviewed payout request is somebody
+              * waiting on their money, and nothing else on this page is time-bound.
+              * Settling happens on the referee's own page, where the commissions the
+              * payment clears are visible.
+              */}
+            <div className="space-y-3">
+                <h2 className="text-lg font-bold text-gray-900">{m.payoutRequests.title}</h2>
+                <PayoutRequestsPanel />
+            </div>
 
             <RefereeFormModal
                 open={formOpen}

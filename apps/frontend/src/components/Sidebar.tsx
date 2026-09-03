@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    Banknote,
     ChevronLeft,
     ChevronRight,
     ChevronDown,
@@ -243,7 +244,7 @@ export default function Sidebar({
             const portal = (t as { referralPortal?: {
                 breadcrumb?: string;
                 dashboard?: string;
-                nav?: { signups?: string; payments?: string };
+                nav?: { signups?: string; payments?: string; payouts?: string };
             } }).referralPortal;
             return [{
                 key: 'referrals',
@@ -260,6 +261,11 @@ export default function Sidebar({
                         href: routes.referralsPortal.signups,
                         label: portal?.nav?.signups ?? 'Signups',
                         icon: Users,
+                    },
+                    {
+                        href: routes.referralsPortal.payouts,
+                        label: portal?.nav?.payouts ?? 'Payouts',
+                        icon: Banknote,
                     },
                     {
                         href: routes.referralsPortal.payments,
