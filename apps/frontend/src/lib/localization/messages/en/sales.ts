@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: 'Save All Changes',
             saving: 'Saving...',
             draftBanner: 'This is a draft — nothing has been posted to stock or accounts yet.',
+            convertedFrom: 'Converted from {document}',
             completeSale: 'Complete Sale',
             completing: 'Completing...',
             completed: 'Draft completed — stock and accounts updated.',
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: 'Online Orders',
         },
         newOrder: 'New Order',
+        convertToSale: 'Convert to Sale',
         columns: {
             orderNumber: 'Order #',
             date: 'Date',
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: 'Sales Quotations',
         subtitle: 'Build estimates and track expirations',
         newQuotation: 'New Quotation',
+        convertToSale: 'Convert to Sale',
         newProforma: 'New Proforma Invoice',
         columns: {
             quoteNumber: 'Quote #',

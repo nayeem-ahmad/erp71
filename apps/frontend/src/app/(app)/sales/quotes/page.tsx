@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { FileText, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
+import { FileText, Plus, Eye, Edit2, Printer, Trash2, ReceiptText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -227,6 +227,17 @@ export default function QuotesPage() {
                             >
                                 <Edit2 className="w-4 h-4" />
                             </Link>
+                            {/* Opens the sale entry screen seeded from this
+                                quotation; the sale records the link back when
+                                it is saved. */}
+                            <Link
+                                href={`${routes.sales.new}?quotationId=${quote.id}`}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                                title={t.quotes.convertToSale}
+                                aria-label={t.quotes.convertToSale}
+                            >
+                                <ReceiptText className="w-4 h-4" />
+                            </Link>
                             <button
                                 onClick={() => handlePrint(quote)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -247,7 +258,7 @@ export default function QuotesPage() {
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 170,
+                size: 200,
             }),
         ],
         [t, locale],

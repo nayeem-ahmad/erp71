@@ -336,6 +336,7 @@ export const salesMessages = {
                 saveAllChanges: "Simpan Semua Changes",
                 saving: "Saving...",
                 draftBanner: "Ini draf — belum ada apa-apa direkod ke stok atau akaun.",
+                convertedFrom: "Ditukar daripada {document}",
                 completeSale: "Selesaikan Jualan",
                 completing: "Menyelesaikan...",
                 completed: "Draf selesai — stok dan akaun dikemas kini.",
@@ -380,6 +381,7 @@ export const salesMessages = {
                 onlineOrders: "Pesanan Dalam Talian",
             },
             newOrder: "Baharu Pesanan",
+            convertToSale: "Tukar kepada Jualan",
             columns: {
                 orderNumber: "Pesanan #",
                 date: "Tarikh",
@@ -434,6 +436,7 @@ export const salesMessages = {
             title: "Jualan Quotations",
             subtitle: "Build estimates and track expirations",
             newQuotation: "Baharu Sebut Harga",
+            convertToSale: "Tukar kepada Jualan",
             newProforma: "Invois Proforma Baharu",
             columns: {
                 quoteNumber: "Sebut Harga #",

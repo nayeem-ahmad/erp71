@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: 'تمام تبدیلیاں محفوظ کریں',
             saving: 'محفوظ ہو رہا ہے...',
             draftBanner: 'یہ ایک مسودہ ہے — ابھی تک اسٹاک یا کھاتوں میں کچھ درج نہیں ہوا۔',
+            convertedFrom: '{document} سے تبدیل شدہ',
             completeSale: 'فروخت مکمل کریں',
             completing: 'مکمل ہو رہی ہے...',
             completed: 'مسودہ مکمل ہو گیا — اسٹاک اور کھاتے اپ ڈیٹ ہو گئے۔',
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: 'آن لائن آرڈرز',
         },
         newOrder: 'نیا آرڈر',
+        convertToSale: 'فروخت میں تبدیل کریں',
         columns: {
             orderNumber: 'آرڈر نمبر',
             date: 'تاریخ',
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: 'سیلز کوٹیشنز',
         subtitle: 'تخمینے بنائیں اور میعاد پر نظر رکھیں',
         newQuotation: 'نئی کوٹیشن',
+        convertToSale: 'فروخت میں تبدیل کریں',
         newProforma: "نیا پروفارما انوائس",
         columns: {
             quoteNumber: 'کوٹیشن نمبر',

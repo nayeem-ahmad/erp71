@@ -2121,12 +2121,23 @@ model Sale {
   created_at       DateTime @default(now())
   sale_date        DateTime @default(now())
 
+  /// The document this entry was converted from, when it was raised by the
+  /// "convert to sale" action on a quotation or a sales order. Structural
+  /// columns rather than text in `reference_number`: that one is the tenant's
+  /// own invoice numbering, is unique per tenant, and is auto-generated when
+  /// the user leaves it blank, so it cannot also carry a pointer to a source
+  /// document. Both stay null on an ordinary counter sale.
+  quotation_id     String?
+  sales_order_id   String?
+
   // Relations
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store          Store           @relation(fields: [store_id], references: [id])
   counter        PosCounter?     @relation(fields: [counter_id], references: [id])
   customer_id    String?
   customer       Customer?       @relation(fields: [customer_id], references: [id])
+  quotation      Quotation?      @relation(fields: [quotation_id], references: [id])
+  salesOrder     SalesOrder?     @relation(fields: [sales_order_id], references: [id])
   items          SaleItem[]
   payments       PaymentRecord[]
   returns        SalesReturn[]
@@ -2140,6 +2151,8 @@ model Sale {
   @@index([tenant_id, store_id])
   @@index([tenant_id, customer_id])
   @@index([tenant_id, counter_id])
+  @@index([tenant_id, quotation_id])
+  @@index([tenant_id, sales_order_id])
 }
 
 model Customer {
@@ -3263,6 +3276,9 @@ model SalesOrder {
   customer Customer?        @relation(fields: [customer_id], references: [id])
   items    SalesOrderItem[]
   deposits OrderDeposit[]
+  /// Sales entries raised from this order. A list, not a single link: an order
+  /// may legitimately be invoiced more than once (part deliveries).
+  sales    Sale[]
 
   @@unique([tenant_id, order_number])
   @@index([tenant_id, status])
@@ -3351,6 +3367,8 @@ model Quotation {
   store    Store           @relation(fields: [store_id], references: [id])
   customer Customer?       @relation(fields: [customer_id], references: [id])
   items    QuotationItem[]
+  /// Sales entries raised from this quotation, directly rather than via an order.
+  sales    Sale[]
 
   @@unique([tenant_id, quote_number, version])
 }

@@ -95,6 +95,13 @@ describe('SalesService', () => {
         create: jest.fn(),
         updateMany: jest.fn(),
       },
+      quotation: {
+        findFirst: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      salesOrder: {
+        findFirst: jest.fn(),
+      },
     };
 
     db = {
@@ -911,6 +918,120 @@ describe('SalesService', () => {
       expect(tx.customer.update).not.toHaveBeenCalled();
       expect(applyInventoryMovement).toHaveBeenCalled();
       expect(tx.sale.delete).toHaveBeenCalled();
+    });
+  });
+
+  describe('create() — converted from a quotation or sales order', () => {
+    const dtoFor = (source: Record<string, string>) => ({
+      storeId: 'store-1',
+      totalAmount: 30,
+      amountPaid: 30,
+      items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+      ...source,
+    });
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 30 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.quotation.findFirst.mockResolvedValue({ id: 'quote-1', status: 'SENT' });
+      tx.salesOrder.findFirst.mockResolvedValue({ id: 'order-1' });
+    });
+
+    it('stores the quotation on the sale and marks the quote converted', async () => {
+      await service.create('tenant-1', 'user-1', dtoFor({ quotationId: 'quote-1' }));
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ quotation_id: 'quote-1', sales_order_id: null }),
+        }),
+      );
+      expect(tx.quotation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'quote-1', tenant_id: 'tenant-1', status: { not: 'CONVERTED' } },
+        data: { status: 'CONVERTED' },
+      });
+    });
+
+    it('stores the sales order on the sale and touches no quotation', async () => {
+      await service.create('tenant-1', 'user-1', dtoFor({ salesOrderId: 'order-1' }));
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sales_order_id: 'order-1', quotation_id: null }),
+        }),
+      );
+      expect(tx.quotation.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('looks the source document up inside the tenant', async () => {
+      await service.create('tenant-1', 'user-1', dtoFor({ quotationId: 'quote-1' }));
+
+      expect(tx.quotation.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'quote-1', tenant_id: 'tenant-1' } }),
+      );
+    });
+
+    it('rejects a quotation id that belongs to another tenant', async () => {
+      tx.quotation.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', 'user-1', dtoFor({ quotationId: 'someone-elses-quote' })),
+      ).rejects.toThrow(NotFoundException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a sales order id that belongs to another tenant', async () => {
+      tx.salesOrder.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', 'user-1', dtoFor({ salesOrderId: 'someone-elses-order' })),
+      ).rejects.toThrow(NotFoundException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('records the link on a draft but leaves the quotation live', async () => {
+      tx.product.count = jest.fn().mockResolvedValue(1);
+      tx.sale.create.mockResolvedValue({ id: 'draft-1', serial_number: 'SL-1', total_amount: 30 });
+
+      await service.create('tenant-1', 'user-1', {
+        ...dtoFor({ quotationId: 'quote-1' }),
+        isDraft: true,
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'DRAFT', quotation_id: 'quote-1' }),
+        }),
+      );
+      expect(tx.quotation.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('converts the quotation when the draft it came from is finally posted', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 'draft-1',
+        tenant_id: 'tenant-1',
+        store_id: 'store-1',
+        counter_id: null,
+        customer_id: null,
+        serial_number: 'SL-1',
+        reference_number: '2607-001',
+        status: 'DRAFT',
+        total_amount: 30,
+        amount_paid: 30,
+        note: null,
+        quotation_id: 'quote-1',
+        sales_order_id: null,
+        items: [{ product_id: 'prod-1', quantity: 2, price_at_sale: 15 }],
+        payments: [{ payment_method: 'Cash', amount: 30, account_id: null }],
+      });
+      tx.sale.update.mockResolvedValue({ id: 'draft-1', status: 'COMPLETED', total_amount: 30 });
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.quotation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'quote-1', tenant_id: 'tenant-1', status: { not: 'CONVERTED' } },
+        data: { status: 'CONVERTED' },
+      });
     });
   });
 });

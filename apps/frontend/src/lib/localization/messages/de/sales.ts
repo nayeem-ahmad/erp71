@@ -336,6 +336,7 @@ export const salesMessages = {
             saveAllChanges: "Alle Änderungen speichern",
             saving: "Wird gespeichert...",
             draftBanner: "Dies ist ein Entwurf — es wurde noch nichts auf Bestand oder Konten gebucht.",
+            convertedFrom: "Umgewandelt aus {document}",
             completeSale: "Verkauf abschließen",
             completing: "Wird abgeschlossen...",
             completed: "Entwurf abgeschlossen — Bestand und Konten aktualisiert.",
@@ -380,6 +381,7 @@ export const salesMessages = {
             onlineOrders: "Online-Bestellungen",
         },
         newOrder: "Neuer Auftrag",
+        convertToSale: "In Verkauf umwandeln",
         columns: {
             orderNumber: "Auftragsnr.",
             date: "Datum",
@@ -434,6 +436,7 @@ export const salesMessages = {
         title: "Angebote",
         subtitle: "Kostenvoranschläge erstellen und Ablauffristen verfolgen",
         newQuotation: "Neues Angebot",
+        convertToSale: "In Verkauf umwandeln",
         newProforma: "Neue Proformarechnung",
         columns: {
             quoteNumber: "Angebotsnr.",
