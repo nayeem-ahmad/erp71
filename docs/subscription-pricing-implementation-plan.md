@@ -119,17 +119,20 @@ Rows needing a key that does not exist yet: payroll, recruitment, projects, camp
 ## Phase 2 — Seats and portals
 
 **Goal:** "unlimited customer accounts and employee self-service" becomes true, so seats can be priced.
-**Effort:** ~2 days. **One migration.**
+**Status:** done. **No migration in the end** — see below.
 
 Storefront customers are already safe: `POST /storefront/:slug/auth/signup` creates a `User` and a `Customer` and never a `TenantUser`, and `assertUserQuota` counts only `tenantUser` rows.
 
 Employees are not. `EmployeeGuard`'s own comment: unlike a referee, an employee "is a real tenant member with a real membership row". `assertUserQuota` counts every `TenantUser` with no filter on role, so a 40-person shop wanting payslip access needs 30 extra seats — ৳1,800/mo on top of a ৳999 plan.
 
-- Migration: `TenantUser.portal_only Boolean @default(false)` (or a `kind` enum if referee/investor portals will want the same treatment — check before choosing).
-- `assertUserQuota` excludes `portal_only`.
-- The employee-portal provisioning path sets it; `invitations.service.ts` does not.
-- Backfill: existing `TenantUser` rows whose only link is an `Employee` with `portal_access = true` and no store permissions.
-- Spec pinning that granting portal access to N employees does not move the seat count.
+**Landed 2026-09-03, and it needed no migration.** Portal-only status is derived
+from the invariant the security model already depends on — such a user is
+provisioned with no store permissions, which is what makes `StorePermissionGuard`
+refuse every guarded controller — rather than stored on a column that can drift
+away from it. `countPortalOnlyMembers` in `plan-entitlements.service.ts` excludes
+them from `assertUserQuota`; grant one a store permission and the next count
+bills for them. `OWNER` is never portal-only, since an owner bypasses permission
+checks however few rows they hold. No column, no backfill, four specs.
 
 ---
 

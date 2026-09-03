@@ -615,7 +615,7 @@ model Tenant {
   /// NULLs and exactly one non-NULL, which is the same guarantee in a form
   /// `db push` actually creates. `platform_workspace_key: null` is therefore how
   /// every customer-facing query says "not the platform's own workspace".
-  platform_workspace_key   String?   @unique
+  platform_workspace_key String? @unique
 
   /// Per-tenant overrides of the platform feature switches, e.g. `{"voice": true}`.
   /// A missing key inherits the platform default; an explicit boolean wins over it.
@@ -1008,26 +1008,26 @@ model PrintTemplate {
 }
 
 model SalesSettings {
-  id                      String   @id @default(uuid())
-  tenant_id               String   @unique
-  paper_size              String   @default("A4") // A4, A5, Letter, Thermal80, Thermal58
-  reference_number_format String   @default("YYMM-#") // Format template
-  pos_enabled             Boolean  @default(true)
+  id                      String  @id @default(uuid())
+  tenant_id               String  @unique
+  paper_size              String  @default("A4") // A4, A5, Letter, Thermal80, Thermal58
+  reference_number_format String  @default("YYMM-#") // Format template
+  pos_enabled             Boolean @default(true)
 
   /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
   /// buyer's bank opening an LC) knows where to remit. Held on the tenant
   /// rather than per document because they are typed once and change rarely —
   /// and because a wrong account number repeated across fifty PIs is a support
   /// case, not a data-entry mistake.
-  bank_name               String?
-  bank_branch             String?
-  bank_account_name       String?
-  bank_account_number     String?
-  bank_routing_number     String?
-  bank_swift_code         String?
+  bank_name           String?
+  bank_branch         String?
+  bank_account_name   String?
+  bank_account_number String?
+  bank_routing_number String?
+  bank_swift_code     String?
 
-  created_at              DateTime @default(now())
-  updated_at              DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 }
@@ -1266,16 +1266,16 @@ model Product {
   /// Snapshotted onto ImportShipmentItem at shipment time, because a later
   /// reclassification must not retroactively change how past entries were
   /// assessed.
-  hs_code                String?
-  country_of_origin      String?
+  hs_code           String?
+  country_of_origin String?
   /// Per unit. Sea and air freight are billed on weight, LCL on volume, and
   /// without these an import can only allocate freight by value — which puts
   /// the freight bill on the expensive line rather than the heavy one.
-  net_weight_kg          Decimal?    @db.Decimal(12, 3)
-  cbm                    Decimal?    @db.Decimal(12, 4)
+  net_weight_kg     Decimal? @db.Decimal(12, 3)
+  cbm               Decimal? @db.Decimal(12, 4)
 
-  created_at             DateTime    @default(now())
-  deleted_at             DateTime?
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
 
   // Relations
   tenant                 Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1665,13 +1665,13 @@ model ProductDemandItem {
 }
 
 model Supplier {
-  id          String    @id @default(uuid())
+  id          String  @id @default(uuid())
   tenant_id   String
   name        String
   phone       String?
   email       String?
   address     String?
-  due_balance Decimal   @default(0) @db.Decimal(12, 2)
+  due_balance Decimal @default(0) @db.Decimal(12, 2)
 
   /// Set on a supplier bought from under an LC. Drives whether the import
   /// fields below are asked for, and nothing else — a foreign supplier is
@@ -1686,9 +1686,9 @@ model Supplier {
   beneficiary_name    String?
   beneficiary_account String?
 
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  deleted_at  DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   tenant             Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   purchases          Purchase[]
@@ -1934,9 +1934,9 @@ model PurchaseQuotationItem {
 // ---------------------------------------------------------------------------
 
 model ImportShipment {
-  id        String @id @default(uuid())
-  tenant_id String
-  store_id  String
+  id          String  @id @default(uuid())
+  tenant_id   String
+  store_id    String
   /// Where the goods land. A container split across branches is received whole
   /// here and moved on with warehouse transfers — see the plan's open question 1.
   supplier_id String?
@@ -1944,7 +1944,7 @@ model ImportShipment {
   /// Set once received. This is the join back to the ordinary purchase
   /// pipeline, and its presence is what "this shipment is closed to further
   /// costing" means.
-  purchase_id String? @unique
+  purchase_id    String? @unique
   /// The customer proforma that justified opening this LC, where there was one.
   /// Not a foreign key with an action: deleting the quotation must not cascade
   /// into an import file that has money against it.
@@ -1995,8 +1995,8 @@ model ImportShipment {
   eta               DateTime?
 
   // --- Customs ---
-  be_number    String?
-  be_date      DateTime?
+  be_number     String?
+  be_date       DateTime?
   cf_agent_name String?
 
   notes      String?
@@ -2021,10 +2021,10 @@ model ImportShipment {
 }
 
 model ImportShipmentItem {
-  id          String @id @default(uuid())
-  shipment_id String
-  product_id  String
-  quantity    Int
+  id            String  @id @default(uuid())
+  shipment_id   String
+  product_id    String
+  quantity      Int
   /// Unit price in the shipment's currency. The BDT figure is derived at
   /// posting and deliberately not stored: the rate can move between opening and
   /// settlement, and a stale translated value would quietly disagree with the
@@ -2072,7 +2072,7 @@ model ImportCost {
   /// False for rebatable VAT and creditable AIT, which are receivables rather
   /// than product cost. Capitalising them overstates COGS on every subsequent
   /// sale of the goods, and it is the most common landed-cost error there is.
-  is_capitalized Boolean @default(true)
+  is_capitalized        Boolean @default(true)
   /// Where a non-capitalised charge lands instead — VAT Rebate Receivable, AIT.
   /// Required when is_capitalized is false.
   receivable_account_id String?
@@ -2140,8 +2140,8 @@ model Sale {
   /// own invoice numbering, is unique per tenant, and is auto-generated when
   /// the user leaves it blank, so it cannot also carry a pointer to a source
   /// document. Both stay null on an ordinary counter sale.
-  quotation_id     String?
-  sales_order_id   String?
+  quotation_id   String?
+  sales_order_id String?
 
   // Relations
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -2510,26 +2510,26 @@ enum CrmContactCaptureSource {
 /// what lets the business-card scanner drop a card into the system in one step
 /// without inventing a pipeline stage for someone met at a trade fair.
 model CrmContact {
-  id             String                  @id @default(uuid())
-  tenant_id      String
-  name           String
-  company        String?
-  designation    String?
-  mobile         String?
-  phone          String?
-  email          String?
-  address        String?
-  website_url    String?
-  linkedin_url   String?
-  photo_url      String?
+  id                String                  @id @default(uuid())
+  tenant_id         String
+  name              String
+  company           String?
+  designation       String?
+  mobile            String?
+  phone             String?
+  email             String?
+  address           String?
+  website_url       String?
+  linkedin_url      String?
+  photo_url         String?
   /// Cloudinary's public_id for `photo_url` — see the same field on `Lead`.
   photo_storage_key String?
-  notes          String?
-  capture_source CrmContactCaptureSource @default(MANUAL)
-  assigned_to    String?
-  created_by     String?
-  created_at     DateTime                @default(now())
-  updated_at     DateTime                @updatedAt
+  notes             String?
+  capture_source    CrmContactCaptureSource @default(MANUAL)
+  assigned_to       String?
+  created_by        String?
+  created_at        DateTime                @default(now())
+  updated_at        DateTime                @updatedAt
 
   tenant             Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   assignee           User?                  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
@@ -2724,9 +2724,9 @@ model CrmActivityPurpose {
 /// CustomerInteraction and CrmFollowUp, which survive read-only through R2 and
 /// are dropped in R3. See docs/superpowers/specs/2026-08-12-crm-activity-unification-design.md
 model CrmActivity {
-  id           String  @id @default(uuid())
-  tenant_id    String
-  store_id     String?
+  id        String  @id @default(uuid())
+  tenant_id String
+  store_id  String?
 
   /// Exactly one of lead_id / customer_id is set — enforced in the service, the
   /// same rule CrmFollowUp.validateFollowUpTarget already applies.
@@ -3344,7 +3344,7 @@ model Quotation {
   ///
   /// A quote can be promoted to a proforma; the reverse is deliberately not
   /// allowed, because a PI may already have an advance receipted against it.
-  doc_kind          String    @default("QUOTE")
+  doc_kind String @default("QUOTE")
 
   /// Commercial terms. All null on an ordinary quote — these are what make a
   /// document a PI that a buyer's bank will accept against an LC application.
@@ -3354,29 +3354,29 @@ model Quotation {
   /// posts to the ledger until the PI becomes a sale, and `convertToOrder`
   /// translates at `exchange_rate` on the way through. See
   /// docs/lc-imports-and-proforma-invoice-plan.md §3.
-  currency          String    @default("BDT")
+  currency                String    @default("BDT")
   /// BDT per one unit of `currency`, fixed when the document was written.
   /// Required when currency is not BDT, ignored when it is.
-  exchange_rate     Decimal?  @db.Decimal(12, 6)
-  incoterm          String? // FOB | CFR | CIF | EXW | DDP | DAP | FCA
-  port_of_loading   String?
-  port_of_discharge String?
-  payment_terms     String?
+  exchange_rate           Decimal?  @db.Decimal(12, 6)
+  incoterm                String? // FOB | CFR | CIF | EXW | DDP | DAP | FCA
+  port_of_loading         String?
+  port_of_discharge       String?
+  payment_terms           String?
   /// Percentage of the total requested up front. Drives the suggested deposit
   /// when the PI is converted to a sales order.
-  advance_percent   Decimal?  @db.Decimal(5, 2)
+  advance_percent         Decimal?  @db.Decimal(5, 2)
   /// Days from order to delivery, as promised to the buyer. Deliberately not
   /// `lead_time_days`: `Product.lead_time_days` is the tenant's own
   /// replenishment lead time — internal planning data that a customer-facing
   /// document must never carry — and two fields a line apart in a join with the
   /// same name eventually get copied into each other.
   delivery_lead_time_days Int?
-  country_of_origin String?
+  country_of_origin       String?
   /// Unguessable secret authorizing the public view. Clearing it revokes every
   /// link ever shared for this quotation, short or long.
-  share_token       String?   @unique
-  share_token_at    DateTime?
-  created_at        DateTime  @default(now())
+  share_token             String?   @unique
+  share_token_at          DateTime?
+  created_at              DateTime  @default(now())
 
   // Relations
   tenant   Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -3408,6 +3408,11 @@ model SubscriptionPlan {
   description             String?
   monthly_price           Decimal              @db.Decimal(12, 2)
   yearly_price            Decimal?             @db.Decimal(12, 2)
+  /// One-time onboarding fee, charged on the first checkout only. A price, so a
+  /// column: `features_json` is validated against PLAN_ENTITLEMENT_REGISTRY and
+  /// carries capability, not money. Flat across billing cycles — there is no
+  /// annual waiver.
+  setup_fee               Decimal              @default(0) @db.Decimal(12, 2)
   features_json           Json                 @default("{}")
   marketing_features_json Json                 @default("[]")
   is_active               Boolean              @default(true)
@@ -3508,6 +3513,11 @@ model TenantSubscription {
   // discount_type: 'PERCENTAGE' (value = percent off) | 'FIXED' (value = amount off in BDT).
   discount_type             String?
   discount_value            Decimal?           @db.Decimal(12, 2)
+  /// When the plan's one-time setup fee was collected. Null means the next
+  /// checkout charges it. Without this the fee is charged again every time a
+  /// tenant lapses to PAST_DUE and re-subscribes, because `createCheckout` has
+  /// no other way to know it was already paid.
+  setup_fee_paid_at         DateTime?
 
   // Relations
   tenant Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -5782,20 +5792,20 @@ model AiMessage {
 // ── Support Chat ──────────────────────────────────────────────────────────────
 
 model SupportThread {
-  id         String   @id @default(cuid())
-  tenantId   String
-  subject    String
-  status     String   @default("open") // open | resolved
+  id          String   @id @default(cuid())
+  tenantId    String
+  subject     String
+  status      String   @default("open") // open | resolved
   /// support | bug | feature | general
-  category   String   @default("support")
-  page       String?
-  feedbackId String?  @unique
+  category    String   @default("support")
+  page        String?
+  feedbackId  String?  @unique
   /// The shop user who opened the thread. Nullable because the user row may be
   /// removed, and because pre-2026-09 threads are backfilled from their first
   /// message's sender — a thread with no messages has nobody to attribute it to.
   createdById String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   feedback  Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)
@@ -5982,7 +5992,7 @@ enum RemainingHoursSource {
 }
 
 model Project {
-  id              String          @id @default(uuid())
+  id              String            @id @default(uuid())
   tenant_id       String
   store_id        String?
   code            String
@@ -5993,21 +6003,21 @@ model Project {
   customer_id     String?
   lead_id         String?
   project_type_id String?
-  status          ProjectStatus   @default(DRAFT)
-  priority        ProjectPriority @default(MEDIUM)
+  status          ProjectStatus     @default(DRAFT)
+  priority        ProjectPriority   @default(MEDIUM)
   /// PUBLIC by default: the overwhelming majority of a shop's jobs are meant to
   /// be seen by the whole workspace, and defaulting the other way would hide
   /// every project that existed before this column did.
   visibility      ProjectVisibility @default(PUBLIC)
   manager_id      String?
-  start_date      DateTime?       @db.Date
-  target_end_date DateTime?       @db.Date
-  actual_end_date DateTime?       @db.Date
+  start_date      DateTime?         @db.Date
+  target_end_date DateTime?         @db.Date
+  actual_end_date DateTime?         @db.Date
   /// Plain number in Phase 1 — nothing rolls up into it until costing lands.
-  budget_amount   Decimal?        @db.Decimal(14, 2)
+  budget_amount   Decimal?          @db.Decimal(14, 2)
   created_by      String?
-  created_at      DateTime        @default(now())
-  updated_at      DateTime        @updatedAt
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
   deleted_at      DateTime?
 
   tenant      Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -6450,7 +6460,7 @@ model ProjectTaskChecklistItem {
 }
 
 model ProjectTimeEntry {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenant_id   String
   task_id     String
   /// Denormalised for per-project reporting without joining through tasks.
@@ -6458,7 +6468,7 @@ model ProjectTimeEntry {
   user_id     String?
   /// Unused in Phase 1 — the hook Phase 2 needs to cost hours against payroll.
   employee_id String?
-  work_date   DateTime @db.Date
+  work_date   DateTime  @db.Date
   /// `hours` stays the stored truth even when a span is present, and every
   /// report reads it alone. The span is additive: entries written before it
   /// existed, and hours typed by hand, have none — so a report that summed
@@ -6466,20 +6476,20 @@ model ProjectTimeEntry {
   /// catalogue. When both ends are given the service derives `hours` from them
   /// rather than trusting a third figure from the client, so the two can never
   /// disagree.
-  hours       Decimal  @db.Decimal(8, 2)
+  hours       Decimal   @db.Decimal(8, 2)
   /// Optional wall-clock span. Both ends or neither: half a span cannot be
   /// displayed, cannot be checked for overlap, and is not worth storing.
   started_at  DateTime?
   ended_at    DateTime?
   note        String?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
 
-  tenant   Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  task     ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  project  Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  user     User?       @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
-  employee Employee?   @relation(fields: [employee_id], references: [id])
+  tenant   Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task     ProjectTask           @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  project  Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user     User?                 @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
+  employee Employee?             @relation(fields: [employee_id], references: [id])
   tags     ProjectTimeEntryTag[]
 
   @@index([tenant_id, project_id, work_date])
@@ -6700,7 +6710,7 @@ model ShortLink {
   created_at    DateTime         @default(now())
   revoked_at    DateTime?
 
-  tenant Tenant? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant Tenant?          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   clicks ShortLinkClick[]
 
   @@index([tenant_id, created_at])
@@ -6729,7 +6739,7 @@ model ShortLink {
 /// data: anything built on top should treat retention as a policy question, not
 /// keep them forever by default.
 model ShortLinkClick {
-  id            String @id @default(uuid())
+  id            String  @id @default(uuid())
   short_link_id String
   /// Copied off the link so tenant-scoped reporting never needs the join, and so
   /// a click survives in aggregate form if the link row is ever reshaped.
@@ -7110,10 +7120,10 @@ model SocialMediaPostPush {
 // to their participants — see the access note on ChatParticipant.
 
 model ChatConversation {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   tenant_id String
   /// dm | group
-  kind      String @default("dm")
+  kind      String  @default("dm")
   /// Null for DMs: the title a member sees is the *other* participant's name,
   /// which differs per viewer and so cannot be a stored column.
   title     String?
@@ -7200,12 +7210,12 @@ model ChatMessage {
 }
 
 model ChatAttachment {
-  id         String @id @default(uuid())
-  message_id String
-  file_url   String
-  file_name  String
-  mime_type  String
-  file_size  Int?
+  id          String   @id @default(uuid())
+  message_id  String
+  file_url    String
+  file_name   String
+  mime_type   String
+  file_size   Int?
   /// Cloudinary's handle for the stored asset. `file_url` cannot be turned back
   /// into one, so without this the row could be deleted while the file stayed —
   /// billed forever. Same reason ProjectAttachment carries one.

@@ -124,7 +124,7 @@ export class BillingService {
         // off whatever the referral left.
         const existingSubscription = await this.db.tenantSubscription.findUnique({
             where: { tenant_id: ctx.tenantId },
-            select: { discount_type: true, discount_value: true },
+            select: { discount_type: true, discount_value: true, setup_fee_paid_at: true },
         });
         if (existingSubscription) {
             planAmount = applySubscriptionDiscount(
@@ -146,7 +146,24 @@ export class BillingService {
                 ? Number(addon.yearly_price ?? Number(addon.monthly_price) * 12)
                 : Number(addon.monthly_price),
         }));
-        const amount = planAmount + addonLineItems.reduce((sum, item) => sum + item.price, 0);
+        // One-time onboarding fee, charged on the first checkout and never again.
+        // Deliberately outside both discounts: the referral discount already
+        // excludes add-ons, and an admin grandfathering someone's monthly price
+        // is not a statement about onboarding work. Flat across billing cycles —
+        // the annual waiver was dropped, so there is no cycle condition here.
+        //
+        // This does not need protecting from recurrence: BillingSchedulerService
+        // recomputes renewals from plan.monthly_price rather than replaying this
+        // amount, so a setup line cannot repeat by itself. What it needs
+        // protecting from is a tenant lapsing to PAST_DUE and checking out again,
+        // which is what setup_fee_paid_at records.
+        const setupFee = existingSubscription?.setup_fee_paid_at
+            ? 0
+            : Number(plan.setup_fee ?? 0);
+
+        const amount = planAmount
+            + addonLineItems.reduce((sum, item) => sum + item.price, 0)
+            + setupFee;
 
         const providerName = this.getProviderName();
         const referencePrefix = providerName === 'ssl-wireless' ? 'sslw' : 'manual';
@@ -189,6 +206,7 @@ export class BillingService {
                 line_items: {
                     plan: { code: plan.code, name: plan.name, price: planAmount },
                     addons: addonLineItems,
+                    ...(setupFee > 0 ? { setup_fee: setupFee } : {}),
                 },
                 addon_codes: addonLineItems.map((item) => item.code),
             },
@@ -506,6 +524,13 @@ export class BillingService {
         const periodStart = input.periodStart ?? new Date();
         const periodEnd = input.periodEnd ?? this.calculatePeriodEnd(periodStart, billingCycle);
 
+        const priorSubscription = await this.db.tenantSubscription.findUnique({
+            where: { tenant_id: input.tenantId },
+            select: { setup_fee_paid_at: true },
+        });
+        const existingSetupFeePaidAt = priorSubscription?.setup_fee_paid_at ?? null;
+        const activationTime = periodStart;
+
         const subscription = await this.db.tenantSubscription.upsert({
             where: { tenant_id: input.tenantId },
             update: {
@@ -517,6 +542,10 @@ export class BillingService {
                 provider_name: input.providerName ?? 'manual',
                 provider_customer_ref: input.providerCustomerRef ?? `tenant_${input.tenantId}`,
                 provider_subscription_ref: input.providerSubscriptionRef ?? `manual_${input.tenantId}`,
+                // Stamped on the first activation only. `??` rather than a plain
+                // assignment so a re-subscribe after a lapse leaves the original
+                // date — and therefore the "already paid" answer — intact.
+                setup_fee_paid_at: existingSetupFeePaidAt ?? activationTime,
             },
             create: {
                 tenant_id: input.tenantId,
@@ -528,6 +557,7 @@ export class BillingService {
                 provider_name: input.providerName ?? 'manual',
                 provider_customer_ref: input.providerCustomerRef ?? `tenant_${input.tenantId}`,
                 provider_subscription_ref: input.providerSubscriptionRef ?? `manual_${input.tenantId}`,
+                setup_fee_paid_at: activationTime,
             },
             include: { plan: true },
         });
@@ -1157,6 +1187,7 @@ export class BillingService {
         description: string | null;
         monthly_price: unknown;
         yearly_price: unknown;
+        setup_fee?: unknown;
         features_json: unknown;
     }) {
         return {
@@ -1165,6 +1196,7 @@ export class BillingService {
             description: plan.description,
             monthly_price: Number(plan.monthly_price),
             yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
+            setup_fee: Number(plan.setup_fee ?? 0),
             features_json: plan.features_json,
         };
     }

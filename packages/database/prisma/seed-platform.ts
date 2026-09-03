@@ -72,6 +72,7 @@ export async function seedPlatformReferenceData(
         description: string;
         monthly_price: number;
         yearly_price: number;
+        setup_fee?: number;
         is_active?: boolean;
         features_json: Record<string, unknown>;
         marketing_features_json?: string[];
@@ -89,6 +90,7 @@ export async function seedPlatformReferenceData(
                     description: data.description,
                     monthly_price: data.monthly_price,
                     yearly_price: data.yearly_price,
+                    setup_fee: data.setup_fee ?? 0,
                     is_active: isActive,
                     features_json: data.features_json as never,
                     marketing_features_json: data.marketing_features_json ?? [],
@@ -148,6 +150,7 @@ export async function seedPlatformReferenceData(
         description: 'One counter, one owner, a couple of staff — ring up sales and know what is in stock',
         monthly_price: 299,
         yearly_price: 2990,
+        setup_fee: 0,
         features_json: {
             maxStores: 1,
             maxUsers: 2,
@@ -217,6 +220,7 @@ export async function seedPlatformReferenceData(
         description: 'A real business with books to close, a second branch, and someone chasing customers',
         monthly_price: 999,
         yearly_price: 9990,
+        setup_fee: 4000,
         features_json: {
             maxStores: 2,
             maxUsers: 10,
@@ -254,6 +258,7 @@ export async function seedPlatformReferenceData(
         description: 'Multi-branch operators who run payroll, manufacture, or import',
         monthly_price: 2499,
         yearly_price: 24990,
+        setup_fee: 15000,
         features_json: {
             maxStores: 5,
             maxUsers: 30,
