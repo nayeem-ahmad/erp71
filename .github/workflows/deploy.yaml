@@ -66,10 +66,15 @@ jobs:
       - run: npm install
       - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
+      # seed-platform imports `assertKnownEntitlements` from @erp71/shared-types
+      # (since 1dd13434), and npm install does not build workspace packages — so
+      # without this the seed dies on a missing dist/index.js and takes the whole
+      # backend job with it. The comment this replaces claimed the seed needed only
+      # @prisma/client, which stopped being true the moment that import landed.
+      - run: npm run build --workspace=packages/shared-types
       # Signup reads SubscriptionPlan at runtime, so without the plan rows every
       # signup in the integration suites 400s and takes the rest of the suite with
-      # it. seed-platform imports only @prisma/client, so unlike prisma/seed.ts it
-      # needs no @erp71/shared-types build first.
+      # it.
       - run: npm run db:seed:platform --workspace=packages/database
       - name: Run backend unit tests with coverage
         run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit
