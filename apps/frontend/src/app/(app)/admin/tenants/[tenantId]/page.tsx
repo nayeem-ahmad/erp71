@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, LogIn } from 'lucide-react';
-import { PLATFORM_FEATURE_KEYS } from '@erp71/shared-types';
+import { TENANT_OVERRIDABLE_FEATURE_KEYS } from '@erp71/shared-types';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button, Alert, ConfirmDialog } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -151,7 +151,7 @@ export default function AdminTenantDetailPage() {
             }
             if (detail.featuresDirty) {
                 const payload = Object.fromEntries(
-                    PLATFORM_FEATURE_KEYS.map((key) => [
+                    TENANT_OVERRIDABLE_FEATURE_KEYS.map((key) => [
                         key,
                         detail.featureDraft[key] === 'inherit' ? null : detail.featureDraft[key] === 'on',
                     ]),

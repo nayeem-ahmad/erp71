@@ -46,6 +46,16 @@ export type AdminTenantMessagingIdentity = {
     updated_by: string | null;
 };
 
+/**
+ * The platform's own internal workspace — the tenant the admin console's project
+ * pages are scoped to. Not a shop: it never appears in `/auth/me`'s tenant list.
+ */
+export type PlatformWorkspace = {
+    id: string;
+    name: string;
+    timezone: string;
+};
+
 /** A tenant's active/trialing add-on subscription, as shown to a platform admin. */
 export type AdminTenantAddonSubscription = {
     addon: {
@@ -142,8 +152,34 @@ function clearRejectedWorkspace(): boolean {
     sessionStorage.removeItem('tenant_id');
     sessionStorage.removeItem('store_id');
     sessionStorage.removeItem('subscription_plan_code');
+    // Also the platform workspace, which is what the header carried if the tab
+    // is in the admin console. The shell re-fetches it from
+    // `GET /platform/workspace`, which re-provisions it if it has gone.
+    sessionStorage.removeItem('platform_workspace_id');
     localStorage.removeItem('last_tenant_id');
     return true;
+}
+
+/**
+ * The tenant this request is scoped to.
+ *
+ * Normally the shop the tab is in. In the platform-admin console there is no
+ * shop — the sidebar there is the admin console, not a workspace — but the
+ * project module is tenant-scoped end to end, so those pages run against the
+ * platform's own internal workspace instead. Its id is not in `/auth/me`'s
+ * tenant list (it is not a shop anyone can enter); the app shell fetches it from
+ * `GET /platform/workspace` and parks it here.
+ *
+ * Admin endpoints ignore the header entirely — they are guarded by
+ * `PlatformAdminGuard` and never run `TenantInterceptor` — so sending it
+ * console-wide changes nothing for them and saves every project call having to
+ * opt in by hand.
+ */
+function resolveTenantHeader(): string | null {
+    const tenantId = getWorkspaceItem('tenant_id');
+    if (tenantId) return tenantId;
+    if (getWorkspaceItem('active_context') !== 'platform-admin') return null;
+    return getWorkspaceItem('platform_workspace_id');
 }
 
 /**
@@ -183,7 +219,7 @@ export async function fetchBlobWithAuth(
     if (!isRetry) await renewIfNearExpiry();
 
     const token = getAccessToken();
-    const tenantId = getWorkspaceItem('tenant_id');
+    const tenantId = resolveTenantHeader();
     const storeId = getWorkspaceItem('store_id');
 
     const headers = new Headers(options.headers);
@@ -261,7 +297,7 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     if (!isRetry) await renewIfNearExpiry();
 
     const token = getAccessToken();
-    const tenantId = getWorkspaceItem('tenant_id');
+    const tenantId = resolveTenantHeader();
     const storeId = getWorkspaceItem('store_id');
 
     const headers = new Headers(options.headers);
@@ -2743,6 +2779,12 @@ export const api = {
         }),
     lookupAdminUser: (email: string) =>
         fetchWithAuth(`/admin/users/lookup?email=${encodeURIComponent(email)}`),
+    /**
+     * The platform team's own workspace, provisioned on first call. Its id is
+     * what scopes the project pages when the tab is in the admin console — see
+     * `resolveTenantHeader`.
+     */
+    getPlatformWorkspace: (): Promise<PlatformWorkspace> => fetchWithAuth('/platform/workspace'),
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),
     getSystemHealth: () => fetchWithAuth('/admin/system-health'),
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),

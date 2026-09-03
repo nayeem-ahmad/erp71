@@ -275,7 +275,11 @@ export default function Sidebar({
             .filter((module) => {
                 if (platformAdminMode) {
                     if (module.key === 'help') return helpEnabled;
-                    return module.key === 'admin' || module.key === 'help';
+                    // The platform team's own project workspace, the one shop
+                    // module the admin console carries. Its own switch decides,
+                    // which the shell has already resolved into this prop.
+                    if (module.key === 'projects') return canAccessProjects;
+                    return module.key === 'admin';
                 }
                 if (accountingOnlyMode) {
                     if (module.key === 'help') return helpEnabled;
@@ -360,6 +364,7 @@ export default function Sidebar({
         canAccessAccountingAdvanced,
         canAccessPremiumCrm,
         canAccessManufacturing,
+        canAccessProjects,
         canAccessAdmin,
         canManageBilling,
         canManageTeam,

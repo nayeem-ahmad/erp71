@@ -277,6 +277,25 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Platform Settings')).not.toBeInTheDocument();
     });
 
+    it('keeps Project Management out of the admin console until the platform switch is on', () => {
+        render(<Sidebar platformAdminMode helpEnabled />);
+
+        expect(screen.queryByText('Project Management')).not.toBeInTheDocument();
+    });
+
+    it('shows the platform team its own project module in platform admin mode', () => {
+        render(<Sidebar platformAdminMode helpEnabled canAccessProjects />);
+
+        fireEvent.click(screen.getByText('Project Management'));
+        expect(screen.getByText('Boards')).toBeInTheDocument();
+        expect(screen.getByText('Sprints')).toBeInTheDocument();
+        expect(screen.getByText('Hour Logs')).toBeInTheDocument();
+
+        // Still the admin console: no shop module rides in alongside it.
+        expect(screen.queryByText('Sales')).not.toBeInTheDocument();
+        expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
+    });
+
     it('shows platform admin and billing items when enabled', () => {
         render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 

@@ -684,6 +684,10 @@ export const adminMessages = {
                 label: 'Project Management',
                 hint: 'Projects, tasks, time logging, kanban and sprints. Off by default.',
             },
+            platformProjects: {
+                label: 'Platform Projects',
+                hint: 'Project management for the platform team, inside the admin console, in ERP71’s own workspace. Not a shop feature. On by default.',
+            },
             saved: 'Tenant feature settings saved.',
         },
         sms: {

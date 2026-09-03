@@ -16,7 +16,10 @@ const RECENT_SIGNUPS = 5;
 const TRIAL_ENDING_WITHIN_DAYS = 7;
 
 /** A soft-deleted tenant is not a customer, and not churn either — it is gone. */
-const LIVE_TENANT = { deleted_at: null } as const;
+// `platform_workspace_key: null` means "not the platform's own workspace". That
+// row is a tenant so the project module can be scoped to it, but it is not a
+// customer — counting it would inflate every figure on this dashboard by one.
+const LIVE_TENANT = { deleted_at: null, platform_workspace_key: null } as const;
 
 /**
  * Aggregates for the platform-admin dashboard: how many tenants there are, what

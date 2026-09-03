@@ -27,7 +27,7 @@ describe('PlatformSettingsService', () => {
     });
 
     describe('getPlatformFeatures', () => {
-        it('returns assist features off and manufacturing on by default', async () => {
+        it('returns assist features off, and manufacturing and platform projects on, by default', async () => {
             const features = await service.getPlatformFeatures();
 
             expect(features).toEqual({
@@ -39,6 +39,7 @@ describe('PlatformSettingsService', () => {
                 aiChat: false,
                 externalImport: false,
                 projects: false,
+                platformProjects: true,
             });
         });
 
@@ -60,7 +61,16 @@ describe('PlatformSettingsService', () => {
                 aiChat: false,
                 externalImport: false,
                 projects: false,
+                platformProjects: true,
             });
+        });
+
+        it('lets an operator switch off the platform project workspace', async () => {
+            db.platformSetting.findMany.mockResolvedValue([
+                { group: 'general', key: 'platform_projects_enabled', value: 'false', is_secret: false },
+            ]);
+
+            await expect(service.isFeatureEnabled('platformProjects')).resolves.toBe(false);
         });
     });
 });

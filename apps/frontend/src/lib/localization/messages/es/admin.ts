@@ -684,6 +684,10 @@ export const adminMessages = {
                 label: "Gestión de proyectos",
                 hint: "Proyectos, tareas, imputación de tiempo, kanban y sprints. Desactivado por defecto.",
             },
+            platformProjects: {
+                label: "Proyectos de la plataforma",
+                hint: "Gestión de proyectos para el equipo de la plataforma, dentro de la consola de administración, en el espacio de trabajo propio de ERP71. No es una función para tiendas. Activado por defecto.",
+            },
             saved: "Ajustes de las funciones de los espacios guardados.",
         },
         sms: {

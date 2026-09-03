@@ -69,6 +69,7 @@ import { ImportsModule } from './imports/imports.module';
 import { AddonModulesModule } from './addon-modules/addon-modules.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { PlatformWorkspaceModule } from './platform-workspace/platform-workspace.module';
 import { NavigationModule } from './navigation/navigation.module';
 import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { SmsModule } from './sms/sms.module';
@@ -132,6 +133,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         CacheModule,
         DatabaseModule,
         PlatformSettingsModule,
+        PlatformWorkspaceModule,
         NavigationModule,
         SubscriptionPlansModule,
         TenantMessagingModule,

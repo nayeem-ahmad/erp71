@@ -19,6 +19,7 @@ type FeatureSettings = {
     ai_chat_enabled: string;
     external_import_enabled: string;
     projects_enabled: string;
+    platform_projects_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -30,13 +31,14 @@ const DEFAULTS: FeatureSettings = {
     ai_chat_enabled: 'false',
     external_import_enabled: 'false',
     projects_enabled: 'false',
+    platform_projects_enabled: 'true',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects' | 'platformProjects';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
@@ -46,6 +48,10 @@ const FEATURE_TOGGLES: Array<{
     { key: 'ai_chat_enabled', labelKey: 'aiChat' },
     { key: 'external_import_enabled', labelKey: 'externalImport' },
     { key: 'projects_enabled', labelKey: 'projects' },
+    // Not a shop switch: this one governs the platform team's own project
+    // workspace in the admin console. It lives here because this page is where
+    // every platform feature switch is, not because tenants are affected by it.
+    { key: 'platform_projects_enabled', labelKey: 'platformProjects' },
 ];
 
 function FeatureSwitch({
@@ -98,6 +104,7 @@ export default function PlatformTenantFeaturesPage() {
                     ai_chat_enabled: d.ai_chat_enabled ?? DEFAULTS.ai_chat_enabled,
                     external_import_enabled: d.external_import_enabled ?? DEFAULTS.external_import_enabled,
                     projects_enabled: d.projects_enabled ?? DEFAULTS.projects_enabled,
+                    platform_projects_enabled: d.platform_projects_enabled ?? DEFAULTS.platform_projects_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))

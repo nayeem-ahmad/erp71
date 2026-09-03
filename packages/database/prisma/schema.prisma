@@ -600,6 +600,23 @@ model Tenant {
   onboarding_dismissed_at  DateTime?
   deleted_at               DateTime?
 
+  /// Marks the single internal workspace the platform team runs its own work in
+  /// (Admin console › Projects). It is a real tenant so the whole project
+  /// module — projects, tasks, boards, sprints, hour logs — works unchanged, but
+  /// it is not a customer: it is excluded from tenant listings, platform metrics
+  /// and the account chooser. Provisioned on demand by PlatformWorkspaceService,
+  /// which sets it to the one constant `PLATFORM_WORKSPACE_KEY`.
+  ///
+  /// A nullable unique column rather than the boolean this obviously wants to be:
+  /// "at most one" needs a partial unique index over a boolean, which Prisma
+  /// cannot express — so it would live only in migration SQL, and production
+  /// applies the schema with `prisma db push`, which never runs migrations (see
+  /// apps/backend/Dockerfile). Postgres lets a UNIQUE column hold any number of
+  /// NULLs and exactly one non-NULL, which is the same guarantee in a form
+  /// `db push` actually creates. `platform_workspace_key: null` is therefore how
+  /// every customer-facing query says "not the platform's own workspace".
+  platform_workspace_key   String?   @unique
+
   /// Per-tenant overrides of the platform feature switches, e.g. `{"voice": true}`.
   /// A missing key inherits the platform default; an explicit boolean wins over it.
   feature_overrides Json @default("{}")
