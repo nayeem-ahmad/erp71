@@ -43,7 +43,7 @@ describe('RateHistory', () => {
     });
 
     it('shows each past rate against the party that traded it', async () => {
-        render(<RateHistory productId="prod-1" type="purchase" partyId="sup-1" partyName="Rahim Traders" />);
+        render(<RateHistory productId="prod-1" type="purchase" partyId="sup-1" />);
 
         await waitFor(() => expect(screen.getByText(/Previous purchase rates/i)).toBeInTheDocument());
 
@@ -52,6 +52,8 @@ describe('RateHistory', () => {
         expect(screen.getAllByText('Rahim Traders').length).toBeGreaterThan(0);
         expect(screen.getByText('No supplier')).toBeInTheDocument();
         expect(screen.getByText('×10')).toBeInTheDocument();
+        // Labelled by role — the name is already on every row in the section.
+        expect(screen.getByText('This supplier')).toBeInTheDocument();
         expect(screen.getByText('Other suppliers')).toBeInTheDocument();
     });
 
