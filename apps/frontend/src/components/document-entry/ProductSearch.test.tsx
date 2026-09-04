@@ -83,7 +83,7 @@ describe('ProductSearch entry bar', () => {
         );
     });
 
-    it('opens the history in a modal and adopts the rate that is clicked', async () => {
+    it('opens the history under the product box and adopts the rate that is clicked', async () => {
         render(
             <ProductSearch
                 onProductSelect={jest.fn()}
@@ -98,18 +98,40 @@ describe('ProductSearch entry bar', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         fireEvent.click(screen.getByLabelText('Previous rates'));
 
-        const dialog = await screen.findByRole('dialog');
+        const panel = await screen.findByRole('dialog');
         // The header carries the comparison basis: which product, whose rates.
-        expect(dialog).toHaveTextContent('Previous purchase rates');
-        expect(dialog).toHaveTextContent('Coffee Beans · Rahim Traders');
-        // The modal supplies the title, so the body must not repeat it.
+        expect(panel).toHaveTextContent('Previous purchase rates');
+        expect(panel).toHaveTextContent('Coffee Beans · Rahim Traders');
+        // The panel supplies the title, so the body must not repeat it.
         expect(screen.getAllByText(/Previous purchase rates/i)).toHaveLength(1);
 
         fireEvent.click(await screen.findByTitle('Use this rate'));
 
-        // Picking is a decision — the modal closes and the cost is adopted.
+        // Picking is a decision — the panel closes and the cost is adopted.
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         expect(screen.getByLabelText('Unit Cost')).toHaveValue(1180);
+    });
+
+    it('has the history loaded before the panel is opened', async () => {
+        render(
+            <ProductSearch
+                onProductSelect={jest.fn()}
+                priceLabel="Unit Cost"
+                historyType="purchase"
+                historyPartyId="sup-1"
+            />,
+        );
+        await stageCoffee();
+
+        // Staging the product warms the cache, so the panel opens on rows
+        // rather than on "Loading previous rates…".
+        await waitFor(() => expect(api.getProductRateHistory).toHaveBeenCalled());
+        fireEvent.click(screen.getByLabelText('Previous rates'));
+
+        expect(screen.getByText('Rahim Traders')).toBeInTheDocument();
+        expect(screen.queryByText(/Loading previous rates/i)).not.toBeInTheDocument();
+        // The warm cache answers the second reader — no repeat round trip.
+        expect(api.getProductRateHistory).toHaveBeenCalledTimes(1);
     });
 
     it('offers no history control at all when the document did not ask for one', async () => {

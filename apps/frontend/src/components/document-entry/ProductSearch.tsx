@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus, X, History } from 'lucide-react';
-import RateHistoryModal from './RateHistoryModal';
-import { type RateHistoryType } from './RateHistory';
+import RateHistoryPopover from './RateHistoryPopover';
+import { useRateHistory, type RateHistoryType } from './RateHistory';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -57,7 +57,14 @@ export default function ProductSearch({
     const inputRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const historyButtonRef = useRef<HTMLButtonElement>(null);
     const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const productInputId = useId();
+
+    // Warm the cache the moment a product is staged, so the history panel
+    // paints its rows on the click rather than after a round trip. The hook
+    // caches per product+party, so opening the panel re-reads, never re-fetches.
+    useRateHistory(historyType && staged ? staged.id : undefined, historyType, historyPartyId);
 
     // Fetch whenever the dropdown is open (including an empty query → browse all).
     useEffect(() => {
@@ -180,88 +187,114 @@ export default function ProductSearch({
                 {/* Capped rather than free-growing: stretched across a wide
                     work area it left the amount fields marooned at the far
                     edge, visually detached from the product they price. */}
-                <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md">
-                    <span className="block text-[11px] text-gray-500 mb-0.5">Product</span>
-                    <Search className="absolute start-2.5 top-[26px] -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        // Once a product is staged the box shows what was picked
-                        // and stops being a search field; the X hands it back.
-                        value={staged ? staged.name : query}
-                        readOnly={!!staged}
-                        onChange={(e) => {
-                            setQuery(e.target.value);
-                            setShowDropdown(true);
-                        }}
-                        onFocus={() => { if (!staged) setShowDropdown(true); }}
-                        onKeyDown={handleSearchKeyDown}
-                        placeholder={placeholder}
-                        aria-label="Product"
-                        className={`w-full ps-8 ${staged ? 'pe-8' : 'pe-3'} py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent ${staged ? 'bg-blue-50 border-blue-200 font-medium text-gray-900' : ''}`}
-                    />
-                    {staged && (
-                        <button
-                            type="button"
-                            onClick={() => { clearStaged(); inputRef.current?.focus(); }}
-                            className="absolute end-2 top-[26px] -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                            title="Clear product"
-                            aria-label="Clear product"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
+                <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md">
+                    <label htmlFor={productInputId} className="block text-[11px] text-gray-500 mb-0.5">
+                        Product
+                    </label>
+                    {/* The overlay icons and both panels hang off the input alone —
+                        measured against the label as well they sat a caption's
+                        height too high. */}
+                    <div className="relative">
+                        <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                            ref={inputRef}
+                            id={productInputId}
+                            type="text"
+                            // Once a product is staged the box shows what was picked
+                            // and stops being a search field; the X hands it back.
+                            value={staged ? staged.name : query}
+                            readOnly={!!staged}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                setShowDropdown(true);
+                            }}
+                            onFocus={() => { if (!staged) setShowDropdown(true); }}
+                            onKeyDown={handleSearchKeyDown}
+                            placeholder={placeholder}
+                            aria-label="Product"
+                            className={`w-full ps-8 ${staged ? 'pe-8' : 'pe-3'} py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent ${staged ? 'bg-blue-50 border-blue-200 font-medium text-gray-900' : ''}`}
+                        />
+                        {staged && (
+                            <button
+                                type="button"
+                                onClick={() => { clearStaged(); inputRef.current?.focus(); }}
+                                className="absolute end-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                                title="Clear product"
+                                aria-label="Clear product"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
 
-                    {/* Results Dropdown */}
-                    {showDropdown && !staged && (
-                        <div
-                            ref={dropdownRef}
-                            className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
-                        >
-                            {loading ? (
-                                <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
-                            ) : products.length === 0 ? (
-                                <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
-                            ) : (
-                                <>
-                                    {!query.trim() && (
-                                        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
-                                            Popular products
-                                        </div>
-                                    )}
-                                    {products.map((product, index) => {
-                                        const stock = availableQtyOf(product);
-                                        return (
-                                            <div
-                                                key={product.id}
-                                                ref={(el) => { optionRefs.current[index] = el; }}
-                                                onClick={() => handleSelectProduct(product)}
-                                                onMouseEnter={() => setHighlight(index)}
-                                                className={`px-3 py-2 cursor-pointer border-b last:border-b-0 flex justify-between items-center gap-2 ${index === highlight ? 'bg-blue-50' : ''}`}
-                                            >
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
-                                                    <div className="text-xs text-gray-600">
-                                                        SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
-                                                        <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
-                                                            Avail: {stock}
-                                                        </span>
-                                                        {product.qty_sold > 0 && (
-                                                            <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
-                                                        )}
-                                                        {product.subgroup && (
-                                                            <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        {/* Results Dropdown */}
+                        {showDropdown && !staged && (
+                            <div
+                                ref={dropdownRef}
+                                className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
+                            >
+                                {loading ? (
+                                    <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
+                                ) : products.length === 0 ? (
+                                    <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
+                                ) : (
+                                    <>
+                                        {!query.trim() && (
+                                            <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
+                                                Popular products
                                             </div>
-                                        );
-                                    })}
-                                </>
-                            )}
-                        </div>
-                    )}
+                                        )}
+                                        {products.map((product, index) => {
+                                            const stock = availableQtyOf(product);
+                                            return (
+                                                <div
+                                                    key={product.id}
+                                                    ref={(el) => { optionRefs.current[index] = el; }}
+                                                    onClick={() => handleSelectProduct(product)}
+                                                    onMouseEnter={() => setHighlight(index)}
+                                                    className={`px-3 py-2 cursor-pointer border-b last:border-b-0 flex justify-between items-center gap-2 ${index === highlight ? 'bg-blue-50' : ''}`}
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+                                                        <div className="text-xs text-gray-600">
+                                                            SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
+                                                            <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
+                                                                Avail: {stock}
+                                                            </span>
+                                                            {product.qty_sold > 0 && (
+                                                                <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
+                                                            )}
+                                                            {product.subgroup && (
+                                                                <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                                </div>
+                                            );
+                                        })}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Hung under the product box rather than over the screen: the
+                            rate being decided stays visible three fields to the right. */}
+                        {historyType && showHistory && staged && (
+                            <RateHistoryPopover
+                                productId={staged.id}
+                                productName={staged.name}
+                                type={historyType}
+                                partyId={historyPartyId}
+                                partyName={historyPartyName}
+                                anchorRefs={[historyButtonRef]}
+                                onPickRate={(rate) => {
+                                    setStagedPrice(String(rate));
+                                    requestAnimationFrame(() => priceRef.current?.select());
+                                }}
+                                onClose={() => setShowHistory(false)}
+                            />
+                        )}
+                    </div>
                 </div>
 
                 <label className="flex flex-col gap-0.5">
@@ -306,8 +339,9 @@ export default function ProductSearch({
 
                 {historyType && (
                     <button
+                        ref={historyButtonRef}
                         type="button"
-                        onClick={() => setShowHistory(true)}
+                        onClick={() => setShowHistory((open) => !open)}
                         disabled={!staged}
                         title={staged ? 'Previous rates' : 'Pick a product to see its previous rates'}
                         aria-label="Previous rates"
@@ -333,21 +367,6 @@ export default function ProductSearch({
                         </span>
                     )}
                 </div>
-            )}
-
-            {historyType && showHistory && staged && (
-                <RateHistoryModal
-                    productId={staged.id}
-                    productName={staged.name}
-                    type={historyType}
-                    partyId={historyPartyId}
-                    partyName={historyPartyName}
-                    onPickRate={(rate) => {
-                        setStagedPrice(String(rate));
-                        requestAnimationFrame(() => priceRef.current?.select());
-                    }}
-                    onClose={() => setShowHistory(false)}
-                />
             )}
         </div>
     );
