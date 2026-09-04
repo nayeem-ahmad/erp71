@@ -38,7 +38,8 @@ export default function CustomerSelection({ customer, setCustomer, readOnly = fa
             onSelect={setCustomer}
             readOnly={readOnly}
             readOnlyFallback="Walk-in customer"
-            placeholder="Customer — search by name or phone…"
+            label="Customer"
+            placeholder="Search by name or phone…"
             noMatchLabel="No customers found"
             clearLabel="Remove customer"
             summary={(cust) => (

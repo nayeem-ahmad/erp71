@@ -248,9 +248,14 @@ export default function VoiceEntryInput({
     if (inline) {
         return (
             <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">{children}</div>
-                    {voiceButton}
+                    {/* Captioned like the fields it sits beside — centring it
+                        against the whole picker floated it above their row. */}
+                    <div className="flex flex-col gap-0.5">
+                        <span aria-hidden className="invisible text-[11px] select-none">&nbsp;</span>
+                        {voiceButton}
+                    </div>
                 </div>
                 {recording && (
                     <span className="text-[11px] text-red-600 animate-pulse px-0.5">Recording…</span>

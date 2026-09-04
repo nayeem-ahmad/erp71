@@ -127,6 +127,7 @@ export default function SupplierSelection({
             loading={loading}
             selected={supplier}
             onSelect={setSupplier}
+            label={t.common.supplier}
             placeholder={t.purchaseShared.searchSuppliers}
             noMatchLabel={t.purchaseShared.noSuppliersFound}
             clearLabel={t.purchaseShared.clearSupplier}
