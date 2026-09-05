@@ -22,6 +22,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('lucide-react', () => ({
     ChevronLeft: () => <span data-testid="icon-chevron-left" />,
     CircleCheck: () => <span data-testid="icon-circle-check" />,
+    Copy: () => <span data-testid="icon-copy" />,
     Plus: () => <span data-testid="icon-plus" />,
     Trash2: () => <span data-testid="icon-trash" />,
     Paperclip: () => <span data-testid="icon-paperclip" />,
@@ -280,6 +281,115 @@ describe('AccountingVouchersPage — Story 30.5', () => {
                     ],
                 }));
             });
+        });
+    });
+
+    describe('duplicate mode', () => {
+        const sourceVoucher = {
+            id: 'voucher-9',
+            voucher_number: 'CP-00009',
+            voucher_type: 'cash_payment',
+            description: 'Paid office rent',
+            reference_number: 'CP-REF-09',
+            date: '2026-07-01T00:00:00.000Z',
+            store_id: 'store-2',
+            attribution: 'BRANCH',
+            source: { module: null, type: null, id: null },
+            attachments: [{ id: 'a1', file_url: '/u/rent.pdf', file_name: 'rent.pdf' }],
+            details: [
+                { id: 'd1', account_id: 'expense-1', debit_amount: '250.00', credit_amount: '0.00', comment: 'Rent' },
+                { id: 'd2', account_id: 'cash-1', debit_amount: '0.00', credit_amount: '250.00', comment: null },
+            ],
+        };
+
+        beforeEach(() => {
+            mockSearchParams = { duplicate: 'voucher-9' };
+            // Earlier suites in this file post vouchers; the assertions below
+            // check which endpoint this flow hits, which stale calls defeat.
+            (api.createVoucher as jest.Mock).mockClear();
+            (api.updateVoucher as jest.Mock).mockClear();
+            (api.getVoucher as jest.Mock).mockResolvedValue(sourceVoucher);
+            (api.getVoucherNumberPreview as jest.Mock).mockResolvedValue({ voucherNumber: 'CP-00042' });
+            (api.getStores as jest.Mock).mockResolvedValue([
+                { id: 'store-1', name: 'Main Branch' },
+                { id: 'store-2', name: 'Uttara Branch' },
+            ]);
+        });
+
+        it('copies the source voucher onto a fresh voucher number', async () => {
+            render(<AccountingVouchersPage />);
+
+            await waitFor(() => {
+                expect(api.getVoucher).toHaveBeenCalledWith('voucher-9');
+                expect(screen.getByLabelText('Description')).toHaveValue('Paid office rent');
+                // The branch only resolves once the store list has arrived too.
+                expect(screen.getByLabelText('Branch')).toHaveValue('store-2');
+            });
+
+            expect(screen.getByLabelText('Reference number')).toHaveValue('CP-REF-09');
+            expect(selectedAccountLabel('Account row 1')).toBe('General Operating Expense');
+            expect(screen.getByLabelText('Debit row 1')).toHaveValue(250);
+            expect(selectedAccountLabel('Account row 2')).toBe('Cash in Hand');
+            expect(screen.getByLabelText('Credit row 2')).toHaveValue(250);
+
+            // A duplicate never reuses the source's number, date or attachments.
+            expect(screen.getByText('CP-00042')).toBeInTheDocument();
+            expect(screen.queryByText('CP-00009')).not.toBeInTheDocument();
+            expect(screen.getByLabelText('Voucher date')).toHaveValue(new Date().toISOString().slice(0, 10));
+            expect(screen.queryByText('rent.pdf')).not.toBeInTheDocument();
+            expect(screen.getByText(/Copied from CP-00009/)).toBeInTheDocument();
+        });
+
+        it('drops the source date and attachments when duplicating straight from the edit form', async () => {
+            // The duplicate link sits on the edit form, so Next re-renders this
+            // page with new search params instead of remounting it.
+            mockSearchParams = { edit: 'voucher-9' };
+            (api.getVoucher as jest.Mock).mockResolvedValue({
+                ...sourceVoucher,
+                attachments: [{ id: 'a1', file_url: '/u/rent.pdf', file_name: 'rent.pdf' }],
+            });
+
+            const { rerender } = render(<AccountingVouchersPage />);
+
+            await waitFor(() => {
+                expect(screen.getByLabelText('Voucher date')).toHaveValue('2026-07-01');
+                expect(screen.getByText('rent.pdf')).toBeInTheDocument();
+            });
+
+            mockSearchParams = { duplicate: 'voucher-9' };
+            rerender(<AccountingVouchersPage />);
+
+            await waitFor(() => {
+                expect(screen.getByLabelText('Voucher date'))
+                    .toHaveValue(new Date().toISOString().slice(0, 10));
+                expect(screen.queryByText('rent.pdf')).not.toBeInTheDocument();
+                expect(screen.getByRole('button', { name: 'Save Voucher' })).toBeInTheDocument();
+            });
+        });
+
+        it('posts the copy as a new voucher rather than updating the source', async () => {
+            render(<AccountingVouchersPage />);
+
+            await waitFor(() => {
+                expect(screen.getByLabelText('Branch')).toHaveValue('store-2');
+                expect(screen.getByRole('button', { name: 'Save Voucher' })).toBeEnabled();
+            });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Save Voucher' }));
+
+            await waitFor(() => {
+                expect(api.createVoucher).toHaveBeenCalledWith(expect.objectContaining({
+                    voucherType: 'cash_payment',
+                    description: 'Paid office rent',
+                    storeId: 'store-2',
+                    details: [
+                        expect.objectContaining({ accountId: 'expense-1', debitAmount: 250, creditAmount: 0 }),
+                        expect.objectContaining({ accountId: 'cash-1', debitAmount: 0, creditAmount: 250 }),
+                    ],
+                }));
+            });
+
+            expect(api.updateVoucher).not.toHaveBeenCalled();
         });
     });
 
