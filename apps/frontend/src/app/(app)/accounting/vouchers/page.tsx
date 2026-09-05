@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, ChevronLeft, ChevronRight, Eye, FileText, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Eye, FileText, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -346,6 +346,13 @@ function AccountingVouchersListPageContent() {
                                 <Eye className="w-4 h-4" />
                             </Link>
                             <Link
+                                href={`/accounting/vouchers/new?duplicate=${voucher.id}`}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                title={t.vouchers.list.duplicate}
+                            >
+                                <Copy className="w-4 h-4" />
+                            </Link>
+                            <Link
                                 href={isSystem ? '#' : `/accounting/vouchers/new?edit=${voucher.id}`}
                                 onClick={isSystem ? (e) => { e.preventDefault(); toast.info(t.vouchers.list.systemVoucherLocked); } : undefined}
                                 className={`p-1.5 rounded-lg ${isSystem ? 'text-gray-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50'}`}
@@ -374,7 +381,7 @@ function AccountingVouchersListPageContent() {
                     );
                 },
                 enableSorting: false,
-                size: 200,
+                size: 230,
             }),
         ],
         [canApprove, handleApprove, handleDelete, handlePrint, handleReject, locale, t],

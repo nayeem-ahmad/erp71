@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { Copy } from 'lucide-react';
 import {
     AccountingPageShell,
     CompactSection,
@@ -151,6 +153,15 @@ export default function VoucherDetailPage() {
                     [{ label: t.vouchers.list.title, href: routes.accounting.vouchers }],
                     voucher?.voucher_number ?? t.journal.detail.voucherDetail,
                 )}
+                actions={voucher ? (
+                    <Link
+                        href={`/accounting/vouchers/new?duplicate=${voucher.id}`}
+                        className="inline-flex items-center gap-1 min-h-touch px-3 py-1.5 rounded border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                        <Copy className="h-3.5 w-3.5" />
+                        {t.vouchers.list.duplicate}
+                    </Link>
+                ) : undefined}
             />
 
             {loading ? <CompactSection className="text-sm text-gray-500">{t.journal.detail.loading}</CompactSection> : null}

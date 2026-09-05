@@ -8,7 +8,9 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('next/link', () => {
-    return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
+    return ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+        <a href={href} {...rest}>{children}</a>
+    );
 });
 
 jest.mock('@/components/data-table', () => ({
@@ -46,6 +48,12 @@ jest.mock('@/components/data-table', () => ({
                                 {column.cell({ getValue: () => row[column.accessorKey as string] })}
                             </span>
                         ))}
+                    {/* Display columns (the action buttons) take the row, not a value. */}
+                    {columns
+                        .filter((column) => !column.accessorKey && column.id === 'actions')
+                        .map((column) => (
+                            <span key={column.id}>{column.cell({ row: { original: row } })}</span>
+                        ))}
                 </div>
             ))}
         </div>
@@ -62,6 +70,7 @@ jest.mock('@/lib/toast', () => ({
 
 jest.mock('lucide-react', () => ({
     Check: () => <span />,
+    Copy: () => <span />,
     X: () => <span />,
     ChevronLeft: () => <span />,
     ChevronRight: () => <span />,
@@ -140,6 +149,30 @@ describe('AccountingVouchersListPage', () => {
         await waitFor(() => {
             expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
         });
+    });
+
+    it('offers a duplicate action that opens the entry form prefilled from the voucher', async () => {
+        (api.getVouchers as jest.Mock).mockResolvedValue({
+            data: [
+                {
+                    id: 'voucher-1',
+                    voucher_number: 'CP-00001',
+                    voucher_type: 'cash_payment',
+                    reference_number: 'CP-REF-01',
+                    date: '2026-03-21T00:00:00.000Z',
+                    description: 'Office rent for March',
+                    total_amount: 125,
+                    // System-posted vouchers cannot be edited, but they can be copied.
+                    source: { module: 'sales', type: 'invoice', id: 'inv-1' },
+                },
+            ],
+            meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        });
+
+        render(<AccountingVouchersListPage />);
+
+        const duplicate = await screen.findByTitle('Duplicate voucher');
+        expect(duplicate).toHaveAttribute('href', '/accounting/vouchers/new?duplicate=voucher-1');
     });
 
     it('badges an unapproved voucher and filters the list down to the approval queue', async () => {

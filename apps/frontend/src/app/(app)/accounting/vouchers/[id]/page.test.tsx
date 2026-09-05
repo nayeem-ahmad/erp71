@@ -3,7 +3,9 @@ import VoucherDetailPage from './page';
 import { api } from '@/lib/api';
 
 jest.mock('next/link', () => {
-    return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
+    return ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+        <a href={href} {...rest}>{children}</a>
+    );
 });
 
 jest.mock('next/navigation', () => ({
@@ -12,6 +14,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
+    Copy: () => <span data-testid="icon-copy" />,
     BookText: () => <span data-testid="icon-book-text" />,
     ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
@@ -63,5 +66,23 @@ describe('VoucherDetailPage — Story 30.6', () => {
             expect(screen.getByText('General Operating Expense')).toBeInTheDocument();
             expect(screen.getAllByText(/125\.00/).length).toBeGreaterThan(0);
         });
+    });
+
+    it('links the duplicate action at the voucher it is viewing', async () => {
+        (api.getVoucher as jest.Mock).mockResolvedValue({
+            id: 'voucher-1',
+            voucher_number: 'CP-00001',
+            voucher_type: 'cash_payment',
+            reference_number: null,
+            description: 'Office expense settlement',
+            date: '2026-03-21T00:00:00.000Z',
+            total_amount: 125,
+            details: [],
+        });
+
+        render(<VoucherDetailPage />);
+
+        const duplicate = await screen.findByRole('link', { name: /Duplicate voucher/ });
+        expect(duplicate).toHaveAttribute('href', '/accounting/vouchers/new?duplicate=voucher-1');
     });
 });

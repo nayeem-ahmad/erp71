@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, CircleCheck, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, CircleCheck, Copy, Plus, Trash2 } from 'lucide-react';
 import { AccountCategory, VoucherType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
@@ -119,11 +119,18 @@ function AccountingVouchersPageContent() {
     const [submitError, setSubmitError] = useState('');
     const [createdVoucher, setCreatedVoucher] = useState<VoucherSummary | null>(null);
     const [attachments, setAttachments] = useState<VoucherAttachmentItem[]>([]);
-    const [editScope, setEditScope] = useState<{ storeId: string | null; attribution: string | null } | null>(null);
+    // Branch/attribution carried over from the voucher an edit or a duplicate started from.
+    const [sourceScope, setSourceScope] = useState<{ storeId: string | null; attribution: string | null } | null>(null);
+    const [duplicatedFrom, setDuplicatedFrom] = useState('');
 
     const editVoucherId = searchParams.get('edit');
     const isEditMode = Boolean(editVoucherId);
     const templateId = searchParams.get('templateId');
+    // `?duplicate=<id>` prefills a brand-new voucher from an existing one: same
+    // type, narration and lines, but a fresh number, today's date and no
+    // attachments carried over.
+    const duplicateVoucherId = editVoucherId ? null : searchParams.get('duplicate');
+    const isDuplicateMode = Boolean(duplicateVoucherId);
 
     useEffect(() => {
         if (!editVoucherId) {
@@ -163,7 +170,7 @@ function AccountingVouchersPageContent() {
                     })),
                 );
                 setAttachments(mapApiAttachments(voucher.attachments));
-                setEditScope({
+                setSourceScope({
                     storeId: voucher.store_id ?? null,
                     attribution: voucher.attribution ?? null,
                 });
@@ -187,7 +194,68 @@ function AccountingVouchersPageContent() {
     }, [editVoucherId]);
 
     useEffect(() => {
-        if (!templateId || editVoucherId) {
+        if (!duplicateVoucherId) {
+            return;
+        }
+
+        let active = true;
+
+        const loadVoucherForDuplicate = async () => {
+            setIsLoadingPreview(true);
+            setLoadError('');
+
+            try {
+                const voucher = await api.getVoucher(duplicateVoucherId);
+                if (!active) {
+                    return;
+                }
+
+                setVoucherType(voucher.voucher_type as VoucherType);
+                setDescription(voucher.description ?? '');
+                setReferenceNumber(voucher.reference_number ?? '');
+                setRows(
+                    voucher.details.map((detail: any, index: number) => ({
+                        id: `voucher-row-duplicate-${index}`,
+                        accountId: detail.account_id ?? detail.account?.id ?? '',
+                        debitAmount: Number(detail.debit_amount) > 0 ? String(detail.debit_amount) : '',
+                        creditAmount: Number(detail.credit_amount) > 0 ? String(detail.credit_amount) : '',
+                        comment: detail.comment ?? '',
+                        costCenterId: detail.cost_center_id ?? detail.costCenter?.id ?? '',
+                    })),
+                );
+                setSourceScope({
+                    storeId: voucher.store_id ?? null,
+                    attribution: voucher.attribution ?? null,
+                });
+                setDuplicatedFrom(voucher.voucher_number);
+                // The duplicate link is reachable from the edit form, which keeps
+                // this component mounted — so the source's own date and files have
+                // to be dropped rather than merely left unset.
+                setVoucherDate(new Date().toISOString().slice(0, 10));
+                setAttachments([]);
+                setCreatedVoucher(null);
+                setSubmitError('');
+            } catch (error) {
+                if (!active) {
+                    return;
+                }
+                setLoadError(error instanceof Error ? error.message : t.vouchers.duplicateLoadFailed);
+            } finally {
+                if (active) {
+                    setIsLoadingPreview(false);
+                }
+            }
+        };
+
+        void loadVoucherForDuplicate();
+
+        return () => {
+            active = false;
+        };
+    }, [duplicateVoucherId, t.vouchers.duplicateLoadFailed]);
+
+    useEffect(() => {
+        if (!templateId || editVoucherId || duplicateVoucherId) {
             return;
         }
 
@@ -232,7 +300,7 @@ function AccountingVouchersPageContent() {
         return () => {
             active = false;
         };
-    }, [templateId, editVoucherId]);
+    }, [templateId, editVoucherId, duplicateVoucherId]);
 
     useEffect(() => {
         let active = true;
@@ -269,8 +337,9 @@ function AccountingVouchersPageContent() {
                 }
                 setStores(data);
 
-                if (editVoucherId) {
-                    // An edited voucher keeps the branch it was posted against.
+                if (editVoucherId || duplicateVoucherId) {
+                    // An edited or duplicated voucher keeps the branch its source
+                    // was posted against.
                     return;
                 }
 
@@ -307,27 +376,27 @@ function AccountingVouchersPageContent() {
         return () => {
             active = false;
         };
-    }, [editVoucherId]);
+    }, [editVoucherId, duplicateVoucherId]);
 
-    // The store list and the edited voucher load in parallel, so the branch the
+    // The store list and the source voucher load in parallel, so the branch the
     // voucher was posted against can only be restored once both have arrived.
     useEffect(() => {
-        if (!editScope) {
+        if (!sourceScope) {
             return;
         }
 
-        if (editScope.attribution === 'COMPANY') {
+        if (sourceScope.attribution === 'COMPANY') {
             setBranchSelection('company');
             return;
         }
 
         setBranchSelection('branch');
         setVoucherStoreId(
-            editScope.storeId && stores.some((store) => store.id === editScope.storeId)
-                ? editScope.storeId
+            sourceScope.storeId && stores.some((store) => store.id === sourceScope.storeId)
+                ? sourceScope.storeId
                 : stores[0]?.id ?? '',
         );
-    }, [editScope, stores]);
+    }, [sourceScope, stores]);
 
     useEffect(() => {
         if (isEditMode) {
@@ -522,8 +591,22 @@ function AccountingVouchersPageContent() {
                         <ChevronLeft className="w-5 h-5" />
                     </Link>
                     <h1 className="text-base font-bold text-gray-900 whitespace-nowrap">
-                        {isEditMode ? t.vouchers.list.editVoucher : t.vouchers.workbenchTitle}
+                        {isEditMode
+                            ? t.vouchers.list.editVoucher
+                            : isDuplicateMode
+                                ? t.vouchers.duplicateTitle
+                                : t.vouchers.workbenchTitle}
                     </h1>
+                    {isEditMode ? (
+                        <Link
+                            href={`/accounting/vouchers/new?duplicate=${editVoucherId}`}
+                            className="inline-flex items-center gap-1 min-h-touch px-2 py-1 border rounded text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            title={t.vouchers.list.duplicate}
+                        >
+                            <Copy className="h-3.5 w-3.5" />
+                            {t.vouchers.list.duplicate}
+                        </Link>
+                    ) : null}
                 </div>
                 <div className="h-5 w-px bg-gray-200 hidden sm:block" />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -595,6 +678,15 @@ function AccountingVouchersPageContent() {
                     {previewError ? <span className="text-red-600 font-medium">{previewError}</span> : null}
                 </div>
             </div>
+
+            {isDuplicateMode && duplicatedFrom ? (
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-200 bg-blue-50 text-blue-900 flex-shrink-0">
+                    <Copy className="h-4 w-4 flex-shrink-0" />
+                    <p className="text-sm font-medium">
+                        {t.vouchers.duplicateNotice.replace('{voucherNumber}', duplicatedFrom)}
+                    </p>
+                </div>
+            ) : null}
 
             {createdVoucher ? (
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-emerald-200 bg-emerald-50 text-emerald-900 flex-shrink-0">
