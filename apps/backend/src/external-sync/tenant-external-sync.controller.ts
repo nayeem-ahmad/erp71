@@ -60,10 +60,16 @@ export class TenantExternalSyncController {
         }
     }
 
-    @Get()
-    async getConnection(@Tenant() tenant: TenantContext) {
+    @Get('providers')
+    async listProviders(@Tenant() tenant: TenantContext) {
         await this.assertAllowed(tenant);
-        return this.externalSyncService.getConnection(tenant.tenantId);
+        return this.externalSyncService.listProviders();
+    }
+
+    @Get()
+    async getConnection(@Tenant() tenant: TenantContext, @Query('provider') provider?: string) {
+        await this.assertAllowed(tenant);
+        return this.externalSyncService.getConnection(tenant.tenantId, provider);
     }
 
     @Put()
@@ -77,9 +83,9 @@ export class TenantExternalSyncController {
     }
 
     @Delete()
-    async deleteConnection(@Tenant() tenant: TenantContext) {
+    async deleteConnection(@Tenant() tenant: TenantContext, @Query('provider') provider?: string) {
         await this.assertAllowed(tenant);
-        return this.externalSyncService.deleteConnection(tenant.tenantId);
+        return this.externalSyncService.deleteConnection(tenant.tenantId, provider);
     }
 
     @Post('test')

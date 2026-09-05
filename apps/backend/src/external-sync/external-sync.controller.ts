@@ -19,9 +19,15 @@ import {
 export class ExternalSyncController {
     constructor(private readonly externalSyncService: ExternalSyncService) {}
 
+    /** The external ERPs a connection can be created against. */
+    @Get('providers')
+    listProviders() {
+        return this.externalSyncService.listProviders();
+    }
+
     @Get()
-    getConnection(@Param('tenantId') tenantId: string) {
-        return this.externalSyncService.getConnection(tenantId);
+    getConnection(@Param('tenantId') tenantId: string, @Query('provider') provider?: string) {
+        return this.externalSyncService.getConnection(tenantId, provider);
     }
 
     @Put()
@@ -34,8 +40,8 @@ export class ExternalSyncController {
     }
 
     @Delete()
-    deleteConnection(@Param('tenantId') tenantId: string) {
-        return this.externalSyncService.deleteConnection(tenantId);
+    deleteConnection(@Param('tenantId') tenantId: string, @Query('provider') provider?: string) {
+        return this.externalSyncService.deleteConnection(tenantId, provider);
     }
 
     @Post('test')

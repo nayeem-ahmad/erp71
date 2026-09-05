@@ -7,11 +7,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
-import {
-    EXPRESS_RETAIL_PROVIDER,
-    ExpressRetailClient,
-    assertValidBaseUrl,
-} from './express-retail.client';
+import { assertValidBaseUrl } from './express-retail.client';
 import {
     DateWindow,
     MappedPayment,
@@ -21,17 +17,17 @@ import {
     PaymentParty,
     SyncWarning,
     creditTransactionType,
-    groupBy,
-    mapCustomer,
-    mapPayment,
-    mapProduct,
-    mapPurchase,
-    mapSale,
-    mapSaleReturn,
-    mapSupplier,
-    splitIntoMonthlyWindows,
     toDateString,
 } from './external-sync.mapper';
+import {
+    DEFAULT_PROVIDER,
+    EXPRESS_MAPPERS,
+    ProviderClient,
+    ProviderMappers,
+    getProviderDefinition,
+    isKnownProvider,
+    listProviderDefinitions,
+} from './provider-adapter';
 import {
     applyPaymentImpacts,
     applyPurchaseImpacts,
@@ -149,9 +145,29 @@ export class ExternalSyncService {
 
     // ---------------------------------------------------------------- config
 
-    async getConnection(tenantId: string) {
+    /** Validates a provider key, defaulting to Express Retail Pro when omitted. */
+    private resolveProviderKey(provider?: string | null): string {
+        const key = provider ?? DEFAULT_PROVIDER;
+        if (!isKnownProvider(key)) {
+            throw new BadRequestException(`Unknown external-sync provider: ${key}`);
+        }
+        return key;
+    }
+
+    /** The providers a connection can be created against, for the UI selector. */
+    listProviders() {
+        return listProviderDefinitions().map((def) => ({
+            provider: def.provider,
+            label: def.label,
+            defaultBaseUrl: def.defaultBaseUrl,
+            defaultDocumentPrefix: def.defaultDocumentPrefix,
+        }));
+    }
+
+    async getConnection(tenantId: string, provider: string = DEFAULT_PROVIDER) {
+        const providerKey = this.resolveProviderKey(provider);
         const connection = await this.db.externalSyncConnection.findUnique({
-            where: { tenant_id_provider: { tenant_id: tenantId, provider: EXPRESS_RETAIL_PROVIDER } },
+            where: { tenant_id_provider: { tenant_id: tenantId, provider: providerKey } },
             include: { store: { select: { id: true, name: true } } },
         });
 
@@ -169,9 +185,10 @@ export class ExternalSyncService {
         });
         if (!store) throw new BadRequestException('Store not found for this tenant');
 
+        const def = getProviderDefinition(this.resolveProviderKey(dto.provider));
         const baseUrl = assertValidBaseUrl(dto.baseUrl);
         const existing = await this.db.externalSyncConnection.findUnique({
-            where: { tenant_id_provider: { tenant_id: tenantId, provider: EXPRESS_RETAIL_PROVIDER } },
+            where: { tenant_id_provider: { tenant_id: tenantId, provider: def.provider } },
         });
 
         if (!existing && !dto.password) {
@@ -182,7 +199,7 @@ export class ExternalSyncService {
             base_url: baseUrl,
             username: dto.username.trim(),
             store_id: dto.storeId,
-            document_prefix: dto.documentPrefix ?? existing?.document_prefix ?? 'XR-',
+            document_prefix: dto.documentPrefix ?? existing?.document_prefix ?? def.defaultDocumentPrefix,
             enabled: dto.enabled ?? existing?.enabled ?? false,
             post_impacts: dto.postImpacts ?? existing?.post_impacts ?? false,
             window_days: dto.windowDays ?? existing?.window_days ?? 90,
@@ -201,7 +218,7 @@ export class ExternalSyncService {
             : await this.db.externalSyncConnection.create({
                   data: {
                       tenant_id: tenantId,
-                      provider: EXPRESS_RETAIL_PROVIDER,
+                      provider: def.provider,
                       password_encrypted: this.encryption.encrypt(dto.password as string),
                       created_by: adminUserId ?? null,
                       ...data,
@@ -212,12 +229,13 @@ export class ExternalSyncService {
         return this.toPublicConnection(saved);
     }
 
-    async deleteConnection(tenantId: string) {
+    async deleteConnection(tenantId: string, provider: string = DEFAULT_PROVIDER) {
+        const def = getProviderDefinition(this.resolveProviderKey(provider));
         const existing = await this.db.externalSyncConnection.findUnique({
-            where: { tenant_id_provider: { tenant_id: tenantId, provider: EXPRESS_RETAIL_PROVIDER } },
+            where: { tenant_id_provider: { tenant_id: tenantId, provider: def.provider } },
             select: { id: true },
         });
-        if (!existing) throw new NotFoundException('No Express Retail Pro connection configured for this tenant');
+        if (!existing) throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
 
         // Mappings and runs cascade; the imported documents themselves are left
         // in place deliberately — deleting a connection must not delete a
@@ -228,10 +246,11 @@ export class ExternalSyncService {
 
     /** Verifies credentials without importing anything. */
     async testConnection(tenantId: string, dto: TestExternalSyncConnectionDto) {
+        const def = getProviderDefinition(this.resolveProviderKey(dto.provider));
         let password = dto.password;
         if (!password) {
             const existing = await this.db.externalSyncConnection.findUnique({
-                where: { tenant_id_provider: { tenant_id: tenantId, provider: EXPRESS_RETAIL_PROVIDER } },
+                where: { tenant_id_provider: { tenant_id: tenantId, provider: def.provider } },
                 select: { password_encrypted: true },
             });
             if (!existing) {
@@ -240,13 +259,14 @@ export class ExternalSyncService {
             password = this.encryption.decrypt(existing.password_encrypted);
         }
 
-        const client = new ExpressRetailClient({ baseUrl: dto.baseUrl, username: dto.username, password });
+        const client = def.createClient({ baseUrl: dto.baseUrl, username: dto.username, password });
         const session = await client.login();
 
         return {
             ok: true,
+            provider: def.provider,
             organizationId: session.organizationId,
-            user: { name: session.name, username: session.username, role: session.role },
+            user: session.user,
         };
     }
 
@@ -266,10 +286,11 @@ export class ExternalSyncService {
      * a full history pull takes minutes.
      */
     async startRun(tenantId: string, dto: RunExternalSyncDto, trigger: 'MANUAL' | 'SCHEDULED', userId?: string) {
+        const def = getProviderDefinition(this.resolveProviderKey(dto.provider));
         const connection = await this.db.externalSyncConnection.findUnique({
-            where: { tenant_id_provider: { tenant_id: tenantId, provider: EXPRESS_RETAIL_PROVIDER } },
+            where: { tenant_id_provider: { tenant_id: tenantId, provider: def.provider } },
         });
-        if (!connection) throw new NotFoundException('No Express Retail Pro connection configured for this tenant');
+        if (!connection) throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
 
         const inFlight = await this.db.externalSyncRun.findFirst({
             where: { connection_id: connection.id, status: 'RUNNING' },
@@ -375,7 +396,9 @@ export class ExternalSyncService {
         });
 
         try {
-            const client = new ExpressRetailClient({
+            const def = getProviderDefinition(connection.provider);
+            const mappers = def.mappers;
+            const client = def.createClient({
                 baseUrl: connection.base_url,
                 username: connection.username,
                 password: this.encryption.decrypt(connection.password_encrypted),
@@ -397,7 +420,7 @@ export class ExternalSyncService {
                 });
             }
 
-            const chunks = splitIntoMonthlyWindows(window.from, window.to);
+            const chunks = def.planWindows(window.from, window.to);
             const windowedSteps = steps.filter((step) => step !== 'MASTERS');
             // One unit of work per master step plus one per chunk of each
             // windowed step, so the progress fraction means something.
@@ -411,11 +434,11 @@ export class ExternalSyncService {
 
             if (steps.includes('MASTERS')) {
                 await this.writeProgress(runId, 'Products, customers and suppliers', stats, warnings, doneUnits, totalUnits);
-                await this.syncProducts(connection, client, stats, warnings, dryRun);
+                await this.syncProducts(connection, client, stats, warnings, dryRun, mappers);
                 // Opening balances are stamped at the start of the imported
                 // range so they sit before every document that follows.
-                await this.syncCustomers(connection, client, stats, warnings, dryRun, window.from);
-                await this.syncSuppliers(connection, client, stats, warnings, dryRun, window.from);
+                await this.syncCustomers(connection, client, stats, warnings, dryRun, window.from, mappers);
+                await this.syncSuppliers(connection, client, stats, warnings, dryRun, window.from, mappers);
                 await tick('Products, customers and suppliers');
             }
 
@@ -434,22 +457,22 @@ export class ExternalSyncService {
                 // document was dropped while its payments still landed.)
                 if (steps.includes('PURCHASES')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
+                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun, mappers);
                     await tick(`Purchases ${label}`);
                 }
                 if (steps.includes('SALES')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
+                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers);
                     await tick(`Sales ${label}`);
                 }
                 if (steps.includes('CUSTOMER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun, mappers);
                     await tick(`Customer payments ${label}`);
                 }
                 if (steps.includes('SUPPLIER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun, mappers);
                     await tick(`Supplier payments ${label}`);
                 }
             }
@@ -461,7 +484,7 @@ export class ExternalSyncService {
                 const saleMap = await this.loadMappings(connection.id, 'SALE');
                 for (const chunk of chunks) {
                     await this.assertNotCancelled(runId);
-                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun);
+                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun, mappers);
                     await tick(`Sale returns ${chunk.from.slice(0, 7)}`);
                 }
             }
@@ -555,17 +578,18 @@ export class ExternalSyncService {
 
     private async syncProducts(
         connection: { id: string; tenant_id: string },
-        client: ExpressRetailClient,
+        client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchProducts();
         const claimedSkus = new Set<string>();
         const map = await this.loadMappings(connection.id, 'PRODUCT');
 
         for (const row of rows) {
-            const mapped = mapProduct(row, claimedSkus);
+            const mapped = mappers.product(row, claimedSkus);
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -644,19 +668,20 @@ export class ExternalSyncService {
     }
 
     private async syncCustomers(
-        connection: { id: string; tenant_id: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        connection: { id: string; tenant_id: string; provider: string; post_impacts: boolean },
+        client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
         openingAsOf: Date,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchCustomers();
         const claimedCodes = new Set<string>();
         const map = await this.loadMappings(connection.id, 'CUSTOMER');
 
         for (const row of rows) {
-            const mapped = mapCustomer(row, claimedCodes);
+            const mapped = mappers.customer(row, claimedCodes);
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -726,7 +751,7 @@ export class ExternalSyncService {
                             partyId: customerId,
                             amount: mapped.previousDue,
                             asOf: openingAsOf,
-                            label: EXPRESS_RETAIL_PROVIDER,
+                            label: connection.provider,
                         }),
                     );
                 }
@@ -760,19 +785,20 @@ export class ExternalSyncService {
     }
 
     private async syncSuppliers(
-        connection: { id: string; tenant_id: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        connection: { id: string; tenant_id: string; provider: string; post_impacts: boolean },
+        client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
         openingAsOf: Date,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchSuppliers();
         const claimedNames = new Set<string>();
         const map = await this.loadMappings(connection.id, 'SUPPLIER');
 
         for (const row of rows) {
-            const mapped = mapSupplier(row, claimedNames);
+            const mapped = mappers.supplier(row, claimedNames);
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -824,7 +850,7 @@ export class ExternalSyncService {
                             partyId: supplierId,
                             amount: mapped.previousDue,
                             asOf: openingAsOf,
-                            label: EXPRESS_RETAIL_PROVIDER,
+                            label: connection.provider,
                         }),
                     );
                 }
@@ -861,20 +887,20 @@ export class ExternalSyncService {
 
     private async syncSalesWindow(
         connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
         customerMap: Map<string, string>,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ) {
-        const [headers, lines] = await Promise.all([client.fetchSales(window), client.fetchSaleLines(window)]);
-        const linesBySale = groupBy(lines, (line) => String(line.sale_id));
+        const docs = await client.fetchSaleDocuments(window);
         const saleMap = await this.loadMappings(connection.id, 'SALE');
 
-        for (const header of headers) {
-            const mapped = mapSale(header, linesBySale.get(String(header.id)) ?? [], connection.document_prefix, warnings);
+        for (const doc of docs) {
+            const mapped = mappers.sale(doc, connection.document_prefix, warnings);
             if (dryRun) {
                 saleMap.has(mapped.externalId) ? stats.sales.updated++ : stats.sales.created++;
                 continue;
@@ -893,7 +919,7 @@ export class ExternalSyncService {
                     entity: 'SALE',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Invoice ${header.invoice} could not be imported: ${error?.message ?? error}`,
+                    message: `Invoice ${mapped.referenceNumber ?? mapped.serialNumber} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }
@@ -914,19 +940,20 @@ export class ExternalSyncService {
      */
     private async syncSaleReturnsWindow(
         connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
         saleMap: Map<string, string>,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ) {
-        const rows = await client.fetchSaleReturns(window);
+        const docs = await client.fetchSaleReturnDocuments(window);
         const returnMap = await this.loadMappings(connection.id, 'SALE_RETURN');
 
-        for (const row of rows) {
-            const mapped = mapSaleReturn(row, connection.document_prefix, warnings);
+        for (const doc of docs) {
+            const mapped = mappers.saleReturn(doc, connection.document_prefix, warnings);
 
             // A missing parent no longer costs us the return: SalesReturn.sale_id
             // is optional, so it imports standalone and still restocks and
@@ -939,7 +966,7 @@ export class ExternalSyncService {
                     externalId: mapped.externalId,
                     code: 'PARENT_SALE_UNRESOLVED',
                     message:
-                        `Return ${row.invoice} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which is not in the ` +
+                        `Return ${mapped.referenceNumber ?? mapped.returnNumber} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which is not in the ` +
                         'imported range — imported without a linked sale',
                 });
             }
@@ -962,7 +989,7 @@ export class ExternalSyncService {
                     entity: 'SALE_RETURN',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Return ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                    message: `Return ${mapped.referenceNumber ?? mapped.returnNumber} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }
@@ -1109,26 +1136,25 @@ export class ExternalSyncService {
      * only by which side we are on.
      */
     private async syncPaymentsWindow(
-        connection: { id: string; tenant_id: string; document_prefix: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        connection: { id: string; tenant_id: string; provider: string; document_prefix: string; post_impacts: boolean },
+        client: ProviderClient,
         window: DateWindow,
         party: PaymentParty,
         partyMap: Map<string, string>,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ) {
         const isCustomer = party === 'CUSTOMER';
         const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
         const tally = isCustomer ? stats.customerPayments : stats.supplierPayments;
 
-        const rows = isCustomer
-            ? await client.fetchCustomerPayments(window)
-            : await client.fetchSupplierPayments(window);
+        const rows = await client.fetchPayments(window, party);
         const paymentMap = await this.loadMappings(connection.id, entity);
 
         for (const row of rows) {
-            const mapped = mapPayment(row, party, connection.document_prefix, warnings);
+            const mapped = mappers.payment(row, party, connection.document_prefix, warnings);
             if (!mapped) {
                 tally.skipped++;
                 continue;
@@ -1143,7 +1169,7 @@ export class ExternalSyncService {
                     entity,
                     externalId: mapped.externalId,
                     code: 'PARTY_UNRESOLVED',
-                    message: `Payment ${row.invoice} references ${party.toLowerCase()} ${mapped.externalPartyId ?? '(none)'}, which is not in the imported list — skipped`,
+                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} references ${party.toLowerCase()} ${mapped.externalPartyId ?? '(none)'}, which is not in the imported list — skipped`,
                 });
                 continue;
             }
@@ -1166,14 +1192,14 @@ export class ExternalSyncService {
                     entity,
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Payment ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }
     }
 
     private async writePayment(
-        connection: { id: string; tenant_id: string; post_impacts: boolean },
+        connection: { id: string; tenant_id: string; provider: string; post_impacts: boolean },
         party: PaymentParty,
         mapped: MappedPayment,
         partyId: string,
@@ -1440,25 +1466,20 @@ export class ExternalSyncService {
 
     private async syncPurchasesWindow(
         connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
-        client: ExpressRetailClient,
+        client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
         supplierMap: Map<string, string>,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        mappers: ProviderMappers = EXPRESS_MAPPERS,
     ) {
-        const [headers, lines] = await Promise.all([client.fetchPurchases(window), client.fetchPurchaseLines(window)]);
-        const linesByPurchase = groupBy(lines, (line) => String(line.purchase_id));
+        const docs = await client.fetchPurchaseDocuments(window);
         const purchaseMap = await this.loadMappings(connection.id, 'PURCHASE');
 
-        for (const header of headers) {
-            const mapped = mapPurchase(
-                header,
-                linesByPurchase.get(String(header.id)) ?? [],
-                connection.document_prefix,
-                warnings,
-            );
+        for (const doc of docs) {
+            const mapped = mappers.purchase(doc, connection.document_prefix, warnings);
             if (dryRun) {
                 purchaseMap.has(mapped.externalId) ? stats.purchases.updated++ : stats.purchases.created++;
                 continue;
@@ -1477,7 +1498,7 @@ export class ExternalSyncService {
                     entity: 'PURCHASE',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Purchase ${header.invoice} could not be imported: ${error?.message ?? error}`,
+                    message: `Purchase ${mapped.referenceNumber ?? mapped.purchaseNumber} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }

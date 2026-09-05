@@ -9,6 +9,7 @@ import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, 
 import {
     api,
     type ExternalSyncConnection,
+    type ExternalSyncProvider,
     type ExternalSyncRun,
     type ExternalSyncStep,
     type ExternalSyncWarning,
@@ -42,22 +43,29 @@ export default function TenantExternalSyncPage() {
 
     const [tenantName, setTenantName] = useState('');
     const [stores, setStores] = useState<StoreOption[]>([]);
+    const [providers, setProviders] = useState<ExternalSyncProvider[]>([]);
+    const [provider, setProvider] = useState('');
     const [connection, setConnection] = useState<ExternalSyncConnection | null>(null);
     const [runs, setRuns] = useState<ExternalSyncRun[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
 
     const [form, setForm] = useState({
-        baseUrl: 'https://www.expressretailerp.com',
+        baseUrl: '',
         username: '',
         password: '',
         storeId: '',
-        documentPrefix: 'XR-',
+        documentPrefix: '',
         windowDays: 90,
         historyStartDate: '',
         enabled: false,
         postImpacts: false,
     });
+
+    const providerLabel = useMemo(
+        () => providers.find((p) => p.provider === provider)?.label ?? 'External ERP',
+        [providers, provider],
+    );
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
@@ -79,47 +87,75 @@ export default function TenantExternalSyncPage() {
         }
     }, [tenantId]);
 
-    const load = useCallback(async () => {
-        if (!tenantId) return;
-        setIsLoading(true);
-        setLoadError('');
-        try {
-            const [tenant, existing] = await Promise.all([
-                api.getAdminTenant(tenantId),
-                api.getExternalSync(tenantId),
-            ]);
+    const load = useCallback(
+        async (selectProvider?: string) => {
+            if (!tenantId) return;
+            setIsLoading(true);
+            setLoadError('');
+            try {
+                const [tenant, provList] = await Promise.all([
+                    api.getAdminTenant(tenantId),
+                    api.listExternalSyncProviders(tenantId),
+                ]);
+                setTenantName(tenant?.name ?? '');
+                setStores(tenant?.stores ?? []);
+                setProviders(provList);
 
-            setTenantName(tenant?.name ?? '');
-            setStores(tenant?.stores ?? []);
-            setConnection(existing);
+                const chosen = selectProvider || provList[0]?.provider || '';
+                setProvider(chosen);
+                const def = provList.find((p) => p.provider === chosen);
 
-            if (existing) {
-                setForm({
-                    baseUrl: existing.base_url,
-                    username: existing.username,
-                    password: '',
-                    storeId: existing.store_id,
-                    documentPrefix: existing.document_prefix,
-                    windowDays: existing.window_days,
-                    historyStartDate: existing.history_start_date?.slice(0, 10) ?? '',
-                    enabled: existing.enabled,
-                    postImpacts: existing.post_impacts,
-                });
-            } else if (tenant?.stores?.length === 1) {
-                setForm((prev) => ({ ...prev, storeId: tenant.stores[0].id }));
+                const existing = chosen ? await api.getExternalSync(tenantId, chosen) : null;
+                setConnection(existing);
+
+                if (existing) {
+                    setForm({
+                        baseUrl: existing.base_url,
+                        username: existing.username,
+                        password: '',
+                        storeId: existing.store_id,
+                        documentPrefix: existing.document_prefix,
+                        windowDays: existing.window_days,
+                        historyStartDate: existing.history_start_date?.slice(0, 10) ?? '',
+                        enabled: existing.enabled,
+                        postImpacts: existing.post_impacts,
+                    });
+                } else {
+                    // No connection yet: seed the form with the provider's defaults.
+                    setForm({
+                        baseUrl: def?.defaultBaseUrl ?? '',
+                        username: '',
+                        password: '',
+                        storeId: tenant?.stores?.length === 1 ? tenant.stores[0].id : '',
+                        documentPrefix: def?.defaultDocumentPrefix ?? '',
+                        windowDays: 90,
+                        historyStartDate: '',
+                        enabled: false,
+                        postImpacts: false,
+                    });
+                }
+                setFieldErrors({});
+
+                await loadRuns();
+            } catch (err: unknown) {
+                setLoadError(err instanceof Error ? err.message : 'Failed to load the sync configuration');
+            } finally {
+                setIsLoading(false);
             }
-
-            await loadRuns();
-        } catch (err: unknown) {
-            setLoadError(err instanceof Error ? err.message : 'Failed to load the sync configuration');
-        } finally {
-            setIsLoading(false);
-        }
-    }, [tenantId, loadRuns]);
+        },
+        [tenantId, loadRuns],
+    );
 
     useEffect(() => {
         void load();
     }, [load]);
+
+    // Switching providers reloads that provider's connection (a tenant can have
+    // one per provider) and reseeds the form.
+    const handleProviderChange = (next: string) => {
+        if (next === provider) return;
+        void load(next);
+    };
 
     // While an import is in flight the run row is the only progress channel.
     useEffect(() => {
@@ -145,6 +181,7 @@ export default function TenantExternalSyncPage() {
         setIsSaving(true);
         try {
             const saved = await api.saveExternalSync(tenantId, {
+                provider,
                 baseUrl: form.baseUrl.trim(),
                 username: form.username.trim(),
                 ...(form.password ? { password: form.password } : {}),
@@ -173,6 +210,7 @@ export default function TenantExternalSyncPage() {
         setIsTesting(true);
         try {
             const result = await api.testExternalSync(tenantId, {
+                provider,
                 baseUrl: form.baseUrl.trim(),
                 username: form.username.trim(),
                 ...(form.password ? { password: form.password } : {}),
@@ -189,6 +227,7 @@ export default function TenantExternalSyncPage() {
         setIsStarting(true);
         try {
             await api.startExternalSyncRun(tenantId, {
+                provider,
                 ...(runForm.dateFrom ? { dateFrom: runForm.dateFrom } : {}),
                 ...(runForm.dateTo ? { dateTo: runForm.dateTo } : {}),
                 dryRun: runForm.dryRun,
@@ -221,7 +260,7 @@ export default function TenantExternalSyncPage() {
     async function handleDelete() {
         setConfirmDelete(false);
         try {
-            await api.deleteExternalSync(tenantId);
+            await api.deleteExternalSync(tenantId, provider);
             setConnection(null);
             toast.success('Connection removed — imported documents were left in place');
             await load();
@@ -233,13 +272,13 @@ export default function TenantExternalSyncPage() {
     const breadcrumbs = buildBreadcrumbs('Home', [
         { label: 'Admin', href: '/admin' },
         { label: 'Tenants', href: '/admin/tenants' },
-        { label: 'Express Retail Pro import' },
+        { label: 'External ERP import' },
     ]);
 
     if (isLoading) {
         return (
             <PageShell>
-                <PageHeader title="Express Retail Pro import" breadcrumbs={breadcrumbs} />
+                <PageHeader title="External ERP import" breadcrumbs={breadcrumbs} />
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Loading…
@@ -251,7 +290,7 @@ export default function TenantExternalSyncPage() {
     return (
         <PageShell>
             <PageHeader
-                title="Express Retail Pro import"
+                title={`${providerLabel} import`}
                 subtitle={tenantName ? `Pull sales and purchase history into ${tenantName}` : undefined}
                 breadcrumbs={breadcrumbs}
                 actions={
@@ -271,11 +310,28 @@ export default function TenantExternalSyncPage() {
 
             <CompactSection title="Connection">
                 <div className="grid gap-3 md:grid-cols-2">
+                    <Field
+                        label="Source system"
+                        hint={connection ? 'A connection already exists for this provider' : 'Which ERP to import from'}
+                    >
+                        <Select
+                            value={provider}
+                            onChange={(e) => handleProviderChange(e.target.value)}
+                            disabled={!!activeRun}
+                        >
+                            {providers.map((p) => (
+                                <option key={p.provider} value={p.provider}>
+                                    {p.label}
+                                    {/* keeps the list honest when a provider has a live connection */}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
                     <Field label="Base URL" required error={fieldErrors.baseUrl}>
                         <Input
                             value={form.baseUrl}
                             onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-                            placeholder="https://www.expressretailerp.com"
+                            placeholder="https://…"
                         />
                     </Field>
                     <Field label="Store for imported documents" required error={fieldErrors.storeId}>

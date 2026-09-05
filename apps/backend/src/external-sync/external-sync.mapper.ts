@@ -549,12 +549,12 @@ export function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]>
     return grouped;
 }
 
-function emptyToNull(value: string | null | undefined): string | null {
+export function emptyToNull(value: string | null | undefined): string | null {
     const trimmed = (value ?? '').trim();
     return trimmed === '' ? null : trimmed;
 }
 
-function parseTimestamp(value: string | null | undefined): Date | null {
+export function parseTimestamp(value: string | null | undefined): Date | null {
     if (!value) return null;
     // The provider mixes ISO ("2026-07-23T12:31:15.000000Z") and plain
     // ("2025-07-24 16:01:53") formats across endpoints.
