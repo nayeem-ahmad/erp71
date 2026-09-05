@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
+import { Copy, Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
@@ -93,6 +93,9 @@ function SupplierPaymentsContent() {
     const [formNotes, setFormNotes] = useState('');
     const [openBills, setOpenBills] = useState<OpenBill[]>([]);
     const [billAllocations, setBillAllocations] = useState<Record<string, string>>({});
+    // Set when the create form was opened as a copy of an existing payment;
+    // names the source in the modal so a duplicate is never mistaken for it.
+    const [duplicatedFrom, setDuplicatedFrom] = useState('');
 
     const [allocatingPayment, setAllocatingPayment] = useState<SupplierCreditPayment | null>(null);
     const [allocateBills, setAllocateBills] = useState<OpenBill[]>([]);
@@ -152,6 +155,24 @@ function SupplierPaymentsContent() {
         setFormAmount('');
         setFormNotes('');
         setBillAllocations({});
+        setDuplicatedFrom('');
+    };
+
+    /**
+     * Open the create form prefilled from an existing payment. Bill allocations
+     * are deliberately left empty: they point at specific open bills that the
+     * original already settled, so the copy picks its own from a fresh list.
+     */
+    const openDuplicate = (payment: SupplierCreditPayment) => {
+        setViewPayment(null);
+        setEditPayment(null);
+        setFormSupplierId(payment.supplier?.id ?? '');
+        setFormDirection(directionFromType(payment.type));
+        setFormAmount(String(payment.amount));
+        setFormNotes(payment.notes ?? '');
+        setBillAllocations({});
+        setDuplicatedFrom(payment.payment_number ?? '');
+        setShowForm(true);
     };
 
     const selectedFormSupplier = suppliers.find((s) => s.id === formSupplierId) ?? null;
@@ -425,6 +446,14 @@ function SupplierPaymentsContent() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => openDuplicate(payment)}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                title={t.common.duplicate}
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => handlePrint(payment)}
                                 className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50"
                                 title={isPayment ? copy.printVoucher : copy.printReceipt}
@@ -443,7 +472,7 @@ function SupplierPaymentsContent() {
                     );
                 },
                 enableSorting: false,
-                size: 130,
+                size: 160,
             }),
         ],
         [copy, locale, t.common, handlePrint, openAllocateModal],
@@ -527,8 +556,17 @@ function SupplierPaymentsContent() {
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
                     <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col">
-                        <ModalHeader title={copy.newPayment} onClose={() => setShowForm(false)} />
+                        <ModalHeader
+                            title={duplicatedFrom ? copy.duplicatePayment : copy.newPayment}
+                            subtitle={duplicatedFrom || undefined}
+                            onClose={() => setShowForm(false)}
+                        />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            {duplicatedFrom ? (
+                                <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                    {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
+                                </p>
+                            ) : null}
                             {suppliers.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                     {copy.noSuppliers}
@@ -776,6 +814,14 @@ function SupplierPaymentsContent() {
                         >
                             {t.common.edit}
                         </Button>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            icon={<Copy className="w-4 h-4" />}
+                            onClick={() => openDuplicate(viewPayment)}
+                        >
+                            {t.common.duplicate}
+                        </Button>
                         <Button type="button" onClick={() => setViewPayment(null)}>
                             {t.common.close}
                         </Button>
@@ -833,6 +879,14 @@ function SupplierPaymentsContent() {
                         <ModalFooter>
                             <Button type="button" variant="secondary" onClick={() => setEditPayment(null)}>
                                 {t.common.cancel}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                icon={<Copy className="w-4 h-4" />}
+                                onClick={() => openDuplicate(editPayment)}
+                            >
+                                {t.common.duplicate}
                             </Button>
                             <Button type="submit" disabled={saving} loading={saving}>
                                 {t.common.saveChanges}

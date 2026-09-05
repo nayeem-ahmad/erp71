@@ -24,6 +24,7 @@ jest.mock('@/lib/api', () => ({
         searchProductsByQuantity: jest.fn(),
         getProductRateHistory: jest.fn(),
         createPurchase: jest.fn(),
+        getPurchase: jest.fn(),
     },
 }));
 
@@ -193,6 +194,45 @@ describe('NewPurchasePage', () => {
                     items: [expect.objectContaining({ productId: 'prod-2', quantity: 3250 })],
                 }),
             );
+        });
+    });
+
+    it('copies an existing purchase from ?duplicate= and posts it as a new one', async () => {
+        (api.getPurchase as jest.Mock).mockResolvedValue({
+            id: 'purchase-1',
+            purchase_number: 'PUR-00001',
+            supplier_id: 'sup-1',
+            supplier: { id: 'sup-1', name: 'Fresh Farms', phone: '01710000000', due_balance: 250 },
+            notes: 'Weekly beans',
+            tax_amount: '0',
+            discount_amount: '0',
+            freight_amount: '100',
+            items: [
+                { product_id: 'prod-1', quantity: 4, unit_cost: '12.50', product: { name: 'Coffee Beans' } },
+            ],
+        });
+        searchParams = new URLSearchParams('duplicate=purchase-1');
+        await renderPage();
+
+        await waitFor(() => expect(api.getPurchase).toHaveBeenCalledWith('purchase-1'));
+        await waitFor(() => expect(screen.getAllByText('Coffee Beans').length).toBeGreaterThan(0));
+
+        // The source is named, and its supplier, charges and note came across.
+        expect(screen.getAllByText(/PUR-00001/).length).toBeGreaterThan(0);
+        expect(screen.getByLabelText('Notes')).toHaveValue('Weekly beans');
+        expect(screen.getByLabelText('Freight')).toHaveValue(100);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createPurchase).toHaveBeenCalledWith(expect.objectContaining({
+                supplierId: 'sup-1',
+                freightAmount: 100,
+                notes: 'Weekly beans',
+                items: [{ productId: 'prod-1', quantity: 4, unitCost: 12.5 }],
+            }));
         });
     });
 

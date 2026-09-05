@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Copy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
@@ -30,13 +31,15 @@ import PurchaseTotals, {
  *
  * `?productId=` seeds the first line, which is how the products list sends a
  * shopkeeper here to restock one item. `?from=products` sends them back there
- * afterwards instead of to the purchases list.
+ * afterwards instead of to the purchases list. `?duplicate=<id>` copies an
+ * existing purchase onto a fresh screen.
  */
-export default function NewPurchasePage() {
+function NewPurchasePageContent() {
     const { t } = useI18n();
     const router = useRouter();
     const searchParams = useSearchParams();
     const seedProductId = searchParams.get('productId');
+    const duplicatePurchaseId = searchParams.get('duplicate');
     const cameFromProducts = searchParams.get('from') === 'products';
     const returnHref = cameFromProducts ? routes.inventory.products : routes.purchases.list;
 
@@ -48,6 +51,7 @@ export default function NewPurchasePage() {
     const [adjustments, setAdjustments] = useState<PurchaseAdjustments>(EMPTY_PURCHASE_ADJUSTMENTS);
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [duplicatedFrom, setDuplicatedFrom] = useState('');
 
     const totals = useMemo(() => computePurchaseTotals(items, adjustments), [items, adjustments]);
 
@@ -107,6 +111,50 @@ export default function NewPurchasePage() {
 
         return () => { cancelled = true; };
     }, [seedProductId, addProduct]);
+
+    // Copy an existing purchase: supplier, lines and the three charge fields.
+    // The purchase number and the posting it produced are not carried over —
+    // saving this screen records a new purchase of its own.
+    useEffect(() => {
+        if (!duplicatePurchaseId) return;
+
+        let cancelled = false;
+
+        api.getPurchase(duplicatePurchaseId)
+            .then((purchase: any) => {
+                if (cancelled || !purchase?.id) return;
+
+                setItems((purchase.items ?? []).map((item: any) => ({
+                    productId: item.product_id ?? item.product?.id ?? '',
+                    name: item.product?.name ?? '',
+                    price: Number(item.unit_cost ?? 0),
+                    group: item.product?.group?.name,
+                    subgroup: item.product?.subgroup?.name,
+                    quantity: Number(item.quantity ?? 0),
+                    discount: 0,
+                    unitType: item.product?.unit_type ?? 'none',
+                    // The purchase payload carries no stock rows, so leave
+                    // availability unknown rather than claiming zero.
+                    availableQty: undefined,
+                })));
+                setSupplier(purchase.supplier
+                    ? { ...purchase.supplier, id: purchase.supplier_id ?? purchase.supplier.id }
+                    : null);
+                setAdjustments({
+                    taxAmount: Number(purchase.tax_amount ?? 0),
+                    discountAmount: Number(purchase.discount_amount ?? 0),
+                    freightAmount: Number(purchase.freight_amount ?? 0),
+                });
+                setNotes(purchase.notes ?? '');
+                setDuplicatedFrom(purchase.purchase_number ?? '');
+            })
+            .catch((error: unknown) => {
+                console.error('Failed to load the purchase to duplicate', error);
+                if (!cancelled) toast.error(t.purchases.duplicateLoadFailed);
+            });
+
+        return () => { cancelled = true; };
+    }, [duplicatePurchaseId, t.purchases.duplicateLoadFailed]);
 
     const updateItem = (productId: string, updates: Partial<LineItem>) =>
         setItems((prev) =>
@@ -189,9 +237,15 @@ export default function NewPurchasePage() {
 
     return (
         <DocumentEntryLayout
-            title={t.purchases.recordPurchase}
+            title={duplicatedFrom ? `${t.common.duplicate}: ${duplicatedFrom}` : t.purchases.recordPurchase}
             backHref={returnHref}
             backLabel={t.purchases.title}
+            banner={duplicatedFrom ? (
+                <div className="flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                    <Copy className="h-4 w-4 flex-shrink-0" />
+                    <span>{t.purchases.duplicateBanner.replace('{number}', duplicatedFrom)}</span>
+                </div>
+            ) : undefined}
             onSubmit={handleSubmit}
             metaBar={
                 <DocumentMetaBar
@@ -272,5 +326,17 @@ export default function NewPurchasePage() {
                 </>
             }
         />
+    );
+}
+
+/**
+ * `useSearchParams` bails out of prerendering without a Suspense boundary
+ * above it, so the screen itself is a child component.
+ */
+export default function NewPurchasePage() {
+    return (
+        <Suspense>
+            <NewPurchasePageContent />
+        </Suspense>
     );
 }

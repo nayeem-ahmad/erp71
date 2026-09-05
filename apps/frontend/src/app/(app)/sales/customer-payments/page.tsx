@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Eye, Loader2, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react';
+import { Copy, Eye, Loader2, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
@@ -81,6 +81,9 @@ function CustomerPaymentsContent() {
     const [formDirection, setFormDirection] = useState<PaymentDirection>('receive');
     const [formAmount, setFormAmount] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    // Set when the create form was opened as a copy of an existing payment;
+    // names the source in the modal so a duplicate is never mistaken for it.
+    const [duplicatedFrom, setDuplicatedFrom] = useState('');
 
     const [viewPayment, setViewPayment] = useState<CustomerCreditPayment | null>(null);
     const [editPayment, setEditPayment] = useState<CustomerCreditPayment | null>(null);
@@ -133,6 +136,23 @@ function CustomerPaymentsContent() {
         setFormDirection('receive');
         setFormAmount('');
         setFormNotes('');
+        setDuplicatedFrom('');
+    };
+
+    /**
+     * Open the create form prefilled from an existing payment. It is the create
+     * path, not an update: nothing is written until the operator saves, and the
+     * copy gets its own payment number and its own accounting entry.
+     */
+    const openDuplicate = (payment: CustomerCreditPayment) => {
+        setViewPayment(null);
+        setEditPayment(null);
+        setFormCustomerId(payment.customer?.id ?? '');
+        setFormDirection(directionFromType(payment.type));
+        setFormAmount(String(payment.amount));
+        setFormNotes(payment.notes ?? '');
+        setDuplicatedFrom(payment.payment_number ?? '');
+        setShowForm(true);
     };
 
     const selectedFormCustomer = customers.find((c) => c.id === formCustomerId) ?? null;
@@ -341,6 +361,14 @@ function CustomerPaymentsContent() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => openDuplicate(payment)}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                title={t.common.duplicate}
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => handlePrint(payment)}
                                 className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50"
                                 title={isPayout ? copy.printVoucher : copy.printReceipt}
@@ -359,7 +387,7 @@ function CustomerPaymentsContent() {
                     );
                 },
                 enableSorting: false,
-                size: 130,
+                size: 160,
             }),
         ],
         [copy, locale, t.common, handlePrint],
@@ -449,8 +477,17 @@ function CustomerPaymentsContent() {
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
                     <form onSubmit={handleCreate} className="flex flex-col overflow-hidden">
-                        <ModalHeader title={copy.newPayment} onClose={() => setShowForm(false)} />
+                        <ModalHeader
+                            title={duplicatedFrom ? copy.duplicatePayment : copy.newPayment}
+                            subtitle={duplicatedFrom || undefined}
+                            onClose={() => setShowForm(false)}
+                        />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            {duplicatedFrom ? (
+                                <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                    {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
+                                </p>
+                            ) : null}
                             {customers.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                     {copy.noCustomers}
@@ -620,6 +657,16 @@ function CustomerPaymentsContent() {
                             </Button>
                             <Button
                                 type="button"
+                                variant="secondary"
+                                size="md"
+                                className="flex-1 justify-center"
+                                icon={<Copy className="w-4 h-4" />}
+                                onClick={() => openDuplicate(viewPayment)}
+                            >
+                                {t.common.duplicate}
+                            </Button>
+                            <Button
+                                type="button"
                                 variant="ghost"
                                 size="md"
                                 className="flex-1 justify-center"
@@ -681,6 +728,16 @@ function CustomerPaymentsContent() {
                         <ModalFooter>
                             <Button type="button" variant="secondary" size="md" className="flex-1 justify-center" onClick={() => setEditPayment(null)}>
                                 {t.common.cancel}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="md"
+                                className="flex-1 justify-center"
+                                icon={<Copy className="w-4 h-4" />}
+                                onClick={() => openDuplicate(editPayment)}
+                            >
+                                {t.common.duplicate}
                             </Button>
                             <Button type="submit" variant="primary" size="md" className="flex-1 justify-center" loading={saving}>
                                 {saving ? copy.saving : t.common.saveChanges}

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Download, Printer } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, Download, Printer } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -130,6 +131,14 @@ export default function PurchaseInvoicePage() {
                         )}
                         actions={(
                             <>
+                                <Link
+                                    href={`/purchases/new?duplicate=${purchase.id}`}
+                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+                                    title={t.purchases.duplicate}
+                                >
+                                    <Copy className="h-4 w-4" />
+                                    {t.common.duplicate}
+                                </Link>
                                 <button
                                     onClick={() => window.print()}
                                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"

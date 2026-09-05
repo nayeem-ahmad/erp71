@@ -21,6 +21,7 @@ jest.mock('@/lib/api', () => ({
         getPaymentMethods: jest.fn(),
         getQuotation: jest.fn(),
         getOrder: jest.fn(),
+        getSale: jest.fn(),
     },
 }));
 
@@ -377,5 +378,75 @@ describe('NewSalePage — converting a quotation or sales order', () => {
         await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
 
         await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sales/new'));
+    });
+});
+
+describe('NewSalePage — duplicating an existing sale', () => {
+    const sale = {
+        id: 'sale-9',
+        serial_number: 'S-00009',
+        note: 'Monthly restock',
+        total_amount: '305',
+        customer_id: 'cust-1',
+        customer: { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: '0' },
+        payments: [{ payment_method: 'CASH', amount: '305' }],
+        items: [
+            { product_id: 'prod-1', quantity: 2, price_at_sale: '150', product: { name: 'Rice 5kg' } },
+        ],
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams({ duplicate: 'sale-9' });
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([]);
+        (api.getSale as jest.Mock).mockResolvedValue(sale);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00010' });
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+    });
+
+    it('loads the lines, customer and note, and names the sale it copied', async () => {
+        await act(async () => { render(<NewSalePage />); });
+
+        await waitFor(() => expect(api.getSale).toHaveBeenCalledWith('sale-9'));
+
+        expect(screen.getByText('Rice 5kg')).toBeInTheDocument();
+        expect(screen.getByText('Alice Corp')).toBeInTheDocument();
+        expect(screen.getByLabelText('Note')).toHaveValue('Monthly restock');
+        expect(screen.getByRole('link', { name: 'S-00009' }))
+            .toHaveAttribute('href', '/sales/sale-9');
+    });
+
+    it('leaves the payment lines empty so no receipt is invented', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSale).toHaveBeenCalled());
+
+        // The source was fully paid in cash; the copy starts unpaid.
+        expect(await screen.findByLabelText('Cash amount')).toHaveValue(null);
+    });
+
+    it('posts a standalone sale, attached to no quotation or order', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSale).toHaveBeenCalled());
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '305' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({
+                quotationId: undefined,
+                salesOrderId: undefined,
+                totalAmount: 305,
+                items: [expect.objectContaining({ productId: 'prod-1', quantity: 2, priceAtSale: 150 })],
+            }));
+        });
     });
 });

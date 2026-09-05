@@ -2,15 +2,17 @@ import type { LineItem } from '@/lib/hooks/useNewSaleCart';
 import { routes } from '@/lib/routes';
 
 /**
- * A quotation or sales order the entry screen was opened from via the
- * "Convert to Sale" action on the corresponding list.
+ * A document the entry screen was opened from: a quotation or sales order via
+ * "Convert to Sale", or an existing sale via "Duplicate".
  *
- * `id` is echoed back to the backend when the sale is saved (as `quotationId`
- * or `salesOrderId`) so the invoice records where it came from; everything else
- * here only feeds the banner.
+ * For the two conversions `id` is echoed back to the backend when the sale is
+ * saved (as `quotationId` or `salesOrderId`) so the invoice records where it
+ * came from. A duplicate deliberately sends neither — the copy is a standalone
+ * sale, not a second invoice against the same order — so there its `id` only
+ * feeds the banner, as the rest of this shape does in every case.
  */
 export interface SaleSourceDocument {
-    kind: 'quotation' | 'salesOrder';
+    kind: 'quotation' | 'salesOrder' | 'sale';
     id: string;
     /** Quote/proforma or order number, as the customer sees it. */
     number: string;
@@ -80,6 +82,41 @@ export function seedFromQuotation(quote: any): SeededSale {
         items: (quote.items ?? []).map((item: any) => lineFrom(item, item.unit_price, rate, 'Item')),
         customer: quote.customer ? { ...quote.customer, id: quote.customer_id } : null,
         description: quote.notes || '',
+    };
+}
+
+/**
+ * Cart contents for a sale being copied from an existing one.
+ *
+ * Payments are deliberately NOT carried over. The lines are what was sold; a
+ * payment is money that actually changed hands, and prefilling one would record
+ * a receipt nobody made. The operator states how this copy was paid.
+ *
+ * A sale stores only its final total, so the gap between that and the line
+ * subtotal comes across as a single rounding adjustment — the same thing the
+ * detail screen does, and for the same reason: the original discount/VAT/
+ * transport split is not persisted and must not be invented here.
+ */
+export function seedFromSale(sale: any): SeededSale & { rounding: number } {
+    const items: LineItem[] = (sale.items ?? []).map((item: any) =>
+        lineFrom(item, item.price_at_sale, 1, 'Item'),
+    );
+    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
+    return {
+        source: {
+            kind: 'sale',
+            id: sale.id,
+            number: sale.serial_number,
+            href: routes.sales.detail(sale.id),
+            exchangeRate: 1,
+            currency: 'BDT',
+            amountPaid: 0,
+        },
+        items,
+        customer: sale.customer ? { ...sale.customer, id: sale.customer_id } : null,
+        description: sale.note || '',
+        rounding: Number((Number(sale.total_amount ?? 0) - subtotal).toFixed(2)),
     };
 }
 

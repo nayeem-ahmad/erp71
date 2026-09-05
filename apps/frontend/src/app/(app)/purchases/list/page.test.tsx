@@ -52,6 +52,13 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         expect(action).toHaveAttribute('href', '/purchases/new');
     });
 
+    it('renders a duplicate action pointing the entry form at the purchase', async () => {
+        render(<PurchasesPage />);
+
+        const link = await screen.findByTitle('Duplicate purchase');
+        expect(link).toHaveAttribute('href', '/purchases/new?duplicate=purchase-1');
+    });
+
     it('forwards the legacy ?new=1 deep link to the entry page', async () => {
         searchParams = new URLSearchParams('new=1');
         render(<PurchasesPage />);
