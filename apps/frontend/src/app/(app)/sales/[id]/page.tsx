@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Pencil, X, Download, Check, Trash2, ChevronDown } from 'lucide-react';
+import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -344,6 +344,17 @@ function SaleDetailPageContent() {
         </div>
     );
 
+    const duplicateAction = (
+        <Link
+            href={`/sales/new?duplicate=${sale.id}`}
+            className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
+            title={t.sales.detail.duplicate}
+        >
+            <Copy className="w-4 h-4" />
+            {t.common.duplicate}
+        </Link>
+    );
+
     const viewActions = (
         <>
             <Link
@@ -411,6 +422,7 @@ function SaleDetailPageContent() {
                 <Download className="w-4 h-4" />
                 {t.sales.detail.invoicePdf}
             </Link>
+            {duplicateAction}
             {isDraft && (
                 <button
                     type="button"
@@ -443,6 +455,7 @@ function SaleDetailPageContent() {
                 <X className="w-4 h-4" />
                 {t.common.cancel}
             </button>
+            {duplicateAction}
             <button
                 type="button"
                 onClick={handleDelete}

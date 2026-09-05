@@ -24,11 +24,14 @@ import { routes } from '@/lib/routes';
 import {
     exchangeRateOf,
     seedFromQuotation,
+    seedFromSale,
     seedFromSalesOrder,
     type SaleSourceDocument,
 } from './source-document';
+import { useI18n } from '@/lib/i18n';
 
 function NewSalePageContent() {
+    const { t } = useI18n();
     const {
         items,
         customer,
@@ -64,6 +67,8 @@ function NewSalePageContent() {
     const searchParams = useSearchParams();
     const quotationId = searchParams.get('quotationId');
     const salesOrderId = searchParams.get('salesOrderId');
+    // `?duplicate=<id>` copies an existing sale onto a fresh entry screen.
+    const duplicateSaleId = searchParams.get('duplicate');
     const [source, setSource] = useState<SaleSourceDocument | null>(null);
     const [loadingSource, setLoadingSource] = useState(false);
 
@@ -74,7 +79,7 @@ function NewSalePageContent() {
     // Seed the cart from the document being converted. Runs once per id: the
     // user is free to edit the lines afterwards, and re-seeding would undo that.
     useEffect(() => {
-        if (!quotationId && !salesOrderId) {
+        if (!quotationId && !salesOrderId && !duplicateSaleId) {
             setSource(null);
             return;
         }
@@ -86,12 +91,16 @@ function NewSalePageContent() {
             try {
                 const doc = quotationId
                     ? await api.getQuotation(quotationId)
-                    : await api.getOrder(salesOrderId as string);
+                    : salesOrderId
+                        ? await api.getOrder(salesOrderId)
+                        : await api.getSale(duplicateSaleId as string);
 
                 if (cancelled) return;
 
                 if (!doc) {
-                    toast.error('That document could not be found.');
+                    toast.error(duplicateSaleId
+                        ? t.sales.detail.duplicateLoadFailed
+                        : 'That document could not be found.');
                     return;
                 }
 
@@ -104,14 +113,23 @@ function NewSalePageContent() {
                     return;
                 }
 
-                const seeded = quotationId ? seedFromQuotation(doc) : seedFromSalesOrder(doc);
+                // Held separately from `seeded` because only a copied sale
+                // carries a rounding figure, and a union of the three seeds
+                // loses the type of a field two of them do not have.
+                const duplicated = duplicateSaleId ? seedFromSale(doc) : null;
+                const seeded = duplicated
+                    ?? (quotationId ? seedFromQuotation(doc) : seedFromSalesOrder(doc));
 
                 loadCart({
                     items: seeded.items,
                     customer: seeded.customer,
                     description: seeded.description,
                 });
-                setAdjustments(EMPTY_ADJUSTMENTS);
+                // A copied sale carries the gap between its line subtotal and
+                // its stored total, so the duplicate totals to the same figure.
+                setAdjustments(duplicated
+                    ? { ...EMPTY_ADJUSTMENTS, rounding: duplicated.rounding }
+                    : EMPTY_ADJUSTMENTS);
                 setSource(seeded.source);
             } catch (error: any) {
                 console.error('Failed to load the document being converted', error);
@@ -122,7 +140,7 @@ function NewSalePageContent() {
         })();
 
         return () => { cancelled = true; };
-    }, [quotationId, salesOrderId, loadCart]);
+    }, [quotationId, salesOrderId, duplicateSaleId, loadCart, t.sales.detail.duplicateLoadFailed]);
 
     /**
      * Drop the source document once its sale has been saved. Clearing the query
@@ -345,16 +363,30 @@ function NewSalePageContent() {
     };
 
     const sourceLabel = source?.kind === 'quotation' ? 'quotation' : 'sales order';
+    const isDuplicate = source?.kind === 'sale';
 
     const conversionBanner = source ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <span>
-                Converting {sourceLabel}{' '}
-                <Link href={source.href} className="font-semibold underline">
-                    {source.number}
-                </Link>
-                . Lines and customer are prefilled — edit anything before saving.
-            </span>
+            {isDuplicate ? (
+                // Split around the placeholder rather than substituting into it,
+                // so the source number stays a link and the sentence still reads
+                // in its own word order in every locale.
+                <span>
+                    {t.sales.detail.duplicateBanner.split('{number}')[0]}
+                    <Link href={source.href} className="font-semibold underline">
+                        {source.number}
+                    </Link>
+                    {t.sales.detail.duplicateBanner.split('{number}')[1] ?? ''}
+                </span>
+            ) : (
+                <span>
+                    Converting {sourceLabel}{' '}
+                    <Link href={source.href} className="font-semibold underline">
+                        {source.number}
+                    </Link>
+                    . Lines and customer are prefilled — edit anything before saving.
+                </span>
+            )}
             {source.exchangeRate !== 1 && (
                 <span className="text-xs text-blue-700">
                     Converted from {source.currency} at {source.exchangeRate}.
@@ -374,7 +406,9 @@ function NewSalePageContent() {
 
     return (
         <SaleEntryLayout
-            title={source ? `New Sale from ${source.number}` : 'New Sale'}
+            title={isDuplicate
+                ? `${t.common.duplicate}: ${source!.number}`
+                : source ? `New Sale from ${source.number}` : 'New Sale'}
             backHref={source ? source.href : routes.sales.list}
             banner={conversionBanner}
             refNumber={refNumber}

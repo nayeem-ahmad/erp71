@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Eye, Edit2, FileText, Search, Trash2 } from 'lucide-react';
+import { Receipt, Copy, Eye, Edit2, FileText, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -219,6 +219,13 @@ export default function SalesPage() {
                             <Eye className="w-4 h-4" />
                         </Link>
                         <Link
+                            href={`/sales/new?duplicate=${info.row.original.id}`}
+                            className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title={t.common.duplicate}
+                        >
+                            <Copy className="w-4 h-4" />
+                        </Link>
+                        <Link
                             href={`/sales/${info.row.original.id}?edit=true`}
                             className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                             title={t.common.edit}
@@ -239,7 +246,7 @@ export default function SalesPage() {
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 120,
+                size: 150,
             }),
         ],
         [t, locale, handleDelete, deletingId],

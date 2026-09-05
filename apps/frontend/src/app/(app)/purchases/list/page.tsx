@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ClipboardList, Plus, Printer } from 'lucide-react';
+import { ClipboardList, Copy, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -139,17 +139,26 @@ export default function PurchasesPage() {
                 id: 'actions',
                 header: '',
                 cell: ({ row }) => (
-                    <Link
-                        href={`/purchases/${row.original.id}/invoice`}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors inline-flex"
-                        title={t.purchases.printInvoice}
-                    >
-                        <Printer className="w-4 h-4" />
-                    </Link>
+                    <div className="flex items-center gap-0.5">
+                        <Link
+                            href={`/purchases/${row.original.id}/invoice`}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors inline-flex"
+                            title={t.purchases.printInvoice}
+                        >
+                            <Printer className="w-4 h-4" />
+                        </Link>
+                        <Link
+                            href={`/purchases/new?duplicate=${row.original.id}`}
+                            className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors inline-flex"
+                            title={t.purchases.duplicate}
+                        >
+                            <Copy className="w-4 h-4" />
+                        </Link>
+                    </div>
                 ),
                 enableSorting: false,
                 enableResizing: false,
-                size: 50,
+                size: 90,
             }),
         ],
         [t, locale],

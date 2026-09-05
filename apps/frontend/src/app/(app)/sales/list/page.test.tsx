@@ -157,6 +157,16 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
+    it('renders a duplicate action pointing the entry form at the sale', async () => {
+        render(<SalesListPage />);
+        await waitFor(() => {
+            const link = screen.getAllByRole('link').find(
+                (l) => l.getAttribute('href') === '/sales/new?duplicate=sale-1',
+            );
+            expect(link).toBeDefined();
+        });
+    });
+
     it('shows empty state when no sales exist', async () => {
         const { api } = require('@/lib/api');
         api.getSalesList.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });

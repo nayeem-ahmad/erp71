@@ -213,6 +213,12 @@ describe('SaleDetailPage — view mode', () => {
         );
     });
 
+    it('offers a duplicate action pointing the entry form at this sale', async () => {
+        await renderPage();
+        expect(screen.getByRole('link', { name: /duplicate/i }))
+            .toHaveAttribute('href', '/sales/new?duplicate=test-sale-1');
+    });
+
     it('navigates to edit mode from the Edit action', async () => {
         await renderPage();
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
@@ -229,6 +235,12 @@ describe('SaleDetailPage — edit mode', () => {
         expect(
             screen.getByDisplayValue(enMessages.shared.statuses.sale.COMPLETED),
         ).toBeInTheDocument();
+    });
+
+    it('keeps the duplicate action available while editing', async () => {
+        await renderPage();
+        expect(screen.getByRole('link', { name: /duplicate/i }))
+            .toHaveAttribute('href', '/sales/new?duplicate=test-sale-1');
     });
 
     it('makes quantity, price and the product search available', async () => {
