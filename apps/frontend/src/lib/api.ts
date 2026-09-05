@@ -541,6 +541,13 @@ export type ExternalSyncConnection = {
     nextWindowFrom: string;
 };
 
+export type ExternalSyncProvider = {
+    provider: string;
+    label: string;
+    defaultBaseUrl: string;
+    defaultDocumentPrefix: string;
+};
+
 export type ExternalSyncStep =
     | 'MASTERS'
     | 'SALES'
@@ -2612,9 +2619,12 @@ export const api = {
         error?: string | null;
     } | null> => fetchWithAuth(`/admin/tenants/${tenantId}/demo-data/status`),
     // --- External ERP sync (platform admin only) ---
-    getExternalSync: (tenantId: string): Promise<ExternalSyncConnection | null> =>
-        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`),
+    listExternalSyncProviders: (tenantId: string): Promise<ExternalSyncProvider[]> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/providers`),
+    getExternalSync: (tenantId: string, provider?: string): Promise<ExternalSyncConnection | null> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
     saveExternalSync: (tenantId: string, data: {
+        provider?: string;
         baseUrl: string;
         username: string;
         password?: string;
@@ -2629,10 +2639,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    deleteExternalSync: (tenantId: string) =>
-        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`, { method: 'DELETE' }),
-    testExternalSync: (tenantId: string, data: { baseUrl: string; username: string; password?: string }): Promise<{
+    deleteExternalSync: (tenantId: string, provider?: string) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`, { method: 'DELETE' }),
+    testExternalSync: (tenantId: string, data: { provider?: string; baseUrl: string; username: string; password?: string }): Promise<{
         ok: boolean;
+        provider: string;
         organizationId: string;
         user: { name: string; username: string; role: string };
     }> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/test`, {
@@ -2641,6 +2652,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     startExternalSyncRun: (tenantId: string, data: {
+        provider?: string;
         dateFrom?: string;
         dateTo?: string;
         dryRun?: boolean;
@@ -2659,9 +2671,12 @@ export const api = {
     // Same shapes as the admin calls above; the tenant route resolves the
     // workspace from the session instead of taking a tenant id, and refuses
     // anything but the owner of a feature-enabled workspace.
-    getMyExternalSync: (): Promise<ExternalSyncConnection | null> =>
-        fetchWithAuth('/tenants/external-sync'),
+    listMyExternalSyncProviders: (): Promise<ExternalSyncProvider[]> =>
+        fetchWithAuth('/tenants/external-sync/providers'),
+    getMyExternalSync: (provider?: string): Promise<ExternalSyncConnection | null> =>
+        fetchWithAuth(`/tenants/external-sync${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
     saveMyExternalSync: (data: {
+        provider?: string;
         baseUrl: string;
         username: string;
         password?: string;
@@ -2675,9 +2690,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    deleteMyExternalSync: () => fetchWithAuth('/tenants/external-sync', { method: 'DELETE' }),
-    testMyExternalSync: (data: { baseUrl: string; username: string; password?: string }): Promise<{
+    deleteMyExternalSync: (provider?: string) =>
+        fetchWithAuth(`/tenants/external-sync${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`, { method: 'DELETE' }),
+    testMyExternalSync: (data: { provider?: string; baseUrl: string; username: string; password?: string }): Promise<{
         ok: boolean;
+        provider: string;
         organizationId: string;
         user: { name: string; username: string; role: string };
     }> => fetchWithAuth('/tenants/external-sync/test', {
@@ -2686,6 +2703,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     startMyExternalSyncRun: (data: {
+        provider?: string;
         dateFrom?: string;
         dateTo?: string;
         dryRun?: boolean;

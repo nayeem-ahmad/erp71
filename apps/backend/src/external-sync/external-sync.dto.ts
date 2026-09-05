@@ -2,6 +2,12 @@ import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertExternalSyncConnectionDto {
+    /** Which external ERP this connection talks to. Defaults to Express Retail Pro. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    provider?: string;
+
     @IsString()
     @MaxLength(500)
     baseUrl!: string;
@@ -52,6 +58,12 @@ export class UpsertExternalSyncConnectionDto {
 }
 
 export class RunExternalSyncDto {
+    /** Which configured connection to run. Defaults to Express Retail Pro. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    provider?: string;
+
     /** Defaults to the connection's rolling window when omitted. */
     @IsOptional()
     @IsDateString()
@@ -91,6 +103,11 @@ export class ListExternalSyncRunsQueryDto {
 }
 
 export class TestExternalSyncConnectionDto {
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    provider?: string;
+
     @IsString()
     @MaxLength(500)
     baseUrl!: string;
