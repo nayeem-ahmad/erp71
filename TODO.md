@@ -548,6 +548,7 @@ Spec: `docs/superpowers/specs/2026-07-16-six-month-demo-data-design.md` (approac
 - [ ] Seven files still fall back to the retired Render backend (`https://erp71-backend.onrender.com`) when `NEXT_PUBLIC_API_BASE`/`NEXT_PUBLIC_API_URL` are unset — `lib/api.ts` plus the six pages that hand-roll their own `API_BASE` (forgot-password, reset-password, verify-email, and the four storefront pages). Harmless while the env vars are set in production, wrong the moment they are not
 - [ ] Storefront as a paid add-on: `storefront.controller.ts` currently has **no gating at all** (free for every tenant) — turning it into a paid add-on needs a product decision on whether existing tenants with a live storefront are grandfathered in for free, since adding a paywall retroactively would break their live customer-facing pages
 - [ ] Book Publishing add-on: no backend module exists yet (confirmed absent as of 2026-07-05) — would be net-new domain work (catalog/orders specific to publishing), not a regate of an existing module like Manufacturing/Advanced Accounting
+- [x] Run publisher vertical tests (manufacturing service/controller, suppliers service, purchases service) — 4 suites, 39 tests, all passing in 6.2s; results artifact shared — done 2026-07-06
 
 ### Marketing & Onboarding
 - [x] Build real marketing/landing page — `apps/frontend/src/app/page.tsx` with hero preview, how-it-works, modules, 4-tier pricing preview, shared marketing components — done 2026-06-12
