@@ -14,7 +14,7 @@ import { RefreshTokenService } from './refresh-token.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { StorePermission } from '@erp71/shared-types';
+import { CURRENT_TERMS_VERSION, StorePermission } from '@erp71/shared-types';
 
 /**
  * Plain functions rather than `jest.fn()`: the suite calls `jest.resetAllMocks()`,
@@ -84,6 +84,7 @@ describe('AuthService', () => {
         referee: { findFirst: jest.fn().mockResolvedValue(null) },
         employee: { findFirst: jest.fn().mockResolvedValue(null) },
         referralSignup: { create: jest.fn() },
+        termsAcceptance: { create: jest.fn() },
         $transaction: jest.fn(),
     };
 
@@ -240,6 +241,7 @@ describe('AuthService', () => {
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'BASIC',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         });
 
         expect(result.access_token).toBe('jwt-token');
@@ -321,6 +323,7 @@ describe('AuthService', () => {
                 tenantName: 'Tenant One',
                 storeName: 'Main Store',
                 referralCode: 'rahm1a2b3c',
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
             } as any);
 
         beforeEach(() => {
@@ -414,6 +417,7 @@ describe('AuthService', () => {
             mobile_country_code: 'BD',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         });
 
         expect(db.userStoreAccess.create).toHaveBeenCalledWith(
@@ -571,6 +575,7 @@ describe('AuthService', () => {
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'PREMIUM',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         } as any)).rejects.toThrow(BadRequestException);
     });
 
@@ -582,6 +587,7 @@ describe('AuthService', () => {
             password: 'password123',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         } as any)).rejects.toThrow(ConflictException);
     });
 
@@ -768,6 +774,7 @@ describe('AuthService.signup', () => {
 
     const tx = {
         user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+        termsAcceptance: { create: jest.fn(async () => ({})) },
     };
     const db = {
         user: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
@@ -812,7 +819,7 @@ describe('AuthService.signup', () => {
 
     it('creates account with only org name + email + password', async () => {
         const svc = makeService();
-        await svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Dhaka Retail Co.' } as any);
+        await svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Dhaka Retail Co.', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
         expect(createdUser.name).toBe('owner');            // email local-part
         expect(createdUser.mobile).toBeNull();             // no mobile provided
         expect(db.user.findFirst).not.toHaveBeenCalled();  // no mobile uniqueness lookup
@@ -825,9 +832,74 @@ describe('AuthService.signup', () => {
 
     it('accepts a duplicate mobile (no uniqueness check)', async () => {
         const svc = makeService();
-        await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678' } as any);
+        await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
         expect(createdUser.mobile).toBe('+8801712345678');
         expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('records the acceptance against the tenant and the tier that was agreed to', async () => {
+        const svc = makeService();
+        await svc.signup(
+            {
+                email: 'owner@shop.com',
+                password: 'password1',
+                tenantName: 'Dhaka Retail Co.',
+                planCode: 'BASIC',
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
+            } as any,
+            { ipAddress: '203.0.113.9', userAgent: 'Mozilla/5.0' },
+        );
+
+        expect(tx.termsAcceptance.create).toHaveBeenCalledWith({
+            data: {
+                user_id: 'u1',
+                tenant_id: 't1',
+                terms_version: CURRENT_TERMS_VERSION,
+                // The tier is the point: the terms differ per plan, so an
+                // acceptance that does not name one records nothing useful.
+                plan_code: 'BASIC',
+                source: 'SIGNUP',
+                ip_address: '203.0.113.9',
+                user_agent: 'Mozilla/5.0',
+            },
+        });
+    });
+
+    it('refuses a signup that did not accept the terms', async () => {
+        const svc = makeService();
+        await expect(
+            svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Org' } as any),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        // Nothing was written — the check runs before the transaction opens.
+        expect(tx.user.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a stale terms version rather than recording it', async () => {
+        const svc = makeService();
+        await expect(
+            svc.signup({
+                email: 'owner@shop.com',
+                password: 'password1',
+                tenantName: 'Org',
+                acceptedTermsVersion: '2019-01-01',
+            } as any),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(tx.termsAcceptance.create).not.toHaveBeenCalled();
+    });
+
+    it('truncates an oversized user agent', async () => {
+        const svc = makeService();
+        await svc.signup(
+            { email: 'owner@shop.com', password: 'password1', tenantName: 'Org', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any,
+            { userAgent: 'x'.repeat(5000) },
+        );
+
+        expect(tx.termsAcceptance.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                user_agent: 'x'.repeat(512),
+                ip_address: null,
+            }),
+        });
     });
 });
 
@@ -843,6 +915,7 @@ describe('AuthService.googleSignIn', () => {
 
     const tx = {
         user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+        termsAcceptance: { create: jest.fn(async () => ({})) },
     };
     const db = {
         user: { findUnique: jest.fn(), update: jest.fn(async () => ({})) },
@@ -895,7 +968,7 @@ describe('AuthService.googleSignIn', () => {
 
     it('creates a passwordless, pre-verified account for a first-time Google user', async () => {
         const svc = makeService();
-        const res = await svc.googleSignIn({ credential: 'tok' } as any);
+        const res = await svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(createdUser).toMatchObject({
             email: profile.email,
@@ -916,6 +989,7 @@ describe('AuthService.googleSignIn', () => {
             credential: 'tok',
             tenantName: '  Dhaka Retail Co. ',
             referralCode: 'PARTNER1',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         } as any);
 
         expect((svc as any).provisionTenant).toHaveBeenCalledWith(
@@ -930,6 +1004,44 @@ describe('AuthService.googleSignIn', () => {
         expect(res).toMatchObject({ is_new_user: true, requires_workspace: false });
     });
 
+    it('records the acceptance with no tier when no workspace was named', async () => {
+        const svc = makeService();
+        await svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
+
+        expect(tx.termsAcceptance.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                user_id: 'u1',
+                // Both null: the tier is chosen later, in the onboarding wizard.
+                tenant_id: null,
+                plan_code: null,
+                source: 'GOOGLE_SIGNUP',
+                terms_version: CURRENT_TERMS_VERSION,
+            }),
+        });
+    });
+
+    it('refuses to create a Google account without an accepted terms version', async () => {
+        const svc = makeService();
+        await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(BadRequestException);
+        expect(tx.user.create).not.toHaveBeenCalled();
+    });
+
+    it('does not ask a returning Google user to re-accept anything', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            google_id: profile.googleId,
+            email_verified_at: new Date(),
+            avatar_url: profile.picture,
+        }));
+
+        // No `acceptedTermsVersion` — this is a sign-in, and gating it would lock
+        // every existing Google user out on a version bump.
+        const res = await svc.googleSignIn({ credential: 'tok' } as any);
+
+        expect(res).toMatchObject({ is_new_user: false });
+        expect(tx.termsAcceptance.create).not.toHaveBeenCalled();
+    });
+
     it('signs in a returning Google user matched on their Google subject id', async () => {
         const svc = makeService();
         db.user.findUnique.mockResolvedValueOnce(existingUser({
@@ -938,7 +1050,7 @@ describe('AuthService.googleSignIn', () => {
             avatar_url: profile.picture,
         }));
 
-        const res = await svc.googleSignIn({ credential: 'tok' } as any);
+        const res = await svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(db.user.update).not.toHaveBeenCalled();
         expect(res).toMatchObject({ is_new_user: false, access_token: 'x' });
@@ -950,7 +1062,7 @@ describe('AuthService.googleSignIn', () => {
             .mockResolvedValueOnce(null)             // by google_id
             .mockResolvedValueOnce(existingUser());  // by email
 
-        await svc.googleSignIn({ credential: 'tok' } as any);
+        await svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(db.user.update).toHaveBeenCalledWith({
             where: { id: 'u9' },
@@ -972,7 +1084,7 @@ describe('AuthService.googleSignIn', () => {
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(existingUser({ google_id: 'some-other-google-sub' }));
 
-        await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        await expect(svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).rejects.toBeInstanceOf(UnauthorizedException);
         expect(db.user.update).not.toHaveBeenCalled();
     });
 
@@ -983,7 +1095,7 @@ describe('AuthService.googleSignIn', () => {
         );
         totp.isEnabled.mockReturnValue(true);
 
-        await expect(svc.googleSignIn({ credential: 'tok' } as any)).resolves.toEqual({
+        await expect(svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).resolves.toEqual({
             requires_2fa: true,
             user_id: 'u9',
         });
@@ -993,7 +1105,7 @@ describe('AuthService.googleSignIn', () => {
     it('rejects an invalid mobile number before creating anything', async () => {
         const svc = makeService();
         await expect(
-            svc.googleSignIn({ credential: 'tok', mobile: 'not-a-number' } as any),
+            svc.googleSignIn({ credential: 'tok', mobile: 'not-a-number', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(db.$transaction).not.toHaveBeenCalled();
     });
@@ -1002,7 +1114,7 @@ describe('AuthService.googleSignIn', () => {
         const svc = makeService();
         google.verifyIdToken.mockRejectedValue(new UnauthorizedException('bad token'));
 
-        await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        await expect(svc.googleSignIn({ credential: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).rejects.toBeInstanceOf(UnauthorizedException);
         expect(db.user.findUnique).not.toHaveBeenCalled();
         expect(db.$transaction).not.toHaveBeenCalled();
     });
@@ -1018,6 +1130,7 @@ describe('AuthService.mobileSignIn', () => {
 
     const tx = {
         user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+        termsAcceptance: { create: jest.fn(async () => ({})) },
     };
     const db = {
         user: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(async () => ({})) },
@@ -1073,7 +1186,7 @@ describe('AuthService.mobileSignIn', () => {
     it('asks for an email instead of creating a half-formed account', async () => {
         const svc = makeService();
 
-        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).resolves.toEqual({
+        await expect(svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).resolves.toEqual({
             requires_signup: true,
             mobile: profile.phoneNumber,
         });
@@ -1082,7 +1195,7 @@ describe('AuthService.mobileSignIn', () => {
 
     it('creates a passwordless account with the number already verified', async () => {
         const svc = makeService();
-        const res = await svc.mobileSignIn({ idToken: 'tok', email: '  Owner@Shop.com ' } as any);
+        const res = await svc.mobileSignIn({ idToken: 'tok', email: '  Owner@Shop.com ', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(createdUser).toMatchObject({
             email: 'owner@shop.com',
@@ -1107,6 +1220,7 @@ describe('AuthService.mobileSignIn', () => {
             name: '  Nayeem Ahmad ',
             tenantName: '  Dhaka Retail Co. ',
             referralCode: 'PARTNER1',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
         } as any);
 
         expect(createdUser).toMatchObject({ name: 'Nayeem Ahmad' });
@@ -1129,7 +1243,7 @@ describe('AuthService.mobileSignIn', () => {
             .mockResolvedValueOnce(existingUser({ mobile: null })); // by email
 
         await expect(
-            svc.mobileSignIn({ idToken: 'tok', email: 'owner@shop.com' } as any),
+            svc.mobileSignIn({ idToken: 'tok', email: 'owner@shop.com', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any),
         ).rejects.toBeInstanceOf(ConflictException);
         expect(db.$transaction).not.toHaveBeenCalled();
     });
@@ -1141,7 +1255,7 @@ describe('AuthService.mobileSignIn', () => {
             mobile_verified_at: new Date(),
         }));
 
-        const res = await svc.mobileSignIn({ idToken: 'tok' } as any);
+        const res = await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(db.user.findMany).not.toHaveBeenCalled();
         expect(db.user.update).not.toHaveBeenCalled();
@@ -1152,7 +1266,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = makeService();
         db.user.findMany.mockResolvedValueOnce([existingUser()]);
 
-        const res = await svc.mobileSignIn({ idToken: 'tok' } as any);
+        const res = await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(db.user.update).toHaveBeenCalledWith({
             where: { id: 'u9' },
@@ -1172,7 +1286,7 @@ describe('AuthService.mobileSignIn', () => {
             mobile_verified_at: new Date('2026-01-01'),
         }));
 
-        await svc.mobileSignIn({ idToken: 'tok' } as any);
+        await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
         expect(db.user.update).toHaveBeenCalledWith({
             where: { id: 'u9' },
@@ -1188,7 +1302,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = makeService();
         db.user.findMany.mockResolvedValueOnce([existingUser(), existingUser({ id: 'u10' })]);
 
-        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).rejects.toBeInstanceOf(ConflictException);
+        await expect(svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).rejects.toBeInstanceOf(ConflictException);
         expect(db.user.update).not.toHaveBeenCalled();
         expect(db.$transaction).not.toHaveBeenCalled();
     });
@@ -1200,7 +1314,7 @@ describe('AuthService.mobileSignIn', () => {
         );
         totp.isEnabled.mockReturnValue(true);
 
-        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).resolves.toEqual({
+        await expect(svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).resolves.toEqual({
             requires_2fa: true,
             user_id: 'u9',
         });
@@ -1211,7 +1325,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = makeService();
         firebase.verifyPhoneIdToken.mockRejectedValue(new UnauthorizedException('bad token'));
 
-        await expect(svc.mobileSignIn({ idToken: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        await expect(svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).rejects.toBeInstanceOf(UnauthorizedException);
         expect(db.user.findUnique).not.toHaveBeenCalled();
         expect(db.$transaction).not.toHaveBeenCalled();
     });

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
 import { CallHandler, ExecutionContext, INestApplication, NestInterceptor, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { DatabaseService } from '../src/database/database.service';
@@ -92,6 +93,7 @@ describe('Inventory Operations (e2e)', () => {
                     tenantName: 'Inventory Tenant',
                     storeName: 'Inventory Store',
                     mobile: '01700000000',
+                    acceptedTermsVersion: CURRENT_TERMS_VERSION,
                 })
                 .expect(201);
 

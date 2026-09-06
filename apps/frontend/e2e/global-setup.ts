@@ -1,4 +1,5 @@
 import { request } from '@playwright/test';
+import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
 
 /**
  * Ensures the canonical E2E account exists before the suite runs.
@@ -37,6 +38,9 @@ async function globalSetup() {
                     tenantName: 'E2E Test Org',
                     storeName: 'E2E Test Store',
                     planCode: 'FREE',
+                    // Signup refuses an account without it, and a hardcoded
+                    // string here would rot silently on the next version bump.
+                    acceptedTermsVersion: CURRENT_TERMS_VERSION,
                 },
                 failOnStatusCode: false,
             });

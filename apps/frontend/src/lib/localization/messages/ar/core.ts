@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: 'فشل الدخول إلى العرض التجريبي. حاول مرة أخرى.',
             sessionExpired: 'انتهت جلستك. الرجاء تسجيل الدخول مجددًا.',
             googleFailed: 'فشل تسجيل الدخول عبر Google. حاول مرة أخرى.',
+            termsNotice: 'المتابعة عبر Google أو رقم هاتفك تنشئ حسابًا إن لم يكن لديك حساب، وتعني موافقتك على',
         },
         mobile: {
             start: 'تسجيل الدخول برقم الجوال',
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: 'اسم المتجر الرئيسي',
             planLabel: 'الخطة',
             monthSuffix: '/ شهريًا',
-            termsPrefix: 'بإنشاء مساحة عمل فإنك توافق على',
+            termsAgreePrefix: 'أوافق على',
+            termsPlanSuffix: '، بما في ذلك الشروط الخاصة بخطة {plan}.',
+            termsRequired: 'يرجى قبول شروط الخدمة للمتابعة.',
             termsLink: 'شروط الخدمة',
             and: 'و',
             privacyLink: 'سياسة الخصوصية',

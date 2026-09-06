@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: 'Demo login failed. Please try again.',
             sessionExpired: 'Your session has expired. Please sign in again.',
             googleFailed: 'Google sign-in failed. Please try again.',
+            termsNotice: 'Continuing with Google or your mobile number creates an account if you do not have one, and means you agree to our',
         },
         mobile: {
             start: 'Sign in with mobile number',
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: 'Primary store name',
             planLabel: 'Plan',
             monthSuffix: '/ month',
-            termsPrefix: 'By creating a workspace you agree to our',
+            termsAgreePrefix: 'I agree to the',
+            termsPlanSuffix: ', including the plan-specific terms for {plan}.',
+            termsRequired: 'Please accept the Terms of Service to continue.',
             termsLink: 'Terms of Service',
             and: 'and',
             privacyLink: 'Privacy Policy',

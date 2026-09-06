@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: "Error al iniciar la demo. Inténtalo de nuevo.",
             sessionExpired: "Tu sesión ha caducado. Vuelve a iniciar sesión.",
             googleFailed: "Error al iniciar sesión con Google. Inténtalo de nuevo.",
+            termsNotice: "Continuar con Google o tu número de móvil crea una cuenta si no tienes una, y significa que aceptas nuestras",
         },
         mobile: {
             start: "Iniciar sesión con el número de móvil",
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: "Nombre de la tienda principal",
             planLabel: "Plan",
             monthSuffix: "/ mes",
-            termsPrefix: "Al crear un espacio de trabajo aceptas nuestras",
+            termsAgreePrefix: "Acepto las",
+            termsPlanSuffix: ", incluidas las condiciones específicas del plan {plan}.",
+            termsRequired: "Acepta las Condiciones del servicio para continuar.",
             termsLink: "Condiciones del servicio",
             and: "y nuestra",
             privacyLink: "Política de privacidad",

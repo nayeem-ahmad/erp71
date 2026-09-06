@@ -486,6 +486,7 @@ export const coreMessages = {
                 demoFailed: "Log masuk demo gagal. Sila cuba lagi.",
                 sessionExpired: "Sesi anda telah tamat. Sila log masuk semula.",
                 googleFailed: "Log masuk Google gagal. Sila cuba lagi.",
+                termsNotice: "Meneruskan dengan Google atau nombor mudah alih anda akan mencipta akaun jika anda belum ada, dan bermakna anda bersetuju dengan",
             },
             mobile: {
                 start: "Log masuk dengan nombor telefon",
@@ -521,7 +522,9 @@ export const coreMessages = {
                 storeLabel: "Nama kedai utama",
                 planLabel: "Pelan",
                 monthSuffix: "/ bulan",
-                termsPrefix: "Dengan mencipta ruang kerja anda bersetuju dengan",
+                termsAgreePrefix: "Saya bersetuju dengan",
+                termsPlanSuffix: ", termasuk terma khusus pelan {plan}.",
+                termsRequired: "Sila terima Terma Perkhidmatan untuk meneruskan.",
                 termsLink: "Terma Perkhidmatan",
                 and: "dan",
                 privacyLink: "Dasar Privasi",

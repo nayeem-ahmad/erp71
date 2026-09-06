@@ -376,6 +376,7 @@ model User {
   auditLogs                         AuditLog[]
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
+  termsAcceptances                  TermsAcceptance[]
   refreshTokens                     RefreshToken[]
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
@@ -498,6 +499,47 @@ model EmailVerificationToken {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+}
+
+/// One row per time a person ticked "I agree" — append-only, never updated.
+///
+/// Consent used to be implied by the signup button, with nothing written down,
+/// so there was no way to answer "who agreed to what, and when". A row names
+/// the document version (`terms_version`), the tier whose addendum was part of
+/// it (`plan_code`), and the screen it was collected on, because the terms are
+/// tier-specific and "they agreed to the terms" is not a useful record when the
+/// terms differ per plan.
+///
+/// Rows are never rewritten when the document changes: a bump of
+/// CURRENT_TERMS_VERSION leaves history naming what each person actually saw,
+/// and re-acceptance writes a second row rather than overwriting the first.
+model TermsAcceptance {
+  id            String   @id @default(uuid())
+  user_id       String
+  /// The workspace provisioned in the same breath as the acceptance. Null when
+  /// consent was collected before a workspace existed — a Google sign-up that
+  /// left the organization field blank hands the person to the onboarding
+  /// wizard, and the tier is only chosen there.
+  tenant_id     String?
+  /// The value of CURRENT_TERMS_VERSION the signup form sent, which the backend
+  /// re-checks rather than trusts.
+  terms_version String
+  /// Plan tier selected at acceptance, so the tier addendum that formed part of
+  /// the agreement can be identified later. Not a foreign key to
+  /// SubscriptionPlan: this must survive a plan being renamed, repriced or
+  /// retired, which is exactly when an old acceptance matters most.
+  plan_code     String?
+  /// SIGNUP | GOOGLE_SIGNUP | MOBILE_SIGNUP — see TERMS_ACCEPTANCE_SOURCES.
+  source        String
+  ip_address    String?
+  user_agent    String?
+  accepted_at   DateTime @default(now())
+
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, accepted_at])
+  @@index([tenant_id])
 }
 
 model UserInvitation {
@@ -827,6 +869,7 @@ model Tenant {
   boardColumnStatuses        BoardColumnStatus[]
   boardTasks                 BoardTask[]
   chatConversations          ChatConversation[]
+  termsAcceptances           TermsAcceptance[]
 
   @@index([deleted_at])
 }

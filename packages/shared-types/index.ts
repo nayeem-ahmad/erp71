@@ -1228,3 +1228,4 @@ export * from './lead-identity';
 export * from './campaign-rows';
 export * from './careers';
 export * from './locales';
+export * from './terms';

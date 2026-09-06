@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import TermsClient from './TermsClient';
 
 /**
@@ -26,5 +27,12 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-    return <TermsClient />;
+    // `TermsClient` reads `?plan=` to highlight the tier addendum a signup is
+    // about to accept, and `useSearchParams` opts the subtree into client
+    // rendering — without a boundary the whole route deopts at build time.
+    return (
+        <Suspense fallback={null}>
+            <TermsClient />
+        </Suspense>
+    );
 }

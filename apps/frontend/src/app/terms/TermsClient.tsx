@@ -1,15 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
 import { INFO_EMAIL } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
+import { PLAN_TERMS_ADDENDA, resolvePlanTermsSlug } from '@/lib/marketing/plan-terms';
+import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
 
 export default function TermsClient() {
     const { t } = useI18n();
+    const searchParams = useSearchParams();
     const m = t.marketing.legal;
     const p = m.terms;
+    // Signup links here as `/terms?plan=<tier>` so the addendum someone is about
+    // to accept is the one highlighted. Every addendum still renders either way:
+    // this document is the whole agreement, and hiding the tiers a reader did
+    // not arrive on would misrepresent what they are agreeing to.
+    const highlightedSlug = resolvePlanTermsSlug(searchParams.get('plan'));
 
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
@@ -21,7 +30,13 @@ export default function TermsClient() {
                 <div className="max-w-3xl mx-auto">
 
                     <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">{p.title}</h1>
-                    <p className="text-sm text-gray-400 mb-12">{m.lastUpdated}</p>
+                    <p className="text-sm text-gray-400 mb-12">
+                        {m.lastUpdated}
+                        {/* The version a signup records against. Printed so a stored
+                            acceptance can be matched to the document it names. */}
+                        <span className="ms-2 text-gray-300">·</span>
+                        <span className="ms-2 font-mono text-xs">v{CURRENT_TERMS_VERSION}</span>
+                    </p>
 
                     <div className="space-y-10 text-gray-700 leading-relaxed">
 
@@ -84,6 +99,14 @@ export default function TermsClient() {
                                 </Link>
                                 , which is the authoritative statement of what each plan costs. The price
                                 shown at checkout is the price that applies to your subscription.
+                            </p>
+                            <p className="mb-4">
+                                The tier you subscribe to also carries its own terms — which modules it licenses
+                                and what obligations they place on you. Those are set out in{' '}
+                                <Link href="#plan-terms" className="text-blue-600 hover:underline font-medium">
+                                    Section 11
+                                </Link>
+                                {' '}and form part of this agreement for your plan.
                             </p>
                             <ul className="list-disc ps-6 space-y-2 text-sm">
                                 <li>
@@ -207,9 +230,61 @@ export default function TermsClient() {
                             </p>
                         </section>
 
-                        {/* 11 */}
+                        {/* 11 — the tier-specific half of the agreement. */}
+                        <section id="plan-terms" className="scroll-mt-28">
+                            <h2 className="text-xl font-bold text-gray-900 mb-3">11. Plan-Specific Terms</h2>
+                            <p className="mb-3">
+                                Sections 1&ndash;10 apply to every subscriber. The terms below apply in addition,
+                                according to the tier your workspace is on, and are part of what you accept when
+                                you create or change a subscription. Where a plan-specific term conflicts with
+                                Sections 1&ndash;10, the plan-specific term governs for that tier.
+                            </p>
+                            <p className="mb-6">
+                                Prices, capacity limits and inclusions are not restated here — they are published on
+                                the{' '}
+                                <Link href="/pricing" className="text-blue-600 hover:underline font-medium">
+                                    pricing page
+                                </Link>
+                                {' '}for the reason given in Section 4.
+                            </p>
+
+                            <div className="space-y-6">
+                                {PLAN_TERMS_ADDENDA.map((addendum) => {
+                                    const highlighted = addendum.slug === highlightedSlug;
+                                    return (
+                                        <div
+                                            key={addendum.slug}
+                                            id={`plan-terms-${addendum.slug}`}
+                                            className={`scroll-mt-28 rounded-xl border p-4 ${highlighted
+                                                ? 'border-blue-600 bg-blue-50'
+                                                : 'border-gray-200 bg-white'
+                                                }`}
+                                        >
+                                            <div className="flex flex-wrap items-baseline gap-2">
+                                                <h3 className="text-base font-bold text-gray-900">{addendum.name}</h3>
+                                                {highlighted && (
+                                                    <span className="text-xs font-medium text-blue-600">
+                                                        The plan you are signing up for
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-sm text-gray-500">{addendum.summary}</p>
+                                            <ul className="mt-3 list-disc ps-6 space-y-2 text-sm">
+                                                {addendum.clauses.map((clause) => (
+                                                    <li key={clause.title}>
+                                                        <strong>{clause.title}.</strong> {clause.body}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        {/* 12 */}
                         <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">11. Contact</h2>
+                            <h2 className="text-xl font-bold text-gray-900 mb-3">12. Contact</h2>
                             <p>
                                 For questions about these Terms, please contact us:
                             </p>

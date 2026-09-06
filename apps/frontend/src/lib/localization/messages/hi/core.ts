@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: "डेमो लॉगिन विफल। कृपया फिर से प्रयास करें।",
             sessionExpired: "आपका सत्र समाप्त हो गया है। कृपया फिर से साइन इन करें।",
             googleFailed: "Google साइन-इन विफल। कृपया फिर से प्रयास करें।",
+            termsNotice: "Google या अपने मोबाइल नंबर से जारी रखने पर, खाता न होने पर एक बन जाएगा और आप सहमत होते हैं हमारी",
         },
         mobile: {
             start: "मोबाइल नंबर से साइन इन करें",
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: "मुख्य दुकान का नाम",
             planLabel: "योजना",
             monthSuffix: "/ माह",
-            termsPrefix: "कार्यक्षेत्र बनाकर आप हमारी",
+            termsAgreePrefix: "मैं",
+            termsPlanSuffix: " से सहमत हूँ, जिसमें {plan} प्लान की प्लान-विशिष्ट शर्तें शामिल हैं।",
+            termsRequired: "जारी रखने के लिए कृपया सेवा शर्तें स्वीकार करें।",
             termsLink: "सेवा शर्तों",
             and: "और",
             privacyLink: "गोपनीयता नीति",

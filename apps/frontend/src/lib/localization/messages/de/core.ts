@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: "Demo-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
             sessionExpired: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
             googleFailed: "Google-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+            termsNotice: "Wenn Sie mit Google oder Ihrer Mobilnummer fortfahren, wird ein Konto erstellt, falls Sie noch keines haben, und Sie stimmen unseren",
         },
         mobile: {
             start: "Mit Mobilnummer anmelden",
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: "Name des Hauptgeschäfts",
             planLabel: "Tarif",
             monthSuffix: "/ Monat",
-            termsPrefix: "Mit dem Erstellen eines Arbeitsbereichs stimmen Sie unseren",
+            termsAgreePrefix: "Ich stimme den",
+            termsPlanSuffix: " zu, einschließlich der planspezifischen Bedingungen für {plan}.",
+            termsRequired: "Bitte akzeptieren Sie die Nutzungsbedingungen, um fortzufahren.",
             termsLink: "Nutzungsbedingungen",
             and: "und der",
             privacyLink: "Datenschutzerklärung",
