@@ -43,6 +43,16 @@ export class SignupDto {
     @IsOptional()
     @IsString()
     mobile_country_code?: string;
+
+    /**
+     * The `CURRENT_TERMS_VERSION` string the signup form displayed next to its
+     * "I agree" checkbox. Required here because this DTO only ever creates an
+     * account — unlike the Google and mobile DTOs, which double as sign-in.
+     * The service re-checks the value against the current version rather than
+     * storing whatever a client sends.
+     */
+    @IsString({ message: 'Please accept the Terms of Service to continue.' })
+    acceptedTermsVersion: string;
 }
 
 export class LoginDto {
@@ -91,6 +101,16 @@ export class GoogleSignInDto {
     @IsOptional()
     @IsString()
     mobile_country_code?: string;
+
+    /**
+     * The `CURRENT_TERMS_VERSION` string shown beside the signup checkbox.
+     * Optional on the DTO because this endpoint is also the sign-in path, and a
+     * returning user is not asked to re-accept anything. The service requires
+     * it whenever the request actually creates an account.
+     */
+    @IsOptional()
+    @IsString()
+    acceptedTermsVersion?: string;
 }
 
 /**
@@ -135,6 +155,16 @@ export class MobileSignInDto {
     @IsOptional()
     @IsString()
     referralCode?: string;
+
+    /**
+     * The `CURRENT_TERMS_VERSION` string shown beside the signup checkbox.
+     * Optional on the DTO because this endpoint is also the sign-in path, and a
+     * returning user is not asked to re-accept anything. The service requires
+     * it whenever the request actually creates an account.
+     */
+    @IsOptional()
+    @IsString()
+    acceptedTermsVersion?: string;
 }
 
 export class CreateStoreDto {

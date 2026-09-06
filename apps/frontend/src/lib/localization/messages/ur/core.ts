@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: 'ڈیمو لاگ اِن ناکام۔ دوبارہ کوشش کریں۔',
             sessionExpired: 'آپ کا سیشن ختم ہو گیا ہے۔ دوبارہ لاگ اِن کریں۔',
             googleFailed: 'گوگل لاگ اِن ناکام۔ دوبارہ کوشش کریں۔',
+            termsNotice: 'گوگل یا اپنے موبائل نمبر سے جاری رکھنے پر، اکاؤنٹ نہ ہونے کی صورت میں ایک بن جائے گا اور آپ متفق ہوتے ہیں ہماری',
         },
         mobile: {
             start: 'موبائل نمبر سے لاگ اِن کریں',
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: 'بنیادی دکان کا نام',
             planLabel: 'پلان',
             monthSuffix: '/ ماہ',
-            termsPrefix: 'ورک اسپیس بنا کر آپ ہماری',
+            termsAgreePrefix: 'میں',
+            termsPlanSuffix: ' سے اتفاق کرتا ہوں، بشمول {plan} پلان کی مخصوص شرائط۔',
+            termsRequired: 'جاری رکھنے کے لیے براہِ کرم شرائطِ خدمت قبول کریں۔',
             termsLink: 'شرائطِ خدمت',
             and: 'اور',
             privacyLink: 'پرائیویسی پالیسی',

@@ -20,6 +20,13 @@ export type MobileSignUpFields = {
     tenantName?: string;
     planCode?: string;
     referralCode?: string;
+    /**
+     * `CURRENT_TERMS_VERSION`, carried through because the backend refuses to
+     * create an account without it. Every page that can reach account creation
+     * through this panel has to supply it — including the login page, whose
+     * mobile button silently signs a new number up.
+     */
+    acceptedTermsVersion?: string;
 };
 
 export type MobileSignInPanelProps = {

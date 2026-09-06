@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import BrandLogo from '@/components/BrandLogo';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import MobileSignInPanel from '@/components/MobileSignInPanel';
+import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
 import { routes } from '@/lib/routes';
 import { useHydrated } from '@/hooks/useHydrated';
 
@@ -113,7 +114,13 @@ function LoginPageContent() {
         setIsGoogleLoading(true);
         setError(null);
         try {
-            const authRes = await api.googleSignIn({ credential });
+            // This button signs an unknown Google account *up*, so it carries the
+            // same consent the signup form's checkbox collects. The notice under
+            // the buttons is what the visitor is agreeing to here.
+            const authRes = await api.googleSignIn({
+                credential,
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
+            });
             if (authRes?.requires_2fa && authRes?.user_id) {
                 // Google proved the identity; the authenticator app still has to.
                 setTwoFactorUserId(authRes.user_id);
@@ -302,9 +309,29 @@ function LoginPageContent() {
                                 onSuccess={handleMobileAuth}
                                 onError={setError}
                                 onAvailabilityChange={setMobileAvailable}
+                                // An unrecognised number is signed up rather than
+                                // turned away, so this path needs consent too.
+                                signUpFields={() => ({ acceptedTermsVersion: CURRENT_TERMS_VERSION })}
                                 disabled={isLoading || isDemoLoading || isGoogleLoading}
                             />
                         </div>
+                    )}
+
+                    {/* Neither button asks for a plan, so no tier addendum applies
+                        here — the tier is chosen in the onboarding wizard, which is
+                        where a workspace created this way gets one. Shown only when
+                        a button that can create an account is actually rendered. */}
+                    {!twoFactorUserId && (googleAvailable || mobileAvailable) && (
+                        <p className="mb-3 text-center text-xs leading-relaxed text-gray-400">
+                            {t.auth.login.termsNotice}{' '}
+                            <Link href="/terms" className="text-blue-600 hover:underline font-medium">
+                                {t.auth.signup.termsLink}
+                            </Link>
+                            {' '}{t.auth.signup.and}{' '}
+                            <Link href="/privacy" className="text-blue-600 hover:underline font-medium">
+                                {t.auth.signup.privacyLink}
+                            </Link>.
+                        </p>
                     )}
 
                     {/* Try Demo button */}

@@ -486,6 +486,7 @@ export const coreMessages = {
             demoFailed: "Échec de la connexion à la démo. Veuillez réessayer.",
             sessionExpired: "Votre session a expiré. Veuillez vous reconnecter.",
             googleFailed: "Échec de la connexion Google. Veuillez réessayer.",
+            termsNotice: "Continuer avec Google ou votre numéro de mobile crée un compte si vous n'en avez pas, et vaut acceptation de nos",
         },
         mobile: {
             start: "Se connecter avec un numéro de mobile",
@@ -521,7 +522,9 @@ export const coreMessages = {
             storeLabel: "Nom de la boutique principale",
             planLabel: "Formule",
             monthSuffix: "/ mois",
-            termsPrefix: "En créant un espace de travail, vous acceptez nos",
+            termsAgreePrefix: "J'accepte les",
+            termsPlanSuffix: ", y compris les conditions spécifiques au forfait {plan}.",
+            termsRequired: "Veuillez accepter les Conditions d'utilisation pour continuer.",
             termsLink: "Conditions d'utilisation",
             and: "et notre",
             privacyLink: "Politique de confidentialité",

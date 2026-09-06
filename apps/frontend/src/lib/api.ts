@@ -2435,7 +2435,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string }) =>
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string }) =>
         fetch(`${API_BASE}/auth/google`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -2456,7 +2456,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string }) =>
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string }) =>
         fetch(`${API_BASE}/auth/mobile`, {
             method: 'POST',
             body: JSON.stringify(data),

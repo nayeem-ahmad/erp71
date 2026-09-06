@@ -28,6 +28,9 @@ import {
     countryCodeFromE164,
     normalizeMobileToE164,
     resolveTenantFeatures,
+    CURRENT_TERMS_VERSION,
+    isCurrentTermsVersion,
+    type TermsAcceptanceSource,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -80,6 +83,8 @@ export class AuthService {
             // Duplicate mobiles are allowed (one person may own multiple businesses) — no uniqueness check.
         }
 
+        this.assertTermsAccepted(dto.acceptedTermsVersion);
+
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const displayName = dto.name?.trim() || dto.email.split('@')[0];
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
@@ -95,8 +100,9 @@ export class AuthService {
                 },
             });
 
+            let provisioned: { tenant: { id: string } } | null = null;
             if (dto.tenantName?.trim()) {
-                await this.provisionTenant(tx, createdUser.id, {
+                provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName,
                     storeName: dto.storeName?.trim() || 'Main Store',
                     address: dto.address,
@@ -104,6 +110,14 @@ export class AuthService {
                     referralCode: dto.referralCode,
                 });
             }
+
+            await this.recordTermsAcceptance(tx, {
+                userId: createdUser.id,
+                tenantId: provisioned?.tenant.id,
+                planCode: provisioned ? defaultPlan : null,
+                source: 'SIGNUP',
+                meta,
+            });
 
             return createdUser;
         });
@@ -266,6 +280,11 @@ export class AuthService {
             }
         }
 
+        // Reached only when no account matched the Google identity, so this is a
+        // signup however the visitor got here — including the login page's
+        // "Continue with Google", which creates an account for a new email.
+        this.assertTermsAccepted(dto.acceptedTermsVersion);
+
         const wantsWorkspace = !!dto.tenantName?.trim();
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
@@ -284,8 +303,9 @@ export class AuthService {
                 },
             });
 
+            let provisioned: { tenant: { id: string } } | null = null;
             if (wantsWorkspace) {
-                await this.provisionTenant(tx, createdUser.id, {
+                provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName!.trim(),
                     storeName: dto.storeName?.trim() || 'Main Store',
                     address: dto.address,
@@ -293,6 +313,14 @@ export class AuthService {
                     referralCode: dto.referralCode,
                 });
             }
+
+            await this.recordTermsAcceptance(tx, {
+                userId: createdUser.id,
+                tenantId: provisioned?.tenant.id,
+                planCode: provisioned ? defaultPlan : null,
+                source: 'GOOGLE_SIGNUP',
+                meta,
+            });
 
             return createdUser;
         });
@@ -416,6 +444,10 @@ export class AuthService {
             );
         }
 
+        // Past the `requires_signup` return above, so an account is definitely
+        // being created here rather than signed in to.
+        this.assertTermsAccepted(dto.acceptedTermsVersion);
+
         const wantsWorkspace = !!dto.tenantName?.trim();
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
@@ -434,8 +466,9 @@ export class AuthService {
                 },
             });
 
+            let provisioned: { tenant: { id: string } } | null = null;
             if (wantsWorkspace) {
-                await this.provisionTenant(tx, createdUser.id, {
+                provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName!.trim(),
                     storeName: dto.storeName?.trim() || 'Main Store',
                     address: dto.address,
@@ -443,6 +476,14 @@ export class AuthService {
                     referralCode: dto.referralCode,
                 });
             }
+
+            await this.recordTermsAcceptance(tx, {
+                userId: createdUser.id,
+                tenantId: provisioned?.tenant.id,
+                planCode: provisioned ? defaultPlan : null,
+                source: 'MOBILE_SIGNUP',
+                meta,
+            });
 
             return createdUser;
         });
@@ -911,6 +952,61 @@ export class AuthService {
         }
 
         return result;
+    }
+
+    /**
+     * Refuse a signup that did not name the terms version it agreed to.
+     *
+     * Consent that does not identify the document proves nothing, so a missing
+     * value is rejected rather than stored as an empty string. A *stale* value
+     * is rejected too: it means the page was open across a terms change, and
+     * sending that person back to read the current text is the entire reason
+     * the document carries a version.
+     */
+    private assertTermsAccepted(version: string | null | undefined) {
+        if (!version?.trim()) {
+            throw new BadRequestException('Please accept the Terms of Service to continue.');
+        }
+        if (!isCurrentTermsVersion(version)) {
+            throw new BadRequestException(
+                'Our Terms of Service have been updated. Please reload the page and accept the current terms.',
+            );
+        }
+    }
+
+    /**
+     * Write the consent row inside the caller's signup transaction, so an
+     * account can never exist without the acceptance that created it and a
+     * failed tenant provision rolls both back together.
+     *
+     * `planCode` is the tier whose addendum formed part of the agreement. It is
+     * null when no workspace was provisioned in the same request — a Google or
+     * mobile sign-in that arrived without an organization name picks its tier
+     * later, in the onboarding wizard.
+     */
+    private async recordTermsAcceptance(
+        tx: any,
+        params: {
+            userId: string;
+            tenantId?: string | null;
+            planCode?: string | null;
+            source: TermsAcceptanceSource;
+            meta: AuditRequestMeta;
+        },
+    ) {
+        await tx.termsAcceptance.create({
+            data: {
+                user_id: params.userId,
+                tenant_id: params.tenantId ?? null,
+                terms_version: CURRENT_TERMS_VERSION,
+                plan_code: params.planCode ?? null,
+                source: params.source,
+                ip_address: params.meta.ipAddress ?? null,
+                // Bounded: a user agent is attacker-controlled and unbounded, and
+                // nothing reads more than the leading identification from it.
+                user_agent: params.meta.userAgent?.slice(0, 512) ?? null,
+            },
+        });
     }
 
     private async provisionTenant(

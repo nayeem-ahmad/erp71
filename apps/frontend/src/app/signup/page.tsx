@@ -10,6 +10,7 @@ import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import {
+    CURRENT_TERMS_VERSION,
     DEFAULT_MOBILE_COUNTRY_CODE,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
@@ -24,6 +25,7 @@ import { routes } from '@/lib/routes';
 import { useHydrated } from '@/hooks/useHydrated';
 import { setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
 import { ACCOUNTING_EDITION, MARKETING_PLANS } from '@/lib/marketing/plans';
+import { resolvePlanTermsSlug } from '@/lib/marketing/plan-terms';
 
 /**
  * Both the plan codes and the marketing slugs, because the pricing page links by
@@ -102,6 +104,12 @@ function SignupPageContent() {
         planCode: 'STANDARD' as Plan['code'],
         referralCode: '',
     });
+    // Explicit rather than implied. Consent used to be a line of grey text above
+    // the submit button, which recorded nothing and asked for nothing; the terms
+    // are now tier-specific, so what is being agreed to depends on the plan
+    // selected right above this box.
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [termsError, setTermsError] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [googleAvailable, setGoogleAvailable] = useState(false);
@@ -207,6 +215,16 @@ function SignupPageContent() {
         setForm((current) => ({ ...current, [field]: value }));
     };
 
+    const visiblePlans = plans.length > 0 ? plans : FALLBACK_PLANS;
+    // Falls back to the code so the sentence still reads if the plan list has
+    // not loaded and the code came from `?plan=`.
+    const selectedPlanName =
+        visiblePlans.find((plan) => plan.code === form.planCode)?.name ?? form.planCode;
+    // Deep-links the tier addendum the checkbox is agreeing to, rather than
+    // dropping the reader at the top of an eleven-section document.
+    const termsSlug = resolvePlanTermsSlug(form.planCode);
+    const termsHref = termsSlug ? `/terms?plan=${termsSlug}#plan-terms-${termsSlug}` : '/terms';
+
     const submitSignup = async (e: FormSubmitEvent) => {
         e.preventDefault();
         setError(null);
@@ -227,6 +245,13 @@ function SignupPageContent() {
             setError(t.auth.signup.mobileInvalid);
             return;
         }
+        if (!acceptedTerms) {
+            // Marked on the field as well as the banner: the checkbox sits below
+            // the fold on a phone, and a banner alone leaves people hunting.
+            setTermsError(true);
+            setError(t.auth.signup.termsRequired);
+            return;
+        }
 
         setIsLoading(true);
 
@@ -234,6 +259,7 @@ function SignupPageContent() {
             const signupRes = await api.signup({
                 ...form,
                 referralCode: form.referralCode.trim() || undefined,
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
             });
             setCredentials(signupRes);
             // The remembered code has done its job. Leaving it would silently attach
@@ -288,6 +314,14 @@ function SignupPageContent() {
      * the backend says `requires_workspace` and the onboarding wizard collects it.
      */
     const handleGoogleCredential = async (credential: string) => {
+        // The checkbox governs this button too — it creates an account just as
+        // the form does. Checked before the token is spent so a refused signup
+        // does not burn the credential.
+        if (!acceptedTerms) {
+            setTermsError(true);
+            setError(t.auth.signup.termsRequired);
+            return;
+        }
         setIsGoogleLoading(true);
         setError(null);
         try {
@@ -298,6 +332,7 @@ function SignupPageContent() {
                 referralCode: form.referralCode.trim() || undefined,
                 mobile: form.mobile.trim() || undefined,
                 mobile_country_code: form.mobile_country_code,
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
             });
 
             if (authRes?.requires_2fa) {
@@ -332,6 +367,7 @@ function SignupPageContent() {
         tenantName: form.tenantName.trim() || undefined,
         planCode: form.planCode,
         referralCode: form.referralCode.trim() || undefined,
+        acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
 
     const handleMobileAuth = async (authRes: any) => {
@@ -437,7 +473,7 @@ function SignupPageContent() {
                         <div className="md:col-span-2 space-y-3">
                             <label className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.planLabel}</label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(plans.length > 0 ? plans : FALLBACK_PLANS).map((plan) => {
+                                {visiblePlans.map((plan) => {
                                     const selected = form.planCode === plan.code;
                                     return (
                                         <button
@@ -458,12 +494,45 @@ function SignupPageContent() {
                             </div>
                         </div>
 
-                        <p className="md:col-span-2 text-xs text-gray-400 text-center leading-relaxed">
-                            {t.auth.signup.termsPrefix}{' '}
-                            <Link href="/terms" className="text-blue-600 hover:underline font-medium">{t.auth.signup.termsLink}</Link>
-                            {' '}{t.auth.signup.and}{' '}
-                            <Link href="/privacy" className="text-blue-600 hover:underline font-medium">{t.auth.signup.privacyLink}</Link>.
-                        </p>
+                        <div className="md:col-span-2">
+                            <label
+                                htmlFor="signup-terms"
+                                className={`flex items-start gap-3 rounded-xl border p-3 min-h-touch cursor-pointer transition-colors ${termsError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
+                                    }`}
+                            >
+                                <input
+                                    id="signup-terms"
+                                    type="checkbox"
+                                    checked={acceptedTerms}
+                                    onChange={(e) => {
+                                        setAcceptedTerms(e.target.checked);
+                                        if (e.target.checked) setTermsError(false);
+                                    }}
+                                    className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20"
+                                />
+                                <span className="text-xs leading-relaxed text-gray-600">
+                                    {t.auth.signup.termsAgreePrefix}{' '}
+                                    <Link
+                                        href={termsHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline font-medium"
+                                    >
+                                        {t.auth.signup.termsLink}
+                                    </Link>
+                                    {' '}{t.auth.signup.and}{' '}
+                                    <Link
+                                        href="/privacy"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline font-medium"
+                                    >
+                                        {t.auth.signup.privacyLink}
+                                    </Link>
+                                    {formatMessage(t.auth.signup.termsPlanSuffix, { plan: selectedPlanName })}
+                                </span>
+                            </label>
+                        </div>
 
                         <div className="md:col-span-2">
                             <button type="submit" disabled={!hydrated || isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed group">
@@ -496,13 +565,16 @@ function SignupPageContent() {
                     </div>
 
                     <div className={mobileAvailable ? 'mt-4' : ''}>
+                        {/* Gated on the checkbox like the form and the Google button:
+                            this panel creates an account, and an SMS code should not
+                            be spent on a signup the backend will refuse. */}
                         <MobileSignInPanel
                             onSuccess={handleMobileAuth}
                             onError={setError}
                             onAvailabilityChange={setMobileAvailable}
                             signUpFields={mobileSignUpFields}
                             intent="signup"
-                            disabled={isLoading || isGoogleLoading}
+                            disabled={isLoading || isGoogleLoading || !acceptedTerms}
                         />
                     </div>
 
