@@ -75,6 +75,7 @@ function Block({ block, linkBase, dense }: { block: LegalBlock; linkBase: string
         );
     }
 
+    if (dense) return null;
     return (
         <div className={`bg-gray-50 rounded-xl p-4 space-y-1 ${dense ? 'mt-2 text-xs' : 'mt-3 text-sm'}`}>
             {block.lines.map((line, index) => (
