@@ -2761,18 +2761,44 @@ export const api = {
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/tenants/reminders${suffix}`);
     },
-    recordTenantPayment: (tenantId: string, data: { amount: number; notes?: string; method?: string }) =>
+    recordTenantPayment: (
+        tenantId: string,
+        data: { amount: number; notes?: string; method?: string; occurredAt?: string },
+    ) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         }),
-    recordTenantRefund: (tenantId: string, data: { amount: number; notes?: string }) =>
+    recordTenantRefund: (
+        tenantId: string,
+        data: { amount: number; notes?: string; occurredAt?: string },
+    ) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/refunds`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         }),
+    recordTenantFee: (
+        tenantId: string,
+        data: { amount: number; label?: string; notes?: string; occurredAt?: string },
+    ) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/fees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    updateTenantLedgerEntry: (
+        eventId: string,
+        data: { amount?: number; label?: string; notes?: string; method?: string; occurredAt?: string },
+    ) =>
+        fetchWithAuth(`/admin/tenants/ledger/${eventId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    deleteTenantLedgerEntry: (eventId: string) =>
+        fetchWithAuth(`/admin/tenants/ledger/${eventId}`, { method: 'DELETE' }),
     sellTenantSmsCredits: (tenantId: string, data: { credits: number; amount?: number; notes?: string }) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/sms-credits`, {
             method: 'POST',

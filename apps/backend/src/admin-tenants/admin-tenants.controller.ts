@@ -13,6 +13,8 @@ import {
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
+    RecordTenantFeeDto,
+    UpdateTenantLedgerEntryDto,
     AdminSellSmsCreditsDto,
     AdminSellAiCreditsDto,
     AdminGrantTenantAddonDto,
@@ -45,6 +47,25 @@ export class AdminTenantsController {
     @Get('reminders')
     listReminders(@Query() query: ListAdminTenantLedgerQueryDto) {
         return this.adminTenantsService.listTenantReminders(query);
+    }
+
+    // Declared before the `:tenantId` routes below: Nest resolves in declaration
+    // order, and an entry id in the first segment must not be read as a tenant.
+    @Patch('ledger/:eventId')
+    updateLedgerEntry(
+        @Param('eventId') eventId: string,
+        @Body() dto: UpdateTenantLedgerEntryDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.updateLedgerEntry(eventId, dto, req.user.userId);
+    }
+
+    @Delete('ledger/:eventId')
+    deleteLedgerEntry(
+        @Param('eventId') eventId: string,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.deleteLedgerEntry(eventId, req.user.userId);
     }
 
     @Get(':tenantId')
@@ -161,6 +182,15 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.recordRefund(tenantId, dto, req.user.userId);
+    }
+
+    @Post(':tenantId/fees')
+    recordFee(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: RecordTenantFeeDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.recordFee(tenantId, dto, req.user.userId);
     }
 
     @Post(':tenantId/sms-credits')

@@ -55,6 +55,12 @@ export type LedgerEvent = {
     payload: Record<string, unknown> | null;
     created_at: string;
     running_balance?: number;
+    /**
+     * Server's verdict on whether this row may be edited or deleted — only the
+     * entries an admin typed in are. Derived once on the API side so the row
+     * actions can never offer what the endpoint would reject.
+     */
+    editable?: boolean;
 };
 
 export type CreateDraft = {

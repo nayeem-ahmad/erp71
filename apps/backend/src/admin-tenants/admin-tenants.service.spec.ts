@@ -109,7 +109,14 @@ describe('AdminTenantsService', () => {
         count: jest.fn(),
         create: jest.fn(),
       },
-      billingEvent: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), findUnique: jest.fn() },
+      billingEvent: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn().mockResolvedValue({}),
+      },
       aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { credits_used: 0 } }) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
@@ -1305,6 +1312,208 @@ describe('AdminTenantsService', () => {
         expect.objectContaining({ addonCode: 'AI_ASSISTANT' }),
       );
       expect(result).toEqual([]);
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  ledger entries — manual fees, backdating, edit and delete           */
+  /* ------------------------------------------------------------------ */
+
+  describe('recordFee', () => {
+    const makeFeeEvent = (overrides: any = {}) => ({
+      id: 'be-fee',
+      event_type: 'manual_fee',
+      status: 'posted',
+      amount: 250,
+      currency: 'BDT',
+      created_at: new Date('2026-03-01T10:00:00Z'),
+      ...overrides,
+    });
+
+    it('posts a manual_fee event and audits it', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      db.billingEvent.create.mockResolvedValue(makeFeeEvent());
+
+      const result = await service.recordFee('t1', { amount: 250, label: 'Setup fee' }, 'admin1');
+
+      expect(db.billingEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenant_id: 't1',
+            event_type: 'manual_fee',
+            amount: 250,
+            reference_id: 'Setup fee',
+          }),
+        }),
+      );
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.fee.record', 'Tenant', { userId: 'admin1', tenantId: 't1' }, 't1',
+        expect.objectContaining({ amount: 250, label: 'Setup fee' }),
+      );
+      expect(result.event_type).toBe('manual_fee');
+    });
+
+    it('stores a backdated occurredAt as the entry date', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      db.billingEvent.create.mockResolvedValue(makeFeeEvent());
+
+      await service.recordFee('t1', { amount: 250, occurredAt: '2026-02-14T08:30:00.000Z' }, 'admin1');
+
+      const data = db.billingEvent.create.mock.calls[0][0].data;
+      expect(data.created_at).toEqual(new Date('2026-02-14T08:30:00.000Z'));
+    });
+
+    it('rejects a date beyond the clock-skew allowance', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      const farFuture = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      await expect(service.recordFee('t1', { amount: 250, occurredAt: farFuture }, 'admin1'))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(db.billingEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('404s for an unknown tenant', async () => {
+      db.tenant.findFirst.mockResolvedValue(null);
+
+      await expect(service.recordFee('nope', { amount: 10 }, 'admin1'))
+        .rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('recordPayment / recordRefund backdating', () => {
+    it('records a payment at the supplied date', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      db.tenantSubscription.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      db.billingEvent.create.mockResolvedValue({
+        id: 'be-1', event_type: 'manual_payment', status: 'succeeded',
+        amount: 500, currency: 'BDT', created_at: new Date('2026-02-14T08:30:00.000Z'),
+      });
+
+      await service.recordPayment('t1', { amount: 500, occurredAt: '2026-02-14T08:30:00.000Z' }, 'admin1');
+
+      const data = db.billingEvent.create.mock.calls[0][0].data;
+      expect(data.created_at).toEqual(new Date('2026-02-14T08:30:00.000Z'));
+    });
+
+    it('leaves created_at to the database default when no date is given', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      db.tenantSubscription.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      db.billingEvent.create.mockResolvedValue({
+        id: 'be-1', event_type: 'manual_refund', status: 'succeeded',
+        amount: 50, currency: 'BDT', created_at: new Date(),
+      });
+
+      await service.recordRefund('t1', { amount: 50 }, 'admin1');
+
+      expect(db.billingEvent.create.mock.calls[0][0].data).not.toHaveProperty('created_at');
+    });
+  });
+
+  describe('updateLedgerEntry', () => {
+    const existing = {
+      id: 'be-1',
+      tenant_id: 't1',
+      event_type: 'manual_payment',
+      amount: 500,
+      created_at: new Date('2026-03-01T10:00:00Z'),
+      payload: { recorded_by: 'admin0', notes: 'old note', method: 'bKash' },
+    };
+
+    it('changes amount, date and notes while keeping the rest of the payload', async () => {
+      db.billingEvent.findFirst.mockResolvedValue(existing);
+      db.billingEvent.update.mockResolvedValue({
+        ...existing, amount: 750, created_at: new Date('2026-02-20T06:00:00.000Z'),
+      });
+
+      await service.updateLedgerEntry(
+        'be-1',
+        { amount: 750, notes: 'corrected', occurredAt: '2026-02-20T06:00:00.000Z' },
+        'admin1',
+      );
+
+      const data = db.billingEvent.update.mock.calls[0][0].data;
+      expect(data.amount).toBe(750);
+      expect(data.created_at).toEqual(new Date('2026-02-20T06:00:00.000Z'));
+      expect(data.payload).toEqual(expect.objectContaining({
+        recorded_by: 'admin0',
+        method: 'bKash',
+        notes: 'corrected',
+        edited_by: 'admin1',
+      }));
+    });
+
+    it('clears notes when an empty string is sent', async () => {
+      db.billingEvent.findFirst.mockResolvedValue(existing);
+      db.billingEvent.update.mockResolvedValue({ ...existing, payload: {} });
+
+      await service.updateLedgerEntry('be-1', { notes: '' }, 'admin1');
+
+      expect(db.billingEvent.update.mock.calls[0][0].data.payload.notes).toBeNull();
+    });
+
+    it('refuses to edit a system-generated entry', async () => {
+      db.billingEvent.findFirst.mockResolvedValue({ ...existing, event_type: 'subscription_fee' });
+
+      await expect(service.updateLedgerEntry('be-1', { amount: 1 }, 'admin1'))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(db.billingEvent.update).not.toHaveBeenCalled();
+    });
+
+    it('404s for an unknown entry', async () => {
+      db.billingEvent.findFirst.mockResolvedValue(null);
+
+      await expect(service.updateLedgerEntry('nope', { amount: 1 }, 'admin1'))
+        .rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('deleteLedgerEntry', () => {
+    it('deletes a manual entry and audits it', async () => {
+      db.billingEvent.findFirst.mockResolvedValue({
+        id: 'be-1', tenant_id: 't1', event_type: 'manual_fee',
+        amount: 250, created_at: new Date('2026-03-01T10:00:00Z'), payload: {},
+      });
+
+      const result = await service.deleteLedgerEntry('be-1', 'admin1');
+
+      expect(db.billingEvent.delete).toHaveBeenCalledWith({ where: { id: 'be-1' } });
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.ledger_entry.delete', 'BillingEvent', { userId: 'admin1', tenantId: 't1' }, 'be-1',
+        expect.objectContaining({ event_type: 'manual_fee', amount: 250 }),
+      );
+      expect(result).toEqual({ success: true, id: 'be-1' });
+    });
+
+    it('refuses to delete a credit-sale payment', async () => {
+      db.billingEvent.findFirst.mockResolvedValue({
+        id: 'be-2', tenant_id: 't1', event_type: 'sms_credit_sale_payment',
+        amount: 100, created_at: new Date(), payload: {},
+      });
+
+      await expect(service.deleteLedgerEntry('be-2', 'admin1'))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(db.billingEvent.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listTenantLedger', () => {
+    it('flags manual entries as editable and machine-posted ones as not', async () => {
+      db.billingEvent.findMany.mockResolvedValue([
+        {
+          id: 'be-1', tenant_id: 't1', event_type: 'manual_fee', status: 'posted',
+          provider_name: 'manual', amount: 250, currency: 'BDT', reference_id: null,
+          payload: {}, created_at: new Date(), tenant: { id: 't1', name: 'Shop' },
+        },
+        {
+          id: 'be-2', tenant_id: 't1', event_type: 'subscription_fee', status: 'posted',
+          provider_name: 'manual', amount: 499, currency: 'BDT', reference_id: 'BASIC',
+          payload: {}, created_at: new Date(), tenant: { id: 't1', name: 'Shop' },
+        },
+      ]);
+
+      const rows = await service.listTenantLedger({ tenantId: 't1' });
+
+      expect(rows.map((r: any) => r.editable)).toEqual([true, false]);
     });
   });
 });
