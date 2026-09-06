@@ -12,7 +12,7 @@
  * dated by, and a reader comparing a stored row against the published page
  * should not have to map one numbering onto another.
  */
-export const CURRENT_TERMS_VERSION = '2026-09-06';
+export const CURRENT_TERMS_VERSION = '2026-09-07';
 
 /**
  * Which flow collected the consent. Recorded because the three signup paths
