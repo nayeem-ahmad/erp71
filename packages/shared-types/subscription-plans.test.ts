@@ -30,10 +30,20 @@ describe('subscription-plans helpers', () => {
         expect(resolveAiCreditsMonthly(features, 'STANDARD')).toBe(500);
     });
 
-    it('treats Premium as coming soon and not self-serve', () => {
-        expect(isComingSoonSubscriptionPlan('PREMIUM')).toBe(true);
-        expect(isSelfServeSubscriptionPlan('PREMIUM', 1499)).toBe(false);
+    it('sells Premium self-serve', () => {
+        // Business opened for self-serve on 2026-09-07. The coming-soon list is
+        // now empty but deliberately kept — see the comment on the constant.
+        expect(isComingSoonSubscriptionPlan('PREMIUM')).toBe(false);
+        expect(isSelfServeSubscriptionPlan('PREMIUM', 2499)).toBe(true);
         expect(isSelfServeSubscriptionPlan('STANDARD', 999)).toBe(true);
+    });
+
+    it('still refuses the plans that were never self-serve', () => {
+        // The two exclusions that are not about coming-soon status: FREE is
+        // retired, and any plan priced at zero is not something to sell.
+        expect(isSelfServeSubscriptionPlan('FREE', 0)).toBe(false);
+        expect(isSelfServeSubscriptionPlan('PREMIUM', 0)).toBe(false);
+        expect(isSelfServeSubscriptionPlan('ENTERPRISE', 8000)).toBe(false);
     });
 
     it('reads granular entitlements from normalized features', () => {

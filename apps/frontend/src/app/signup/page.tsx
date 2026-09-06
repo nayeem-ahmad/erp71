@@ -25,7 +25,10 @@ import { routes } from '@/lib/routes';
 import { useHydrated } from '@/hooks/useHydrated';
 import { setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
 import { ACCOUNTING_EDITION, MARKETING_PLANS } from '@/lib/marketing/plans';
-import { resolvePlanTermsSlug } from '@/lib/marketing/plan-terms';
+import { planTermsAddendumForCode, resolvePlanTermsSlug } from '@/lib/marketing/plan-terms';
+import LegalSections from '@/components/legal/LegalSections';
+import { TERMS_SECTIONS } from '@/lib/legal/terms-content';
+import { Checkbox } from '@/components/ui';
 
 /**
  * Both the plan codes and the marketing slugs, because the pricing page links by
@@ -224,6 +227,10 @@ function SignupPageContent() {
     // dropping the reader at the top of an eleven-section document.
     const termsSlug = resolvePlanTermsSlug(form.planCode);
     const termsHref = termsSlug ? `/terms?plan=${termsSlug}#plan-terms-${termsSlug}` : '/terms';
+    // Only this tier's addendum goes in the box: it is the one forming part of
+    // the purchase being made. `/terms` still shows all of them, because there
+    // the whole document is the agreement.
+    const selectedAddendum = planTermsAddendumForCode(form.planCode);
 
     const submitSignup = async (e: FormSubmitEvent) => {
         e.preventDefault();
@@ -470,45 +477,98 @@ function SignupPageContent() {
                             )}
                         </div>
 
-                        <div className="md:col-span-2 space-y-3">
-                            <label className="text-sm font-medium text-gray-700 ms-1">{t.auth.signup.planLabel}</label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {visiblePlans.map((plan) => {
-                                    const selected = form.planCode === plan.code;
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={plan.code}
-                                            onClick={() => handleChange('planCode', plan.code)}
-                                            className={`rounded-2xl border p-4 text-start transition-all ${selected ? 'border-blue-600 bg-blue-50 shadow-blue-100 shadow-lg' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <p className="font-bold text-gray-900">{plan.name}</p>
-                                                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{plan.code}</span>
-                                            </div>
-                                            <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                            <p className="mt-3 text-lg font-black text-gray-900">{formatBDT(plan.monthly_price)}<span className="text-xs font-bold text-gray-400 ms-1">{t.auth.signup.monthSuffix}</span></p>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <fieldset className="md:col-span-2 space-y-2">
+                            {/* A fieldset, not a bare label: the old markup had a
+                                <label> that labelled nothing, so the group was
+                                anonymous to a screen reader. */}
+                            <legend className="text-sm font-medium text-gray-700 ms-1 mb-2">
+                                {t.auth.signup.planLabel}
+                            </legend>
+                            {/* One row per tier rather than a card grid. Four cards
+                                ran to ~300px at desktop and over half the form on a
+                                phone; rows fit the price on the same line as the
+                                name and degrade better for Bangla, which runs ~20%
+                                wider than English and would break an equal-width
+                                segmented strip at 360px. */}
+                            {visiblePlans.map((plan) => {
+                                const selected = form.planCode === plan.code;
+                                return (
+                                    <label
+                                        key={plan.code}
+                                        className={`flex min-h-touch cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${selected ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                                            }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="planCode"
+                                            value={plan.code}
+                                            checked={selected}
+                                            onChange={() => handleChange('planCode', plan.code)}
+                                            className="h-4 w-4 shrink-0 accent-blue-600"
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex flex-wrap items-baseline justify-between gap-x-2">
+                                                <span className="text-sm font-semibold text-gray-900">{plan.name}</span>
+                                                <span className="text-sm font-semibold text-gray-900">
+                                                    {formatBDT(plan.monthly_price)}
+                                                    <span className="ms-1 text-xs font-normal text-gray-400">
+                                                        {t.auth.signup.monthSuffix}
+                                                    </span>
+                                                </span>
+                                            </span>
+                                            {plan.description && (
+                                                <span className="mt-0.5 block text-xs text-gray-500">{plan.description}</span>
+                                            )}
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                        </fieldset>
 
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-2 space-y-2">
+                            <p className="text-sm font-medium text-gray-700 ms-1">
+                                {formatMessage(t.auth.signup.termsBoxLabel, { plan: selectedPlanName })}
+                            </p>
+                            {/* The agreement itself, not a link to it. A checkbox
+                                beside a link asks people to agree to something they
+                                have not been shown; the recorded TermsAcceptance row
+                                is only worth having if what was on screen is known.
+                                Core sections come from the same module `/terms`
+                                renders, so the two can never drift, and only the
+                                selected tier's addendum is included — that is the one
+                                forming part of this purchase. */}
+                            <div
+                                className="max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-gray-50 p-3"
+                                // Focusable so the box can be scrolled from the
+                                // keyboard, and announced as a region rather than a
+                                // wall of unattributed text.
+                                tabIndex={0}
+                                role="region"
+                                aria-label={t.auth.signup.termsBoxAriaLabel}
+                            >
+                                <LegalSections
+                                    sections={TERMS_SECTIONS}
+                                    addenda={selectedAddendum ? [selectedAddendum] : []}
+                                    highlightedSlug={selectedAddendum?.slug}
+                                    // A bare `#plan-terms` would scroll this page
+                                    // looking for an anchor it does not have.
+                                    linkBase="/terms"
+                                    dense
+                                />
+                            </div>
                             <label
                                 htmlFor="signup-terms"
-                                className={`flex items-start gap-3 rounded-xl border p-3 min-h-touch cursor-pointer transition-colors ${termsError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
+                                className={`flex items-start gap-3 rounded-lg border p-3 min-h-touch cursor-pointer transition-colors ${termsError ? 'border-danger bg-red-50' : 'border-gray-200 bg-white'
                                     }`}
                             >
-                                <input
+                                <Checkbox
                                     id="signup-terms"
-                                    type="checkbox"
+                                    className="mt-0.5 shrink-0"
                                     checked={acceptedTerms}
                                     onChange={(e) => {
                                         setAcceptedTerms(e.target.checked);
                                         if (e.target.checked) setTermsError(false);
                                     }}
-                                    className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20"
                                 />
                                 <span className="text-xs leading-relaxed text-gray-600">
                                     {t.auth.signup.termsAgreePrefix}{' '}

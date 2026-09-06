@@ -18,8 +18,8 @@ jest.mock('next/navigation', () => ({
  * Deliberately unlike the static fallback: different names, a different Starter
  * price, and a setup fee. The page is supposed to prefer these, and the old
  * suite could not tell the difference because its mock echoed the constants
- * back. `PREMIUM` is absent exactly as production omits it while it sits in
- * COMING_SOON_SUBSCRIPTION_PLAN_CODES.
+ * back. `PREMIUM` is absent so the static-fallback path stays covered — a plan
+ * the endpoint does not return still has to render from the constants.
  */
 const API_PLANS = [
     {
@@ -164,16 +164,18 @@ describe('PricingPage', () => {
         expect(hrefs).not.toContain('/signup?plan=enterprise');
     });
 
-    it('marks Business as coming soon while the API omits it', async () => {
+    it('offers Business for checkout even while the API omits it', async () => {
+        // Business opened for self-serve on 2026-09-07. It is no longer badged
+        // coming-soon, and it is buyable from its static values whether or not
+        // the plans endpoint happens to carry a row for it.
         render(<PricingPage />);
-        await waitFor(() => expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0));
-        const businessSignupLinks = screen.getAllByRole('link').filter((link) =>
-            link.getAttribute('href')?.includes('plan=business'),
-        );
-        expect(businessSignupLinks).toHaveLength(0);
+        await waitFor(() => expect(screen.getAllByText('Business').length).toBeGreaterThan(0));
+        expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+        const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+        expect(hrefs).toContain('/signup?plan=business');
     });
 
-    it('clears the coming-soon flag once the API returns that plan', async () => {
+    it('prefers the live Business values when the API does return that plan', async () => {
         getSubscriptionPlans.mockResolvedValue([
             ...API_PLANS,
             {

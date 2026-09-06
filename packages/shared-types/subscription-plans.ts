@@ -16,20 +16,31 @@ export const SELF_SERVE_SUBSCRIPTION_PLAN_CODES = [
   'BASIC',
   'ACCOUNTING',
   'STANDARD',
+  'PREMIUM',
 ] as const;
 
 export type SelfServeSubscriptionPlanCode = (typeof SELF_SERVE_SUBSCRIPTION_PLAN_CODES)[number];
 
-/** Visible on marketing but not yet available for self-serve purchase. */
-export const COMING_SOON_SUBSCRIPTION_PLAN_CODES = [
-  'PREMIUM',
-] as const;
+/**
+ * Visible on marketing but not yet available for self-serve purchase.
+ *
+ * Empty since PREMIUM (Business) opened for self-serve on 2026-09-07. The list
+ * and its guards are kept rather than deleted: this is the mechanism for
+ * announcing a tier before it can be bought, and the next one will need it.
+ *
+ * Deliberately typed as a plain array of plan codes rather than `as const`. An
+ * empty `as const` tuple makes the derived member type `never`, which would
+ * silently turn `isComingSoonSubscriptionPlan`'s type predicate into an
+ * assertion that nothing is ever a coming-soon plan — narrowing callers'
+ * arguments to `never` at every call site.
+ */
+export const COMING_SOON_SUBSCRIPTION_PLAN_CODES: readonly FixedSubscriptionPlanCode[] = [];
 
-export type ComingSoonSubscriptionPlanCode = (typeof COMING_SOON_SUBSCRIPTION_PLAN_CODES)[number];
-
-export function isComingSoonSubscriptionPlan(
-  code: string,
-): code is ComingSoonSubscriptionPlanCode {
+/**
+ * Returns a plain boolean, not a type predicate, for the reason above: with the
+ * list empty there is no meaningful type to narrow to.
+ */
+export function isComingSoonSubscriptionPlan(code: string): boolean {
   return (COMING_SOON_SUBSCRIPTION_PLAN_CODES as readonly string[]).includes(code);
 }
 

@@ -563,15 +563,48 @@ describe('AuthService', () => {
         expect(result.preferred_locale).toBe('bn');
     });
 
-    it('rejects self-serve signup with the coming-soon Premium plan', async () => {
-        db.user.findUnique.mockResolvedValueOnce(null);
+    it('provisions a Business workspace at signup', async () => {
+        // Business used to be refused here as coming-soon. It opened for
+        // self-serve on 2026-09-07, and this is the assertion that the whole
+        // path — DTO validation through provisionTenant — actually lets it in.
+        db.user.findUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
         db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+        db.subscriptionPlan.findUnique.mockResolvedValue({
+            id: 'plan-premium', code: 'PREMIUM', is_active: true, monthly_price: 2499,
+        });
+        db.tenant.create.mockResolvedValue({ id: 'tenant-1' });
+        db.store.create.mockResolvedValue({ id: 'store-1' });
 
-        await expect(service.signup({
+        await service.signup({
             email: 'owner@example.com',
             password: 'password123',
             mobile: '01712345678',
             mobile_country_code: 'BD',
+            tenantName: 'Tenant One',
+            storeName: 'Main Store',
+            planCode: 'PREMIUM',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
+        } as any);
+
+        expect(db.tenantSubscription.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ plan_id: 'plan-premium' }) }),
+        );
+    });
+
+    it('still rejects a plan that is inactive or priced at zero', async () => {
+        // The other half of the guard, which the coming-soon case used to cover:
+        // provisioning must refuse a plan that is not actually for sale.
+        db.user.findUnique.mockResolvedValueOnce(null);
+        db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+        db.subscriptionPlan.findUnique.mockResolvedValue({
+            id: 'plan-premium', code: 'PREMIUM', is_active: false, monthly_price: 2499,
+        });
+
+        await expect(service.signup({
+            email: 'owner@example.com',
+            password: 'password123',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'PREMIUM',

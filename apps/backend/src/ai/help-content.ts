@@ -46,7 +46,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             },
             {
                 q: 'Which subscription plans are available?',
-                a: 'The self-serve paid plans are BASIC, ACCOUNTING, and STANDARD; PREMIUM — which unlocks CRM, Manufacturing, and the AI assistant — is shown as "coming soon". The old Free plan is no longer offered for new sign-ups. Compare and switch plans anytime under Billing.',
+                a: 'The self-serve paid plans are BASIC (Starter), ACCOUNTING, STANDARD (Growth), and PREMIUM (Business) — Business adds payroll, manufacturing, imports and API access, and carries a one-time setup fee. Enterprise is quote-led: contact sales rather than checking out. The old Free plan is no longer offered for new sign-ups. Compare and switch plans anytime under Billing.',
             },
         ],
     },

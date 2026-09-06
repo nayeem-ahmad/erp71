@@ -522,6 +522,8 @@ export const coreMessages = {
             storeLabel: 'Primary store name',
             planLabel: 'Plan',
             monthSuffix: '/ month',
+            termsBoxLabel: 'Terms for the {plan} plan',
+            termsBoxAriaLabel: 'Terms of Service',
             termsAgreePrefix: 'I agree to the',
             termsPlanSuffix: ', including the plan-specific terms for {plan}.',
             termsRequired: 'Please accept the Terms of Service to continue.',

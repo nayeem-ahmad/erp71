@@ -522,6 +522,8 @@ export const coreMessages = {
                 storeLabel: "Nama kedai utama",
                 planLabel: "Pelan",
                 monthSuffix: "/ bulan",
+                termsBoxLabel: "Terma untuk pelan {plan}",
+                termsBoxAriaLabel: "Terma Perkhidmatan",
                 termsAgreePrefix: "Saya bersetuju dengan",
                 termsPlanSuffix: ", termasuk terma khusus pelan {plan}.",
                 termsRequired: "Sila terima Terma Perkhidmatan untuk meneruskan.",

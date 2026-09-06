@@ -16,8 +16,9 @@ jest.mock('next/navigation', () => ({
 jest.mock('../../lib/api', () => ({
     api: {
         getSubscriptionPlans: jest.fn().mockResolvedValue([
-            { code: 'BASIC', name: 'Basic', description: 'Core operations', monthly_price: 499 },
-            { code: 'STANDARD', name: 'Standard', description: 'Growth plan', monthly_price: 999 },
+            { code: 'BASIC', name: 'Starter', description: 'One counter', monthly_price: 299 },
+            { code: 'STANDARD', name: 'Growth', description: 'Growth plan', monthly_price: 999 },
+            { code: 'PREMIUM', name: 'Business', description: 'Multi-branch', monthly_price: 2499 },
         ]),
         getSignupDefaults: jest.fn().mockResolvedValue({ defaultPlanCode: 'STANDARD' }),
         signup: jest.fn().mockResolvedValue({
@@ -66,6 +67,47 @@ describe('SignupPage', () => {
         await waitFor(() => expect(api.signup).toHaveBeenCalled());
         const payload = (api.signup as jest.Mock).mock.calls[0][0];
         expect(payload.planCode).toBe('STANDARD');
+    });
+
+    it('offers Business as a selectable tier', async () => {
+        // It used to be filtered out as coming-soon, so it never reached the
+        // picker at all. This is the front half of the change that opened it.
+        render(<SignupPage />);
+        const business = await screen.findByRole('radio', { name: /Business/ });
+        expect(business).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(business);
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        expect((api.signup as jest.Mock).mock.calls[0][0].planCode).toBe('PREMIUM');
+    });
+
+    it('shows the agreement itself, not just a link to it', async () => {
+        // The box has to contain what the checkbox agrees to — a clause from the
+        // core terms and the addendum for the tier being bought.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        expect(screen.getByText(/Acceptance of Terms/)).toBeInTheDocument();
+        expect(screen.getByText(/exclusive jurisdiction of the courts of Dhaka/)).toBeInTheDocument();
+    });
+
+    it('swaps the tier addendum in the box when the tier changes', async () => {
+        // Only the selected tier's addendum belongs in the box: it is the one
+        // forming part of this purchase. /terms still shows all of them.
+        render(<SignupPage />);
+        fireEvent.click(await screen.findByRole('radio', { name: /Business/ }));
+        expect(screen.getByText(/statutory payroll compliance|payroll module calculates and records/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Starter licenses one workspace/)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('radio', { name: /Starter/ }));
+        expect(screen.getByText(/Starter licenses one workspace/)).toBeInTheDocument();
+        expect(screen.queryByText(/payroll module calculates and records/i)).not.toBeInTheDocument();
     });
 
     it('refuses to submit until the terms checkbox is ticked', async () => {

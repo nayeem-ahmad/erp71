@@ -17,9 +17,32 @@ jest.mock('next/navigation', () => ({
 
 import TermsClient from './TermsClient';
 
+/**
+ * Collapse whitespace so the guard below compares words and punctuation rather
+ * than JSX indentation. Losing a clause, a comma or a link's label changes this
+ * string; reflowing the source that produces it does not.
+ */
+function proseOf(container: HTMLElement): string {
+    return (container.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
 describe('TermsClient', () => {
     beforeEach(() => {
         currentSearchParams = new URLSearchParams();
+    });
+
+    it('renders the agreement unchanged', () => {
+        // A guard for refactoring, not a behavioural assertion. Sections 1-10 and
+        // 12 were hand-written JSX with no coverage at all, so moving them into
+        // structured data was unguarded editing of a legal document. This snapshot
+        // was taken against the original JSX: if the extraction drops a clause,
+        // misplaces a comma that sat outside a <Link>, or loses a link's label,
+        // this fails.
+        //
+        // Update it only when the terms themselves are meant to change — and when
+        // they are, CURRENT_TERMS_VERSION has to move with them.
+        const { container } = render(<TermsClient />);
+        expect(proseOf(container)).toMatchSnapshot();
     });
 
     it('prints the version a stored acceptance is recorded against', () => {

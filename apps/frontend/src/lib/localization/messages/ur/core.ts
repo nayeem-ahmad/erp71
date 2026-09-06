@@ -522,6 +522,8 @@ export const coreMessages = {
             storeLabel: 'بنیادی دکان کا نام',
             planLabel: 'پلان',
             monthSuffix: '/ ماہ',
+            termsBoxLabel: '{plan} پلان کی شرائط',
+            termsBoxAriaLabel: 'شرائطِ خدمت',
             termsAgreePrefix: 'میں',
             termsPlanSuffix: ' سے اتفاق کرتا ہوں، بشمول {plan} پلان کی مخصوص شرائط۔',
             termsRequired: 'جاری رکھنے کے لیے براہِ کرم شرائطِ خدمت قبول کریں۔',

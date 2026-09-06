@@ -124,9 +124,12 @@ describe('HomePage', () => {
         expect(screen.getByText('Talk to sales')).toBeInTheDocument();
     });
 
-    it('marks Premium as coming soon on the homepage pricing preview', () => {
+    it('offers Business rather than badging it coming soon', () => {
+        // It was previewed as coming-soon until it opened for self-serve on
+        // 2026-09-07.
         render(<HomePage />);
-        expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+        expect(screen.getByText('Business')).toBeInTheDocument();
     });
 
     it('renders plan prices from the live plans endpoint', async () => {

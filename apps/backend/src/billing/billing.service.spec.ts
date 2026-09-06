@@ -348,11 +348,23 @@ describe('BillingService', () => {
         })).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects checkout when selecting the coming-soon Premium plan', async () => {
+    it('checks out the Business plan', async () => {
+        // Business was refused here as coming-soon until 2026-09-07. The guard
+        // itself is still in place for whatever tier is announced next; what
+        // changed is that PREMIUM is no longer on that list.
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+
         await expect(service.createCheckoutSession(tenantCtx(), {
             planCode: 'PREMIUM',
             billingCycle: 'MONTHLY',
-        })).rejects.toThrow(BadRequestException);
+        })).resolves.toBeDefined();
     });
 
     it('rejects invalid manual webhook signatures', async () => {
@@ -739,12 +751,12 @@ describe('BillingService', () => {
         })).rejects.toThrow(ForbiddenException);
     });
 
-    it('rejects sandbox confirmation for the coming-soon Premium plan', async () => {
+    it('confirms a sandbox Business checkout', async () => {
         await expect(service.confirmCheckout(tenantCtx(), {
             planCode: 'PREMIUM',
             billingCycle: 'MONTHLY',
             reference: 'manual_ref_premium',
-        })).rejects.toThrow(BadRequestException);
+        })).resolves.toBeDefined();
     });
 
     it('confirms manual checkout and activates subscription', async () => {
