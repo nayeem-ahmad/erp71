@@ -32,6 +32,23 @@
  * Idempotent: only rows where the stamp is still NULL are touched, so a second
  * run is a no-op and a value corrected by hand is never overwritten.
  *
+ * Why there is a cutoff
+ * ---------------------
+ * "Stamp every NULL" was too broad, and it silently destroyed revenue. Signup
+ * creates a subscription with status PAST_DUE and no stamp — the customer is
+ * expected to go and check out afterwards. Any restart in that window (a deploy,
+ * an OOM kill) ran this script, which could not tell that row apart from a
+ * legacy tenant and stamped it. Checkout then read the stamp as "already paid"
+ * and billed the plan price with no setup fee, permanently and silently, on an
+ * invoice that looked correct. With Business at a 15,000 BDT setup fee that is
+ * the largest single loss the billing code can produce.
+ *
+ * SETUP_FEE_EPOCH is the date `20260903160000_add_setup_fee` landed. No fee
+ * existed before it, so a subscription that started earlier cannot owe one and
+ * is safe to stamp. A subscription that started on or after it is a genuine
+ * "has this been paid?" question that only checkout can answer, so it is left
+ * NULL and reported rather than assumed.
+ *
  * Usage:
  *   npx tsx prisma/sync-setup-fee-paid.ts --dry-run
  *   npx tsx prisma/sync-setup-fee-paid.ts
@@ -44,15 +61,30 @@ const prisma = new PrismaClient();
 export interface SyncResult {
     scanned: number;
     stamped: number;
+    /** Rows left NULL because they postdate the fee — awaiting a real checkout. */
+    skipped: number;
 }
+
+/**
+ * The date migration `20260903160000_add_setup_fee` landed. A subscription that
+ * started before this could not have been charged a setup fee, so backfilling
+ * its stamp is safe. One that started after it must not be assumed paid.
+ */
+export const SETUP_FEE_EPOCH = new Date('2026-09-03T00:00:00.000Z');
 
 export async function syncSetupFeePaid(client: PrismaClient, dryRun = false): Promise<SyncResult> {
     const pending = await client.tenantSubscription.findMany({
-        where: { setup_fee_paid_at: null },
+        where: { setup_fee_paid_at: null, current_period_start: { lt: SETUP_FEE_EPOCH } },
         select: { id: true, current_period_start: true },
     });
 
-    const result: SyncResult = { scanned: pending.length, stamped: 0 };
+    // Never stamped, only counted. These are new enough to genuinely owe a fee;
+    // reported so an unbilled backlog is visible rather than silent.
+    const skipped = await client.tenantSubscription.count({
+        where: { setup_fee_paid_at: null, current_period_start: { gte: SETUP_FEE_EPOCH } },
+    });
+
+    const result: SyncResult = { scanned: pending.length, stamped: 0, skipped };
     if (pending.length === 0 || dryRun) {
         return result;
     }
@@ -73,9 +105,18 @@ async function main() {
     const result = await syncSetupFeePaid(prisma, dryRun);
     const prefix = dryRun ? '[dry run] ' : '';
     console.log(
-        `${prefix}sync-setup-fee-paid: scanned ${result.scanned} subscription(s) with no setup-fee stamp, ` +
+        `${prefix}sync-setup-fee-paid: scanned ${result.scanned} pre-fee subscription(s) with no setup-fee stamp, ` +
             `stamped ${result.stamped}.`,
     );
+    if (result.skipped > 0) {
+        // Deliberately loud: these are subscriptions that may still owe a setup
+        // fee. Stamping them is what silently loses the money, so they are named
+        // rather than absorbed.
+        console.log(
+            `${prefix}sync-setup-fee-paid: left ${result.skipped} subscription(s) unstamped — ` +
+                `they start on or after ${SETUP_FEE_EPOCH.toISOString().slice(0, 10)} and may still owe a setup fee.`,
+        );
+    }
 }
 
 if (require.main === module) {
