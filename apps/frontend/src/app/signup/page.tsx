@@ -215,7 +215,21 @@ function SignupPageContent() {
     }, [form.referralCode]);
 
     const handleChange = (field: keyof typeof form, value: string) => {
-        setForm((current) => ({ ...current, [field]: value }));
+        setForm((current) => {
+            // Consent is per tier — the box above the checkbox shows the selected
+            // plan's addendum, and the acceptance is recorded with that plan_code.
+            // Leaving the box ticked through a plan change would record agreement
+            // to an addendum the person was never shown: tick on Starter, switch
+            // to Business, and the stored row claims they accepted the payroll and
+            // API obligations plus a setup fee they never read about. The mobile
+            // path made this worst of all, because `mobileSignUpFields` reads
+            // `form.planCode` at submit time, which can be minutes after the tick.
+            if (field === 'planCode' && current.planCode !== value) {
+                setAcceptedTerms(false);
+                setTermsError(false);
+            }
+            return { ...current, [field]: value };
+        });
     };
 
     const visiblePlans = plans.length > 0 ? plans : FALLBACK_PLANS;
