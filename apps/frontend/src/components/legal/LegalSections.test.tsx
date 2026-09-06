@@ -48,6 +48,26 @@ describe('LegalSections', () => {
         }
     });
 
+    it('navigates in place by default, as /terms wants', () => {
+        render(<LegalSections sections={TERMS_SECTIONS} addenda={PLAN_TERMS_ADDENDA} />);
+        expect(screen.getByRole('link', { name: 'Section 11' })).not.toHaveAttribute('target');
+    });
+
+    it('opens every link in a new tab when asked, for the signup box', () => {
+        // Embedded in a form that persists nothing, a same-tab link discards
+        // everything typed. Covers the hardcoded pricing-page link in the plan
+        // preamble too, which is not an inline node and was missed once already.
+        render(<LegalSections sections={TERMS_SECTIONS} addenda={PLAN_TERMS_ADDENDA} newTabLinks />);
+        const links = screen.getAllByRole('link').filter(
+            (a) => !(a.getAttribute('href') || '').startsWith('mailto:'),
+        );
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) {
+            expect(link).toHaveAttribute('target', '_blank');
+            expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+        }
+    });
+
     it('renders a mailto for an email node', () => {
         render(<LegalSections sections={TERMS_SECTIONS} addenda={PLAN_TERMS_ADDENDA} />);
         const [email] = screen.getAllByRole('link', { name: /@/ });

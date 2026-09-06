@@ -26,11 +26,24 @@ export type LegalSectionsProps = {
     linkBase?: string;
     /** Tighter type and spacing, for the bounded box on signup. */
     dense?: boolean;
+    /**
+     * Open every link in a new tab. On `/terms` same-tab navigation is right.
+     * Inside the signup consent box it is not: the form keeps everything in
+     * component state and persists nothing, so following a link unmounts the
+     * page and discards the email, password, organization, phone, referral code,
+     * plan choice and the ticked checkbox. Back returns a blank form.
+     */
+    newTabLinks?: boolean;
     /** Copy for the highlight badge. Omitted on the page, supplied on signup. */
     highlightLabel?: string;
 };
 
-function InlineContent({ content, linkBase }: { content: LegalInline[]; linkBase: string }) {
+/** `target`/`rel` for a link, or nothing when navigating in place is fine. */
+function linkTarget(newTab: boolean) {
+    return newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+}
+
+function InlineContent({ content, linkBase, newTab }: { content: LegalInline[]; linkBase: string; newTab: boolean }) {
     return (
         <>
             {content.map((node, index) => {
@@ -45,7 +58,12 @@ function InlineContent({ content, linkBase }: { content: LegalInline[]; linkBase
                 }
                 const href = node.sameDocument ? `${linkBase}${node.href}` : node.href;
                 return (
-                    <Link key={index} href={href} className="text-blue-600 hover:underline font-medium">
+                    <Link
+                        key={index}
+                        href={href}
+                        className="text-blue-600 hover:underline font-medium"
+                        {...linkTarget(newTab)}
+                    >
                         {node.text}
                     </Link>
                 );
@@ -54,11 +72,11 @@ function InlineContent({ content, linkBase }: { content: LegalInline[]; linkBase
     );
 }
 
-function Block({ block, linkBase, dense }: { block: LegalBlock; linkBase: string; dense: boolean }) {
+function Block({ block, linkBase, dense, newTab }: { block: LegalBlock; linkBase: string; dense: boolean; newTab: boolean }) {
     if (block.kind === 'p') {
         return (
             <p className={dense ? 'mb-2' : 'mb-4 last:mb-0'}>
-                <InlineContent content={block.content} linkBase={linkBase} />
+                <InlineContent content={block.content} linkBase={linkBase} newTab={newTab} />
             </p>
         );
     }
@@ -68,7 +86,7 @@ function Block({ block, linkBase, dense }: { block: LegalBlock; linkBase: string
             <ul className={`list-disc ps-6 ${dense ? 'space-y-1 text-xs' : 'space-y-2 text-sm'}`}>
                 {block.items.map((item, index) => (
                     <li key={index}>
-                        <InlineContent content={item} linkBase={linkBase} />
+                        <InlineContent content={item} linkBase={linkBase} newTab={newTab} />
                     </li>
                 ))}
             </ul>
@@ -79,7 +97,7 @@ function Block({ block, linkBase, dense }: { block: LegalBlock; linkBase: string
         <div className={`bg-gray-50 rounded-xl p-4 space-y-1 ${dense ? 'mt-2 text-xs' : 'mt-3 text-sm'}`}>
             {block.lines.map((line, index) => (
                 <p key={index}>
-                    <InlineContent content={line} linkBase={linkBase} />
+                    <InlineContent content={line} linkBase={linkBase} newTab={newTab} />
                 </p>
             ))}
         </div>
@@ -145,6 +163,7 @@ export default function LegalSections({
     linkBase = '',
     dense = false,
     highlightLabel,
+    newTabLinks = false,
 }: LegalSectionsProps) {
     return (
         <div className={dense ? 'space-y-4 text-xs text-gray-600 leading-relaxed' : 'space-y-10 text-gray-700 leading-relaxed'}>
@@ -168,7 +187,11 @@ export default function LegalSections({
                             <p className={dense ? 'mb-3' : 'mb-6'}>
                                 Prices, capacity limits and inclusions are not restated here — they are published on
                                 the{' '}
-                                <Link href="/pricing" className="text-blue-600 hover:underline font-medium">
+                                <Link
+                                    href="/pricing"
+                                    className="text-blue-600 hover:underline font-medium"
+                                    {...linkTarget(newTabLinks)}
+                                >
                                     pricing page
                                 </Link>
                                 {' '}for the reason given in Section 4.
@@ -189,7 +212,7 @@ export default function LegalSections({
                             {number}. {section.heading}
                         </h2>
                         {section.blocks.map((block, blockIndex) => (
-                            <Block key={blockIndex} block={block} linkBase={linkBase} dense={dense} />
+                            <Block key={blockIndex} block={block} linkBase={linkBase} dense={dense} newTab={newTabLinks} />
                         ))}
                     </section>
                 );

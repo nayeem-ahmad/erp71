@@ -568,6 +568,10 @@ function SignupPageContent() {
                                     // looking for an anchor it does not have.
                                     linkBase="/terms"
                                     dense
+                                    // The form persists nothing, so a same-tab
+                                    // link out of this box discards everything
+                                    // typed so far, including the plan choice.
+                                    newTabLinks
                                 />
                             </div>
                             <label
