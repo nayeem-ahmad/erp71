@@ -36,7 +36,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Welche Abo-Tarife gibt es?",
-                    a: "Die selbst buchbaren kostenpflichtigen Tarife sind BASIC, ACCOUNTING und STANDARD; PREMIUM — das CRM, Fertigung und den KI-Assistenten freischaltet — wird als „demnächst“ angezeigt. Der frühere Free-Tarif wird für Neuanmeldungen nicht mehr angeboten. Tarife vergleichen und wechseln Sie jederzeit unter Abrechnung.",
+                    a: "Die selbst buchbaren kostenpflichtigen Tarife sind BASIC (Starter), ACCOUNTING, STANDARD (Growth) und PREMIUM (Business) — Business ergänzt Lohnabrechnung, Fertigung, Importe und API-Zugriff und enthält eine einmalige Einrichtungsgebühr. Enterprise erfolgt auf Angebotsbasis: Kontaktieren Sie den Vertrieb, statt direkt zu buchen. Der frühere Free-Tarif wird für Neuanmeldungen nicht mehr angeboten. Tarife vergleichen und wechseln Sie jederzeit unter Abrechnung.",
                 },
             ],
         },

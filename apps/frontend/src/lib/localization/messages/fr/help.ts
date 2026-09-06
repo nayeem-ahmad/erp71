@@ -36,7 +36,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Quelles offres d'abonnement existe-t-il ?",
-                    a: "Les offres payantes en libre-service sont BASIC, ACCOUNTING et STANDARD ; PREMIUM — qui débloque le CRM, la production et l'assistant IA — est affichée comme « bientôt disponible ». L'ancienne offre Free n'est plus proposée aux nouvelles inscriptions. Comparez et changez d'offre à tout moment dans Facturation.",
+                    a: "Les formules payantes en libre-service sont BASIC (Starter), ACCOUNTING, STANDARD (Growth) et PREMIUM (Business) — Business ajoute la paie, la production, les importations et l'accès à l'API, et comporte des frais de mise en service uniques. Enterprise fonctionne sur devis : contactez le service commercial plutôt que de payer en ligne. L'ancienne formule gratuite n'est plus proposée aux nouvelles inscriptions. Comparez et changez de formule à tout moment dans Facturation.",
                 },
             ],
         },

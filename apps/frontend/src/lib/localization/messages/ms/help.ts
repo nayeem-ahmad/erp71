@@ -36,7 +36,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Pelan langganan apakah yang tersedia?',
-                    a: 'Pelan berbayar layan-diri ialah BASIC, ACCOUNTING, dan STANDARD; PREMIUM — yang membuka kunci CRM, Pembuatan, dan pembantu AI — dipaparkan sebagai "coming soon". Pelan Free lama tidak lagi ditawarkan untuk pendaftaran baharu. Bandingkan dan tukar pelan pada bila-bila masa di bawah Pengebilan.',
+                    a: "Pelan berbayar layan-diri ialah BASIC (Starter), ACCOUNTING, STANDARD (Growth) dan PREMIUM (Business) — Business menambah penggajian, pembuatan, import dan akses API, serta dikenakan yuran persediaan sekali sahaja. Enterprise berasaskan sebut harga: hubungi jualan dan bukannya membuat pembayaran sendiri. Pelan Free lama tidak lagi ditawarkan untuk pendaftaran baharu. Bandingkan dan tukar pelan pada bila-bila masa di bawah Pengebilan.",
                 },
             ],
         },

@@ -102,8 +102,8 @@ export const PLAN_TERMS_ADDENDA: PlanTermsAddendum[] = [
         summary: 'Multi-branch operators running payroll, manufacturing or imports.',
         clauses: [
             {
-                title: 'Availability of the tier',
-                body: 'Business is published but is not yet open for self-serve purchase. These terms take effect for a workspace on the tier from the date its subscription begins, not from the date the tier was announced.',
+                title: 'When these terms apply',
+                body: 'These terms take effect for a workspace on the Business tier from the date its subscription begins. Upgrading to Business from a lower tier brings the whole of this addendum into force at that point, including the payroll and API obligations below, for the workspace as it then stands.',
             },
             {
                 title: 'Payroll and HR',

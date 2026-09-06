@@ -121,6 +121,46 @@ describe('Integration Tests (e2e)', () => {
             expect(payload.user.email).toBe('test@example.com');
         });
 
+        it('should signup onto the Business tier', async () => {
+            // Business (PREMIUM) was refused end to end until 2026-09-07: it was
+            // filtered out of GET /auth/plans, rejected by the DTO's @IsIn, and
+            // thrown out of provisionTenant as coming-soon. This is the only test
+            // that walks the whole path over real HTTP against a real database,
+            // which is what the unit specs cannot prove on their own.
+            const response = await request(app.getHttpServer())
+                .post('/auth/signup')
+                .send({
+                    email: 'business@example.com',
+                    password: 'password123',
+                    name: 'Business Owner',
+                    tenantName: 'Business Tenant',
+                    storeName: 'Business Store',
+                    planCode: 'PREMIUM',
+                    acceptedTermsVersion: CURRENT_TERMS_VERSION,
+                });
+
+            expect(response.status).toBe(201);
+            const payload = bodyOf(response);
+            expect(payload.tenants[0].subscription.plan.code).toBe('PREMIUM');
+        });
+
+        it('should refuse a signup that names a stale terms version', async () => {
+            // The staleness check is what protects the recorded consent from
+            // naming a document the person never saw. It is also what a browser
+            // holding the page open across a terms deploy will hit.
+            const response = await request(app.getHttpServer())
+                .post('/auth/signup')
+                .send({
+                    email: 'stale@example.com',
+                    password: 'password123',
+                    tenantName: 'Stale Tenant',
+                    storeName: 'Stale Store',
+                    acceptedTermsVersion: '2019-01-01',
+                });
+
+            expect(response.status).toBe(400);
+        });
+
         it('should login and return a token', async () => {
             const response = await request(app.getHttpServer())
                 .post('/auth/login')

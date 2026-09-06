@@ -36,7 +36,7 @@ export const helpMessages = {
                 },
                 {
                     q: "¿Qué planes de suscripción existen?",
-                    a: "Los planes de pago de autoservicio son BASIC, ACCOUNTING y STANDARD; PREMIUM —que desbloquea CRM, Fabricación y el asistente de IA— aparece como «próximamente». El antiguo plan Free ya no se ofrece a nuevos registros. Compare y cambie de plan cuando quiera en Facturación.",
+                    a: "Los planes de pago de autoservicio son BASIC (Starter), ACCOUNTING, STANDARD (Growth) y PREMIUM (Business): Business añade nóminas, fabricación, importaciones y acceso a la API, e incluye una cuota de instalación única. Enterprise se contrata mediante presupuesto: contacta con ventas en lugar de pagar en línea. El antiguo plan gratuito ya no se ofrece para nuevos registros. Compara y cambia de plan cuando quieras en Facturación.",
                 },
             ],
         },

@@ -200,4 +200,63 @@ describe('SignupPage', () => {
         const payload = (api.signup as jest.Mock).mock.calls[0][0];
         expect(payload.planCode).toBe('BASIC');
     });
+
+    it('PROBE: ?plan=business preselects, dom shape', async () => {
+        currentSearchParams = new URLSearchParams('plan=business');
+        const { container } = render(<SignupPage />);
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
+        await waitFor(() => {
+            const checked = Array.from(container.querySelectorAll('input[type=radio]:checked')).map((e: any) => e.value);
+            expect(checked.length).toBe(1);
+        });
+        const checked = Array.from(container.querySelectorAll('input[type=radio]:checked')).map((e: any) => e.value);
+        console.log('CHECKED:', JSON.stringify(checked));
+        const box = container.querySelector('[role=region]')!;
+        console.log('BOX NODES:', box.querySelectorAll('*').length);
+        console.log('BOX TEXT LEN:', (box.textContent || '').length);
+        const contact = Array.from(box.querySelectorAll('section')).find((sec:any)=>/12\. Contact/.test(sec.textContent||''));
+        console.log('CONTACT SECTION HTML:', contact ? contact.innerHTML : 'NONE');
+        console.log('FOCUSABLE LINKS IN BOX:', box.querySelectorAll('a').length);
+        const ids = Array.from(container.querySelectorAll('[id]')).map((e: any) => e.id);
+        console.log('IDS:', JSON.stringify(ids));
+        console.log('SECTION HEADINGS:', JSON.stringify(Array.from(box.querySelectorAll('h2')).map((h:any)=>h.textContent)));
+    });
+
+    it('PROBE2: keyboard + rerender', async () => {
+        const { container } = render(<SignupPage />);
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
+        const radios = Array.from(container.querySelectorAll('input[type=radio]')) as HTMLInputElement[];
+        console.log('RADIO NAMES:', JSON.stringify(radios.map(r => r.name)));
+        console.log('RADIO VALUES:', JSON.stringify(radios.map(r => r.value)));
+        console.log('RADIO tabIndex:', JSON.stringify(radios.map(r => r.tabIndex)));
+        // arrow-key nav within a radiogroup is browser-native; assert grouping only
+        const fieldsets = container.querySelectorAll('fieldset');
+        console.log('FIELDSETS:', fieldsets.length);
+        console.log('LEGEND:', fieldsets[0]?.querySelector('legend')?.textContent);
+        // keystroke -> does box text change identity?
+        const box = container.querySelector('[role=region]')!;
+        const before = box.innerHTML;
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'X' } });
+        const after = container.querySelector('[role=region]')!.innerHTML;
+        console.log('BOX HTML STABLE ACROSS KEYSTROKE:', before === after);
+        console.log('BOX ELEMENT IDENTITY STABLE:', box === container.querySelector('[role=region]'));
+    });
+
+    it('PROBE3: API failure -> fallback list', async () => {
+        (api.getSubscriptionPlans as jest.Mock).mockRejectedValueOnce(new Error('down'));
+        const { container } = render(<SignupPage />);
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
+        const radios = Array.from(container.querySelectorAll('input[type=radio]')) as HTMLInputElement[];
+        console.log('FALLBACK VALUES:', JSON.stringify(radios.map(r => r.value)));
+        console.log('FALLBACK LABELS:', JSON.stringify(radios.map(r => (r.closest('label')!.textContent||'').replace(/\s+/g,' ').trim())));
+        console.log('FALLBACK CHECKED:', JSON.stringify(radios.filter(r=>r.checked).map(r=>r.value)));
+    });
+
+    it('PROBE4: API returns empty array', async () => {
+        (api.getSubscriptionPlans as jest.Mock).mockResolvedValueOnce([]);
+        const { container } = render(<SignupPage />);
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
+        const radios = Array.from(container.querySelectorAll('input[type=radio]')) as HTMLInputElement[];
+        console.log('EMPTY-API VALUES:', JSON.stringify(radios.map(r => r.value)));
+    });
 });

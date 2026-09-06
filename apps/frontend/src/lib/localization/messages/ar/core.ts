@@ -522,6 +522,8 @@ export const coreMessages = {
             storeLabel: 'اسم المتجر الرئيسي',
             planLabel: 'الخطة',
             monthSuffix: '/ شهريًا',
+            termsBoxLabel: 'شروط خطة {plan}',
+            termsBoxAriaLabel: 'شروط الخدمة',
             termsAgreePrefix: 'أوافق على',
             termsPlanSuffix: '، بما في ذلك الشروط الخاصة بخطة {plan}.',
             termsRequired: 'يرجى قبول شروط الخدمة للمتابعة.',

@@ -92,7 +92,6 @@ export const MARKETING_PLANS: MarketingPlan[] = [
         setupFee: 15000,
         aiCredits: 2000,
         highlight: false,
-        comingSoon: true,
         tagline: 'Multi-branch operators who run payroll, manufacture, or import',
         features: [
             '5 branches, 30 users',
@@ -383,9 +382,10 @@ function aiCreditsFrom(plan: PublicPlanFromApi, fallback: number | null): number
  * Merge live API plans onto the static defaults.
  *
  * The API is authoritative for everything it sends, so a reprice in the admin UI
- * reaches this page with no deploy. A plan the API omits — today that is
- * PREMIUM, filtered out while it sits in `COMING_SOON_SUBSCRIPTION_PLAN_CODES` —
- * keeps its static values, and Enterprise has no row to come from at all.
+ * reaches this page with no deploy. A plan the API omits keeps its static values
+ * — today nothing on the ladder is omitted, since PREMIUM opened for self-serve
+ * on 2026-09-07, but a future coming-soon tier would be. Enterprise has no row
+ * to come from at all.
  */
 export function buildMarketingPlansFromApi(apiPlans: PublicPlanFromApi[]): MarketingPlan[] {
     const paidApiPlans = apiPlans.filter((plan) => plan.code !== 'FREE' && plan.monthly_price > 0);

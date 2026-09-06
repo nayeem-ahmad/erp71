@@ -2,6 +2,8 @@ import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'clas
 import {
     BUSINESS_TYPE_VALUES,
     ENABLED_LOCALE_CODES,
+    SELF_SERVE_SUBSCRIPTION_PLAN_CODES,
+    type SelfServeSubscriptionPlanCode,
     type SupportedLocaleCode,
 } from '@erp71/shared-types';
 
@@ -29,8 +31,8 @@ export class SignupDto {
     address?: string;
 
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+    @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
+    planCode?: SelfServeSubscriptionPlanCode;
 
     @IsOptional()
     @IsString()
@@ -87,8 +89,8 @@ export class GoogleSignInDto {
     address?: string;
 
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+    @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
+    planCode?: SelfServeSubscriptionPlanCode;
 
     @IsOptional()
     @IsString()
@@ -149,8 +151,8 @@ export class MobileSignInDto {
     address?: string;
 
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+    @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
+    planCode?: SelfServeSubscriptionPlanCode;
 
     @IsOptional()
     @IsString()
@@ -180,8 +182,8 @@ export class CreateStoreDto {
     address?: string;
 
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+    @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
+    planCode?: SelfServeSubscriptionPlanCode;
 
     @IsOptional()
     @IsIn(BUSINESS_TYPE_VALUES)
