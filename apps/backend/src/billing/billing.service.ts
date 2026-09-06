@@ -157,6 +157,16 @@ export class BillingService {
         // amount, so a setup line cannot repeat by itself. What it needs
         // protecting from is a tenant lapsing to PAST_DUE and checking out again,
         // which is what setup_fee_paid_at records.
+        //
+        // KNOWN GAP (tracked in TODO.md): this stamp records "a subscription was
+        // activated", not "this plan's setup fee was collected". A tenant who
+        // activated on Starter — setup_fee 0 — is stamped all the same, so an
+        // upgrade to Growth or Business reads it as paid and charges no
+        // onboarding fee. Fixing it properly needs the amount (or the plan) the
+        // fee was collected for on the row, which is a schema change; it is
+        // deliberately not bolted on here. Two ACTIVE Growth tenants are exposed
+        // today. Do NOT "fix" this by dropping the check — that re-bills every
+        // lapsed tenant on re-subscribe, which is the worse failure.
         const setupFee = existingSubscription?.setup_fee_paid_at
             ? 0
             : Number(plan.setup_fee ?? 0);

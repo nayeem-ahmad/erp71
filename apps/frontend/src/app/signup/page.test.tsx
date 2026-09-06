@@ -149,6 +149,25 @@ describe('SignupPage', () => {
         expect(screen.getAllByText(/Dhaka, Bangladesh/).length).toBeGreaterThan(0);       // contact card
     });
 
+    it('never lets a link in the consent box discard the form', async () => {
+        // The signup form keeps everything in component state and persists
+        // nothing, so a same-tab navigation out of the box throws away the email,
+        // password, organization, phone, referral code, plan choice and the tick.
+        // /terms is unaffected — there, navigating in place is correct.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        const box = screen.getByRole('region', { name: /terms of service/i });
+        const links = Array.from(box.querySelectorAll('a[href]'))
+            .filter((a) => !a.getAttribute('href')!.startsWith('mailto:'));
+
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) {
+            expect(link).toHaveAttribute('target', '_blank');
+            expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+        }
+    });
+
     it('refuses to submit until the terms checkbox is ticked', async () => {
         render(<SignupPage />);
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
