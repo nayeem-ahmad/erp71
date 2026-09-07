@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import {
     applyCreatedRangeQuery,
@@ -75,22 +76,37 @@ export default function CrmActivitiesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [statusFilter, setStatusFilter] = useState('PLANNED');
-    const [targetFilter, setTargetFilter] = useState<'' | 'customer' | 'lead'>('');
-    const [purposeFilter, setPurposeFilter] = useState('');
-    const [channelFilter, setChannelFilter] = useState('');
-    const [leadOwnerFilter, setLeadOwnerFilter] = useState('');
-    const [assigneeFilter, setAssigneeFilter] = useState('');
-    const [overdueOnly, setOverdueOnly] = useState(false);
-    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    // Remembered for the tab, so coming back from an activity's lead lands on
+    // the same slice it was opened from. On a first visit these are the
+    // defaults: PLANNED work due today — the agenda this page exists to show.
+    // `createdRangeFromPreset` resolves the tenant's calendar day, so a
+    // shopkeeper's "today" is not UTC's.
+    const [filters, setFilter, filtersReady] = useRememberedFilters('crm-activities', {
+        status: 'PLANNED',
+        target: '' as '' | 'customer' | 'lead',
+        purposeId: '',
+        channelId: '',
+        leadOwner: '',
+        assignee: '',
+        overdueOnly: false,
+        createdRange: null as CreatedRange | null,
+        dueRange: createdRangeFromPreset('today') as CreatedRange | null,
+    });
+    const {
+        status: statusFilter,
+        target: targetFilter,
+        purposeId: purposeFilter,
+        channelId: channelFilter,
+        leadOwner: leadOwnerFilter,
+        assignee: assigneeFilter,
+        overdueOnly,
+        createdRange,
+        dueRange,
+    } = filters;
+
     // Logging a call or planning one from here, rather than opening the lead
     // first: the composer asks which lead or customer it is against.
     const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
-    // Opens on today's agenda. `createdRangeFromPreset` resolves the Dhaka
-    // calendar day, so a shopkeeper's "today" is not UTC's.
-    const [dueRange, setDueRange] = useState<CreatedRange | null>(() =>
-        createdRangeFromPreset('today'),
-    );
     const { options: memberOptions } = useTeamMemberOptions(m.filters.me);
 
     /**
@@ -99,16 +115,20 @@ export default function CrmActivitiesPage() {
      * Each control therefore releases the other.
      */
     const chooseDueRange = useCallback((next: CreatedRange | null) => {
-        setDueRange(next);
-        if (next) setOverdueOnly(false);
-    }, []);
+        setFilter('dueRange', next);
+        if (next) setFilter('overdueOnly', false);
+    }, [setFilter]);
 
     const chooseOverdueOnly = useCallback((next: boolean) => {
-        setOverdueOnly(next);
-        if (next) setDueRange(null);
-    }, []);
+        setFilter('overdueOnly', next);
+        if (next) setFilter('dueRange', null);
+    }, [setFilter]);
 
     const load = useCallback(async () => {
+        // Nothing is fetched until the remembered filters are in: otherwise a
+        // return visit would fire one request for the defaults and a second for
+        // the remembered slice, and briefly render the wrong list.
+        if (!filtersReady) return;
         setIsLoading(true);
         setError(null);
         try {
@@ -140,6 +160,7 @@ export default function CrmActivitiesPage() {
         assigneeFilter,
         dueRange,
         createdRange,
+        filtersReady,
         m.loadFailed,
     ]);
 
@@ -267,7 +288,7 @@ export default function CrmActivitiesPage() {
             </div>
 
             <div className="mb-4 flex flex-wrap items-center gap-3">
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={statusFilter} onChange={(e) => setFilter('status', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.filters.allStatuses}</option>
                     <option value="PLANNED">{m.status.PLANNED}</option>
                     <option value="DONE">{m.status.DONE}</option>
@@ -275,24 +296,24 @@ export default function CrmActivitiesPage() {
                 </Select>
                 <Select
                     value={targetFilter}
-                    onChange={(e) => setTargetFilter(e.target.value as '' | 'customer' | 'lead')}
+                    onChange={(e) => setFilter('target', e.target.value as '' | 'customer' | 'lead')}
                     className="w-auto max-w-[180px]"
                 >
                     <option value="">{m.filters.allTargets}</option>
                     <option value="lead">{m.filters.leads}</option>
                     <option value="customer">{m.filters.customers}</option>
                 </Select>
-                <Select value={purposeFilter} onChange={(e) => setPurposeFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={purposeFilter} onChange={(e) => setFilter('purposeId', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.filters.allPurposes}</option>
                     {purposes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
-                <Select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={channelFilter} onChange={(e) => setFilter('channelId', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.filters.allChannels}</option>
                     {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </Select>
                 <Select
                     value={leadOwnerFilter}
-                    onChange={(e) => setLeadOwnerFilter(e.target.value)}
+                    onChange={(e) => setFilter('leadOwner', e.target.value)}
                     className="w-auto max-w-[180px]"
                 >
                     <option value="">{m.filters.allOwners}</option>
@@ -302,7 +323,7 @@ export default function CrmActivitiesPage() {
                 </Select>
                 <Select
                     value={assigneeFilter}
-                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    onChange={(e) => setFilter('assignee', e.target.value)}
                     className="w-auto max-w-[180px]"
                 >
                     <option value="">{m.filters.allAssignees}</option>
@@ -313,7 +334,7 @@ export default function CrmActivitiesPage() {
                     {m.filters.overdueOnly}
                 </label>
                 <CreatedRangeFilter value={dueRange} onChange={chooseDueRange} label={m.filters.due} />
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                <CreatedRangeFilter value={createdRange} onChange={(next) => setFilter('createdRange', next)} />
             </div>
 
             {error && (

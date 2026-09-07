@@ -113,3 +113,18 @@ if (typeof window !== 'undefined' && typeof (window as any).Blob !== 'undefined'
         });
     };
 }
+
+/**
+ * Web storage does not reset between tests the way component state does, so a
+ * test that changes a remembered setting — a list's filters, a view toggle —
+ * would otherwise seed every test after it in the same file. Cleared here
+ * rather than per suite so nobody has to remember it when adding the next one.
+ */
+afterEach(() => {
+    try {
+        window.sessionStorage.clear();
+        window.localStorage.clear();
+    } catch {
+        // Storage unavailable in this environment; nothing to reset.
+    }
+});
