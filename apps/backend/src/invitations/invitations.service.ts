@@ -353,6 +353,15 @@ export class InvitationsService {
             throw new BadRequestException('Please enter a valid mobile number including country code.');
         }
 
+        // `User.mobile` is unique, so an invitee typing a number that already
+        // belongs to someone else would otherwise fail as an opaque P2002 midway
+        // through the transaction below.
+        if (await this.db.user.findUnique({ where: { mobile: normalizedMobile }, select: { id: true } })) {
+            throw new ConflictException(
+                'This mobile number is already linked to another account. Use a different number to accept this invitation.',
+            );
+        }
+
         const passwordHash = await bcrypt.hash(password, 10);
 
         await this.db.$transaction(async (tx) => {

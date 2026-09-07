@@ -94,6 +94,20 @@ export class AdminTenantsService {
         return { mobile: normalized, mobile_country_code: countryCode };
     }
 
+    /**
+     * Refuse a mobile number held by a different account. `User.mobile` is
+     * unique, so without this the collision surfaces as an opaque P2002 rather
+     * than something the admin can act on. `excludeUserId` lets an edit keep the
+     * number the account already holds.
+     */
+    private async assertMobileAvailable(mobile: string | null, excludeUserId?: string) {
+        if (!mobile) return;
+        const holder = await this.db.user.findUnique({ where: { mobile }, select: { id: true } });
+        if (holder && holder.id !== excludeUserId) {
+            throw new ConflictException('This mobile number is already linked to another account.');
+        }
+    }
+
     /** DB flag or PLATFORM_ADMIN_EMAILS whitelist (bootstrap / legacy admins). */
     private isEffectivePlatformAdmin(user: { is_platform_admin?: boolean | null; email?: string | null }) {
         return user.is_platform_admin === true || isPlatformAdminEmail(user.email);
@@ -1037,6 +1051,7 @@ export class AdminTenantsService {
         }
 
         const mobileFields = this.resolveMobileFields(dto.mobile, dto.mobile_country_code);
+        await this.assertMobileAvailable(mobileFields.mobile);
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const user = await this.db.user.create({
@@ -1094,6 +1109,7 @@ export class AdminTenantsService {
                     dto.mobile,
                     dto.mobile_country_code ?? user.mobile_country_code,
                 );
+                await this.assertMobileAvailable(mobileFields.mobile, userId);
                 data.mobile = mobileFields.mobile;
                 data.mobile_country_code = mobileFields.mobile_country_code;
             }

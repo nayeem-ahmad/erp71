@@ -354,7 +354,13 @@ model User {
   // two ERP71 users.
   firebase_uid             String?   @unique
   mobile_country_code      String    @default("BD")
-  mobile                   String?
+  /// Unique across accounts, so a number identifies exactly one person at
+  /// sign-in. Duplicates were allowed between 2026-07-10 and 2026-09-07 on the
+  /// reasoning that one person may own several businesses; sign-in by number
+  /// needs that back, and a second workspace belongs on the same account rather
+  /// than behind a second login. Nullable, and Postgres treats NULLs as
+  /// distinct, so any number of accounts may still carry no number at all.
+  mobile                   String?   @unique
   /// When the number in `mobile` was proved by an SMS code. Null means it was
   /// only ever typed into a form, which is why mobile sign-in matches on it only
   /// after Firebase has verified the same number.
@@ -430,10 +436,6 @@ model User {
   chatParticipations                ChatParticipant[]           @relation("ChatParticipantUser")
   chatMessages                      ChatMessage[]               @relation("ChatMessageSender")
 
-  // Mobile sign-in looks an account up by number on every SMS code entered.
-  // Deliberately not unique: one person may own several workspaces under the
-  // same number, and sign-in resolves that ambiguity rather than the schema.
-  @@index([mobile])
 }
 
 /// Why the token was issued. A password reset and a partner invite are the same

@@ -39,17 +39,6 @@ import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 
-/**
- * How many accounts sharing one mobile number are still worth trying a password
- * against. Each candidate costs a bcrypt compare, so this bounds the work one
- * sign-in request can provoke; a number on more accounts than this is treated as
- * ambiguous outright.
- */
-const MOBILE_LOGIN_CANDIDATE_LIMIT = 5;
-
-const MOBILE_LOGIN_AMBIGUOUS_MESSAGE =
-    'This mobile number is linked to more than one account. Please sign in with your email address instead.';
-
 /** The columns `login()` needs off a user row to finish authenticating them. */
 type LoginCandidate = {
     id: string;
@@ -101,7 +90,7 @@ export class AuthService {
             if (!normalizedMobile) {
                 throw new BadRequestException('Please enter a valid mobile number including country code.');
             }
-            // Duplicate mobiles are allowed (one person may own multiple businesses) — no uniqueness check.
+            await this.assertMobileAvailable(normalizedMobile);
         }
 
         this.assertTermsAccepted(dto.acceptedTermsVersion);
@@ -172,6 +161,27 @@ export class AuthService {
     }
 
     /**
+     * Refuse a mobile number that already belongs to a different account.
+     *
+     * `User.mobile` is unique, so the database would stop a collision anyway —
+     * but as an opaque P2002 the caller cannot act on. This turns it into a
+     * message that says what to do instead. `excludeUserId` lets an edit keep the
+     * number it already holds.
+     *
+     * Like the email check it sits beside, this is a read-then-write and two
+     * simultaneous signups could still both pass it; the unique index is the
+     * actual guarantee, and this is the readable error for every realistic case.
+     */
+    private async assertMobileAvailable(mobile: string, excludeUserId?: string) {
+        const holder = await this.db.user.findUnique({ where: { mobile }, select: { id: true } });
+        if (holder && holder.id !== excludeUserId) {
+            throw new ConflictException(
+                'This mobile number is already linked to another account. Sign in with it, or use a different number.',
+            );
+        }
+    }
+
+    /**
      * Password sign-in, by email address or by mobile number.
      *
      * The number is only a *lookup key* here — the password is what authenticates,
@@ -180,11 +190,8 @@ export class AuthService {
      * types a number they do not own still has to produce the password of an
      * account carrying it, so squatting on a stranger's number buys nothing.
      *
-     * `mobile` is deliberately not unique (one person, several businesses), so a
-     * number can name more than one account. The password settles it: candidates
-     * are loaded by number and the one whose hash matches wins. Only if *several*
-     * accounts share both the number and the password is there nothing left to
-     * separate them, and those users are sent to their email address instead.
+     * `mobile` is unique, so the number names at most one account and the lookup
+     * is a plain `findUnique` — the same shape as the email path.
      */
     async login(dto: LoginDto, meta: AuditRequestMeta = {}) {
         const identifier = (dto.identifier ?? dto.email ?? '').trim();
@@ -239,11 +246,13 @@ export class AuthService {
     }
 
     /**
-     * Resolve a mobile number + password to exactly one account.
+     * Resolve a mobile number + password to the one account carrying that number.
      *
-     * Every failure other than a genuinely ambiguous number answers with the same
-     * 'Invalid credentials' the email path uses, so this endpoint cannot be used
-     * to ask which numbers have accounts behind them.
+     * Every failure answers with the same 'Invalid credentials' the email path
+     * uses — an unusable number, a number nobody holds, an account with no
+     * password (Google or SMS created), and a wrong password are indistinguishable
+     * from outside, so this endpoint cannot be asked which numbers have accounts
+     * behind them.
      */
     private async authenticateByMobile(
         rawMobile: string,
@@ -255,46 +264,21 @@ export class AuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        // One extra row past the cap is all that is needed to notice the number is
-        // over it. The cap exists because every candidate costs a bcrypt compare,
-        // and an unbounded fan-out would make one request arbitrarily expensive.
-        const candidates = await this.db.user.findMany({
-            where: { mobile },
-            orderBy: { created_at: 'asc' },
-            take: MOBILE_LOGIN_CANDIDATE_LIMIT + 1,
-        });
-        if (candidates.length > MOBILE_LOGIN_CANDIDATE_LIMIT) {
-            throw new ConflictException(MOBILE_LOGIN_AMBIGUOUS_MESSAGE);
-        }
-
-        const matches: LoginCandidate[] = [];
-        for (const candidate of candidates) {
-            if (!candidate.passwordHash) continue;
-            if (await this.passwordMatches(dto.password, candidate.passwordHash, mobile)) {
-                matches.push(candidate);
-            }
-        }
-
-        if (matches.length > 1) {
-            // Same number, same password, different accounts: nothing here can pick
-            // one, and guessing would sign them into a workspace at random.
-            throw new ConflictException(MOBILE_LOGIN_AMBIGUOUS_MESSAGE);
-        }
-
-        if (matches.length === 0) {
-            // Only worth recording against an account when exactly one was in the
-            // running — with several candidates there is no telling which was meant.
-            if (candidates.length === 1) {
-                this.audit
-                    .logForUserTenants('LOGIN_FAILED', 'User', { userId: candidates[0].id, ...meta }, candidates[0].id, {
-                        mobile,
-                    })
-                    .catch(() => {});
-            }
+        const user = await this.db.user.findUnique({ where: { mobile } });
+        if (!user || !user.passwordHash) {
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        return matches[0];
+        if (!(await this.passwordMatches(dto.password, user.passwordHash, mobile))) {
+            this.audit
+                .logForUserTenants('LOGIN_FAILED', 'User', { userId: user.id, ...meta }, user.id, {
+                    mobile,
+                })
+                .catch(() => {});
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        return user;
     }
 
     private async passwordMatches(password: string, passwordHash: string, subject: string): Promise<boolean> {
@@ -382,6 +366,7 @@ export class AuthService {
             if (!normalizedMobile) {
                 throw new BadRequestException('Please enter a valid mobile number including country code.');
             }
+            await this.assertMobileAvailable(normalizedMobile);
         }
 
         // Reached only when no account matched the Google identity, so this is a
@@ -454,13 +439,12 @@ export class AuthService {
      *
      * The cases, in the order they are tried:
      *  1. We already know this Firebase uid → sign in.
-     *  2. Exactly one account carries this number → adopt the Firebase identity
-     *     onto it, so someone who signed up with a password can start using the
-     *     SMS code without ending up with a second, empty workspace.
-     *  3. Several accounts carry it → refuse. Mobile numbers were never unique
-     *     here (one person, several businesses), so there is no honest way to
-     *     pick one; those users sign in with their email and password.
-     *  4. Nobody matches → create the account, once the caller supplies an email
+     *  2. An account carries this number → adopt the Firebase identity onto it,
+     *     so someone who signed up with a password can start using the SMS code
+     *     without ending up with a second, empty workspace. `mobile` is unique,
+     *     so there is at most one such account — the refusal this used to need
+     *     when several shared a number is gone with the duplicates.
+     *  3. Nobody matches → create the account, once the caller supplies an email
      *     address. Until then the answer is `requires_signup`, and nothing is
      *     written.
      */
@@ -472,23 +456,47 @@ export class AuthService {
             return this.completeMobileLoginForExistingUser(linked, profile, meta);
         }
 
-        // `take: 2` is all the ambiguity check needs, and it keeps the query cheap
-        // for a number that somehow sits on dozens of rows.
-        const byNumber = await this.db.user.findMany({
-            where: { mobile: profile.phoneNumber },
-            orderBy: { created_at: 'asc' },
-            take: 2,
-        });
-        if (byNumber.length > 1) {
-            throw new ConflictException(
-                'This mobile number is linked to more than one account. Please sign in with your email and password.',
-            );
-        }
-        if (byNumber.length === 1) {
-            return this.completeMobileLoginForExistingUser(byNumber[0], profile, meta);
+        const byNumber = await this.db.user.findUnique({ where: { mobile: profile.phoneNumber } });
+        if (byNumber) {
+            return this.completeMobileLoginForExistingUser(byNumber, profile, meta);
         }
 
         return this.createUserFromMobile(profile, dto, meta);
+    }
+
+    /**
+     * Free up `mobile` for an account that has just proved it by SMS.
+     *
+     * Needed only because the column is unique. Firebase is the authority on
+     * which number an identity holds, so a ported line or a new SIM can point at
+     * a number another account merely typed into a form — and without this the
+     * sign-in would die on a P2002 the user can do nothing about. A proved claim
+     * outranks a typed one, so the number comes off the account that never
+     * confirmed it; that account keeps its login, which was never the number, and
+     * can set a different one. This is the same precedence
+     * `sync-user-mobile-unique.ts` applies to the duplicates already in the data.
+     *
+     * Two accounts that have each *verified* the same number is a different
+     * matter: nothing here can say which is current, and moving a verified number
+     * would hand one person the other's way in. That refuses instead.
+     */
+    private async releaseMobileForVerifiedClaim(tx: any, mobile: string, claimantUserId: string) {
+        const holder = await tx.user.findUnique({
+            where: { mobile },
+            select: { id: true, mobile_verified_at: true },
+        });
+        if (!holder || holder.id === claimantUserId) return;
+
+        if (holder.mobile_verified_at) {
+            throw new ConflictException(
+                'This mobile number is already verified on another account. Please sign in with that account.',
+            );
+        }
+
+        await tx.user.update({
+            where: { id: holder.id },
+            data: { mobile: null, mobile_verified_at: null },
+        });
     }
 
     private async completeMobileLoginForExistingUser(
@@ -511,7 +519,15 @@ export class AuthService {
             patch.mobile_country_code = countryCodeFromE164(profile.phoneNumber) ?? DEFAULT_MOBILE_COUNTRY_CODE;
         }
         if (!user.mobile_verified_at || patch.mobile) patch.mobile_verified_at = new Date();
-        if (Object.keys(patch).length > 0) {
+        if (patch.mobile) {
+            // Taking the number off its previous holder and putting it on this
+            // account has to be one step: a failure in between would leave the
+            // number attached to nobody.
+            await this.db.$transaction(async (tx) => {
+                await this.releaseMobileForVerifiedClaim(tx, patch.mobile as string, user.id);
+                await tx.user.update({ where: { id: user.id }, data: patch });
+            });
+        } else if (Object.keys(patch).length > 0) {
             await this.db.user.update({ where: { id: user.id }, data: patch });
         }
 
