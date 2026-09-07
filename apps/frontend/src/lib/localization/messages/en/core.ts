@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: 'Please enter a valid mobile number.',
             mobileInvalid: 'Please enter a valid mobile number including country code.',
+            referralCodeToggle: 'Have a referral code?',
             referralCodeLabel: 'Referral code (optional)',
             referralCodePlaceholder: 'Enter referral code',
             referralCodeValidating: 'Checking referral code…',

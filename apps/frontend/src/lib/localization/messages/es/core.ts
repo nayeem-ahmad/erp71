@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: "Introduce un número de móvil válido.",
             mobileInvalid: "Introduce un número de móvil válido incluyendo el prefijo del país.",
+            referralCodeToggle: "¿Tienes un código de recomendación?",
             referralCodeLabel: "Código de recomendación (opcional)",
             referralCodePlaceholder: "Introduce el código de recomendación",
             referralCodeValidating: "Comprobando el código de recomendación…",

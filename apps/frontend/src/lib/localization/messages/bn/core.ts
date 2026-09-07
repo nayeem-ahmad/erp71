@@ -550,6 +550,7 @@ export const coreMessages = {
                 mobilePlaceholder: "01XXXXXXXXX",
                 mobileRequired: "একটি বৈধ মোবাইল নম্বর লিখুন।",
                 mobileInvalid: "দেশ কোডসহ একটি বৈধ মোবাইল নম্বর লিখুন।",
+                referralCodeToggle: "রেফারেল কোড আছে?",
                 referralCodeLabel: "রেফারেল কোড (ঐচ্ছিক)",
                 referralCodePlaceholder: "রেফারেল কোড লিখুন",
                 referralCodeValidating: "রেফারেল কোড যাচাই হচ্ছে…",

@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: "Veuillez saisir un numéro de mobile valide.",
             mobileInvalid: "Veuillez saisir un numéro de mobile valide avec l'indicatif du pays.",
+            referralCodeToggle: "Vous avez un code de parrainage ?",
             referralCodeLabel: "Code de parrainage (facultatif)",
             referralCodePlaceholder: "Saisir le code de parrainage",
             referralCodeValidating: "Vérification du code de parrainage…",

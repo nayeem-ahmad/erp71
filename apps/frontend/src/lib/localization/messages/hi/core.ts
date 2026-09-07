@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: "कृपया एक मान्य मोबाइल नंबर दर्ज करें।",
             mobileInvalid: "कृपया देश कोड सहित एक मान्य मोबाइल नंबर दर्ज करें।",
+            referralCodeToggle: "रेफ़रल कोड है?",
             referralCodeLabel: "रेफ़रल कोड (वैकल्पिक)",
             referralCodePlaceholder: "रेफ़रल कोड दर्ज करें",
             referralCodeValidating: "रेफ़रल कोड जाँचा जा रहा है…",

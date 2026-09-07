@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: 'الرجاء إدخال رقم جوال صالح.',
             mobileInvalid: 'الرجاء إدخال رقم جوال صالح مع رمز الدولة.',
+            referralCodeToggle: 'لديك رمز إحالة؟',
             referralCodeLabel: 'رمز الإحالة (اختياري)',
             referralCodePlaceholder: 'أدخل رمز الإحالة',
             referralCodeValidating: 'جارٍ التحقق من رمز الإحالة…',
