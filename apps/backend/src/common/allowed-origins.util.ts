@@ -1,6 +1,25 @@
-const MIGRATION_FRONTEND_ORIGINS = [
+/**
+ * Browser origins that must always be trusted in production, whatever the
+ * environment happens to say.
+ *
+ * `FRONTEND_URL` names one host, but the platform is served from two: the app
+ * on `app.erp71.com` and the marketing site on the apex since the 2026-09-07
+ * two-domain cutover. The apex was missed in that cutover, so the landing
+ * page's own call to `GET /auth/plans` was rejected by CORS and its pricing
+ * preview silently fell back to static figures — the exact drift from
+ * `/pricing` that reading the live plans was meant to prevent.
+ *
+ * `www` is here because Caddy proxies it rather than redirecting: the
+ * `www`-to-apex fold happens in `resolveHostRoute`, so a request can reach the
+ * API carrying the `www` origin.
+ *
+ * This list gates CSRF as well as CORS, so an origin missing here fails both.
+ */
+const ALWAYS_ALLOWED_PRODUCTION_ORIGINS = [
     'https://app.erp71.com',
     'https://app.nayeemahmad.com',
+    'https://erp71.com',
+    'https://www.erp71.com',
 ];
 
 function toOrigin(url: string): string | null {
@@ -29,7 +48,7 @@ export function getAllowedOrigins(): string[] {
         .forEach(add);
 
     if (process.env.NODE_ENV === 'production') {
-        MIGRATION_FRONTEND_ORIGINS.forEach((origin) => origins.add(origin));
+        ALWAYS_ALLOWED_PRODUCTION_ORIGINS.forEach((origin) => origins.add(origin));
     }
 
     if (origins.size === 0) {
