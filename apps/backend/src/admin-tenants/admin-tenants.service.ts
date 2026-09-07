@@ -818,6 +818,11 @@ export class AdminTenantsService {
                 data: { tenant_id: tenant.id, name: dto.storeName, address: dto.address ?? null },
             });
 
+            // Resolved before the subscription row so the dunning clock below can
+            // depend on whether anything is actually owed.
+            const baseFee = Number(plan.monthly_price ?? 0);
+            const netFee = applySubscriptionDiscount(baseFee, discountType, discountValue);
+
             await tx.tenantSubscription.create({
                 data: {
                     tenant_id: tenant.id,
@@ -826,6 +831,14 @@ export class AdminTenantsService {
                     current_period_start: now,
                     current_period_end: now,
                     provider_name: 'manual',
+                    // The workspace is invoiced below and unpaid from this moment,
+                    // so the 30-day suspension clock starts here. Without it the
+                    // sweep — which requires a non-null `past_due_since` — would
+                    // never see a tenant who simply never pays their first
+                    // invoice: nothing else starts the clock until a *renewal*
+                    // fee posts a month later. Null when nothing is charged, so a
+                    // zero-price plan is never counted down toward suspension.
+                    past_due_since: netFee > 0 ? now : null,
                     discount_type: discountType,
                     discount_value: discountValue,
                 },
@@ -835,8 +848,6 @@ export class AdminTenantsService {
             // reflects the charge at creation. Reuses the cron's idempotency key
             // (`subscription_fee:{tenantId}:{periodKey}`) so the daily fee-posting job won't
             // double-post for this same period. Zero-price / FREE plans post nothing.
-            const baseFee = Number(plan.monthly_price ?? 0);
-            const netFee = applySubscriptionDiscount(baseFee, discountType, discountValue);
             if (netFee > 0) {
                 const periodKey = now.toISOString().slice(0, 10);
                 await tx.billingEvent.create({
@@ -1331,16 +1342,11 @@ export class AdminTenantsService {
             },
         });
 
-        // Activate a PAST_DUE subscription upon payment
-        const subscription = await this.db.tenantSubscription.findUnique({
-            where: { tenant_id: tenantId },
-        });
-        if (subscription?.status === 'PAST_DUE') {
-            await this.db.tenantSubscription.update({
-                where: { tenant_id: tenantId },
-                data: { status: 'ACTIVE' },
-            });
-        }
+        // Activate a PAST_DUE subscription upon payment — but only once the ledger
+        // actually balances. A part payment against larger arrears leaves the
+        // tenant overdue, so the dunning clock and any suspension stay put rather
+        // than being reset by a token amount.
+        await this.settleBillingStateIfPaid(tenantId);
 
         await this.auditService.log('tenant.payment.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             amount: dto.amount,
@@ -1357,6 +1363,32 @@ export class AdminTenantsService {
             currency: event.currency,
             created_at: event.created_at,
         };
+    }
+
+    /**
+     * Returns a tenant to good standing when — and only when — the ledger is
+     * square: clears the dunning clock and lifts any non-payment suspension.
+     *
+     * Balance-driven rather than event-driven on purpose. Every path that can
+     * change what a tenant owes (a payment, an admin correcting or voiding a
+     * fee) ends up here, and a part payment against larger arrears must leave
+     * the tenant overdue rather than buying a fresh 30 days for a token amount.
+     */
+    private async settleBillingStateIfPaid(tenantId: string): Promise<void> {
+        const balance = (await this.computeLedgerBalancesByTenant([tenantId])).get(tenantId) ?? 0;
+        if (balance < 0) return;
+
+        await this.db.tenantSubscription.updateMany({
+            where: { tenant_id: tenantId, status: 'PAST_DUE' },
+            data: { status: 'ACTIVE', past_due_since: null, last_reminder_at: null },
+        });
+
+        // Unfreeze immediately rather than waiting for the nightly pass — an
+        // admin who just took payment expects the tenant working again now.
+        await this.db.tenant.updateMany({
+            where: { id: tenantId, billing_suspended_at: { not: null } },
+            data: { billing_suspended_at: null, billing_suspension_reason: null },
+        });
     }
 
     async recordRefund(tenantId: string, dto: RecordTenantRefundDto, adminUserId: string) {
@@ -1525,6 +1557,11 @@ export class AdminTenantsService {
             },
         );
 
+        // Correcting an amount can settle (or re-open) the balance, so the
+        // dunning clock and suspension follow the ledger rather than drifting
+        // from it.
+        await this.settleBillingStateIfPaid(event.tenant_id);
+
         return {
             id: updated.id,
             event_type: updated.event_type,
@@ -1540,12 +1577,12 @@ export class AdminTenantsService {
         const amount = event.amount !== null ? Number(event.amount) : null;
 
         // A subscription fee is voided in place rather than removed. The billing
-        // cron skips a period only when it finds an event under
-        // `subscription_fee:{tenantId}:{periodKey}`, and it never advances
-        // `current_period_end` itself — so on a PAST_DUE tenant this row is the
-        // only thing standing between the admin's deletion and the same fee
-        // reappearing on tomorrow's 10:00 run. Rewriting the row keeps that
-        // unique pair claimed atomically, which a delete-then-insert would not.
+        // cron treats an event under `subscription_fee:{tenantId}:{periodKey}` as
+        // "this period is already charged", so the row is what keeps a deleted
+        // fee from being re-posted should that period ever be walked again — a
+        // backdated period end, or a corrected `current_period_end`. Rewriting
+        // the row keeps that unique pair claimed atomically, which a
+        // delete-then-insert would not.
         const voided = event.event_type === 'subscription_fee';
 
         if (voided) {
@@ -1582,6 +1619,10 @@ export class AdminTenantsService {
                 voided,
             },
         );
+
+        // Voiding a fee the tenant was suspended over settles the balance, so
+        // the freeze must lift with it.
+        await this.settleBillingStateIfPaid(event.tenant_id);
 
         return { success: true, id: eventId, voided };
     }
@@ -1746,6 +1787,10 @@ export class AdminTenantsService {
             store_count: tenant.stores.length,
             user_count: tenant.users.length,
             sms_credits: tenant.sms_credits ?? 0,
+            // Non-null means the workspace is frozen for non-payment: reads work,
+            // every write is refused by BillingSuspensionGuard.
+            billing_suspended_at: tenant.billing_suspended_at ?? null,
+            billing_suspension_reason: tenant.billing_suspension_reason ?? null,
             ledger_balance: extras?.ledger_balance ?? 0,
             ai_credits: extras?.ai_credits ?? {
                 used: 0,

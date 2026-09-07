@@ -86,6 +86,7 @@ describe('AdminTenantsService', () => {
         count: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       tenantUser: { create: jest.fn() },
       paymentMethod: { createMany: jest.fn() },
@@ -94,6 +95,7 @@ describe('AdminTenantsService', () => {
       tenantSubscription: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         groupBy: jest.fn(),
         create: jest.fn(),
       },
@@ -970,6 +972,43 @@ describe('AdminTenantsService', () => {
       db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't-new', name: 'Acme Ltd' }));
     });
 
+    describe('the dunning clock at creation', () => {
+      beforeEach(() => {
+        db.user.findUnique.mockResolvedValue(null);
+        db.user.create.mockResolvedValue({ id: 'u-new', email: 'owner@acme.com', name: 'Alice' });
+      });
+
+      const create = (planCode: string) => service.createTenant(
+        {
+          ownerMode: 'new', ownerEmail: 'owner@acme.com', ownerName: 'Alice',
+          tenantName: 'Acme Ltd', storeName: 'Acme Store', planCode,
+        } as any,
+        'admin-1',
+      );
+
+      it('starts when the tenant is invoiced, so an unpaid first invoice can suspend', async () => {
+        // Without this the suspension sweep — which requires a non-null
+        // past_due_since — never sees a tenant who simply never pays.
+        db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-p', code: 'PREMIUM', is_active: true, monthly_price: 750, name: 'Premium' });
+
+        await create('PREMIUM');
+
+        expect(db.tenantSubscription.create).toHaveBeenCalledWith(expect.objectContaining({
+          data: expect.objectContaining({ status: 'PAST_DUE', past_due_since: expect.any(Date) }),
+        }));
+      });
+
+      it('stays unset on a zero-price plan, which is never charged', async () => {
+        db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-1', code: 'FREE', is_active: true, monthly_price: 0, name: 'Free' });
+
+        await create('FREE');
+
+        expect(db.tenantSubscription.create).toHaveBeenCalledWith(expect.objectContaining({
+          data: expect.objectContaining({ past_due_since: null }),
+        }));
+      });
+    });
+
     describe('ownerMode = new', () => {
       it('creates a new user and provisions the tenant', async () => {
         db.user.findUnique.mockResolvedValueOnce(null); // email check → not taken
@@ -1377,6 +1416,63 @@ describe('AdminTenantsService', () => {
 
       await expect(service.recordFee('nope', { amount: 10 }, 'admin1'))
         .rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('recordPayment settling the billing state', () => {
+    const paymentEvent = {
+      id: 'be-1', event_type: 'manual_payment', status: 'succeeded',
+      amount: 750, currency: 'BDT', created_at: new Date(),
+    };
+
+    beforeEach(() => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't1' });
+      db.tenantSubscription.findUnique.mockResolvedValue({ status: 'PAST_DUE' });
+      db.billingEvent.create.mockResolvedValue(paymentEvent);
+    });
+
+    it('reactivates and unfreezes once the ledger balances', async () => {
+      // 750 charged, 750 paid.
+      db.billingEvent.findMany.mockResolvedValue([
+        { tenant_id: 't1', event_type: 'subscription_fee', amount: 750 },
+        { tenant_id: 't1', event_type: 'manual_payment', amount: 750 },
+      ]);
+
+      await service.recordPayment('t1', { amount: 750 }, 'admin1');
+
+      expect(db.tenantSubscription.updateMany).toHaveBeenCalledWith({
+        where: { tenant_id: 't1', status: 'PAST_DUE' },
+        data: { status: 'ACTIVE', past_due_since: null, last_reminder_at: null },
+      });
+      expect(db.tenant.updateMany).toHaveBeenCalledWith({
+        where: { id: 't1', billing_suspended_at: { not: null } },
+        data: { billing_suspended_at: null, billing_suspension_reason: null },
+      });
+    });
+
+    it('leaves a part payment overdue and still suspended', async () => {
+      // 1500 charged, 200 paid — the tenant is still 1300 behind, so a token
+      // amount must not buy back access or reset the 30-day clock.
+      db.billingEvent.findMany.mockResolvedValue([
+        { tenant_id: 't1', event_type: 'subscription_fee', amount: 1500 },
+        { tenant_id: 't1', event_type: 'manual_payment', amount: 200 },
+      ]);
+
+      await service.recordPayment('t1', { amount: 200 }, 'admin1');
+
+      expect(db.tenantSubscription.updateMany).not.toHaveBeenCalled();
+      expect(db.tenant.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('treats an overpayment as settled', async () => {
+      db.billingEvent.findMany.mockResolvedValue([
+        { tenant_id: 't1', event_type: 'subscription_fee', amount: 750 },
+        { tenant_id: 't1', event_type: 'manual_payment', amount: 1000 },
+      ]);
+
+      await service.recordPayment('t1', { amount: 1000 }, 'admin1');
+
+      expect(db.tenant.updateMany).toHaveBeenCalled();
     });
   });
 

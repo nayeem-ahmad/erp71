@@ -17,6 +17,7 @@ import { JobsModule } from './system-health/jobs/jobs.module';
 import { MetricsModule } from './system-health/metrics/metrics.module';
 import { CircuitBreakerModule } from './system-health/resilience/circuit-breaker.module';
 import { AuthModule } from './auth/auth.module';
+import { BillingSuspensionGuard } from './auth/billing-suspension.guard';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { TeamModule } from './team/team.module';
@@ -247,6 +248,10 @@ import { SocialMediaModule } from './social-media/social-media.module';
     controllers: [],
     providers: [
         { provide: APP_GUARD, useClass: ThrottlerGuard },
+        // Freezes writes in a workspace suspended for non-payment. Global so a
+        // module added later is covered without wiring — the guarantee is that
+        // *nothing* can be entered, which a per-controller opt-in would leak.
+        { provide: APP_GUARD, useClass: BillingSuspensionGuard },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
         // Must stay after TransformInterceptor: it needs to sit inside the
         // response envelope so it can read the raw controller result.

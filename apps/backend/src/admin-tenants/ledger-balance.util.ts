@@ -5,10 +5,12 @@
  * `subscription_fee` is machine-posted but editable anyway, because a wrong
  * plan price or a mis-set discount lands there and an admin needs to fix the
  * charge rather than paper over it — with one caveat the delete path handles:
- * the billing cron keys each fee `subscription_fee:{tenantId}:{periodKey}` and
- * never advances `current_period_end` itself, so that row is the *only* thing
- * stopping a re-post on the next daily run. Deleting one therefore voids it in
- * place (see `VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE`) rather than removing the row.
+ * the billing cron keys each fee `subscription_fee:{tenantId}:{periodKey}`, so
+ * that row is what marks the period as already charged. Deleting one therefore
+ * voids it in place (see `VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE`) rather than
+ * removing the row. The cron now also advances `current_period_end` past every
+ * period it posts, so a voided period is not normally revisited; the tombstone
+ * is the belt to that braces, and still matters if a period is ever replayed.
  *
  * The credit-sale payments stay locked: each is the money half of an SMS/AI
  * credit grant that has already landed in the tenant's balance, and nothing
