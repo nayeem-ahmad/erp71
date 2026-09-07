@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import SlaClient from './SlaClient';
 
 /**
@@ -17,7 +18,7 @@ import SlaClient from './SlaClient';
 export const metadata: Metadata = {
     title: 'Service Level Agreement — ERP71',
     description: 'Uptime commitments and support response times for ERP71.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/sla` },
+    alternates: { canonical: `${siteOrigin()}/sla` },
     openGraph: {
         title: 'Service Level Agreement — ERP71',
         description: 'Uptime commitments and support response times for ERP71.',

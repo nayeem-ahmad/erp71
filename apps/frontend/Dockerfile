@@ -27,6 +27,12 @@ RUN npm run generate --workspace=@erp71/database
 # Build the frontend with debug info
 ARG NEXT_PUBLIC_API_BASE
 ARG NEXT_PUBLIC_API_URL
+# Two-domain routing. NEXT_PUBLIC_MARKETING_URL is the switch that turns it on
+# (empty = single-domain behaviour); both are read by src/middleware.ts and by
+# the canonical-URL helper, and Next inlines NEXT_PUBLIC_* at build time, so
+# they have to be here rather than only in the container's runtime env.
+ARG NEXT_PUBLIC_MARKETING_URL
+ARG NEXT_PUBLIC_APP_URL
 # Server-side target for the next.config.js /api/v1 rewrite. In production the
 # frontend and backend run as separate containers, so this must resolve to the
 # backend service on the compose network, not localhost. Baked at build time
@@ -42,6 +48,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_MARKETING_URL=${NEXT_PUBLIC_MARKETING_URL}
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV BACKEND_URL=${BACKEND_URL}
 RUN npm run build --workspace=@erp71/frontend
 

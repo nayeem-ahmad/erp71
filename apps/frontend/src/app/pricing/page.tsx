@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import PricingClient from './PricingClient';
 
 /**
@@ -17,7 +18,7 @@ import PricingClient from './PricingClient';
 export const metadata: Metadata = {
     title: 'Pricing — ERP71',
     description: 'Plans and pricing for ERP71. Start free, upgrade when your shop grows.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/pricing` },
+    alternates: { canonical: `${siteOrigin()}/pricing` },
     openGraph: {
         title: 'Pricing — ERP71',
         description: 'Plans and pricing for ERP71. Start free, upgrade when your shop grows.',

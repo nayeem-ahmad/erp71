@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import PrivacyClient from './PrivacyClient';
 
 /**
@@ -17,7 +18,7 @@ import PrivacyClient from './PrivacyClient';
 export const metadata: Metadata = {
     title: 'Privacy Policy — ERP71',
     description: 'How ERP71 collects, uses and protects your data.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/privacy` },
+    alternates: { canonical: `${siteOrigin()}/privacy` },
     openGraph: {
         title: 'Privacy Policy — ERP71',
         description: 'How ERP71 collects, uses and protects your data.',

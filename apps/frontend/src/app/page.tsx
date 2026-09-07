@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import HomeClient from './HomeClient';
 
 /**
@@ -17,7 +18,7 @@ import HomeClient from './HomeClient';
 export const metadata: Metadata = {
     title: 'ERP71 — Retail ERP for Bangladeshi shops',
     description: 'POS, inventory, accounting and CRM in one system, built for small and medium retailers in Bangladesh.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}` },
+    alternates: { canonical: siteOrigin() },
     openGraph: {
         title: 'ERP71 — Retail ERP for Bangladeshi shops',
         description: 'POS, inventory, accounting and CRM in one system, built for small and medium retailers in Bangladesh.',
