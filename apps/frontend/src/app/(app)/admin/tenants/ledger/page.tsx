@@ -2,16 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowDownLeft, ArrowUpRight, Loader2, Plus } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Loader2, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { PageShell, Button, StatusBadge } from '@/components/ui';
+import { PageShell, Button, Select, StatusBadge, ConfirmDialog } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
-import TenantLedgerPaymentModal from '@/components/admin/tenants/TenantLedgerPaymentModal';
-import { withRunningBalances } from '@/components/admin/tenants/ledger-utils';
+import TenantLedgerEntryModal, { type LedgerEntryKind } from '@/components/admin/tenants/TenantLedgerEntryModal';
+import {
+    isCreditLedgerEvent,
+    isDebitLedgerEvent,
+    withRunningBalances,
+} from '@/components/admin/tenants/ledger-utils';
 import type { LedgerEvent, TenantRecord } from '@/components/admin/tenants/types';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
@@ -22,13 +26,18 @@ export default function AdminTenantLedgerPage() {
     const m = t.admin.tenants;
     const lp = m.ledgerPage;
     const ml = m.ledger;
+    const em = ml.entryModal;
 
     const [tenants, setTenants] = useState<TenantRecord[]>([]);
     const [tenantFilter, setTenantFilter] = useState('');
     const [events, setEvents] = useState<LedgerEvent[]>([]);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [entryModalOpen, setEntryModalOpen] = useState(false);
+    const [entryModalKind, setEntryModalKind] = useState<LedgerEntryKind>('payment');
+    const [editingEntry, setEditingEntry] = useState<LedgerEvent | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<LedgerEvent | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const loadLedger = useCallback(async () => {
         setIsLoading(true);
@@ -55,10 +64,40 @@ export default function AdminTenantLedgerPage() {
         void loadLedger();
     }, [loadLedger]);
 
+    const openAdd = (kind: LedgerEntryKind) => {
+        setEditingEntry(null);
+        setEntryModalKind(kind);
+        setEntryModalOpen(true);
+    };
+
+    // Memoised because the actions column closes over it — a fresh identity every
+    // render would rebuild the whole column set on each keystroke elsewhere.
+    const openEdit = useCallback((event: LedgerEvent) => {
+        setEditingEntry(event);
+        setEntryModalOpen(true);
+    }, []);
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        try {
+            await api.deleteTenantLedgerEntry(pendingDelete.id);
+            toast.success(em.deleteSuccess);
+            setPendingDelete(null);
+            await loadLedger();
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : em.deleteFailed);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const columns: ColumnDef<LedgerEvent, unknown>[] = useMemo(() => [
         columnHelper.accessor('created_at', {
             header: ml.columns.date,
-            cell: (info) => formatDate(info.getValue()),
+            // Date and time: entries are backdated by hand now, and two rows on
+            // the same day are otherwise indistinguishable in the running balance.
+            cell: (info) => formatDateTime(info.getValue()),
         }),
         columnHelper.accessor('tenant_name', {
             header: lp.columns.tenant,
@@ -68,8 +107,8 @@ export default function AdminTenantLedgerPage() {
             header: ml.columns.type,
             cell: (info) => {
                 const type = info.getValue();
-                const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(type);
-                const isDebit = ['manual_refund', 'subscription_fee'].includes(type);
+                const isCredit = isCreditLedgerEvent(type);
+                const isDebit = isDebitLedgerEvent(type);
                 const tone = isCredit ? 'success' : isDebit ? 'warning' : 'neutral';
                 return (
                     <StatusBadge tone={tone} className="gap-1">
@@ -82,12 +121,11 @@ export default function AdminTenantLedgerPage() {
         columnHelper.accessor('amount', {
             header: ml.columns.amount,
             cell: (info) => {
-                const row = info.row.original;
-                const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(row.event_type);
+                const isCredit = isCreditLedgerEvent(info.row.original.event_type);
                 const value = info.getValue();
                 return (
-                    <span className={`font-bold ${isCredit ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        {value !== null ? `৳${Number(value).toFixed(2)}` : '—'}
+                    <span className={`font-bold ${isCredit ? 'text-success-text' : 'text-warning-text'}`}>
+                        {value !== null ? formatBDT(Number(value)) : '—'}
                     </span>
                 );
             },
@@ -96,15 +134,62 @@ export default function AdminTenantLedgerPage() {
             header: lp.columns.runningBalance,
             cell: (info) => {
                 const value = info.getValue();
-                return value !== undefined ? `৳${Number(value).toFixed(2)}` : '—';
+                return value !== undefined ? formatBDT(Number(value)) : '—';
             },
         }),
-        columnHelper.accessor((row) => (row.payload as Record<string, unknown> | null)?.notes as string | undefined, {
-            id: 'notes',
-            header: ml.columns.notes,
-            cell: (info) => <span className="text-gray-500">{info.getValue() || '—'}</span>,
+        columnHelper.accessor(
+            (row) => {
+                const payload = row.payload as Record<string, unknown> | null;
+                const label = typeof payload?.label === 'string' ? payload.label : null;
+                const notes = typeof payload?.notes === 'string' ? payload.notes : null;
+                return [label, notes].filter(Boolean).join(' — ');
+            },
+            {
+                id: 'notes',
+                header: ml.columns.notes,
+                cell: (info) => <span className="text-gray-500">{info.getValue() || '—'}</span>,
+            },
+        ),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => {
+                const row = info.row.original;
+                // Machine-posted rows (subscription fees, credit-sale payments) own
+                // state this screen cannot unwind, so the server refuses to edit
+                // them — the buttons say so rather than failing on click.
+                const locked = row.editable === false;
+                return (
+                    <div className="flex items-center justify-end gap-1">
+                        <button
+                            type="button"
+                            onClick={() => openEdit(row)}
+                            disabled={locked}
+                            title={locked ? em.lockedHint : t.common.edit}
+                            aria-label={t.common.edit}
+                            className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPendingDelete(row)}
+                            disabled={locked}
+                            title={locked ? em.lockedHint : t.common.delete}
+                            aria-label={t.common.delete}
+                            className="p-1.5 rounded-md text-danger hover:bg-danger-light transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                );
+            },
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 100,
         }),
-    ], [lp.columns, ml.columns, ml.eventType]);
+    ], [em.lockedHint, lp.columns, ml.columns, ml.eventType, openEdit, t.common]);
 
     return (
         <PageShell>
@@ -119,9 +204,18 @@ export default function AdminTenantLedgerPage() {
                         lp.title,
                     )}
                     actions={(
-                        <Button onClick={() => setPaymentModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
-                            {lp.recordPayment}
-                        </Button>
+                        <>
+                            <Button
+                                variant="secondary"
+                                onClick={() => openAdd('fee')}
+                                icon={<Receipt className="w-4 h-4" />}
+                            >
+                                {lp.addFee}
+                            </Button>
+                            <Button onClick={() => openAdd('payment')} icon={<Plus className="w-4 h-4" />}>
+                                {lp.recordPayment}
+                            </Button>
+                        </>
                     )}
                 />
 
@@ -132,16 +226,17 @@ export default function AdminTenantLedgerPage() {
                 )}
 
                 <div className="max-w-md">
-                    <select
+                    <Select
                         value={tenantFilter}
                         onChange={(e) => setTenantFilter(e.target.value)}
-                        className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                        aria-label={lp.columns.tenant}
+                        className="w-full"
                     >
                         <option value="">{lp.allTenants}</option>
                         {tenants.map((tenant) => (
                             <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
                         ))}
-                    </select>
+                    </Select>
                 </div>
 
                 {isLoading ? (
@@ -158,15 +253,36 @@ export default function AdminTenantLedgerPage() {
                     />
                 )}
 
-            <TenantLedgerPaymentModal
-                open={paymentModalOpen}
+            <TenantLedgerEntryModal
+                open={entryModalOpen}
                 tenants={tenants}
                 defaultTenantId={tenantFilter}
-                onClose={() => setPaymentModalOpen(false)}
+                defaultKind={entryModalKind}
+                entry={editingEntry}
+                onClose={() => {
+                    setEntryModalOpen(false);
+                    setEditingEntry(null);
+                }}
                 onSuccess={(message) => {
                     toast.success(message);
                     void loadLedger();
                 }}
+            />
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={em.deleteTitle}
+                // A subscription fee is voided rather than removed — the row
+                // keeps holding the biller's key for its period — so say so
+                // instead of promising a plain delete.
+                prompt={pendingDelete?.event_type === 'subscription_fee' ? em.deleteFeePrompt : em.deletePrompt}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                workingLabel={em.deleting}
+                loading={deleting}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => setPendingDelete(null)}
             />
         </PageShell>
     );

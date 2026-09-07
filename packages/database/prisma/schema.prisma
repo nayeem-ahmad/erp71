@@ -654,6 +654,18 @@ model Tenant {
   onboarding_dismissed_at  DateTime?
   deleted_at               DateTime?
 
+  /// When this workspace was frozen for non-payment. Non-null means every
+  /// state-changing request is rejected by `BillingSuspensionGuard` — the data
+  /// stays readable so the owner can settle up and export, but nothing new can
+  /// be entered. Set by the billing suspension sweep once a subscription has
+  /// been unpaid past `BILLING_SUSPENSION_DAYS` (30), and cleared the moment a
+  /// payment lands. Distinct from `deleted_at`, which removes the tenant
+  /// outright, and from the subscription's own status, which only gates
+  /// plan-ranked features.
+  billing_suspended_at      DateTime?
+  /// Why the workspace was frozen, shown to the owner on the blocked screen.
+  billing_suspension_reason String?
+
   /// Marks the single internal workspace the platform team runs its own work in
   /// (Admin console › Projects). It is a real tenant so the whole project
   /// module — projects, tasks, boards, sprints, hour logs — works unchanged, but
@@ -872,6 +884,7 @@ model Tenant {
   termsAcceptances           TermsAcceptance[]
 
   @@index([deleted_at])
+  @@index([billing_suspended_at])
 }
 
 /// Platform-admin managed sender identity for one tenant's outbound messages.
@@ -3558,9 +3571,23 @@ model TenantSubscription {
   tenant_id                 String             @unique
   plan_id                   String
   status                    SubscriptionStatus @default(TRIALING)
+  /// MONTHLY | YEARLY — how long each billing period runs and which of the
+  /// plan's two prices the renewal charges. Was previously only a checkout
+  /// argument, used once to compute the first period end and then discarded,
+  /// which left the fee job unable to tell an annual subscription from a
+  /// monthly one and charging `monthly_price` for both.
+  billing_cycle             String             @default("MONTHLY")
   current_period_start      DateTime           @default(now())
   current_period_end        DateTime
   cancel_at_period_end      Boolean            @default(false)
+  /// When the tenant first fell behind on the current run of unpaid periods —
+  /// the clock the 30-day suspension is measured against. Set when a fee posts
+  /// against an unpaid balance, cleared when the ledger returns to settled, so
+  /// it survives the renewals that keep moving `current_period_end` forward.
+  past_due_since            DateTime?
+  /// When the recurring overdue reminder was last sent, so the reminder cadence
+  /// can keep knocking past the grace window without mailing daily.
+  last_reminder_at          DateTime?
   provider_name             String?
   provider_customer_ref     String?
   provider_subscription_ref String?
@@ -3579,6 +3606,7 @@ model TenantSubscription {
   plan   SubscriptionPlan @relation(fields: [plan_id], references: [id])
 
   @@index([plan_id, status])
+  @@index([status, past_due_since])
 }
 
 model BillingEvent {

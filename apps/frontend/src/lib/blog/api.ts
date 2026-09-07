@@ -126,8 +126,10 @@ export function categoryName(
  *
  * Relative URLs are fine in a page but wrong in a feed or an OpenGraph tag,
  * which are read far from the page they came from.
+ *
+ * Re-exported from `@/lib/domain-routing`, which owns every question about
+ * which of the two public domains is which, so the canonical origin follows the
+ * marketing host once there is one. Kept here because the blog's own metadata,
+ * feed and sitemap have always reached for it through this module.
  */
-export function siteOrigin(): string {
-    const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-    return (configured || 'https://app.erp71.com').replace(/\/+$/, '');
-}
+export { siteOrigin } from '@/lib/domain-routing';

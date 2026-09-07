@@ -16,7 +16,7 @@ import type { MetadataRoute } from 'next';
  * `/store/` is left crawlable on purpose: storefronts and their per-product
  * pages are marketing, and shop owners want them found.
  */
-import { siteOrigin } from '@/lib/blog/api';
+import { siteOrigin } from '@/lib/domain-routing';
 
 export default function robots(): MetadataRoute.Robots {
     return {

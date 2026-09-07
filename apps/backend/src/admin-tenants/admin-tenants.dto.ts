@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
     BUSINESS_TYPE_VALUES,
@@ -147,11 +147,40 @@ export class RecordTenantPaymentDto {
     @IsNumber() @IsPositive() amount: number;
     @IsOptional() @IsString() notes?: string;
     @IsOptional() @IsString() method?: string;
+    /** When the money actually moved. Omitted = now. Stored as the entry's ledger date. */
+    @IsOptional() @IsDateString() occurredAt?: string;
 }
 
 export class RecordTenantRefundDto {
     @IsNumber() @IsPositive() amount: number;
     @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsDateString() occurredAt?: string;
+}
+
+/**
+ * A charge an admin adds by hand — a setup fee, an onboarding charge, a
+ * penalty. Debits the ledger the same way a subscription fee does, but carries
+ * no billing-cycle idempotency key, so it stays editable afterwards.
+ */
+export class RecordTenantFeeDto {
+    @IsNumber() @IsPositive() amount: number;
+    @IsOptional() @IsString() label?: string;
+    @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsDateString() occurredAt?: string;
+}
+
+/**
+ * Edit one manually-recorded ledger entry. Every field is optional — send only
+ * what changed. The entry's type and tenant are fixed: an entry that was
+ * mis-typed as a payment is deleted and re-added, not mutated into a fee, so
+ * the audit trail keeps both halves.
+ */
+export class UpdateTenantLedgerEntryDto {
+    @IsOptional() @IsNumber() @IsPositive() amount?: number;
+    @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsString() method?: string;
+    @IsOptional() @IsString() label?: string;
+    @IsOptional() @IsDateString() occurredAt?: string;
 }
 
 export class AdminSellSmsCreditsDto {

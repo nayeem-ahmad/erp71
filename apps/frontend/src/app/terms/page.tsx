@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import { Suspense } from 'react';
 import TermsClient from './TermsClient';
 
@@ -18,7 +19,7 @@ import TermsClient from './TermsClient';
 export const metadata: Metadata = {
     title: 'Terms of Service — ERP71',
     description: 'Terms of Service governing use of the ERP71 platform.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/terms` },
+    alternates: { canonical: `${siteOrigin()}/terms` },
     openGraph: {
         title: 'Terms of Service — ERP71',
         description: 'Terms of Service governing use of the ERP71 platform.',
