@@ -28,6 +28,9 @@ jest.mock('../../lib/api', () => ({
         // Google sign-up stays off in these tests; the button renders nothing.
         getGoogleAuthConfig: jest.fn().mockResolvedValue({ enabled: false, client_id: null }),
         googleSignIn: jest.fn(),
+        // The referral field debounces a lookup 400ms after a keystroke. Unmocked
+        // it would reach a real fetch once these tests start typing into it.
+        validateReferralCode: jest.fn().mockResolvedValue({ valid: false }),
     },
 }));
 
@@ -166,6 +169,58 @@ describe('SignupPage', () => {
             expect(link).toHaveAttribute('target', '_blank');
             expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
         }
+    });
+
+    it('keeps the referral field behind a toggle', async () => {
+        // Most people have no code, and an always-open field cost a full row on a
+        // page that already runs several screens.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        expect(screen.queryByLabelText(/referral code/i)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /have a referral code/i }));
+        expect(screen.getByLabelText(/referral code/i)).toBeInTheDocument();
+    });
+
+    it('opens the referral field itself when a code arrives by ?ref=', async () => {
+        // An attributed visitor must see their code rather than hunt for it: the
+        // discount it carries is the reason they followed the link.
+        currentSearchParams = new URLSearchParams({ ref: 'PARTNER1' });
+        render(<SignupPage />);
+
+        const field = await screen.findByLabelText(/referral code/i);
+        expect(field).toHaveValue('PARTNER1');
+        expect(screen.queryByRole('button', { name: /have a referral code/i })).not.toBeInTheDocument();
+    });
+
+    it('still sends a referral code entered through the toggle', async () => {
+        // The field is collapsed, not removed — attribution must still work.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+        fireEvent.click(screen.getByRole('button', { name: /have a referral code/i }));
+        fireEvent.change(screen.getByLabelText(/referral code/i), { target: { value: 'partner9' } });
+
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        expect((api.signup as jest.Mock).mock.calls[0][0].referralCode).toBe('PARTNER9');
+    });
+
+    it('shows the tagline only for the selected tier', async () => {
+        // Decision-support for the tier under consideration, noise on the others.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        expect(screen.getByText('Growth plan')).toBeInTheDocument();
+        expect(screen.queryByText('Multi-branch')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('radio', { name: /Business/ }));
+        expect(screen.getByText('Multi-branch')).toBeInTheDocument();
+        expect(screen.queryByText('Growth plan')).not.toBeInTheDocument();
     });
 
     it('refuses to submit until the terms checkbox is ticked', async () => {

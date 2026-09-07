@@ -550,6 +550,7 @@ export const coreMessages = {
                 mobilePlaceholder: "01XXXXXXXXX",
                 mobileRequired: "Sila masukkan nombor mudah alih yang sah.",
                 mobileInvalid: "Sila masukkan nombor mudah alih yang sah termasuk kod negara.",
+                referralCodeToggle: "Ada kod rujukan?",
                 referralCodeLabel: "Kod rujukan (pilihan)",
                 referralCodePlaceholder: "Masukkan kod rujukan",
                 referralCodeValidating: "Menyemak kod rujukan…",

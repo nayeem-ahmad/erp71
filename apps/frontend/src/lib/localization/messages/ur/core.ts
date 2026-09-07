@@ -550,6 +550,7 @@ export const coreMessages = {
             mobilePlaceholder: '01XXXXXXXXX',
             mobileRequired: 'براہِ کرم درست موبائل نمبر درج کریں۔',
             mobileInvalid: 'براہِ کرم ملک کے کوڈ سمیت درست موبائل نمبر درج کریں۔',
+            referralCodeToggle: 'ریفرل کوڈ ہے؟',
             referralCodeLabel: 'ریفرل کوڈ (اختیاری)',
             referralCodePlaceholder: 'ریفرل کوڈ درج کریں',
             referralCodeValidating: 'ریفرل کوڈ جانچا جا رہا ہے…',
