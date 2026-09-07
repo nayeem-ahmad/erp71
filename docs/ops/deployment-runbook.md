@@ -111,7 +111,7 @@ curl -s https://app.erp71.com | grep -c 'Run your business'   # expect 0
 ## Pre-Deployment Checklist
 
 - [ ] All CI checks green on the release branch
-- [ ] PR `dev` → `main` reviewed, approved, and **merged** (there is no auto-deploy — deploying is a manual SSH step)
+- [ ] PR `dev` → `main` reviewed, approved, and **merged** — the merge itself deploys, once CI passes on `main`
 - [ ] Database migrations reviewed (if any schema changes)
 - [ ] Rollback plan identified (previous good commit hash)
 
@@ -119,8 +119,17 @@ curl -s https://app.erp71.com | grep -c 'Run your business'   # expect 0
 
 ## Standard Deploy (main branch)
 
-There is **no auto-deploy**. After merging to `main`, SSH into the VPS and run the
-idempotent deploy script:
+**Merging to `main` deploys automatically.** `.github/workflows/deploy-vps.yml`
+waits for the **CI/CD Pipeline** to pass on that push, then SSHes to the VPS, runs
+the idempotent deploy script, and curls both health endpoints. Watch it under
+GitHub → Actions → "Deploy to VPS"; a red job means the build failed or the stack
+came up unhealthy. Deploys are serialized (`concurrency: deploy-vps`), so two
+merges in a row queue rather than build over each other.
+
+It does **not** roll back on failure — see [Rollback Procedure](#rollback-procedure).
+
+To deploy by hand (a redeploy, a rollback, or a non-`main` branch), either use
+GitHub → Actions → "Deploy to VPS" → **Run workflow**, or SSH in directly:
 
 ```bash
 ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
