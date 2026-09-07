@@ -1,5 +1,9 @@
 export const salesMessages = {
         shared: {
+            newCustomer: "Pelanggan Baharu",
+            useExisting: "Guna Sedia Ada",
+            customerNamePlaceholder: "Nama pelanggan",
+            customerNameRequiredInline: "Nama pelanggan diperlukan semasa mencipta pelanggan secara langsung.",
             walkIn: "Pelanggan walk-in",
             walkInCustomer: "Pelanggan Walk-in",
             walkInDraft: "Draf Walk-in",

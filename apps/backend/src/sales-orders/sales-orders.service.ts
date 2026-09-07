@@ -5,6 +5,7 @@ import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreateSalesOrderDto, UpdateSalesOrderDto, UpdateOrderStatusDto, AddDepositDto } from './sales-orders.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 
 @Injectable()
 export class SalesOrdersService {
@@ -28,6 +29,10 @@ export class SalesOrdersService {
 
     async create(tenantId: string, userId: string, dto: CreateSalesOrderDto) {
         return this.db.$transaction(async (tx) => {
+            if (dto.newCustomer) {
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+            }
+
             const orderNumber = `ORD-${Date.now()}`;
             const deliveryDate = this.normalizeDeliveryDate(dto.deliveryDate);
             

@@ -6,7 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
-import CustomerSelection from '../../components/CustomerSelection';
+import CustomerSelection, {
+    newCustomerPayload,
+    type NewCustomerDraft,
+} from '../../components/CustomerSelection';
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import TotalsFooter from '../../components/TotalsFooter';
@@ -21,6 +24,7 @@ import ProformaTermsFields, {
     type ProformaTerms,
 } from '../ProformaTermsFields';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { useI18n } from '@/lib/i18n';
 
 export default function NewQuotationPage() {
     const router = useRouter();
@@ -42,6 +46,9 @@ export default function NewQuotationPage() {
         clearCart,
     } = useNewSaleCart();
 
+    const { t } = useI18n();
+    const [customerDraft, setCustomerDraft] = useState<NewCustomerDraft | null>(null);
+    const [customerDraftNameInvalid, setCustomerDraftNameInvalid] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [validUntil, setValidUntil] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -113,11 +120,19 @@ export default function NewQuotationPage() {
             return;
         }
 
+        if (customerDraft && !customerDraft.name.trim()) {
+            setCustomerDraftNameInvalid(true);
+            toast.error(t.shared.customerNameRequiredInline);
+            return;
+        }
+        setCustomerDraftNameInvalid(false);
+
         setSubmitting(true);
         try {
             await api.createQuotation({
                 storeId: getWorkspaceItem('store_id') || '',
-                customerId: customer?.id,
+                customerId: customerDraft ? undefined : customer?.id,
+                newCustomer: newCustomerPayload(customerDraft),
                 items: items.map((item) => ({
                     productId: item.productId,
                     quantity: item.quantity,
@@ -162,7 +177,15 @@ export default function NewQuotationPage() {
                     </MetaField>
                 </DocumentMetaBar>
             }
-            partyPicker={<CustomerSelection customer={customer} setCustomer={setCustomer} />}
+            partyPicker={(
+                <CustomerSelection
+                    customer={customer}
+                    setCustomer={setCustomer}
+                    draft={customerDraft}
+                    setDraft={setCustomerDraft}
+                    draftNameInvalid={customerDraftNameInvalid}
+                />
+            )}
             picker={
                 <VoiceEntryInput entryType="sales_quote" onResult={handleVoiceQuote} inline>
                     <ProductSearch onProductSelect={handleAddItem} />

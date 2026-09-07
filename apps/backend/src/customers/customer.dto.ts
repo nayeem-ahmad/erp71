@@ -85,6 +85,29 @@ export class CreateCustomerDto {
     anniversary?: string;
 }
 
+/**
+ * Quick-create payload for the document-entry customer pickers. Only `name` is
+ * required; the document's service creates the customer in the same
+ * transaction, so nothing is persisted if the document itself fails.
+ */
+export class InlineCustomerDto {
+    @IsString()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    @Matches(/^\+?[0-9\s\-]+$/, { message: 'Invalid phone number format' })
+    phone?: string;
+
+    @IsOptional()
+    @IsEmail()
+    email?: string;
+
+    @IsOptional()
+    @IsString()
+    address?: string;
+}
+
 export class UpdateCustomerDto {
     @IsOptional()
     @IsString()

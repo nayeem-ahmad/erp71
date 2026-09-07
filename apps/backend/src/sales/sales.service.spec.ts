@@ -65,6 +65,8 @@ describe('SalesService', () => {
       customer: {
         update: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'cust-inline' }),
       },
       customerCreditTransaction: {
         create: jest.fn(),
@@ -222,6 +224,34 @@ describe('SalesService', () => {
 
       expect(tx.customer.update).toHaveBeenCalledWith({
         where: { id: 'cust-1' },
+        data: { total_spent: { increment: 50 } },
+      });
+    });
+
+    it('creates a customer inline when a newCustomer payload is provided', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-inline', total_amount: 50 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.customer.update.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        newCustomer: { name: 'Walk-in Rahim', phone: '01711111111' },
+        totalAmount: 50,
+        amountPaid: 50,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
+      });
+
+      expect(tx.customer.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Walk-in Rahim' }),
+        select: { id: true },
+      });
+      // The sale, and everything keyed off the customer, use the new id.
+      expect(tx.sale.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ customer_id: 'cust-inline' }),
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-inline' },
         data: { total_spent: { increment: 50 } },
       });
     });

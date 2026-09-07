@@ -1,5 +1,9 @@
 export const salesMessages = {
     shared: {
+        newCustomer: "नया ग्राहक",
+        useExisting: "मौजूदा उपयोग करें",
+        customerNamePlaceholder: "ग्राहक का नाम",
+        customerNameRequiredInline: "यहीं ग्राहक बनाते समय नाम आवश्यक है।",
         walkIn: "वॉक-इन",
         walkInCustomer: "वॉक-इन ग्राहक",
         walkInDraft: "वॉक-इन ड्राफ़्ट",

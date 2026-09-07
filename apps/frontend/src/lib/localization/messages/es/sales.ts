@@ -1,5 +1,9 @@
 export const salesMessages = {
     shared: {
+        newCustomer: "Nuevo cliente",
+        useExisting: "Usar existente",
+        customerNamePlaceholder: "Nombre del cliente",
+        customerNameRequiredInline: "El nombre del cliente es obligatorio al crearlo aquí mismo.",
         walkIn: "Sin cita",
         walkInCustomer: "Cliente sin cita",
         walkInDraft: "Borrador sin cita",

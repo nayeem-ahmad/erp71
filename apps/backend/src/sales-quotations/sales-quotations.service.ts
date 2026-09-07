@@ -15,6 +15,7 @@ import { DocumentSeries, nextDocumentNumber } from '../database/document-number.
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { ShortLinksService } from '../short-links/short-links.service';
 import { toPublicQuotation } from './public-quotation.dto';
+import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 
 /**
  * Both share entity types resolve to a Quotation row and to the same
@@ -84,6 +85,10 @@ export class SalesQuotationsService {
         const docKind: QuotationDocKind = dto.docKind ?? 'QUOTE';
 
         return this.db.$transaction(async (tx) => {
+            if (dto.newCustomer) {
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+            }
+
             const quoteNumber = await nextDocumentNumber(tx, {
                 tenantId,
                 series: docKind === 'PROFORMA' ? DocumentSeries.PROFORMA : DocumentSeries.QUOTE,

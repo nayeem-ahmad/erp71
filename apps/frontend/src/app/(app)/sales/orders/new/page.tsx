@@ -6,7 +6,10 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
-import CustomerSelection from '../../components/CustomerSelection';
+import CustomerSelection, {
+    newCustomerPayload,
+    type NewCustomerDraft,
+} from '../../components/CustomerSelection';
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import TotalsFooter from '../../components/TotalsFooter';
@@ -16,9 +19,11 @@ import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entr
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { toast } from '@/lib/toast';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { useI18n } from '@/lib/i18n';
 
 export default function NewSalesOrderPage() {
     const router = useRouter();
+    const { t } = useI18n();
     // No `description` here on purpose: CreateSalesOrderDto has no notes field,
     // so a note box on this screen would be silently dropped on save.
     const {
@@ -31,6 +36,8 @@ export default function NewSalesOrderPage() {
         clearCart,
     } = useNewSaleCart();
 
+    const [customerDraft, setCustomerDraft] = useState<NewCustomerDraft | null>(null);
+    const [customerDraftNameInvalid, setCustomerDraftNameInvalid] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [deliveryDate, setDeliveryDate] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -93,11 +100,19 @@ export default function NewSalesOrderPage() {
             return;
         }
 
+        if (customerDraft && !customerDraft.name.trim()) {
+            setCustomerDraftNameInvalid(true);
+            toast.error(t.shared.customerNameRequiredInline);
+            return;
+        }
+        setCustomerDraftNameInvalid(false);
+
         setSubmitting(true);
         try {
             await api.createOrder({
                 storeId: getWorkspaceItem('store_id') || '',
-                customerId: customer?.id,
+                customerId: customerDraft ? undefined : customer?.id,
+                newCustomer: newCustomerPayload(customerDraft),
                 items: items.map((item) => ({
                     productId: item.productId,
                     quantity: item.quantity,
@@ -109,6 +124,7 @@ export default function NewSalesOrderPage() {
             });
 
             clearCart();
+            setCustomerDraft(null);
             toast.success('Sales order created');
             router.push(routes.sales.orders);
         } catch (error: any) {
@@ -141,7 +157,15 @@ export default function NewSalesOrderPage() {
                     </MetaField>
                 </DocumentMetaBar>
             }
-            partyPicker={<CustomerSelection customer={customer} setCustomer={setCustomer} />}
+            partyPicker={(
+                <CustomerSelection
+                    customer={customer}
+                    setCustomer={setCustomer}
+                    draft={customerDraft}
+                    setDraft={setCustomerDraft}
+                    draftNameInvalid={customerDraftNameInvalid}
+                />
+            )}
             picker={
                 <VoiceEntryInput entryType="sales_order" onResult={handleVoiceOrder} inline>
                     <ProductSearch onProductSelect={handleAddItem} />

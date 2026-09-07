@@ -40,6 +40,7 @@ jest.mock('lucide-react', () => ({
   List: () => <span data-testid="icon-list" />,
   Gift: () => <span data-testid="icon-gift" />,
   User: () => <span data-testid="icon-user" />,
+  UserPlus: () => <span data-testid="icon-user-plus" />,
   History: () => <span data-testid="icon-history" />,
   Receipt: () => <span data-testid="icon-receipt" />,
 }));

@@ -10,6 +10,7 @@ import {
     IsString,
     ValidateNested,
 } from 'class-validator';
+import { InlineCustomerDto } from '../customers/customer.dto';
 
 export class CreateSaleItemDto {
     @IsString()
@@ -53,6 +54,16 @@ export class CreateSaleDto {
     @IsOptional()
     @IsString()
     customerId?: string;
+
+    /**
+     * A customer typed into the picker's quick-create form. Resolved to a real
+     * customer inside the sale transaction, so an abandoned sale creates no one.
+     * Takes precedence over `customerId` when both arrive.
+     */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => InlineCustomerDto)
+    newCustomer?: InlineCustomerDto;
 
     @IsOptional()
     @IsString()

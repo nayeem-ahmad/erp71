@@ -1,4 +1,6 @@
-import { IsString, IsArray, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { InlineCustomerDto } from '../customers/customer.dto';
 
 export class CreateSalesOrderItemDto {
     @IsString()
@@ -18,6 +20,12 @@ export class CreateSalesOrderDto {
     @IsOptional()
     @IsString()
     customerId?: string;
+
+    /** Quick-created customer, saved with the order. See `InlineCustomerDto`. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => InlineCustomerDto)
+    newCustomer?: InlineCustomerDto;
 
     @IsArray()
     items: CreateSalesOrderItemDto[];
