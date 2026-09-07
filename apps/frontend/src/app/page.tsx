@@ -16,12 +16,12 @@ import HomeClient from './HomeClient';
  * for a crawler.
  */
 export const metadata: Metadata = {
-    title: 'ERP71 — Retail ERP for Bangladeshi shops',
-    description: 'POS, inventory, accounting and CRM in one system, built for small and medium retailers in Bangladesh.',
+    title: 'ERP71 — Business management for small businesses',
+    description: 'POS, inventory, accounting and CRM in one system, built for small and medium businesses.',
     alternates: { canonical: siteOrigin() },
     openGraph: {
-        title: 'ERP71 — Retail ERP for Bangladeshi shops',
-        description: 'POS, inventory, accounting and CRM in one system, built for small and medium retailers in Bangladesh.',
+        title: 'ERP71 — Business management for small businesses',
+        description: 'POS, inventory, accounting and CRM in one system, built for small and medium businesses.',
         type: 'website',
     },
 };

@@ -43,7 +43,7 @@ describe('HomePage', () => {
 
     it('renders the hero tagline badge', () => {
         render(<HomePage />);
-        expect(screen.getByText('Built for Bangladeshi SMEs')).toBeInTheDocument();
+        expect(screen.getByText('Built for small businesses')).toBeInTheDocument();
     });
 
     it('renders the hero heading', () => {
@@ -52,11 +52,12 @@ describe('HomePage', () => {
         expect(screen.getByText('Grow with confidence.')).toBeInTheDocument();
     });
 
-    it('renders the dashboard preview', () => {
+    it('renders the dashboard preview as a real screenshot', () => {
+        // The preview used to be a hand-built mock that drifted from the app;
+        // it is now a screenshot of the actual dashboard.
         render(<HomePage />);
-        expect(screen.getByText('app.erp71.com/dashboard')).toBeInTheDocument();
-        expect(screen.getByText('Today sales')).toBeInTheDocument();
-        expect(screen.getByText('Recent sales')).toBeInTheDocument();
+        const shot = screen.getByRole('img', { name: /ERP71 dashboard/i });
+        expect(shot).toHaveAttribute('src', expect.stringContaining('dashboard-preview'));
     });
 
     it('renders the how-it-works section', () => {
@@ -84,23 +85,30 @@ describe('HomePage', () => {
         expect(screen.getByText('Online Storefront')).toBeInTheDocument();
     });
 
-    it('renders payment methods', () => {
+    it('renders payment methods, generic ones first', () => {
         render(<HomePage />);
-        expect(screen.getByText('Payments your customers already use')).toBeInTheDocument();
+        expect(screen.getByText('Take payment however your customers pay')).toBeInTheDocument();
+        expect(screen.getByText('Cash')).toBeInTheDocument();
+        expect(screen.getByText('Cards')).toBeInTheDocument();
+        // The regional gateways are still supported, just no longer the headline.
         expect(screen.getByText('bKash')).toBeInTheDocument();
-        expect(screen.getByText('Nagad')).toBeInTheDocument();
     });
 
-    it('renders the stats section', () => {
+    it('renders capabilities rather than invented traction numbers', () => {
+        // We are pre-launch: the band claims what the product does, not how
+        // many businesses use it.
         render(<HomePage />);
-        expect(screen.getByText('500+')).toBeInTheDocument();
-        expect(screen.getByText('Active businesses')).toBeInTheDocument();
+        expect(screen.getByText('What you get on day one')).toBeInTheDocument();
+        expect(screen.getByText('Double-entry')).toBeInTheDocument();
+        expect(screen.queryByText('500+')).not.toBeInTheDocument();
+        expect(screen.queryByText(/Sales processed daily/)).not.toBeInTheDocument();
     });
 
-    it('renders testimonials', () => {
+    it('renders use cases in place of invented testimonials', () => {
         render(<HomePage />);
-        expect(screen.getByText('Trusted by businesses across Bangladesh')).toBeInTheDocument();
-        expect(screen.getByText('Rahim Uddin')).toBeInTheDocument();
+        expect(screen.getByText('Built for how you actually work')).toBeInTheDocument();
+        expect(screen.getByText('Retail & POS')).toBeInTheDocument();
+        expect(screen.queryByText('Rahim Uddin')).not.toBeInTheDocument();
     });
 
     it('renders the ladder tiers in the pricing preview', async () => {

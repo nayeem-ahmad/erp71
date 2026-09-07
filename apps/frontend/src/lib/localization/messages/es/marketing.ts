@@ -21,31 +21,26 @@ export const marketingMessages = {
 
     home: {
         preview: {
-            url: 'app.erp71.com/dashboard',
-            sidebar: ["Panel", 'POS', "Inventario", "Ventas", "Contabilidad"],
-            cards: {
-                todaySales: "Ventas de hoy",
-                orders: "Pedidos",
-                lowStock: "Existencias bajas",
-                customers: "Clientes",
-            },
-            recentSales: "Ventas recientes",
-            live: "En vivo",
+            alt: "El panel de ERP71 con ventas, beneficio neto, efectivo disponible y cuentas por cobrar del mes, con un gráfico de flujo de caja y ventas por categoría",
+            caption: "El panel real, con datos de demostración.",
         },
         hero: {
-            badge: "Creado para pymes de Bangladés",
+            badge: "Creado para pequeñas empresas",
             titleLine1: "Gestione su negocio.",
             titleLine2: "Crezca con confianza.",
-            description: "Gestión todo en uno: ventas, inventario, contabilidad, tienda en línea y pagos en BDT. Empiece en minutos, ya tenga un comercio, una fábrica o una empresa de servicios.",
+            description: "Gestión todo en uno: ventas, inventario, contabilidad, tienda en línea y pagos. Empiece en minutos, ya tenga un comercio, una fábrica o una empresa de servicios.",
             startTrial: "Empezar",
             tryDemo: "Probar la demo",
             footnote: "Solo planes de pago · Complete el pago para activar su espacio de trabajo",
         },
-        stats: {
-            activeStores: "Negocios activos",
-            salesProcessed: "Ventas procesadas al día",
-            uptime: "SLA de disponibilidad",
-            posTime: "Tiempo de transacción en POS",
+        capabilities: {
+            title: "Lo que tiene desde el primer día",
+            items: [
+                { value: "Partida doble", label: "Contabilidad real, no un libro de caja" },
+                { value: "Multisucursal", label: "Todas sus sedes en un panel" },
+                { value: "Por roles", label: "Cada persona ve solo su trabajo" },
+                { value: "Espacio propio", label: "Un espacio de trabajo privado y aislado" },
+            ],
         },
         howItWorks: {
             title: "En marcha en una tarde",
@@ -80,17 +75,20 @@ export const marketingMessages = {
             ],
         },
         payments: {
-            title: "Los pagos que sus clientes ya utilizan",
+            title: "Cobre como pague su cliente",
+            description: "Efectivo y tarjetas en todas partes, más las billeteras móviles y pasarelas que ya admitimos. Seguimos añadiendo proveedores regionales.",
         },
-        testimonials: {
-            title: "La confianza de negocios de todo Bangladés",
+        useCases: {
+            title: "Pensado para su forma de trabajar",
+            description: "El mismo núcleo — productos, existencias, dinero — adaptado a cómo funciona su negocio.",
             items: [
-                { name: 'Rahim Uddin', role: "Propietario, Rahim Electronics, Daca", quote: "Pasamos de los libros en papel a ERP71 en una semana. La exactitud de nuestro inventario mejoró de la noche a la mañana." },
-                { name: 'Nasrin Begum', role: "Gerente, Fashion House, Chittagong", quote: "El POS es increíblemente rápido. Durante la avalancha del Eid procesamos cientos de ventas sin un solo fallo." },
-                { name: 'Kamal Hossain', role: "Director, KH Supermart, Sylhet", quote: "El inventario en varios locales era nuestro mayor quebradero de cabeza. Ahora vemos cada sucursal desde un único panel." },
+                { title: "Comercio y TPV", desc: "Cobre en el mostrador, escanee códigos, divida pagos y vea el stock actualizarse mientras vende." },
+                { title: "Mayoreo y distribución", desc: "Listas de precios por cliente, crédito, pagos parciales y cuentas por cobrar que puede reclamar." },
+                { title: "Empresas de servicios", desc: "Presupueste, facture y cobre — con la contabilidad detrás y sin inventario que gestionar." },
+                { title: "Fabricación ligera", desc: "Convierta materia prima en producto terminado, controle lo consumido y calcule su coste real." },
             ],
         },
-        trustBadges: ["Alojado en Bangladés", "Facturación nativa en BDT", "Acceso por roles", "Registros de auditoría"],
+        trustBadges: ["Sus datos son suyos", "Acceso por roles", "Registros de auditoría", "Exporte cuando quiera"],
         pricing: {
             title: "Precios sencillos y transparentes",
             description: "Elija el plan de pago que encaje con su negocio. Cambie de plan cuando quiera.",

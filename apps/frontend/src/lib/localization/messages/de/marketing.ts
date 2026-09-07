@@ -21,16 +21,8 @@ export const marketingMessages = {
 
     home: {
         preview: {
-            url: 'app.erp71.com/dashboard',
-            sidebar: ["Dashboard", 'POS', "Lagerbestand", "Verkäufe", "Buchhaltung"],
-            cards: {
-                todaySales: "Heutige Verkäufe",
-                orders: "Bestellungen",
-                lowStock: "Geringer Bestand",
-                customers: "Kunden",
-            },
-            recentSales: "Letzte Verkäufe",
-            live: "Live",
+            alt: "Das ERP71-Dashboard mit Umsatz, Reingewinn, Kassenbestand und Forderungen des Monats, dazu ein Cashflow-Diagramm und Umsatz nach Kategorie",
+            caption: "Das echte Dashboard, mit Demodaten.",
         },
         hero: {
             badge: "Für bangladeschische KMU entwickelt",
@@ -41,11 +33,14 @@ export const marketingMessages = {
             tryDemo: "Demo testen",
             footnote: "Nur kostenpflichtige Tarife · Schließen Sie den Kauf ab, um Ihren Arbeitsbereich zu aktivieren",
         },
-        stats: {
-            activeStores: "Aktive Unternehmen",
-            salesProcessed: "Täglich verarbeitete Verkäufe",
-            uptime: "Verfügbarkeits-SLA",
-            posTime: "POS-Transaktionsdauer",
+        capabilities: {
+            title: "Das haben Sie ab dem ersten Tag",
+            items: [
+                { value: "Doppelte Buchführung", label: "Echte Buchhaltung, kein Kassenbuch" },
+                { value: "Mehrere Filialen", label: "Alle Standorte in einem Dashboard" },
+                { value: "Rollenbasiert", label: "Jeder sieht nur seinen Bereich" },
+                { value: "Eigener Bereich", label: "Ein isolierter, privater Arbeitsbereich" },
+            ],
         },
         howItWorks: {
             title: "An einem Nachmittag einsatzbereit",
@@ -80,17 +75,20 @@ export const marketingMessages = {
             ],
         },
         payments: {
-            title: "Zahlungsarten, die Ihre Kunden bereits nutzen",
+            title: "Kassieren Sie so, wie Ihre Kunden zahlen",
+            description: "Bargeld und Karten überall, dazu die Mobile Wallets und Gateways, die wir heute unterstützen. Weitere regionale Anbieter kommen laufend dazu.",
         },
-        testimonials: {
-            title: "Vertrauen von Unternehmen in ganz Bangladesch",
+        useCases: {
+            title: "Gebaut für Ihre Arbeitsweise",
+            description: "Derselbe Kern — Artikel, Bestand, Geld — zugeschnitten auf Ihr Geschäft.",
             items: [
-                { name: 'Rahim Uddin', role: "Inhaber, Rahim Electronics, Dhaka", quote: "Innerhalb einer Woche von Papierbüchern auf ERP71 umgestiegen. Unsere Bestandsgenauigkeit war über Nacht besser." },
-                { name: 'Nasrin Begum', role: "Leiterin, Fashion House, Chittagong", quote: "Das POS ist unglaublich schnell. Im Eid-Ansturm haben wir Hunderte Verkäufe ohne einen einzigen Aussetzer abgewickelt." },
-                { name: 'Kamal Hossain', role: "Direktor, KH Supermart, Sylhet", quote: "Bestand über mehrere Standorte war unser größtes Problem. Jetzt sehen wir jede Filiale in einem Dashboard." },
+                { title: "Einzelhandel & Kasse", desc: "Kassieren Sie am Tresen, scannen Sie Barcodes, teilen Sie Zahlungen — der Bestand aktualisiert sich beim Verkauf." },
+                { title: "Großhandel & Vertrieb", desc: "Preislisten je Kunde, Zahlungsziele, Teilzahlungen und Forderungen, die Sie wirklich nachverfolgen können." },
+                { title: "Dienstleister", desc: "Angebot, Rechnung, Zahlungseingang — mit der Buchhaltung dahinter und ohne Lagerverwaltung." },
+                { title: "Leichte Fertigung", desc: "Aus Rohstoffen Fertigware machen, den Verbrauch je Auftrag erfassen und sauber kalkulieren." },
             ],
         },
-        trustBadges: ["In Bangladesch gehostet", "Abrechnung nativ in BDT", "Rollenbasierter Zugriff", "Audit-Protokolle"],
+        trustBadges: ["Ihre Daten bleiben Ihre", "Rollenbasierter Zugriff", "Audit-Logs", "Jederzeit exportierbar"],
         pricing: {
             title: "Einfache, transparente Preise",
             description: "Wählen Sie den kostenpflichtigen Tarif, der zu Ihrem Unternehmen passt. Jederzeit aufrüstbar.",

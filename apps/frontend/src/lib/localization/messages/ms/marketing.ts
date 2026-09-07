@@ -21,25 +21,11 @@ export const marketingMessages = {
 
         home: {
             preview: {
-                url: "app.erp71.com/dashboard",
-                sidebar: [
-                    "Dashboard",
-                    "POS",
-                    "Inventori",
-                    "Jualan",
-                    "Perakaunan",
-                ],
-                cards: {
-                    todaySales: "Jualan hari ini",
-                    orders: "Pesanan",
-                    lowStock: "Stok rendah",
-                    customers: "Pelanggan",
-                },
-                recentSales: "Jualan terkini",
-                live: "Langsung",
+                alt: "Papan pemuka ERP71 memaparkan jualan, untung bersih, tunai di tangan dan belum terkutip bagi bulan tersebut, dengan carta aliran tunai dan jualan mengikut kategori",
+                caption: "Papan pemuka sebenar, dengan data demo.",
             },
             hero: {
-                badge: "Dibina untuk PKS Bangladesh",
+                badge: "Dibina untuk perniagaan kecil",
                 titleLine1: "Uruskan perniagaan anda.",
                 titleLine2: "Berkembang dengan yakin.",
                 description: "Pengurusan perniagaan semua-dalam-satu — jualan, inventori, perakaunan, kedai dalam talian, dan pembayaran BDT. Mulakan dalam beberapa minit, sama ada kedai, kilang, atau firma perkhidmatan.",
@@ -47,11 +33,14 @@ export const marketingMessages = {
                 tryDemo: "Cuba Demo",
                 footnote: "Pelan berbayar sahaja · Lengkapkan pembayaran untuk mengaktifkan ruang kerja anda",
             },
-            stats: {
-                activeStores: "Perniagaan aktif",
-                salesProcessed: "Jualan diproses setiap hari",
-                uptime: "SLA Masa Aktif",
-                posTime: "Masa transaksi POS",
+            capabilities: {
+                title: "Apa yang anda dapat pada hari pertama",
+                items: [
+                    { value: "Catatan bergu", label: "Perakaunan sebenar, bukan buku tunai" },
+                    { value: "Pelbagai cawangan", label: "Semua lokasi pada satu papan pemuka" },
+                    { value: "Ikut peranan", label: "Setiap orang lihat kerjanya sahaja" },
+                    { value: "Ruang sendiri", label: "Ruang kerja peribadi dan terasing" },
+                ],
             },
             howItWorks: {
                 title: "Berjalan dalam masa satu petang",
@@ -152,34 +141,20 @@ export const marketingMessages = {
                 ],
             },
             payments: {
-                title: "Pembayaran yang pelanggan anda sudah gunakan",
+                title: "Terima bayaran ikut cara pelanggan anda membayar",
+                description: "Tunai dan kad di mana-mana, serta dompet mudah alih dan gerbang pembayaran yang kami sokong hari ini. Lebih banyak penyedia serantau sedang ditambah.",
             },
-            testimonials: {
-                title: "Dipercayai oleh perniagaan di seluruh Bangladesh",
+            useCases: {
+                title: "Dibina untuk cara anda bekerja",
+                description: "Teras yang sama — produk, stok, wang — disesuaikan dengan cara perniagaan anda berjalan.",
                 items: [
-                    {
-                        name: "Rahim Uddin",
-                        role: "Pemilik, Rahim Electronics, Dhaka",
-                        quote: "Beralih dari lejar kertas ke ERP71 dalam masa seminggu. Ketepatan stok kami bertambah baik dalam sekelip mata.",
-                    },
-                    {
-                        name: "Nasrin Begum",
-                        role: "Pengurus, Fashion House, Chittagong",
-                        quote: "POS ini sangat pantas. Semasa kunjungan Hari Raya kami memproses ratusan jualan tanpa sebarang masalah.",
-                    },
-                    {
-                        name: "Kamal Hossain",
-                        role: "Pengarah, KH Supermart, Sylhet",
-                        quote: "Inventori pelbagai lokasi adalah masalah terbesar kami. Kini kami boleh melihat setiap cawangan dari satu papan pemuka.",
-                    },
+                    { title: "Runcit & POS", desc: "Buat jualan di kaunter, imbas kod bar, pecahkan bayaran dan lihat stok dikemas kini serta-merta." },
+                    { title: "Borong & pengedaran", desc: "Senarai harga ikut pelanggan, terma kredit, bayaran ansuran dan baki belum terkutip yang boleh dikejar." },
+                    { title: "Perniagaan perkhidmatan", desc: "Sebut harga, invois dan kutipan — dengan akaun tersusun di belakangnya, tanpa stok untuk diurus." },
+                    { title: "Pembuatan ringan", desc: "Tukar bahan mentah kepada barang siap, jejak penggunaan setiap kelompok dan kira kosnya dengan betul." },
                 ],
             },
-            trustBadges: [
-                "Dihoskan di Bangladesh",
-                "Pengebilan natif BDT",
-                "Akses berasaskan peranan",
-                "Log audit",
-            ],
+            trustBadges: ["Data anda kekal milik anda", "Akses ikut peranan", "Log audit", "Eksport bila-bila masa"],
             pricing: {
                 title: "Harga mudah dan telus",
                 description: "Pilih pelan berbayar yang sesuai dengan perniagaan anda. Naik taraf bila-bila masa apabila anda berkembang.",

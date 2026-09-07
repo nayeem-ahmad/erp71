@@ -1,13 +1,6 @@
 import {
-    BarChart3, BookOpen, Globe, Package, Receipt, ShoppingCart, Store, Users, Wallet,
+    BarChart3, BookOpen, Factory, Globe, Package, ShoppingCart, Store, Truck, Users, Wallet, Wrench,
 } from 'lucide-react';
-
-export const HERO_STATS = [
-    { value: '500+', label: 'Active stores' },
-    { value: '৳ 2Cr+', label: 'Sales processed daily' },
-    { value: '99.9%', label: 'Uptime SLA' },
-    { value: '< 1s', label: 'POS transaction time' },
-] as const;
 
 export const HOW_IT_WORKS = [
     {
@@ -18,7 +11,7 @@ export const HOW_IT_WORKS = [
     {
         step: '02',
         title: 'Add products & stock',
-        description: 'Import or add products, set prices in BDT, and configure warehouses for accurate inventory.',
+        description: 'Import or add products, set your prices, and configure warehouses for accurate inventory.',
     },
     {
         step: '03',
@@ -56,12 +49,12 @@ export const FEATURES = [
     {
         icon: Wallet,
         title: 'Integrated Payments',
-        desc: 'Accept bKash, Nagad, SSL Wireless, and cash — reconciled automatically.',
+        desc: 'Take cash, cards and mobile wallets — reconciled automatically.',
     },
     {
         icon: Globe,
         title: 'Multi-Tenant SaaS',
-        desc: 'Each business gets an isolated workspace. Scale from one store to a nationwide chain.',
+        desc: 'Each business gets an isolated workspace. Scale from one store to a whole chain.',
     },
 ] as const;
 
@@ -81,8 +74,8 @@ export const MODULES = [
     {
         icon: BookOpen,
         title: 'Accounting',
-        desc: 'Full double-entry books with COA, journals, VAT ledger, and financial reports for Bangladesh.',
-        bullets: ['P&L & balance sheet', 'Bank reconciliation', 'NBR-ready VAT report'],
+        desc: 'Full double-entry books with chart of accounts, journals, a tax ledger and the reports your accountant asks for.',
+        bullets: ['P&L & balance sheet', 'Bank reconciliation', 'Tax-ready reporting'],
     },
     {
         icon: Store,
@@ -93,37 +86,25 @@ export const MODULES = [
 ] as const;
 
 export const PAYMENT_METHODS = [
+    { name: 'Cash', tone: 'bg-gray-100 text-gray-700' },
+    { name: 'Cards', tone: 'bg-blue-100 text-blue-700' },
+    { name: 'Bank transfer', tone: 'bg-slate-100 text-slate-700' },
     { name: 'bKash', tone: 'bg-pink-100 text-pink-700' },
     { name: 'Nagad', tone: 'bg-orange-100 text-orange-700' },
     { name: 'SSLCommerz', tone: 'bg-indigo-100 text-indigo-700' },
-    { name: 'Cash', tone: 'bg-gray-100 text-gray-700' },
-    { name: 'Cards', tone: 'bg-blue-100 text-blue-700' },
 ] as const;
 
-export const TESTIMONIALS = [
-    {
-        name: 'Rahim Uddin',
-        role: 'Owner, Rahim Electronics, Dhaka',
-        quote: 'Switched from paper ledgers to ERP71 in a week. Our stock accuracy improved overnight.',
-        stars: 5,
-    },
-    {
-        name: 'Nasrin Begum',
-        role: 'Manager, Fashion House, Chittagong',
-        quote: 'The POS is incredibly fast. During Eid rush we processed hundreds of sales without a single hiccup.',
-        stars: 5,
-    },
-    {
-        name: 'Kamal Hossain',
-        role: 'Director, KH Supermart, Sylhet',
-        quote: 'Multi-location inventory was our biggest headache. Now we can see every branch from one dashboard.',
-        stars: 5,
-    },
+/** Icons for the use-case cards; the copy lives in the message catalog. */
+export const USE_CASES = [
+    { icon: ShoppingCart },
+    { icon: Truck },
+    { icon: Wrench },
+    { icon: Factory },
 ] as const;
 
 export const TRUST_BADGES = [
-    'Bangladesh-hosted',
-    'BDT-native billing',
+    'Your data stays yours',
     'Role-based access',
     'Audit logs',
+    'Export anytime',
 ] as const;

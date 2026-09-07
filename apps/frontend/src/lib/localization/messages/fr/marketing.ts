@@ -21,19 +21,11 @@ export const marketingMessages = {
 
     home: {
         preview: {
-            url: 'app.erp71.com/dashboard',
-            sidebar: ["Tableau de bord", 'POS', "Stock", "Ventes", "Comptabilité"],
-            cards: {
-                todaySales: "Ventes du jour",
-                orders: "Commandes",
-                lowStock: "Stock faible",
-                customers: "Clients",
-            },
-            recentSales: "Ventes récentes",
-            live: "En direct",
+            alt: "Le tableau de bord ERP71 affichant les ventes, le bénéfice net, la trésorerie et les créances du mois, avec un graphique de flux de trésorerie et les ventes par catégorie",
+            caption: "Le vrai tableau de bord, avec des données de démonstration.",
         },
         hero: {
-            badge: "Conçu pour les PME du Bangladesh",
+            badge: "Conçu pour les petites entreprises",
             titleLine1: "Pilotez votre entreprise.",
             titleLine2: "Développez-vous en confiance.",
             description: "Une gestion tout-en-un — ventes, stock, comptabilité, boutique en ligne et paiements en BDT. Opérationnel en quelques minutes, que vous dirigiez un commerce, une usine ou une société de services.",
@@ -41,11 +33,14 @@ export const marketingMessages = {
             tryDemo: "Essayer la démo",
             footnote: "Offres payantes uniquement · Finalisez le paiement pour activer votre espace de travail",
         },
-        stats: {
-            activeStores: "Entreprises actives",
-            salesProcessed: "Ventes traitées par jour",
-            uptime: "SLA de disponibilité",
-            posTime: "Durée d'une transaction POS",
+        capabilities: {
+            title: "Ce que vous avez dès le premier jour",
+            items: [
+                { value: "Partie double", label: "Une vraie comptabilité, pas un livre de caisse" },
+                { value: "Multi-sites", label: "Tous vos points de vente sur un tableau de bord" },
+                { value: "Par rôles", label: "Chacun ne voit que son périmètre" },
+                { value: "Votre espace", label: "Un espace de travail isolé et privé" },
+            ],
         },
         howItWorks: {
             title: "Opérationnel en une après-midi",
@@ -80,17 +75,20 @@ export const marketingMessages = {
             ],
         },
         payments: {
-            title: "Les paiements que vos clients utilisent déjà",
+            title: "Encaissez comme vos clients paient",
+            description: "Espèces et cartes partout, ainsi que les portefeuilles mobiles et passerelles déjà pris en charge. D'autres prestataires régionaux arrivent.",
         },
-        testimonials: {
-            title: "La confiance des entreprises dans tout le Bangladesh",
+        useCases: {
+            title: "Conçu pour votre façon de travailler",
+            description: "Le même socle — produits, stock, argent — adapté au fonctionnement de votre activité.",
             items: [
-                { name: 'Rahim Uddin', role: "Propriétaire, Rahim Electronics, Dacca", quote: "Nous sommes passés des registres papier à ERP71 en une semaine. La précision de notre stock s'est améliorée du jour au lendemain." },
-                { name: 'Nasrin Begum', role: "Responsable, Fashion House, Chittagong", quote: "Le POS est incroyablement rapide. Pendant la ruée de l'Aïd, nous avons traité des centaines de ventes sans le moindre accroc." },
-                { name: 'Kamal Hossain', role: "Directeur, KH Supermart, Sylhet", quote: "Le stock multi-sites était notre plus gros casse-tête. Nous voyons désormais chaque succursale depuis un seul tableau de bord." },
+                { title: "Commerce & caisse", desc: "Encaissez au comptoir, scannez les codes-barres, fractionnez les paiements et voyez le stock se mettre à jour." },
+                { title: "Gros & distribution", desc: "Tarifs par client, conditions de crédit, paiements partiels et créances réellement suivies." },
+                { title: "Sociétés de services", desc: "Devis, facture et encaissement — la comptabilité derrière, sans stock à gérer." },
+                { title: "Fabrication légère", desc: "Transformez vos matières en produits finis, suivez ce que chaque série consomme et calculez son coût." },
             ],
         },
-        trustBadges: ["Hébergé au Bangladesh", "Facturation nativement en BDT", "Accès par rôles", "Journaux d'audit"],
+        trustBadges: ["Vos données restent les vôtres", "Accès par rôles", "Journaux d'audit", "Export à tout moment"],
         pricing: {
             title: "Des tarifs simples et transparents",
             description: "Choisissez l'offre payante adaptée à votre entreprise. Évoluez à tout moment.",
