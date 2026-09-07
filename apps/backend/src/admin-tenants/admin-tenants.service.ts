@@ -29,7 +29,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
-import { isEditableLedgerEvent, ledgerEventDelta } from './ledger-balance.util';
+import {
+    isEditableLedgerEvent,
+    ledgerEventDelta,
+    VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE,
+} from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
 import {
@@ -1231,8 +1235,10 @@ export class AdminTenantsService {
             where: {
                 ...(query.tenantId ? { tenant_id: query.tenantId } : {}),
                 tenant: ACTIVE_TENANT_FILTER,
-                // Payment reminders are not transactions — keep them out of the ledger.
-                event_type: { notIn: [...REMINDER_EVENT_TYPES] },
+                // Payment reminders are not transactions — keep them out of the
+                // ledger; the void tombstone is a deleted row that only still
+                // exists to hold the billing cron's idempotency key.
+                event_type: { notIn: [...REMINDER_EVENT_TYPES, VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE] },
             },
             orderBy: { created_at: 'desc' },
             include: {
@@ -1460,8 +1466,8 @@ export class AdminTenantsService {
 
         if (!isEditableLedgerEvent(event.event_type)) {
             throw new BadRequestException(
-                'Only manually recorded payments, refunds and fees can be edited or deleted. '
-                + 'Post an offsetting entry to correct a system-generated one.',
+                'Credit-sale payments cannot be edited or deleted — the credits they paid for are '
+                + 'already spendable. Post an offsetting entry to correct one.',
             );
         }
 
@@ -1483,7 +1489,13 @@ export class AdminTenantsService {
         if (dto.notes !== undefined) payload.notes = dto.notes || null;
         if (dto.method !== undefined) payload.method = dto.method || null;
 
-        const label = dto.label !== undefined ? (dto.label.trim() || null) : undefined;
+        // `reference_id` means different things per type — a free-text label on a
+        // manual fee, but the plan code on a subscription fee. Only the former is
+        // the admin's to rewrite, so a stray `label` on anything else is dropped
+        // rather than allowed to overwrite the plan the charge belongs to.
+        const label = event.event_type === 'manual_fee' && dto.label !== undefined
+            ? (dto.label.trim() || null)
+            : undefined;
         if (label !== undefined) payload.label = label;
 
         payload.edited_by = adminUserId;
@@ -1525,8 +1537,38 @@ export class AdminTenantsService {
 
     async deleteLedgerEntry(eventId: string, adminUserId: string) {
         const event = await this.findEditableLedgerEntry(eventId);
+        const amount = event.amount !== null ? Number(event.amount) : null;
 
-        await this.db.billingEvent.delete({ where: { id: eventId } });
+        // A subscription fee is voided in place rather than removed. The billing
+        // cron skips a period only when it finds an event under
+        // `subscription_fee:{tenantId}:{periodKey}`, and it never advances
+        // `current_period_end` itself — so on a PAST_DUE tenant this row is the
+        // only thing standing between the admin's deletion and the same fee
+        // reappearing on tomorrow's 10:00 run. Rewriting the row keeps that
+        // unique pair claimed atomically, which a delete-then-insert would not.
+        const voided = event.event_type === 'subscription_fee';
+
+        if (voided) {
+            const payload: Record<string, unknown> =
+                event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+                    ? { ...(event.payload as Prisma.JsonObject) }
+                    : {};
+            payload.voided_by = adminUserId;
+            payload.voided_at = new Date().toISOString();
+            payload.voided_amount = amount;
+
+            await this.db.billingEvent.update({
+                where: { id: eventId },
+                data: {
+                    event_type: VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE,
+                    status: 'voided',
+                    amount: null,
+                    payload: payload as Prisma.InputJsonObject,
+                },
+            });
+        } else {
+            await this.db.billingEvent.delete({ where: { id: eventId } });
+        }
 
         await this.auditService.log(
             'tenant.ledger_entry.delete',
@@ -1535,12 +1577,13 @@ export class AdminTenantsService {
             eventId,
             {
                 event_type: event.event_type,
-                amount: event.amount !== null ? Number(event.amount) : null,
+                amount,
                 occurred_at: event.created_at,
+                voided,
             },
         );
 
-        return { success: true, id: eventId };
+        return { success: true, id: eventId, voided };
     }
 
     async sellSmsCredits(tenantId: string, dto: AdminSellSmsCreditsDto, adminUserId: string) {

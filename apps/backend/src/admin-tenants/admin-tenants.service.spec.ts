@@ -1451,8 +1451,34 @@ describe('AdminTenantsService', () => {
       expect(db.billingEvent.update.mock.calls[0][0].data.payload.notes).toBeNull();
     });
 
-    it('refuses to edit a system-generated entry', async () => {
-      db.billingEvent.findFirst.mockResolvedValue({ ...existing, event_type: 'subscription_fee' });
+    it('corrects a subscription fee posted at the wrong price', async () => {
+      const fee = {
+        ...existing, event_type: 'subscription_fee', reference_id: 'BASIC', amount: 999,
+      };
+      db.billingEvent.findFirst.mockResolvedValue(fee);
+      db.billingEvent.update.mockResolvedValue({ ...fee, amount: 499 });
+
+      await service.updateLedgerEntry('be-1', { amount: 499 }, 'admin1');
+
+      expect(db.billingEvent.update.mock.calls[0][0].data.amount).toBe(499);
+    });
+
+    it('never lets a label overwrite the plan code on a subscription fee', async () => {
+      const fee = {
+        ...existing, event_type: 'subscription_fee', reference_id: 'BASIC',
+      };
+      db.billingEvent.findFirst.mockResolvedValue(fee);
+      db.billingEvent.update.mockResolvedValue(fee);
+
+      await service.updateLedgerEntry('be-1', { label: 'oops' }, 'admin1');
+
+      const data = db.billingEvent.update.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('reference_id');
+      expect(data.payload).not.toHaveProperty('label');
+    });
+
+    it('refuses to edit a credit-sale payment', async () => {
+      db.billingEvent.findFirst.mockResolvedValue({ ...existing, event_type: 'ai_credit_sale_payment' });
 
       await expect(service.updateLedgerEntry('be-1', { amount: 1 }, 'admin1'))
         .rejects.toBeInstanceOf(BadRequestException);
@@ -1481,7 +1507,29 @@ describe('AdminTenantsService', () => {
         'tenant.ledger_entry.delete', 'BillingEvent', { userId: 'admin1', tenantId: 't1' }, 'be-1',
         expect.objectContaining({ event_type: 'manual_fee', amount: 250 }),
       );
-      expect(result).toEqual({ success: true, id: 'be-1' });
+      expect(result).toEqual({ success: true, id: 'be-1', voided: false });
+    });
+
+    it('voids a subscription fee in place so the biller cannot re-post it', async () => {
+      db.billingEvent.findFirst.mockResolvedValue({
+        id: 'be-3', tenant_id: 't1', event_type: 'subscription_fee',
+        amount: 499, created_at: new Date('2026-03-01T10:00:00Z'),
+        payload: { plan_code: 'BASIC' },
+      });
+
+      const result = await service.deleteLedgerEntry('be-3', 'admin1');
+
+      // The row survives — it is the only thing holding
+      // `subscription_fee:{tenantId}:{periodKey}`, and the cron never advances
+      // `current_period_end` itself, so removing it re-posts the same fee.
+      expect(db.billingEvent.delete).not.toHaveBeenCalled();
+      const data = db.billingEvent.update.mock.calls[0][0].data;
+      expect(data.event_type).toBe('subscription_fee_voided');
+      expect(data.amount).toBeNull();
+      expect(data.payload).toEqual(expect.objectContaining({
+        plan_code: 'BASIC', voided_by: 'admin1', voided_amount: 499,
+      }));
+      expect(result).toEqual({ success: true, id: 'be-3', voided: true });
     });
 
     it('refuses to delete a credit-sale payment', async () => {
@@ -1497,7 +1545,7 @@ describe('AdminTenantsService', () => {
   });
 
   describe('listTenantLedger', () => {
-    it('flags manual entries as editable and machine-posted ones as not', async () => {
+    it('flags the correctable entries and leaves credit sales locked', async () => {
       db.billingEvent.findMany.mockResolvedValue([
         {
           id: 'be-1', tenant_id: 't1', event_type: 'manual_fee', status: 'posted',
@@ -1509,11 +1557,23 @@ describe('AdminTenantsService', () => {
           provider_name: 'manual', amount: 499, currency: 'BDT', reference_id: 'BASIC',
           payload: {}, created_at: new Date(), tenant: { id: 't1', name: 'Shop' },
         },
+        {
+          id: 'be-3', tenant_id: 't1', event_type: 'sms_credit_sale_payment', status: 'succeeded',
+          provider_name: 'manual', amount: 100, currency: 'BDT', reference_id: null,
+          payload: {}, created_at: new Date(), tenant: { id: 't1', name: 'Shop' },
+        },
       ]);
 
       const rows = await service.listTenantLedger({ tenantId: 't1' });
 
-      expect(rows.map((r: any) => r.editable)).toEqual([true, false]);
+      expect(rows.map((r: any) => r.editable)).toEqual([true, true, false]);
+    });
+
+    it('hides the void tombstone from the ledger', async () => {
+      await service.listTenantLedger({ tenantId: 't1' });
+
+      const notIn = db.billingEvent.findMany.mock.calls[0][0].where.event_type.notIn;
+      expect(notIn).toContain('subscription_fee_voided');
     });
   });
 });

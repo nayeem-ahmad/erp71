@@ -14,6 +14,9 @@ const KIND_BY_EVENT_TYPE: Record<string, LedgerEntryKind> = {
     manual_payment: 'payment',
     manual_refund: 'refund',
     manual_fee: 'fee',
+    // A subscription fee edits through the fee form, minus the label field —
+    // its `reference_id` is the plan code, not free text (see below).
+    subscription_fee: 'fee',
 };
 
 type Props = {
@@ -66,6 +69,9 @@ export default function TenantLedgerEntryModal({
     const em = ml.entryModal;
 
     const isEdit = Boolean(entry);
+    // Machine-posted: the amount, date and notes are the admin's to correct, but
+    // the plan code sitting in `reference_id` is not a label to retype.
+    const isSubscriptionFee = entry?.event_type === 'subscription_fee';
 
     const [tenantId, setTenantId] = useState(defaultTenantId);
     const [kind, setKind] = useState<LedgerEntryKind>(defaultKind);
@@ -88,7 +94,9 @@ export default function TenantLedgerEntryModal({
         setKind(entry ? (KIND_BY_EVENT_TYPE[entry.event_type] ?? 'fee') : defaultKind);
         setOccurredAt(toLocalInputValue(entry?.created_at ?? new Date()));
         setAmount(entry?.amount != null ? String(entry.amount) : '');
-        setLabel(entry ? (payloadString(entry, 'label') || entry.reference_id || '') : '');
+        setLabel(entry?.event_type === 'manual_fee'
+            ? (payloadString(entry, 'label') || entry.reference_id || '')
+            : '');
         setMethod(payloadString(entry, 'method'));
         setNotes(payloadString(entry, 'notes'));
     }, [open, entry, defaultTenantId, defaultKind]);
@@ -143,7 +151,7 @@ export default function TenantLedgerEntryModal({
                     amount: parsedAmount,
                     notes,
                     ...(kind === 'payment' ? { method } : {}),
-                    ...(kind === 'fee' ? { label } : {}),
+                    ...(kind === 'fee' && !isSubscriptionFee ? { label } : {}),
                     ...(occurredAtIso ? { occurredAt: occurredAtIso } : {}),
                 });
                 onSuccess(em.updateSuccess);
@@ -209,7 +217,10 @@ export default function TenantLedgerEntryModal({
                     </Select>
                 </Field>
 
-                <Field label={pm.typeLabel} hint={isEdit ? em.typeLockedHint : undefined}>
+                <Field
+                    label={pm.typeLabel}
+                    hint={isSubscriptionFee ? em.subscriptionFeeHint : isEdit ? em.typeLockedHint : undefined}
+                >
                     <div className="flex rounded-md border border-gray-200 overflow-hidden">
                         {kindOptions.map(({ value, label: optionLabel, icon: Icon }) => (
                             <button
@@ -255,7 +266,7 @@ export default function TenantLedgerEntryModal({
                     />
                 </Field>
 
-                {kind === 'fee' && (
+                {kind === 'fee' && !isSubscriptionFee && (
                     <Field label={em.feeLabelLabel} htmlFor="ledger-entry-label">
                         <Input
                             id="ledger-entry-label"

@@ -1,4 +1,9 @@
-import { computeLedgerBalance, isEditableLedgerEvent, ledgerEventDelta } from './ledger-balance.util';
+import {
+    computeLedgerBalance,
+    isEditableLedgerEvent,
+    ledgerEventDelta,
+    VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE,
+} from './ledger-balance.util';
 
 describe('ledger-balance.util', () => {
     it('sums manual payments and refunds', () => {
@@ -11,13 +16,20 @@ describe('ledger-balance.util', () => {
         expect(ledgerEventDelta('manual_fee', 250)).toBe(-250);
     });
 
-    it('only lets admins rewrite the entries admins typed in', () => {
+    it('opens the manual entries and the subscription fee to correction', () => {
         expect(isEditableLedgerEvent('manual_payment')).toBe(true);
         expect(isEditableLedgerEvent('manual_refund')).toBe(true);
         expect(isEditableLedgerEvent('manual_fee')).toBe(true);
-        expect(isEditableLedgerEvent('subscription_fee')).toBe(false);
+        expect(isEditableLedgerEvent('subscription_fee')).toBe(true);
+    });
+
+    it('keeps credit-sale payments locked — their credits are already spendable', () => {
         expect(isEditableLedgerEvent('sms_credit_sale_payment')).toBe(false);
         expect(isEditableLedgerEvent('ai_credit_sale_payment')).toBe(false);
+    });
+
+    it('gives a voided subscription fee no weight in the balance', () => {
+        expect(ledgerEventDelta(VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE, 499)).toBe(0);
     });
 
     it('computes running ledger balance', () => {

@@ -272,7 +272,10 @@ export default function AdminTenantLedgerPage() {
             <ConfirmDialog
                 open={pendingDelete !== null}
                 title={em.deleteTitle}
-                prompt={em.deletePrompt}
+                // A subscription fee is voided rather than removed — the row
+                // keeps holding the biller's key for its period — so say so
+                // instead of promising a plain delete.
+                prompt={pendingDelete?.event_type === 'subscription_fee' ? em.deleteFeePrompt : em.deletePrompt}
                 confirmLabel={t.common.delete}
                 cancelLabel={t.common.cancel}
                 workingLabel={em.deleting}
