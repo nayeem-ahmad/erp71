@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import { BillingService } from '../billing/billing.service';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
@@ -28,7 +29,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
-import { ledgerEventDelta } from './ledger-balance.util';
+import {
+    isEditableLedgerEvent,
+    ledgerEventDelta,
+    VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE,
+} from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
 import {
@@ -42,6 +47,8 @@ import {
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
+    RecordTenantFeeDto,
+    UpdateTenantLedgerEntryDto,
     CreatePlatformAdminUserDto,
     UpdatePlatformAdminUserDto,
     AdminResetPlatformUserPasswordDto,
@@ -56,6 +63,27 @@ import {
 // no owner to bill, no plan and no stores. It belongs in none of the customer
 // listings or metrics built from this filter.
 const ACTIVE_TENANT_FILTER = { deleted_at: null, platform_workspace_key: null } as const;
+
+/**
+ * Backdating a ledger entry is the point of the date field — an admin enters a
+ * payment days after the cash arrived — but a typo of "2205" instead of "2025"
+ * would park the row at the top of every ledger forever. A day of slack absorbs
+ * clock skew between the admin's browser and the server.
+ */
+const MAX_LEDGER_DATE_SKEW_MS = 24 * 60 * 60 * 1000;
+
+function resolveLedgerDate(occurredAt: string | undefined): Date | undefined {
+    if (!occurredAt) return undefined;
+
+    const date = new Date(occurredAt);
+    if (Number.isNaN(date.getTime())) {
+        throw new BadRequestException('Invalid ledger date');
+    }
+    if (date.getTime() > Date.now() + MAX_LEDGER_DATE_SKEW_MS) {
+        throw new BadRequestException('Ledger date cannot be in the future');
+    }
+    return date;
+}
 
 @Injectable()
 export class AdminTenantsService {
@@ -1207,8 +1235,10 @@ export class AdminTenantsService {
             where: {
                 ...(query.tenantId ? { tenant_id: query.tenantId } : {}),
                 tenant: ACTIVE_TENANT_FILTER,
-                // Payment reminders are not transactions — keep them out of the ledger.
-                event_type: { notIn: [...REMINDER_EVENT_TYPES] },
+                // Payment reminders are not transactions — keep them out of the
+                // ledger; the void tombstone is a deleted row that only still
+                // exists to hold the billing cron's idempotency key.
+                event_type: { notIn: [...REMINDER_EVENT_TYPES, VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE] },
             },
             orderBy: { created_at: 'desc' },
             include: {
@@ -1228,6 +1258,9 @@ export class AdminTenantsService {
             reference_id: e.reference_id,
             payload: e.payload,
             created_at: e.created_at,
+            // Served rather than re-derived in the browser so the row's edit and
+            // delete buttons can never offer what the endpoints would reject.
+            editable: isEditableLedgerEvent(e.event_type),
         }));
     }
 
@@ -1278,6 +1311,7 @@ export class AdminTenantsService {
         if (!tenant) throw new NotFoundException('Tenant not found');
 
         const externalEventId = `manual_payment_${crypto.randomBytes(16).toString('hex')}`;
+        const occurredAt = resolveLedgerDate(dto.occurredAt);
 
         const event = await this.db.billingEvent.create({
             data: {
@@ -1288,6 +1322,7 @@ export class AdminTenantsService {
                 status: 'succeeded',
                 amount: dto.amount,
                 currency: 'BDT',
+                ...(occurredAt ? { created_at: occurredAt } : {}),
                 payload: {
                     recorded_by: adminUserId,
                     notes: dto.notes ?? null,
@@ -1310,6 +1345,7 @@ export class AdminTenantsService {
         await this.auditService.log('tenant.payment.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             amount: dto.amount,
             method: dto.method ?? null,
+            occurred_at: event.created_at,
             event_id: event.id,
         });
 
@@ -1331,6 +1367,7 @@ export class AdminTenantsService {
         if (!tenant) throw new NotFoundException('Tenant not found');
 
         const externalEventId = `manual_refund_${crypto.randomBytes(16).toString('hex')}`;
+        const occurredAt = resolveLedgerDate(dto.occurredAt);
 
         const event = await this.db.billingEvent.create({
             data: {
@@ -1341,6 +1378,7 @@ export class AdminTenantsService {
                 status: 'succeeded',
                 amount: dto.amount,
                 currency: 'BDT',
+                ...(occurredAt ? { created_at: occurredAt } : {}),
                 payload: {
                     recorded_by: adminUserId,
                     notes: dto.notes ?? null,
@@ -1350,6 +1388,7 @@ export class AdminTenantsService {
 
         await this.auditService.log('tenant.refund.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             amount: dto.amount,
+            occurred_at: event.created_at,
             event_id: event.id,
         });
 
@@ -1361,6 +1400,190 @@ export class AdminTenantsService {
             currency: event.currency,
             created_at: event.created_at,
         };
+    }
+
+    /**
+     * Post an ad-hoc charge — setup fee, onboarding, penalty — against a tenant.
+     *
+     * Deliberately a distinct `manual_fee` type rather than a hand-written
+     * `subscription_fee`: the billing cron owns that type and keys it by billing
+     * period, so a hand-posted one would either collide with the cron's
+     * idempotency key or silently suppress a real cycle's charge.
+     */
+    async recordFee(tenantId: string, dto: RecordTenantFeeDto, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        const externalEventId = `manual_fee_${crypto.randomBytes(16).toString('hex')}`;
+        const occurredAt = resolveLedgerDate(dto.occurredAt);
+        const label = dto.label?.trim() || null;
+
+        const event = await this.db.billingEvent.create({
+            data: {
+                tenant_id: tenantId,
+                provider_name: 'manual',
+                external_event_id: externalEventId,
+                event_type: 'manual_fee',
+                status: 'posted',
+                amount: dto.amount,
+                currency: 'BDT',
+                reference_id: label,
+                ...(occurredAt ? { created_at: occurredAt } : {}),
+                payload: {
+                    recorded_by: adminUserId,
+                    label,
+                    notes: dto.notes ?? null,
+                },
+            },
+        });
+
+        await this.auditService.log('tenant.fee.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
+            amount: dto.amount,
+            label,
+            occurred_at: event.created_at,
+            event_id: event.id,
+        });
+
+        return {
+            id: event.id,
+            event_type: event.event_type,
+            status: event.status,
+            amount: Number(event.amount),
+            currency: event.currency,
+            created_at: event.created_at,
+        };
+    }
+
+    /** The one ledger row this admin is allowed to rewrite, or a 404/400 explaining why not. */
+    private async findEditableLedgerEntry(eventId: string) {
+        const event = await this.db.billingEvent.findFirst({
+            where: { id: eventId, tenant: ACTIVE_TENANT_FILTER },
+        });
+        if (!event) throw new NotFoundException('Ledger entry not found');
+
+        if (!isEditableLedgerEvent(event.event_type)) {
+            throw new BadRequestException(
+                'Credit-sale payments cannot be edited or deleted — the credits they paid for are '
+                + 'already spendable. Post an offsetting entry to correct one.',
+            );
+        }
+
+        return event;
+    }
+
+    async updateLedgerEntry(eventId: string, dto: UpdateTenantLedgerEntryDto, adminUserId: string) {
+        const event = await this.findEditableLedgerEntry(eventId);
+        const occurredAt = resolveLedgerDate(dto.occurredAt);
+
+        // The payload is a free-form Json column, so merge rather than replace:
+        // `recorded_by` and anything a future field adds must survive an edit
+        // that only moves the amount.
+        const payload: Record<string, unknown> =
+            event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+                ? { ...(event.payload as Prisma.JsonObject) }
+                : {};
+
+        if (dto.notes !== undefined) payload.notes = dto.notes || null;
+        if (dto.method !== undefined) payload.method = dto.method || null;
+
+        // `reference_id` means different things per type — a free-text label on a
+        // manual fee, but the plan code on a subscription fee. Only the former is
+        // the admin's to rewrite, so a stray `label` on anything else is dropped
+        // rather than allowed to overwrite the plan the charge belongs to.
+        const label = event.event_type === 'manual_fee' && dto.label !== undefined
+            ? (dto.label.trim() || null)
+            : undefined;
+        if (label !== undefined) payload.label = label;
+
+        payload.edited_by = adminUserId;
+        payload.edited_at = new Date().toISOString();
+
+        const updated = await this.db.billingEvent.update({
+            where: { id: eventId },
+            data: {
+                ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+                ...(occurredAt ? { created_at: occurredAt } : {}),
+                ...(label !== undefined ? { reference_id: label } : {}),
+                payload: payload as Prisma.InputJsonObject,
+            },
+        });
+
+        await this.auditService.log(
+            'tenant.ledger_entry.update',
+            'BillingEvent',
+            { userId: adminUserId, tenantId: event.tenant_id },
+            eventId,
+            {
+                event_type: event.event_type,
+                previous_amount: event.amount !== null ? Number(event.amount) : null,
+                amount: updated.amount !== null ? Number(updated.amount) : null,
+                previous_occurred_at: event.created_at,
+                occurred_at: updated.created_at,
+            },
+        );
+
+        return {
+            id: updated.id,
+            event_type: updated.event_type,
+            status: updated.status,
+            amount: updated.amount !== null ? Number(updated.amount) : null,
+            currency: updated.currency,
+            created_at: updated.created_at,
+        };
+    }
+
+    async deleteLedgerEntry(eventId: string, adminUserId: string) {
+        const event = await this.findEditableLedgerEntry(eventId);
+        const amount = event.amount !== null ? Number(event.amount) : null;
+
+        // A subscription fee is voided in place rather than removed. The billing
+        // cron skips a period only when it finds an event under
+        // `subscription_fee:{tenantId}:{periodKey}`, and it never advances
+        // `current_period_end` itself — so on a PAST_DUE tenant this row is the
+        // only thing standing between the admin's deletion and the same fee
+        // reappearing on tomorrow's 10:00 run. Rewriting the row keeps that
+        // unique pair claimed atomically, which a delete-then-insert would not.
+        const voided = event.event_type === 'subscription_fee';
+
+        if (voided) {
+            const payload: Record<string, unknown> =
+                event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+                    ? { ...(event.payload as Prisma.JsonObject) }
+                    : {};
+            payload.voided_by = adminUserId;
+            payload.voided_at = new Date().toISOString();
+            payload.voided_amount = amount;
+
+            await this.db.billingEvent.update({
+                where: { id: eventId },
+                data: {
+                    event_type: VOIDED_SUBSCRIPTION_FEE_EVENT_TYPE,
+                    status: 'voided',
+                    amount: null,
+                    payload: payload as Prisma.InputJsonObject,
+                },
+            });
+        } else {
+            await this.db.billingEvent.delete({ where: { id: eventId } });
+        }
+
+        await this.auditService.log(
+            'tenant.ledger_entry.delete',
+            'BillingEvent',
+            { userId: adminUserId, tenantId: event.tenant_id },
+            eventId,
+            {
+                event_type: event.event_type,
+                amount,
+                occurred_at: event.created_at,
+                voided,
+            },
+        );
+
+        return { success: true, id: eventId, voided };
     }
 
     async sellSmsCredits(tenantId: string, dto: AdminSellSmsCreditsDto, adminUserId: string) {
