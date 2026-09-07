@@ -67,9 +67,32 @@ describe('Login UI Authentication Mapping', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     expect(api.login).toHaveBeenCalledWith({
-        email: 'admin@bmad.com',
+        identifier: 'admin@bmad.com',
         password: 'password123'
     });
+  });
+
+  it('submits a mobile number through the same identifier field', async () => {
+    const { api } = require('../../lib/api');
+    render(<LoginPage />);
+
+    // The field is one box for both: the backend decides which column to look in,
+    // so the page must post the number untouched rather than reject it.
+    fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: '01712345678' } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect(api.login).toHaveBeenCalledWith({
+        identifier: '01712345678',
+        password: 'password123'
+    });
+  });
+
+  it('does not constrain the identifier box to email input', () => {
+    render(<LoginPage />);
+    // type="email" would make the browser block a mobile number before submit.
+    expect(screen.getByPlaceholderText(/name@company.com/i)).toHaveAttribute('type', 'text');
   });
 
   it('displays error message on failed login', async () => {

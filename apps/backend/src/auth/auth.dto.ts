@@ -2,6 +2,7 @@ import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'clas
 import {
     BUSINESS_TYPE_VALUES,
     ENABLED_LOCALE_CODES,
+    MOBILE_COUNTRY_CODES,
     SELF_SERVE_SUBSCRIPTION_PLAN_CODES,
     type SelfServeSubscriptionPlanCode,
     type SupportedLocaleCode,
@@ -57,12 +58,37 @@ export class SignupDto {
     acceptedTermsVersion: string;
 }
 
+/**
+ * Password sign-in, by email address or by mobile number.
+ *
+ * `identifier` carries whichever the person typed — the service picks the lookup
+ * column by looking for an `@`. `email` stays accepted as the name this field
+ * used to have, because callers still post it under that key (the
+ * accept-invitation page signs someone in with the address from their invite).
+ * Exactly one of the two has to arrive; neither is `@IsEmail()` any more, since
+ * a mobile number is a legitimate value here.
+ */
 export class LoginDto {
-    @IsEmail()
-    email: string;
+    @IsOptional()
+    @IsString()
+    identifier?: string;
+
+    /** Legacy alias for `identifier`. Still an email address in practice. */
+    @IsOptional()
+    @IsString()
+    email?: string;
 
     @IsString()
     password: string;
+
+    /**
+     * Which country's national format a bare mobile number should be read in.
+     * Ignored when the number already arrives in E.164, and defaulted to
+     * Bangladesh when absent.
+     */
+    @IsOptional()
+    @IsIn(MOBILE_COUNTRY_CODES)
+    mobile_country_code?: string;
 }
 
 /**

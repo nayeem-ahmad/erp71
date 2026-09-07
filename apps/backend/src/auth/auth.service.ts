@@ -26,7 +26,9 @@ import {
     isSelfServeSubscriptionPlan,
     DEFAULT_MOBILE_COUNTRY_CODE,
     countryCodeFromE164,
+    looksLikeEmailIdentifier,
     normalizeMobileToE164,
+    resolveMobileToE164,
     resolveTenantFeatures,
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
@@ -36,6 +38,25 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
+
+/**
+ * How many accounts sharing one mobile number are still worth trying a password
+ * against. Each candidate costs a bcrypt compare, so this bounds the work one
+ * sign-in request can provoke; a number on more accounts than this is treated as
+ * ambiguous outright.
+ */
+const MOBILE_LOGIN_CANDIDATE_LIMIT = 5;
+
+const MOBILE_LOGIN_AMBIGUOUS_MESSAGE =
+    'This mobile number is linked to more than one account. Please sign in with your email address instead.';
+
+/** The columns `login()` needs off a user row to finish authenticating them. */
+type LoginCandidate = {
+    id: string;
+    email: string;
+    passwordHash: string | null;
+    email_verified_at: Date | null;
+};
 
 type TenantProvisionDto = {
     tenantName: string;
@@ -150,35 +171,30 @@ export class AuthService {
         return this.generateAuthResponse(userId, meta);
     }
 
+    /**
+     * Password sign-in, by email address or by mobile number.
+     *
+     * The number is only a *lookup key* here — the password is what authenticates,
+     * which is why an unverified `mobile` is allowed to match even though the SMS
+     * path in `mobileSignIn` insists on a Firebase-verified number. Someone who
+     * types a number they do not own still has to produce the password of an
+     * account carrying it, so squatting on a stranger's number buys nothing.
+     *
+     * `mobile` is deliberately not unique (one person, several businesses), so a
+     * number can name more than one account. The password settles it: candidates
+     * are loaded by number and the one whose hash matches wins. Only if *several*
+     * accounts share both the number and the password is there nothing left to
+     * separate them, and those users are sent to their email address instead.
+     */
     async login(dto: LoginDto, meta: AuditRequestMeta = {}) {
-        const user = await this.db.user.findUnique({
-            where: { email: dto.email },
-        });
-
-        if (!user) {
-            throw new UnauthorizedException('Invalid credentials');
+        const identifier = (dto.identifier ?? dto.email ?? '').trim();
+        if (!identifier) {
+            throw new BadRequestException('Enter your email address or mobile number.');
         }
 
-        if (!user.passwordHash) {
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        let isPasswordValid = false;
-        try {
-            isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-        } catch (error: any) {
-            console.warn(`[AuthService] Password verification failed for ${dto.email}:`, error?.message);
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        if (!isPasswordValid) {
-            this.audit
-                .logForUserTenants('LOGIN_FAILED', 'User', { userId: user.id, ...meta }, user.id, {
-                    email: dto.email,
-                })
-                .catch(() => {});
-            throw new UnauthorizedException('Invalid credentials');
-        }
+        const user = looksLikeEmailIdentifier(identifier)
+            ? await this.authenticateByEmail(identifier, dto.password, meta)
+            : await this.authenticateByMobile(identifier, dto, meta);
 
         const requireEmailVerification = process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
         const isExempt = isPlatformAdminEmail(user.email);
@@ -200,6 +216,94 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id)
             .catch(() => {});
         return this.generateAuthResponse(user.id, meta);
+    }
+
+    /** The original email + password path, unchanged in behaviour. */
+    private async authenticateByEmail(email: string, password: string, meta: AuditRequestMeta): Promise<LoginCandidate> {
+        const user = await this.db.user.findUnique({ where: { email } });
+
+        if (!user || !user.passwordHash) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        if (!(await this.passwordMatches(password, user.passwordHash, email))) {
+            this.audit
+                .logForUserTenants('LOGIN_FAILED', 'User', { userId: user.id, ...meta }, user.id, {
+                    email,
+                })
+                .catch(() => {});
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        return user;
+    }
+
+    /**
+     * Resolve a mobile number + password to exactly one account.
+     *
+     * Every failure other than a genuinely ambiguous number answers with the same
+     * 'Invalid credentials' the email path uses, so this endpoint cannot be used
+     * to ask which numbers have accounts behind them.
+     */
+    private async authenticateByMobile(
+        rawMobile: string,
+        dto: LoginDto,
+        meta: AuditRequestMeta,
+    ): Promise<LoginCandidate> {
+        const mobile = resolveMobileToE164(rawMobile, dto.mobile_country_code ?? DEFAULT_MOBILE_COUNTRY_CODE);
+        if (!mobile) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // One extra row past the cap is all that is needed to notice the number is
+        // over it. The cap exists because every candidate costs a bcrypt compare,
+        // and an unbounded fan-out would make one request arbitrarily expensive.
+        const candidates = await this.db.user.findMany({
+            where: { mobile },
+            orderBy: { created_at: 'asc' },
+            take: MOBILE_LOGIN_CANDIDATE_LIMIT + 1,
+        });
+        if (candidates.length > MOBILE_LOGIN_CANDIDATE_LIMIT) {
+            throw new ConflictException(MOBILE_LOGIN_AMBIGUOUS_MESSAGE);
+        }
+
+        const matches: LoginCandidate[] = [];
+        for (const candidate of candidates) {
+            if (!candidate.passwordHash) continue;
+            if (await this.passwordMatches(dto.password, candidate.passwordHash, mobile)) {
+                matches.push(candidate);
+            }
+        }
+
+        if (matches.length > 1) {
+            // Same number, same password, different accounts: nothing here can pick
+            // one, and guessing would sign them into a workspace at random.
+            throw new ConflictException(MOBILE_LOGIN_AMBIGUOUS_MESSAGE);
+        }
+
+        if (matches.length === 0) {
+            // Only worth recording against an account when exactly one was in the
+            // running — with several candidates there is no telling which was meant.
+            if (candidates.length === 1) {
+                this.audit
+                    .logForUserTenants('LOGIN_FAILED', 'User', { userId: candidates[0].id, ...meta }, candidates[0].id, {
+                        mobile,
+                    })
+                    .catch(() => {});
+            }
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        return matches[0];
+    }
+
+    private async passwordMatches(password: string, passwordHash: string, subject: string): Promise<boolean> {
+        try {
+            return await bcrypt.compare(password, passwordHash);
+        } catch (error: any) {
+            console.warn(`[AuthService] Password verification failed for ${subject}:`, error?.message);
+            throw new UnauthorizedException('Invalid credentials');
+        }
     }
 
     /**

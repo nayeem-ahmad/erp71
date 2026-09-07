@@ -474,6 +474,8 @@ export const coreMessages = {
             title: 'خوش آمدید',
             description: 'لاگ اِن کرنے کے لیے اپنی تفصیلات درج کریں',
             emailLabel: 'ای میل پتہ',
+            identifierLabel: 'ای میل یا موبائل نمبر',
+            identifierPlaceholder: 'name@company.com یا 01712345678',
             passwordLabel: 'پاس ورڈ',
             submit: 'لاگ اِن کریں',
             demo: 'ڈیمو آزمائیں',

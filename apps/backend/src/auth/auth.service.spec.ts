@@ -40,6 +40,7 @@ describe('AuthService', () => {
         user: {
             findUnique: jest.fn(),
             findFirst: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
             create: jest.fn(),
             update: jest.fn(),
         },
@@ -190,6 +191,7 @@ describe('AuthService', () => {
         auditService.log.mockResolvedValue(undefined);
         auditService.logForUserTenants.mockResolvedValue(undefined);
         db.user.findFirst.mockResolvedValue(null);
+        db.user.findMany.mockResolvedValue([]);
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue(null);
         platformSettings.getPlatformFeatures.mockResolvedValue({
@@ -629,6 +631,146 @@ describe('AuthService', () => {
         (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
         await expect(service.login({ email: 'owner@example.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
+    });
+
+    describe('login by mobile number', () => {
+        const candidate = (id: string, email: string) => ({
+            id,
+            email,
+            passwordHash: `hashed-${id}`,
+            email_verified_at: null,
+            totp_secret: null,
+        });
+
+        it('signs in against a national number, normalized to E.164 for the lookup', async () => {
+            db.user.findMany.mockResolvedValue([candidate('user-1', 'owner@example.com')]);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            db.user.findUnique.mockResolvedValue(makeUserWithAccess('store-1', 'tenant-1'));
+
+            const result = await service.login({ identifier: '01712345678', password: 'password123' } as any);
+
+            expect(db.user.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { mobile: '+8801712345678' } }),
+            );
+            expect(result).toHaveProperty('access_token', 'jwt-token');
+        });
+
+        it('reads a bare number in the country the caller names', async () => {
+            db.user.findMany.mockResolvedValue([candidate('user-1', 'owner@example.com')]);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            db.user.findUnique.mockResolvedValue(makeUserWithAccess('store-1', 'tenant-1'));
+
+            await service.login({
+                identifier: '9812345678',
+                password: 'password123',
+                mobile_country_code: 'IN',
+            } as any);
+
+            expect(db.user.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { mobile: '+919812345678' } }),
+            );
+        });
+
+        it('rejects a wrong password against a number it knows', async () => {
+            db.user.findMany.mockResolvedValue([candidate('user-1', 'owner@example.com')]);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'wrong' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+        });
+
+        it('picks the one account whose password matches when a number is shared', async () => {
+            // The whole point of resolving by password: a number on two accounts is
+            // not ambiguous as long as only one of them has this password.
+            db.user.findMany.mockResolvedValue([
+                candidate('user-1', 'first@example.com'),
+                candidate('user-2', 'second@example.com'),
+            ]);
+            (bcrypt.compare as jest.Mock)
+                .mockResolvedValueOnce(false)
+                .mockResolvedValueOnce(true);
+            db.user.findUnique.mockResolvedValue(makeUserWithAccess('store-1', 'tenant-1'));
+
+            const result = await service.login({ identifier: '01712345678', password: 'password123' } as any);
+
+            expect(result).toHaveProperty('access_token', 'jwt-token');
+            expect(db.user.findUnique).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'user-2' } }),
+            );
+        });
+
+        it('refuses to guess when the number and password both match several accounts', async () => {
+            db.user.findMany.mockResolvedValue([
+                candidate('user-1', 'first@example.com'),
+                candidate('user-2', 'second@example.com'),
+            ]);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(ConflictException);
+        });
+
+        it('refuses a number carried by more accounts than it will try, without hashing any', async () => {
+            // Six rows come back for a cap of five: the number is over the limit, and
+            // no bcrypt compare should be spent on it.
+            db.user.findMany.mockResolvedValue(
+                Array.from({ length: 6 }, (_, i) => candidate(`user-${i}`, `owner${i}@example.com`)),
+            );
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(ConflictException);
+            expect(bcrypt.compare as jest.Mock).not.toHaveBeenCalled();
+        });
+
+        it('skips accounts that have no password at all', async () => {
+            // A Google- or SMS-created account has a null hash; bcrypt must never be
+            // handed one, and the sign-in fails like any other wrong credential.
+            db.user.findMany.mockResolvedValue([
+                { ...candidate('user-1', 'owner@example.com'), passwordHash: null },
+            ]);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+            expect(bcrypt.compare as jest.Mock).not.toHaveBeenCalled();
+        });
+
+        it('rejects an unknown number with the same answer as a wrong password', async () => {
+            db.user.findMany.mockResolvedValue([]);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+        });
+
+        it('rejects an unusable number without touching the database', async () => {
+            await expect(
+                service.login({ identifier: '123', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+            expect(db.user.findMany).not.toHaveBeenCalled();
+        });
+
+        it('still accepts the legacy email field callers post', async () => {
+            // accept-invitation signs someone in with the address from their invite,
+            // and posts it as `email`.
+            // Two lookups on this path: the credential check, then the auth payload.
+            db.user.findUnique
+                .mockResolvedValueOnce({ id: 'user-1', email: 'owner@example.com', passwordHash: 'hashed', email_verified_at: null })
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+            const result = await service.login({ email: 'owner@example.com', password: 'password123' } as any);
+
+            expect(result).toHaveProperty('access_token', 'jwt-token');
+            expect(db.user.findMany).not.toHaveBeenCalled();
+        });
+
+        it('rejects a request carrying neither identifier nor email', async () => {
+            await expect(service.login({ password: 'password123' } as any)).rejects.toThrow(BadRequestException);
+        });
     });
 
     it('marks nayeem.ahmad@gmail.com as platform admin in auth responses', async () => {

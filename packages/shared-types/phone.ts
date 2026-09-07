@@ -19,6 +19,9 @@ export const MOBILE_COUNTRY_OPTIONS: MobileCountryOption[] = [
     { code: 'SA', dial: '+966', label: 'Saudi Arabia', nationalLength: 9 },
 ];
 
+/** Just the ISO codes from `MOBILE_COUNTRY_OPTIONS`, for request validation. */
+export const MOBILE_COUNTRY_CODES: string[] = MOBILE_COUNTRY_OPTIONS.map((entry) => entry.code);
+
 const E164_REGEX = /^\+[1-9]\d{7,14}$/;
 
 export function getMobileCountryOption(code: string): MobileCountryOption | undefined {
@@ -81,4 +84,33 @@ export function formatMobileForDisplay(e164: string | null | undefined, countryC
     const country = getMobileCountryOption(countryCode);
     if (!country || !e164.startsWith(country.dial)) return e164;
     return `${country.dial} ${e164.slice(country.dial.length)}`;
+}
+
+/**
+ * Turn whatever someone typed into a login box into E.164, or null.
+ *
+ * Sign-in is the one place a number arrives with no form around it to say which
+ * country it belongs to, so both shapes have to work: a number typed in full
+ * (`+8801712345678`) is taken as-is, and bare national digits (`01712345678`)
+ * are read against `countryCode`. Trying E.164 first matters for the traveller
+ * case — `+919812345678` under a BD default would otherwise be measured against
+ * Bangladesh's 11-digit national length and rejected.
+ */
+export function resolveMobileToE164(
+    raw: string | null | undefined,
+    countryCode: string = DEFAULT_MOBILE_COUNTRY_CODE,
+): string | null {
+    const value = (raw ?? '').trim();
+    if (!value) return null;
+    if (isValidE164Mobile(value)) return value;
+    return normalizeMobileToE164(countryCode || DEFAULT_MOBILE_COUNTRY_CODE, value);
+}
+
+/**
+ * Does this look like an email address rather than a phone number? Used to pick
+ * a lookup column at sign-in. `@` is the honest discriminator: every email has
+ * one and no phone number does, so neither shape can be mistaken for the other.
+ */
+export function looksLikeEmailIdentifier(raw: string | null | undefined): boolean {
+    return (raw ?? '').includes('@');
 }

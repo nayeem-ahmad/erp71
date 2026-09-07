@@ -474,6 +474,8 @@ export const coreMessages = {
             title: "वापसी पर स्वागत है",
             description: "साइन इन करने के लिए कृपया अपना विवरण दर्ज करें",
             emailLabel: "ईमेल पता",
+            identifierLabel: "ईमेल या मोबाइल नंबर",
+            identifierPlaceholder: "name@company.com या 01712345678",
             passwordLabel: "पासवर्ड",
             submit: "साइन इन करें",
             demo: "डेमो आज़माएँ",

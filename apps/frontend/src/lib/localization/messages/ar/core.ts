@@ -474,6 +474,8 @@ export const coreMessages = {
             title: 'أهلًا بعودتك',
             description: 'الرجاء إدخال بياناتك لتسجيل الدخول',
             emailLabel: 'عنوان البريد الإلكتروني',
+            identifierLabel: 'البريد الإلكتروني أو رقم الجوال',
+            identifierPlaceholder: 'name@company.com أو 01712345678',
             passwordLabel: 'كلمة المرور',
             submit: 'تسجيل الدخول',
             demo: 'جرّب العرض التجريبي',
