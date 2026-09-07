@@ -377,3 +377,127 @@ describe('LeadsPage — address, remarks and web links', () => {
         expect(website).toHaveTextContent('karimtraders.com.bd');
     });
 });
+
+
+/**
+ * A filtered list is a slice somebody is working through, and opening a lead
+ * from it is part of that work — not the end of it. Coming back to the whole
+ * list, and re-picking every filter, is the tax this removes.
+ */
+describe('LeadsPage — remembered filters', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+    });
+
+    it('comes back to the filters the last visit left set', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(
+                expect.objectContaining({ assignedTo: 'user-2', priority: 'HIGH' }),
+            ),
+        );
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(selectByOption('All owners').value).toBe('user-2');
+        expect(selectByOption('All priorities').value).toBe('HIGH');
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(
+                expect.objectContaining({ assignedTo: 'user-2', priority: 'HIGH' }),
+            ),
+        );
+    });
+
+    it('never fetches the unfiltered list on the way to the remembered one', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'user-2' })),
+        );
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        // Every request carries the remembered owner — no flash of all leads.
+        for (const call of api.getLeads.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({ assignedTo: 'user-2' }));
+        }
+    });
+
+    it('lets a dashboard link win over a remembered filter, so its count still means something', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'user-2' })),
+        );
+        first.unmount();
+
+        jest.clearAllMocks();
+        // The "leads nobody owns" tile links here naming its own owner filter.
+        searchParams = new URLSearchParams('assignedTo=unassigned');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(selectByOption('All owners').value).toBe('unassigned');
+        for (const call of api.getLeads.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({ assignedTo: 'unassigned' }));
+        }
+    });
+
+    it('still remembers the filters a link did not name', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ priority: 'HIGH' })),
+        );
+        first.unmount();
+
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams('assignedTo=unassigned');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(
+                expect.objectContaining({ assignedTo: 'unassigned', priority: 'HIGH' }),
+            ),
+        );
+    });
+
+    it('applies a remembered search at once rather than after the typing debounce', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.change(screen.getByPlaceholderText(/search by name/i), { target: { value: 'karim' } });
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ search: 'karim' })),
+        );
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(screen.getByPlaceholderText(/search by name/i)).toHaveValue('karim');
+        for (const call of api.getLeads.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({ search: 'karim' }));
+        }
+    });
+});

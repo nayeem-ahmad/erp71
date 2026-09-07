@@ -22,6 +22,7 @@ import {
     LEAD_STATUSES,
 } from './lead-form-fields';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import Avatar from '@/components/Avatar';
 
 type TaxonomyRef = { id: string; name: string } | null;
@@ -195,31 +196,76 @@ function LeadsPage() {
     // Filters can arrive in the URL so another screen can link at a specific
     // slice — the CRM dashboard's "leads with no owner" and "leads untouched for
     // N days" tiles both do, and their counts only mean anything if the list
-    // they open holds precisely the rows that were counted. Read once, as the
-    // initial state: from here on the controls own these, so changing one is not
-    // undone by the query string it was seeded from.
+    // they open holds precisely the rows that were counted. Read once, into the
+    // initial state below: from here on the controls own these, so changing one
+    // is not undone by the query string it was seeded from.
     const searchParams = useSearchParams();
     const staleDaysParam = readStaleDaysParam(searchParams.get('staleDays'));
+    const statusParam = readStatusParam(searchParams.get('status'));
+    const ownerParam = searchParams.get('assignedTo') ?? '';
+    const emailParam = readEmailPresenceParam(searchParams.get('emailPresence'));
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState(() => readStatusParam(searchParams.get('status')));
-    const [categoryFilter, setCategoryFilter] = useState('');
-    const [sourceFilter, setSourceFilter] = useState('');
-    const [priorityFilter, setPriorityFilter] = useState('');
-    const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('assignedTo') ?? '');
-    // Seeded from the URL like the filters above, so a link can open the leads
-    // that have no address — the same shape the dashboard's tiles link with.
-    const [emailFilter, setEmailFilter] = useState(
-        () => readEmailPresenceParam(searchParams.get('emailPresence')),
+    // A search restored from the last visit is not typing: it is already the
+    // term to query, so it applies with the first request rather than 300ms
+    // later — which would otherwise fetch the unsearched list first and flash
+    // it. Only once somebody types here does the debounce take over.
+    const [typing, setTyping] = useState(false);
+
+    /**
+     * Otherwise the filters are remembered for the tab, so opening a lead and
+     * coming back returns to the slice it was opened from instead of the whole
+     * list. A parameter that *is* present still wins: a dashboard tile's link
+     * names the exact rows it counted, and opening somebody's leftover filter
+     * instead would make that count a lie.
+     */
+    const urlSeeded = useMemo(() => {
+        const seeded: ('status' | 'owner' | 'email' | 'staleOnly')[] = [];
+        if (statusParam) seeded.push('status');
+        if (ownerParam) seeded.push('owner');
+        if (emailParam) seeded.push('email');
+        // The window itself rides along with the toggle below.
+        if (staleDaysParam !== null) seeded.push('staleOnly');
+        return seeded;
+        // Read once, at mount: from here on the controls own these.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const [filters, setFilter, filtersReady] = useRememberedFilters(
+        'crm-leads',
+        {
+            search: '',
+            status: statusParam,
+            category: '',
+            source: '',
+            priority: '',
+            owner: ownerParam,
+            email: emailParam,
+            staleOnly: staleDaysParam !== null,
+            createdRange: null as CreatedRange | null,
+        },
+        urlSeeded,
     );
+    const {
+        search,
+        status: statusFilter,
+        category: categoryFilter,
+        source: sourceFilter,
+        priority: priorityFilter,
+        owner: ownerFilter,
+        email: emailFilter,
+        staleOnly,
+        createdRange,
+    } = filters;
+
+    const effectiveSearch = typing ? debouncedSearch : search;
+
     // Held apart from the toggle so switching the filter off and on again keeps
     // the window the link asked for, rather than snapping back to the default.
+    // Not remembered: it is the link's number, not a choice made on this page.
     const [staleDays] = useState(() => staleDaysParam ?? DEFAULT_STALE_DAYS);
-    const [staleOnly, setStaleOnly] = useState(() => staleDaysParam !== null);
-    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
@@ -242,18 +288,24 @@ function LeadsPage() {
         api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
-    // Debounce free-text search before it triggers a server request
+    // Debounce free-text search before it triggers a server request. Kept in
+    // step with a restored search while nobody is typing, so the first
+    // keystroke debounces away from that term rather than from an empty box.
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search);
+            return;
+        }
         const timer = setTimeout(() => setDebouncedSearch(search), 300);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, typing]);
 
     const fetchAllRows = useCallback(
         (onProgress?: (loaded: number, total: number) => void) =>
             fetchAllPages(
                 ({ page: p, limit, sortBy, sortDir }) =>
                     api.getLeads({
-                        search: debouncedSearch || undefined,
+                        search: effectiveSearch || undefined,
                         status: statusFilter || undefined,
                         category: categoryFilter || undefined,
                         source: sourceFilter || undefined,
@@ -269,15 +321,18 @@ function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort],
+        [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
+        // Held until the remembered filters are in, so a return visit does not
+        // fetch the unfiltered list first and flash it before the real slice.
+        if (!filtersReady) return;
         const seq = ++loadSeq.current;
         setLoading(true);
         try {
             const data = await api.getLeads({
-                search: debouncedSearch || undefined,
+                search: effectiveSearch || undefined,
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
                 source: sourceFilter || undefined,
@@ -301,14 +356,14 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -582,7 +637,7 @@ function LeadsPage() {
                     <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <Input
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => { setTyping(true); setFilter('search', e.target.value); }}
                         placeholder={m.searchPlaceholder}
                         className="ps-9"
                     />
@@ -593,7 +648,7 @@ function LeadsPage() {
                     widened again without editing the address bar. */}
                 <button
                     type="button"
-                    onClick={() => setStaleOnly((v) => !v)}
+                    onClick={() => setFilter('staleOnly', !staleOnly)}
                     aria-pressed={staleOnly}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                         staleOnly
@@ -604,7 +659,7 @@ function LeadsPage() {
                     <Clock className="w-4 h-4" />
                     {fmt(m.noActivityFilter, { days: staleDays })}
                 </button>
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={statusFilter} onChange={(e) => setFilter('status', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {/* Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts. The
                         three working stages as one choice — what the dashboard's
@@ -612,19 +667,19 @@ function LeadsPage() {
                     <option value={OPEN_STATUS_FILTER}>{m.openPipeline}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                 </Select>
-                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={categoryFilter} onChange={(e) => setFilter('category', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allCategories}</option>
                     {categoryOptions.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                 </Select>
-                <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={sourceFilter} onChange={(e) => setFilter('source', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allSources}</option>
                     {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </Select>
-                <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={priorityFilter} onChange={(e) => setFilter('priority', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </Select>
-                <Select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={ownerFilter} onChange={(e) => setFilter('owner', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allOwners}</option>
                     {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. Every lead
                         created before the owner field existed is unowned, so reaching
@@ -635,12 +690,12 @@ function LeadsPage() {
                 {/* Presence, not a value match — free-text search already covers
                     the address itself. "No email" is the one that earns the
                     control: it lists the leads no campaign can reach. */}
-                <Select value={emailFilter} onChange={(e) => setEmailFilter(e.target.value)} className="w-auto max-w-[180px]">
+                <Select value={emailFilter} onChange={(e) => setFilter('email', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allEmails}</option>
                     <option value="has">{m.hasEmail}</option>
                     <option value="empty">{m.noEmail}</option>
                 </Select>
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                <CreatedRangeFilter value={createdRange} onChange={(next) => setFilter('createdRange', next)} />
             </div>
 
             <DataTable<Lead>

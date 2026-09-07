@@ -250,3 +250,87 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
         expect(api.getCrmActivitySummary.mock.calls.length).toBeGreaterThan(1);
     });
 });
+
+
+/**
+ * The same slice, still there on the way back. Coming here from a lead's page
+ * and finding the agenda reset to PLANNED-due-today is the case this covers.
+ */
+describe('CrmActivitiesPage — remembered filters', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+
+    const lastCall = () => api.getAllCrmActivities.mock.calls.at(-1)![0];
+
+    it('comes back to the status and assignee the last visit left set', async () => {
+        const first = render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const status = screen.getByRole('option', { name: 'All statuses' }).closest('select')!;
+        fireEvent.change(status, { target: { value: 'DONE' } });
+        await waitFor(() => expect(lastCall().status).toBe('DONE'));
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const restored = screen.getByRole('option', { name: 'All statuses' }).closest('select') as HTMLSelectElement;
+        expect(restored.value).toBe('DONE');
+        // Never the PLANNED default on the way — no flash of the wrong list.
+        for (const call of api.getAllCrmActivities.mock.calls) {
+            expect(call[0].status).toBe('DONE');
+        }
+    });
+
+    it('remembers a due range chosen instead of the default agenda', async () => {
+        const first = render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(screen.getByRole('button', { name: /^due · /i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
+        await waitFor(() => expect(lastCall().dueFrom).toBeTruthy());
+        const chosen = lastCall().dueFrom;
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        await waitFor(() => expect(lastCall().dueFrom).toBe(chosen));
+    });
+
+    it('remembers Overdue only, and the due range it cleared stays cleared', async () => {
+        const first = render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(screen.getByLabelText('Overdue only'));
+        await waitFor(() => expect(lastCall().overdue).toBe(true));
+        first.unmount();
+
+        jest.clearAllMocks();
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect((screen.getByLabelText('Overdue only') as HTMLInputElement).checked).toBe(true);
+        await waitFor(() => {
+            expect(lastCall().overdue).toBe(true);
+            expect(lastCall().dueFrom).toBeUndefined();
+        });
+    });
+
+    it('opens on today\'s planned agenda when nothing has been remembered yet', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        await waitFor(() => {
+            expect(lastCall().status).toBe('PLANNED');
+            expect(lastCall().dueFrom).toBe(tenantDateOnly());
+        });
+    });
+});

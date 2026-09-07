@@ -53,8 +53,9 @@ apex can serve it instead:
 
 1. **DNS.** `A` records for `erp71.com` and `www.erp71.com` pointing at
    `66.116.236.127`. Confirm with `dig +short erp71.com`.
-2. **Reverse proxy.** Add the site block to the shared Hermes Caddyfile (back it
-   up, `caddy validate`, `caddy reload`) — same upstream as the app host:
+2. **Reverse proxy.** The shared Hermes Caddyfile (`/opt/hermes/caddy/Caddyfile`)
+   needs an `erp71.com, www.erp71.com` block on the same upstream as the app
+   host. Back it up, edit, `caddy validate`, `caddy reload`:
 
    ```
    erp71.com, www.erp71.com {
@@ -62,6 +63,16 @@ apex can serve it instead:
    	reverse_proxy erp71-frontend-1:3000
    }
    ```
+
+   **Check for an existing `erp71.com` block first.** Before the cutover the file
+   held a single-domain leftover — `erp71.com { redir https://app.erp71.com{uri} }`
+   — which points the apex at the app, the opposite of what this needs. It must be
+   *replaced*, not appended to: two blocks with the same site address fail
+   `caddy validate`.
+
+   Note both hosts are proxied and neither is redirected here. `www` folds into
+   the apex in `resolveHostRoute`, so a redirect at the proxy would pre-empt a
+   rule the app already owns and tests.
 
    Caddy passes `Host` through unchanged, which is what the middleware reads. A
    proxy that rewrites it must send the original in `X-Forwarded-Host`.

@@ -474,6 +474,8 @@ export const coreMessages = {
                 title: "আবার স্বাগতম",
                 description: "সাইন ইন করতে আপনার তথ্য লিখুন",
                 emailLabel: "ইমেইল ঠিকানা",
+                identifierLabel: "ইমেইল বা মোবাইল নম্বর",
+                identifierPlaceholder: "name@company.com বা 01712345678",
                 passwordLabel: "পাসওয়ার্ড",
                 submit: "সাইন ইন",
                 demo: "ডেমো দেখুন",

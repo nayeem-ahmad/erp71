@@ -1,4 +1,10 @@
-import { normalizeMobileToE164, isValidE164Mobile, countryCodeFromE164 } from './phone';
+import {
+    normalizeMobileToE164,
+    isValidE164Mobile,
+    countryCodeFromE164,
+    resolveMobileToE164,
+    looksLikeEmailIdentifier,
+} from './phone';
 
 describe('phone utils', () => {
     it('normalizes Bangladesh mobile numbers', () => {
@@ -32,6 +38,45 @@ describe('phone utils', () => {
             expect(countryCodeFromE164('+33612345678')).toBeNull();
             expect(countryCodeFromE164('01712345678')).toBeNull();
             expect(countryCodeFromE164(null)).toBeNull();
+        });
+    });
+
+    describe('resolveMobileToE164', () => {
+        it('accepts bare national digits against the given country', () => {
+            expect(resolveMobileToE164('01712345678', 'BD')).toBe('+8801712345678');
+            expect(resolveMobileToE164('9812345678', 'IN')).toBe('+919812345678');
+        });
+
+        it('defaults to Bangladesh when no country is supplied', () => {
+            expect(resolveMobileToE164('01712345678')).toBe('+8801712345678');
+        });
+
+        it('takes an already-E.164 number as-is, whatever the country default', () => {
+            // The traveller case: a full +91 number must not be measured against
+            // Bangladesh's 11-digit national length and thrown out.
+            expect(resolveMobileToE164('+919812345678', 'BD')).toBe('+919812345678');
+            expect(resolveMobileToE164('+8801712345678', 'BD')).toBe('+8801712345678');
+        });
+
+        it('tolerates spacing and punctuation around a full number', () => {
+            expect(resolveMobileToE164('  +880 1712-345678 ', 'BD')).toBe('+8801712345678');
+        });
+
+        it('returns null for blank and unusable input', () => {
+            expect(resolveMobileToE164('')).toBeNull();
+            expect(resolveMobileToE164('   ')).toBeNull();
+            expect(resolveMobileToE164(null)).toBeNull();
+            expect(resolveMobileToE164('123', 'BD')).toBeNull();
+        });
+    });
+
+    describe('looksLikeEmailIdentifier', () => {
+        it('separates addresses from numbers in whatever shape they are typed', () => {
+            expect(looksLikeEmailIdentifier('owner@example.com')).toBe(true);
+            expect(looksLikeEmailIdentifier('01712345678')).toBe(false);
+            expect(looksLikeEmailIdentifier('+8801712345678')).toBe(false);
+            expect(looksLikeEmailIdentifier('')).toBe(false);
+            expect(looksLikeEmailIdentifier(null)).toBe(false);
         });
     });
 });

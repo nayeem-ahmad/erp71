@@ -18,7 +18,9 @@ type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSu
 
 function LoginPageContent() {
     const { t } = useI18n();
-    const [email, setEmail] = useState('');
+    // Holds an email address or a mobile number; the backend picks the lookup
+    // column by looking for an `@`.
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ function LoginPageContent() {
         setError(null);
 
         try {
-            const loginRes = await api.login({ email, password });
+            const loginRes = await api.login({ identifier, password });
             if (loginRes?.requires_2fa && loginRes?.user_id) {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
@@ -221,17 +223,20 @@ function LoginPageContent() {
                     ) : (
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
-                            <label htmlFor="login-email" className="text-sm font-medium text-gray-700 ms-1">{t.auth.login.emailLabel}</label>
+                            <label htmlFor="login-identifier" className="text-sm font-medium text-gray-700 ms-1">{t.auth.login.identifierLabel}</label>
                             <div className="relative">
                                 <Mail className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                {/* type="text", not "email": the browser would otherwise reject a
+                                    mobile number as malformed before the form ever submits. */}
                                 <input
-                                    id="login-email"
-                                    type="email"
+                                    id="login-identifier"
+                                    type="text"
+                                    autoComplete="username"
                                     required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    value={identifier}
+                                    onChange={(e) => setIdentifier(e.target.value)}
                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                                    placeholder="name@company.com"
+                                    placeholder={t.auth.login.identifierPlaceholder}
                                 />
                             </div>
                         </div>
