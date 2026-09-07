@@ -40,6 +40,10 @@ services:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
         BACKEND_URL: ${BACKEND_URL:-http://backend:4000}
+        # Which public domain is which. Empty NEXT_PUBLIC_MARKETING_URL keeps
+        # the single-domain behaviour; see .env.production.example.
+        NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:-}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
     env_file:
       - .env.production
     environment:

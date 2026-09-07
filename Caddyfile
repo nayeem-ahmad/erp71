@@ -2,16 +2,21 @@
     email nayeem.ahmad@gmail.com
 }
 
-nayeemahmad.com {
-    redir https://app.nayeemahmad.com{uri}
-}
-
-app.nayeemahmad.com {
+# Marketing site. Both halves of the pair are served; the app's middleware
+# folds www into the apex so a page is never indexed at two addresses.
+erp71.com, www.erp71.com {
     encode zstd gzip
     reverse_proxy frontend:3000
 }
 
-api.nayeemahmad.com {
+# The signed-in app. Same Next.js container — `middleware.ts` decides which of
+# the two sites a request is for, from the Host header Caddy passes through.
+app.erp71.com {
+    encode zstd gzip
+    reverse_proxy frontend:3000
+}
+
+api.erp71.com {
     encode zstd gzip
     reverse_proxy backend:4000
 }

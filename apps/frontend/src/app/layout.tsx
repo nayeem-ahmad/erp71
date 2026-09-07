@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { Inter, Noto_Sans_Arabic, Noto_Sans_Bengali } from 'next/font/google';
 
 import './globals.css';
-import { siteOrigin } from '../lib/blog/api';
+import { siteOrigin } from '../lib/domain-routing';
 import { BRAND_FULL_NAME, BRAND_NAME } from '../lib/brand';
 import { I18nProvider } from '../lib/i18n';
 import { DEFAULT_LOCALE, LOCALE_COOKIE_NAME, getLocaleConfig, resolveLocale } from '../lib/localization/config';

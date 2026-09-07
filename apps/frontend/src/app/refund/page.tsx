@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { siteOrigin } from '@/lib/domain-routing';
 import RefundClient from './RefundClient';
 
 /**
@@ -17,7 +18,7 @@ import RefundClient from './RefundClient';
 export const metadata: Metadata = {
     title: 'Refund & Cancellation Policy — ERP71',
     description: 'Our policy on subscription cancellations and refunds.',
-    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/refund` },
+    alternates: { canonical: `${siteOrigin()}/refund` },
     openGraph: {
         title: 'Refund & Cancellation Policy — ERP71',
         description: 'Our policy on subscription cancellations and refunds.',

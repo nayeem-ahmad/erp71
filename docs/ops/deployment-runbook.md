@@ -12,8 +12,88 @@
 | Repo path | `/opt/erp71` |
 | Deploy branch | `main` |
 | Stack | `docker-compose.prod.yml` — Caddy + Next.js (`:3000`) + NestJS (`:4000`) + Postgres 15 |
-| Live URL | `app.erp71.com` (Caddy auto-TLS) |
+| Live URLs | `erp71.com` / `www.erp71.com` (marketing), `app.erp71.com` (app), `api.erp71.com` (API) — Caddy auto-TLS |
 | Runtime env | `/opt/erp71/.env.production` (chmod 600, uncommitted) |
+
+---
+
+## Domains
+
+Four public names. Three of them — `erp71.com`, `www.erp71.com` and
+`app.erp71.com` — are the same Next.js container;
+`apps/frontend/src/middleware.ts` reads the `Host` header and decides which of
+the two sites a request belongs to.
+
+| Host | Serves |
+|---|---|
+| `erp71.com` | Marketing site — homepage, pricing, blog, legal pages |
+| `www.erp71.com` | Same, redirected (308) to the apex so nothing is indexed twice |
+| `app.erp71.com` | The signed-in app. `/` is the front door: dashboard, or the account chooser when the identity has more than one workspace, or the login page when the browser holds no session |
+| `api.erp71.com` | Backend API |
+
+Two rules follow:
+
+- An **app path typed against the marketing host** (`erp71.com/login`,
+  `erp71.com/dashboard`, …) is redirected to `app.erp71.com`. This is not
+  cosmetic: the session is an access token in the browser's storage, which is
+  scoped to an origin, so signing in on `erp71.com` would leave the credentials
+  on a host the app is not served from.
+- **`app.erp71.com/` never shows the marketing homepage.** It renders a gate
+  that reads the session in the browser (the server cannot — the token is in web
+  storage) and continues to `/dashboard` or `/login`. Every other marketing path
+  stays reachable on the app host; only the front door changes.
+
+### Turning it on
+
+The behaviour is off until `NEXT_PUBLIC_MARKETING_URL` names the marketing
+origin. Until then the frontend behaves as a single-domain deployment, exactly
+as it did before the two domains existed. Order matters — the last step is what
+makes `app.erp71.com/` stop serving marketing, so do not take it before the
+apex can serve it instead:
+
+1. **DNS.** `A` records for `erp71.com` and `www.erp71.com` pointing at
+   `66.116.236.127`. Confirm with `dig +short erp71.com`.
+2. **Reverse proxy.** Add the site block to the shared Hermes Caddyfile (back it
+   up, `caddy validate`, `caddy reload`) — same upstream as the app host:
+
+   ```
+   erp71.com, www.erp71.com {
+   	encode zstd gzip
+   	reverse_proxy erp71-frontend-1:3000
+   }
+   ```
+
+   Caddy passes `Host` through unchanged, which is what the middleware reads. A
+   proxy that rewrites it must send the original in `X-Forwarded-Host`.
+   Certificates are issued on the first request, so give it a few seconds.
+3. **Env + redeploy.** In `/opt/erp71/.env.production`:
+
+   ```
+   NEXT_PUBLIC_MARKETING_URL=https://erp71.com
+   NEXT_PUBLIC_APP_URL=https://app.erp71.com
+   ```
+
+   Then `./scripts/deploy.sh main`. Both are `NEXT_PUBLIC_*`, so Next inlines
+   them at build time — a rebuild is required, which is what the deploy script
+   does. `scripts/sync-erp71-env-urls.sh` leaves
+   `NEXT_PUBLIC_MARKETING_URL` alone on purpose.
+
+To back it out, blank `NEXT_PUBLIC_MARKETING_URL` and redeploy: the app returns
+to serving both sites from `app.erp71.com`, and nothing else changes.
+
+### Verifying
+
+```bash
+# Marketing site answers at the apex, and www folds into it
+curl -s -o /dev/null -w '%{http_code}\n' https://erp71.com
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://www.erp71.com
+
+# An app path on the marketing host moves to the app host
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://erp71.com/login
+
+# The app's front door is the gate, not the marketing homepage
+curl -s https://app.erp71.com | grep -c 'Run your business'   # expect 0
+```
 
 ---
 
@@ -128,14 +208,16 @@ docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml ps
 # 2. Backend health
 curl -s https://api.erp71.com/api/v1/health
 
-# 3. Frontend reachable
+# 3. Frontend reachable — app host and marketing host
 curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com
+curl -s -o /dev/null -w '%{http_code}\n' https://erp71.com
 
 # 4. Backend logs — no boot errors
 docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml logs --tail=50 backend
 ```
 
-Then smoke-test in the browser: log in, load `app.erp71.com`, exercise the changed
-feature.
+Then smoke-test in the browser: load `erp71.com` (marketing homepage), log in at
+`app.erp71.com` (front door lands on the dashboard or the account chooser), and
+exercise the changed feature.
 
 See also: `docs/ops/vps-backups.md`, `docs/ops/shared-vps-second-app.md`.
