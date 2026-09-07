@@ -1,7 +1,7 @@
 export const marketingMessages = {
     blog: {
         title: 'Blog',
-        description: 'Guides, product updates and notes on running a shop in Bangladesh',
+        description: 'Guides, product updates and notes on running a small business',
         heading: 'The ERP71 blog',
         subheading: 'Practical writing for shop owners — stock, cash, staff and the software in between.',
         empty: 'No posts yet. Check back soon.',
@@ -21,31 +21,26 @@ export const marketingMessages = {
 
     home: {
         preview: {
-            url: 'app.erp71.com/dashboard',
-            sidebar: ['Dashboard', 'POS', 'Inventory', 'Sales', 'Accounting'],
-            cards: {
-                todaySales: 'Today sales',
-                orders: 'Orders',
-                lowStock: 'Low stock',
-                customers: 'Customers',
-            },
-            recentSales: 'Recent sales',
-            live: 'Live',
+            alt: 'The ERP71 dashboard showing sales, net profit, cash in hand and receivables for the month, with a cash flow chart and sales by category',
+            caption: 'The real dashboard, running on demo data.',
         },
         hero: {
-            badge: 'Built for Bangladeshi SMEs',
+            badge: 'Built for small businesses',
             titleLine1: 'Run your business.',
             titleLine2: 'Grow with confidence.',
-            description: 'All-in-one business management — sales, inventory, accounting, storefront, and BDT payments. Go live in minutes, whether you run a shop, factory, or service firm.',
+            description: 'All-in-one business management — sales, inventory, accounting, storefront and payments. Go live in minutes, whether you run a shop, factory, or service firm.',
             startTrial: 'Get started',
             tryDemo: 'Try Demo',
             footnote: 'Paid plans only · Complete checkout to activate your workspace',
         },
-        stats: {
-            activeStores: 'Active businesses',
-            salesProcessed: 'Sales processed daily',
-            uptime: 'Uptime SLA',
-            posTime: 'POS transaction time',
+        capabilities: {
+            title: 'What you get on day one',
+            items: [
+                { value: 'Double-entry', label: 'Real accounting, not a cashbook' },
+                { value: 'Multi-branch', label: 'Every location on one dashboard' },
+                { value: 'Role-based', label: 'Each person sees only their work' },
+                { value: 'Your own space', label: 'An isolated, private workspace' },
+            ],
         },
         howItWorks: {
             title: 'Up and running in one afternoon',
@@ -66,7 +61,7 @@ export const marketingMessages = {
                 { title: 'Sales Analytics', desc: 'Revenue reports, top-selling products, and cashier performance — all in real time.' },
                 { title: 'Customer Management', desc: 'Build customer profiles, track purchase history, and run targeted promotions.' },
                 { title: 'Integrated Payments', desc: 'Accept bKash, Nagad, SSL Wireless, and cash — reconciled automatically.' },
-                { title: 'Multi-Tenant SaaS', desc: 'Each business gets an isolated workspace. Scale from one location to a nationwide operation.' },
+                { title: 'Multi-Tenant SaaS', desc: 'Each business gets an isolated workspace. Scale from a single location to a whole network of them.' },
             ],
         },
         modules: {
@@ -75,22 +70,25 @@ export const marketingMessages = {
             items: [
                 { title: 'POS & Checkout', desc: 'Touch-friendly terminal built for busy counters. Offline-tolerant with instant sync when back online.', bullets: ['Barcode & SKU search', 'Split & partial payments', 'Receipt print & email'] },
                 { title: 'Inventory & Purchasing', desc: 'Know exactly what is on hand across warehouses, branches, and in transit.', bullets: ['Stock transfers', 'Purchase orders', 'Low-stock alerts'] },
-                { title: 'Accounting', desc: 'Full double-entry books with COA, journals, VAT ledger, and financial reports for Bangladesh.', bullets: ['P&L & balance sheet', 'Bank reconciliation', 'NBR-ready VAT report'] },
+                { title: 'Accounting', desc: 'Full double-entry books with chart of accounts, journals, a tax ledger and the financial reports your accountant asks for.', bullets: ['P&L & balance sheet', 'Bank reconciliation', 'Tax-ready reporting'] },
                 { title: 'Online Storefront', desc: 'Publish a branded shop for customers to browse and order — synced with your live inventory.', bullets: ['Custom domain ready', 'Delivery zones', 'Order-to-POS flow'] },
             ],
         },
         payments: {
-            title: 'Payments your customers already use',
+            title: 'Take payment however your customers pay',
+            description: 'Cash and cards everywhere, plus the mobile wallets and gateways we support today. More regional providers are being added.',
         },
-        testimonials: {
-            title: 'Trusted by businesses across Bangladesh',
+        useCases: {
+            title: 'Built for how you actually work',
+            description: 'The same core — products, stock, money — shaped to the way your business runs.',
             items: [
-                { name: 'Rahim Uddin', role: 'Owner, Rahim Electronics, Dhaka', quote: 'Switched from paper ledgers to ERP71 in a week. Our stock accuracy improved overnight.' },
-                { name: 'Nasrin Begum', role: 'Manager, Fashion House, Chittagong', quote: 'The POS is incredibly fast. During Eid rush we processed hundreds of sales without a single hiccup.' },
-                { name: 'Kamal Hossain', role: 'Director, KH Supermart, Sylhet', quote: 'Multi-location inventory was our biggest headache. Now we can see every branch from one dashboard.' },
+                { title: 'Retail & POS', desc: 'Ring up sales at the counter, scan barcodes, split payments, and watch stock update as you sell.' },
+                { title: 'Wholesale & distribution', desc: 'Price lists per customer, credit terms, part payments, and receivables you can actually chase.' },
+                { title: 'Service businesses', desc: 'Quote, invoice, and collect — with the books kept behind it and no inventory to manage.' },
+                { title: 'Light manufacturing', desc: 'Turn raw materials into finished goods, track what each build consumed, and cost it properly.' },
             ],
         },
-        trustBadges: ['Bangladesh-hosted', 'BDT-native billing', 'Role-based access', 'Audit logs'],
+        trustBadges: ['Your data stays yours', 'Role-based access', 'Audit logs', 'Export anytime'],
         pricing: {
             title: 'Simple, transparent pricing',
             description: 'Choose a paid plan that fits your business. Upgrade anytime as you grow.',
@@ -104,13 +102,13 @@ export const marketingMessages = {
         },
         cta: {
             title: 'Ready to modernise your business?',
-            description: 'Join hundreds of Bangladeshi businesses who have moved their operations to ERP71.',
+            description: 'Move your sales, stock and books onto one system — and see your whole business in one place.',
             button: 'View pricing',
         },
     },
     pricing: {
         title: 'Simple, transparent pricing',
-        description: 'Built for Bangladeshi SMEs. Paid plans only while we scale platform capacity.',
+        description: 'Built for small businesses. Paid plans only while we scale platform capacity.',
         monthly: 'Monthly',
         yearly: 'Yearly',
         yearlySave: 'Save {percent}%',

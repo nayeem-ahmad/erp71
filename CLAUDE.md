@@ -37,7 +37,9 @@ ERP71 platform targeting Bangladeshi small/medium retailers. Monorepo:
 
 Production runs on a self-managed VPS at `66.116.236.127` (repo at `/opt/erp71`, branch `main`), serving `app.erp71.com` via Caddy.
 
-**To deploy: there is no auto-deploy.** Merge to `main`, then SSH in and run the deploy script:
+**To deploy: merge to `main` and it ships itself.** `.github/workflows/deploy-vps.yml` runs once the CI/CD Pipeline passes for that push, SSHes to the VPS, runs the deploy script, and health-checks `api.erp71.com` and `app.erp71.com`. A red job means the deploy failed or came up unhealthy — there is no automatic rollback.
+
+Manual deploys are still available for redeploys, rollbacks, or shipping a non-`main` branch — either GitHub → Actions → "Deploy to VPS" → Run workflow, or directly:
 
 ```bash
 ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'

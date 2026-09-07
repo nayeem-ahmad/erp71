@@ -2,7 +2,7 @@ export const componentsMessages = {
         marketingNav: {
             features: 'Ciri',
             pricing: 'Harga',
-            reviews: 'Ulasan',
+            reviews: 'Kegunaan',
             blog: 'Blog',
             contact: 'Hubungi',
             signIn: 'Log masuk',

@@ -1,14 +1,15 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
-    ArrowRight, CheckCircle2, PlayCircle, Receipt, Shield, Star, Zap,
+    ArrowRight, CheckCircle2, PlayCircle, Shield, Zap,
 } from 'lucide-react';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
 import {
-    FEATURES, HERO_STATS, MODULES, PAYMENT_METHODS,
+    FEATURES, MODULES, PAYMENT_METHODS, USE_CASES,
 } from '@/lib/marketing/content';
 import { buildMarketingPlansFromApi, type PublicPlanFromApi } from '@/lib/marketing/plans';
 import { api } from '@/lib/api';
@@ -35,62 +36,22 @@ function HeroBackground() {
 }
 
 function DashboardPreview({ m }: { m: ReturnType<typeof useI18n>['t']['marketing']['home'] }) {
-    const preview = m.preview;
-    const previewCards = [
-        { label: preview.cards.todaySales, value: '৳ 48,250' },
-        { label: preview.cards.orders, value: '127' },
-        { label: preview.cards.lowStock, value: '6' },
-        { label: preview.cards.customers, value: '1,204' },
-    ];
-
     return (
-        <div className="relative mx-auto max-w-4xl">
-            <div className="absolute -inset-4 bg-gradient-to-r from-blue-200/40 to-indigo-200/40 rounded-3xl blur-2xl" />
+        <figure className="relative mx-auto max-w-5xl">
+            <div className="absolute -inset-4 bg-gradient-to-r from-blue-200/40 to-indigo-200/40 rounded-3xl blur-2xl" aria-hidden />
             <div className="relative bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-blue-100 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
-                    <span className="w-3 h-3 rounded-full bg-red-400" />
-                    <span className="w-3 h-3 rounded-full bg-yellow-400" />
-                    <span className="w-3 h-3 rounded-full bg-green-400" />
-                    <span className="ms-3 text-xs font-semibold text-gray-400">{preview.url}</span>
-                </div>
-                <div className="grid grid-cols-12 min-h-[280px]">
-                    <div className="col-span-3 bg-gray-900 p-4 space-y-3 hidden sm:block">
-                        {preview.sidebar.map((item, i) => (
-                            <div
-                                key={item}
-                                className={`text-xs font-semibold px-3 py-2 rounded-lg ${i === 0 ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
-                            >
-                                {item}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="col-span-12 sm:col-span-9 p-6 bg-[#f9fafb]">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                            {previewCards.map((card) => (
-                                <div key={card.label} className="bg-white rounded-xl border border-gray-100 p-3">
-                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{card.label}</p>
-                                    <p className="text-lg font-black text-gray-900 mt-1">{card.value}</p>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="bg-white rounded-xl border border-gray-100 p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <p className="text-sm font-bold text-gray-800">{preview.recentSales}</p>
-                                <span className="text-xs text-blue-600 font-semibold">{preview.live}</span>
-                            </div>
-                            <div className="space-y-2">
-                                {['Plain T-Shirt — ৳ 850', 'Wireless Mouse — ৳ 1,200', 'Notebook A5 — ৳ 120'].map((row) => (
-                                    <div key={row} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-600">{row}</span>
-                                        <Receipt className="w-4 h-4 text-green-500" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <Image
+                    src="/marketing/dashboard-preview.webp"
+                    alt={m.preview.alt}
+                    width={2160}
+                    height={1350}
+                    sizes="(max-width: 1024px) 100vw, 64rem"
+                    priority
+                    className="w-full h-auto"
+                />
             </div>
-        </div>
+            <figcaption className="mt-3 text-center text-xs text-gray-400">{m.preview.caption}</figcaption>
+        </figure>
     );
 }
 
@@ -112,13 +73,6 @@ export default function HomeClient() {
             .catch(() => null);
     }, []);
     const displayPlans = useMemo(() => buildMarketingPlansFromApi(apiPlans), [apiPlans]);
-
-    const statLabels = [
-        m.stats.activeStores,
-        m.stats.salesProcessed,
-        m.stats.uptime,
-        m.stats.posTime,
-    ];
 
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
@@ -173,13 +127,16 @@ export default function HomeClient() {
             </section>
 
             <section className="py-16 px-6 bg-blue-600">
-                <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center text-white">
-                    {HERO_STATS.map(({ value }, i) => (
-                        <div key={statLabels[i]}>
-                            <div className="text-4xl font-black mb-1">{value}</div>
-                            <div className="text-blue-200 text-sm font-medium">{statLabels[i]}</div>
-                        </div>
-                    ))}
+                <div className="max-w-5xl mx-auto">
+                    <h2 className="text-center text-blue-100 text-sm font-semibold mb-8">{m.capabilities.title}</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center text-white">
+                        {m.capabilities.items.map(({ value, label }) => (
+                            <div key={value}>
+                                <div className="text-2xl font-black mb-1">{value}</div>
+                                <div className="text-blue-200 text-sm font-medium">{label}</div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </section>
 
@@ -263,7 +220,8 @@ export default function HomeClient() {
 
             <section className="py-16 px-6 bg-gray-50">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="text-2xl font-black tracking-tight mb-6">{m.payments.title}</h2>
+                    <h2 className="text-2xl font-black tracking-tight mb-3">{m.payments.title}</h2>
+                    <p className="text-gray-500 text-sm max-w-xl mx-auto mb-6">{m.payments.description}</p>
                     <div className="flex flex-wrap items-center justify-center gap-3">
                         {PAYMENT_METHODS.map(({ name, tone }) => (
                             <span key={name} className={`px-4 py-2 rounded-xl text-sm font-bold ${tone}`}>
@@ -274,24 +232,25 @@ export default function HomeClient() {
                 </div>
             </section>
 
-            <section id="testimonials" className="py-24 px-6 bg-white">
+            <section id="use-cases" className="py-24 px-6 bg-white">
                 <div className="max-w-6xl mx-auto">
-                    <h2 className="text-4xl font-black tracking-tight text-center mb-16">{m.testimonials.title}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {m.testimonials.items.map(({ name, role, quote }, i) => (
-                            <div key={name} className="bg-gray-50 p-8 rounded-2xl border border-gray-100 shadow-sm">
-                                <div className="flex mb-4">
-                                    {Array.from({ length: 5 }).map((_, j) => (
-                                        <Star key={j} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    ))}
+                    <div className="text-center mb-16">
+                        <h2 className="text-4xl font-black tracking-tight mb-4">{m.useCases.title}</h2>
+                        <p className="text-gray-500 text-lg max-w-xl mx-auto">{m.useCases.description}</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {USE_CASES.map(({ icon: Icon }, i) => {
+                            const item = m.useCases.items[i];
+                            return (
+                                <div key={item.title} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50">
+                                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                                        <Icon className="w-6 h-6 text-blue-600" />
+                                    </div>
+                                    <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                                    <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
                                 </div>
-                                <p className="text-gray-700 italic mb-6">&ldquo;{quote}&rdquo;</p>
-                                <div>
-                                    <div className="font-bold text-sm">{name}</div>
-                                    <div className="text-gray-400 text-xs">{role}</div>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </section>

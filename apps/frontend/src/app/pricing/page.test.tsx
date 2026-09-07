@@ -76,7 +76,7 @@ describe('PricingPage', () => {
 
     it('renders the hero subtitle', () => {
         render(<PricingPage />);
-        expect(screen.getByText(/Built for Bangladeshi SMEs/)).toBeInTheDocument();
+        expect(screen.getByText(/Built for small businesses/)).toBeInTheDocument();
     });
 
     it('renders the four ladder tiers', async () => {

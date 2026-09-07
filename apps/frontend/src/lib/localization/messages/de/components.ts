@@ -2,7 +2,7 @@ export const componentsMessages = {
     marketingNav: {
         features: "Funktionen",
         pricing: "Preise",
-        reviews: "Bewertungen",
+        reviews: "Anwendungsfälle",
         blog: "Blog",
         contact: "Kontakt",
         signIn: "Anmelden",

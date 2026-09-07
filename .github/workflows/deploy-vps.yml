@@ -1,9 +1,14 @@
 name: Deploy to VPS
 
-# Manual production deploy only — never runs on push.
+# Auto-deploys production on every push to main, once the CI/CD Pipeline for
+# that commit has passed. Also runnable by hand:
 # GitHub → Actions → "Deploy to VPS" → Run workflow.
 
 on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       branch:
@@ -12,11 +17,28 @@ on:
         default: main
         type: string
 
+# Never let two deploys build on the VPS at once; a newer commit supersedes an
+# older one still waiting.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
+    # On workflow_run, deploy only when CI succeeded for a *push* to main. CI
+    # also runs on PRs targeting main, and those runs must not ship anything.
+    # Manual runs are unconditional (no workflow_run context).
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.event == 'push') }}
     steps:
+      - name: Resolve branch to deploy
+        id: target
+        run: echo "branch=${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'main' }}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -26,6 +48,6 @@ jobs:
           command_timeout: 30m
           script: |
             cd /opt/erp71
-            bash scripts/deploy.sh ${{ inputs.branch }}
+            bash scripts/deploy.sh ${{ steps.target.outputs.branch }}
             curl -sf https://api.erp71.com/api/v1/health
             curl -sf -o /dev/null -w "app HTTP %{http_code}\n" https://app.erp71.com/

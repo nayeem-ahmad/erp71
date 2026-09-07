@@ -37,7 +37,7 @@ export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
                     >
                         {m.blog}
                     </Link>
-                    <Link href="/#testimonials" className="hover:text-gray-900 transition-colors">{m.reviews}</Link>
+                    <Link href="/#use-cases" className="hover:text-gray-900 transition-colors">{m.reviews}</Link>
                     <Link href="/contact" className="hover:text-gray-900 transition-colors">{m.contact}</Link>
                 </nav>
 
@@ -82,7 +82,7 @@ export default function MarketingNav({ active = 'home' }: MarketingNavProps) {
                     >
                         {m.blog}
                     </Link>
-                    <Link href="/#testimonials" className={navLinkCls} onClick={() => setMobileMenuOpen(false)}>{m.reviews}</Link>
+                    <Link href="/#use-cases" className={navLinkCls} onClick={() => setMobileMenuOpen(false)}>{m.reviews}</Link>
                     <Link href="/contact" className={navLinkCls} onClick={() => setMobileMenuOpen(false)}>{m.contact}</Link>
                     <div className="pt-3 pb-2 flex flex-col gap-2">
                         <Link
