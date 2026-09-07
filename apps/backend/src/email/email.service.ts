@@ -356,14 +356,48 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
         });
     }
 
-    async sendPaymentRetryReminder(to: string, tenantName: string, amount: number, currency: string, graceDays: number): Promise<void> {
+    /**
+     * The recurring overdue knock. `daysUntilSuspension` counts down to the
+     * workspace freeze, so the same template sharpens as the deadline nears
+     * rather than repeating one fixed warning.
+     */
+    async sendPaymentRetryReminder(to: string, tenantName: string, amount: number, currency: string, daysUntilSuspension: number): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const consequence = daysUntilSuspension > 0
+            ? `<p>Please <a href="${frontendUrl}/billing">settle the balance</a> within <strong>${daysUntilSuspension} day${daysUntilSuspension === 1 ? '' : 's'}</strong>. After that the workspace is suspended — your data stays safe and readable, but new entries cannot be added until payment is received.</p>`
+            : `<p><strong>This workspace is now suspended.</strong> Your data is safe and readable, but new entries cannot be added until the balance is settled. <a href="${frontendUrl}/billing">Settle the balance</a> to restore full access immediately.</p>`;
+
+        await this.send({
+            to,
+            subject: daysUntilSuspension > 0
+                ? `Payment overdue for ${escapeHtml(tenantName)} — ${daysUntilSuspension} day${daysUntilSuspension === 1 ? '' : 's'} to settle`
+                : `${escapeHtml(tenantName)} is suspended — payment required`,
+            html: `<h2>Payment Overdue</h2>
+<p>Your outstanding balance of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${escapeHtml(tenantName)}</strong> has not yet been received.</p>
+${consequence}`,
+        });
+    }
+
+    /**
+     * Sent once, when the workspace is actually frozen for non-payment. The
+     * reminder above warns; this one confirms it has happened and says plainly
+     * that the data is intact.
+     */
+    async sendWorkspaceSuspended(
+        to: string,
+        tenantName: string,
+        amount: number,
+        currency: string,
+        suspensionDays: number,
+    ): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
-            subject: `Retry payment for ${tenantName}`,
-            html: `<h2>Payment Retry Reminder</h2>
-<p>Your subscription payment of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${tenantName}</strong> is still outstanding.</p>
-<p>Please <a href="${frontendUrl}/dashboard/billing">retry payment</a> within ${graceDays} days to avoid downgrade to the Free plan.</p>`,
+            subject: `${escapeHtml(tenantName)} has been suspended`,
+            html: `<h2>Workspace Suspended</h2>
+<p><strong>${escapeHtml(tenantName)}</strong> has been suspended after ${suspensionDays} days with an unpaid balance of <strong>${currency} ${amount.toFixed(2)}</strong>.</p>
+<p><strong>Your data has not been deleted.</strong> Everyone on the workspace can still sign in, view records and export reports — but sales, purchases, vouchers and other new entries are blocked until the balance is settled.</p>
+<p><a href="${frontendUrl}/billing">Settle the balance</a> to restore full access. Access returns as soon as the payment is recorded.</p>`,
         });
     }
 

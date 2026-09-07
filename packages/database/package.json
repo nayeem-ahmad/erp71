@@ -24,6 +24,7 @@
     "sync:lead-activity": "tsx prisma/sync-lead-activity.ts",
     "sync:setup-fee-paid": "tsx prisma/sync-setup-fee-paid.ts",
     "backfill:product-costs": "tsx prisma/backfill-product-costs.ts",
+    "backfill:billing-periods": "tsx prisma/backfill-frozen-billing-periods.ts",
     "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
     "retag:parties": "tsx prisma/retag-party-ledger.ts",
     "sync:nav-layout": "tsx prisma/sync-nav-layout.ts"

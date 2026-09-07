@@ -93,10 +93,32 @@ const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.en
  * `error.message` handling is unaffected.
  */
 export class ApiError extends Error {
-    constructor(message: string, public readonly status: number) {
+    constructor(
+        message: string,
+        public readonly status: number,
+        /**
+         * Machine-readable discriminator when the backend sends one, e.g.
+         * `WORKSPACE_SUSPENDED` for a workspace frozen over an unpaid balance.
+         * Lets a caller tell that apart from an ordinary permission 403, whose
+         * body carries no code.
+         */
+        public readonly code?: string,
+    ) {
         super(message);
         this.name = 'ApiError';
     }
+}
+
+/** Reads the backend's error `code`, whether it sits at the top level or inside `error`. */
+function readErrorCode(body: unknown): string | undefined {
+    if (typeof body !== 'object' || body === null) return undefined;
+    const record = body as Record<string, unknown>;
+    if (typeof record.code === 'string') return record.code;
+    const nested = record.error;
+    if (typeof nested === 'object' && nested !== null && typeof (nested as Record<string, unknown>).code === 'string') {
+        return (nested as Record<string, string>).code;
+    }
+    return undefined;
 }
 
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
@@ -256,6 +278,7 @@ export async function fetchBlobWithAuth(
             if (clearRejectedWorkspace()) return fetchBlobWithAuth(endpoint, options, true);
         }
         let message = `API error: ${response.statusText}`;
+        let code: string | undefined;
         try {
             const errorBody = await response.json();
             const apiMessage = Array.isArray(errorBody?.message)
@@ -264,10 +287,11 @@ export async function fetchBlobWithAuth(
             if (apiMessage) {
                 message = apiMessage;
             }
+            code = readErrorCode(errorBody);
         } catch {
             // Fall back to the response status text when no JSON error payload is available.
         }
-        throw new ApiError(message, response.status);
+        throw new ApiError(message, response.status, code);
     }
 
     const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -339,9 +363,11 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
         }
 
         let message = `API error: ${response.statusText}`;
+        let code: string | undefined;
 
         try {
             const errorBody = await response.json();
+            code = readErrorCode(errorBody);
             const nested = errorBody?.error;
             const apiMessage = typeof nested === 'object' && nested !== null && nested.message
                 ? (Array.isArray(nested.message) ? nested.message.join(', ') : nested.message)
@@ -360,7 +386,7 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
             // Fall back to the response status text when no JSON error payload is available.
         }
 
-        throw new ApiError(message, response.status);
+        throw new ApiError(message, response.status, code);
     }
 
     return response.json();
@@ -2761,18 +2787,44 @@ export const api = {
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/tenants/reminders${suffix}`);
     },
-    recordTenantPayment: (tenantId: string, data: { amount: number; notes?: string; method?: string }) =>
+    recordTenantPayment: (
+        tenantId: string,
+        data: { amount: number; notes?: string; method?: string; occurredAt?: string },
+    ) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         }),
-    recordTenantRefund: (tenantId: string, data: { amount: number; notes?: string }) =>
+    recordTenantRefund: (
+        tenantId: string,
+        data: { amount: number; notes?: string; occurredAt?: string },
+    ) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/refunds`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         }),
+    recordTenantFee: (
+        tenantId: string,
+        data: { amount: number; label?: string; notes?: string; occurredAt?: string },
+    ) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/fees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    updateTenantLedgerEntry: (
+        eventId: string,
+        data: { amount?: number; label?: string; notes?: string; method?: string; occurredAt?: string },
+    ) =>
+        fetchWithAuth(`/admin/tenants/ledger/${eventId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    deleteTenantLedgerEntry: (eventId: string) =>
+        fetchWithAuth(`/admin/tenants/ledger/${eventId}`, { method: 'DELETE' }),
     sellTenantSmsCredits: (tenantId: string, data: { credits: number; amount?: number; notes?: string }) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/sms-credits`, {
             method: 'POST',

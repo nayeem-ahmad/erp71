@@ -21,6 +21,7 @@ import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import { applySubscriptionDiscount } from './discount.util';
+import { BillingCycle, calculatePeriodEnd, normalizeBillingCycle } from './billing-cycle.util';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { CircuitOpenError } from '../system-health/resilience/circuit-breaker';
 import * as Sentry from '@sentry/nestjs';
@@ -32,7 +33,7 @@ import {
     RefundBillingDto,
 } from './billing.dto';
 
-type BillingCycle = 'MONTHLY' | 'YEARLY';
+
 type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
 type BillingProviderName = 'manual' | 'ssl-wireless';
 type SslWirelessCallbackMode = 'success' | 'fail' | 'cancel' | 'ipn';
@@ -546,6 +547,10 @@ export class BillingService {
             update: {
                 plan_id: plan.id,
                 status: input.status ?? 'ACTIVE',
+                // Persisted so renewals know which price to charge and how long
+                // the next period runs; it was previously used once here and
+                // then thrown away.
+                billing_cycle: billingCycle,
                 current_period_start: periodStart,
                 current_period_end: periodEnd,
                 cancel_at_period_end: input.cancelAtPeriodEnd ?? false,
@@ -561,6 +566,7 @@ export class BillingService {
                 tenant_id: input.tenantId,
                 plan_id: plan.id,
                 status: input.status ?? 'ACTIVE',
+                billing_cycle: billingCycle,
                 current_period_start: periodStart,
                 current_period_end: periodEnd,
                 cancel_at_period_end: input.cancelAtPeriodEnd ?? false,
@@ -1172,13 +1178,16 @@ export class BillingService {
     }
 
     private normalizeBillingCycle(billingCycle?: string): BillingCycle {
-        return billingCycle === 'YEARLY' ? 'YEARLY' : 'MONTHLY';
+        return normalizeBillingCycle(billingCycle);
     }
 
+    /**
+     * Delegates to the shared cycle arithmetic so checkout and the renewal cron
+     * agree on where a period ends. The old local version added a flat 30 or 365
+     * days, which drifts against the calendar month a subscription is sold by.
+     */
     private calculatePeriodEnd(periodStart: Date, billingCycle: BillingCycle) {
-        const periodEnd = new Date(periodStart);
-        periodEnd.setDate(periodEnd.getDate() + (billingCycle === 'YEARLY' ? 365 : 30));
-        return periodEnd;
+        return calculatePeriodEnd(periodStart, billingCycle);
     }
 
     private async canManageBilling(ctx: TenantContext): Promise<boolean> {

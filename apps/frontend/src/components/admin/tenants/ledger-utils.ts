@@ -1,18 +1,31 @@
 import type { LedgerEvent } from './types';
 
+/** Entry types that add to the tenant's balance; everything else charges it. */
+export const CREDIT_LEDGER_EVENT_TYPES = [
+    'manual_payment',
+    'sms_credit_sale_payment',
+    'ai_credit_sale_payment',
+] as const;
+
+export const DEBIT_LEDGER_EVENT_TYPES = [
+    'manual_refund',
+    'manual_fee',
+    'subscription_fee',
+] as const;
+
+export function isCreditLedgerEvent(eventType: string): boolean {
+    return (CREDIT_LEDGER_EVENT_TYPES as readonly string[]).includes(eventType);
+}
+
+export function isDebitLedgerEvent(eventType: string): boolean {
+    return (DEBIT_LEDGER_EVENT_TYPES as readonly string[]).includes(eventType);
+}
+
 function ledgerDelta(event: LedgerEvent): number {
     const amount = event.amount ?? 0;
-    switch (event.event_type) {
-        case 'manual_payment':
-        case 'sms_credit_sale_payment':
-        case 'ai_credit_sale_payment':
-            return amount;
-        case 'manual_refund':
-        case 'subscription_fee':
-            return -amount;
-        default:
-            return 0;
-    }
+    if (isCreditLedgerEvent(event.event_type)) return amount;
+    if (isDebitLedgerEvent(event.event_type)) return -amount;
+    return 0;
 }
 
 /** Compute per-tenant running balance; returns rows newest-first for display. */

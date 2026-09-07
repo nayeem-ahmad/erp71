@@ -171,6 +171,27 @@ describe('401 handling', () => {
         expect(handleExpiredSession).toHaveBeenCalledTimes(1);
     });
 
+    it('carries the backend error code onto ApiError so callers can spot a suspension', async () => {
+        mockFetch.mockReturnValue(errorJson(403, 'Forbidden', {
+            error: {
+                code: 'WORKSPACE_SUSPENDED',
+                message: 'Unpaid subscription balance of 750.00 after 30 days.',
+            },
+        }));
+
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({
+            status: 403,
+            code: 'WORKSPACE_SUSPENDED',
+            message: 'Unpaid subscription balance of 750.00 after 30 days.',
+        });
+    });
+
+    it('leaves the code undefined on an ordinary permission 403', async () => {
+        mockFetch.mockReturnValue(errorJson(403, 'Forbidden', { message: 'Forbidden resource' }));
+
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({ code: undefined });
+    });
+
     it('leaves other error statuses alone — a 403 or 500 is not an expired session', async () => {
         mockFetch.mockReturnValue(errorJson(403, 'Forbidden', { message: 'Forbidden resource' }));
         await expect(fetchWithAuth('/admin/tenants')).rejects.toThrow('Forbidden resource');
