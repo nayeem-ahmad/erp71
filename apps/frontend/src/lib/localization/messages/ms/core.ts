@@ -474,6 +474,8 @@ export const coreMessages = {
                 title: "Selamat kembali",
                 description: "Sila masukkan butiran anda untuk log masuk",
                 emailLabel: "Alamat emel",
+                identifierLabel: "E-mel atau nombor telefon bimbit",
+                identifierPlaceholder: "name@company.com atau 01712345678",
                 passwordLabel: "Kata laluan",
                 submit: "Log masuk",
                 demo: "Cuba Demo",

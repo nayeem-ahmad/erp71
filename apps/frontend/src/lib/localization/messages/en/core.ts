@@ -474,6 +474,8 @@ export const coreMessages = {
             title: 'Welcome back',
             description: 'Please enter your details to sign in',
             emailLabel: 'Email address',
+            identifierLabel: 'Email or mobile number',
+            identifierPlaceholder: 'name@company.com or 01712345678',
             passwordLabel: 'Password',
             submit: 'Sign in',
             demo: 'Try Demo',

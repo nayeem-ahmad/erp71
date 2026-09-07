@@ -474,6 +474,8 @@ export const coreMessages = {
             title: "Bienvenido de nuevo",
             description: "Introduce tus datos para iniciar sesión",
             emailLabel: "Dirección de correo electrónico",
+            identifierLabel: "Correo electrónico o número de móvil",
+            identifierPlaceholder: "name@company.com o 01712345678",
             passwordLabel: "Contraseña",
             submit: "Iniciar sesión",
             demo: "Probar la demo",

@@ -40,6 +40,7 @@ describe('AuthService', () => {
         user: {
             findUnique: jest.fn(),
             findFirst: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
             create: jest.fn(),
             update: jest.fn(),
         },
@@ -190,6 +191,7 @@ describe('AuthService', () => {
         auditService.log.mockResolvedValue(undefined);
         auditService.logForUserTenants.mockResolvedValue(undefined);
         db.user.findFirst.mockResolvedValue(null);
+        db.user.findMany.mockResolvedValue([]);
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue(null);
         platformSettings.getPlatformFeatures.mockResolvedValue({
@@ -225,7 +227,8 @@ describe('AuthService', () => {
 
     it('signs up a new tenant-backed user', async () => {
         db.user.findUnique
-            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)  // email is free
+            .mockResolvedValueOnce(null)  // mobile is free
             .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
         db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
         db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-basic', code: 'BASIC', is_active: true });
@@ -402,7 +405,8 @@ describe('AuthService', () => {
 
     it('provisionTenant creates UserStoreAccess and UserStorePermission for OWNER', async () => {
         db.user.findUnique
-            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)  // email is free
+            .mockResolvedValueOnce(null)  // mobile is free
             .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
         db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
         db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-basic', code: 'BASIC', is_active: true, monthly_price: 499 });
@@ -568,7 +572,8 @@ describe('AuthService', () => {
         // self-serve on 2026-09-07, and this is the assertion that the whole
         // path — DTO validation through provisionTenant — actually lets it in.
         db.user.findUnique
-            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)  // email is free
+            .mockResolvedValueOnce(null)  // mobile is free
             .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
         db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
         db.subscriptionPlan.findUnique.mockResolvedValue({
@@ -629,6 +634,170 @@ describe('AuthService', () => {
         (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
         await expect(service.login({ email: 'owner@example.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
+    });
+
+    describe('login by mobile number', () => {
+        const account = (id: string, email: string) => ({
+            id,
+            email,
+            passwordHash: `hashed-${id}`,
+            email_verified_at: null,
+            totp_secret: null,
+        });
+
+        it('signs in against a national number, normalized to E.164 for the lookup', async () => {
+            db.user.findUnique
+                .mockResolvedValueOnce(account('user-1', 'owner@example.com'))
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+            const result = await service.login({ identifier: '01712345678', password: 'password123' } as any);
+
+            expect(db.user.findUnique).toHaveBeenNthCalledWith(1, { where: { mobile: '+8801712345678' } });
+            expect(result).toHaveProperty('access_token', 'jwt-token');
+        });
+
+        it('reads a bare number in the country the caller names', async () => {
+            db.user.findUnique
+                .mockResolvedValueOnce(account('user-1', 'owner@example.com'))
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+            await service.login({
+                identifier: '9812345678',
+                password: 'password123',
+                mobile_country_code: 'IN',
+            } as any);
+
+            expect(db.user.findUnique).toHaveBeenNthCalledWith(1, { where: { mobile: '+919812345678' } });
+        });
+
+        it('rejects a wrong password against a number it knows', async () => {
+            db.user.findUnique.mockResolvedValue(account('user-1', 'owner@example.com'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'wrong' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+        });
+
+        it('rejects an account with no password without reaching bcrypt', async () => {
+            // Google- and SMS-created accounts have a null hash.
+            db.user.findUnique.mockResolvedValue({ ...account('user-1', 'owner@example.com'), passwordHash: null });
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+            expect(bcrypt.compare as jest.Mock).not.toHaveBeenCalled();
+        });
+
+        it('rejects an unknown number with the same answer as a wrong password', async () => {
+            db.user.findUnique.mockResolvedValue(null);
+
+            await expect(
+                service.login({ identifier: '01712345678', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+        });
+
+        it('rejects an unusable number without touching the database', async () => {
+            await expect(
+                service.login({ identifier: '123', password: 'password123' } as any),
+            ).rejects.toThrow(UnauthorizedException);
+            expect(db.user.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('still accepts the legacy email field callers post', async () => {
+            // accept-invitation signs someone in with the address from their invite,
+            // and posts it as `email`.
+            db.user.findUnique
+                .mockResolvedValueOnce({ id: 'user-1', email: 'owner@example.com', passwordHash: 'hashed', email_verified_at: null })
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+            const result = await service.login({ email: 'owner@example.com', password: 'password123' } as any);
+
+            expect(result).toHaveProperty('access_token', 'jwt-token');
+            expect(db.user.findUnique).toHaveBeenNthCalledWith(1, { where: { email: 'owner@example.com' } });
+        });
+
+        it('rejects a request carrying neither identifier nor email', async () => {
+            await expect(service.login({ password: 'password123' } as any)).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('mobile number uniqueness', () => {
+        it('refuses a signup whose mobile already belongs to another account', async () => {
+            db.user.findUnique
+                .mockResolvedValueOnce(null) // email is free
+                .mockResolvedValueOnce({ id: 'someone-else' }); // the number is not
+
+            await expect(service.signup({
+                email: 'new@example.com',
+                password: 'password123',
+                tenantName: 'Tenant Two',
+                mobile: '01712345678',
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
+            } as any)).rejects.toThrow(ConflictException);
+
+            expect(db.user.create).not.toHaveBeenCalled();
+        });
+
+        it('allows a signup whose mobile nobody holds', async () => {
+            db.user.findUnique
+                .mockResolvedValueOnce(null) // email
+                .mockResolvedValueOnce(null) // mobile
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            db.user.create.mockResolvedValue({ id: 'user-1', email: 'new@example.com', name: 'new' });
+            db.tenant.create.mockResolvedValue({ id: 'tenant-1', name: 'Tenant Two' });
+            db.store.create.mockResolvedValue({ id: 'store-1', name: 'Main Store' });
+            db.tenantUser.create.mockResolvedValue({});
+            db.termsAcceptance.create.mockResolvedValue({});
+            db.subscriptionPlan.findUnique.mockResolvedValue({ code: 'STANDARD', monthly_price: 1000, is_active: true });
+
+            await service.signup({
+                email: 'new@example.com',
+                password: 'password123',
+                tenantName: 'Tenant Two',
+                mobile: '01712345678',
+                acceptedTermsVersion: CURRENT_TERMS_VERSION,
+            } as any);
+
+            expect(db.user.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ mobile: '+8801712345678' }),
+                }),
+            );
+        });
+
+        it('takes a ported number off an account that only ever typed it', async () => {
+            // Firebase says this identity now holds a number another account has
+            // sitting unverified in its profile. The proved claim wins.
+            db.user.findUnique
+                .mockResolvedValueOnce({ id: 'squatter', mobile_verified_at: null })
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            db.user.update.mockResolvedValue({});
+
+            await (service as any).completeMobileLoginForExistingUser(
+                { id: 'user-1', firebase_uid: 'fb-1', mobile: '+8801700000000', mobile_verified_at: new Date(), totp_secret: null },
+                { firebaseUid: 'fb-1', phoneNumber: '+8801712345678' },
+                {},
+            );
+
+            expect(db.user.update).toHaveBeenCalledWith({
+                where: { id: 'squatter' },
+                data: { mobile: null, mobile_verified_at: null },
+            });
+        });
+
+        it('refuses to move a number another account has verified', async () => {
+            db.user.findUnique.mockResolvedValueOnce({ id: 'other', mobile_verified_at: new Date() });
+
+            await expect((service as any).completeMobileLoginForExistingUser(
+                { id: 'user-1', firebase_uid: 'fb-1', mobile: '+8801700000000', mobile_verified_at: new Date(), totp_secret: null },
+                { firebaseUid: 'fb-1', phoneNumber: '+8801712345678' },
+                {},
+            )).rejects.toThrow(ConflictException);
+        });
     });
 
     it('marks nayeem.ahmad@gmail.com as platform admin in auth responses', async () => {
@@ -863,11 +1032,24 @@ describe('AuthService.signup', () => {
         );
     });
 
-    it('accepts a duplicate mobile (no uniqueness check)', async () => {
+    it('stores a mobile nobody else holds', async () => {
         const svc = makeService();
         await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
         expect(createdUser.mobile).toBe('+8801712345678');
-        expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('refuses a mobile that already belongs to another account', async () => {
+        const svc = makeService();
+        // First lookup is the email check, second is the number.
+        db.user.findUnique
+            .mockImplementationOnce(async () => null)
+            .mockImplementationOnce(async () => ({ id: 'someone-else' }));
+
+        await expect(svc.signup({
+            email: 'a@b.com', password: 'password1', tenantName: 'Org',
+            mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION,
+        } as any)).rejects.toBeInstanceOf(ConflictException);
+        expect(createdUser).toBeUndefined();
     });
 
     it('records the acceptance against the tenant and the tier that was agreed to', async () => {
@@ -1162,7 +1344,13 @@ describe('AuthService.mobileSignIn', () => {
     let createdUser: any;
 
     const tx = {
-        user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+        user: {
+            create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }),
+            // A number moving between accounts is released from its old holder and
+            // reassigned inside one transaction, so both calls land on `tx`.
+            findUnique: jest.fn(async () => null),
+            update: jest.fn(async () => ({})),
+        },
         termsAcceptance: { create: jest.fn(async () => ({})) },
     };
     const db = {
@@ -1204,6 +1392,8 @@ describe('AuthService.mobileSignIn', () => {
         db.user.findUnique.mockResolvedValue(null);
         db.user.findMany.mockResolvedValue([]);
         db.user.update.mockResolvedValue({});
+        tx.user.findUnique.mockResolvedValue(null);
+        tx.user.update.mockResolvedValue({});
         db.$transaction.mockImplementation(async (cb: any) => cb(tx));
         tx.user.create.mockImplementation(async ({ data }: any) => {
             createdUser = { id: 'u1', ...data };
@@ -1273,6 +1463,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = makeService();
         db.user.findUnique
             .mockResolvedValueOnce(null)                            // by firebase_uid
+            .mockResolvedValueOnce(null)                            // by mobile
             .mockResolvedValueOnce(existingUser({ mobile: null })); // by email
 
         await expect(
@@ -1290,14 +1481,15 @@ describe('AuthService.mobileSignIn', () => {
 
         const res = await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
-        expect(db.user.findMany).not.toHaveBeenCalled();
         expect(db.user.update).not.toHaveBeenCalled();
         expect(res).toMatchObject({ is_new_user: false, access_token: 'x' });
     });
 
-    it('adopts the Firebase identity onto the one account carrying the number', async () => {
+    it('adopts the Firebase identity onto the account carrying the number', async () => {
         const svc = makeService();
-        db.user.findMany.mockResolvedValueOnce([existingUser()]);
+        db.user.findUnique
+            .mockResolvedValueOnce(null)                 // by firebase_uid
+            .mockResolvedValueOnce(existingUser());      // by mobile
 
         const res = await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
@@ -1321,7 +1513,7 @@ describe('AuthService.mobileSignIn', () => {
 
         await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
 
-        expect(db.user.update).toHaveBeenCalledWith({
+        expect(tx.user.update).toHaveBeenCalledWith({
             where: { id: 'u9' },
             data: {
                 mobile: profile.phoneNumber,
@@ -1331,13 +1523,36 @@ describe('AuthService.mobileSignIn', () => {
         });
     });
 
-    it('refuses to guess when the number sits on more than one account', async () => {
+    it('takes a ported number off an account that had only typed it', async () => {
         const svc = makeService();
-        db.user.findMany.mockResolvedValueOnce([existingUser(), existingUser({ id: 'u10' })]);
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            firebase_uid: profile.firebaseUid,
+            mobile: '+8801811111111',
+            mobile_verified_at: new Date('2026-01-01'),
+        }));
+        // Somebody else has this number in their profile, unconfirmed.
+        tx.user.findUnique.mockResolvedValueOnce({ id: 'squatter', mobile_verified_at: null });
 
-        await expect(svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any)).rejects.toBeInstanceOf(ConflictException);
-        expect(db.user.update).not.toHaveBeenCalled();
-        expect(db.$transaction).not.toHaveBeenCalled();
+        await svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
+
+        expect(tx.user.update).toHaveBeenCalledWith({
+            where: { id: 'squatter' },
+            data: { mobile: null, mobile_verified_at: null },
+        });
+    });
+
+    it('refuses to move a number another account has already verified', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            firebase_uid: profile.firebaseUid,
+            mobile: '+8801811111111',
+            mobile_verified_at: new Date('2026-01-01'),
+        }));
+        tx.user.findUnique.mockResolvedValueOnce({ id: 'other', mobile_verified_at: new Date() });
+
+        await expect(
+            svc.mobileSignIn({ idToken: 'tok', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any),
+        ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('still demands the second factor from a 2FA account', async () => {
