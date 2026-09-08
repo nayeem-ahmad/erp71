@@ -445,6 +445,7 @@ export const salesMessages = {
         newQuotation: "नया कोटेशन",
         convertToSale: "बिक्री में बदलें",
         newProforma: "नया प्रोफ़ॉर्मा इनवॉइस",
+        shortLink: "छोटा लिंक",
         columns: {
             quoteNumber: "कोट #",
             docKind: "प्रकार",
@@ -497,6 +498,7 @@ export const salesMessages = {
             statusLabel: "स्थिति: {status}",
             saving: "सहेजा जा रहा है...",
             saveChanges: "परिवर्तन सहेजें",
+            share: "साझा करें",
             // The subject line the share modal builds its title and WhatsApp
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "कोटेशन {number}",

@@ -445,6 +445,7 @@ export const salesMessages = {
         newQuotation: "Neues Angebot",
         convertToSale: "In Verkauf umwandeln",
         newProforma: "Neue Proformarechnung",
+        shortLink: "Kurzlink",
         columns: {
             quoteNumber: "Angebotsnr.",
             docKind: "Typ",
@@ -497,6 +498,7 @@ export const salesMessages = {
             statusLabel: "STATUS: {status}",
             saving: "Wird gespeichert...",
             saveChanges: "Änderungen speichern",
+            share: "Teilen",
             // The subject line the share modal builds its title and WhatsApp
             // message from — it goes out to a customer, so it is localized.
             shareSubject: "Angebot {number}",

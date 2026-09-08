@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { FileText, Plus, Eye, Edit2, Printer, Trash2, ReceiptText } from 'lucide-react';
+import { FileText, Plus, Eye, Edit2, Printer, Trash2, ReceiptText, Link2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -16,6 +16,8 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { PageShell } from '@/components/ui';
+import ShareModal from '@/components/share/ShareModal';
+import { useQuotationShare } from '@/components/share/use-quotation-share';
 
 interface Quotation {
     id: string;
@@ -60,6 +62,9 @@ export default function QuotesPage() {
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    // Same endpoint and same modal the detail page uses, so a link minted from a
+    // row and one minted from the quotation itself are the one link.
+    const { share, sharingId, openShare, revokeShare, closeShare } = useQuotationShare();
 
     useEffect(() => {
         loadQuotes();
@@ -238,6 +243,20 @@ export default function QuotesPage() {
                             >
                                 <ReceiptText className="w-4 h-4" />
                             </Link>
+                            {/* Mints (or reopens) the /s/<code> short link for
+                                this quotation and hands it over ready to send —
+                                the same link the detail page's Share button
+                                produces, since the endpoint reuses the
+                                quotation's existing token and code. */}
+                            <button
+                                onClick={() => void openShare(quote)}
+                                disabled={sharingId === quote.id}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                title={t.quotes.shortLink}
+                                aria-label={t.quotes.shortLink}
+                            >
+                                <Link2 className="w-4 h-4" />
+                            </button>
                             <button
                                 onClick={() => handlePrint(quote)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -258,10 +277,10 @@ export default function QuotesPage() {
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 200,
+                size: 230,
             }),
         ],
-        [t, locale],
+        [t, locale, openShare, sharingId],
     );
 
     const filterPresets = useMemo(
@@ -320,7 +339,16 @@ export default function QuotesPage() {
                     searchPlaceholder={t.quotes.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
                 />
-            
+
+                {share && (
+                    <ShareModal
+                        subject={share.subject}
+                        shortPath={share.path}
+                        onRevoke={revokeShare}
+                        onClose={closeShare}
+                    />
+                )}
+
         </PageShell>
     );
 }
