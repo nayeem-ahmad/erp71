@@ -219,13 +219,25 @@ export function leadFormToPayload(
     payload.photo_storage_key = form.photo_storage_key;
     // Create only: the opening next step is materialised as a PLANNED activity.
     // Reschedule an existing one through PATCH /crm/activities/:id.
+    //
+    // All three hang off the subject. `seedOpeningActivity` returns early without
+    // one, so a date or an assignee sent alone lands on rollup columns describing
+    // an activity that was never created — and `assigned_to` reaches here on its
+    // own routinely, because `setLeadOwner` seeds `next_step_assigned_to` from the
+    // lead owner whether or not anybody typed a next step. That is live now that
+    // the section is hidden (`showNextStep` defaults to false): without this gate
+    // every lead created from the form would carry a stray `next_step_assigned_to`.
     if (opts.mode !== 'update') {
         const nextStep = form.next_step.trim();
-        if (nextStep) payload.next_step = nextStep;
-        if (form.next_step_date) {
-            payload.next_step_date = new Date(form.next_step_date).toISOString();
+        if (nextStep) {
+            payload.next_step = nextStep;
+            if (form.next_step_date) {
+                payload.next_step_date = new Date(form.next_step_date).toISOString();
+            }
+            if (form.next_step_assigned_to) {
+                payload.next_step_assigned_to = form.next_step_assigned_to;
+            }
         }
-        if (form.next_step_assigned_to) payload.next_step_assigned_to = form.next_step_assigned_to;
     }
     const customFields = Object.entries(form.custom_fields ?? {}).reduce<Record<string, string>>((acc, [k, v]) => {
         const val = String(v ?? '').trim();
@@ -267,9 +279,15 @@ type LeadFormFieldsProps = {
     sourceOptions?: LeadTaxonomyOption[];
     categoryOptions?: LeadTaxonomyOption[];
     /**
-     * Next-step fields belong on create only. On edit they are a read-only
-     * rollup of the earliest PLANNED activity — shown on the detail card,
-     * rescheduled from the activity panel.
+     * Off everywhere as of this change: activities — planned and logged alike —
+     * are created and edited from CrmActivityPanel, so no lead form collects a
+     * next step any more. The section itself is kept, not deleted: it is the
+     * whole of what has to come back if we want the shortcut again.
+     *
+     * `next_step*` were never editable lead fields even when this was on. They
+     * are a read-only rollup of the earliest PLANNED activity; on create the
+     * form's values were an *input* that `seedOpeningActivity` turned into a
+     * real activity, and the columns were derived from that.
      */
     showNextStep?: boolean;
 };
@@ -283,7 +301,7 @@ export function LeadFormFields({
     errors = {},
     sourceOptions = [],
     categoryOptions = [],
-    showNextStep = true,
+    showNextStep = false,
 }: Readonly<LeadFormFieldsProps>) {
     const { t } = useI18n();
     const m = t.crm.leads;
