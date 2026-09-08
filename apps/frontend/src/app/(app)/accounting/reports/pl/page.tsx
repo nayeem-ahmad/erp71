@@ -19,7 +19,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printStatementReport, reportContextLines } from '@/lib/statement-printer';
@@ -176,7 +176,7 @@ export default function ProfitLossPage() {
                 ),
                 locale,
                 generatedLabel: printCopy.generated,
-                generatedAt: new Date().toLocaleString(locale),
+                generatedAt: formatDateTime(new Date(), locale),
             },
             [
                 {

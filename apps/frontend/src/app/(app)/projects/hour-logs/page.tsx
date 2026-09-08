@@ -46,6 +46,7 @@ import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { formatDate } from '@/lib/format';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
@@ -1134,7 +1135,7 @@ export default function HourLogsPage() {
                     .replace('{hours}', pendingDelete ? hoursOf(pendingDelete).toFixed(2) : '')
                     .replace(
                         '{date}',
-                        pendingDelete ? new Date(pendingDelete.work_date).toLocaleDateString() : '',
+                        pendingDelete ? formatDate(pendingDelete.work_date) : '',
                     )}
                 confirmLabel={t.common.delete}
                 cancelLabel={t.common.cancel}

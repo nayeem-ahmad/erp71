@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2, ReceiptText } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -120,7 +120,7 @@ export default function OrdersPage() {
             bodyHtml: `
                 <h1>${order.order_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.datePayment, {
-                    date: new Date(order.created_at).toLocaleString(),
+                    date: formatDateTime(order.created_at, locale),
                     status: t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status,
                     payment: t.shared.statuses.payment[order.payment_status as keyof typeof t.shared.statuses.payment] ?? order.payment_status,
                 })}</div>

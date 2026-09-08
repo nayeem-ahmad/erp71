@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { applySubscriptionDiscount } from './discount.util';
 import { elapsedPeriods, normalizeBillingCycle } from './billing-cycle.util';
 import { computeLedgerBalance } from '../admin-tenants/ledger-balance.util';
+import { formatZonedDate } from '../common/tenant-time.util';
 
 /** The slice of a subscription the good-standing note needs, shared by both passes. */
 interface ReminderCycleSubscription {
@@ -345,7 +346,7 @@ export class BillingSchedulerService {
                 owner.id,
                 'SUBSCRIPTION_GOOD_STANDING',
                 'Your subscription is all set',
-                `Nothing is due for ${sub.tenant!.name}. Your ${planName} plan is paid up and renews on ${renewsAt.toDateString()}.`,
+                `Nothing is due for ${sub.tenant!.name}. Your ${planName} plan is paid up and renews on ${formatZonedDate(renewsAt)}.`,
                 '/billing',
             );
         }
@@ -684,8 +685,8 @@ export class BillingSchedulerService {
                 const formattedAmount = amount.toFixed(2);
                 const title = 'Subscription fee posted';
                 const periodLabel = postedCount > 1
-                    ? `${postedCount} periods ending ${finalPeriod.periodStart.toDateString()}`
-                    : `the period ending ${finalPeriod.periodStart.toDateString()}`;
+                    ? `${postedCount} periods ending ${formatZonedDate(finalPeriod.periodStart)}`
+                    : `the period ending ${formatZonedDate(finalPeriod.periodStart)}`;
                 const body = `Your ${sub.plan?.name ?? 'subscription'} fee of ৳${formattedAmount} for ${sub.tenant.name} has been posted for ${periodLabel}.`;
 
                 if (owner?.id) {
@@ -778,7 +779,7 @@ export class BillingSchedulerService {
                         owner.id,
                         'addon_fee',
                         'Add-on fee posted',
-                        `Your ${sub.addon.name} add-on fee of ৳${formattedAmount} for ${sub.tenant.name} has been posted for the period ending ${sub.current_period_end.toDateString()}.`,
+                        `Your ${sub.addon.name} add-on fee of ৳${formattedAmount} for ${sub.tenant.name} has been posted for the period ending ${formatZonedDate(sub.current_period_end)}.`,
                         '/billing',
                     );
                 }

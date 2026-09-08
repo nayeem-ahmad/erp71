@@ -8,6 +8,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 export default function InventoryTransferDetailPage() {
@@ -160,7 +161,7 @@ export default function InventoryTransferDetailPage() {
                                     <div className="mt-1 h-2.5 w-2.5 rounded-full bg-blue-600" />
                                     <div>
                                         <div className={`text-sm font-bold ${event.tone}`}>{event.label}</div>
-                                        <div className="text-xs text-gray-500">{new Date(event.at).toLocaleString()}</div>
+                                        <div className="text-xs text-gray-500">{formatDateTime(event.at)}</div>
                                     </div>
                                 </div>
                             ))}

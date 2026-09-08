@@ -34,6 +34,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
     formatDate: (d: string) => d,
+    formatDateTime: (d: string) => d,
 }));
 
 jest.mock('next/navigation', () => ({

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { Package, DollarSign, Printer, Save, Pencil, X, Trash2, Search, PackageCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -274,7 +274,7 @@ function OrderDetailsPageContent() {
                                 {t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status}
                             </span>
                             <span className="text-xs font-bold text-gray-400">
-                                {new Date(order.created_at).toLocaleString()}
+                                {formatDateTime(order.created_at, locale)}
                             </span>
                         </span>
                     }
@@ -356,7 +356,7 @@ function OrderDetailsPageContent() {
                     <h1>{order.order_number}</h1>
                     <div className="subtitle">
                         {formatMessage(t.shared.print.datePayment, {
-                            date: new Date(order.created_at).toLocaleString(),
+                            date: formatDateTime(order.created_at, locale),
                             status: t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status,
                             payment: t.shared.statuses.payment[order.payment_status as keyof typeof t.shared.statuses.payment] ?? order.payment_status,
                         })}

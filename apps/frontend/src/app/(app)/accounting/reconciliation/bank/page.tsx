@@ -10,7 +10,7 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -237,7 +237,7 @@ export default function BankReconciliationPage() {
                                 <tbody>
                                     {report.entries.map((e) => (
                                         <tr key={e.id} className={`border-b border-gray-50 ${e.is_matched ? 'opacity-60' : ''}`}>
-                                            <td className="px-4 py-3 text-gray-500">{new Date(e.entry_date).toLocaleDateString()}</td>
+                                            <td className="px-4 py-3 text-gray-500">{formatDate(e.entry_date, locale)}</td>
                                             <td className="px-4 py-3 text-gray-700">{e.description ?? '—'}</td>
                                             <td className="px-4 py-3 text-end font-medium">{formatBDT(Number(e.amount), { locale })}</td>
                                             <td className="px-4 py-3 text-center">

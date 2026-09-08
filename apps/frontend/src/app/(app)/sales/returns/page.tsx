@@ -10,7 +10,7 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -92,7 +92,7 @@ export default function ReturnsPage() {
             bodyHtml: `
                 <h1>${ret.return_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.originalReceipt, {
-                    date: new Date(ret.created_at).toLocaleString(),
+                    date: formatDateTime(ret.created_at),
                     receipt: ret.sale?.serial_number || t.shared.dash,
                 })}</div>
                 <table>

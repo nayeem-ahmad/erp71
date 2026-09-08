@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, CheckCircle2, Loader2, Lock, Mail, Phone, User, UserPlus, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { getAccessToken, setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
@@ -186,7 +187,7 @@ function AcceptInvitationContent() {
                                     <span>{info.email}</span>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    {formatMessage(m.expires, { date: new Date(info.expiresAt).toLocaleDateString() })}
+                                    {formatMessage(m.expires, { date: formatDate(info.expiresAt) })}
                                 </p>
                             </div>
 

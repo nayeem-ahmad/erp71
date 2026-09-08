@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, CheckCircle, AlertCircle, Monitor } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -169,7 +169,7 @@ export default function CashierSessionsPage() {
                                     <div>
                                         <h2 className="text-lg font-bold tracking-tight">{t.cashierSessions.sessionActive}</h2>
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                            {formatMessage(t.cashierSessions.opened, { date: new Date(session.opened_at).toLocaleString() })}
+                                            {formatMessage(t.cashierSessions.opened, { date: formatDateTime(session.opened_at) })}
                                         </p>
                                     </div>
                                 </div>

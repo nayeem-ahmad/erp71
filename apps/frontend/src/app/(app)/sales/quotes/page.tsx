@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Plus, Eye, Edit2, Printer, Trash2, ReceiptText, Link2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -112,7 +112,7 @@ export default function QuotesPage() {
             bodyHtml: `
                 <h1>${quote.quote_number} (${formatMessage(t.shared.version, { version: quote.version })})</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.createdMeta, {
-                    date: new Date(quote.created_at).toLocaleString(),
+                    date: formatDateTime(quote.created_at, locale),
                     status: t.shared.statuses.quote[quote.status as keyof typeof t.shared.statuses.quote] ?? quote.status,
                     validUntil: quote.valid_until ? formatDate(quote.valid_until, locale) : t.shared.open,
                 })}</div>

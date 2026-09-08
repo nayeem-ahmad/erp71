@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Printer, Save, Package, FileText, Pencil, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -199,7 +199,7 @@ function ReturnDetailPageContent() {
 
                 <PageHeader
                     title={ret.return_number}
-                    subtitle={new Date(ret.created_at).toLocaleString()}
+                    subtitle={formatDateTime(ret.created_at)}
                     breadcrumbs={nestedPageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.sales,
@@ -276,7 +276,7 @@ function ReturnDetailPageContent() {
                 {/* Print-ready content (hidden on screen) */}
                 <div ref={printRef} className="hidden">
                     <h1>{ret.return_number}</h1>
-                    <div className="subtitle">Date: {new Date(ret.created_at).toLocaleString()} | {t.returns.columns.originalReceipt}: {ret.sale?.serial_number || '-'}</div>
+                    <div className="subtitle">Date: {formatDateTime(ret.created_at)} | {t.returns.columns.originalReceipt}: {ret.sale?.serial_number || '-'}</div>
                     <table>
                         <thead>
                             <tr>

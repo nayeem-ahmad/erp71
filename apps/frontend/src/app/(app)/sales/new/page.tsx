@@ -5,7 +5,7 @@ import { Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatBDT, toDatetimeLocal } from '@/lib/format';
+import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { newCustomerPayload, type NewCustomerDraft } from '../components/CustomerSelection';
@@ -32,7 +32,7 @@ import {
 import { useI18n } from '@/lib/i18n';
 
 function NewSalePageContent() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const {
         items,
         customer,
@@ -193,7 +193,7 @@ function NewSalePageContent() {
         printSalesInvoice(
             {
                 referenceNumber: refNumber || '—',
-                date: new Date(saleDate).toLocaleDateString('en-BD'),
+                date: formatDate(saleDate, locale),
                 companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
                 headerConfig: printHeader.headerConfig,
                 customerName: customer?.name,

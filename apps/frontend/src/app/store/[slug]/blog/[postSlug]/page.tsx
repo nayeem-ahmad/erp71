@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { permanentRedirect } from 'next/navigation';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
 import { fetchStorefrontPost } from '@/lib/blog/storefront-api';
+import { formatDate as formatDisplayDate } from '@/lib/format';
 
 // Next.js parses this at build time and only accepts a literal, so the shared
 // constant cannot be used here. 300 seconds — publishing revalidates on demand,
@@ -35,9 +36,10 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     };
 }
 
+/** Locale pinned so this server-rendered date matches the client on rehydration. */
 function formatDate(value: string | null): string {
     if (!value) return '';
-    return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDisplayDate(value, 'en');
 }
 
 function Unavailable({ shopSlug }: { shopSlug: string }) {

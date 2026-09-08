@@ -14,6 +14,7 @@ import { DEFAULT_HEADER_CONFIG, PAPER_SIZES, resolveHeaderConfig } from '@/lib/p
 // printer libs can import it without pulling in a client component.
 import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
 import type { DeepPartial, HeaderContext, PaperSize, PrintDocType, PrintHeaderConfig } from '@/lib/print';
+import { formatDate } from '@/lib/format';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
 
@@ -133,7 +134,7 @@ export default function PrintTemplatesPage() {
     const previewContext: HeaderContext = useMemo(() => ({
         docTitle: 'Invoice',
         docNumber: 'INV-000123',
-        docDate: new Date().toLocaleDateString('en-BD'),
+        docDate: formatDate(new Date()),
         companyName: branding.businessName ?? 'Your Business',
         storeName: branding.businessName ?? 'Main Store',
         address: '12 Motijheel C/A, Dhaka 1000',

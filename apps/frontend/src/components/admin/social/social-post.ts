@@ -1,5 +1,7 @@
 /** Shapes returned by `/admin/social-media`, shared by the page and its modals. */
 
+import { formatDateTime as formatDisplayDateTime } from '@/lib/format';
+
 export const SOCIAL_NETWORKS = [
     'facebook',
     'instagram',
@@ -53,12 +55,5 @@ export type BufferChannel = {
 };
 
 export function formatDateTime(value: string | null): string {
-    if (!value) return '—';
-    return new Date(value).toLocaleString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    return formatDisplayDateTime(value);
 }

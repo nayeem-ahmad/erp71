@@ -14,6 +14,7 @@ jest.mock('@/lib/api', () => ({
 
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `৳${v}`,
+    formatDate: (v: string) => v,
 }));
 
 jest.mock('next/navigation', () => ({

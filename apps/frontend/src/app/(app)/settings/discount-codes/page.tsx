@@ -4,7 +4,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { useState, useEffect } from 'react';
 import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
@@ -316,7 +316,7 @@ export default function DiscountCodesPage() {
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500">
                                         {c.valid_until
-                                            ? <>{m.table.until} {new Date(c.valid_until).toLocaleDateString('en-BD')}</>
+                                            ? <>{m.table.until} {formatDate(c.valid_until)}</>
                                             : <span className="text-gray-300">{m.table.noExpiry}</span>}
                                     </td>
                                     <td className="px-4 py-3">

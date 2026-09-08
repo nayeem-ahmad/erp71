@@ -7,7 +7,7 @@ import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db';
 import { useI18n } from '@/lib/i18n';
@@ -539,7 +539,7 @@ export default function POSPage() {
             serialNumber: sale?.serial_number || '',
             storeName: printHeader.companyName,
             headerConfig: printHeader.headerConfig,
-            date: sale?.created_at ? new Date(sale.created_at).toLocaleString() : new Date().toLocaleString(),
+            date: formatDateTime(sale?.created_at ?? new Date()),
             items: saleCart.map((item: any) => ({
                 name: item.name,
                 sku: item.sku,
@@ -829,7 +829,7 @@ export default function POSPage() {
                                                     {sale.serial_number}
                                                 </p>
                                                 <p className="text-[11px] font-bold text-gray-500 mt-0.5">
-                                                    {new Date(sale.created_at).toLocaleString()}
+                                                    {formatDateTime(sale.created_at)}
                                                 </p>
                                                 {sale.customer?.name && (
                                                     <p className="text-[11px] text-gray-400 mt-0.5 truncate">
