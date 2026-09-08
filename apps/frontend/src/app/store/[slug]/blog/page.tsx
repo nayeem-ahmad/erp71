@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { fetchStorefrontPosts } from '@/lib/blog/storefront-api';
+import { formatDate as formatDisplayDate } from '@/lib/format';
 
 /**
  * A shop's blog index, on its own storefront.
@@ -46,9 +47,10 @@ function Unavailable() {
     );
 }
 
+/** Locale pinned so this server-rendered date matches the client on rehydration. */
 function formatDate(value: string | null): string {
     if (!value) return '';
-    return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDisplayDate(value, 'en');
 }
 
 export default async function StorefrontBlogIndexPage({

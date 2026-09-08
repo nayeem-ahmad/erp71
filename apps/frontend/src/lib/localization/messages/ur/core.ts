@@ -275,6 +275,7 @@ export const coreMessages = {
             manufacturing: 'مینوفیکچرنگ',
             projects: 'پروجیکٹ مینجمنٹ',
             purchase: 'خریداری',
+            imports: 'درآمد',
             accounting: 'اکاؤنٹنگ',
             expenses: 'اخراجات',
             inventory: 'انوینٹری',

@@ -9,6 +9,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import SupportComposer from '@/components/SupportComposer';
+import { formatDate } from '@/lib/format';
 
 type KnockCategory = 'support' | 'bug' | 'feature' | 'general';
 
@@ -206,7 +207,7 @@ export default function SupportPage() {
                                         <p className="text-xs text-gray-400 truncate mt-1">{thread.lastMessage.body}</p>
                                     )}
                                     <p className="text-[10px] text-gray-300 mt-1">
-                                        {new Date(thread.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        {formatDate(thread.updatedAt)}
                                     </p>
                                 </button>
                             ))

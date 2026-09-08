@@ -3,6 +3,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { formatDate, formatDateTime } from '@/lib/format';
 import {
     Button,
     Checkbox,
@@ -458,7 +459,7 @@ export default function TaskDetailPanel({
                                         {(task.timeEntries ?? []).map((entry) => (
                                             <li key={entry.id} className="flex items-center gap-2 py-1.5">
                                                 <span className="w-24 shrink-0 text-gray-500">
-                                                    {new Date(entry.work_date).toLocaleDateString()}
+                                                    {formatDate(entry.work_date)}
                                                 </span>
                                                 <span className="w-14 shrink-0">{num(entry.hours)}h</span>
                                                 <span className="flex-1 truncate text-gray-600">
@@ -517,7 +518,7 @@ export default function TaskDetailPanel({
                                                             </p>
                                                         )}
                                                         <p className="mt-0.5 text-xs text-gray-400">
-                                                            {new Date(row.changed_at).toLocaleString()}
+                                                            {formatDateTime(row.changed_at)}
                                                             {row.user
                                                                 ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
                                                                 : ''}
@@ -1236,7 +1237,7 @@ function ActivitySection({
                                 <div className="rounded-md bg-gray-50 p-2">
                                     <p className="text-xs text-gray-500">
                                         {actorName(entry.user) ?? m.someone} ·{' '}
-                                        {new Date(entry.created_at).toLocaleString()}
+                                        {formatDateTime(entry.created_at)}
                                     </p>
                                     {editingId === entry.id ? (
                                         <div className="mt-1 space-y-2">
@@ -1304,7 +1305,7 @@ function ActivitySection({
                                     </span>{' '}
                                     {describeActivity(entry, m.types as Record<string, string>)}
                                     <span className="ms-1 text-xs text-gray-400">
-                                        {new Date(entry.created_at).toLocaleString()}
+                                        {formatDateTime(entry.created_at)}
                                     </span>
                                 </p>
                             )}

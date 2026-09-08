@@ -2,6 +2,7 @@ import { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus, X, History } from 'lucide-react';
+import AnchoredDropdown from './AnchoredDropdown';
 import RateHistoryPopover from './RateHistoryPopover';
 import { useRateHistory, type RateHistoryType } from './RateHistory';
 
@@ -182,12 +183,16 @@ export default function ProductSearch({
         <div className="flex flex-col gap-1">
             {/* One entry bar: product, unit amount, quantity, Add — and the
                 history icon at the end. Everything needed to commit a line is
-                on a single row, so the eye never leaves it. */}
-            <div className="flex flex-wrap sm:flex-nowrap items-end gap-1.5">
-                {/* Capped rather than free-growing: stretched across a wide
-                    work area it left the amount fields marooned at the far
-                    edge, visually detached from the product they price. */}
-                <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md">
+                on a single row, so the eye never leaves it.
+
+                It wraps at every width rather than only below `sm`: pinned to
+                one line it ran past the work area on a narrow laptop and the
+                `overflow-hidden` there cut the Add button off the screen. */}
+            <div className="flex flex-wrap items-end gap-1.5">
+                {/* Takes whatever the fixed amount fields beside it leave, so
+                    the bar reaches the edge of the work area instead of
+                    stopping short of it on a wide screen. */}
+                <div className="w-full sm:w-auto sm:grow sm:shrink sm:basis-[180px] sm:min-w-[180px]">
                     <label htmlFor={productInputId} className="block text-[11px] text-gray-500 mb-0.5">
                         Product
                     </label>
@@ -228,10 +233,7 @@ export default function ProductSearch({
 
                         {/* Results Dropdown */}
                         {showDropdown && !staged && (
-                            <div
-                                ref={dropdownRef}
-                                className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
-                            >
+                            <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={320}>
                                 {loading ? (
                                     <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
                                 ) : products.length === 0 ? (
@@ -274,13 +276,15 @@ export default function ProductSearch({
                                         })}
                                     </>
                                 )}
-                            </div>
+                            </AnchoredDropdown>
                         )}
 
-                        {/* Hung under the product box rather than over the screen: the
-                            rate being decided stays visible three fields to the right. */}
+                        {/* Anchored to the product box rather than thrown over the
+                            screen: the rate being decided stays visible three
+                            fields to the right. */}
                         {historyType && showHistory && staged && (
                             <RateHistoryPopover
+                                anchorRef={inputRef}
                                 productId={staged.id}
                                 productName={staged.name}
                                 type={historyType}
@@ -297,59 +301,64 @@ export default function ProductSearch({
                     </div>
                 </div>
 
-                <label className="flex flex-col gap-0.5">
-                    <span className="text-[11px] text-gray-500">{priceLabel}</span>
-                    <input
-                        ref={priceRef}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={stagedPrice}
-                        disabled={!staged}
-                        onChange={(e) => setStagedPrice(e.target.value)}
-                        onKeyDown={handleStagedKeyDown}
-                        aria-label={priceLabel}
-                        className={`${numberInput} w-24 disabled:bg-gray-50 disabled:text-gray-400`}
-                    />
-                </label>
+                {/* Price, quantity and Add travel together, so a bar too narrow
+                    for one line breaks under the product box instead of
+                    stranding Add on a row of its own. */}
+                <div className="flex flex-wrap items-end gap-1.5">
+                    <label className="flex flex-col gap-0.5">
+                        <span className="text-[11px] text-gray-500">{priceLabel}</span>
+                        <input
+                            ref={priceRef}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={stagedPrice}
+                            disabled={!staged}
+                            onChange={(e) => setStagedPrice(e.target.value)}
+                            onKeyDown={handleStagedKeyDown}
+                            aria-label={priceLabel}
+                            className={`${numberInput} w-24 disabled:bg-gray-50 disabled:text-gray-400`}
+                        />
+                    </label>
 
-                <label className="flex flex-col gap-0.5">
-                    <span className="text-[11px] text-gray-500">Qty</span>
-                    <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={stagedQty}
-                        disabled={!staged}
-                        onChange={(e) => setStagedQty(e.target.value)}
-                        onKeyDown={handleStagedKeyDown}
-                        aria-label="Qty"
-                        className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
-                    />
-                </label>
+                    <label className="flex flex-col gap-0.5">
+                        <span className="text-[11px] text-gray-500">Qty</span>
+                        <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={stagedQty}
+                            disabled={!staged}
+                            onChange={(e) => setStagedQty(e.target.value)}
+                            onKeyDown={handleStagedKeyDown}
+                            aria-label="Qty"
+                            className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
+                        />
+                    </label>
 
-                <button
-                    type="button"
-                    onClick={handleAddStaged}
-                    disabled={!staged}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 min-h-touch sm:min-h-0"
-                >
-                    Add
-                </button>
-
-                {historyType && (
                     <button
-                        ref={historyButtonRef}
                         type="button"
-                        onClick={() => setShowHistory((open) => !open)}
+                        onClick={handleAddStaged}
                         disabled={!staged}
-                        title={staged ? 'Previous rates' : 'Pick a product to see its previous rates'}
-                        aria-label="Previous rates"
-                        className="px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-transparent min-h-touch sm:min-h-0"
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 min-h-touch sm:min-h-0"
                     >
-                        <History className="w-4 h-4" />
+                        Add
                     </button>
-                )}
+
+                    {historyType && (
+                        <button
+                            ref={historyButtonRef}
+                            type="button"
+                            onClick={() => setShowHistory((open) => !open)}
+                            disabled={!staged}
+                            title={staged ? 'Previous rates' : 'Pick a product to see its previous rates'}
+                            aria-label="Previous rates"
+                            className="px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-transparent min-h-touch sm:min-h-0"
+                        >
+                            <History className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Stock line for the staged product — kept off the entry row so the

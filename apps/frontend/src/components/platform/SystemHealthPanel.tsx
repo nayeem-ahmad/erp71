@@ -12,6 +12,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 
 export type DependencyState = 'ok' | 'degraded' | 'down' | 'disabled' | 'unknown';
@@ -57,9 +58,7 @@ export const STATE_STYLES: Record<DependencyState, { dot: string; chip: string }
 };
 
 export function formatTimestamp(value: string | null): string {
-    if (!value) return '—';
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+    return formatDateTime(value);
 }
 
 export function formatUptime(seconds: number): string {

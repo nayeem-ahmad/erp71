@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import {
     Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, UserCog,
     FolderTree, Map, ChevronLeft, ChevronRight, MessageSquare, Wallet,
@@ -253,7 +253,7 @@ export default function CustomerProfile() {
                                             <div className="flex justify-between items-start mb-4">
                                                 <div>
                                                     <h3 className="font-bold text-sm">{sale.serial_number}</h3>
-                                                    <p className="text-xs text-gray-500 font-medium">{new Date(sale.created_at).toLocaleString()}</p>
+                                                    <p className="text-xs text-gray-500 font-medium">{formatDateTime(sale.created_at)}</p>
                                                     {sale.payments?.length > 0 && (
                                                         <div className="flex gap-1 mt-1">
                                                             {sale.payments.map((p: any, i: number) => (

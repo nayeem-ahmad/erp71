@@ -43,6 +43,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `BDT ${v}`,
     formatDate: (v: string) => v,
+    formatDateTime: (v: string) => v,
 }));
 
 const mockReturn = {

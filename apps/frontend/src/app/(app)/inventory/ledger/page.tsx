@@ -9,6 +9,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { formatDateTime } from '@/lib/format';
 import { useServerList } from '@/hooks/useServerList';
 
 interface LedgerRow {
@@ -63,7 +64,7 @@ export default function InventoryLedgerPage() {
         () => [
             columnHelper.accessor('created_at', {
                 header: t.inventoryLedger.columns.timestamp,
-                cell: (info) => new Date(info.getValue()).toLocaleString(),
+                cell: (info) => formatDateTime(info.getValue()),
                 size: 170,
             }),
             columnHelper.accessor((row) => row.product?.name || '-', {

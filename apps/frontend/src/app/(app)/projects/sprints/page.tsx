@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Sprint {
@@ -175,9 +176,7 @@ export default function SprintsPage() {
                 accessorFn: (row: Sprint) => row.start_date,
                 meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: Sprint } }) =>
-                    `${new Date(row.original.start_date).toLocaleDateString()} — ${new Date(
-                        row.original.end_date,
-                    ).toLocaleDateString()}`,
+                    `${formatDate(row.original.start_date)} — ${formatDate(row.original.end_date)}`,
             },
             {
                 id: 'projects',

@@ -6,6 +6,7 @@ import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import CrmActivityComposer from './CrmActivityComposer';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
@@ -287,7 +288,7 @@ export default function CrmActivityPanel({
                                             </div>
                                             <p className="text-sm font-medium text-gray-800">{row.subject}</p>
                                             <p className="mt-0.5 text-xs text-gray-400">
-                                                {row.due_at ? `${m.due} ${new Date(row.due_at).toLocaleString()}` : m.noDate}
+                                                {row.due_at ? `${m.due} ${formatDateTime(row.due_at)}` : m.noDate}
                                                 {row.assignee ? ` · ${row.assignee.name || row.assignee.email}` : ''}
                                             </p>
                                             {row.notes && <p className="text-xs text-gray-400">{row.notes}</p>}
@@ -352,7 +353,7 @@ export default function CrmActivityPanel({
                                     )}
                                     {row.outcome && <p className="mt-0.5 text-xs text-gray-500">{row.outcome}</p>}
                                     <p className="mt-0.5 text-xs text-gray-400">
-                                        {row.completed_at ? new Date(row.completed_at).toLocaleString() : ''}
+                                        {row.completed_at ? formatDateTime(row.completed_at) : ''}
                                     </p>
                                 </div>
                             ))

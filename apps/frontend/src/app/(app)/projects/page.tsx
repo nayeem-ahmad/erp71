@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 
 interface ProjectRow {
     id: string;
@@ -158,9 +158,7 @@ export default function ProjectsPage() {
                 accessorKey: 'target_end_date',
                 hideOnMobile: true,
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
-                    row.original.target_end_date
-                        ? new Date(row.original.target_end_date).toLocaleDateString()
-                        : '—',
+                    formatDate(row.original.target_end_date),
             },
             {
                 id: 'budget',

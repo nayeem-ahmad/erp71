@@ -1,6 +1,7 @@
 import type { Column, Table } from '@tanstack/react-table';
 import { SIMPLE_DOC_STYLES, openPrintWindow } from '@/lib/print';
 import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
+import { formatDateTime } from '@/lib/format';
 import { isPinnedColumnId } from './column-order';
 
 export type ExportColumnSpec<T> = {
@@ -205,7 +206,7 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
   <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
 </table>`,
-        footerHtml: `<div class="footer">Printed on ${new Date().toLocaleString()}</div>`,
+        footerHtml: `<div class="footer">Printed on ${formatDateTime(new Date())}</div>`,
     });
 }
 

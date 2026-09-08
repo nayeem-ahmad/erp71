@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import {
     ShoppingBag, TrendingUp, Calendar, Clock, Package, BarChart3, Search,
 } from 'lucide-react';
@@ -243,7 +243,7 @@ export default function PurchaseHistoryPage() {
                                     <div>
                                         <h3 className="font-bold text-sm">{sale.serial_number}</h3>
                                         <p className="text-xs text-gray-500 font-medium">
-                                            {new Date(sale.created_at).toLocaleString('en-BD')}
+                                            {formatDateTime(sale.created_at)}
                                         </p>
                                     </div>
                                     <div className="text-end">

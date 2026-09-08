@@ -58,6 +58,21 @@ describe('ProductSearch entry bar', () => {
         expect(screen.getByLabelText('Previous rates')).toBeDisabled();
     });
 
+    it('keeps the result list out of the entry form, where the table cannot cover it', async () => {
+        render(
+            <form data-testid="entry-form">
+                <ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />
+                <div>Line items table</div>
+            </form>,
+        );
+
+        fireEvent.focus(screen.getByLabelText('Product'));
+        const option = await screen.findByText('Coffee Beans');
+
+        expect(screen.getByTestId('entry-form')).not.toContainElement(option);
+        expect(document.body).toContainElement(option);
+    });
+
     it('shows the picked product in the same box the search used', async () => {
         render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />);
         await stageCoffee();

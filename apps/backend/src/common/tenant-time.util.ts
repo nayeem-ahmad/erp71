@@ -105,6 +105,23 @@ export function zonedDateString(instant: Date, timeZone: string): string {
 }
 
 /**
+ * The `dd/MM/yyyy` a UTC instant falls on in `timeZone`, for text a user reads.
+ *
+ * `toLocaleDateString()` with no locale renders in whatever locale the *server
+ * process* resolves to — `en-US` in the container — so an expiry notice went out
+ * reading `9/8/2026` for a date the rest of the platform shows as `08/09/2026`.
+ * Built from the zoned parts rather than from `Intl` so the order and the
+ * separator are the platform's, not a locale's.
+ */
+export function formatZonedDate(
+    instant: Date,
+    timeZone: string = DEFAULT_TENANT_TIMEZONE,
+): string {
+    const [year, month, day] = zonedDateString(instant, timeZone).split('-');
+    return `${day}/${month}/${year}`;
+}
+
+/**
  * The UTC instant at which a local wall-clock reading occurs in `timeZone`.
  *
  * Two candidates, because the offset needed to convert the reading depends on

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { formatDateTime } from '@/lib/format';
+
 const LABEL_CLASS = 'font-semibold uppercase tracking-wide text-[10px] text-gray-400';
 const FIELD_CLASS = 'px-1.5 py-0.5 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-transparent';
 
@@ -66,7 +68,7 @@ export default function DocumentMetaBar({
     refReadOnly = false,
 }: DocumentMetaBarProps) {
     const labelClass = LABEL_CLASS;
-    const displayDate = documentDate ? new Date(documentDate).toLocaleString() : '—';
+    const displayDate = documentDate ? formatDateTime(documentDate) : '—';
 
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">

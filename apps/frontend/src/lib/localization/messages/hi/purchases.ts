@@ -65,7 +65,6 @@ export const purchasesMessages = {
             dailyOperations: "दैनिक संचालन",
             payables: "देय",
             orderFlow: "ऑर्डर और प्राप्तियाँ",
-            imports: "आयात (एलसी)",
             reports: "खरीद रिपोर्ट",
             setup: "खरीद सेटअप",
             links: {

@@ -7,6 +7,7 @@ import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
@@ -153,7 +154,7 @@ export default function ProductionDeployPage() {
                                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Last deploy</p>
                                 {status?.lastRun ? (
                                     <a href={status.lastRun.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate block">
-                                        {new Date(status.lastRun.createdAt).toLocaleString()} · {status.lastRun.title || `run #${status.lastRun.id}`}
+                                        {formatDateTime(status.lastRun.createdAt)} · {status.lastRun.title || `run #${status.lastRun.id}`}
                                     </a>
                                 ) : (
                                     <p className="text-sm text-gray-400">No deploys yet.</p>

@@ -9,6 +9,7 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
     getDefaultNavLayout,
@@ -252,7 +253,7 @@ export default function PlatformNavigationSettingsPage() {
                                                     : tenantOverrideCopy.kinds.pinned_default}
                                             </td>
                                             <td className="py-2 text-gray-500">
-                                                {new Date(row.updatedAt).toLocaleString()}
+                                                {formatDateTime(row.updatedAt)}
                                             </td>
                                         </tr>
                                     ))}

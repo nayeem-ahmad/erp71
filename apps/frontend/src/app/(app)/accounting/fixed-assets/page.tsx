@@ -9,7 +9,7 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
 
@@ -201,7 +201,7 @@ export default function FixedAssetsPage() {
                                     <tr key={a.id} className="border-b border-gray-50">
                                         <td className="px-4 py-3 font-mono text-xs text-gray-500">{a.asset_code}</td>
                                         <td className="px-4 py-3 font-bold text-gray-800">{a.name}</td>
-                                        <td className="px-4 py-3 text-gray-500">{new Date(a.purchase_date).toLocaleDateString()}</td>
+                                        <td className="px-4 py-3 text-gray-500">{formatDate(a.purchase_date, locale)}</td>
                                         <td className="px-4 py-3">{formatBDT(Number(a.cost), { locale })}</td>
                                         <td className="px-4 py-3 text-danger">{formatBDT(Number(a.accumulated_depreciation), { locale })}</td>
                                         <td className="px-4 py-3 font-bold">{formatBDT(Number(a.cost) - Number(a.accumulated_depreciation), { locale })}</td>
