@@ -505,21 +505,28 @@ export class CrmActivitiesService {
         return { success: true };
     }
 
-    async summary(tenantId: string, timezone: string) {
+    /**
+     * @param assignedTo When set, the tiles count only that user's activities —
+     * the "only mine" scope, resolved from the session by the controller. The
+     * list below it takes the same narrowing, so the two cannot disagree.
+     */
+    async summary(tenantId: string, timezone: string, assignedTo?: string) {
         const { gte: today, lt: tomorrow } = zonedTodayWindow(timezone);
+        const mine = assignedTo ? { assigned_to: assignedTo } : {};
 
         const [dueToday, overdue, total] = await Promise.all([
             this.db.crmActivity.count({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: 'PLANNED',
                     due_at: { gte: today, lt: tomorrow },
                 },
             }),
             this.db.crmActivity.count({
-                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { lt: today } },
+                where: { tenant_id: tenantId, ...mine, status: 'PLANNED', due_at: { lt: today } },
             }),
-            this.db.crmActivity.count({ where: { tenant_id: tenantId, status: 'PLANNED' } }),
+            this.db.crmActivity.count({ where: { tenant_id: tenantId, ...mine, status: 'PLANNED' } }),
         ]);
 
         return { dueToday, overdue, total };

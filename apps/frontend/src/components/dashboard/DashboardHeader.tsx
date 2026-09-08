@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 export type DashboardRange = 'today' | 'week' | 'month';
 
 /**
@@ -44,6 +46,7 @@ export function DashboardHeader({
     range,
     onRangeChange,
     labels,
+    toolbar,
 }: {
     greeting: string;
     tenantName: string;
@@ -51,6 +54,8 @@ export function DashboardHeader({
     range: DashboardRange;
     onRangeChange: (r: DashboardRange) => void;
     labels: Record<DashboardRange, string>;
+    /** Extra controls beside the range switcher — see `ModuleDashboard`. */
+    toolbar?: ReactNode;
 }) {
     return (
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -60,7 +65,10 @@ export function DashboardHeader({
                     {tenantName} · {subtitle}
                 </p>
             </div>
-            <RangeTabs range={range} onRangeChange={onRangeChange} labels={labels} />
+            <div className="flex flex-wrap items-center gap-2">
+                {toolbar}
+                <RangeTabs range={range} onRangeChange={onRangeChange} labels={labels} />
+            </div>
         </div>
     );
 }

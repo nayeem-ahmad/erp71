@@ -24,14 +24,32 @@ import { CrmDashboardQueryDto } from './crm-dashboard.dto';
 export class CrmDashboardController {
     constructor(private readonly service: CrmDashboardService) {}
 
+    /**
+     * `mine=true` resolves against the caller's own id, which never crosses the
+     * wire — the same shape `GET /crm/lead-conversations?mine` uses.
+     */
+    private ownerScope(tenant: TenantContext, query: CrmDashboardQueryDto): string | undefined {
+        return query.mine ? tenant.userId : undefined;
+    }
+
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
+        return this.service.getOverview(
+            tenant.tenantId,
+            query,
+            tenant.timezone,
+            this.ownerScope(tenant, query),
+        );
     }
 
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
+        return this.service.getTrends(
+            tenant.tenantId,
+            query,
+            tenant.timezone,
+            this.ownerScope(tenant, query),
+        );
     }
 
     /**
@@ -41,6 +59,11 @@ export class CrmDashboardController {
      */
     @Get('activity-heatmap')
     getActivityHeatmap(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
-        return this.service.getActivityHeatmap(tenant.tenantId, query, tenant.timezone);
+        return this.service.getActivityHeatmap(
+            tenant.tenantId,
+            query,
+            tenant.timezone,
+            this.ownerScope(tenant, query),
+        );
     }
 }

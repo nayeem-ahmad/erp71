@@ -1118,6 +1118,58 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    describe('findAll — only-mine scope', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        it('narrows to the caller', async () => {
+            await service.findAll('tenant-1', { mine: true, userId: 'user-7' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ assigned_to: 'user-7' }),
+            );
+        });
+
+        it('overrides a stale owner filter rather than contradicting it', async () => {
+            // The scope outlives any one page, so a remembered owner filter must
+            // not be able to widen it back out to somebody else's leads.
+            await service.findAll(
+                'tenant-1',
+                { mine: true, userId: 'user-7', assignedTo: 'user-9' } as any,
+            );
+
+            expect(db.lead.findMany.mock.calls[0][0].where.assigned_to).toBe('user-7');
+        });
+
+        it('beats the unassigned sentinel too, which would otherwise empty the list', async () => {
+            await service.findAll(
+                'tenant-1',
+                { mine: true, userId: 'user-7', assignedTo: UNASSIGNED_OWNER_FILTER } as any,
+            );
+
+            expect(db.lead.findMany.mock.calls[0][0].where.assigned_to).toBe('user-7');
+        });
+
+        it('leaves the list unscoped when there is no signed-in user to resolve', async () => {
+            await service.findAll('tenant-1', { mine: true } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('assigned_to');
+        });
+
+        it('composes with the other filters instead of replacing them', async () => {
+            await service.findAll(
+                'tenant-1',
+                { mine: true, userId: 'user-7', status: 'NEW', priority: 'HIGH' } as any,
+            );
+
+            expect(db.lead.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ assigned_to: 'user-7', status: 'NEW', priority: 'HIGH' }),
+            );
+        });
+    });
+
     describe('findAll — email presence filter', () => {
         beforeEach(() => {
             db.lead.findMany.mockResolvedValue([]);

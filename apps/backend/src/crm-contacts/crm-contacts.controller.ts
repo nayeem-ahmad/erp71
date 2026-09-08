@@ -50,9 +50,19 @@ export class CrmContactsController {
         return this.service.bulkAction(tenant.tenantId, dto);
     }
 
+    /**
+     * `mine=true` is the last word on the owner, deliberately: it is a preference
+     * that outlives any one page, so a stale owner filter remembered from an
+     * earlier visit must not widen it back out. The id is resolved here rather
+     * than sent by the client — see `ListContactsDto.mine`.
+     */
     @Get()
     findAll(@Tenant() tenant: TenantContext, @Query() query: ListContactsDto) {
-        return this.service.findAll(tenant.tenantId, { ...query, timezone: tenant.timezone });
+        return this.service.findAll(tenant.tenantId, {
+            ...query,
+            assignedTo: query.mine ? tenant.userId : query.assignedTo,
+            timezone: tenant.timezone,
+        });
     }
 
     @Get(':id')

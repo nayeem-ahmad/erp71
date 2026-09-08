@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Solo míos',
+            mineOnlyHint: 'Mostrar solo los registros asignados a mí. Se recuerda en todas las pantallas del CRM.',
+            ownerLockedHint: 'Se muestran solo tus registros: desactiva «Solo míos» para filtrar por responsable.',
+            assigneeLockedHint: 'Se muestran solo tus registros: desactiva «Solo míos» para filtrar por asignado.',
+        },
         hub: {
             moduleLabel: "Módulo CRM",
             title: "Relaciones con clientes",

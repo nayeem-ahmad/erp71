@@ -130,6 +130,7 @@ export default function ModuleDashboard({
     subtitle,
     range,
     onRangeChange,
+    toolbar,
     error,
     children,
 }: Readonly<{
@@ -139,6 +140,12 @@ export default function ModuleDashboard({
     subtitle: string;
     range: DashboardRange;
     onRangeChange: (range: DashboardRange) => void;
+    /**
+     * Controls that belong beside the range switcher — a scope toggle, say. Sits
+     * before the tabs in both mounts so the row reads "what am I looking at,
+     * over what period".
+     */
+    toolbar?: ReactNode;
     error?: string;
     children: ReactNode;
 }>) {
@@ -156,10 +163,12 @@ export default function ModuleDashboard({
                     range={range}
                     onRangeChange={onRangeChange}
                     labels={rangeLabels}
+                    toolbar={toolbar}
                 />
             ) : (
-                // The hub header supplies everything but this one control.
-                <div className="flex justify-end">
+                // The hub header supplies everything but these controls.
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    {toolbar}
                     <RangeTabs range={range} onRangeChange={onRangeChange} labels={rangeLabels} />
                 </div>
             )}

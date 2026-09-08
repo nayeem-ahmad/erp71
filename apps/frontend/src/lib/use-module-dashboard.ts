@@ -45,11 +45,32 @@ export function useModuleDashboard<TOverview, TTrend = never>({
     initialRange = 'month',
     unavailableMessage,
     windowKind = 'date',
+    reloadKey,
+    enabled = true,
 }: {
     fetchOverview: (window: DateWindow) => Promise<TOverview>;
     fetchTrends?: (window: DateWindow) => Promise<{ points?: TTrend[] } | null>;
     initialRange?: DashboardRange;
     unavailableMessage: string;
+    /**
+     * Anything else the fetchers read that should re-run them when it changes —
+     * the CRM dashboard's "only mine" scope is the one caller today.
+     *
+     * A scalar rather than a dependency array, because the fetchers themselves
+     * live in a ref (callers pass inline arrows, which would reload every render)
+     * and a fresh array would defeat the effect's dependency check the same way.
+     * `undefined` means the window alone drives reloads, as it always has.
+     */
+    reloadKey?: string | number | boolean;
+    /**
+     * Holds every request until the caller is ready to ask the right question.
+     *
+     * The CRM dashboard's "only mine" scope is read from storage after mount, so
+     * without this the page would fetch the whole team's numbers, paint them, and
+     * replace them a tick later. `loading` stays true meanwhile, so what the user
+     * sees is the skeleton it would have shown anyway rather than a flicker.
+     */
+    enabled?: boolean;
     /**
      * `date` sends `YYYY-MM-DD` bounds, for endpoints that read a whole local
      * calendar day. `instant` sends ISO instants, which is what the accounting
@@ -72,6 +93,7 @@ export function useModuleDashboard<TOverview, TTrend = never>({
     fetchers.current = { fetchOverview, fetchTrends };
 
     useEffect(() => {
+        if (!enabled) return;
         let cancelled = false;
 
         const load = async () => {
@@ -107,7 +129,7 @@ export function useModuleDashboard<TOverview, TTrend = never>({
         return () => {
             cancelled = true;
         };
-    }, [range, unavailableMessage, windowKind]);
+    }, [range, unavailableMessage, windowKind, reloadKey, enabled]);
 
     const DELTA_CONTEXT: Record<DashboardRange, string> = {
         today: copy.vsPreviousToday,

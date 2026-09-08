@@ -16,9 +16,11 @@ jest.mock('next/navigation', () => ({
 jest.mock('../../lib/api', () => ({
     api: {
         getSubscriptionPlans: jest.fn().mockResolvedValue([
-            { code: 'BASIC', name: 'Starter', description: 'One counter', monthly_price: 299 },
-            { code: 'STANDARD', name: 'Growth', description: 'Growth plan', monthly_price: 999 },
-            { code: 'PREMIUM', name: 'Business', description: 'Multi-branch', monthly_price: 2499 },
+            // `yearly_price` is the annual total, matching the wire shape of
+            // `GET /auth/plans` — not the monthly equivalent `/pricing` derives.
+            { code: 'BASIC', name: 'Starter', description: 'One counter', monthly_price: 299, yearly_price: 2990, setup_fee: 0 },
+            { code: 'STANDARD', name: 'Growth', description: 'Growth plan', monthly_price: 999, yearly_price: 9990, setup_fee: 4000 },
+            { code: 'PREMIUM', name: 'Business', description: 'Multi-branch', monthly_price: 2499, yearly_price: 24990, setup_fee: 15000 },
         ]),
         getSignupDefaults: jest.fn().mockResolvedValue({ defaultPlanCode: 'STANDARD' }),
         signup: jest.fn().mockResolvedValue({
@@ -273,5 +275,84 @@ describe('SignupPage', () => {
         await waitFor(() => expect(api.signup).toHaveBeenCalled());
         const payload = (api.signup as jest.Mock).mock.calls[0][0];
         expect(payload.planCode).toBe('BASIC');
+    });
+
+    it('shows the onboarding fee on a plan that has one, and none on a plan that does not', async () => {
+        // The fee used to be invisible until the in-app billing page, which is
+        // after the account already exists.
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        const growthRow = screen.getByRole('radio', { name: /Growth/ }).closest('label');
+        const businessRow = screen.getByRole('radio', { name: /Business/ }).closest('label');
+        const starterRow = screen.getByRole('radio', { name: /Starter/ }).closest('label');
+
+        expect(growthRow).toHaveTextContent('৳ 4,000 one-time onboarding fee');
+        expect(businessRow).toHaveTextContent('৳ 15,000 one-time onboarding fee');
+        // Starter's setup_fee is 0 and is hidden rather than rendered as ৳0.
+        expect(starterRow).not.toHaveTextContent('one-time onboarding fee');
+    });
+
+    it('totals the subscription and the onboarding fee in the summary', async () => {
+        render(<SignupPage />);
+        const business = await screen.findByRole('radio', { name: /Business/ });
+        fireEvent.click(business);
+
+        // Monthly: 2,499 + 15,000 one-time.
+        expect(await screen.findByText('৳ 17,499')).toBeInTheDocument();
+    });
+
+    it('switches every price to the annual total when yearly is selected', async () => {
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        fireEvent.click(screen.getByRole('button', { name: /^Yearly$/i }));
+
+        // The annual total, not the 833/mo equivalent the pricing page shows.
+        const growthRow = screen.getByRole('radio', { name: /Growth/ }).closest('label');
+        expect(growthRow).toHaveTextContent('৳ 9,990');
+        expect(growthRow).toHaveTextContent('৳ 833 / month equivalent');
+
+        const businessRow = screen.getByRole('radio', { name: /Business/ }).closest('label');
+        expect(businessRow).toHaveTextContent('৳ 24,990');
+    });
+
+    it('sends the chosen billing cycle with the signup payload', async () => {
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        fireEvent.click(screen.getByRole('button', { name: /^Yearly$/i }));
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        expect((api.signup as jest.Mock).mock.calls[0][0].billingCycle).toBe('YEARLY');
+    });
+
+    it('honours ?cycle=yearly so the pricing page choice survives the click', async () => {
+        currentSearchParams = new URLSearchParams('plan=business&cycle=yearly');
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Business/ });
+
+        // Business at the annual total, arrived at without touching the toggle.
+        const businessRow = screen.getByRole('radio', { name: /Business/ }).closest('label');
+        expect(businessRow).toHaveTextContent('৳ 24,990');
+    });
+
+    it('defaults to monthly when no cycle is given', async () => {
+        render(<SignupPage />);
+        await screen.findByRole('radio', { name: /Growth/ });
+
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        expect((api.signup as jest.Mock).mock.calls[0][0].billingCycle).toBe('MONTHLY');
     });
 });
