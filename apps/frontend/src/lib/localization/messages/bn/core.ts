@@ -381,6 +381,7 @@ export const coreMessages = {
                 support: "সাপোর্ট",
                 adminSupport: "সাপোর্ট",
                 systemHealth: "সিস্টেম হেলথ",
+                adminAuditLogs: "অডিট ট্রেইল",
                 platformStatus: "পাবলিক স্ট্যাটাস",
                 platformSettingsSms: "এসএমএস গেটওয়ে",
                 platformSettingsEmail: "ইমেইল / SMTP",

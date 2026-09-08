@@ -925,6 +925,27 @@ export const adminMessages = {
             creating: "তৈরি হচ্ছে…",
             selectThread: "কথোপকথন দেখতে একটি থ্রেড নির্বাচন করুন।",
         },
+        auditLogs: {
+            title: 'অডিট ট্রেইল',
+            description: 'সব টেন্যান্ট ও ব্যবহারকারীর প্রতিটি রেকর্ড করা কার্যক্রম।',
+            loadFailed: 'অডিট ট্রেইল লোড করা যায়নি',
+            noLogs: 'এই ফিল্টারে কোনো অডিট এন্ট্রি নেই।',
+            scopeLabel: 'পরিধি',
+            scope: {
+                platform: 'প্ল্যাটফর্ম',
+                tenant: 'একটি টেন্যান্ট',
+                all: 'সব',
+            },
+            filters: {
+                user: 'ব্যবহারকারী আইডি',
+                tenant: 'টেন্যান্ট আইডি',
+            },
+            columns: {
+                tenant: 'টেন্যান্ট',
+                ip: 'আইপি ঠিকানা',
+            },
+            platformRow: 'প্ল্যাটফর্ম',
+        },
         systemHealth: {
             badge: "প্ল্যাটফর্ম অ্যাডমিন",
             title: "সিস্টেম হেলথ",

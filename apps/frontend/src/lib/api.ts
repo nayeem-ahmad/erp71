@@ -2861,6 +2861,30 @@ export const api = {
     getPlatformWorkspace: (): Promise<PlatformWorkspace> => fetchWithAuth('/platform/workspace'),
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),
     getSystemHealth: () => fetchWithAuth('/admin/system-health'),
+    getAdminAuditLogs: (params?: {
+        scope?: 'platform' | 'tenant' | 'all';
+        tenant_id?: string;
+        entity?: string;
+        action?: string;
+        user_id?: string;
+        from?: string;
+        to?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
+        const q = new URLSearchParams();
+        if (params?.scope) q.set('scope', params.scope);
+        if (params?.tenant_id) q.set('tenant_id', params.tenant_id);
+        if (params?.entity) q.set('entity', params.entity);
+        if (params?.action) q.set('action', params.action);
+        if (params?.user_id) q.set('user_id', params.user_id);
+        if (params?.from) q.set('from', params.from);
+        if (params?.to) q.set('to', params.to);
+        if (params?.limit) q.set('limit', String(params.limit));
+        if (params?.offset) q.set('offset', String(params.offset));
+        const query = q.toString();
+        return fetchWithAuth(`/admin/audit-logs${query ? `?${query}` : ''}`);
+    },
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
     getAdminUsers: (params?: { search?: string; isAdmin?: boolean }) => {
         const query = new URLSearchParams();

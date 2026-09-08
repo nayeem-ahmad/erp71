@@ -27,6 +27,12 @@ export interface AuditQueryOptions {
     toDate?: Date;
     limit?: number;
     offset?: number;
+    /**
+     * Resolve each row's `tenant_id` to the workspace name. Only the platform
+     * reader needs this: a tenant-scoped caller already knows whose trail it is
+     * asking for, and every row it gets back carries the same id.
+     */
+    includeTenantName?: boolean;
 }
 
 @Injectable()
@@ -134,6 +140,27 @@ export class AuditService {
             this.db.auditLog.count({ where }),
         ]);
 
-        return { rows, total, limit, offset };
+        if (!options.includeTenantName) return { rows, total, limit, offset };
+
+        // One extra query for the page, not one per row. Rows written by a
+        // platform admin have no tenant and stay null.
+        const tenantIds = [...new Set(rows.map((row) => row.tenant_id).filter((id): id is string => !!id))];
+        const tenants = tenantIds.length
+            ? await this.db.tenant.findMany({
+                  where: { id: { in: tenantIds } },
+                  select: { id: true, name: true },
+              })
+            : [];
+        const nameById = new Map(tenants.map((tenant) => [tenant.id, tenant.name]));
+
+        return {
+            rows: rows.map((row) => ({
+                ...row,
+                tenant_name: row.tenant_id ? nameById.get(row.tenant_id) ?? null : null,
+            })),
+            total,
+            limit,
+            offset,
+        };
     }
 }

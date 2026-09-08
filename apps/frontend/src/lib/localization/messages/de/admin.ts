@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: "Wird erstellt…",
         selectThread: "Wählen Sie eine Konversation, um sie anzuzeigen.",
     },
+    auditLogs: {
+        title: 'Audit-Trail',
+        description: 'Jede aufgezeichnete Aktion über alle Mandanten und Benutzer hinweg.',
+        loadFailed: 'Audit-Trail konnte nicht geladen werden',
+        noLogs: 'Keine Einträge für diesen Filter.',
+        scopeLabel: 'Bereich',
+        scope: {
+            platform: 'Plattform',
+            tenant: 'Ein Mandant',
+            all: 'Alle',
+        },
+        filters: {
+            user: 'Benutzer-ID',
+            tenant: 'Mandanten-ID',
+        },
+        columns: {
+            tenant: 'Mandant',
+            ip: 'IP-Adresse',
+        },
+        platformRow: 'Plattform',
+    },
     systemHealth: {
         badge: "Plattform-Admin",
         title: "Systemzustand",

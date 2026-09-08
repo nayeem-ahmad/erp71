@@ -382,6 +382,7 @@ export const coreMessages = {
             support: "Assistance",
             adminSupport: "Assistance",
             systemHealth: "État du système",
+            adminAuditLogs: "Piste d'audit",
             platformStatus: "État public",
             platformSettingsSms: "Passerelle SMS",
             platformSettingsEmail: "E-mail / SMTP",

@@ -382,6 +382,7 @@ export const coreMessages = {
             support: 'سپورٹ',
             adminSupport: 'سپورٹ',
             systemHealth: 'سسٹم کی صحت',
+            adminAuditLogs: 'آڈٹ ٹریل',
             platformStatus: 'عوامی حیثیت',
             platformSettingsSms: 'ایس ایم ایس گیٹ وے',
             platformSettingsEmail: 'ای میل / ایس ایم ٹی پی',

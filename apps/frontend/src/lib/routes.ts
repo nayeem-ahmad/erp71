@@ -272,6 +272,7 @@ export const routes = {
         feedback: '/admin/feedback',
         support: '/admin/support',
         systemHealth: '/admin/system-health',
+        auditLogs: '/admin/audit-logs',
         platformSettings: {
             root: '/admin/platform-settings',
             general: '/admin/platform-settings/general',

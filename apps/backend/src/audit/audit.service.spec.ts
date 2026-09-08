@@ -12,6 +12,7 @@ describe('AuditService', () => {
                 count: jest.fn().mockResolvedValue(0),
             },
             tenantUser: { findMany: jest.fn().mockResolvedValue([]) },
+            tenant: { findMany: jest.fn().mockResolvedValue([]) },
         };
         service = new AuditService(db);
     });
@@ -109,6 +110,58 @@ describe('AuditService', () => {
                     lte: new Date('2026-08-19T17:59:59.999Z'),
                 },
             });
+        });
+
+        it('leaves rows untouched when tenant names were not asked for', async () => {
+            db.auditLog.findMany.mockResolvedValue([{ id: 'a1', tenant_id: 't1' }]);
+
+            const result = await service.query({ timezone: 'Asia/Dhaka', tenantId: 't1' });
+
+            expect(db.tenant.findMany).not.toHaveBeenCalled();
+            expect(result.rows[0]).not.toHaveProperty('tenant_name');
+        });
+
+        it('names each row\'s workspace in one query, and leaves platform rows null', async () => {
+            db.auditLog.findMany.mockResolvedValue([
+                { id: 'a1', tenant_id: 't1' },
+                { id: 'a2', tenant_id: 't2' },
+                { id: 'a3', tenant_id: 't1' },
+                { id: 'a4', tenant_id: null },
+            ]);
+            db.tenant.findMany.mockResolvedValue([
+                { id: 't1', name: 'Karim Store' },
+                { id: 't2', name: 'Rahim Pharmacy' },
+            ]);
+
+            const result = await service.query({ timezone: 'Asia/Dhaka', includeTenantName: true });
+
+            // One lookup for the page, with each tenant asked for only once.
+            expect(db.tenant.findMany).toHaveBeenCalledTimes(1);
+            expect(db.tenant.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['t1', 't2'] } });
+            expect(result.rows.map((row: any) => row.tenant_name)).toEqual([
+                'Karim Store',
+                'Rahim Pharmacy',
+                'Karim Store',
+                null,
+            ]);
+        });
+
+        it('does not query tenants when the page holds only platform rows', async () => {
+            db.auditLog.findMany.mockResolvedValue([{ id: 'a1', tenant_id: null }]);
+
+            const result = await service.query({ timezone: 'Asia/Dhaka', includeTenantName: true });
+
+            expect(db.tenant.findMany).not.toHaveBeenCalled();
+            expect((result.rows[0] as any).tenant_name).toBeNull();
+        });
+
+        it('falls back to null for a tenant that no longer exists', async () => {
+            db.auditLog.findMany.mockResolvedValue([{ id: 'a1', tenant_id: 'gone' }]);
+            db.tenant.findMany.mockResolvedValue([]);
+
+            const result = await service.query({ timezone: 'Asia/Dhaka', includeTenantName: true });
+
+            expect((result.rows[0] as any).tenant_name).toBeNull();
         });
     });
 });
