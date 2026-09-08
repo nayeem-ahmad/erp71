@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Seulement les miens',
+            mineOnlyHint: 'Afficher uniquement les enregistrements qui me sont attribués. Mémorisé sur tous les écrans CRM.',
+            ownerLockedHint: 'Seuls vos enregistrements sont affichés — désactivez « Seulement les miens » pour filtrer par propriétaire.',
+            assigneeLockedHint: 'Seuls vos enregistrements sont affichés — désactivez « Seulement les miens » pour filtrer par responsable.',
+        },
         hub: {
             moduleLabel: "Module CRM",
             title: "Relations client",

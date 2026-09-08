@@ -16,6 +16,8 @@ import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { useCrmMineOnly } from '@/lib/crm-scope';
+import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from './BusinessCardScanner';
 import {
@@ -56,6 +58,7 @@ const CONTACT_IMPORT_FIELDS: ImportField[] = [
 export default function ContactsPage() {
     const { t, locale } = useI18n();
     const m = t.crm.contacts;
+    const scopeCopy = t.crm.scope;
     const c = t.common;
     const router = useRouter();
 
@@ -65,6 +68,13 @@ export default function ContactsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [captureSourceFilter, setCaptureSourceFilter] = useState('');
     const [assignedFilter, setAssignedFilter] = useState('');
+    /**
+     * "Only my contacts" — the CRM-wide scope, shared with the Overview and the
+     * other CRM lists and remembered across visits. `scopeReady` holds the first
+     * request until the stored choice is in, so the page does not paint the whole
+     * team's contacts and then replace them.
+     */
+    const { mineOnly, setMineOnly, ready: scopeReady } = useCrmMineOnly();
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
@@ -99,6 +109,7 @@ export default function ContactsPage() {
                         search: debouncedSearch || undefined,
                         captureSource: captureSourceFilter || undefined,
                         assignedTo: assignedFilter || undefined,
+                        mine: mineOnly || undefined,
                         page: p,
                         limit,
                         sortBy,
@@ -107,10 +118,11 @@ export default function ContactsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, sort],
+        [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, createdRange, sort],
     );
 
     const loadContacts = useCallback(async () => {
+        if (!scopeReady) return;
         const seq = ++loadSeq.current;
         setLoading(true);
         try {
@@ -118,6 +130,7 @@ export default function ContactsPage() {
                 search: debouncedSearch || undefined,
                 captureSource: captureSourceFilter || undefined,
                 assignedTo: assignedFilter || undefined,
+                mine: mineOnly || undefined,
                 page,
                 limit: pageSize,
                 sortBy: sort?.id,
@@ -134,7 +147,7 @@ export default function ContactsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, scopeReady, createdRange, page, pageSize, sort]);
 
     useEffect(() => { void loadContacts(); }, [loadContacts]);
 
@@ -339,6 +352,15 @@ export default function ContactsPage() {
                         className="ps-9"
                     />
                 </div>
+                {/* The scope, not a filter: it outlives the tab and is shared with
+                    the Overview and the other CRM lists. First in the row because
+                    it decides what every control after it is narrowing. */}
+                <MineOnlyToggle
+                    value={mineOnly}
+                    onChange={setMineOnly}
+                    label={scopeCopy.mineOnly}
+                    title={scopeCopy.mineOnlyHint}
+                />
                 <Select
                     value={captureSourceFilter}
                     onChange={(e) => setCaptureSourceFilter(e.target.value)}
@@ -349,12 +371,17 @@ export default function ContactsPage() {
                         <option key={s} value={s}>{captureSourceLabel(s)}</option>
                     ))}
                 </Select>
+                {/* Disabled rather than hidden while the scope is on: the API pins
+                    the owner to the caller either way, and a control that still
+                    looked live would be offering a choice it could not honour. */}
                 <Select
-                    value={assignedFilter}
+                    value={mineOnly ? '' : assignedFilter}
                     onChange={(e) => setAssignedFilter(e.target.value)}
+                    disabled={mineOnly}
+                    title={mineOnly ? scopeCopy.ownerLockedHint : undefined}
                     className="w-auto max-w-[200px]"
                 >
-                    <option value="">{m.fields.assignedTo}</option>
+                    <option value="">{mineOnly ? scopeCopy.mineOnly : m.fields.assignedTo}</option>
                     {teamMembers.map((mem) => {
                         const id = mem.userId ?? mem.user_id ?? mem.user?.id;
                         const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;

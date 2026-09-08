@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CrmDashboard from './CrmDashboard';
 import { api } from '@/lib/api';
 
@@ -233,5 +233,76 @@ describe('CrmDashboard', () => {
         // The range switcher survives the move — it is the one control the
         // surrounding page header does not already provide.
         expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument();
+    });
+
+    /**
+     * The CRM-wide "only mine" scope, shared with the leads, activities and
+     * contacts lists and remembered in localStorage — cleared between tests here
+     * rather than left to leak into the ones above.
+     */
+    describe('only mine', () => {
+        beforeEach(() => localStorage.clear());
+
+        const toggle = () => screen.getByRole('button', { name: 'Only mine' });
+
+        it('counts the whole team until somebody asks for their own numbers', async () => {
+            render(<CrmDashboard {...identity} />);
+            await screen.findByText('75%');
+
+            expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+            for (const call of (api.getCrmDashboardOverview as jest.Mock).mock.calls) {
+                expect(call[0].mine).toBeUndefined();
+            }
+        });
+
+        it('re-asks every panel for the caller own numbers', async () => {
+            render(<CrmDashboard {...identity} />);
+            await screen.findByText('75%');
+
+            fireEvent.click(toggle());
+
+            // The window it compares against has to move with it, or the deltas
+            // would rate one person's month against the whole team's last one.
+            await waitFor(() => {
+                const calls = (api.getCrmDashboardOverview as jest.Mock).mock.calls.slice(-2);
+                expect(calls).toHaveLength(2);
+                for (const call of calls) expect(call[0].mine).toBe(true);
+            });
+            expect((api.getCrmDashboardTrends as jest.Mock).mock.calls.at(-1)[0].mine).toBe(true);
+            expect(
+                (api.getCrmDashboardActivityHeatmap as jest.Mock).mock.calls.at(-1)[0].mine,
+            ).toBe(true);
+        });
+
+        it('offers the switch when embedded under the CRM hub too', async () => {
+            render(<CrmDashboard {...identity} variant="embedded" />);
+            await screen.findByText('75%');
+
+            expect(toggle()).toBeInTheDocument();
+        });
+
+        it('remembers the choice for the next visit, and asks scoped from the first request', async () => {
+            const first = render(<CrmDashboard {...identity} />);
+            await screen.findByText('75%');
+            fireEvent.click(toggle());
+            await waitFor(() =>
+                expect((api.getCrmDashboardOverview as jest.Mock).mock.calls.at(-1)[0].mine).toBe(true));
+            first.unmount();
+
+            jest.clearAllMocks();
+            (api.getCrmDashboardOverview as jest.Mock).mockResolvedValue(overview());
+            (api.getCrmDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
+            (api.getCrmDashboardActivityHeatmap as jest.Mock).mockResolvedValue(heatmap());
+
+            render(<CrmDashboard {...identity} />);
+            await screen.findByText('75%');
+
+            expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+            // Never a first request for everybody's numbers before the remembered
+            // scope lands — that flash is what the readiness gate prevents.
+            for (const call of (api.getCrmDashboardOverview as jest.Mock).mock.calls) {
+                expect(call[0].mine).toBe(true);
+            }
+        });
     });
 });

@@ -23,6 +23,8 @@ import {
 } from './lead-form-fields';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useCrmMineOnly } from '@/lib/crm-scope';
+import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 
 type TaxonomyRef = { id: string; name: string } | null;
@@ -192,6 +194,7 @@ function LeadsPage() {
     const { t, locale, fmt } = useI18n();
     const m = t.crm.leads;
     const c = t.common;
+    const scopeCopy = t.crm.scope;
 
     // Filters can arrive in the URL so another screen can link at a specific
     // slice — the CRM dashboard's "leads with no owner" and "leads untouched for
@@ -260,6 +263,15 @@ function LeadsPage() {
         createdRange,
     } = filters;
 
+    /**
+     * "Only my leads" — the CRM-wide scope, not one of the filters above. It is
+     * kept apart from them deliberately: those are per tab and per visit, this
+     * outlives both and is shared with the CRM Overview and the other lists, so a
+     * rep who works their own book is not asked to re-pick it on every screen.
+     * The server resolves the owner, so no user id is looked up here.
+     */
+    const { mineOnly, setMineOnly, ready: scopeReady } = useCrmMineOnly();
+
     const effectiveSearch = typing ? debouncedSearch : search;
 
     // Held apart from the toggle so switching the filter off and on again keeps
@@ -311,6 +323,7 @@ function LeadsPage() {
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
                         assignedTo: ownerFilter || undefined,
+                        mine: mineOnly || undefined,
                         emailPresence: emailFilter || undefined,
                         staleDays: staleOnly ? staleDays : undefined,
                         page: p,
@@ -321,13 +334,14 @@ function LeadsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort],
+        [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, sort],
     );
 
     const loadLeads = useCallback(async () => {
-        // Held until the remembered filters are in, so a return visit does not
-        // fetch the unfiltered list first and flash it before the real slice.
-        if (!filtersReady) return;
+        // Held until the remembered filters and the scope are in, so a return
+        // visit does not fetch the unfiltered list first and flash it before the
+        // real slice.
+        if (!filtersReady || !scopeReady) return;
         const seq = ++loadSeq.current;
         setLoading(true);
         try {
@@ -338,6 +352,7 @@ function LeadsPage() {
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
                 assignedTo: ownerFilter || undefined,
+                mine: mineOnly || undefined,
                 emailPresence: emailFilter || undefined,
                 staleDays: staleOnly ? staleDays : undefined,
                 page,
@@ -356,14 +371,14 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady, scopeReady]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, emailFilter, staleOnly, staleDays, createdRange, sort]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -642,6 +657,15 @@ function LeadsPage() {
                         className="ps-9"
                     />
                 </div>
+                {/* The scope, not a filter: it outlives the tab and is shared with
+                    the Overview and the other CRM lists. First in the row because
+                    it decides what every control after it is narrowing. */}
+                <MineOnlyToggle
+                    value={mineOnly}
+                    onChange={setMineOnly}
+                    label={scopeCopy.mineOnly}
+                    title={scopeCopy.mineOnlyHint}
+                />
                 {/* The dashboard's stale tile links straight here. A visible,
                     togglable control rather than an invisible URL filter, so a
                     shortened list always says why it is short — and can be
@@ -679,8 +703,17 @@ function LeadsPage() {
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </Select>
-                <Select value={ownerFilter} onChange={(e) => setFilter('owner', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allOwners}</option>
+                {/* Disabled rather than hidden while the scope is on: the API pins
+                    the owner to the caller either way, and a control that still
+                    looked live would be offering a choice it could not honour. */}
+                <Select
+                    value={mineOnly ? '' : ownerFilter}
+                    onChange={(e) => setFilter('owner', e.target.value)}
+                    disabled={mineOnly}
+                    title={mineOnly ? scopeCopy.ownerLockedHint : undefined}
+                    className="w-auto max-w-[180px]"
+                >
+                    <option value="">{mineOnly ? scopeCopy.mineOnly : m.allOwners}</option>
                     {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. Every lead
                         created before the owner field existed is unowned, so reaching
                         them to distribute is the main use of this filter. */}

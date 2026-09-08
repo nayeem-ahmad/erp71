@@ -1,5 +1,15 @@
 export const crmHrMessages = {
     crm: {
+        /**
+         * The CRM-wide "only mine" scope. One shared block rather than a copy per
+         * page, because the switch is the same switch everywhere it appears.
+         */
+        scope: {
+            mineOnly: 'Only mine',
+            mineOnlyHint: 'Show only the records assigned to me. Remembered across CRM screens.',
+            ownerLockedHint: 'Showing only your own records — switch off "Only mine" to filter by owner.',
+            assigneeLockedHint: 'Showing only your own records — switch off "Only mine" to filter by assignee.',
+        },
         hub: {
             moduleLabel: 'CRM Module',
             title: 'Customer Relationships',
