@@ -8,6 +8,53 @@
     }
 
     /*
+     * Native `<select>` rendering, retired.
+     *
+     * Safari on macOS draws a `<select>` as a native menulist and ignores the
+     * author box outright: its own white gradient, its own border and radius,
+     * its own metrics, and the ⇅ stepper glyph. So every dropdown in the app
+     * rendered as a stray OS control sitting next to the styled `Input` beside
+     * it, however carefully the control recipe was applied. Chrome keeps the
+     * author box but still stamps its own arrow at its own size, so the two
+     * browsers never agreed either.
+     *
+     * `appearance: none` hands the box back to the author styles, and the arrow
+     * it removes is redrawn here as a background chevron (lucide's
+     * `chevron-down` path in gray-400, to match the icon set) so the control
+     * still reads as a dropdown. This is the same treatment `@tailwindcss/forms`
+     * applies, scoped to the one control that needed it rather than pulled in
+     * wholesale over every input in the app.
+     *
+     * Deliberately a base rule on the element, not a class on the `Select`
+     * primitive: the ~150 hand-rolled `<select>`s that predate the primitive are
+     * the same browser control and drifted the same way, and the reset belongs
+     * with preflight either way.
+     *
+     * `:not([multiple])` is what makes that reachable — specificity (0,1,1)
+     * outranks the single-class `px-*`/`pe-*` utilities those call sites carry,
+     * which would otherwise win on the shared padding property and drop the
+     * text under the chevron. It also skips list-boxes, which render as a
+     * scrolling list with no arrow to replace. A call site that needs a wider
+     * end gutter (a trailing adornment, say) overrides with Tailwind's `!`
+     * prefix; none does today.
+     */
+    select:not([multiple]) {
+        -webkit-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.625rem center;
+        background-size: 1rem 1rem;
+        /* Logical, so the gutter follows the chevron to the other side under
+           RTL. `background-position` has no logical form, hence the pair. */
+        padding-inline-end: 2rem;
+    }
+
+    [dir='rtl'] select:not([multiple]) {
+        background-position: left 0.625rem center;
+    }
+
+    /*
      * Directional icons under RTL.
      *
      * Logical Tailwind utilities mirror boxes, not glyphs: a "next" chevron

@@ -131,6 +131,7 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 
 - **Control recipe (one, everywhere):** `w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white` — height ~34px desktop, `min-h-touch` (44px) below `md`.
 - **Label:** above the control, `text-xs font-medium text-gray-600`; required fields get `<span className="text-danger">*</span>`.
+- **Selects are never left to the browser.** A base rule in `globals.css` strips `appearance` off every `<select>` and redraws the arrow as a gray-400 `chevron-down`, because Safari on macOS otherwise discards the whole control recipe and draws its own menulist. That rule also owns the inline-end padding (the chevron gutter) at a specificity that outranks utility classes, so a `px-*` at the call site sets the start inset only. A select that needs a wider end gutter overrides with Tailwind's `!` prefix.
 - **Errors: inline, per field** — `text-xs text-danger mt-1` + `border-danger` on the control, with a form-level banner only for submit/server errors. **`alert()` validation (CRM leads) is banned.**
 - **Layout:** `grid gap-3 sm:grid-cols-2`, full-width fields `sm:col-span-2`. Group with `CompactSection`, not bespoke cards.
 - **Footer:** right-aligned `Cancel` (secondary) + primary submit, `border-t pt-3`, sticky at the modal/sheet bottom for long forms. One placement rule; no more left/right/full-width variance.
