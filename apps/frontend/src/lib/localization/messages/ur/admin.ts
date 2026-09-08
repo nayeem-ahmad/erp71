@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: 'بن رہی ہے…',
         selectThread: 'گفتگو دیکھنے کے لیے کوئی ایک منتخب کریں۔',
     },
+    auditLogs: {
+        title: 'آڈٹ ٹریل',
+        description: 'تمام ٹیننٹس اور صارفین کی ہر ریکارڈ شدہ کارروائی۔',
+        loadFailed: 'آڈٹ ٹریل لوڈ نہیں ہو سکا',
+        noLogs: 'اس فلٹر سے کوئی اندراج میل نہیں کھاتا۔',
+        scopeLabel: 'دائرہ کار',
+        scope: {
+            platform: 'پلیٹ فارم',
+            tenant: 'ایک ٹیننٹ',
+            all: 'سب',
+        },
+        filters: {
+            user: 'صارف آئی ڈی',
+            tenant: 'ٹیننٹ آئی ڈی',
+        },
+        columns: {
+            tenant: 'ٹیننٹ',
+            ip: 'آئی پی ایڈریس',
+        },
+        platformRow: 'پلیٹ فارم',
+    },
     systemHealth: {
         badge: 'پلیٹ فارم ایڈمن',
         title: 'سسٹم کی صحت',

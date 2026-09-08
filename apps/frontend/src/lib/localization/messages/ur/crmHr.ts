@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'صرف میرے',
+            mineOnlyHint: 'صرف وہ ریکارڈ دکھائیں جو مجھے سونپے گئے ہیں۔ ہر CRM اسکرین پر یاد رکھا جاتا ہے۔',
+            ownerLockedHint: 'صرف آپ کے اپنے ریکارڈ دکھائے جا رہے ہیں — مالک کے مطابق چھاننے کے لیے ”صرف میرے“ بند کریں۔',
+            assigneeLockedHint: 'صرف آپ کے اپنے ریکارڈ دکھائے جا رہے ہیں — ذمہ دار کے مطابق چھاننے کے لیے ”صرف میرے“ بند کریں۔',
+        },
         hub: {
             moduleLabel: 'سی آر ایم ماڈیول',
             title: 'گاہکوں سے تعلقات',
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: 'منصوبہ بند',
             emptyMessage: 'ان فلٹرز سے کوئی سرگرمی نہیں ملی۔',
             loadFailed: 'سرگرمیاں لوڈ نہیں ہو سکیں۔',
+            approvalFailed: 'منظوری اپ ڈیٹ نہیں ہو سکی۔',
+            approveActivity: 'اس سرگرمی کی منظوری دیں',
             open: 'کھولیں',
             columns: {
                 subject: 'سرگرمی',
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: 'لیڈ یا گاہک',
                 due: 'مقررہ',
                 status: 'حیثیت',
+                approved: 'منظور شدہ',
             },
             status: { PLANNED: 'منصوبہ بند', DONE: 'مکمل', CANCELLED: 'منسوخ' },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: 'تمام ذمہ داران',
                 me: 'میں',
                 due: 'مقررہ',
+                allApprovals: 'تمام منظوریاں',
+                approvalApproved: 'منظور شدہ',
+                approvalPending: 'منظوری کے منتظر',
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'نئی لیڈ',
             emptyMessage: 'ابھی کوئی لیڈ نہیں',
+            accessDenied: 'آپ کے پلان میں سی آر ایم ماڈیول شامل نہیں ہے، اس لیے لیڈز نہیں دکھائی جا سکتیں۔ اپ گریڈ کے لیے اپنے ایڈمنسٹریٹر سے رابطہ کریں۔',
             searchPlaceholder: 'نام یا فون سے تلاش کریں...',
             allStatuses: 'تمام حیثیتیں',
             allSources: 'تمام ذرائع',

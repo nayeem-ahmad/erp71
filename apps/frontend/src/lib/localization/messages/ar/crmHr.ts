@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'الخاصة بي فقط',
+            mineOnlyHint: 'اعرض السجلات المسندة إليّ فقط. يُحفظ هذا الاختيار في كل شاشات إدارة العلاقات.',
+            ownerLockedHint: 'تُعرض سجلاتك أنت فقط — أوقف «الخاصة بي فقط» للتصفية حسب المالك.',
+            assigneeLockedHint: 'تُعرض سجلاتك أنت فقط — أوقف «الخاصة بي فقط» للتصفية حسب المكلَّف.',
+        },
         hub: {
             moduleLabel: 'وحدة إدارة العلاقات',
             title: 'علاقات الزبائن',
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: 'مخطط',
             emptyMessage: 'لا توجد أنشطة مطابقة لهذه الفلاتر.',
             loadFailed: 'تعذّر تحميل الأنشطة.',
+            approvalFailed: 'تعذّر تحديث الاعتماد.',
+            approveActivity: 'اعتماد هذا النشاط',
             open: 'فتح',
             columns: {
                 subject: 'النشاط',
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: 'عميل محتمل أو زبون',
                 due: 'الاستحقاق',
                 status: 'الحالة',
+                approved: 'معتمد',
             },
             status: { PLANNED: 'مخطط', DONE: 'منجز', CANCELLED: 'ملغى' },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: 'كل المسؤولين',
                 me: 'أنا',
                 due: 'الاستحقاق',
+                allApprovals: 'كل حالات الاعتماد',
+                approvalApproved: 'معتمد',
+                approvalPending: 'بانتظار الاعتماد',
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'عميل محتمل جديد',
             emptyMessage: 'لا يوجد عملاء محتملون بعد',
+            accessDenied: 'لا تتضمن باقتك وحدة إدارة العملاء، لذا لا يمكن عرض العملاء المحتملين. تواصل مع المسؤول للترقية.',
             searchPlaceholder: 'ابحث بالاسم أو الهاتف...',
             allStatuses: 'كل الحالات',
             allSources: 'كل المصادر',

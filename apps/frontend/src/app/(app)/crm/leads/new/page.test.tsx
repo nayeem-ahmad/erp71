@@ -93,13 +93,33 @@ describe('NewLeadPage — lead owner', () => {
         expect(api.createLead).toHaveBeenCalledWith(expect.objectContaining({ assigned_to: 'user-1' }));
     });
 
-    it('points the opening next step at the new owner too', async () => {
+    // Was 'points the opening next step at the new owner too', asserting that
+    // moving Lead Owner dragged the next-step Assigned To select with it. That
+    // select is gone — `showNextStep` defaults to false — so the assertion had
+    // nothing to read. `setLeadOwner` still does the dragging and is still
+    // covered, as a pure function, in lead-form-fields.test.ts.
+    it('collects no next step: the form has no such section any more', async () => {
         render(<NewLeadPage />);
 
         await waitFor(() => expect((fieldControl('Lead Owner') as HTMLSelectElement).value).toBe('user-1'));
-        fireEvent.change(fieldControl('Lead Owner'), { target: { value: 'user-2' } });
 
-        expect((fieldControl('Assigned To') as HTMLSelectElement).value).toBe('user-2');
+        expect(screen.queryByText('Next Step')).toBeNull();
+        expect(screen.queryByText('Next Step Date')).toBeNull();
+        expect(() => fieldControl('Assigned To')).toThrow();
+    });
+
+    it('sends no next-step key, not even the assignee the owner seeds', async () => {
+        render(<NewLeadPage />);
+
+        await waitFor(() => expect((fieldControl('Lead Owner') as HTMLSelectElement).value).toBe('user-1'));
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Karim Traders' } });
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        const payload = api.createLead.mock.calls[0][0];
+        expect(payload).not.toHaveProperty('next_step');
+        expect(payload).not.toHaveProperty('next_step_date');
+        expect(payload).not.toHaveProperty('next_step_assigned_to');
     });
 
     it('sends the address the form collects', async () => {

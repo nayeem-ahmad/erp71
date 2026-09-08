@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Seulement les miens',
+            mineOnlyHint: 'Afficher uniquement les enregistrements qui me sont attribués. Mémorisé sur tous les écrans CRM.',
+            ownerLockedHint: 'Seuls vos enregistrements sont affichés — désactivez « Seulement les miens » pour filtrer par propriétaire.',
+            assigneeLockedHint: 'Seuls vos enregistrements sont affichés — désactivez « Seulement les miens » pour filtrer par responsable.',
+        },
         hub: {
             moduleLabel: "Module CRM",
             title: "Relations client",
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "Planifiées",
             emptyMessage: "Aucune activité ne correspond à ces filtres.",
             loadFailed: "Impossible de charger les activités.",
+            approvalFailed: "Impossible de mettre à jour l'approbation.",
+            approveActivity: 'Approuver cette activité',
             open: "Ouvrir",
             columns: {
                 subject: "Activité",
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: "Piste ou client",
                 due: "Échéance",
                 status: "Statut",
+                approved: 'Approuvée',
             },
             status: { PLANNED: "Planifiée", DONE: "Terminée", CANCELLED: "Annulée" },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "Tous les responsables",
                 me: "Moi",
                 due: "Échéance",
+                allApprovals: 'Toutes les approbations',
+                approvalApproved: 'Approuvée',
+                approvalPending: "En attente d'approbation",
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Nouvelle piste",
             emptyMessage: "Aucune piste pour l'instant",
+            accessDenied: "Votre forfait n'inclut pas le module CRM, les pistes ne peuvent donc pas être affichées. Contactez votre administrateur pour effectuer une mise à niveau.",
             searchPlaceholder: "Rechercher par nom ou téléphone...",
             allStatuses: "Tous les statuts",
             allSources: "Toutes les sources",

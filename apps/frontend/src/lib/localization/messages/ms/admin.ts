@@ -925,6 +925,27 @@ export const adminMessages = {
             creating: "Mencipta…",
             selectThread: "Pilih utas untuk melihat perbualan.",
         },
+        auditLogs: {
+            title: 'Jejak Audit',
+            description: 'Setiap tindakan yang direkodkan merentas semua penyewa dan pengguna.',
+            loadFailed: 'Gagal memuatkan jejak audit',
+            noLogs: 'Tiada entri sepadan dengan penapis ini.',
+            scopeLabel: 'Skop',
+            scope: {
+                platform: 'Platform',
+                tenant: 'Satu penyewa',
+                all: 'Semua',
+            },
+            filters: {
+                user: 'ID Pengguna',
+                tenant: 'ID Penyewa',
+            },
+            columns: {
+                tenant: 'Penyewa',
+                ip: 'Alamat IP',
+            },
+            platformRow: 'Platform',
+        },
         systemHealth: {
             badge: "Pentadbir Platform",
             title: "Kesihatan Sistem",

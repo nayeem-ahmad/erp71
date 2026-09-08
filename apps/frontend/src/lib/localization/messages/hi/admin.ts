@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: "बनाया जा रहा है…",
         selectThread: "बातचीत देखने के लिए एक थ्रेड चुनें।",
     },
+    auditLogs: {
+        title: 'ऑडिट ट्रेल',
+        description: 'सभी टेनेंट और उपयोगकर्ताओं की हर दर्ज कार्रवाई।',
+        loadFailed: 'ऑडिट ट्रेल लोड नहीं हो सका',
+        noLogs: 'इस फ़िल्टर से कोई प्रविष्टि मेल नहीं खाती।',
+        scopeLabel: 'दायरा',
+        scope: {
+            platform: 'प्लेटफ़ॉर्म',
+            tenant: 'एक टेनेंट',
+            all: 'सभी',
+        },
+        filters: {
+            user: 'उपयोगकर्ता आईडी',
+            tenant: 'टेनेंट आईडी',
+        },
+        columns: {
+            tenant: 'टेनेंट',
+            ip: 'आईपी पता',
+        },
+        platformRow: 'प्लेटफ़ॉर्म',
+    },
     systemHealth: {
         badge: "प्लेटफ़ॉर्म एडमिन",
         title: "सिस्टम स्वास्थ्य",

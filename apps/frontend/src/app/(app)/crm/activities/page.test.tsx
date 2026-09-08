@@ -24,6 +24,7 @@ jest.mock('@/lib/api', () => ({
         getLeads: jest.fn(),
         searchCustomers: jest.fn(),
         createCrmActivity: jest.fn(),
+        setCrmActivityApproval: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -43,6 +44,8 @@ const activity = {
     customer: null,
     lead: { id: 'lead-1', name: 'Karim Traders', mobile: '01700000000' },
     assignee: { id: 'user-2', name: 'Rifat', email: 'rifat@example.com' },
+    is_approved: false,
+    approver: null,
     created_at: '2026-08-20T08:00:00.000Z',
 };
 
@@ -332,5 +335,188 @@ describe('CrmActivitiesPage — remembered filters', () => {
             expect(lastCall().status).toBe('PLANNED');
             expect(lastCall().dueFrom).toBe(tenantDateOnly());
         });
+    });
+});
+
+/**
+ * The reviewer's switch. Only PLANNED rows carry one, only a holder of
+ * APPROVE_CRM_ACTIVITY can move it, and the list is not reloaded when it moves —
+ * a reload would pull the row out from under a reviewer working a filtered list.
+ */
+describe('CrmActivitiesPage — activity approval', () => {
+    const asReviewer = () =>
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['APPROVE_CRM_ACTIVITY'] }],
+        });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        api.getMe.mockResolvedValue({ id: 'user-1', tenants: [] });
+        api.setCrmActivityApproval.mockResolvedValue({ id: 'act-1', is_approved: true });
+    });
+
+    it('approves a planned activity without reloading the list', async () => {
+        asReviewer();
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const toggle = await waitFor(() => {
+            const el = screen.getByRole('switch', { name: 'Approve this activity' });
+            expect(el).not.toBeDisabled();
+            return el;
+        });
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+        const listCallsBefore = api.getAllCrmActivities.mock.calls.length;
+        fireEvent.click(toggle);
+
+        await waitFor(() => expect(api.setCrmActivityApproval).toHaveBeenCalledWith('act-1', true));
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+        expect(api.getAllCrmActivities.mock.calls.length).toBe(listCallsBefore);
+    });
+
+    // A switch that stays on after the server refused is the failure that matters:
+    // the reviewer walks away believing they signed something off.
+    it('rolls the switch back when the server refuses', async () => {
+        asReviewer();
+        api.setCrmActivityApproval.mockRejectedValue(new Error('nope'));
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const toggle = await waitFor(() => {
+            const el = screen.getByRole('switch', { name: 'Approve this activity' });
+            expect(el).not.toBeDisabled();
+            return el;
+        });
+        fireEvent.click(toggle);
+
+        await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    });
+
+    it('shows the switch disabled to someone who cannot approve', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(screen.getByRole('switch', { name: 'Approve this activity' })).toBeDisabled();
+    });
+
+    // Approving something already done is a decision that changes nothing, so the
+    // column shows a dash rather than a switch nobody should touch.
+    it('offers no switch on an activity that is already done', async () => {
+        asReviewer();
+        api.getAllCrmActivities.mockResolvedValue([
+            { ...activity, status: 'DONE', summary: 'Spoke to Karim', is_approved: true },
+        ]);
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    });
+
+    it('filters the list to activities still awaiting a reviewer', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.change(selectByOption('All approvals'), { target: { value: 'pending' } });
+
+        await waitFor(() => expect(lastCall().approval).toBe('pending'));
+    });
+
+    it('asks for no approval slice until one is chosen', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(lastCall().approval).toBeUndefined();
+    });
+});
+
+/**
+ * The CRM-wide "only mine" scope. Unlike the filters above it lives in
+ * localStorage and is shared with the Overview and the other CRM lists, so it is
+ * cleared between tests here rather than left to leak.
+ */
+describe('CrmActivitiesPage — only mine', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+
+    const toggle = () => screen.getByRole('button', { name: 'Only mine' });
+
+    it('shows the whole team until somebody asks for their own', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(lastCall().mine).toBeUndefined();
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('narrows the list to the caller, letting the server resolve the id', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        // No user id is looked up or sent — that is the server's job.
+        expect(lastCall().assignedTo).toBeUndefined();
+    });
+
+    it('scopes the tiles with the list, so the two cannot disagree', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(
+            api.getCrmActivitySummary.mock.calls.at(-1)[0],
+        ).toEqual({ mine: true }));
+    });
+
+    it('locks the assignee filter while the scope is on, rather than lying about it', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+    });
+
+    it('remembers the choice for the next visit', async () => {
+        const first = render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        first.unmount();
+
+        jest.clearAllMocks();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        // And never a first request for everybody's rows before the remembered
+        // scope lands — that flash is what `scopeReady` exists to prevent.
+        for (const call of api.getAllCrmActivities.mock.calls) {
+            expect(call[0].mine).toBe(true);
+        }
     });
 });

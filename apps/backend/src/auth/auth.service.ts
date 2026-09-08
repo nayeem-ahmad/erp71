@@ -34,6 +34,7 @@ import {
     isCurrentTermsVersion,
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
+import { normalizeBillingCycle, type BillingCycle } from '../billing/billing-cycle.util';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -54,6 +55,7 @@ type TenantProvisionDto = {
     planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     businessType?: string;
     referralCode?: string;
+    billingCycle?: BillingCycle;
 };
 
 @Injectable()
@@ -118,6 +120,7 @@ export class AuthService {
                     address: dto.address,
                     planCode: defaultPlan,
                     referralCode: dto.referralCode,
+                    billingCycle: dto.billingCycle,
                 });
             }
 
@@ -400,6 +403,7 @@ export class AuthService {
                     address: dto.address,
                     planCode: defaultPlan,
                     referralCode: dto.referralCode,
+                    billingCycle: dto.billingCycle,
                 });
             }
 
@@ -594,6 +598,7 @@ export class AuthService {
                     address: dto.address,
                     planCode: defaultPlan,
                     referralCode: dto.referralCode,
+                    billingCycle: dto.billingCycle,
                 });
             }
 
@@ -1181,11 +1186,15 @@ export class AuthService {
             },
         });
 
+        // The cycle the signup form displayed a price for. Recorded here so
+        // `/billing` opens on it; the period stays zero-length and PAST_DUE
+        // because nothing has been charged yet — checkout sets the real dates.
         await tx.tenantSubscription.create({
             data: {
                 tenant_id: tenant.id,
                 plan_id: plan.id,
                 status: 'PAST_DUE',
+                billing_cycle: normalizeBillingCycle(dto.billingCycle),
                 current_period_start: new Date(),
                 current_period_end: new Date(),
                 provider_name: 'manual',

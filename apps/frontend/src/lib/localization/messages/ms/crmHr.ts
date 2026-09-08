@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Milik saya sahaja',
+            mineOnlyHint: 'Tunjukkan hanya rekod yang ditugaskan kepada saya. Diingati merentas semua skrin CRM.',
+            ownerLockedHint: 'Hanya rekod anda sendiri dipaparkan — matikan "Milik saya sahaja" untuk menapis mengikut pemilik.',
+            assigneeLockedHint: 'Hanya rekod anda sendiri dipaparkan — matikan "Milik saya sahaja" untuk menapis mengikut petugas.',
+        },
         hub: {
             moduleLabel: 'Modul CRM',
             title: 'Hubungan Pelanggan',
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: 'Dirancang',
             emptyMessage: 'Tiada aktiviti sepadan dengan penapis ini.',
             loadFailed: 'Tidak dapat memuatkan aktiviti.',
+            approvalFailed: 'Kelulusan tidak dapat dikemas kini.',
+            approveActivity: 'Luluskan aktiviti ini',
             open: 'Buka',
             columns: {
                 subject: 'Aktiviti',
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: 'Prospek atau pelanggan',
                 due: 'Tarikh',
                 status: 'Status',
+                approved: 'Diluluskan',
             },
             status: { PLANNED: 'Dirancang', DONE: 'Selesai', CANCELLED: 'Dibatalkan' },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: 'Semua bertugas',
                 me: 'Saya',
                 due: 'Tempoh',
+                allApprovals: 'Semua kelulusan',
+                approvalApproved: 'Diluluskan',
+                approvalPending: 'Menunggu kelulusan',
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'Prospek Baharu',
             emptyMessage: 'Tiada prospek lagi',
+            accessDenied: 'Pelan anda tidak termasuk modul CRM, jadi prospek tidak dapat dipaparkan. Hubungi pentadbir anda untuk menaik taraf.',
             searchPlaceholder: 'Cari mengikut nama atau telefon...',
             allStatuses: 'Semua status',
             allSources: 'Semua sumber',

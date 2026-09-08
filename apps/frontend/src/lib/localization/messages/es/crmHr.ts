@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Solo míos',
+            mineOnlyHint: 'Mostrar solo los registros asignados a mí. Se recuerda en todas las pantallas del CRM.',
+            ownerLockedHint: 'Se muestran solo tus registros: desactiva «Solo míos» para filtrar por responsable.',
+            assigneeLockedHint: 'Se muestran solo tus registros: desactiva «Solo míos» para filtrar por asignado.',
+        },
         hub: {
             moduleLabel: "Módulo CRM",
             title: "Relaciones con clientes",
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "Planificadas",
             emptyMessage: "Ninguna actividad coincide con estos filtros.",
             loadFailed: "No se pudieron cargar las actividades.",
+            approvalFailed: "No se pudo actualizar la aprobación.",
+            approveActivity: "Aprobar esta actividad",
             open: "Abrir",
             columns: {
                 subject: "Actividad",
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: "Oportunidad o cliente",
                 due: "Vence",
                 status: "Estado",
+                approved: "Aprobada",
             },
             status: { PLANNED: "Planificada", DONE: "Hecha", CANCELLED: "Cancelada" },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "Todos los responsables",
                 me: "Yo",
                 due: "Vence",
+                allApprovals: "Todas las aprobaciones",
+                approvalApproved: "Aprobada",
+                approvalPending: "Pendiente de aprobación",
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Nueva oportunidad",
             emptyMessage: "Aún no hay oportunidades",
+            accessDenied: "Tu plan no incluye el módulo CRM, por lo que no se pueden mostrar las oportunidades. Contacta con tu administrador para mejorarlo.",
             searchPlaceholder: "Buscar por nombre o teléfono...",
             allStatuses: "Todos los estados",
             allSources: "Todos los orígenes",

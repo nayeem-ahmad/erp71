@@ -20,8 +20,10 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CrmActivitiesService } from './crm-activities.service';
 import {
+    type ActivityApprovalFilter,
     CompleteCrmActivityDto,
     CreateCrmActivityDto,
+    SetActivityApprovalDto,
     UpdateCrmActivityDto,
 } from './crm-activities.dto';
 
@@ -32,12 +34,22 @@ import {
 export class CrmActivitiesController {
     constructor(private readonly service: CrmActivitiesService) {}
 
-    // Declared before @Get(':id') — Nest matches routes in declaration order, so
-    // the parameterised route would otherwise swallow /summary as an id.
+    /**
+     * Declared before `@Get(':id')` — Nest matches routes in declaration order, so
+     * the parameterised route would otherwise swallow /summary as an id.
+     *
+     * `mine=true` resolves against the caller's own id, which never crosses the
+     * wire — the same shape `GET /crm/lead-conversations?mine` uses. The tiles and
+     * the list below must agree, so both read it.
+     */
     @Get('summary')
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
-    summary(@Tenant() tenant: TenantContext) {
-        return this.service.summary(tenant.tenantId, tenant.timezone);
+    summary(@Tenant() tenant: TenantContext, @Query('mine') mine?: string) {
+        return this.service.summary(
+            tenant.tenantId,
+            tenant.timezone,
+            mine === 'true' ? tenant.userId : undefined,
+        );
     }
 
     @Post()
@@ -55,9 +67,11 @@ export class CrmActivitiesController {
         @Query('target') target?: 'lead' | 'customer',
         @Query('status') status?: string,
         @Query('assignedTo') assignedTo?: string,
+        @Query('mine') mine?: string,
         @Query('leadOwner') leadOwner?: string,
         @Query('purposeId') purposeId?: string,
         @Query('channelId') channelId?: string,
+        @Query('approval') approval?: ActivityApprovalFilter,
         @Query('dueToday') dueToday?: string,
         @Query('overdue') overdue?: string,
         @Query('dueFrom') dueFrom?: string,
@@ -74,10 +88,14 @@ export class CrmActivitiesController {
             customerId,
             target,
             status,
-            assignedTo,
+            // "Only mine" is the last word on the assignee, deliberately: it is a
+            // preference that outlives any one page, so a stale assignee filter
+            // remembered from an earlier visit must not widen it back out.
+            assignedTo: mine === 'true' ? tenant.userId : assignedTo,
             leadOwner,
             purposeId,
             channelId,
+            approval,
             dueToday: dueToday === 'true',
             overdue: overdue === 'true',
             dueFrom,
@@ -105,6 +123,21 @@ export class CrmActivitiesController {
         @Body() dto: UpdateCrmActivityDto,
     ) {
         return this.service.update(tenant.tenantId, id, dto, tenant.timezone);
+    }
+
+    /**
+     * The reviewer's switch. Its own permission: signing off on somebody else's
+     * plan is a different job from writing one, so a rep with MANAGE_CRM_TASKS
+     * cannot approve their own work.
+     */
+    @Patch(':id/approval')
+    @RequireStorePermission(StorePermission.APPROVE_CRM_ACTIVITY)
+    setApproval(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: SetActivityApprovalDto,
+    ) {
+        return this.service.setApproval(tenant.tenantId, tenant.userId, id, dto.approved);
     }
 
     @Post(':id/complete')

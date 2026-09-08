@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Nur meine',
+            mineOnlyHint: 'Nur die mir zugewiesenen Datensätze anzeigen. Wird über alle CRM-Bildschirme hinweg gemerkt.',
+            ownerLockedHint: 'Es werden nur Ihre eigenen Datensätze angezeigt – schalten Sie „Nur meine“ aus, um nach Inhaber zu filtern.',
+            assigneeLockedHint: 'Es werden nur Ihre eigenen Datensätze angezeigt – schalten Sie „Nur meine“ aus, um nach Zuständigem zu filtern.',
+        },
         hub: {
             moduleLabel: "CRM-Modul",
             title: "Kundenbeziehungen",
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "Geplant",
             emptyMessage: "Keine Aktivitäten passen zu diesen Filtern.",
             loadFailed: "Aktivitäten konnten nicht geladen werden.",
+            approvalFailed: 'Freigabe konnte nicht aktualisiert werden.',
+            approveActivity: 'Diese Aktivität genehmigen',
             open: "Öffnen",
             columns: {
                 subject: "Aktivität",
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: "Lead oder Kunde",
                 due: "Fällig",
                 status: "Status",
+                approved: 'Genehmigt',
             },
             status: { PLANNED: "Geplant", DONE: "Erledigt", CANCELLED: "Abgebrochen" },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "Alle Zuständigen",
                 me: "Ich",
                 due: "Fällig",
+                allApprovals: 'Alle Freigaben',
+                approvalApproved: 'Genehmigt',
+                approvalPending: 'Wartet auf Freigabe',
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Neuer Lead",
             emptyMessage: "Noch keine Leads",
+            accessDenied: "Ihr Tarif enthält das CRM-Modul nicht, daher können keine Leads angezeigt werden. Wenden Sie sich zum Upgrade an Ihren Administrator.",
             searchPlaceholder: "Nach Name oder Telefon suchen...",
             allStatuses: "Alle Status",
             allSources: "Alle Quellen",

@@ -26,6 +26,14 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+    // The page narrows on `instanceof ApiError`, so the mock has to export a real
+    // class rather than a jest.fn() — a plain Error would take the empty-list path.
+    ApiError: class ApiError extends Error {
+        constructor(message: string, public readonly status: number, public readonly code?: string) {
+            super(message);
+            this.name = 'ApiError';
+        }
+    },
     api: {
         getLeads: jest.fn(),
         getCustomFields: jest.fn().mockResolvedValue([]),
@@ -499,5 +507,159 @@ describe('LeadsPage — remembered filters', () => {
         for (const call of api.getLeads.mock.calls) {
             expect(call[0]).toEqual(expect.objectContaining({ search: 'karim' }));
         }
+    });
+});
+
+
+/**
+ * The CRM-wide "only mine" scope. Unlike the filters above it lives in
+ * localStorage and is shared with the Overview and the other CRM lists, so it is
+ * cleared between tests here rather than left to leak.
+ */
+describe('LeadsPage — only mine', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+    });
+
+    const toggle = () => screen.getByRole('button', { name: 'Only mine' });
+    const lastCall = () => api.getLeads.mock.calls.at(-1)[0];
+
+    it('shows the whole team until somebody asks for their own', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(lastCall().mine).toBeUndefined();
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('narrows the list to the caller, letting the server resolve the id', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        // No user id is looked up or sent — that is the server's job.
+        expect(lastCall().assignedTo).toBeUndefined();
+    });
+
+    it('locks the owner filter while the scope is on, rather than lying about it', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+    });
+
+    it('releases the owner filter again when the scope is switched off', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBeUndefined());
+        expect(selectByOption('All owners')).not.toBeDisabled();
+    });
+
+    it('keeps the other filters, so the scope narrows the slice rather than replacing it', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        await waitFor(() => expect(lastCall().priority).toBe('HIGH'));
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall()).toEqual(
+            expect.objectContaining({ mine: true, priority: 'HIGH' }),
+        ));
+    });
+
+    it('remembers the choice for the next visit', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        first.unmount();
+
+        jest.clearAllMocks();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([]);
+
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        // And never a first request for everybody's rows before the remembered
+        // scope lands — that flash is what `scopeReady` exists to prevent.
+        for (const call of api.getLeads.mock.calls) {
+            expect(call[0].mine).toBe(true);
+        }
+    });
+});
+
+describe('LeadsPage — a denied list is not an empty one', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { ApiError } = require('@/lib/api');
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+    });
+
+    it('explains a 403 rather than showing "No leads yet"', async () => {
+        api.getLeads.mockRejectedValue(new ApiError('Forbidden', 403));
+
+        render(<LeadsPage />);
+
+        // Shown in the banner and reused as the table's empty text, so that the
+        // two can never contradict each other.
+        expect((await screen.findAllByText(/plan does not include the CRM module/i)).length).toBeGreaterThan(0);
+        // The whole point: the tenant must not be told their pipeline is empty
+        // when what actually happened is that the request was refused.
+        expect(screen.queryByText('No leads yet')).not.toBeInTheDocument();
+    });
+
+    it('shows the ordinary empty state when the tenant genuinely has no leads', async () => {
+        api.getLeads.mockResolvedValue({ items: [], total: 0 });
+
+        render(<LeadsPage />);
+
+        expect(await screen.findByText('No leads yet')).toBeInTheDocument();
+        expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0);
+    });
+
+    it('clears the notice once access is restored', async () => {
+        api.getLeads.mockRejectedValueOnce(new ApiError('Forbidden', 403));
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+
+        render(<LeadsPage />);
+        await screen.findAllByText(/plan does not include the CRM module/i);
+
+        fireEvent.click(screen.getAllByRole('button')[0]);
+
+        expect(await screen.findByText('Karim Traders')).toBeInTheDocument();
+        await waitFor(() =>
+            expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0),
+        );
+    });
+
+    it('does not mistake a non-permission failure for a plan problem', async () => {
+        api.getLeads.mockRejectedValue(new ApiError('Server error', 500));
+
+        render(<LeadsPage />);
+
+        expect(await screen.findByText('No leads yet')).toBeInTheDocument();
+        expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0);
     });
 });

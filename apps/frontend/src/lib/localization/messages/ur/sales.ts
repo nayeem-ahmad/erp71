@@ -445,6 +445,7 @@ export const salesMessages = {
         newQuotation: 'نئی کوٹیشن',
         convertToSale: 'فروخت میں تبدیل کریں',
         newProforma: "نیا پروفارما انوائس",
+        shortLink: 'مختصر لنک',
         columns: {
             quoteNumber: 'کوٹیشن نمبر',
             docKind: "قسم",
@@ -497,6 +498,7 @@ export const salesMessages = {
             statusLabel: 'حیثیت: {status}',
             saving: 'محفوظ ہو رہی ہے...',
             saveChanges: 'تبدیلیاں محفوظ کریں',
+            share: 'شیئر کریں',
             // The subject line the share modal builds its title and WhatsApp
             // message from — it goes out to a customer, so it is localized.
             shareSubject: 'کوٹیشن {number}',

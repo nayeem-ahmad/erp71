@@ -3,6 +3,8 @@ export { Input } from './Input';
 export { Select } from './Select';
 export { Textarea } from './Textarea';
 export { Checkbox } from './Checkbox';
+export { Switch } from './Switch';
+export type { SwitchProps } from './Switch';
 export { RichTextEditor } from './RichTextEditor';
 export type { RichTextEditorProps } from './RichTextEditor';
 export { Field } from './Field';

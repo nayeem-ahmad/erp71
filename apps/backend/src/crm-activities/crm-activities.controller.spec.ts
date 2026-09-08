@@ -18,6 +18,8 @@ describe('CrmActivitiesController — list query wiring', () => {
 
     const service = {
         findAll: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
+        setApproval: jest.fn().mockResolvedValue({ id: 'a1', is_approved: true }),
+        summary: jest.fn().mockResolvedValue({ dueToday: 0, overdue: 0, total: 0 }),
     } as any;
 
     class AllowAll {
@@ -35,6 +37,8 @@ describe('CrmActivitiesController — list query wiring', () => {
 
     beforeEach(async () => {
         service.findAll.mockClear();
+        service.setApproval.mockClear();
+        service.summary.mockClear();
         const module = await Test.createTestingModule({
             controllers: [CrmActivitiesController],
             providers: [{ provide: CrmActivitiesService, useValue: service }],
@@ -78,5 +82,71 @@ describe('CrmActivitiesController — list query wiring', () => {
             'tenant-1',
             expect.objectContaining({ assignedTo: 'user-3' }),
         );
+    });
+
+    it('passes the approval filter through', async () => {
+        await request(app.getHttpServer()).get('/crm/activities?approval=pending').expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ approval: 'pending' }),
+        );
+    });
+
+    it('routes the approval switch to setApproval with the reviewer', async () => {
+        await request(app.getHttpServer())
+            .patch('/crm/activities/a1/approval')
+            .send({ approved: true })
+            .expect(200);
+
+        expect(service.setApproval).toHaveBeenCalledWith('tenant-1', 'user-1', 'a1', true);
+    });
+
+    /**
+     * The "only mine" scope. The caller's id is resolved here rather than sent,
+     * so these assert that the session's user — not the query string — is what
+     * reaches the service.
+     */
+    it('resolves mine=true to the caller own id', async () => {
+        await request(app.getHttpServer()).get('/crm/activities?mine=true').expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ assignedTo: 'user-1' }),
+        );
+    });
+
+    it('lets the scope override a stale assignee filter', async () => {
+        await request(app.getHttpServer())
+            .get('/crm/activities?mine=true&assignedTo=user-3')
+            .expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ assignedTo: 'user-1' }),
+        );
+    });
+
+    it('leaves the assignee alone for anything but the literal true', async () => {
+        await request(app.getHttpServer())
+            .get('/crm/activities?mine=false&assignedTo=user-3')
+            .expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ assignedTo: 'user-3' }),
+        );
+    });
+
+    it('scopes the summary tiles the same way, so they cannot disagree with the list', async () => {
+        await request(app.getHttpServer()).get('/crm/activities/summary?mine=true').expect(200);
+
+        expect(service.summary).toHaveBeenCalledWith('tenant-1', expect.any(String), 'user-1');
+    });
+
+    it('leaves the summary tiles counting everybody when the scope is off', async () => {
+        await request(app.getHttpServer()).get('/crm/activities/summary').expect(200);
+
+        expect(service.summary).toHaveBeenCalledWith('tenant-1', expect.any(String), undefined);
     });
 });

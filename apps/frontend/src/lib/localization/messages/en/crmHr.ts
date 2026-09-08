@@ -1,5 +1,15 @@
 export const crmHrMessages = {
     crm: {
+        /**
+         * The CRM-wide "only mine" scope. One shared block rather than a copy per
+         * page, because the switch is the same switch everywhere it appears.
+         */
+        scope: {
+            mineOnly: 'Only mine',
+            mineOnlyHint: 'Show only the records assigned to me. Remembered across CRM screens.',
+            ownerLockedHint: 'Showing only your own records — switch off "Only mine" to filter by owner.',
+            assigneeLockedHint: 'Showing only your own records — switch off "Only mine" to filter by assignee.',
+        },
         hub: {
             moduleLabel: 'CRM Module',
             title: 'Customer Relationships',
@@ -90,6 +100,8 @@ export const crmHrMessages = {
             totalPlanned: 'Planned',
             emptyMessage: 'No activities match these filters.',
             loadFailed: 'Could not load activities.',
+            approvalFailed: 'Could not update approval.',
+            approveActivity: 'Approve this activity',
             open: 'Open',
             columns: {
                 subject: 'Activity',
@@ -97,6 +109,7 @@ export const crmHrMessages = {
                 target: 'Lead or customer',
                 due: 'Due',
                 status: 'Status',
+                approved: 'Approved',
             },
             status: { PLANNED: 'Planned', DONE: 'Done', CANCELLED: 'Cancelled' },
             filters: {
@@ -112,6 +125,9 @@ export const crmHrMessages = {
                 allAssignees: 'All assignees',
                 me: 'Me',
                 due: 'Due',
+                allApprovals: 'All approvals',
+                approvalApproved: 'Approved',
+                approvalPending: 'Awaiting approval',
             },
         },
         setup: {
@@ -312,6 +328,7 @@ export const crmHrMessages = {
             },
             newLead: 'New Lead',
             emptyMessage: 'No leads yet',
+            accessDenied: 'Your plan does not include the CRM module, so leads cannot be shown. Contact your administrator to upgrade.',
             searchPlaceholder: 'Search by name or phone...',
             allStatuses: 'All statuses',
             allSources: 'All sources',

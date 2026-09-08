@@ -383,6 +383,21 @@ export class ListLeadsDto {
     @IsString()
     assignedTo?: string;
 
+    /**
+     * "Only my leads" — narrows to the caller's own, and wins over `assignedTo`.
+     *
+     * A flag rather than the caller's own id, so the id is resolved from the
+     * session and never crosses the wire — the shape
+     * `GET /crm/lead-conversations?mine` already uses. It is not merely a
+     * shorthand for `assignedTo=<me>`: it lets the UI keep one remembered
+     * "only mine" preference across every CRM list without first having to look
+     * up who the signed-in user is.
+     */
+    @IsOptional()
+    @Transform(({ value }) => value === true || value === 'true' || value === '1')
+    @IsBoolean()
+    mine?: boolean;
+
     @IsOptional()
     @Transform(emptyToUndefined)
     @IsEnum(LeadEmailPresence)

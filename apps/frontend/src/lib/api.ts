@@ -668,10 +668,14 @@ export type CrmActivityFilters = {
     status?: string;
     /** Who has to do the activity. */
     assignedTo?: string;
+    /** `true` narrows to the caller's own activities; the server resolves the id. */
+    mine?: boolean;
     /** Who owns the related lead — a user id, or 'unassigned'. */
     leadOwner?: string;
     purposeId?: string;
     channelId?: string;
+    /** Reviewer sign-off: 'approved' or 'pending'. Unset means both. */
+    approval?: 'approved' | 'pending';
     dueToday?: boolean;
     overdue?: boolean;
     dueFrom?: string;
@@ -686,13 +690,15 @@ function crmActivityQuery(
     params?: CrmActivityFilters & { page?: number; limit?: number },
 ): string {
     if (!params) return '';
-    const { dueToday, overdue, ...rest } = params;
-    // The API reads these two as the literal string 'true'; sending 'false' would
-    // still switch the filter on, so an unset flag has to be dropped entirely.
+    const { dueToday, overdue, mine, ...rest } = params;
+    // The API reads these three as the literal string 'true'; sending 'false'
+    // would still switch the filter on, so an unset flag has to be dropped
+    // entirely.
     const query = buildReportQuery({
         ...rest,
         dueToday: dueToday ? 'true' : undefined,
         overdue: overdue ? 'true' : undefined,
+        mine: mine ? 'true' : undefined,
     });
     return query ? `?${query}` : '';
 }
@@ -711,10 +717,15 @@ function leadConversationQuery(
  * one payload, so they share one caller rather than seven copies of this.
  */
 function dashboardWindowFetcher(path: string) {
-    return (params?: { from?: string; to?: string }) => {
+    return (params?: { from?: string; to?: string; mine?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        // Only `CrmDashboardQueryDto` declares `mine`, and only the CRM dashboard
+        // ever passes it. The API validates with `forbidNonWhitelisted`, so
+        // sending it to one of the other module dashboards would be a 400 rather
+        // than a no-op — this stays opt-in per caller for that reason.
+        if (params?.mine) query.set('mine', 'true');
         return fetchWithAuth(`${path}${query.toString() ? `?${query.toString()}` : ''}`);
     };
 }
@@ -1320,13 +1331,15 @@ export const api = {
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    /** `mine` narrows to the caller's own leads; the server resolves the id. */
+    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.source) query.set('source', params.source);
         if (params?.category) query.set('category', params.category);
         if (params?.priority) query.set('priority', params.priority);
         if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
+        if (params?.mine) query.set('mine', 'true');
         if (params?.emailPresence) query.set('emailPresence', params.emailPresence);
         if (params?.staleDays) query.set('staleDays', String(params.staleDays));
         if (params?.myActionsToday) query.set('myActionsToday', 'true');
@@ -1366,11 +1379,13 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     // CRM Contacts
-    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    /** `mine` narrows to the caller's own contacts; the server resolves the id. */
+    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; mine?: boolean; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.company) query.set('company', params.company);
         if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
+        if (params?.mine) query.set('mine', 'true');
         if (params?.captureSource) query.set('captureSource', params.captureSource);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
@@ -1482,7 +1497,9 @@ export const api = {
         fetchPaginated(`/crm/activities${crmActivityQuery(params)}`),
     getAllCrmActivities: (params?: CrmActivityFilters) =>
         fetchAllPages(`/crm/activities${crmActivityQuery(params)}`),
-    getCrmActivitySummary: () => fetchWithAuth('/crm/activities/summary'),
+    /** Takes `mine` so the tiles cannot disagree with the list beneath them. */
+    getCrmActivitySummary: (params?: { mine?: boolean }) =>
+        fetchWithAuth(`/crm/activities/summary${params?.mine ? '?mine=true' : ''}`),
     createCrmActivity: (data: any) => fetchWithAuth('/crm/activities', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -1498,6 +1515,13 @@ export const api = {
         fetchWithAuth(`/crm/activities/${id}/complete`, {
             method: 'POST',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The reviewer's switch on a planned activity. */
+    setCrmActivityApproval: (id: string, approved: boolean) =>
+        fetchWithAuth(`/crm/activities/${id}/approval`, {
+            method: 'PATCH',
+            body: JSON.stringify({ approved }),
             headers: { 'Content-Type': 'application/json' },
         }),
     cancelCrmActivity: (id: string) =>
@@ -2861,6 +2885,30 @@ export const api = {
     getPlatformWorkspace: (): Promise<PlatformWorkspace> => fetchWithAuth('/platform/workspace'),
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),
     getSystemHealth: () => fetchWithAuth('/admin/system-health'),
+    getAdminAuditLogs: (params?: {
+        scope?: 'platform' | 'tenant' | 'all';
+        tenant_id?: string;
+        entity?: string;
+        action?: string;
+        user_id?: string;
+        from?: string;
+        to?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
+        const q = new URLSearchParams();
+        if (params?.scope) q.set('scope', params.scope);
+        if (params?.tenant_id) q.set('tenant_id', params.tenant_id);
+        if (params?.entity) q.set('entity', params.entity);
+        if (params?.action) q.set('action', params.action);
+        if (params?.user_id) q.set('user_id', params.user_id);
+        if (params?.from) q.set('from', params.from);
+        if (params?.to) q.set('to', params.to);
+        if (params?.limit) q.set('limit', String(params.limit));
+        if (params?.offset) q.set('offset', String(params.offset));
+        const query = q.toString();
+        return fetchWithAuth(`/admin/audit-logs${query ? `?${query}` : ''}`);
+    },
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
     getAdminUsers: (params?: { search?: string; isAdmin?: boolean }) => {
         const query = new URLSearchParams();

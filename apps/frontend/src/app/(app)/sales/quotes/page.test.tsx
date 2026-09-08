@@ -15,6 +15,7 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
+const { enMessages } = require('@/lib/localization/messages/en');
 
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import QuotesPage from './page';
@@ -38,6 +39,8 @@ jest.mock('@/lib/api', () => ({
         getQuotations: jest.fn(),
         deleteQuotation: jest.fn(),
         createQuotation: jest.fn(),
+        shareQuotation: jest.fn(),
+        revokeQuotationShare: jest.fn(),
     },
 }));
 
@@ -110,6 +113,8 @@ describe('QuotesPage', () => {
         const { api } = require('@/lib/api');
         api.getQuotations.mockResolvedValue(mockQuotes);
         api.deleteQuotation.mockResolvedValue({ deleted: true });
+        api.shareQuotation.mockResolvedValue({ code: 'aB3xK9m', path: '/s/aB3xK9m' });
+        api.revokeQuotationShare.mockResolvedValue({ success: true });
     });
 
     afterEach(() => {
@@ -204,5 +209,77 @@ describe('QuotesPage', () => {
         const row = await screen.findByTestId('row-q-1');
         const link = within(row).getByRole('link', { name: 'Convert to Sale' });
         expect(link).toHaveAttribute('href', '/sales/new?quotationId=q-1');
+    });
+
+    describe('the short-link row action', () => {
+        // Sending a quotation used to mean opening it first: the shareable
+        // /s/<code> link existed only behind the detail page's Share button, so
+        // the list — where a shop owner actually works through the day's quotes
+        // — could not hand one over at all.
+        const m = enMessages.components.shareModal;
+
+        it('mints the short link for that row and shows it absolute', async () => {
+            const { api } = require('@/lib/api');
+            render(<QuotesPage />);
+            const row = await screen.findByTestId('row-q-1');
+
+            fireEvent.click(within(row).getByRole('button', { name: enMessages.quotes.shortLink }));
+
+            await waitFor(() => expect(api.shareQuotation).toHaveBeenCalledWith('q-1'));
+            await waitFor(() =>
+                expect(
+                    screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`),
+                ).toBeInTheDocument(),
+            );
+        });
+
+        it('titles the modal after the row that was clicked, not the first row', async () => {
+            render(<QuotesPage />);
+            const row = await screen.findByTestId('row-q-2');
+
+            fireEvent.click(within(row).getByRole('button', { name: enMessages.quotes.shortLink }));
+
+            await waitFor(() =>
+                expect(screen.getByText('Share Quotation QUO-00002')).toBeInTheDocument(),
+            );
+        });
+
+        it('revokes the link for the row the open modal belongs to', async () => {
+            const { api } = require('@/lib/api');
+            render(<QuotesPage />);
+            const row = await screen.findByTestId('row-q-2');
+
+            fireEvent.click(within(row).getByRole('button', { name: enMessages.quotes.shortLink }));
+            await waitFor(() => screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`));
+
+            fireEvent.click(screen.getByRole('button', { name: m.revoke }));
+            fireEvent.click(screen.getByRole('button', { name: m.revokeConfirm }));
+
+            await waitFor(() => expect(api.revokeQuotationShare).toHaveBeenCalledWith('q-2'));
+            await waitFor(() =>
+                expect(
+                    screen.queryByDisplayValue(`${window.location.origin}/s/aB3xK9m`),
+                ).not.toBeInTheDocument(),
+            );
+        });
+
+        it('toasts and opens nothing when the link cannot be minted', async () => {
+            const { toast } = require('@/lib/toast');
+            const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+            const { api } = require('@/lib/api');
+            api.shareQuotation.mockRejectedValue(new Error('Quotation not found'));
+
+            render(<QuotesPage />);
+            const row = await screen.findByTestId('row-q-1');
+            fireEvent.click(within(row).getByRole('button', { name: enMessages.quotes.shortLink }));
+
+            await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Quotation not found'));
+            expect(
+                screen.queryByDisplayValue(`${window.location.origin}/s/aB3xK9m`),
+            ).not.toBeInTheDocument();
+            expect(window.alert).not.toHaveBeenCalled();
+
+            toastErrorSpy.mockRestore();
+        });
     });
 });

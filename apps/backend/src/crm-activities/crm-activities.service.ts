@@ -23,6 +23,8 @@ import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import { touchLeadActivity } from '../crm-leads/lead-activity.util';
 import {
+    ACTIVITY_APPROVALS,
+    type ActivityApprovalFilter,
     CompleteCrmActivityDto,
     CreateCrmActivityDto,
     UpdateCrmActivityDto,
@@ -46,6 +48,7 @@ export const ACTIVITY_INCLUDES = {
     channel: { select: { id: true, code: true, name: true, icon: true } },
     assignee: { select: { id: true, name: true, email: true } },
     creator: { select: { id: true, name: true, email: true } },
+    approver: { select: { id: true, name: true, email: true } },
 };
 
 const ACTIVITY_SORTABLE: SortableMap = {
@@ -71,6 +74,8 @@ export type ListActivityOpts = {
     leadOwner?: string;
     purposeId?: string;
     channelId?: string;
+    /** 'approved' | 'pending' — anything else is ignored rather than emptying the list. */
+    approval?: ActivityApprovalFilter;
     dueToday?: boolean;
     overdue?: boolean;
     dueFrom?: string;
@@ -220,6 +225,11 @@ export class CrmActivitiesService {
                 store_id: dto.store_id ?? null,
                 created_by: userId,
                 origin: 'MANUAL',
+                // A DONE row logs a call that already happened — there is nothing
+                // left for a reviewer to hold back, so it lands approved. A
+                // PLANNED row is work nobody has done yet, and that is exactly
+                // what the reviewer is for.
+                is_approved: status === 'DONE',
             },
             include: ACTIVITY_INCLUDES,
         });
@@ -257,6 +267,12 @@ export class CrmActivitiesService {
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;
         if (opts.purposeId) where.purpose_id = opts.purposeId;
         if (opts.channelId) where.channel_id = opts.channelId;
+        // Membership-checked rather than truthiness-checked: a typo'd value must
+        // leave the filter off, not silently become `is_approved: false` and show
+        // an empty page that looks like "no activities".
+        if (opts.approval && (ACTIVITY_APPROVALS as readonly string[]).includes(opts.approval)) {
+            where.is_approved = opts.approval === 'approved';
+        }
 
         // Filtering through the relation also drops customer activities, which is
         // right: they have no lead, so they have no lead owner either.
@@ -303,6 +319,37 @@ export class CrmActivitiesService {
         });
         if (!activity) throw new NotFoundException('Activity not found');
         return activity;
+    }
+
+    /**
+     * A reviewer's sign-off on planned work, and the switch that withdraws it.
+     *
+     * Advisory by design: nothing here or in `complete()` stops an unapproved
+     * activity being carried out. The flag tells the team what has been reviewed
+     * — the agent works the approved list — and a rep logging a call they have
+     * already made must never be blocked by a manager's unread queue.
+     *
+     * PLANNED only. A DONE row records something that already happened and a
+     * CANCELLED one never will, so approving either is a question about the past
+     * that the answer cannot change.
+     */
+    async setApproval(tenantId: string, userId: string, id: string, approved: boolean) {
+        const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Activity not found');
+        if (existing.status !== 'PLANNED') {
+            throw new BadRequestException('Only a planned activity can be approved.');
+        }
+
+        // Withdrawing clears the stamp as well as the flag — a row left naming a
+        // reviewer it no longer has approval from reads as approved in any audit
+        // that looks at `approved_by` rather than `is_approved`.
+        return this.db.crmActivity.update({
+            where: { id },
+            data: approved
+                ? { is_approved: true, approved_by: userId, approved_at: new Date() }
+                : { is_approved: false, approved_by: null, approved_at: null },
+            include: ACTIVITY_INCLUDES,
+        });
     }
 
     async update(tenantId: string, id: string, dto: UpdateCrmActivityDto, timezone: string) {
@@ -404,6 +451,10 @@ export class CrmActivitiesService {
                         store_id: existing.store_id,
                         created_by: userId,
                         origin: 'MANUAL',
+                        // Explicit rather than left to the column default: a rep
+                        // closing one call must not be able to sign off the next
+                        // one by writing it into the same request.
+                        is_approved: false,
                     },
                     include: ACTIVITY_INCLUDES,
                 });
@@ -505,21 +556,28 @@ export class CrmActivitiesService {
         return { success: true };
     }
 
-    async summary(tenantId: string, timezone: string) {
+    /**
+     * @param assignedTo When set, the tiles count only that user's activities —
+     * the "only mine" scope, resolved from the session by the controller. The
+     * list below it takes the same narrowing, so the two cannot disagree.
+     */
+    async summary(tenantId: string, timezone: string, assignedTo?: string) {
         const { gte: today, lt: tomorrow } = zonedTodayWindow(timezone);
+        const mine = assignedTo ? { assigned_to: assignedTo } : {};
 
         const [dueToday, overdue, total] = await Promise.all([
             this.db.crmActivity.count({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: 'PLANNED',
                     due_at: { gte: today, lt: tomorrow },
                 },
             }),
             this.db.crmActivity.count({
-                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { lt: today } },
+                where: { tenant_id: tenantId, ...mine, status: 'PLANNED', due_at: { lt: today } },
             }),
-            this.db.crmActivity.count({ where: { tenant_id: tenantId, status: 'PLANNED' } }),
+            this.db.crmActivity.count({ where: { tenant_id: tenantId, ...mine, status: 'PLANNED' } }),
         ]);
 
         return { dueToday, overdue, total };
@@ -616,6 +674,9 @@ export class CrmActivitiesService {
                         status: 'PLANNED',
                         due_at: today,
                         origin: 'BIRTHDAY_CRON',
+                        // A sweep can raise a hundred of these overnight. They
+                        // wait for a reviewer like any other plan.
+                        is_approved: false,
                     },
                 });
                 await this.recalculateRollup(this.db, tenantId, { customer_id: c.id });
@@ -684,6 +745,7 @@ export class CrmActivitiesService {
                         status: 'PLANNED',
                         due_at: new Date(),
                         origin: 'REORDER_CRON',
+                        is_approved: false,
                     },
                 });
                 await this.recalculateRollup(this.db, tenantId, { customer_id: c.id });

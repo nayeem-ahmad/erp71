@@ -133,6 +133,7 @@ enum StorePermission {
   VIEW_CRM_INTERACTIONS
   CREATE_CRM_INTERACTIONS
   MANAGE_CRM_TASKS
+  APPROVE_CRM_ACTIVITY
   VIEW_CUSTOMER_CREDIT
   MANAGE_CUSTOMER_CREDIT
   VIEW_LEADS
@@ -401,6 +402,7 @@ model User {
   createdCrmFollowUps               CrmFollowUp[]               @relation("CrmFollowUpCreator")
   crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
   crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
+  crmActivitiesApproved             CrmActivity[]               @relation("CrmActivityApprover")
   refereeProfile                    Referee?
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
@@ -2829,6 +2831,18 @@ model CrmActivity {
   created_by  String?
   origin      String  @default("MANUAL")
 
+  /// Reviewer sign-off, so a planned touch is worked only once somebody senior
+  /// has read it. False on every PLANNED row — including the ones the birthday
+  /// and reorder crons raise overnight — and true on a DONE row logged directly,
+  /// which records a call that already happened and has nothing left to review.
+  ///
+  /// Advisory, not a lock: `complete()` deliberately does not check it. The flag
+  /// tells the team what has been signed off; it does not stop a rep who needs
+  /// to log a call they have already made.
+  is_approved Boolean   @default(false)
+  approved_by String?
+  approved_at DateTime?
+
   /// Backfill provenance. Both are null on user-created rows, and Postgres
   /// treats NULLs as distinct, so the unique index below constrains only
   /// backfilled rows — which is what makes sync-crm-activities re-runnable.
@@ -2846,9 +2860,11 @@ model CrmActivity {
   channel  ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: Restrict)
   assignee User?                @relation("CrmActivityAssignee", fields: [assigned_to], references: [id])
   creator  User?                @relation("CrmActivityCreator", fields: [created_by], references: [id])
+  approver User?                @relation("CrmActivityApprover", fields: [approved_by], references: [id])
 
   @@unique([tenant_id, legacy_source, legacy_id])
   @@index([tenant_id, status, due_at])
+  @@index([tenant_id, is_approved, status, due_at])
   @@index([tenant_id, assigned_to, status, due_at])
   @@index([tenant_id, lead_id, status, due_at])
   @@index([tenant_id, customer_id, status, due_at])

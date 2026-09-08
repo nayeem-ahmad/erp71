@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'केवल मेरे',
+            mineOnlyHint: 'केवल मुझे सौंपे गए रिकॉर्ड दिखाएँ। हर CRM स्क्रीन पर याद रखा जाता है।',
+            ownerLockedHint: 'केवल आपके अपने रिकॉर्ड दिख रहे हैं — स्वामी के अनुसार फ़िल्टर करने के लिए "केवल मेरे" बंद करें।',
+            assigneeLockedHint: 'केवल आपके अपने रिकॉर्ड दिख रहे हैं — ज़िम्मेदार के अनुसार फ़िल्टर करने के लिए "केवल मेरे" बंद करें।',
+        },
         hub: {
             moduleLabel: "CRM मॉड्यूल",
             title: "ग्राहक संबंध",
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "नियोजित",
             emptyMessage: "इन फ़िल्टरों से कोई गतिविधि मेल नहीं खाती।",
             loadFailed: "गतिविधियाँ लोड नहीं हो सकीं।",
+            approvalFailed: 'अनुमोदन अपडेट नहीं हो सका।',
+            approveActivity: 'इस गतिविधि को अनुमोदित करें',
             open: "खोलें",
             columns: {
                 subject: "गतिविधि",
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: "लीड या ग्राहक",
                 due: "नियत",
                 status: "स्थिति",
+                approved: 'अनुमोदित',
             },
             status: { PLANNED: "नियोजित", DONE: "हो गया", CANCELLED: "रद्द" },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "सभी ज़िम्मेदार",
                 me: "मैं",
                 due: "नियत",
+                allApprovals: 'सभी अनुमोदन',
+                approvalApproved: 'अनुमोदित',
+                approvalPending: 'अनुमोदन की प्रतीक्षा में',
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "नई लीड",
             emptyMessage: "अभी कोई लीड नहीं",
+            accessDenied: "आपके प्लान में सीआरएम मॉड्यूल शामिल नहीं है, इसलिए लीड नहीं दिखाई जा सकतीं। अपग्रेड के लिए अपने प्रशासक से संपर्क करें।",
             searchPlaceholder: "नाम या फ़ोन से खोजें...",
             allStatuses: "सभी स्थितियाँ",
             allSources: "सभी स्रोत",

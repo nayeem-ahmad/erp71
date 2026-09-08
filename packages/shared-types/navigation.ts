@@ -293,6 +293,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
   'admin.support': { id: 'admin.support', kind: 'link', icon: 'Headset', labelKey: 'sidebar.items.adminSupport', href: '/admin/support' },
   'admin.system-health': { id: 'admin.system-health', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.systemHealth', href: '/admin/system-health' },
+  'admin.audit-logs': { id: 'admin.audit-logs', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.adminAuditLogs', href: '/admin/audit-logs' },
   'admin.status': { id: 'admin.status', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.platformStatus', href: '/status' },
   'admin.platform-settings': { id: 'admin.platform-settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.sections.platformSettings', href: '/admin/platform-settings' },
   'admin.platform-settings.sms': { id: 'admin.platform-settings.sms', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.platformSettingsSms', href: '/admin/platform-settings/sms' },
@@ -556,14 +557,15 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('admin.platform', 'admin', 6),
   layoutNode('admin.system-health', 'admin.platform', 0),
-  layoutNode('admin.status', 'admin.platform', 1),
-  layoutNode('admin.platform-settings.deploy', 'admin.platform', 2),
-  layoutNode('admin.users', 'admin.platform', 3),
-  layoutNode('admin.platform-settings.general', 'admin.platform', 4),
-  layoutNode('admin.platform-settings.tenant-features', 'admin.platform', 5),
-  layoutNode('admin.platform-settings.navigation', 'admin.platform', 6),
-  layoutNode('admin.platform-settings.ai', 'admin.platform', 7),
-  layoutNode('admin.platform-settings.feedback-automation', 'admin.platform', 8),
+  layoutNode('admin.audit-logs', 'admin.platform', 1),
+  layoutNode('admin.status', 'admin.platform', 2),
+  layoutNode('admin.platform-settings.deploy', 'admin.platform', 3),
+  layoutNode('admin.users', 'admin.platform', 4),
+  layoutNode('admin.platform-settings.general', 'admin.platform', 5),
+  layoutNode('admin.platform-settings.tenant-features', 'admin.platform', 6),
+  layoutNode('admin.platform-settings.navigation', 'admin.platform', 7),
+  layoutNode('admin.platform-settings.ai', 'admin.platform', 8),
+  layoutNode('admin.platform-settings.feedback-automation', 'admin.platform', 9),
 
   // The platform team's own project workspace. Same nodes as the tenant module —
   // one set of pages serves both — hung off the admin console instead of a shop

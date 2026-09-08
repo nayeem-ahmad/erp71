@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: "শুধু আমার",
+            mineOnlyHint: "শুধু আমার উপর অর্পিত রেকর্ড দেখান। প্রতিটি CRM পর্দায় মনে রাখা হয়।",
+            ownerLockedHint: "শুধু আপনার নিজের রেকর্ড দেখাচ্ছে — মালিক অনুযায়ী ফিল্টার করতে \"শুধু আমার\" বন্ধ করুন।",
+            assigneeLockedHint: "শুধু আপনার নিজের রেকর্ড দেখাচ্ছে — দায়িত্বপ্রাপ্ত অনুযায়ী ফিল্টার করতে \"শুধু আমার\" বন্ধ করুন।",
+        },
         hub: {
             moduleLabel: "CRM মডিউল",
             title: "গ্রাহক সম্পর্ক",
@@ -90,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "পরিকল্পিত",
             emptyMessage: "এই ফিল্টারে কোনো কার্যক্রম নেই।",
             loadFailed: "কার্যক্রম লোড করা যায়নি।",
+            approvalFailed: "অনুমোদন হালনাগাদ করা যায়নি।",
+            approveActivity: "এই কার্যক্রম অনুমোদন করুন",
             open: "খুলুন",
             columns: {
                 subject: "কার্যক্রম",
@@ -97,6 +105,7 @@ export const crmHrMessages = {
                 target: "লিড বা গ্রাহক",
                 due: "নির্ধারিত",
                 status: "অবস্থা",
+                approved: "অনুমোদিত",
             },
             status: { PLANNED: "পরিকল্পিত", DONE: "সম্পন্ন", CANCELLED: "বাতিল" },
             filters: {
@@ -112,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "সব দায়িত্বপ্রাপ্ত",
                 me: "আমি",
                 due: "সময়সীমা",
+                allApprovals: "সব অনুমোদন",
+                approvalApproved: "অনুমোদিত",
+                approvalPending: "অনুমোদনের অপেক্ষায়",
             },
         },
         setup: {
@@ -312,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "নতুন লিড",
             emptyMessage: "কোনো লিড নেই",
+            accessDenied: "আপনার প্ল্যানে সিআরএম মডিউল নেই, তাই লিড দেখানো যাচ্ছে না। আপগ্রেড করতে আপনার প্রশাসকের সঙ্গে যোগাযোগ করুন।",
             searchPlaceholder: "নাম বা ফোন দিয়ে খুঁজুন...",
             allStatuses: "সব স্ট্যাটাস",
             allSources: "সব উৎস",

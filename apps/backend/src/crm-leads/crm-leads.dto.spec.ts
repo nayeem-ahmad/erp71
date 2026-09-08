@@ -88,3 +88,31 @@ describe('ListLeadsDto — emailPresence', () => {
         ).rejects.toThrow(BadRequestException);
     });
 });
+
+/**
+ * `mine` arrives as a query string, so it is only ever the *text* "true" until
+ * the transform runs. Without it, `whitelist` would hand the service the string
+ * `'false'` — which is truthy, and would silently narrow the list to the caller
+ * exactly when they asked for the opposite.
+ */
+describe('ListLeadsDto — mine', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'query' as const, metatype: ListLeadsDto };
+
+    it('reads the literal true as on', async () => {
+        const result: any = await pipe.transform({ mine: 'true' }, metadata);
+        expect(result.mine).toBe(true);
+    });
+
+    it('reads anything else as off, including the string false', async () => {
+        for (const value of ['false', '0', 'yes', '']) {
+            const result: any = await pipe.transform({ mine: value }, metadata);
+            expect(result.mine).toBe(false);
+        }
+    });
+
+    it('leaves the scope unset when the param is absent', async () => {
+        const result: any = await pipe.transform({}, metadata);
+        expect(result.mine).toBeUndefined();
+    });
+});
