@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface TaskRow {
@@ -251,7 +252,7 @@ export default function TasksPage() {
                 accessorKey: 'due_date',
                 meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: TaskRow } }) =>
-                    row.original.due_date ? new Date(row.original.due_date).toLocaleDateString() : '—',
+                    formatDate(row.original.due_date),
             },
         ],
         [m],

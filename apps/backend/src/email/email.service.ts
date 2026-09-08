@@ -4,6 +4,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 import { formatEmailAddress, parseEmailAddress } from './address.util';
+import { formatZonedDate } from '../common/tenant-time.util';
 import {
     renderRefereeInviteEmail,
     resolveEmailLocale,
@@ -312,7 +313,7 @@ ${details}
             to,
             subject: `Your ERP71 subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
             html: `<h2>Subscription Expiry Notice</h2>
-<p>Your subscription for <strong>${tenantName}</strong> expires on <strong>${expiresAt.toDateString()}</strong> (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining).</p>
+<p>Your subscription for <strong>${tenantName}</strong> expires on <strong>${formatZonedDate(expiresAt)}</strong> (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining).</p>
 <p><a href="${frontendUrl}/dashboard/billing">Renew Now</a></p>`,
         });
     }
@@ -412,7 +413,7 @@ ${consequence}`,
             to,
             subject: `${tenantName} is all set — nothing due`,
             html: `<h2>You're all paid up</h2>
-<p>Thank you for staying with ERP71. There is nothing outstanding on <strong>${escapeHtml(tenantName)}</strong> — your <strong>${escapeHtml(planName)}</strong> plan is active and renews on <strong>${renewsAt.toDateString()}</strong>.</p>
+<p>Thank you for staying with ERP71. There is nothing outstanding on <strong>${escapeHtml(tenantName)}</strong> — your <strong>${escapeHtml(planName)}</strong> plan is active and renews on <strong>${formatZonedDate(renewsAt)}</strong>.</p>
 <p>Nothing to do here. If it helps, here are a few places to get more out of your workspace:</p>
 <ul>
   <li><a href="${frontendUrl}/dashboard">Today's sales and stock at a glance</a></li>
@@ -435,7 +436,7 @@ ${consequence}`,
             to,
             subject: `Subscription fee posted for ${tenantName}`,
             html: `<h2>Subscription Fee</h2>
-<p>Your subscription fee of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${tenantName}</strong> has been posted to your account for the period ending <strong>${periodEnd.toDateString()}</strong>.</p>
+<p>Your subscription fee of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${tenantName}</strong> has been posted to your account for the period ending <strong>${formatZonedDate(periodEnd)}</strong>.</p>
 <p><a href="${frontendUrl}/billing">View billing &amp; ledger</a></p>`,
         });
     }

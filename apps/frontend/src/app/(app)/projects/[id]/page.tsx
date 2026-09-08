@@ -21,7 +21,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 
 interface Progress {
     taskCount: number;
@@ -261,9 +261,7 @@ export default function ProjectDetailPage() {
                                                     {num(task.remaining_hours)}h
                                                 </td>
                                                 <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
-                                                    {task.due_date
-                                                        ? new Date(task.due_date).toLocaleDateString()
-                                                        : '—'}
+                                                    {formatDate(task.due_date)}
                                                 </td>
                                             </tr>
                                         ))}
@@ -288,9 +286,7 @@ export default function ProjectDetailPage() {
                                 {project.manager?.name ?? project.manager?.email ?? '—'}
                             </Row>
                             <Row label={m.fields.targetEndDate}>
-                                {project.target_end_date
-                                    ? new Date(project.target_end_date).toLocaleDateString()
-                                    : '—'}
+                                {formatDate(project.target_end_date)}
                             </Row>
                             <Row label={m.fields.budget}>
                                 {project.budget_amount ? formatBDT(Number(project.budget_amount)) : '—'}

@@ -18,7 +18,7 @@ import ReportPrintButton from '@/components/accounting/ReportPrintButton';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printStatementReport, reportContextLines } from '@/lib/statement-printer';
@@ -163,7 +163,7 @@ export default function BalanceSheetPage() {
                 statusNote: data.is_balanced ? t.accountingShared.balanced : t.accountingShared.notBalanced,
                 locale,
                 generatedLabel: printCopy.generated,
-                generatedAt: new Date().toLocaleString(locale),
+                generatedAt: formatDateTime(new Date(), locale),
             },
             [
                 {

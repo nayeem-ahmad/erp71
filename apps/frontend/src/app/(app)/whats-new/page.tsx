@@ -7,6 +7,7 @@ import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { formatDate } from '@/lib/format';
 
 type Update = {
     id: string;
@@ -75,13 +76,7 @@ export default function WhatsNewPage() {
                             <article key={post.id} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                                 <h2 className="text-sm font-semibold text-gray-900">{post.title}</h2>
                                 <p className="mt-1 text-xs text-gray-500">
-                                    {post.published_at
-                                        ? new Date(post.published_at).toLocaleDateString('en-GB', {
-                                              day: 'numeric',
-                                              month: 'short',
-                                              year: 'numeric',
-                                          })
-                                        : ''}
+                                    {post.published_at ? formatDate(post.published_at) : ''}
                                     {post.author_name ? ` · ${post.author_name}` : ''}
                                 </p>
                                 {post.excerpt && <p className="mt-2 text-sm leading-6 text-gray-700">{post.excerpt}</p>}

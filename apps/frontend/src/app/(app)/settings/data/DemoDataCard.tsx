@@ -6,6 +6,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { Button, Checkbox, ConfirmDialog, Select } from '@/components/ui';
+import { formatDate } from '@/lib/format';
 
 /** Module groups the load can be asked for. `core` is always on. */
 export const OPTIONAL_MODULES = ['sales', 'purchasing', 'inventory', 'crm', 'hr', 'finance', 'operations'] as const;
@@ -87,7 +88,7 @@ const SEVERITY_CLASS: Record<DemoAnomaly['severity'], string> = {
  * only ever repeat the first load would not give them that.
  */
 export default function DemoDataCard() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const dm = t.settingsExtras.dataManagement;
     const demo = dm.demoData;
 
@@ -298,7 +299,7 @@ export default function DemoDataCard() {
                                                 className={`rounded-md border p-2 text-xs ${SEVERITY_CLASS[anomaly.severity]}`}
                                             >
                                                 <p className="font-semibold">
-                                                    {anomaly.occurredAt.slice(0, 10)}
+                                                    {formatDate(anomaly.occurredAt, locale)}
                                                     {anomaly.reference ? ` · ${anomaly.reference}` : ''} — {anomaly.label}
                                                 </p>
                                                 <p className="mt-0.5">{anomaly.detail}</p>

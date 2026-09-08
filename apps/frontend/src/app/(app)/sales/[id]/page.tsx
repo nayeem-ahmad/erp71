@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'rea
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
-import { toDatetimeLocal } from '@/lib/format';
+import { formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -30,7 +30,7 @@ const statusBadgeClass: Record<string, string> = {
 };
 
 function SaleDetailPageContent() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -220,7 +220,7 @@ function SaleDetailPageContent() {
             serialNumber: sale.serial_number,
             storeName: printHeader.companyName,
             headerConfig: printHeader.headerConfig,
-            date: new Date(sale.sale_date ?? sale.created_at).toLocaleString(),
+            date: formatDateTime(sale.sale_date ?? sale.created_at, locale),
             customerName: sale.customer?.name,
             items: items.map((i) => ({
                 name: i.name,
@@ -243,7 +243,7 @@ function SaleDetailPageContent() {
         printSalesInvoice(
             {
                 referenceNumber: sale.reference_number || sale.serial_number,
-                date: new Date(sale.sale_date ?? sale.created_at).toLocaleDateString('en-BD'),
+                date: formatDate(sale.sale_date ?? sale.created_at, locale),
                 companyName: printHeader.companyName,
                 headerConfig: printHeader.headerConfig,
                 customerName: customer?.name,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
 import { routes } from '@/lib/routes';
@@ -398,7 +398,7 @@ export default function AccountingDashboard({
                                                     {voucher.voucher_number}
                                                 </span>
                                                 <span className="block truncate text-[10px] text-gray-500">
-                                                    {new Date(voucher.date).toLocaleDateString(locale)}
+                                                    {formatDate(voucher.date, locale)}
                                                     {voucher.description ? ` · ${voucher.description}` : ''}
                                                 </span>
                                             </span>

@@ -7,6 +7,7 @@ import {
     startOfNextZonedDay,
     startOfZonedToday,
     zoneOffsetMinutes,
+    formatZonedDate,
     zonedDateString,
     zonedDayRange,
     zonedDayStart,
@@ -179,6 +180,26 @@ describe('tenant-time.util', () => {
                 weekday: 3,
                 date: '2026-09-02',
             });
+        });
+    });
+
+    describe('formatZonedDate', () => {
+        it('renders dd/MM/yyyy, zero-padded, whatever the process locale is', () => {
+            expect(formatZonedDate(new Date('2026-09-08T09:30:00.000Z'), 'Asia/Dhaka')).toBe(
+                '08/09/2026',
+            );
+        });
+
+        it('names the day the instant falls on in the tenant zone, not in UTC', () => {
+            // 21:00 UTC is already the next calendar day in Dhaka (+06:00).
+            expect(formatZonedDate(new Date('2026-09-08T21:00:00.000Z'), 'Asia/Dhaka')).toBe(
+                '09/09/2026',
+            );
+        });
+
+        it('defaults to the platform home zone', () => {
+            const instant = new Date('2026-09-08T21:00:00.000Z');
+            expect(formatZonedDate(instant)).toBe(formatZonedDate(instant, DEFAULT_TENANT_TIMEZONE));
         });
     });
 

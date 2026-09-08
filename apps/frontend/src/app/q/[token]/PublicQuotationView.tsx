@@ -1,7 +1,7 @@
 'use client';
 
 import { Printer } from 'lucide-react';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate as formatDisplayDate } from '@/lib/format';
 
 type Item = { product_name: string; quantity: number; unit_price: number; line_total: number };
 
@@ -39,8 +39,7 @@ export type PublicQuotation = {
     beneficiary_bank: BeneficiaryBank | null;
 };
 
-const formatDate = (value: string | null) =>
-    value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const formatDate = (value: string | null) => formatDisplayDate(value, 'en');
 
 /** One label/value row, rendered only when there is a value to show. */
 function Term({ label, value }: { label: string; value: string | null }) {

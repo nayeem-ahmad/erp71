@@ -9,7 +9,7 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -225,8 +225,8 @@ export default function RecurringJournalsPage() {
                                         {t.description && <div className="text-sm text-gray-500 mt-0.5">{t.description}</div>}
                                         <div className="flex gap-4 mt-2 text-xs text-gray-400">
                                             <span className="font-bold">{t.frequency}</span>
-                                            <span>Next: <span className="font-bold text-gray-600">{new Date(t.next_due_date).toLocaleDateString()}</span></span>
-                                            {t.last_run_date && <span>Last run: {new Date(t.last_run_date).toLocaleDateString()}</span>}
+                                            <span>Next: <span className="font-bold text-gray-600">{formatDate(t.next_due_date, locale)}</span></span>
+                                            {t.last_run_date && <span>Last run: {formatDate(t.last_run_date, locale)}</span>}
                                         </div>
                                     </div>
                                     <button onClick={() => handlePost(t.id)} disabled={posting === t.id}

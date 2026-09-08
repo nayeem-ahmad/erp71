@@ -5,21 +5,11 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Copy, Download, Printer } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
-
-function formatDateTime(dateStr: string, locale: string) {
-    return new Date(dateStr).toLocaleString(locale === 'bn' ? 'bn-BD' : 'en-BD', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
 
 interface InvoiceData {
     purchase: {

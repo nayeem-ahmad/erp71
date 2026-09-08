@@ -7,6 +7,7 @@ import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
+import { formatZonedDate } from '../common/tenant-time.util';
 
 /* ── Report types ─────────────────────────────────────────────────── */
 
@@ -160,7 +161,7 @@ export class NotificationsService {
                     owner.id,
                     'SUBSCRIPTION_EXPIRY',
                     `Subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
-                    `Your ${sub.tenant.name} subscription will expire on ${sub.current_period_end.toLocaleDateString()}.`,
+                    `Your ${sub.tenant.name} subscription will expire on ${formatZonedDate(sub.current_period_end)}.`,
                     '/billing',
                 );
             } catch (err) {

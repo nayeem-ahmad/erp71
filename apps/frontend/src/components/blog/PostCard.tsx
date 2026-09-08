@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import type { BlogListPost } from '@/lib/blog/api';
+import { formatDate } from '@/lib/format';
 
-/** Date for a byline. Fixed to en-GB so server and client agree — a locale
- * inferred from the request would produce different HTML on rehydration. */
+/** Date for a byline. The locale is pinned rather than resolved ambiently so
+ * server and client agree — one inferred from the request would produce
+ * different HTML on rehydration. */
 export function formatPostDate(value: string | null): string {
     if (!value) return '';
-    return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDate(value, 'en');
 }
 
 /** The `date · N min read` line, shared by the cards and the lead story so the

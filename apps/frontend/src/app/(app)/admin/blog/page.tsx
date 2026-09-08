@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
+import { formatDate as formatDisplayDate } from '@/lib/format';
 
 type AdminPostRow = {
     id: string;
@@ -34,8 +35,7 @@ const STATUS_TONE: Record<string, 'success' | 'warning' | 'neutral' | 'danger'> 
 };
 
 function formatDate(value: string | null): string {
-    if (!value) return '—';
-    return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDisplayDate(value);
 }
 
 export default function AdminBlogPage() {

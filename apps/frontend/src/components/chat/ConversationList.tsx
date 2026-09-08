@@ -4,6 +4,7 @@ import { Archive, BellOff, MessagesSquare, Users } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import ChatAvatar from './ChatAvatar';
 import type { ChatConversation } from './types';
+import { formatDate } from '@/lib/format';
 
 export default function ConversationList({
     conversations,
@@ -25,7 +26,7 @@ export default function ConversationList({
         const sameDay = new Date().toDateString() === date.toDateString();
         return sameDay
             ? date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
-            : date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+            : formatDate(date, locale);
     };
 
     if (loading && conversations.length === 0) {

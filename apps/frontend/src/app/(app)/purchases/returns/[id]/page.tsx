@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Printer, Receipt, Save, Trash2, Undo2, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -208,7 +208,7 @@ function PurchaseReturnDetailPageContent() {
             bodyHtml: `
                 <h1>${purchaseReturn.return_number}</h1>
                 <div class="subtitle">
-                    ${t.purchaseReturns.detail.created}: ${new Date(purchaseReturn.created_at).toLocaleString()} | ${t.purchaseReturns.detail.sourcePurchase}: ${purchaseReturn.purchase?.purchase_number || '-'}
+                    ${t.purchaseReturns.detail.created}: ${formatDateTime(purchaseReturn.created_at, locale)} | ${t.purchaseReturns.detail.sourcePurchase}: ${purchaseReturn.purchase?.purchase_number || '-'}
                 </div>
                 <div class="meta-grid">
                     <div class="meta-box">
@@ -291,7 +291,7 @@ function PurchaseReturnDetailPageContent() {
 
                 <PageHeader
                     title={purchaseReturn.return_number}
-                    subtitle={new Date(purchaseReturn.created_at).toLocaleString()}
+                    subtitle={formatDateTime(purchaseReturn.created_at, locale)}
                     breadcrumbs={nestedPageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.purchase,

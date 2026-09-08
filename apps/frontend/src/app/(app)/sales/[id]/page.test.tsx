@@ -41,6 +41,8 @@ jest.mock('@/lib/toast', () => ({
 
 jest.mock('@/lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
+    formatDate: (d: string) => d,
+    formatDateTime: (d: string) => d,
     toDatetimeLocal: (date: Date) => {
         const pad = (n: number) => String(n).padStart(2, '0');
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;

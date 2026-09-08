@@ -10,6 +10,7 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
 
@@ -192,7 +193,7 @@ export default function PostingExceptionsPage() {
                     const v = info.getValue();
                     return v ? (
                         <span className="text-xs text-gray-500">
-                            {new Date(v).toLocaleString()}
+                            {formatDateTime(v, locale)}
                         </span>
                     ) : (
                         <span className="text-gray-300 text-xs">—</span>
