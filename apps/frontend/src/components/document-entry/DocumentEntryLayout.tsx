@@ -82,8 +82,14 @@ export default function DocumentEntryLayout({
                 <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
                     {(partyPicker || picker) && (
                         <div className="flex flex-col sm:flex-row items-start gap-2 flex-shrink-0">
+                            {/* Both boxes share the row rather than the party
+                                taking a fixed 18rem: capped at a readable width
+                                the party box left a dead strip past the entry
+                                bar on a wide screen. */}
                             {partyPicker && (
-                                <div className="w-full sm:w-72 flex-shrink-0">{partyPicker}</div>
+                                <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[15rem] sm:max-w-sm">
+                                    {partyPicker}
+                                </div>
                             )}
                             {picker && <div className="flex-1 min-w-0">{picker}</div>}
                         </div>
