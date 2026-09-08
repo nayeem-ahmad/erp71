@@ -275,6 +275,7 @@ export const coreMessages = {
             manufacturing: 'التصنيع',
             projects: 'إدارة المشاريع',
             purchase: 'المشتريات',
+            imports: 'الاستيراد',
             accounting: 'المحاسبة',
             expenses: 'المصروفات',
             inventory: 'المخزون',

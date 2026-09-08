@@ -5,9 +5,10 @@ import { UserPlus, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PartySearchSelect, {
-    PartySummaryLine,
+    PartySummaryCard,
     type PartyOption,
 } from '@/components/document-entry/PartySearchSelect';
+import { formatBDT } from '@/lib/format';
 
 /** A customer typed into the form but not saved yet — created with the document. */
 export interface NewCustomerDraft {
@@ -62,7 +63,7 @@ export default function CustomerSelection({
     setDraft,
     draftNameInvalid = false,
 }: CustomerSelectionProps) {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const [customers, setCustomers] = useState<PartyOption[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -163,20 +164,34 @@ export default function CustomerSelection({
                     <UserPlus className="w-4 h-4" />
                 </button>
             ) : undefined}
-            summary={(cust) => (
-                <PartySummaryLine
-                    parts={[
-                        <span key="name" className="font-medium text-gray-700">{cust.name}</span>,
-                        cust.phone,
-                        cust.address,
-                        Number(cust.due_balance ?? 0) > 0
-                            ? `Due ৳${Number(cust.due_balance).toLocaleString()}`
-                            : null,
-                        cust.credit_limit ? `Limit ৳${Number(cust.credit_limit).toLocaleString()}` : null,
-                        cust.loyalty_points ? `${cust.loyalty_points} pts` : null,
-                    ]}
-                />
-            )}
+            summary={(cust) => {
+                const due = Number(cust.due_balance ?? 0);
+                const creditLimit = Number(cust.credit_limit ?? 0);
+                return (
+                    <PartySummaryCard
+                        name={cust.name}
+                        details={[
+                            cust.phone ? { label: t.common.phone, value: cust.phone } : null,
+                            {
+                                label: t.shared.due,
+                                value: formatBDT(due, { locale }),
+                                // Past the agreed limit is a decision to make before
+                                // the sale, not a number to notice afterwards.
+                                tone: due <= 0
+                                    ? 'default'
+                                    : creditLimit > 0 && due >= creditLimit ? 'danger' : 'warning',
+                            },
+                            creditLimit > 0
+                                ? { label: t.customers.profile.creditLimit, value: formatBDT(creditLimit, { locale }) }
+                                : null,
+                            cust.loyalty_points
+                                ? { label: t.shared.columns.points, value: String(cust.loyalty_points) }
+                                : null,
+                            cust.address ? { label: t.common.address, value: cust.address } : null,
+                        ]}
+                    />
+                );
+            }}
         />
     );
 }

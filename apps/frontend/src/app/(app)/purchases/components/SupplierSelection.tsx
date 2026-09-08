@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PartySearchSelect, {
-    PartySummaryLine,
+    PartySummaryCard,
     type PartyOption,
 } from '@/components/document-entry/PartySearchSelect';
 
@@ -145,18 +145,23 @@ export default function SupplierSelection({
                     <UserPlus className="w-4 h-4" />
                 </button>
             )}
-            summary={(picked) => (
-                <PartySummaryLine
-                    parts={[
-                        <span key="name" className="font-medium text-gray-700">{picked.name}</span>,
-                        picked.phone,
-                        picked.address,
-                        Number(picked.due_balance ?? 0) > 0
-                            ? `${t.purchaseShared.payable} ${formatBDT(Number(picked.due_balance), { locale })}`
-                            : null,
-                    ]}
-                />
-            )}
+            summary={(picked) => {
+                const payable = Number(picked.due_balance ?? 0);
+                return (
+                    <PartySummaryCard
+                        name={picked.name}
+                        details={[
+                            picked.phone ? { label: t.common.phone, value: picked.phone } : null,
+                            {
+                                label: t.purchaseShared.payable,
+                                value: formatBDT(payable, { locale }),
+                                tone: payable > 0 ? 'warning' : 'default',
+                            },
+                            picked.address ? { label: t.common.address, value: picked.address } : null,
+                        ]}
+                    />
+                );
+            }}
         />
     );
 }

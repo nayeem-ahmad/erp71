@@ -106,16 +106,22 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'purchase.order-flow.orders': { id: 'purchase.order-flow.orders', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.purchaseOrders', href: '/purchases/orders' },
   'purchase.order-flow.quotations': { id: 'purchase.order-flow.quotations', kind: 'link', icon: 'FileSearch', labelKey: 'sidebar.items.purchaseQuotations', href: '/purchases/quotations' },
   'purchase.order-flow.returns': { id: 'purchase.order-flow.returns', kind: 'link', icon: 'Undo2', labelKey: 'sidebar.items.purchaseReturns', href: '/purchases/returns' },
-  'purchase.imports': { id: 'purchase.imports', kind: 'subgroup', icon: 'Ship', labelKey: 'purchases.hub.imports' },
-  'purchase.imports.shipments': { id: 'purchase.imports.shipments', kind: 'link', icon: 'Ship', labelKey: 'sidebar.items.importShipments', href: '/purchases/imports' },
-  'purchase.imports.lc-register': { id: 'purchase.imports.lc-register', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.lcRegister', href: '/purchases/imports/lc-register' },
-  'purchase.imports.duty-report': { id: 'purchase.imports.duty-report', kind: 'link', icon: 'Receipt', labelKey: 'sidebar.items.dutyReport', href: '/purchases/imports/duty-report', advancedOnly: true },
   'purchase.reports': { id: 'purchase.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'purchases.hub.reports', advancedOnly: true },
   'purchase.reports.summary': { id: 'purchase.reports.summary', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.purchaseSummary', href: '/purchases/reports/summary', advancedOnly: true },
   'purchase.reports.by-product': { id: 'purchase.reports.by-product', kind: 'link', icon: 'Package', labelKey: 'sidebar.items.purchasesByProduct', href: '/purchases/reports/by-product', advancedOnly: true },
   'purchase.reports.by-supplier': { id: 'purchase.reports.by-supplier', kind: 'link', icon: 'Truck', labelKey: 'sidebar.items.purchasesBySupplier', href: '/purchases/reports/by-supplier', advancedOnly: true },
   'purchase.setup': { id: 'purchase.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'purchases.hub.setup' },
   'purchase.setup.suppliers': { id: 'purchase.setup.suppliers', kind: 'link', icon: 'Truck', labelKey: 'sidebar.items.suppliers', href: '/purchases/suppliers' },
+
+  // Imports is a top-level module, not a Purchase subgroup. LC, duty and landed
+  // cost are their own finance workflow, and an importer works in them daily —
+  // one accordion deep inside Purchase they were invisible at a glance. The
+  // pages stay under /purchases/imports, the same way Expenses kept
+  // /accounting/expenses when it split out of Accounting.
+  imports: { id: 'imports', kind: 'module', icon: 'Ship', labelKey: 'sidebar.modules.imports', moduleKey: 'imports' },
+  'imports.shipments': { id: 'imports.shipments', kind: 'link', icon: 'Ship', labelKey: 'sidebar.items.importShipments', href: '/purchases/imports' },
+  'imports.lc-register': { id: 'imports.lc-register', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.lcRegister', href: '/purchases/imports/lc-register' },
+  'imports.duty-report': { id: 'imports.duty-report', kind: 'link', icon: 'Receipt', labelKey: 'sidebar.items.dutyReport', href: '/purchases/imports/duty-report', advancedOnly: true },
 
   accounting: { id: 'accounting', kind: 'module', icon: 'Calculator', labelKey: 'sidebar.modules.accounting', moduleKey: 'accounting' },
   'accounting.overview': { id: 'accounting.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/accounting', exact: true },
@@ -317,7 +323,19 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
   return { id, parentId, sortOrder, visible };
 }
 
-/** Default tenant sidebar tree — mirrors the original hardcoded Sidebar structure. */
+/**
+ * Default tenant sidebar tree — mirrors the original hardcoded Sidebar structure.
+ *
+ * The 2026-09-08 Imports split promoted the `purchase.imports` subgroup to a
+ * top-level `imports` module. For a **saved** layout:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=imports,imports.shipments,imports.lc-register,imports.duty-report`
+ * adds the new module, but `addNavNodesToLayout` cannot reparent or drop nodes,
+ * so a saved layout keeps its old `purchase.imports` subgroup alongside it and
+ * has to be reset from Navigation settings to lose the duplicate. A layout that
+ * still names `purchase.imports*` also now fails `validateNavLayout` — those ids
+ * are gone from the registry — which means it is replaced by this default at
+ * read time and needs nothing at all.
+ */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
   layoutNode('sales', null, 1),
@@ -360,18 +378,19 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('purchase.order-flow.orders', 'purchase', 4),
   layoutNode('purchase.order-flow.quotations', 'purchase', 5),
   layoutNode('purchase.order-flow.returns', 'purchase', 6),
-  layoutNode('purchase.imports', 'purchase', 7),
-  layoutNode('purchase.imports.shipments', 'purchase.imports', 0),
-  layoutNode('purchase.imports.lc-register', 'purchase.imports', 1),
-  layoutNode('purchase.imports.duty-report', 'purchase.imports', 2),
-  layoutNode('purchase.reports', 'purchase', 8),
+  layoutNode('purchase.reports', 'purchase', 7),
   layoutNode('purchase.reports.summary', 'purchase.reports', 0),
   layoutNode('purchase.reports.by-product', 'purchase.reports', 1),
   layoutNode('purchase.reports.by-supplier', 'purchase.reports', 2),
-  layoutNode('purchase.setup', 'purchase', 9),
+  layoutNode('purchase.setup', 'purchase', 8),
   layoutNode('purchase.setup.suppliers', 'purchase.setup', 0),
 
-  layoutNode('accounting', null, 3),
+  layoutNode('imports', null, 3),
+  layoutNode('imports.shipments', 'imports', 0),
+  layoutNode('imports.lc-register', 'imports', 1),
+  layoutNode('imports.duty-report', 'imports', 2),
+
+  layoutNode('accounting', null, 4),
   layoutNode('accounting.overview', 'accounting', 0),
   layoutNode('accounting.vouchers', 'accounting', 1),
   layoutNode('accounting.vouchers-list', 'accounting', 2),
@@ -407,12 +426,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 9),
   layoutNode('accounting.setup.settings', 'accounting.setup', 10),
 
-  layoutNode('expenses', null, 4),
+  layoutNode('expenses', null, 5),
   layoutNode('expenses.list', 'expenses', 0),
   layoutNode('expenses.categories', 'expenses', 1),
   layoutNode('expenses.reports', 'expenses', 2),
 
-  layoutNode('inventory', null, 5),
+  layoutNode('inventory', null, 6),
   layoutNode('inventory.overview', 'inventory', 0),
   layoutNode('inventory.demands', 'inventory', 1),
   layoutNode('inventory.transfers', 'inventory', 2),
@@ -431,7 +450,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.setup.brands', 'inventory.setup', 2),
   layoutNode('inventory.setup.settings', 'inventory.setup', 3),
 
-  layoutNode('crm', null, 6),
+  layoutNode('crm', null, 7),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.contacts', 'crm', 2),
@@ -440,7 +459,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.customers', 'crm', 6),
   layoutNode('crm.setup', 'crm', 7),
 
-  layoutNode('projects', null, 7),
+  layoutNode('projects', null, 8),
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
@@ -449,9 +468,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.hour-log-report', 'projects', 5),
   layoutNode('projects.setup', 'projects', 6),
 
-  layoutNode('manufacturing', null, 8),
+  layoutNode('manufacturing', null, 9),
 
-  layoutNode('hr', null, 9),
+  layoutNode('hr', null, 10),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.attendance', 'hr', 2),
@@ -478,15 +497,15 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.designations', 'hr.setup', 1),
   layoutNode('hr.setup.schedules', 'hr.setup', 2),
 
-  layoutNode('account-settings', null, 10),
+  layoutNode('account-settings', null, 11),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
 
-  layoutNode('chat', null, 11),
-  layoutNode('support', null, 12),
-  layoutNode('admin', null, 13),
+  layoutNode('chat', null, 12),
+  layoutNode('support', null, 13),
+  layoutNode('admin', null, 14),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -498,8 +517,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 14),
-  layoutNode('help', null, 15),
+  layoutNode('whats-new', null, 15),
+  layoutNode('help', null, 16),
 ];
 
 /**
