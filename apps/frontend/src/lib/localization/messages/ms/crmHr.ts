@@ -90,6 +90,8 @@ export const crmHrMessages = {
             totalPlanned: 'Dirancang',
             emptyMessage: 'Tiada aktiviti sepadan dengan penapis ini.',
             loadFailed: 'Tidak dapat memuatkan aktiviti.',
+            approvalFailed: 'Kelulusan tidak dapat dikemas kini.',
+            approveActivity: 'Luluskan aktiviti ini',
             open: 'Buka',
             columns: {
                 subject: 'Aktiviti',
@@ -97,6 +99,7 @@ export const crmHrMessages = {
                 target: 'Prospek atau pelanggan',
                 due: 'Tarikh',
                 status: 'Status',
+                approved: 'Diluluskan',
             },
             status: { PLANNED: 'Dirancang', DONE: 'Selesai', CANCELLED: 'Dibatalkan' },
             filters: {
@@ -112,6 +115,9 @@ export const crmHrMessages = {
                 allAssignees: 'Semua bertugas',
                 me: 'Saya',
                 due: 'Tempoh',
+                allApprovals: 'Semua kelulusan',
+                approvalApproved: 'Diluluskan',
+                approvalPending: 'Menunggu kelulusan',
             },
         },
         setup: {

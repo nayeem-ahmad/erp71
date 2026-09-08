@@ -18,6 +18,7 @@ describe('CrmActivitiesController — list query wiring', () => {
 
     const service = {
         findAll: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
+        setApproval: jest.fn().mockResolvedValue({ id: 'a1', is_approved: true }),
     } as any;
 
     class AllowAll {
@@ -35,6 +36,7 @@ describe('CrmActivitiesController — list query wiring', () => {
 
     beforeEach(async () => {
         service.findAll.mockClear();
+        service.setApproval.mockClear();
         const module = await Test.createTestingModule({
             controllers: [CrmActivitiesController],
             providers: [{ provide: CrmActivitiesService, useValue: service }],
@@ -78,5 +80,23 @@ describe('CrmActivitiesController — list query wiring', () => {
             'tenant-1',
             expect.objectContaining({ assignedTo: 'user-3' }),
         );
+    });
+
+    it('passes the approval filter through', async () => {
+        await request(app.getHttpServer()).get('/crm/activities?approval=pending').expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ approval: 'pending' }),
+        );
+    });
+
+    it('routes the approval switch to setApproval with the reviewer', async () => {
+        await request(app.getHttpServer())
+            .patch('/crm/activities/a1/approval')
+            .send({ approved: true })
+            .expect(200);
+
+        expect(service.setApproval).toHaveBeenCalledWith('tenant-1', 'user-1', 'a1', true);
     });
 });

@@ -90,6 +90,8 @@ export const crmHrMessages = {
             totalPlanned: "Geplant",
             emptyMessage: "Keine Aktivitäten passen zu diesen Filtern.",
             loadFailed: "Aktivitäten konnten nicht geladen werden.",
+            approvalFailed: 'Freigabe konnte nicht aktualisiert werden.',
+            approveActivity: 'Diese Aktivität genehmigen',
             open: "Öffnen",
             columns: {
                 subject: "Aktivität",
@@ -97,6 +99,7 @@ export const crmHrMessages = {
                 target: "Lead oder Kunde",
                 due: "Fällig",
                 status: "Status",
+                approved: 'Genehmigt',
             },
             status: { PLANNED: "Geplant", DONE: "Erledigt", CANCELLED: "Abgebrochen" },
             filters: {
@@ -112,6 +115,9 @@ export const crmHrMessages = {
                 allAssignees: "Alle Zuständigen",
                 me: "Ich",
                 due: "Fällig",
+                allApprovals: 'Alle Freigaben',
+                approvalApproved: 'Genehmigt',
+                approvalPending: 'Wartet auf Freigabe',
             },
         },
         setup: {

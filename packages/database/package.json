@@ -15,6 +15,7 @@
     "sync:accounting": "tsx prisma/sync-accounting.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
     "sync:crm-activities": "tsx prisma/sync-crm-activities.ts",
+    "sync:crm-activity-approval": "tsx prisma/sync-crm-activity-approval.ts",
     "sync:lead-identity": "tsx prisma/sync-lead-identity.ts",
     "sync:user-mobile-unique": "tsx prisma/sync-user-mobile-unique.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",

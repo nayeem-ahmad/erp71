@@ -90,6 +90,8 @@ export const crmHrMessages = {
             totalPlanned: 'منصوبہ بند',
             emptyMessage: 'ان فلٹرز سے کوئی سرگرمی نہیں ملی۔',
             loadFailed: 'سرگرمیاں لوڈ نہیں ہو سکیں۔',
+            approvalFailed: 'منظوری اپ ڈیٹ نہیں ہو سکی۔',
+            approveActivity: 'اس سرگرمی کی منظوری دیں',
             open: 'کھولیں',
             columns: {
                 subject: 'سرگرمی',
@@ -97,6 +99,7 @@ export const crmHrMessages = {
                 target: 'لیڈ یا گاہک',
                 due: 'مقررہ',
                 status: 'حیثیت',
+                approved: 'منظور شدہ',
             },
             status: { PLANNED: 'منصوبہ بند', DONE: 'مکمل', CANCELLED: 'منسوخ' },
             filters: {
@@ -112,6 +115,9 @@ export const crmHrMessages = {
                 allAssignees: 'تمام ذمہ داران',
                 me: 'میں',
                 due: 'مقررہ',
+                allApprovals: 'تمام منظوریاں',
+                approvalApproved: 'منظور شدہ',
+                approvalPending: 'منظوری کے منتظر',
             },
         },
         setup: {
