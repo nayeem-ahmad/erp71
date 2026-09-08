@@ -445,6 +445,7 @@ export const salesMessages = {
             newQuotation: "Baharu Sebut Harga",
             convertToSale: "Tukar kepada Jualan",
             newProforma: "Invois Proforma Baharu",
+            shortLink: "Pautan pendek",
             columns: {
                 quoteNumber: "Sebut Harga #",
                 docKind: "Jenis",
@@ -497,6 +498,7 @@ export const salesMessages = {
                 statusLabel: "STATUS: {status}",
                 saving: "Saving...",
                 saveChanges: "Simpan Changes",
+                share: "Kongsi",
                 shareSubject: "Sebut Harga {number}",
                 shareError: "Tidak dapat mencipta pautan kongsi. Sila cuba lagi.",
                 shareSubjectProforma: "Invois Proforma {number}",

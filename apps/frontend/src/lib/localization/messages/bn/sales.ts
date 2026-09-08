@@ -445,6 +445,7 @@ export const salesMessages = {
             newQuotation: "নতুন কোটেশন",
             convertToSale: "বিক্রয়ে রূপান্তর করুন",
             newProforma: "নতুন প্রোফর্মা ইনভয়েস",
+            shortLink: "শর্ট লিংক",
             columns: {
                 quoteNumber: "কোট #",
                 docKind: "ধরন",
@@ -497,6 +498,7 @@ export const salesMessages = {
                 statusLabel: "অবস্থা: {status}",
                 saving: "সংরক্ষণ হচ্ছে...",
                 saveChanges: "সংরক্ষণ Changes",
+                share: "শেয়ার করুন",
                 shareSubject: "কোটেশন {number}",
                 shareError: "শেয়ার লিংক তৈরি করা যায়নি। আবার চেষ্টা করুন।",
                 shareSubjectProforma: "প্রোফর্মা ইনভয়েস {number}",
