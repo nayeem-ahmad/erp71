@@ -49,6 +49,27 @@ describe('nav-resolver', () => {
         ]);
     });
 
+    it('exposes imports as its own top-level module, not a Purchase subgroup', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+
+        const imports = modules.find((mod) => mod.key === 'imports');
+        expect(imports?.label).toBe('Imports');
+        // Flat links, no subgroup — the whole point of the split is that the LC
+        // screens are one click from the sidebar rather than two.
+        expect((imports?.children ?? []).map((child) => 'type' in child ? child.label : child.href)).toEqual([
+            '/purchases/imports',
+            '/purchases/imports/lc-register',
+            '/purchases/imports/duty-report',
+        ]);
+
+        // The pages did not move, so a prefix check would still pass with the
+        // old subgroup in place — assert on Purchase's own tree instead.
+        const purchase = modules.find((mod) => mod.key === 'purchase');
+        const purchaseHrefs = (purchase?.children ?? []).flatMap((child) =>
+            'type' in child ? child.children.map((link) => link.href) : [child.href]);
+        expect(purchaseHrefs.filter((href) => href.startsWith('/purchases/imports'))).toEqual([]);
+    });
+
     it('groups HR under five subgroups, with only Overview and Employees at the top', () => {
         const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
             .find((mod) => mod.key === 'hr');

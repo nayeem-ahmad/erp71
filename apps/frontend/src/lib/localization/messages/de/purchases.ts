@@ -65,7 +65,6 @@ export const purchasesMessages = {
             dailyOperations: "Tagesgeschäft",
             payables: "Verbindlichkeiten",
             orderFlow: "Bestellungen & Eingänge",
-            imports: "Import (Akkreditiv)",
             reports: "Einkaufsberichte",
             setup: "Einkaufseinrichtung",
             links: {

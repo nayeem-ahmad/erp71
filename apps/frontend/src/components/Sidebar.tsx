@@ -326,7 +326,7 @@ export default function Sidebar({
                     };
                 }
 
-                if (['sales', 'purchase', 'inventory', 'accounting'].includes(module.key)) {
+                if (['sales', 'purchase', 'imports', 'inventory', 'accounting'].includes(module.key)) {
                     const filteredChildren = filterModuleNavChildren(
                         module.children,
                         module.key,

@@ -65,7 +65,6 @@ export const purchasesMessages = {
                 dailyOperations: 'Operasi Harian',
                 payables: 'Hutang',
                 orderFlow: 'Pesanan & Penerimaan',
-                imports: 'Import (LC)',
                 reports: 'Laporan Pembelian',
                 setup: 'Persediaan Pembelian',
                 links: {
