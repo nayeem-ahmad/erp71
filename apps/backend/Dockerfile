@@ -144,6 +144,15 @@ ENV GIT_SHA=$GIT_SHA
 # column is NULL everywhere and the tile counts the whole back catalogue as
 # neglected until each lead is next touched. See prisma/sync-lead-activity.ts.
 #
+# sync:crm-activity-approval marks every DONE and CANCELLED CrmActivity approved.
+# REQUIRED for the same reason as sync:lead-activity above: db push adds
+# `is_approved` at its default of false and never runs the migration that fills
+# it. Without this, the Activities page's "Awaiting approval" filter opens on the
+# tenant's entire logged history — years of finished conversations — instead of
+# the handful of plans a reviewer actually needs to read. PLANNED rows are left
+# unapproved on purpose: that backlog is the review queue. See
+# prisma/sync-crm-activity-approval.ts.
+
 # sync:user-mobile-unique is the one step that runs BEFORE db push, not after.
 # db push creates the unique index on User.mobile, and unlike every other index
 # here that column is already populated — duplicates were deliberately allowed
@@ -152,4 +161,4 @@ ENV GIT_SHA=$GIT_SHA
 # the backend never boots. Clearing the collisions first makes the index a
 # formality. It is idempotent and degrades to a no-op on a fresh database that
 # has no User table yet. See prisma/sync-user-mobile-unique.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

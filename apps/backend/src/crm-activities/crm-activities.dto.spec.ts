@@ -1,5 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
-import { UpdateCrmActivityDto } from './crm-activities.dto';
+import { SetActivityApprovalDto, UpdateCrmActivityDto } from './crm-activities.dto';
 
 /**
  * Reassigning a planned activity is how a lead's `next_step_assigned_to` rollup
@@ -34,5 +34,29 @@ describe('UpdateCrmActivityDto', () => {
     it('leaves the key absent when it is not sent, so an unrelated edit keeps the assignee', async () => {
         const result: any = await pipe.transform({ subject: 'Chase it' }, metadata);
         expect(result).not.toHaveProperty('assigned_to');
+    });
+});
+
+/**
+ * The switch posts a boolean and nothing else. A string "false" arriving as a
+ * truthy value is the classic way a checkbox-shaped endpoint silently approves
+ * what a reviewer just rejected, so the transform is asserted rather than assumed.
+ */
+describe('SetActivityApprovalDto', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'body' as const, metatype: SetActivityApprovalDto };
+
+    it('accepts a real boolean', async () => {
+        await expect(pipe.transform({ approved: true }, metadata)).resolves.toEqual({ approved: true });
+        await expect(pipe.transform({ approved: false }, metadata)).resolves.toEqual({ approved: false });
+    });
+
+    it('reads the string "false" as false, not as a truthy string', async () => {
+        const result: any = await pipe.transform({ approved: 'false' }, metadata);
+        expect(result.approved).toBe(false);
+    });
+
+    it('rejects a missing approved flag', async () => {
+        await expect(pipe.transform({}, metadata)).rejects.toThrow();
     });
 });

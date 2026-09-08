@@ -469,6 +469,148 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    /**
+     * Reviewer sign-off. A PLANNED row is work nobody has done yet, so it is the
+     * only thing there is to review — a DONE row is history, and a CANCELLED one
+     * is never going to be executed.
+     */
+    describe('approval', () => {
+        it('plans an activity unapproved, waiting for a reviewer', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', { lead_id: 'l1', subject: 'Call Karim' } as any, 'Asia/Dhaka');
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_approved: false }) }),
+            );
+        });
+
+        // Nothing to sign off on: the call already happened. Holding these back
+        // would put every logged conversation in the reviewer's queue.
+        it('logs a completed activity already approved', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({ id: 'ch1', code: 'CALL', is_active: true });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+
+            await service.create('t1', 'u1', {
+                lead_id: 'l1',
+                status: 'DONE',
+                summary: 'Spoke to Karim',
+                channel: 'CALL',
+            } as any, 'Asia/Dhaka');
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_approved: true }) }),
+            );
+        });
+
+        it('stamps the reviewer and the moment on approval', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'PLANNED', lead_id: 'l1' });
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', is_approved: true });
+
+            await service.setApproval('t1', 'reviewer-1', 'a1', true);
+
+            const data = db.crmActivity.update.mock.calls[0][0].data;
+            expect(data.is_approved).toBe(true);
+            expect(data.approved_by).toBe('reviewer-1');
+            expect(data.approved_at).toBeInstanceOf(Date);
+        });
+
+        // Withdrawing sign-off has to clear the stamp too, or the row keeps
+        // claiming a reviewer approved it.
+        it('clears the stamp when approval is withdrawn', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'PLANNED', lead_id: 'l1' });
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', is_approved: false });
+
+            await service.setApproval('t1', 'reviewer-1', 'a1', false);
+
+            expect(db.crmActivity.update.mock.calls[0][0].data).toEqual({
+                is_approved: false,
+                approved_by: null,
+                approved_at: null,
+            });
+        });
+
+        it('refuses to approve an activity that is already done', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'DONE' });
+            await expect(service.setApproval('t1', 'u1', 'a1', true)).rejects.toThrow(BadRequestException);
+        });
+
+        it('404s an unknown activity', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            await expect(service.setApproval('t1', 'u1', 'nope', true)).rejects.toThrow(NotFoundException);
+        });
+
+        // The automated half of "only approved work gets executed": a cron can
+        // raise a hundred birthday greetings overnight, and a reviewer should see
+        // them before the team starts dialling.
+        it('raises cron-generated activities unapproved', async () => {
+            db.$queryRaw.mockResolvedValue([{ id: 'c1', tenant_id: 't1', name: 'Karim' }]);
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', customer_id: 'c1' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'p-bday', code: 'BIRTHDAY', name: 'Birthday', is_active: true,
+            });
+
+            await service.autoCreateBirthdayActivities();
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ origin: 'BIRTHDAY_CRON', is_approved: false }),
+                }),
+            );
+        });
+
+        // Closing the loop plans new work, and new work is reviewable work —
+        // otherwise a rep could approve their own next step by finishing this one.
+        it('plans the follow-on activity unapproved', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({
+                id: 'a1', tenant_id: 't1', status: 'PLANNED', lead_id: 'l1', direction: 'OUTBOUND',
+            });
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', status: 'DONE' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a2' });
+            taxonomy.resolveByIdOrCode.mockResolvedValue({
+                id: 'ch1', code: 'CALL', name: 'Call', is_active: true,
+            });
+
+            await service.complete('t1', 'u1', 'a1', {
+                channel: 'CALL',
+                summary: 'Spoke to Karim',
+                next: { subject: 'Chase the invoice', due_at: '2026-09-15T10:00:00Z' },
+            } as any, 'Asia/Dhaka');
+
+            expect(db.crmActivity.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ status: 'PLANNED', is_approved: false }),
+                }),
+            );
+        });
+
+        it('filters the list to approved activities', async () => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', approval: 'approved' });
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.is_approved).toBe(true);
+        });
+
+        it('filters the list to activities still awaiting a reviewer', async () => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', approval: 'pending' });
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.is_approved).toBe(false);
+        });
+
+        it('ignores an unrecognised approval filter rather than emptying the list', async () => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', approval: 'banana' as any });
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.is_approved).toBeUndefined();
+        });
+    });
+
     describe('findOne()', () => {
         it('404s a cross-tenant id', async () => {
             db.crmActivity.findFirst.mockResolvedValue(null);

@@ -674,6 +674,8 @@ export type CrmActivityFilters = {
     leadOwner?: string;
     purposeId?: string;
     channelId?: string;
+    /** Reviewer sign-off: 'approved' or 'pending'. Unset means both. */
+    approval?: 'approved' | 'pending';
     dueToday?: boolean;
     overdue?: boolean;
     dueFrom?: string;
@@ -1513,6 +1515,13 @@ export const api = {
         fetchWithAuth(`/crm/activities/${id}/complete`, {
             method: 'POST',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The reviewer's switch on a planned activity. */
+    setCrmActivityApproval: (id: string, approved: boolean) =>
+        fetchWithAuth(`/crm/activities/${id}/approval`, {
+            method: 'PATCH',
+            body: JSON.stringify({ approved }),
             headers: { 'Content-Type': 'application/json' },
         }),
     cancelCrmActivity: (id: string) =>

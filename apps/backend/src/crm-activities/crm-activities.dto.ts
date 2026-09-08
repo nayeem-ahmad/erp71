@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+    IsBoolean,
     IsDateString,
     IsIn,
     IsOptional,
@@ -23,6 +24,9 @@ const emptyToNull = ({ value }: { value: unknown }) =>
 
 export const ACTIVITY_STATUSES = ['PLANNED', 'DONE', 'CANCELLED'] as const;
 export type ActivityStatus = (typeof ACTIVITY_STATUSES)[number];
+
+export const ACTIVITY_APPROVALS = ['approved', 'pending'] as const;
+export type ActivityApprovalFilter = (typeof ACTIVITY_APPROVALS)[number];
 
 export const ACTIVITY_ORIGINS = ['MANUAL', 'BIRTHDAY_CRON', 'REORDER_CRON', 'IMPORT'] as const;
 export type ActivityOrigin = (typeof ACTIVITY_ORIGINS)[number];
@@ -85,6 +89,18 @@ export class CompleteCrmActivityDto {
     @ValidateNested()
     @Type(() => CreateNextActivityDto)
     next?: CreateNextActivityDto;
+}
+
+export class SetActivityApprovalDto {
+    /**
+     * `@Transform` before `@IsBoolean`, because a query-shaped client can post
+     * the string "false" — which is truthy. Without the transform, withdrawing
+     * approval would silently grant it, the one direction that must never fail
+     * open.
+     */
+    @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+    @IsBoolean()
+    approved: boolean;
 }
 
 /** Mirrors ACTIVITY_SORTABLE in the service — keep the two in step. */

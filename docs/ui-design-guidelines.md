@@ -134,6 +134,7 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 - **Errors: inline, per field** — `text-xs text-danger mt-1` + `border-danger` on the control, with a form-level banner only for submit/server errors. **`alert()` validation (CRM leads) is banned.**
 - **Layout:** `grid gap-3 sm:grid-cols-2`, full-width fields `sm:col-span-2`. Group with `CompactSection`, not bespoke cards.
 - **Footer:** right-aligned `Cancel` (secondary) + primary submit, `border-t pt-3`, sticky at the modal/sheet bottom for long forms. One placement rule; no more left/right/full-width variance.
+- **Checkbox vs. Switch:** `Checkbox` for a boolean submitted with a form; `Switch` (`button role="switch"`, blue-600 track when on) for a boolean that saves the moment it is flipped. A switch with a Save button reads as already saved, and a checkbox that saves silently reads as unsaved — pick by when the write happens, not by how it looks.
 
 ### 2.7 Components
 

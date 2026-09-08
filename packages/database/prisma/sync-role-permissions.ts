@@ -182,6 +182,21 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.USE_TEAM_CHAT,
         ],
     },
+    {
+        // Reviewer sign-off on planned CRM activities. Its own group, and its own
+        // permission, because approving is a different job from planning: a rep
+        // holding MANAGE_CRM_TASKS writes the plan, and must not also be the one
+        // who signs it off. `ROLE_DEFAULT_PERMISSIONS` gives it to Manager (and
+        // Owner, who holds everything); Cashier and Accountant get nothing here.
+        //
+        // It cannot join an existing CRM group: every role already holds
+        // MANAGE_CRM_TASKS, so the "holds none of its permissions" test would
+        // skip the group forever and the grant would reach nobody.
+        key: 'crm-activity-approval',
+        permissions: [
+            StorePermission.APPROVE_CRM_ACTIVITY,
+        ],
+    },
 ];
 
 export interface GroupResult {
