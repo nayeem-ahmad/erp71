@@ -65,7 +65,6 @@ export const purchasesMessages = {
             dailyOperations: 'Daily Operations',
             payables: 'Payables',
             orderFlow: 'Orders & Receipts',
-            imports: 'Imports (LC)',
             reports: 'Purchase Reports',
             setup: 'Purchase Setup',
             links: {

@@ -65,7 +65,6 @@ export const purchasesMessages = {
                 dailyOperations: "দৈনিক কার্যক্রম",
                 payables: "পাওনা",
                 orderFlow: "অর্ডার ও রসিদ",
-                imports: "আমদানি (এলসি)",
                 reports: "ক্রয় রিপোর্ট",
                 setup: "ক্রয় সেটআপ",
                 links: {

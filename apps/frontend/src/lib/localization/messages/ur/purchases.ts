@@ -65,7 +65,6 @@ export const purchasesMessages = {
             dailyOperations: "روزمرہ کے کام",
             payables: "واجبات",
             orderFlow: "آرڈرز اور وصولیاں",
-            imports: "درآمد (ایل سی)",
             reports: "خریداری کی رپورٹس",
             setup: "خریداری کا سیٹ اپ",
             links: {

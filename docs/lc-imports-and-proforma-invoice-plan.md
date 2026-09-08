@@ -491,11 +491,18 @@ Endpoints follow the existing REST shape: CRUD on shipments, `POST
   A **new** `PERMISSION_BACKFILL_GROUPS` entry is required — an existing group
   that has already reconciled will never pick up a new permission (see the
   header comment in `sync-role-permissions.ts:35-45`).
-- **Navigation** — a `purchase.imports` subgroup in `NAV_REGISTRY`
-  (`packages/shared-types/navigation.ts:99-114`) with LC Register, Shipments in
-  Transit, Landed Cost Sheet. **Then run
-  `npx tsx prisma/sync-nav-layout.ts --nodes=purchase.imports,...`** — saved
-  layouts are returned verbatim and will not otherwise show it.
+- **Navigation** — an `imports` **top-level module** in `NAV_REGISTRY`
+  (`packages/shared-types/navigation.ts`) with LC Register, Shipments in
+  Transit, Landed Cost Sheet. It started as a `purchase.imports` subgroup and
+  was promoted out of Purchase on 2026-09-08; the pages stay under
+  `/purchases/imports`, the way Expenses kept `/accounting/expenses`. **Then run
+  `npx tsx prisma/sync-nav-layout.ts --nodes=imports,imports.shipments,imports.lc-register,imports.duty-report`**
+  — saved layouts are returned verbatim and will not otherwise show it. Note
+  `addNavNodesToLayout` only adds: a layout saved before the split keeps its old
+  `purchase.imports` subgroup as well, so reset it from Navigation settings
+  instead if it has one. A layout that still names `purchase.imports*` fails
+  `validateNavLayout` (those ids are gone) and is already being replaced by the
+  code default at read time, so it needs nothing.
 - **Packaging** — register an `IMPORTS` `AddonModule`, gated the way
   `manufacturing` gates itself.
 
