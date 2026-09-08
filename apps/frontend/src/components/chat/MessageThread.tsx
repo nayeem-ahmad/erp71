@@ -5,6 +5,7 @@ import { FileText, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import ChatAvatar from './ChatAvatar';
 import { displayName, type ChatMessage } from './types';
+import { formatDate } from '@/lib/format';
 
 /** Mirrors the backend's CHAT_EDIT_WINDOW_MS, so the affordance matches the rule. */
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
@@ -58,12 +59,7 @@ export default function MessageThread({
     const timeLabel = (iso: string) =>
         new Date(iso).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
 
-    const dayLabel = (iso: string) =>
-        new Date(iso).toLocaleDateString(locale, {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-        });
+    const dayLabel = (iso: string) => formatDate(iso, locale);
 
     let lastDay = '';
 

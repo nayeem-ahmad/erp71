@@ -32,6 +32,7 @@ import {
     type StatusBadgeTone,
 } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { formatDate } from '@/lib/format';
 import CrmActivityComposer from '@/components/crm/CrmActivityComposer';
 
 interface CrmActivityRow {
@@ -268,7 +269,7 @@ export default function CrmActivitiesPage() {
                 return (
                     <span className={`inline-flex items-center gap-1 ${overdue ? 'font-bold text-red-600' : 'text-gray-600'}`}>
                         {overdue && <AlertTriangle className="h-3 w-3" />}
-                        {new Date(value).toLocaleDateString()}
+                        {formatDate(value)}
                     </span>
                 );
             },

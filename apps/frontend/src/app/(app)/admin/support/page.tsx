@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
+import { formatDate } from '@/lib/format';
 
 type ThreadUser = { id: string; name: string; email: string };
 
@@ -382,7 +383,7 @@ export default function AdminSupportPage() {
                                         <p className="text-xs text-gray-400 truncate mt-0.5">{thread.lastMessage.body}</p>
                                     )}
                                     <p className="text-[10px] text-gray-300 mt-1">
-                                        {new Date(thread.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        {formatDate(thread.updatedAt)}
                                     </p>
                                 </button>
                             ))

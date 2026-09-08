@@ -8,6 +8,7 @@ import {
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -129,7 +130,7 @@ export default function FiscalPeriodsPage() {
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-end text-gray-400 text-xs">
-                                            {p.locked_at ? new Date(p.locked_at).toLocaleDateString() : '—'}
+                                            {formatDate(p.locked_at)}
                                         </td>
                                         <td className="px-3 py-2 text-end">
                                             <button

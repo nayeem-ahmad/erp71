@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell } from '@/components/ui';
+import { formatDate as formatDisplayDate, formatDateTime } from '@/lib/format';
 
 type AiUsageLogEntry = {
     id: string;
@@ -52,7 +53,7 @@ function featureBreakdown(logs: AiUsageLogEntry[]): Array<{ feature: string; cre
 }
 
 function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return formatDateTime(iso);
 }
 
 function UsageBar({ used, limit }: { used: number; limit: number }) {
@@ -100,7 +101,7 @@ export default function AiCreditsPage() {
 
     const isFreePlan = summary.credits_limit === 0;
     const isNearLimit = !isFreePlan && summary.credits_remaining < summary.credits_limit * 0.1;
-    const periodLabel = `${new Date(summary.period_start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${new Date(summary.period_end).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+    const periodLabel = `${formatDisplayDate(summary.period_start)} – ${formatDisplayDate(summary.period_end)}`;
 
     return (
         <PageShell>

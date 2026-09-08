@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import { formatZonedDate } from '../common/tenant-time.util';
 import { DatabaseService } from '../database/database.service';
 import { CreateWarrantyClaimDto, UpdateWarrantyClaimStatusDto } from './warranty-claim.dto';
 
@@ -87,7 +88,7 @@ export class WarrantyClaimsService {
                 );
                 if (expiresAt < new Date()) {
                     throw new BadRequestException(
-                        `Warranty expired on ${expiresAt.toLocaleDateString()}.`,
+                        `Warranty expired on ${formatZonedDate(expiresAt)}.`,
                     );
                 }
             }
