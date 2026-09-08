@@ -1,5 +1,5 @@
 # Base stage
-FROM --platform=linux/amd64 node:22-bullseye AS base
+FROM --platform=linux/amd64 node:22-bookworm AS base
 WORKDIR /app
 
 # Dependency stage
