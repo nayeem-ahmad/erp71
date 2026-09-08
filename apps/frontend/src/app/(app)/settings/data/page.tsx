@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Database, Trash2, PackageOpen, PlugZap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Trash2, PlugZap } from 'lucide-react';
 import Link from 'next/link';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -12,21 +12,7 @@ import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { toast } from '@/lib/toast';
 import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
-
-interface DemoBatch {
-    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-    phase?: string | null;
-    processed: number;
-    total: number;
-    batch_number: number;
-    error?: string | null;
-}
-
-/** Number of completed demo-data loads, given the tenant's latest batch. */
-function getCompletedLoads(batch: DemoBatch | null): number {
-    if (!batch) return 0;
-    return batch.status === 'COMPLETED' ? batch.batch_number : batch.batch_number - 1;
-}
+import DemoDataCard from './DemoDataCard';
 
 export default function DataManagementPage() {
     const { t } = useI18n();
@@ -36,39 +22,14 @@ export default function DataManagementPage() {
     const [clearingMode, setClearingMode] = useState<'transactions' | 'all' | null>(null);
     const [clearDialog, setClearDialog] = useState<{ mode: 'transactions' | 'all' } | null>(null);
 
-    const [demoBatch, setDemoBatch] = useState<DemoBatch | null>(null);
-    const [demoConfirm, setDemoConfirm] = useState(false);
-    const [demoStarting, setDemoStarting] = useState(false);
-    const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Bumped after a clear so the demo card remounts and refetches: clearing
+    // wipes the batch history the card is showing.
+    const [demoCardKey, setDemoCardKey] = useState(0);
 
     const owner = isOwner(role);
     // Per-tenant switch: the import only appears for workspaces we have
     // enabled it for, and only for the owner.
     const { externalImport } = usePlatformFeatures();
-    const running = demoBatch?.status === 'RUNNING' || demoBatch?.status === 'PENDING' || demoStarting;
-    // "N previous loads": the latest completed batch number, or one less if a
-    // load is currently in flight.
-    const completedLoads = getCompletedLoads(demoBatch);
-
-    const fetchStatus = useCallback(async (): Promise<DemoBatch | null> => {
-        try {
-            return (await fetchWithAuth('/tenants/demo-data/status')) as DemoBatch | null;
-        } catch {
-            return null;
-        }
-    }, []);
-
-    const poll = useCallback(async () => {
-        const batch = await fetchStatus();
-        setDemoBatch(batch);
-        if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
-            pollTimer.current = setTimeout(poll, 2000);
-        } else if (batch?.status === 'COMPLETED') {
-            toast.success(dm.demoData.completed);
-        } else if (batch?.status === 'FAILED') {
-            toast.error(batch.error || dm.demoData.failed);
-        }
-    }, [fetchStatus, dm.demoData.completed, dm.demoData.failed]);
 
     useEffect(() => {
         api.getMe().then((me: any) => {
@@ -76,41 +37,7 @@ export default function DataManagementPage() {
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);
         }).catch(() => null);
-
-        // Resume polling if a load is already in flight (e.g. after a refresh).
-        fetchStatus().then((batch) => {
-            setDemoBatch(batch);
-            if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
-                pollTimer.current = setTimeout(poll, 2000);
-            }
-        });
-
-        return () => { if (pollTimer.current) clearTimeout(pollTimer.current); };
-    }, [fetchStatus, poll]);
-
-    const startDemo = async () => {
-        setDemoConfirm(false);
-        setDemoStarting(true);
-        try {
-            await fetchWithAuth('/tenants/demo-data', { method: 'POST' });
-            const batch = await fetchStatus();
-            setDemoBatch(batch);
-            pollTimer.current = setTimeout(poll, 2000);
-        } catch (err: any) {
-            // A 409 means a load is already running — recover by resuming polling
-            // rather than surfacing a hard error.
-            const batch = await fetchStatus();
-            if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
-                setDemoBatch(batch);
-                toast.error(dm.demoData.alreadyRunning);
-                pollTimer.current = setTimeout(poll, 2000);
-            } else {
-                toast.error(err?.message || dm.demoData.failed);
-            }
-        } finally {
-            setDemoStarting(false);
-        }
-    };
+    }, []);
 
     const handleClear = async () => {
         if (!clearDialog) return;
@@ -119,17 +46,13 @@ export default function DataManagementPage() {
             await fetchWithAuth(`/tenants/data?mode=${clearDialog.mode}`, { method: 'DELETE' });
             toast.success(clearDialog.mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions);
             setClearDialog(null);
-            setDemoBatch(null); // Clear Data also resets the demo-batch history.
+            setDemoCardKey((key) => key + 1); // Clear Data also resets the demo-batch history.
         } catch (err: any) {
             toast.error(err?.message || dm.clearData.failed);
         } finally {
             setClearingMode(null);
         }
     };
-
-    const progressPct = demoBatch && demoBatch.total > 0
-        ? Math.min(100, Math.round((demoBatch.processed / demoBatch.total) * 100))
-        : 0;
 
     return (
         <PageShell maxWidth="full">
@@ -173,48 +96,7 @@ export default function DataManagementPage() {
                             </div>
                         ) : null}
 
-                        {/* Load Demo Data */}
-                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 rounded-md bg-blue-50 mt-0.5">
-                                    <PackageOpen className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <h2 className="text-base font-bold text-gray-900">{dm.demoData.title}</h2>
-                                    <p className="text-sm text-gray-500">{dm.demoData.description}</p>
-                                </div>
-                            </div>
-
-                            {running ? (
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="font-medium text-gray-700">
-                                            {demoBatch?.phase || dm.demoData.generating}
-                                        </span>
-                                        {demoBatch && demoBatch.total > 0 && (
-                                            <span className="text-gray-500">
-                                                {dm.demoData.progress
-                                                    .replace('{processed}', String(demoBatch.processed))
-                                                    .replace('{total}', String(demoBatch.total))}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-600 transition-all duration-500"
-                                            style={{ width: `${progressPct}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
-                                <Button
-                                    onClick={() => setDemoConfirm(true)}
-                                    icon={<Database className="w-4 h-4" />}
-                                >
-                                    {dm.demoData.button}
-                                </Button>
-                            )}
-                        </div>
+                        <DemoDataCard key={demoCardKey} />
 
                         {/* Clear Data */}
                         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-5">
@@ -269,20 +151,6 @@ export default function DataManagementPage() {
                     </div>
                 )}
             </div>
-
-            {/* Load Demo Data confirmation (plain confirm — no type-to-confirm) */}
-            <ConfirmDialog
-                open={demoConfirm}
-                title={dm.demoData.confirmTitle}
-                prompt={completedLoads > 0
-                    ? dm.demoData.confirmAppend.replace('{count}', String(completedLoads))
-                    : dm.demoData.confirmFirst}
-                confirmLabel={dm.demoData.confirmButton}
-                cancelLabel={dm.dialog.cancel}
-                loading={demoStarting}
-                onConfirm={startDemo}
-                onCancel={() => setDemoConfirm(false)}
-            />
 
             {/* Clear Data confirmation (type-to-confirm) */}
             <ConfirmDialog

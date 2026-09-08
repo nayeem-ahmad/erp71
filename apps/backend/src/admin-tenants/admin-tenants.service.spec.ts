@@ -586,7 +586,7 @@ describe('AdminTenantsService', () => {
     it('delegates to DemoDataService and audits the load', async () => {
       const result = await service.loadDemoData('t-1', 'admin-1');
 
-      expect(demoDataService.startBatchForTenant).toHaveBeenCalledWith('t-1');
+      expect(demoDataService.startBatchForTenant).toHaveBeenCalledWith('t-1', undefined);
       expect(result).toEqual({ batchId: 'batch-1', batchNumber: 1 });
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.demo_data.load',
@@ -595,6 +595,12 @@ describe('AdminTenantsService', () => {
         't-1',
         expect.objectContaining({ batchId: 'batch-1', batchNumber: 1 }),
       );
+    });
+
+    it('passes the admin\'s load options through to the generator', async () => {
+      const options = { months: 3, modules: ['crm'], includeAnomalies: false };
+      await service.loadDemoData('t-1', 'admin-1', options);
+      expect(demoDataService.startBatchForTenant).toHaveBeenCalledWith('t-1', options);
     });
 
     it('returns the latest batch for status polling', async () => {

@@ -28,6 +28,7 @@ import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-a
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
+import type { DemoDataOptionsInput } from '../demo-data/generator/options';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import {
     isEditableLedgerEvent,
@@ -613,15 +614,15 @@ export class AdminTenantsService {
         return { business_type: tenant.business_type, ...summary };
     }
 
-    /** Kick off a six-month demo-data load for an arbitrary tenant (admin). */
-    async loadDemoData(tenantId: string, adminUserId: string) {
-        const result = await this.demoDataService.startBatchForTenant(tenantId);
+    /** Kick off a demo-data load for an arbitrary tenant (admin). */
+    async loadDemoData(tenantId: string, adminUserId: string, options?: DemoDataOptionsInput) {
+        const result = await this.demoDataService.startBatchForTenant(tenantId, options);
         await this.auditService.log(
             'tenant.demo_data.load',
             'Tenant',
             { userId: adminUserId, tenantId },
             tenantId,
-            { batchId: result.batchId, batchNumber: result.batchNumber },
+            { batchId: result.batchId, batchNumber: result.batchNumber, options: result.options },
         );
         return result;
     }
