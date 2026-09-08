@@ -25,10 +25,12 @@ import { PipelineFunnel, type FunnelStage } from '@/components/dashboard/Pipelin
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import { ActivityHeatmap, type ActivityHeatmapPoint } from '@/components/dashboard/ActivityHeatmap';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
+import { useCrmMineOnly } from '@/lib/crm-scope';
 import type { DashboardIdentity } from './dashboard-identity';
 
 type OverviewResponse = {
-    filters: { from: string; to: string };
+    filters: { from: string; to: string; mine: boolean };
     pipeline: {
         counts: Record<string, number>;
         open: number;
@@ -80,7 +82,7 @@ type OverviewResponse = {
 };
 
 type HeatmapResponse = {
-    filters: { from: string; to: string };
+    filters: { from: string; to: string; mine: boolean };
     points: ActivityHeatmapPoint[];
     max: { done: number; planned: number };
     totals: { done: number; planned: number };
@@ -129,7 +131,16 @@ export default function CrmDashboard({
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
     const crm = copy.crm;
+    const scopeCopy = t.crm.scope;
     const leadStatusLabels = t.crm.leads.statuses as Record<string, string>;
+
+    /**
+     * The CRM-wide "only mine" preference. `scopeReady` gates the first request:
+     * until the stored choice is read, firing one would paint the whole team's
+     * numbers and then replace them — see `useCrmMineOnly`.
+     */
+    const { mineOnly, setMineOnly, ready: scopeReady } = useCrmMineOnly();
+    const scope = mineOnly ? { mine: true as const } : undefined;
 
     const {
         range,
@@ -142,9 +153,14 @@ export default function CrmDashboard({
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
-        fetchOverview: (window) => api.getCrmDashboardOverview(window),
-        fetchTrends: (window) => api.getCrmDashboardTrends(window),
+        fetchOverview: (window) => api.getCrmDashboardOverview({ ...window, ...scope }),
+        fetchTrends: (window) => api.getCrmDashboardTrends({ ...window, ...scope }),
         unavailableMessage: crm.overviewUnavailable,
+        // Flipping the scope re-asks all three questions.
+        reloadKey: String(mineOnly),
+        // And nothing is asked until the stored scope is in, so a return visit
+        // never paints the whole team's numbers before replacing them.
+        enabled: scopeReady,
     });
 
     /**
@@ -158,10 +174,18 @@ export default function CrmDashboard({
     const today = useMemo(() => todayInTenantZone(), []);
 
     useEffect(() => {
+        // Same gate as the overview: the calendar is one of "my numbers" too, and
+        // drawing the team's squares first only to redraw them is worse than a
+        // beat of the skeleton.
+        if (!scopeReady) return;
         let cancelled = false;
+        setHeatmapLoading(true);
         void (async () => {
             try {
-                const result = await api.getCrmDashboardActivityHeatmap(activityHeatmapWindow());
+                const result = await api.getCrmDashboardActivityHeatmap({
+                    ...activityHeatmapWindow(),
+                    ...(mineOnly ? { mine: true } : {}),
+                });
                 if (!cancelled) setHeatmap(result);
             } catch {
                 if (!cancelled) setHeatmap(null);
@@ -172,7 +196,7 @@ export default function CrmDashboard({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [scopeReady, mineOnly]);
 
     const pipeline = overview?.pipeline;
     const followUps = overview?.follow_ups;
@@ -350,6 +374,15 @@ export default function CrmDashboard({
             subtitle={crm.subtitle}
             range={range}
             onRangeChange={setRange}
+            toolbar={
+                <MineOnlyToggle
+                    size="sm"
+                    value={mineOnly}
+                    onChange={setMineOnly}
+                    label={scopeCopy.mineOnly}
+                    title={scopeCopy.mineOnlyHint}
+                />
+            }
             error={error}
         >
             <AttentionSection

@@ -59,6 +59,22 @@ function clampWindow(window: DateWindow, maxDays: number): DateWindow {
 }
 
 /**
+ * The "only my numbers" narrowing, as a Prisma fragment.
+ *
+ * Empty when the dashboard is unscoped, so every `where` below can spread it
+ * unconditionally rather than branching. `ownerId` is resolved from the session
+ * in the controller and is never a value the client supplied.
+ */
+function ownedBy(ownerId: string | undefined): { assigned_to?: string } {
+    return ownerId ? { assigned_to: ownerId } : {};
+}
+
+/** The same narrowing for campaigns, which have a creator rather than an owner. */
+function createdBy(ownerId: string | undefined): { created_by?: string } {
+    return ownerId ? { created_by: ownerId } : {};
+}
+
+/**
  * Aggregates for the CRM dashboard — the pipeline half of CRM, in one request.
  *
  * A dedicated service rather than another method on `CrmLeadsService` because the
@@ -69,20 +85,29 @@ function clampWindow(window: DateWindow, maxDays: number): DateWindow {
 export class CrmDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    async getOverview(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+    /**
+     * @param ownerId When set, every panel counts only what this user owns — the
+     * "only mine" scope. Resolved from the session by the controller.
+     */
+    async getOverview(
+        tenantId: string,
+        query: CrmDashboardQueryDto,
+        timezone: string,
+        ownerId?: string,
+    ) {
         const window = resolveDateWindow(query, timezone);
 
         const [pipeline, followUps, activity, sources, owners, campaigns] = await Promise.all([
-            this.getPipeline(tenantId, window),
-            this.getFollowUps(tenantId, window),
-            this.getActivity(tenantId, window),
-            this.getSources(tenantId, window),
-            this.getOwners(tenantId, window),
-            this.getCampaigns(tenantId, window),
+            this.getPipeline(tenantId, window, ownerId),
+            this.getFollowUps(tenantId, window, ownerId),
+            this.getActivity(tenantId, window, ownerId),
+            this.getSources(tenantId, window, ownerId),
+            this.getOwners(tenantId, window, ownerId),
+            this.getCampaigns(tenantId, window, ownerId),
         ]);
 
         return {
-            filters: { from: window.from, to: window.to },
+            filters: { from: window.from, to: window.to, mine: Boolean(ownerId) },
             pipeline,
             follow_ups: followUps,
             activity,
@@ -96,34 +121,42 @@ export class CrmDashboardService {
      * Stage counts are the whole book — an open pipeline is a stock, and a window
      * on it would answer a question nobody asked. Only the flows below are dated.
      */
-    private async getPipeline(tenantId: string, window: DateWindow) {
+    private async getPipeline(tenantId: string, window: DateWindow, ownerId?: string) {
         const staleBefore = staleLeadCutoff();
 
         const openStatuses = [...OPEN_LEAD_STATUSES];
         const closedInWindow = { gte: window.fromDate, lte: window.toDate };
+        const mine = ownedBy(ownerId);
 
         const [grouped, createdInPeriod, converted, lost, unassigned, stale] = await Promise.all([
             this.db.lead.groupBy({
                 by: ['status'],
-                where: { tenant_id: tenantId },
+                where: { tenant_id: tenantId, ...mine },
                 _count: { _all: true },
             }),
             this.db.lead.count({
-                where: { tenant_id: tenantId, created_at: closedInWindow },
+                where: { tenant_id: tenantId, ...mine, created_at: closedInWindow },
             }),
             this.db.lead.findMany({
-                where: { tenant_id: tenantId, status: LeadStatus.CONVERTED, closed_at: closedInWindow },
+                where: { tenant_id: tenantId, ...mine, status: LeadStatus.CONVERTED, closed_at: closedInWindow },
                 select: { created_at: true, closed_at: true },
             }),
             this.db.lead.count({
-                where: { tenant_id: tenantId, status: LeadStatus.LOST, closed_at: closedInWindow },
+                where: { tenant_id: tenantId, ...mine, status: LeadStatus.LOST, closed_at: closedInWindow },
             }),
-            this.db.lead.count({
-                where: { tenant_id: tenantId, status: { in: openStatuses }, assigned_to: null },
-            }),
+            // Not queried under "only mine": a lead with no owner is by
+            // definition not yours, so the answer is 0 without asking. Spreading
+            // `mine` here would also collide with `assigned_to: null` and quietly
+            // count every open lead you own instead.
+            ownerId
+                ? Promise.resolve(0)
+                : this.db.lead.count({
+                    where: { tenant_id: tenantId, status: { in: openStatuses }, assigned_to: null },
+                }),
             this.db.lead.count({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: { in: openStatuses },
                     // Shared with GET /crm/leads?staleDays=N, so the tile's "View
                     // all" opens exactly the rows counted here rather than a list
@@ -160,8 +193,9 @@ export class CrmDashboardService {
         };
     }
 
-    private async getFollowUps(tenantId: string, window: DateWindow) {
+    private async getFollowUps(tenantId: string, window: DateWindow, ownerId?: string) {
         const { gte: today, lt: tomorrow } = zonedTodayWindow(window.timezone);
+        const mine = ownedBy(ownerId);
 
         // Reads CrmActivity, not CrmFollowUp, since R2. That is the point of the
         // merge for this card: a lead's `next_step` is a PLANNED activity now, so
@@ -173,15 +207,16 @@ export class CrmDashboardService {
         // and one logged straight from a call never does.
         const [dueToday, overdue, totalPending, completed] = await Promise.all([
             this.db.crmActivity.count({
-                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { gte: today, lt: tomorrow } },
+                where: { tenant_id: tenantId, ...mine, status: 'PLANNED', due_at: { gte: today, lt: tomorrow } },
             }),
             this.db.crmActivity.count({
-                where: { tenant_id: tenantId, status: 'PLANNED', due_at: { lt: today } },
+                where: { tenant_id: tenantId, ...mine, status: 'PLANNED', due_at: { lt: today } },
             }),
-            this.db.crmActivity.count({ where: { tenant_id: tenantId, status: 'PLANNED' } }),
+            this.db.crmActivity.count({ where: { tenant_id: tenantId, ...mine, status: 'PLANNED' } }),
             this.db.crmActivity.count({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: 'DONE',
                     subject: { not: null },
                     completed_at: { gte: window.fromDate, lte: window.toDate },
@@ -197,7 +232,7 @@ export class CrmDashboardService {
         };
     }
 
-    private async getActivity(tenantId: string, window: DateWindow) {
+    private async getActivity(tenantId: string, window: DateWindow, ownerId?: string) {
         const created = { gte: window.fromDate, lte: window.toDate };
 
         // A "logged touch" is a DONE activity that went out through a channel.
@@ -207,6 +242,7 @@ export class CrmDashboardService {
         // completed and logged — that is the closed loop, counted once in each.
         const done = {
             tenant_id: tenantId,
+            ...ownedBy(ownerId),
             status: 'DONE',
             channel_id: { not: null },
             completed_at: created,
@@ -259,18 +295,19 @@ export class CrmDashboardService {
      * that closed in it — "where did this month's pipeline come from" is the
      * question a source mix answers, and it needs no close date to be honest.
      */
-    private async getSources(tenantId: string, window: DateWindow) {
+    private async getSources(tenantId: string, window: DateWindow, ownerId?: string) {
         const created = { gte: window.fromDate, lte: window.toDate };
+        const mine = ownedBy(ownerId);
 
         const [grouped, convertedGrouped] = await Promise.all([
             this.db.lead.groupBy({
                 by: ['source_id'],
-                where: { tenant_id: tenantId, created_at: created },
+                where: { tenant_id: tenantId, ...mine, created_at: created },
                 _count: { _all: true },
             }),
             this.db.lead.groupBy({
                 by: ['source_id'],
-                where: { tenant_id: tenantId, created_at: created, status: LeadStatus.CONVERTED },
+                where: { tenant_id: tenantId, ...mine, created_at: created, status: LeadStatus.CONVERTED },
                 _count: { _all: true },
             }),
         ]);
@@ -305,14 +342,18 @@ export class CrmDashboardService {
             .slice(0, RANK_LIMIT);
     }
 
-    private async getOwners(tenantId: string, window: DateWindow) {
+    private async getOwners(tenantId: string, window: DateWindow, ownerId?: string) {
         const today = startOfZonedToday(window.timezone);
         const openStatuses = [...OPEN_LEAD_STATUSES];
+        // Under "only mine" the board is one row — the caller's own. `assigned_to`
+        // is pinned to the id rather than merely `not: null`, so the groupBys
+        // cannot fall back to the whole team.
+        const owned = ownerId ? { assigned_to: ownerId } : { assigned_to: { not: null } };
 
         const [openGrouped, convertedGrouped, overdueGrouped] = await Promise.all([
             this.db.lead.groupBy({
                 by: ['assigned_to'],
-                where: { tenant_id: tenantId, status: { in: openStatuses }, assigned_to: { not: null } },
+                where: { tenant_id: tenantId, status: { in: openStatuses }, ...owned },
                 _count: { _all: true },
             }),
             this.db.lead.groupBy({
@@ -321,7 +362,7 @@ export class CrmDashboardService {
                     tenant_id: tenantId,
                     status: LeadStatus.CONVERTED,
                     closed_at: { gte: window.fromDate, lte: window.toDate },
-                    assigned_to: { not: null },
+                    ...owned,
                 },
                 _count: { _all: true },
             }),
@@ -331,7 +372,7 @@ export class CrmDashboardService {
                     tenant_id: tenantId,
                     status: 'PLANNED',
                     due_at: { lt: today },
-                    assigned_to: { not: null },
+                    ...owned,
                 },
                 _count: { _all: true },
             }),
@@ -370,12 +411,17 @@ export class CrmDashboardService {
             .slice(0, RANK_LIMIT);
     }
 
-    private async getCampaigns(tenantId: string, window: DateWindow) {
+    /**
+     * Scoped by `created_by` rather than an owner: a campaign has no assignee, and
+     * "mine" for a blast is the one you sent.
+     */
+    private async getCampaigns(tenantId: string, window: DateWindow, ownerId?: string) {
         const sentInWindow = { gte: window.fromDate, lte: window.toDate };
+        const mine = createdBy(ownerId);
 
         const [totals, recent] = await Promise.all([
             this.db.crmCampaign.aggregate({
-                where: { tenant_id: tenantId, sent_at: sentInWindow },
+                where: { tenant_id: tenantId, ...mine, sent_at: sentInWindow },
                 _count: { _all: true },
                 _sum: {
                     delivered_count: true,
@@ -385,7 +431,7 @@ export class CrmDashboardService {
                 },
             }),
             this.db.crmCampaign.findMany({
-                where: { tenant_id: tenantId },
+                where: { tenant_id: tenantId, ...mine },
                 orderBy: { created_at: 'desc' },
                 take: RECENT_CAMPAIGNS,
                 select: {
@@ -415,18 +461,25 @@ export class CrmDashboardService {
      * with `date_trunc`, the same way the accounting trends do it: at CRM volumes
      * the row count is small, and it keeps day boundaries on one clock.
      */
-    async getTrends(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+    async getTrends(
+        tenantId: string,
+        query: CrmDashboardQueryDto,
+        timezone: string,
+        ownerId?: string,
+    ) {
         const window = resolveDateWindow(query, timezone);
         const range = { gte: window.fromDate, lte: window.toDate };
+        const mine = ownedBy(ownerId);
 
         const [created, conversations, converted, completedFollowUps] = await Promise.all([
             this.db.lead.findMany({
-                where: { tenant_id: tenantId, created_at: range },
+                where: { tenant_id: tenantId, ...mine, created_at: range },
                 select: { created_at: true },
             }),
             this.db.crmActivity.findMany({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: 'DONE',
                     channel_id: { not: null },
                     completed_at: range,
@@ -434,12 +487,13 @@ export class CrmDashboardService {
                 select: { completed_at: true },
             }),
             this.db.lead.findMany({
-                where: { tenant_id: tenantId, status: LeadStatus.CONVERTED, closed_at: range },
+                where: { tenant_id: tenantId, ...mine, status: LeadStatus.CONVERTED, closed_at: range },
                 select: { closed_at: true },
             }),
             this.db.crmActivity.findMany({
                 where: {
                     tenant_id: tenantId,
+                    ...mine,
                     status: 'DONE',
                     subject: { not: null },
                     completed_at: range,
@@ -485,7 +539,10 @@ export class CrmDashboardService {
         for (const row of converted) bucket(row.closed_at, 'leads_converted');
         for (const row of completedFollowUps) bucket(row.completed_at, 'follow_ups_completed');
 
-        return { filters: { from: window.from, to: window.to }, points: [...points.values()] };
+        return {
+            filters: { from: window.from, to: window.to, mine: Boolean(ownerId) },
+            points: [...points.values()],
+        };
     }
 
     /**
@@ -503,17 +560,23 @@ export class CrmDashboardService {
      * `completed_at`, PLANNED by `due_at`. A PLANNED row with no due date has no
      * day to sit on and is left out; CANCELLED rows are not activity at all.
      */
-    async getActivityHeatmap(tenantId: string, query: CrmDashboardQueryDto, timezone: string) {
+    async getActivityHeatmap(
+        tenantId: string,
+        query: CrmDashboardQueryDto,
+        timezone: string,
+        ownerId?: string,
+    ) {
         const window = clampWindow(resolveDateWindow(query, timezone), HEATMAP_MAX_DAYS);
         const range = { gte: window.fromDate, lte: window.toDate };
+        const mine = ownedBy(ownerId);
 
         const [done, planned] = await Promise.all([
             this.db.crmActivity.findMany({
-                where: { tenant_id: tenantId, status: 'DONE', completed_at: range },
+                where: { tenant_id: tenantId, ...mine, status: 'DONE', completed_at: range },
                 select: { completed_at: true },
             }),
             this.db.crmActivity.findMany({
-                where: { tenant_id: tenantId, status: 'PLANNED', due_at: range },
+                where: { tenant_id: tenantId, ...mine, status: 'PLANNED', due_at: range },
                 select: { due_at: true },
             }),
         ]);
@@ -537,7 +600,7 @@ export class CrmDashboardService {
         // against real volume — a tenant logging three calls a day should still
         // see contrast, not a uniformly pale grid scaled to somebody else's max.
         return {
-            filters: { from: window.from, to: window.to },
+            filters: { from: window.from, to: window.to, mine: Boolean(ownerId) },
             points,
             max: {
                 done: points.reduce((peak, point) => Math.max(peak, point.done), 0),
