@@ -8,6 +8,7 @@ import { classifyPaymentMode } from './classify-payment-mode';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
+import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
@@ -51,6 +52,12 @@ export class SalesService {
         }
 
         const result = await this.db.$transaction(async (tx) => {
+            // Resolve a quick-created customer first: credit limits, loyalty
+            // redemption and the postings below all key off `customerId`.
+            if (dto.newCustomer) {
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+            }
+
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
 
@@ -492,6 +499,12 @@ export class SalesService {
             });
             if (foundProducts !== productIds.length) {
                 throw new BadRequestException('One or more products on this draft no longer exist.');
+            }
+
+            // A parked draft is picked up again later, so its quick-created
+            // customer is saved with it rather than deferred to finalisation.
+            if (dto.newCustomer) {
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
             }
 
             const referenceNumber = dto.referenceNumber

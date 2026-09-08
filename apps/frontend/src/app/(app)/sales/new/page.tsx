@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { formatBDT, toDatetimeLocal } from '@/lib/format';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
+import { newCustomerPayload, type NewCustomerDraft } from '../components/CustomerSelection';
 import SaleEntryLayout, {
     computeSaleTotals,
     EMPTY_ADJUSTMENTS,
@@ -49,6 +50,8 @@ function NewSalePageContent() {
         clearCart,
     } = useNewSaleCart();
 
+    const [customerDraft, setCustomerDraft] = useState<NewCustomerDraft | null>(null);
+    const [customerDraftNameInvalid, setCustomerDraftNameInvalid] = useState(false);
     const [salesSettings, setSalesSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -267,6 +270,10 @@ function NewSalePageContent() {
             errors.push('Please add at least one item to the sale');
         }
 
+        if (customerDraft && !customerDraft.name.trim()) {
+            errors.push(t.shared.customerNameRequiredInline);
+        }
+
         const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
         const balance = totals.total - totalPaid;
         const creditDue = creditDueAmount(totals.total, totalPaid);
@@ -293,7 +300,8 @@ function NewSalePageContent() {
         // the quotation or order it settles.
         quotationId: source?.kind === 'quotation' ? source.id : undefined,
         salesOrderId: source?.kind === 'salesOrder' ? source.id : undefined,
-        customerId: customer?.id,
+        customerId: customerDraft ? undefined : customer?.id,
+        newCustomer: newCustomerPayload(customerDraft),
         items: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -316,6 +324,7 @@ function NewSalePageContent() {
         e.preventDefault();
 
         const validation = validateCheckout();
+        setCustomerDraftNameInvalid(!!customerDraft && !customerDraft.name.trim());
         if (!validation.valid) {
             toast.error(validation.errors.join('\n'));
             return;
@@ -327,6 +336,8 @@ function NewSalePageContent() {
 
             // Clear cart and show success
             clearCart();
+            setCustomerDraft(null);
+            setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
@@ -347,10 +358,21 @@ function NewSalePageContent() {
             return;
         }
 
+        // The customer is created with the draft, so the name is needed even
+        // though nothing else about a parked draft is validated.
+        if (customerDraft && !customerDraft.name.trim()) {
+            setCustomerDraftNameInvalid(true);
+            toast.error(t.shared.customerNameRequiredInline);
+            return;
+        }
+        setCustomerDraftNameInvalid(false);
+
         setSavingDraft(true);
         try {
             const response = await api.createNewSale(buildSaleData(true));
             clearCart();
+            setCustomerDraft(null);
+            setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
             toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
@@ -417,6 +439,9 @@ function NewSalePageContent() {
             saleDate={saleDate}
             setSaleDate={setSaleDate}
             customer={customer}
+            customerDraft={customerDraft}
+            setCustomerDraft={setCustomerDraft}
+            customerDraftNameInvalid={customerDraftNameInvalid}
             setCustomer={setCustomer}
             items={items}
             onUpdateItem={updateItem}

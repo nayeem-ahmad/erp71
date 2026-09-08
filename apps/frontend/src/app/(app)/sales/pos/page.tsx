@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, History, Receipt } from 'lucide-react';
+import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, UserPlus, History, Receipt } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -12,8 +12,16 @@ import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db';
 import { useI18n } from '@/lib/i18n';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
+import {
+    emptyCustomerDraft,
+    newCustomerPayload,
+    type NewCustomerDraft,
+} from '../components/CustomerSelection';
 import { toast } from '@/lib/toast';
 import { getAccessToken, getWorkspaceItem } from '@/lib/session-store';
+
+/** POS runs its own rounded field style rather than the entry screens'. */
+const POS_DRAFT_FIELD_CLASS = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 min-h-touch sm:min-h-0';
 
 function interpolate(template: string, values: Record<string, string | number>): string {
     return Object.entries(values).reduce(
@@ -82,6 +90,8 @@ export default function POSPage() {
     const [discountApplying, setDiscountApplying] = useState(false);
 
     const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+    /** Non-null while the checkout is capturing a customer that does not exist yet. */
+    const [customerDraft, setCustomerDraft] = useState<NewCustomerDraft | null>(null);
     const [customerSearch, setCustomerSearch] = useState('');
     const [customerResults, setCustomerResults] = useState<any[]>([]);
     const [loyaltySettings, setLoyaltySettings] = useState<any>(null);
@@ -377,6 +387,7 @@ export default function POSPage() {
         setDiscountCodeInput('');
         setDiscountError('');
         setSelectedCustomer(null);
+        setCustomerDraft(null);
         setCustomerSearch('');
         setCustomerResults([]);
         setRedeemPointsEnabled(false);
@@ -399,6 +410,11 @@ export default function POSPage() {
             return;
         }
 
+        if (customerDraft && !customerDraft.name.trim()) {
+            addNotification(t.shared.customerNameRequiredInline, 'error');
+            return;
+        }
+
         const payments = [];
         if (cashAmount > 0) payments.push({ paymentMethod: 'CASH', amount: cashAmount });
         if (bkashAmount > 0) payments.push({ paymentMethod: 'BKASH', amount: bkashAmount });
@@ -413,7 +429,9 @@ export default function POSPage() {
             storeId: getWorkspaceItem('store_id') || '',
             ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
             ...(counterId ? { counterId } : {}),
-            ...(selectedCustomer?.id ? { customerId: selectedCustomer.id } : {}),
+            ...(customerDraft
+                ? { newCustomer: newCustomerPayload(customerDraft) }
+                : selectedCustomer?.id ? { customerId: selectedCustomer.id } : {}),
             ...(discountAmount > 0 ? { discountAmount } : {}),
             ...(effectivePointsToRedeem > 0 ? { pointsToRedeem: effectivePointsToRedeem } : {}),
             totalAmount: total,
@@ -444,6 +462,8 @@ export default function POSPage() {
                 await refreshPendingCount();
                 addNotification(t.pos.notifications.saleOffline, 'info');
                 setCart([]);
+                setSelectedCustomer(null);
+                setCustomerDraft(null);
                 setShowCheckout(false);
             } catch {
                 addNotification(t.pos.notifications.offlineFailed, 'error');
@@ -474,6 +494,7 @@ export default function POSPage() {
             setAppliedDiscount(null);
             setDiscountCodeInput('');
             setSelectedCustomer(null);
+            setCustomerDraft(null);
             setRedeemPointsEnabled(false);
             setPointsToRedeem(0);
             setShowCheckout(false);
@@ -1014,7 +1035,39 @@ export default function POSPage() {
                             {/* Customer & Loyalty */}
                             <div className="space-y-3">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.pos.payment.customerOptional}</label>
-                                {selectedCustomer ? (
+                                {customerDraft ? (
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                                                {t.shared.newCustomer}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCustomerDraft(null)}
+                                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                                {t.shared.useExisting}
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={customerDraft.name}
+                                            onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })}
+                                            placeholder={t.shared.customerNamePlaceholder}
+                                            aria-label={t.shared.customerNamePlaceholder}
+                                            className={POS_DRAFT_FIELD_CLASS}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={customerDraft.phone}
+                                            onChange={(e) => setCustomerDraft({ ...customerDraft, phone: e.target.value })}
+                                            placeholder={t.common.phone}
+                                            aria-label={t.common.phone}
+                                            className={POS_DRAFT_FIELD_CLASS}
+                                        />
+                                    </div>
+                                ) : selectedCustomer ? (
                                     <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">{selectedCustomer.name || selectedCustomer.phone}</p>
@@ -1044,6 +1097,25 @@ export default function POSPage() {
                                             placeholder={t.pos.payment.searchCustomer}
                                             className="w-full rounded-xl border border-gray-100 bg-gray-50 ps-10 pe-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white"
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedCustomer(null);
+                                                setCustomerSearch('');
+                                                setCustomerResults([]);
+                                                setCustomerDraft({
+                                                    ...emptyCustomerDraft,
+                                                    // Whatever was typed is almost always the new
+                                                    // customer's name, so carry it into the form.
+                                                    name: customerSearch.trim(),
+                                                });
+                                            }}
+                                            className="absolute end-2 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-white hover:text-blue-600 min-h-touch sm:min-h-0"
+                                            title={t.shared.newCustomer}
+                                            aria-label={t.shared.newCustomer}
+                                        >
+                                            <UserPlus className="w-4 h-4" />
+                                        </button>
                                         {customerResults.length > 0 && (
                                             <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                                                 {customerResults.map((customer) => (

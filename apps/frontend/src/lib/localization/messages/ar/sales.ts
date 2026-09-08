@@ -1,5 +1,9 @@
 export const salesMessages = {
     shared: {
+        newCustomer: 'عميل جديد',
+        useExisting: 'استخدام عميل قائم',
+        customerNamePlaceholder: 'اسم العميل',
+        customerNameRequiredInline: 'اسم العميل مطلوب عند إنشاء عميل مباشرة.',
         walkIn: 'زبون عابر',
         walkInCustomer: 'زبون عابر',
         walkInDraft: 'مسودة زبون عابر',

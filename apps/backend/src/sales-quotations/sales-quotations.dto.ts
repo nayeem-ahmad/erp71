@@ -12,6 +12,7 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { InlineCustomerDto } from '../customers/customer.dto';
 
 /**
  * A quotation and a proforma invoice are the same record with a different name
@@ -108,6 +109,12 @@ export class CreateQuotationDto extends ProformaTermsDto {
     @IsOptional()
     @IsString()
     customerId?: string;
+
+    /** Quick-created customer, saved with the quote. See `InlineCustomerDto`. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => InlineCustomerDto)
+    newCustomer?: InlineCustomerDto;
 
     @IsArray()
     @ValidateNested({ each: true })

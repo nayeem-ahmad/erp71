@@ -5,7 +5,7 @@ import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
-import CustomerSelection from './CustomerSelection';
+import CustomerSelection, { type NewCustomerDraft } from './CustomerSelection';
 import TotalsFooter from './TotalsFooter';
 import PaymentSection from './PaymentSection';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
@@ -76,6 +76,13 @@ interface SaleEntryLayoutProps {
 
     customer: any;
     setCustomer: (customer: any) => void;
+    /**
+     * Quick-create state for the customer picker. Passing these turns on the
+     * "new customer" button; screens that only view a sale leave them out.
+     */
+    customerDraft?: NewCustomerDraft | null;
+    setCustomerDraft?: (draft: NewCustomerDraft | null) => void;
+    customerDraftNameInvalid?: boolean;
 
     items: LineItem[];
     onUpdateItem: (productId: string, updates: Partial<LineItem>) => void;
@@ -127,6 +134,9 @@ export default function SaleEntryLayout({
     setSaleDate,
     customer,
     setCustomer,
+    customerDraft = null,
+    setCustomerDraft,
+    customerDraftNameInvalid = false,
     items,
     onUpdateItem,
     onRemoveItem,
@@ -173,7 +183,14 @@ export default function SaleEntryLayout({
                 />
             }
             partyPicker={
-                <CustomerSelection customer={customer} setCustomer={setCustomer} readOnly={readOnly} />
+                <CustomerSelection
+                    customer={customer}
+                    setCustomer={setCustomer}
+                    readOnly={readOnly}
+                    draft={customerDraft}
+                    setDraft={setCustomerDraft}
+                    draftNameInvalid={customerDraftNameInvalid}
+                />
             }
             picker={
                 readOnly ? undefined : (
