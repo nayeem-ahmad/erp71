@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'Prospek Baharu',
             emptyMessage: 'Tiada prospek lagi',
+            accessDenied: 'Pelan anda tidak termasuk modul CRM, jadi prospek tidak dapat dipaparkan. Hubungi pentadbir anda untuk menaik taraf.',
             searchPlaceholder: 'Cari mengikut nama atau telefon...',
             allStatuses: 'Semua status',
             allSources: 'Semua sumber',

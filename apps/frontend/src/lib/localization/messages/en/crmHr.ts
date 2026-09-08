@@ -328,6 +328,7 @@ export const crmHrMessages = {
             },
             newLead: 'New Lead',
             emptyMessage: 'No leads yet',
+            accessDenied: 'Your plan does not include the CRM module, so leads cannot be shown. Contact your administrator to upgrade.',
             searchPlaceholder: 'Search by name or phone...',
             allStatuses: 'All statuses',
             allSources: 'All sources',

@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'عميل محتمل جديد',
             emptyMessage: 'لا يوجد عملاء محتملون بعد',
+            accessDenied: 'لا تتضمن باقتك وحدة إدارة العملاء، لذا لا يمكن عرض العملاء المحتملين. تواصل مع المسؤول للترقية.',
             searchPlaceholder: 'ابحث بالاسم أو الهاتف...',
             allStatuses: 'كل الحالات',
             allSources: 'كل المصادر',

@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "নতুন লিড",
             emptyMessage: "কোনো লিড নেই",
+            accessDenied: "আপনার প্ল্যানে সিআরএম মডিউল নেই, তাই লিড দেখানো যাচ্ছে না। আপগ্রেড করতে আপনার প্রশাসকের সঙ্গে যোগাযোগ করুন।",
             searchPlaceholder: "নাম বা ফোন দিয়ে খুঁজুন...",
             allStatuses: "সব স্ট্যাটাস",
             allSources: "সব উৎস",

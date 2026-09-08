@@ -26,6 +26,14 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+    // The page narrows on `instanceof ApiError`, so the mock has to export a real
+    // class rather than a jest.fn() — a plain Error would take the empty-list path.
+    ApiError: class ApiError extends Error {
+        constructor(message: string, public readonly status: number, public readonly code?: string) {
+            super(message);
+            this.name = 'ApiError';
+        }
+    },
     api: {
         getLeads: jest.fn(),
         getCustomFields: jest.fn().mockResolvedValue([]),
@@ -597,5 +605,61 @@ describe('LeadsPage — only mine', () => {
         for (const call of api.getLeads.mock.calls) {
             expect(call[0].mine).toBe(true);
         }
+    });
+});
+
+describe('LeadsPage — a denied list is not an empty one', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { ApiError } = require('@/lib/api');
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+    });
+
+    it('explains a 403 rather than showing "No leads yet"', async () => {
+        api.getLeads.mockRejectedValue(new ApiError('Forbidden', 403));
+
+        render(<LeadsPage />);
+
+        // Shown in the banner and reused as the table's empty text, so that the
+        // two can never contradict each other.
+        expect((await screen.findAllByText(/plan does not include the CRM module/i)).length).toBeGreaterThan(0);
+        // The whole point: the tenant must not be told their pipeline is empty
+        // when what actually happened is that the request was refused.
+        expect(screen.queryByText('No leads yet')).not.toBeInTheDocument();
+    });
+
+    it('shows the ordinary empty state when the tenant genuinely has no leads', async () => {
+        api.getLeads.mockResolvedValue({ items: [], total: 0 });
+
+        render(<LeadsPage />);
+
+        expect(await screen.findByText('No leads yet')).toBeInTheDocument();
+        expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0);
+    });
+
+    it('clears the notice once access is restored', async () => {
+        api.getLeads.mockRejectedValueOnce(new ApiError('Forbidden', 403));
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+
+        render(<LeadsPage />);
+        await screen.findAllByText(/plan does not include the CRM module/i);
+
+        fireEvent.click(screen.getAllByRole('button')[0]);
+
+        expect(await screen.findByText('Karim Traders')).toBeInTheDocument();
+        await waitFor(() =>
+            expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0),
+        );
+    });
+
+    it('does not mistake a non-permission failure for a plan problem', async () => {
+        api.getLeads.mockRejectedValue(new ApiError('Server error', 500));
+
+        render(<LeadsPage />);
+
+        expect(await screen.findByText('No leads yet')).toBeInTheDocument();
+        expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0);
     });
 });

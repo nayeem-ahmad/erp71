@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Neuer Lead",
             emptyMessage: "Noch keine Leads",
+            accessDenied: "Ihr Tarif enthält das CRM-Modul nicht, daher können keine Leads angezeigt werden. Wenden Sie sich zum Upgrade an Ihren Administrator.",
             searchPlaceholder: "Nach Name oder Telefon suchen...",
             allStatuses: "Alle Status",
             allSources: "Alle Quellen",

@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: 'نئی لیڈ',
             emptyMessage: 'ابھی کوئی لیڈ نہیں',
+            accessDenied: 'آپ کے پلان میں سی آر ایم ماڈیول شامل نہیں ہے، اس لیے لیڈز نہیں دکھائی جا سکتیں۔ اپ گریڈ کے لیے اپنے ایڈمنسٹریٹر سے رابطہ کریں۔',
             searchPlaceholder: 'نام یا فون سے تلاش کریں...',
             allStatuses: 'تمام حیثیتیں',
             allSources: 'تمام ذرائع',

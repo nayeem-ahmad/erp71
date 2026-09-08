@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -215,6 +215,10 @@ function LeadsPage() {
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
+    // A 403 is not an empty pipeline. Without this the two render identically
+    // ("No leads yet"), which is how a tenant missing the premiumCrm
+    // entitlement reads as lost data rather than as a plan that excludes CRM.
+    const [accessDenied, setAccessDenied] = useState(false);
     const [debouncedSearch, setDebouncedSearch] = useState('');
     // A search restored from the last visit is not typing: it is already the
     // term to query, so it applies with the first request rather than 300ms
@@ -369,10 +373,12 @@ function LeadsPage() {
             if (seq !== loadSeq.current) return;
             setLeads(data?.items ?? []);
             setTotal(data?.total ?? 0);
-        } catch {
+            setAccessDenied(false);
+        } catch (err: unknown) {
             if (seq !== loadSeq.current) return;
             setLeads([]);
             setTotal(0);
+            setAccessDenied(err instanceof ApiError && err.status === 403);
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
@@ -725,6 +731,12 @@ function LeadsPage() {
                 <CreatedRangeFilter value={createdRange} onChange={(next) => setFilter('createdRange', next)} />
             </div>
 
+            {accessDenied && (
+                <div className="mb-4 rounded-md border border-red-200 bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
+                    {m.accessDenied}
+                </div>
+            )}
+
             <DataTable<Lead>
                 tableId="crm-leads"
                 title={m.title}
@@ -746,9 +758,14 @@ function LeadsPage() {
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
                 emptyMessage={
-                    staleOnly
-                        ? fmt(m.noActivityEmpty, { days: staleDays })
-                        : m.emptyMessage
+                    // The table has its own empty text, so leaving it at the default
+                    // would print "No leads yet" directly under the notice that says
+                    // the list could not be read — the exact claim being corrected.
+                    accessDenied
+                        ? m.accessDenied
+                        : staleOnly
+                            ? fmt(m.noActivityEmpty, { days: staleDays })
+                            : m.emptyMessage
                 }
                 clearSelectionSignal={selectionEpoch}
                 bulkActions={bulkActions}

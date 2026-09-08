@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Nouvelle piste",
             emptyMessage: "Aucune piste pour l'instant",
+            accessDenied: "Votre forfait n'inclut pas le module CRM, les pistes ne peuvent donc pas être affichées. Contactez votre administrateur pour effectuer une mise à niveau.",
             searchPlaceholder: "Rechercher par nom ou téléphone...",
             allStatuses: "Tous les statuts",
             allSources: "Toutes les sources",

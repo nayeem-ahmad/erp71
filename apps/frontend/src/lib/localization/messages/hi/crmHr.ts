@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "नई लीड",
             emptyMessage: "अभी कोई लीड नहीं",
+            accessDenied: "आपके प्लान में सीआरएम मॉड्यूल शामिल नहीं है, इसलिए लीड नहीं दिखाई जा सकतीं। अपग्रेड के लिए अपने प्रशासक से संपर्क करें।",
             searchPlaceholder: "नाम या फ़ोन से खोजें...",
             allStatuses: "सभी स्थितियाँ",
             allSources: "सभी स्रोत",

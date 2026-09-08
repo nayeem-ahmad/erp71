@@ -324,6 +324,7 @@ export const crmHrMessages = {
             },
             newLead: "Nueva oportunidad",
             emptyMessage: "Aún no hay oportunidades",
+            accessDenied: "Tu plan no incluye el módulo CRM, por lo que no se pueden mostrar las oportunidades. Contacta con tu administrador para mejorarlo.",
             searchPlaceholder: "Buscar por nombre o teléfono...",
             allStatuses: "Todos los estados",
             allSources: "Todos los orígenes",
