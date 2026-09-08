@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useId, type ReactNode } from 'react';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { X, Search } from 'lucide-react';
+import AnchoredDropdown from './AnchoredDropdown';
 
 export interface PartyOption {
     id: string;
@@ -189,10 +190,7 @@ export default function PartySearchSelect({
                         )}
 
                         {showDropdown && (
-                            <div
-                                ref={dropdownRef}
-                                className="absolute top-full start-0 end-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
-                            >
+                            <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={256}>
                                 {loading ? (
                                     <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>
                                 ) : filtered.length === 0 ? (
@@ -213,7 +211,7 @@ export default function PartySearchSelect({
                                         </div>
                                     ))
                                 )}
-                            </div>
+                            </AnchoredDropdown>
                         )}
                     </div>
                     {action}
@@ -225,17 +223,53 @@ export default function PartySearchSelect({
     );
 }
 
-/** One dot-separated detail line under the picker, as used by both modules. */
-export function PartySummaryLine({ parts }: { parts: ReactNode[] }) {
-    const shown = parts.filter(Boolean);
+/** One captioned figure about the picked party — "Due ৳1,590.00". */
+export interface PartyDetail {
+    label: string;
+    value: ReactNode;
+    /** `warning` for money still owed, `danger` for a limit already breached. */
+    tone?: 'default' | 'warning' | 'danger';
+}
+
+const DETAIL_TONE: Record<NonNullable<PartyDetail['tone']>, string> = {
+    default: 'text-gray-800',
+    warning: 'text-amber-700',
+    danger: 'text-red-600',
+};
+
+/**
+ * The picked party's details under the box, each behind its own caption.
+ *
+ * These used to run together as one dot-separated grey line — "Anwar Chowdhury
+ * · 01700100057 · Due ৳1,590 · Limit ৳50,000" — where two of the four figures
+ * were bare numbers whose meaning had to be inferred from their size. Captions
+ * make each one identifiable at a glance, and the values carry the weight.
+ */
+export function PartySummaryCard({
+    name,
+    details,
+}: {
+    name: ReactNode;
+    details: (PartyDetail | null | false | undefined)[];
+}) {
+    const shown = details.filter(Boolean) as PartyDetail[];
     return (
-        <div className="px-1 text-[11px] text-gray-500 leading-snug">
-            {shown.map((part, index) => (
-                <span key={index}>
-                    {index > 0 && <span className="mx-1.5 text-gray-300">·</span>}
-                    {part}
-                </span>
-            ))}
+        <div className="rounded border bg-white px-2.5 py-1.5">
+            <div className="truncate text-sm font-medium text-gray-900">{name}</div>
+            {shown.length > 0 && (
+                <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+                    {shown.map((detail) => (
+                        <div key={detail.label} className="flex min-w-0 items-baseline gap-1">
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                {detail.label}
+                            </dt>
+                            <dd className={`truncate text-xs font-medium ${DETAIL_TONE[detail.tone ?? 'default']}`}>
+                                {detail.value}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            )}
         </div>
     );
 }

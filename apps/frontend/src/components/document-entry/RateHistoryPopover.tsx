@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
+import AnchoredDropdown from './AnchoredDropdown';
 import RateHistory, { type RateHistoryType } from './RateHistory';
 
 interface RateHistoryPopoverProps {
+    /** The box the panel hangs off — the entry bar's product field. */
+    anchorRef: React.RefObject<HTMLElement | null>;
     productId: string;
     /** Named in the header, so the operator knows which product they opened. */
     productName?: string;
@@ -33,6 +36,7 @@ const HEADINGS: Record<RateHistoryType, string> = {
  * cost a dialog's worth of mounting before the first number appeared.
  */
 export default function RateHistoryPopover({
+    anchorRef,
     productId,
     productName,
     type,
@@ -67,11 +71,14 @@ export default function RateHistoryPopover({
     const subtitle = [productName, partyName].filter(Boolean).join(' · ');
 
     return (
-        <div
-            ref={panelRef}
+        <AnchoredDropdown
+            anchorRef={anchorRef}
+            panelRef={panelRef}
+            matchAnchorWidth={false}
+            maxHeight={420}
             role="dialog"
             aria-label={HEADINGS[type]}
-            className="absolute top-full start-0 z-50 mt-1 w-[min(34rem,calc(100vw-1.5rem))] rounded border bg-white shadow-lg"
+            className="w-[min(34rem,calc(100vw-1.5rem))]"
         >
             <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
                 <div className="min-w-0">
@@ -103,6 +110,6 @@ export default function RateHistoryPopover({
                     }
                 />
             </div>
-        </div>
+        </AnchoredDropdown>
     );
 }
