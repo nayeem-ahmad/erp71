@@ -47,7 +47,34 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 30m
           script: |
+            set -euo pipefail
             cd /opt/erp71
             bash scripts/deploy.sh ${{ steps.target.outputs.branch }}
-            curl -sf https://api.erp71.com/api/v1/health
+
+            # The commit we just tried to ship. deploy.sh bakes this into the
+            # backend image as GIT_SHA, so /health reports what is actually
+            # running rather than what the repo happens to be checked out at.
+            EXPECTED="$(git rev-parse HEAD)"
+
+            # Give the new containers a moment to come up before asserting.
+            for i in $(seq 1 30); do
+              if curl -sf https://api.erp71.com/api/v1/health >/tmp/health.json 2>/dev/null; then break; fi
+              sleep 10
+            done
+
+            cat /tmp/health.json
+            echo
+
+            # A plain 200 is NOT proof of a deploy. When a build fails the old
+            # containers keep serving and answer 200 quite happily -- that is
+            # exactly how the #581 deploy on 2026-09-08 reported success while
+            # shipping nothing. Assert the running commit is the one we built.
+            LIVE="$(sed -n 's/.*"commit":"\([0-9a-f]*\)".*/\1/p' /tmp/health.json)"
+            if [ "$LIVE" != "$EXPECTED" ]; then
+              echo "DEPLOY FAILED: expected commit $EXPECTED but $LIVE is live." >&2
+              echo "The old containers are still serving; the rebuild did not take." >&2
+              exit 1
+            fi
+            echo "Verified live commit: $LIVE"
+
             curl -sf -o /dev/null -w "app HTTP %{http_code}\n" https://app.erp71.com/
