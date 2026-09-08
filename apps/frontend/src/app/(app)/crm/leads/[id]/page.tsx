@@ -4,9 +4,8 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Calendar, Trash2, User, MapPin, } from 'lucide-react';
+    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Trash2, User, MapPin, } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
@@ -352,19 +351,13 @@ export default function LeadDetailPage() {
                         )}
                     </div>
 
-                    {(lead.next_step || lead.next_step_date || lead.nextStepAssignee) && (
-                        <div className="rounded-lg border border-primary-border bg-primary-light p-4">
-                            <p className="text-xs font-semibold text-blue-700 mb-2">{m.fields.nextStepSection}</p>
-                            {lead.next_step && <p className="text-sm font-medium text-gray-800">{lead.next_step}</p>}
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-600 font-semibold">
-                                {lead.next_step_date && (
-                                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(lead.next_step_date)}</span>
-                                )}
-                                {lead.nextStepAssignee && <span>{m.fields.nextStepAssignedTo}: {lead.nextStepAssignee.name}</span>}
-                            </div>
-                        </div>
-                    )}
-
+                    {/*
+                      * No Next Step card. The three `next_step*` fields are a read-only
+                      * rollup of the earliest PLANNED CrmActivity, and CrmActivityPanel
+                      * below renders that same activity — with the Complete, Edit and
+                      * Cancel actions the card never had. Showing both printed one task
+                      * twice on one screen, the second copy uneditable.
+                      */}
                     {filledCustomFields.length > 0 && (
                         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
                             <p className="text-xs font-semibold uppercase text-gray-500 mb-3">{m.fields.customFields}</p>

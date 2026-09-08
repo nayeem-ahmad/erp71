@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -186,6 +185,12 @@ const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'fb_url', label: 'Facebook URL', required: false },
     { key: 'x_url', label: 'X (Twitter) URL', required: false },
     { key: 'website_url', label: 'Website', required: false },
+    // Kept, unlike the next-step *displays* above and the New Lead form's section.
+    // This is the importer's column map, and the backend still turns these two into
+    // a real opening CrmActivity (`seedOpeningActivity`, origin IMPORT) — exactly
+    // the model everything else is moving to. Dropping them would strand the next
+    // step of every lead in a migrated spreadsheet, and there is no bulk activity
+    // import to carry it instead.
     { key: 'next_step', label: 'Next Step', required: false },
     { key: 'next_step_date', label: 'Next Step Date', required: false },
 ];
@@ -509,23 +514,12 @@ function LeadsPage() {
                 </span>
             ),
         }),
-        columnHelper.accessor('next_step', {
-            header: m.fields.nextStep,
-            cell: (info) => info.getValue() ?? '—',
-            enableSorting: false,
-        }),
-        columnHelper.accessor('next_step_date', {
-            header: m.fields.nextStepDate,
-            cell: (info) => info.getValue() ? formatDate(info.getValue() as string) : '—',
-        }),
-        columnHelper.accessor('nextStepAssignee', {
-            // The column-scoped label, not `fields.nextStepAssignedTo` — that one
-            // reads "Assigned To" because the form's "Next Step" section header
-            // already scopes it, which a bare table column does not.
-            header: m.columns.nextStepAssignedTo,
-            cell: (info) => info.getValue()?.name ?? '—',
-            enableSorting: false,
-        }),
+        // The three `next_step*` columns are deliberately not rendered. They are a
+        // read-only rollup of the earliest PLANNED CrmActivity, so every value they
+        // showed is already on the lead's activity timeline — CrmActivityPanel is
+        // the one place that shows it, and the one place it can be edited. The
+        // columns stay on the API payload and on `Lead` above; only the display is
+        // withdrawn, so restoring them is this block and nothing else.
         // Free text and the web links land at the end of the declared order:
         // they are the widest columns and the least often scanned. Whoever wants
         // them earlier can drag them, and the table remembers it.
