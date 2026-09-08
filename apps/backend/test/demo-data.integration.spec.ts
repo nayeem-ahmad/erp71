@@ -2,18 +2,22 @@ import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 import { bootstrapDefaultAccountingForTenant } from '@erp71/database';
 import { DatabaseService } from '../src/database/database.service';
-import { runSimulation } from '../src/demo-data/generator/simulate';
+import { runSimulation, type SimulationResult } from '../src/demo-data/generator/simulate';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 jest.setTimeout(180_000);
 
 /**
- * Integration test for the six-month demo-data generator. Runs a short window
- * (three weeks) against a real database and asserts the properties that make the
- * dataset trustworthy: the trial balance balances because it was *derived*, the
- * stock ledger agrees with on-hand, party dues reconcile, and — the regression
- * that motivated approach B — backdated transactions are actually backdated.
+ * Integration test for the demo-data generator. Runs a short window (three weeks)
+ * against a real database and asserts the properties that make the dataset
+ * trustworthy: the trial balance balances because it was *derived*, the stock
+ * ledger agrees with on-hand, party dues reconcile, and — the regression that
+ * motivated approach B — backdated transactions are actually backdated.
+ *
+ * It also asserts the two things the breadth of the generator rests on: that
+ * every module group actually writes rows, and that a planted anomaly is odd as
+ * business without being inconsistent as data.
  *
  * Requires a reachable DATABASE_URL with the schema pushed. Runs in CI, which
  * provisions a clean DB first.
@@ -22,6 +26,7 @@ describe('Demo-data generator (integration)', () => {
     const db = new DatabaseService();
     let tenantId: string;
     let userId: string;
+    let result: SimulationResult;
     const now = new Date();
     const windowDays = 21;
     const startMidnight = (() => {
@@ -73,7 +78,7 @@ describe('Demo-data generator (integration)', () => {
         }
         await bootstrapDefaultAccountingForTenant(db, tenantId);
 
-        await runSimulation({ db, tenantId, userId, batchNumber: 1, now, windowDays });
+        result = await runSimulation({ db, tenantId, userId, batchNumber: 1, now, windowDays });
     });
 
     afterAll(async () => {
@@ -215,6 +220,71 @@ describe('Demo-data generator (integration)', () => {
         }
         expect(saleRange._min.sale_date!.getTime()).toBeGreaterThanOrEqual(lowerBound.getTime());
         expect(saleRange._max.sale_date!.getTime()).toBeLessThanOrEqual(upperBound.getTime());
+    });
+
+    it('writes rows for every module group, not just core trading', async () => {
+        // The point of the module groups is that each one actually populates its
+        // pages. A group that silently writes nothing would leave a demo store
+        // with an empty module and no signal that anything went wrong.
+        const perGroup: Record<string, number> = {
+            core: await db.sale.count({ where: { tenant_id: tenantId } }),
+            sales: await db.quotation.count({ where: { tenant_id: tenantId } })
+                + await db.salesOrder.count({ where: { tenant_id: tenantId } }),
+            purchasing: await db.purchaseOrder.count({ where: { tenant_id: tenantId } })
+                + await db.productDemand.count({ where: { tenant_id: tenantId } }),
+            inventory: await db.warehouseTransfer.count({ where: { tenant_id: tenantId } })
+                + await db.inventoryShrinkage.count({ where: { tenant_id: tenantId } }),
+            crm: await db.lead.count({ where: { tenant_id: tenantId } }),
+            hr: await db.attendanceRecord.count({ where: { tenant_id: tenantId } }),
+            finance: await db.fixedAsset.count({ where: { tenant_id: tenantId } }),
+            operations: await db.project.count({ where: { tenant_id: tenantId } }),
+        };
+        // Assert on the list of empty groups rather than one count at a time, so
+        // a failure names which module went missing.
+        const empty = Object.entries(perGroup).filter(([, count]) => count === 0).map(([group]) => group);
+        expect(empty).toEqual([]);
+    });
+
+    it('plants anomalies and reports exactly what it planted', async () => {
+        expect(result.anomalies.length).toBeGreaterThan(0);
+        expect(result.counts.anomalies).toBe(result.anomalies.length);
+
+        for (const anomaly of result.anomalies) {
+            expect(anomaly.detail.length).toBeGreaterThan(0);
+            expect(anomaly.hint.length).toBeGreaterThan(0);
+            expect(new Date(anomaly.occurredAt).getTime()).toBeGreaterThanOrEqual(startMidnight.getTime());
+            expect(new Date(anomaly.occurredAt).getTime()).toBeLessThanOrEqual(now.getTime() + 60_000);
+        }
+
+        // Every anomaly points at a row that exists: the list is an answer key a
+        // presenter opens, not a description of something that got rolled back.
+        for (const sale of result.anomalies.filter((a) => a.entity === 'Sale')) {
+            const row = await db.sale.findUnique({ where: { id: sale.entityId } });
+            expect(row?.tenant_id).toBe(tenantId);
+            expect(row?.note).toContain('Demo anomaly');
+        }
+    });
+
+    it('keeps a below-cost sale odd as business but consistent as data', async () => {
+        // The whole design rests on this: an anomaly is written through the same
+        // primitives as an ordinary row, so it dents the margin report without
+        // breaking the ledger. (Asserted alongside the trial-balance and stock
+        // invariants above, which cover the same dataset.)
+        const belowCost = result.anomalies.find((a) => a.kind === 'BELOW_COST_SALE');
+        if (!belowCost) return; // Rate-limited: a three-week window may miss one.
+
+        const items = await db.saleItem.findMany({ where: { sale_id: belowCost.entityId } });
+        expect(items.length).toBeGreaterThan(0);
+        expect(items.some((item) => Number(item.price_at_sale) < Number(item.unit_cost_at_sale))).toBe(true);
+
+        const voucher = await db.voucher.findFirst({
+            where: { tenant_id: tenantId, source_id: belowCost.entityId },
+            include: { details: true },
+        });
+        expect(voucher).not.toBeNull();
+        const debits = voucher!.details.reduce((sum, line) => sum + Number(line.debit_amount), 0);
+        const credits = voucher!.details.reduce((sum, line) => sum + Number(line.credit_amount), 0);
+        expect(Math.abs(debits - credits)).toBeLessThan(0.01);
     });
 
     it('backdates vouchers, movements, and payments — not stamped "today"', async () => {

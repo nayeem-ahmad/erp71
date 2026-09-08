@@ -612,6 +612,14 @@ model DemoDataBatch {
   processed    Int       @default(0)
   total        Int       @default(0)
   counts       Json?
+  /// What the operator asked for: months of history, which module groups to
+  /// populate, and whether anomalies were injected. Stored so a second batch can
+  /// be described next to the first ("6 months, all modules, with anomalies").
+  options      Json?
+  /// The anomalies deliberately planted in this batch — kind, date, the row they
+  /// landed on and what makes them odd. This is the answer key for an
+  /// anomaly-detection demo, so it has to survive the run that created it.
+  anomalies    Json?
   started_at   DateTime  @default(now())
   finished_at  DateTime?
   error        String?

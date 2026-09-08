@@ -19,7 +19,7 @@ async function main() {
 
     console.log(`\nGenerating six months of demo history (batch ${batchNumber})...`);
     try {
-        const counts = await runSimulation({
+        const { counts, anomalies } = await runSimulation({
             db: prisma,
             tenantId: account.tenantId,
             userId: account.userId,
@@ -30,11 +30,21 @@ async function main() {
         });
         await prisma.demoDataBatch.update({
             where: { id: batch.id },
-            data: { status: 'COMPLETED', phase: 'Completed', finished_at: new Date(), counts: counts as unknown as object },
+            data: {
+                status: 'COMPLETED', phase: 'Completed', finished_at: new Date(),
+                counts: counts as unknown as object,
+                anomalies: anomalies as unknown as object,
+            },
         });
         console.log('\n\nGenerated:');
         for (const [key, value] of Object.entries(counts)) {
-            console.log(`  ${key}: ${value}`);
+            if (value > 0) console.log(`  ${key}: ${value}`);
+        }
+        if (anomalies.length > 0) {
+            console.log('\nPlanted anomalies (the answer key for an anomaly-detection demo):');
+            for (const anomaly of anomalies) {
+                console.log(`  ${anomaly.occurredAt.slice(0, 10)}  ${anomaly.reference ?? anomaly.entityId}  ${anomaly.label} — ${anomaly.detail}`);
+            }
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

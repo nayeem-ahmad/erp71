@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
+import { LoadDemoDataDto } from '../demo-data/demo-data.dto';
 import {
     ListAdminTenantsQueryDto,
     ListAdminTenantLedgerQueryDto,
@@ -125,9 +126,10 @@ export class AdminTenantsController {
     @HttpCode(202)
     loadDemoData(
         @Param('tenantId') tenantId: string,
+        @Body() dto: LoadDemoDataDto,
         @Request() req: any,
     ) {
-        return this.adminTenantsService.loadDemoData(tenantId, req.user.userId);
+        return this.adminTenantsService.loadDemoData(tenantId, req.user.userId, dto);
     }
 
     @Get(':tenantId/demo-data/status')
