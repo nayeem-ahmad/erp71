@@ -218,7 +218,10 @@ export default function PricingClient() {
                                     </span>
                                 ) : (
                                     <Link
-                                        href={`/signup?plan=${plan.id}`}
+                                        // Carries the toggle through: without the
+                                        // cycle, a visitor who picked yearly landed
+                                        // on a signup form quoting the monthly price.
+                                        href={`/signup?plan=${plan.id}${yearly ? '&cycle=yearly' : ''}`}
                                         className={`block text-center font-bold py-3 rounded-xl transition-colors ${
                                             plan.highlight
                                                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
