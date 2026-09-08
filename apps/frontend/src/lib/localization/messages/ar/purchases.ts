@@ -65,7 +65,6 @@ export const purchasesMessages = {
             dailyOperations: "العمليات اليومية",
             payables: "الذمم الدائنة",
             orderFlow: "الأوامر والاستلام",
-            imports: "الاستيراد (اعتماد)",
             reports: "تقارير المشتريات",
             setup: "إعداد المشتريات",
             links: {

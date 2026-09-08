@@ -275,6 +275,7 @@ export const coreMessages = {
             manufacturing: 'Manufacturing',
             projects: 'Project Management',
             purchase: 'Purchase',
+            imports: 'Imports',
             accounting: 'Accounting',
             expenses: 'Expenses',
             inventory: 'Inventory',
