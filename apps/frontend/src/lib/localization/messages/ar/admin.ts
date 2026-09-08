@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: 'جارٍ الإنشاء…',
         selectThread: 'اختر محادثة لعرضها.',
     },
+    auditLogs: {
+        title: 'سجل التدقيق',
+        description: 'كل إجراء مسجل عبر جميع المستأجرين والمستخدمين.',
+        loadFailed: 'تعذر تحميل سجل التدقيق',
+        noLogs: 'لا توجد إدخالات تطابق هذا الفلتر.',
+        scopeLabel: 'النطاق',
+        scope: {
+            platform: 'المنصة',
+            tenant: 'مستأجر واحد',
+            all: 'الكل',
+        },
+        filters: {
+            user: 'معرف المستخدم',
+            tenant: 'معرف المستأجر',
+        },
+        columns: {
+            tenant: 'المستأجر',
+            ip: 'عنوان IP',
+        },
+        platformRow: 'المنصة',
+    },
     systemHealth: {
         badge: 'مسؤول المنصة',
         title: 'صحة النظام',

@@ -598,6 +598,60 @@ describe('AuthService', () => {
         );
     });
 
+    it('records the billing cycle the signup form quoted a price for', async () => {
+        // Without this the row fell to the column default of MONTHLY, so a
+        // visitor who chose yearly on /pricing reached /billing set to monthly
+        // and had to pick again.
+        db.user.findUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+        db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+        db.subscriptionPlan.findUnique.mockResolvedValue({
+            id: 'plan-premium', code: 'PREMIUM', is_active: true, monthly_price: 2499,
+        });
+        db.tenant.create.mockResolvedValue({ id: 'tenant-1' });
+        db.store.create.mockResolvedValue({ id: 'store-1' });
+
+        await service.signup({
+            email: 'owner@example.com',
+            password: 'password123',
+            tenantName: 'Tenant One',
+            storeName: 'Main Store',
+            planCode: 'PREMIUM',
+            billingCycle: 'YEARLY',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
+        } as any);
+
+        expect(db.tenantSubscription.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ billing_cycle: 'YEARLY' }) }),
+        );
+    });
+
+    it('falls back to MONTHLY when signup sends no cycle', async () => {
+        db.user.findUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+        db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+        db.subscriptionPlan.findUnique.mockResolvedValue({
+            id: 'plan-basic', code: 'BASIC', is_active: true, monthly_price: 299,
+        });
+        db.tenant.create.mockResolvedValue({ id: 'tenant-1' });
+        db.store.create.mockResolvedValue({ id: 'store-1' });
+
+        await service.signup({
+            email: 'owner@example.com',
+            password: 'password123',
+            tenantName: 'Tenant One',
+            storeName: 'Main Store',
+            planCode: 'BASIC',
+            acceptedTermsVersion: CURRENT_TERMS_VERSION,
+        } as any);
+
+        expect(db.tenantSubscription.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ billing_cycle: 'MONTHLY' }) }),
+        );
+    });
+
     it('still rejects a plan that is inactive or priced at zero', async () => {
         // The other half of the guard, which the coming-soon case used to cover:
         // provisioning must refuse a plan that is not actually for sale.

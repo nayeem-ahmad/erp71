@@ -13,6 +13,8 @@ import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useCrmMineOnly } from '@/lib/crm-scope';
+import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import {
     applyCreatedRangeQuery,
@@ -73,6 +75,7 @@ const columnHelper = createColumnHelper<CrmActivityRow>();
 export default function CrmActivitiesPage() {
     const { t } = useI18n();
     const m = t.crm.activitiesPage;
+    const scopeCopy = t.crm.scope;
 
     const { options: purposes } = useLeadTaxonomy('purposes');
     const { options: channels } = useLeadTaxonomy('channels');
@@ -112,6 +115,13 @@ export default function CrmActivitiesPage() {
         dueRange,
     } = filters;
 
+    /**
+     * "Only my activities" — the CRM-wide scope rather than one of the filters
+     * above: it outlives the tab and is shared with the Overview and the other
+     * CRM lists. The server resolves the assignee, so no user id is needed here.
+     */
+    const { mineOnly, setMineOnly, ready: scopeReady } = useCrmMineOnly();
+
     // Logging a call or planning one from here, rather than opening the lead
     // first: the composer asks which lead or customer it is against.
     const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
@@ -138,10 +148,10 @@ export default function CrmActivitiesPage() {
     }, [setFilter]);
 
     const load = useCallback(async () => {
-        // Nothing is fetched until the remembered filters are in: otherwise a
-        // return visit would fire one request for the defaults and a second for
-        // the remembered slice, and briefly render the wrong list.
-        if (!filtersReady) return;
+        // Nothing is fetched until the remembered filters and the scope are in:
+        // otherwise a return visit would fire one request for the defaults and a
+        // second for the remembered slice, and briefly render the wrong list.
+        if (!filtersReady || !scopeReady) return;
         setIsLoading(true);
         setError(null);
         try {
@@ -154,6 +164,7 @@ export default function CrmActivitiesPage() {
                 leadOwner: leadOwnerFilter || undefined,
                 assignedTo: assigneeFilter || undefined,
                 approval: approvalFilter || undefined,
+                mine: mineOnly || undefined,
                 ...applyDueRangeQuery(dueRange),
                 ...applyCreatedRangeQuery(createdRange),
             });
@@ -173,15 +184,20 @@ export default function CrmActivitiesPage() {
         leadOwnerFilter,
         assigneeFilter,
         approvalFilter,
+        mineOnly,
         dueRange,
         createdRange,
         filtersReady,
+        scopeReady,
         m.loadFailed,
     ]);
 
+    // The tiles take the same scope as the list — three counts for the whole team
+    // sitting above one person's rows is the disagreement this avoids.
     const loadSummary = useCallback(() => {
-        api.getCrmActivitySummary().then(setSummary).catch(() => null);
-    }, []);
+        if (!scopeReady) return;
+        api.getCrmActivitySummary({ mine: mineOnly || undefined }).then(setSummary).catch(() => null);
+    }, [mineOnly, scopeReady]);
 
     useEffect(() => {
         api.getMe()
@@ -349,6 +365,15 @@ export default function CrmActivitiesPage() {
             </div>
 
             <div className="mb-4 flex flex-wrap items-center gap-3">
+                {/* The scope, not a filter: it outlives the tab and is shared with
+                    the Overview and the other CRM lists. First in the row because
+                    it decides what every control after it is narrowing. */}
+                <MineOnlyToggle
+                    value={mineOnly}
+                    onChange={setMineOnly}
+                    label={scopeCopy.mineOnly}
+                    title={scopeCopy.mineOnlyHint}
+                />
                 <Select value={statusFilter} onChange={(e) => setFilter('status', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.filters.allStatuses}</option>
                     <option value="PLANNED">{m.status.PLANNED}</option>
@@ -391,12 +416,17 @@ export default function CrmActivitiesPage() {
                     <option value="unassigned">{m.filters.unassigned}</option>
                     {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
                 </Select>
+                {/* Disabled rather than hidden while the scope is on: the API pins
+                    the assignee to the caller either way, and a control that still
+                    looked live would be offering a choice it could not honour. */}
                 <Select
-                    value={assigneeFilter}
+                    value={mineOnly ? '' : assigneeFilter}
                     onChange={(e) => setFilter('assignee', e.target.value)}
+                    disabled={mineOnly}
+                    title={mineOnly ? scopeCopy.assigneeLockedHint : undefined}
                     className="w-auto max-w-[180px]"
                 >
-                    <option value="">{m.filters.allAssignees}</option>
+                    <option value="">{mineOnly ? scopeCopy.mineOnly : m.filters.allAssignees}</option>
                     {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
                 </Select>
                 <label className="flex min-h-touch items-center gap-2 text-sm text-gray-600">

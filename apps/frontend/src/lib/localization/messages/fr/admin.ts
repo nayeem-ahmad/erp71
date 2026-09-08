@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: "Création…",
         selectThread: "Sélectionnez une conversation pour l'afficher.",
     },
+    auditLogs: {
+        title: 'Piste d\'audit',
+        description: 'Chaque action enregistrée pour tous les locataires et utilisateurs.',
+        loadFailed: 'Échec du chargement de la piste d\'audit',
+        noLogs: 'Aucune entrée ne correspond à ce filtre.',
+        scopeLabel: 'Portée',
+        scope: {
+            platform: 'Plateforme',
+            tenant: 'Un locataire',
+            all: 'Tous',
+        },
+        filters: {
+            user: 'ID d\'utilisateur',
+            tenant: 'ID du locataire',
+        },
+        columns: {
+            tenant: 'Locataire',
+            ip: 'Adresse IP',
+        },
+        platformRow: 'Plateforme',
+    },
     systemHealth: {
         badge: "Administration de la plateforme",
         title: "État du système",

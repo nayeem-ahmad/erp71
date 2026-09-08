@@ -35,6 +35,16 @@ export class SignupDto {
     @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
     planCode?: SelfServeSubscriptionPlanCode;
 
+    /**
+     * Which of the plan's two prices the tenant signed up against. Recorded on
+     * the subscription at provisioning so `/billing` opens on the cycle the
+     * visitor already chose, rather than making them pick twice. Checkout is
+     * still what charges — this only carries the intent.
+     */
+    @IsOptional()
+    @IsIn(['MONTHLY', 'YEARLY'])
+    billingCycle?: 'MONTHLY' | 'YEARLY';
+
     @IsOptional()
     @IsString()
     referralCode?: string;
@@ -118,6 +128,11 @@ export class GoogleSignInDto {
     @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
     planCode?: SelfServeSubscriptionPlanCode;
 
+    /** See `SignupDto.billingCycle`. */
+    @IsOptional()
+    @IsIn(['MONTHLY', 'YEARLY'])
+    billingCycle?: 'MONTHLY' | 'YEARLY';
+
     @IsOptional()
     @IsString()
     referralCode?: string;
@@ -179,6 +194,11 @@ export class MobileSignInDto {
     @IsOptional()
     @IsIn(SELF_SERVE_SUBSCRIPTION_PLAN_CODES)
     planCode?: SelfServeSubscriptionPlanCode;
+
+    /** See `SignupDto.billingCycle`. */
+    @IsOptional()
+    @IsIn(['MONTHLY', 'YEARLY'])
+    billingCycle?: 'MONTHLY' | 'YEARLY';
 
     @IsOptional()
     @IsString()

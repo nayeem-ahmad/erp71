@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: "Creando…",
         selectThread: "Seleccione una conversación para verla.",
     },
+    auditLogs: {
+        title: 'Registro de auditoría',
+        description: 'Cada acción registrada en todos los inquilinos y usuarios.',
+        loadFailed: 'No se pudo cargar el registro de auditoría',
+        noLogs: 'Ninguna entrada coincide con este filtro.',
+        scopeLabel: 'Alcance',
+        scope: {
+            platform: 'Plataforma',
+            tenant: 'Un inquilino',
+            all: 'Todos',
+        },
+        filters: {
+            user: 'ID de usuario',
+            tenant: 'ID de inquilino',
+        },
+        columns: {
+            tenant: 'Inquilino',
+            ip: 'Dirección IP',
+        },
+        platformRow: 'Plataforma',
+    },
     systemHealth: {
         badge: "Administración de la plataforma",
         title: "Estado del sistema",

@@ -5,6 +5,13 @@
 -- the approved list, and so a manager can see what a cron raised overnight
 -- before anyone starts dialling.
 
+-- AlterEnum
+-- The reviewer's grant. `UserStorePermission.permission` is this enum, so the
+-- value has to exist in Postgres before sync-role-permissions can write it.
+-- IF NOT EXISTS, matching the other permission migrations: production reaches
+-- this value through `db push`, so a developer's database may already carry it.
+ALTER TYPE "StorePermission" ADD VALUE IF NOT EXISTS 'APPROVE_CRM_ACTIVITY';
+
 -- AlterTable
 ALTER TABLE "CrmActivity" ADD COLUMN "is_approved" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "CrmActivity" ADD COLUMN "approved_by" TEXT;

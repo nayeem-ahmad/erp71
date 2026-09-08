@@ -452,6 +452,8 @@ export class CrmLeadsService {
             category?: string;
             priority?: string;
             assignedTo?: string;
+            /** "Only my leads" — resolved against `userId`, and wins over `assignedTo`. */
+            mine?: boolean;
             emailPresence?: string;
             staleDays?: number;
             myActionsToday?: boolean;
@@ -485,6 +487,11 @@ export class CrmLeadsService {
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo === UNASSIGNED_OWNER_FILTER) where.assigned_to = null;
         else if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        // Last word on the owner, deliberately: the "only mine" scope is a
+        // preference that outlives any one page, so a stale owner filter
+        // remembered from an earlier visit must not quietly widen it back out to
+        // somebody else's leads.
+        if (opts.mine && opts.userId) where.assigned_to = opts.userId;
         // Goes in `AND` rather than beside the scalars because it is itself an
         // OR, and the top-level `OR` below already belongs to free-text search.
         const emailClause: Prisma.LeadWhereInput | null =

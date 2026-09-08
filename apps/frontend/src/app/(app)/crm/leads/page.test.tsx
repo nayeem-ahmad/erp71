@@ -501,3 +501,101 @@ describe('LeadsPage — remembered filters', () => {
         }
     });
 });
+
+
+/**
+ * The CRM-wide "only mine" scope. Unlike the filters above it lives in
+ * localStorage and is shared with the Overview and the other CRM lists, so it is
+ * cleared between tests here rather than left to leak.
+ */
+describe('LeadsPage — only mine', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+    });
+
+    const toggle = () => screen.getByRole('button', { name: 'Only mine' });
+    const lastCall = () => api.getLeads.mock.calls.at(-1)[0];
+
+    it('shows the whole team until somebody asks for their own', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(lastCall().mine).toBeUndefined();
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('narrows the list to the caller, letting the server resolve the id', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        // No user id is looked up or sent — that is the server's job.
+        expect(lastCall().assignedTo).toBeUndefined();
+    });
+
+    it('locks the owner filter while the scope is on, rather than lying about it', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+    });
+
+    it('releases the owner filter again when the scope is switched off', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBeUndefined());
+        expect(selectByOption('All owners')).not.toBeDisabled();
+    });
+
+    it('keeps the other filters, so the scope narrows the slice rather than replacing it', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        await waitFor(() => expect(lastCall().priority).toBe('HIGH'));
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall()).toEqual(
+            expect.objectContaining({ mine: true, priority: 'HIGH' }),
+        ));
+    });
+
+    it('remembers the choice for the next visit', async () => {
+        const first = render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        first.unmount();
+
+        jest.clearAllMocks();
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getTeamMembers.mockResolvedValue([]);
+
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        // And never a first request for everybody's rows before the remembered
+        // scope lands — that flash is what `scopeReady` exists to prevent.
+        for (const call of api.getLeads.mock.calls) {
+            expect(call[0].mine).toBe(true);
+        }
+    });
+});

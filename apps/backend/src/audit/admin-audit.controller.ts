@@ -55,6 +55,7 @@ export class AdminAuditController {
             // this endpoint filters on `fromDate`/`toDate` instants anyway.
             timezone: DEFAULT_TENANT_TIMEZONE,
             platformOnly: scope !== 'tenant' && scope !== 'all',
+            includeTenantName: true,
             tenantId: scope === 'tenant' ? tenantId : undefined,
             entity,
             entityId,

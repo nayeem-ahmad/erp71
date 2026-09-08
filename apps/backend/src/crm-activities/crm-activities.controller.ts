@@ -34,12 +34,22 @@ import {
 export class CrmActivitiesController {
     constructor(private readonly service: CrmActivitiesService) {}
 
-    // Declared before @Get(':id') — Nest matches routes in declaration order, so
-    // the parameterised route would otherwise swallow /summary as an id.
+    /**
+     * Declared before `@Get(':id')` — Nest matches routes in declaration order, so
+     * the parameterised route would otherwise swallow /summary as an id.
+     *
+     * `mine=true` resolves against the caller's own id, which never crosses the
+     * wire — the same shape `GET /crm/lead-conversations?mine` uses. The tiles and
+     * the list below must agree, so both read it.
+     */
     @Get('summary')
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
-    summary(@Tenant() tenant: TenantContext) {
-        return this.service.summary(tenant.tenantId, tenant.timezone);
+    summary(@Tenant() tenant: TenantContext, @Query('mine') mine?: string) {
+        return this.service.summary(
+            tenant.tenantId,
+            tenant.timezone,
+            mine === 'true' ? tenant.userId : undefined,
+        );
     }
 
     @Post()
@@ -57,6 +67,7 @@ export class CrmActivitiesController {
         @Query('target') target?: 'lead' | 'customer',
         @Query('status') status?: string,
         @Query('assignedTo') assignedTo?: string,
+        @Query('mine') mine?: string,
         @Query('leadOwner') leadOwner?: string,
         @Query('purposeId') purposeId?: string,
         @Query('channelId') channelId?: string,
@@ -77,7 +88,10 @@ export class CrmActivitiesController {
             customerId,
             target,
             status,
-            assignedTo,
+            // "Only mine" is the last word on the assignee, deliberately: it is a
+            // preference that outlives any one page, so a stale assignee filter
+            // remembered from an earlier visit must not widen it back out.
+            assignedTo: mine === 'true' ? tenant.userId : assignedTo,
             leadOwner,
             purposeId,
             channelId,

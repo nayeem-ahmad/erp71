@@ -79,6 +79,36 @@ describe('lead owner', () => {
         expect(payload.assigned_to).toBe('user-9');
     });
 
+    it('omits a date and an assignee sent without a subject', () => {
+        // `setLeadOwner` seeds `next_step_assigned_to` from the lead owner whether
+        // or not anyone typed a next step, so this is the ordinary shape of the
+        // create form now that the next-step section is hidden. Without a subject
+        // `seedOpeningActivity` creates no activity, so sending the other two
+        // would populate rollup columns describing an activity that never existed.
+        const payload = leadFormToPayload({
+            ...emptyLeadForm(),
+            name: 'Rahim',
+            next_step_assigned_to: 'user-1',
+            next_step_date: '2026-09-09T10:00',
+        });
+        expect(payload.next_step).toBeUndefined();
+        expect(payload.next_step_date).toBeUndefined();
+        expect(payload.next_step_assigned_to).toBeUndefined();
+    });
+
+    it('sends all three once a subject is present', () => {
+        const payload = leadFormToPayload({
+            ...emptyLeadForm(),
+            name: 'Rahim',
+            next_step: 'Call back',
+            next_step_assigned_to: 'user-1',
+            next_step_date: '2026-09-09T10:00',
+        });
+        expect(payload.next_step).toBe('Call back');
+        expect(payload.next_step_date).toBe(new Date('2026-09-09T10:00').toISOString());
+        expect(payload.next_step_assigned_to).toBe('user-1');
+    });
+
     it('drags the next-step assignee along while it still matches the owner', () => {
         const form = setLeadOwner({ ...emptyLeadForm(), assigned_to: 'user-1', next_step_assigned_to: 'user-1' }, 'user-2');
         expect(form.assigned_to).toBe('user-2');

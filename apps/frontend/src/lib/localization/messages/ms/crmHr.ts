@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Milik saya sahaja',
+            mineOnlyHint: 'Tunjukkan hanya rekod yang ditugaskan kepada saya. Diingati merentas semua skrin CRM.',
+            ownerLockedHint: 'Hanya rekod anda sendiri dipaparkan — matikan "Milik saya sahaja" untuk menapis mengikut pemilik.',
+            assigneeLockedHint: 'Hanya rekod anda sendiri dipaparkan — matikan "Milik saya sahaja" untuk menapis mengikut petugas.',
+        },
         hub: {
             moduleLabel: 'Modul CRM',
             title: 'Hubungan Pelanggan',

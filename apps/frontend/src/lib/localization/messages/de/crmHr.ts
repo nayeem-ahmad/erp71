@@ -1,5 +1,11 @@
 export const crmHrMessages = {
     crm: {
+        scope: {
+            mineOnly: 'Nur meine',
+            mineOnlyHint: 'Nur die mir zugewiesenen Datensätze anzeigen. Wird über alle CRM-Bildschirme hinweg gemerkt.',
+            ownerLockedHint: 'Es werden nur Ihre eigenen Datensätze angezeigt – schalten Sie „Nur meine“ aus, um nach Inhaber zu filtern.',
+            assigneeLockedHint: 'Es werden nur Ihre eigenen Datensätze angezeigt – schalten Sie „Nur meine“ aus, um nach Zuständigem zu filtern.',
+        },
         hub: {
             moduleLabel: "CRM-Modul",
             title: "Kundenbeziehungen",

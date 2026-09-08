@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { LeadStatus } from '../crm-leads/crm-leads.dto';
 
 const TENANT = 'tenant-1';
+const USER = 'user-1';
 
 describe('CrmDashboardService', () => {
     let service: CrmDashboardService;
@@ -330,13 +331,111 @@ describe('CrmDashboardService', () => {
 
             expect(result.points).toHaveLength(371);
             expect(result.points.at(-1)!.date).toBe('2026-07-05');
-            expect(result.filters).toEqual({ from: result.points[0].date, to: '2026-07-05' });
+            expect(result.filters).toEqual({ from: result.points[0].date, to: '2026-07-05', mine: false });
         });
 
         it('leaves a window inside the ceiling exactly as asked', async () => {
             const result = await service.getActivityHeatmap(TENANT, { from: '2026-04-13', to: '2026-07-05' }, 'Asia/Dhaka');
 
-            expect(result.filters).toEqual({ from: '2026-04-13', to: '2026-07-05' });
+            expect(result.filters).toEqual({ from: '2026-04-13', to: '2026-07-05', mine: false });
+        });
+
+        it('narrows both series to the caller under the "only mine" scope', async () => {
+            await service.getActivityHeatmap(TENANT, {}, 'Asia/Dhaka', USER);
+
+            for (const call of db.crmActivity.findMany.mock.calls) {
+                expect(call[0].where.assigned_to).toBe(USER);
+            }
+        });
+    });
+
+    /**
+     * The "only mine" scope. Every panel takes the same narrowing, so these
+     * assert on the `where` each query was built with rather than on counts a
+     * mocked client would return regardless.
+     */
+    describe('only-mine scope', () => {
+        it('leaves every query unscoped when no owner is passed', async () => {
+            await service.getOverview(TENANT, {}, 'Asia/Dhaka');
+
+            const queries = [
+                ...db.lead.groupBy.mock.calls,
+                ...db.lead.count.mock.calls,
+                ...db.lead.findMany.mock.calls,
+                ...db.crmActivity.count.mock.calls,
+                ...db.crmCampaign.findMany.mock.calls,
+            ];
+            for (const call of queries) {
+                expect(call[0].where.assigned_to).not.toBe(USER);
+                expect(call[0].where.created_by).toBeUndefined();
+            }
+        });
+
+        it('narrows every lead and activity query to the caller', async () => {
+            await service.getOverview(TENANT, { from: '2026-07-01', to: '2026-07-31' }, 'Asia/Dhaka', USER);
+
+            // The unassigned tile is the one deliberate exception — see below.
+            const leadQueries = [
+                ...db.lead.count.mock.calls,
+                ...db.lead.findMany.mock.calls,
+            ];
+            for (const call of leadQueries) {
+                expect(call[0].where.assigned_to).toBe(USER);
+            }
+            for (const call of db.crmActivity.count.mock.calls) {
+                expect(call[0].where.assigned_to).toBe(USER);
+            }
+        });
+
+        it('reports no unowned leads without asking, since none of them are yours', async () => {
+            db.lead.count.mockResolvedValue(7);
+
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka', USER);
+
+            expect(result.pipeline.unassigned).toBe(0);
+            // A query pairing `assigned_to: <user>` with `assigned_to: null` would
+            // be unsatisfiable; the point is that it is never built at all.
+            for (const call of db.lead.count.mock.calls) {
+                expect(call[0].where.assigned_to).not.toBeNull();
+            }
+        });
+
+        it('scopes campaigns by who sent them, since a blast has no assignee', async () => {
+            await service.getOverview(TENANT, {}, 'Asia/Dhaka', USER);
+
+            expect(db.crmCampaign.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ created_by: USER }) }),
+            );
+            expect(db.crmCampaign.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ created_by: USER }) }),
+            );
+        });
+
+        it('pins the owner leaderboard to the caller rather than the whole team', async () => {
+            await service.getOverview(TENANT, {}, 'Asia/Dhaka', USER);
+
+            for (const call of db.lead.groupBy.mock.calls) {
+                if (call[0].by[0] !== 'assigned_to') continue;
+                expect(call[0].where.assigned_to).toBe(USER);
+            }
+        });
+
+        it('echoes the scope back, so a reader knows whose numbers these are', async () => {
+            const scoped = await service.getOverview(TENANT, {}, 'Asia/Dhaka', USER);
+            const everyone = await service.getOverview(TENANT, {}, 'Asia/Dhaka');
+
+            expect(scoped.filters.mine).toBe(true);
+            expect(everyone.filters.mine).toBe(false);
+        });
+
+        it('narrows the trend buckets too, so the sparklines match the tiles', async () => {
+            await service.getTrends(TENANT, {}, 'Asia/Dhaka', USER);
+
+            const queries = [...db.lead.findMany.mock.calls, ...db.crmActivity.findMany.mock.calls];
+            expect(queries.length).toBeGreaterThan(0);
+            for (const call of queries) {
+                expect(call[0].where.assigned_to).toBe(USER);
+            }
         });
     });
 });

@@ -932,6 +932,27 @@ export const adminMessages = {
         creating: 'Creating…',
         selectThread: 'Select a thread to view the conversation.',
     },
+    auditLogs: {
+        title: 'Audit Trail',
+        description: 'Every recorded action across all tenants and users.',
+        loadFailed: 'Failed to load the audit trail',
+        noLogs: 'No audit entries match this filter.',
+        scopeLabel: 'Scope',
+        scope: {
+            platform: 'Platform',
+            tenant: 'One tenant',
+            all: 'All',
+        },
+        filters: {
+            user: 'User ID',
+            tenant: 'Tenant ID',
+        },
+        columns: {
+            tenant: 'Tenant',
+            ip: 'IP address',
+        },
+        platformRow: 'Platform',
+    },
     systemHealth: {
         badge: 'Platform Admin',
         title: 'System Health',

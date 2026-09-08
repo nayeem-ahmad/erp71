@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
     ArrayNotEmpty,
     IsArray,
+    IsBoolean,
     IsEmail,
     IsEnum,
     IsInt,
@@ -182,6 +183,17 @@ export class ListContactsDto {
     @Transform(emptyToUndefined)
     @IsString()
     assignedTo?: string;
+
+    /**
+     * "Only my contacts" — narrows to the caller's own, and wins over
+     * `assignedTo`. A flag rather than an id, so the id is resolved from the
+     * session in the controller and never crosses the wire; see the same field on
+     * `ListLeadsDto`.
+     */
+    @IsOptional()
+    @Transform(({ value }) => value === true || value === 'true' || value === '1')
+    @IsBoolean()
+    mine?: boolean;
 
     @IsOptional()
     @Transform(emptyToUndefined)

@@ -435,3 +435,88 @@ describe('CrmActivitiesPage — activity approval', () => {
         expect(lastCall().approval).toBeUndefined();
     });
 });
+
+/**
+ * The CRM-wide "only mine" scope. Unlike the filters above it lives in
+ * localStorage and is shared with the Overview and the other CRM lists, so it is
+ * cleared between tests here rather than left to leak.
+ */
+describe('CrmActivitiesPage — only mine', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+
+    const toggle = () => screen.getByRole('button', { name: 'Only mine' });
+
+    it('shows the whole team until somebody asks for their own', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(lastCall().mine).toBeUndefined();
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('narrows the list to the caller, letting the server resolve the id', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        // No user id is looked up or sent — that is the server's job.
+        expect(lastCall().assignedTo).toBeUndefined();
+    });
+
+    it('scopes the tiles with the list, so the two cannot disagree', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(
+            api.getCrmActivitySummary.mock.calls.at(-1)[0],
+        ).toEqual({ mine: true }));
+    });
+
+    it('locks the assignee filter while the scope is on, rather than lying about it', async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(toggle());
+
+        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+    });
+
+    it('remembers the choice for the next visit', async () => {
+        const first = render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(toggle());
+        await waitFor(() => expect(lastCall().mine).toBe(true));
+        first.unmount();
+
+        jest.clearAllMocks();
+        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        // And never a first request for everybody's rows before the remembered
+        // scope lands — that flash is what `scopeReady` exists to prevent.
+        for (const call of api.getAllCrmActivities.mock.calls) {
+            expect(call[0].mine).toBe(true);
+        }
+    });
+});

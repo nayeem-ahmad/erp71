@@ -58,12 +58,18 @@ const FALLBACK_PLANS: Plan[] = [
         name: plan.name,
         description: plan.tagline,
         monthly_price: plan.monthlyPrice,
+        // MARKETING_PLANS.yearlyPrice is a monthly equivalent; this page and the
+        // API both speak annual totals, so multiply back up.
+        yearly_price: plan.yearlyPrice * 12,
+        setup_fee: plan.setupFee,
     })),
     {
         code: 'ACCOUNTING' as const,
         name: ACCOUNTING_EDITION.name,
         description: ACCOUNTING_EDITION.tagline,
         monthly_price: ACCOUNTING_EDITION.monthlyPrice,
+        yearly_price: ACCOUNTING_EDITION.yearlyPrice * 12,
+        setup_fee: ACCOUNTING_EDITION.setupFee,
     },
 ];
 
@@ -72,7 +78,39 @@ type Plan = {
     name: string;
     description?: string | null;
     monthly_price: number;
+    /**
+     * The annual total, not a monthly equivalent — this is the wire shape the
+     * backend and `/billing` both use. `/pricing` divides it by 12 for display;
+     * this page does not, so the figure here matches what checkout will charge.
+     * Null on a plan an admin has not priced yearly; `yearlyTotalFor` falls back
+     * to 12x monthly so the toggle never renders a blank price.
+     */
+    yearly_price?: number | null;
+    /** One-time onboarding fee, charged on the first checkout only. */
+    setup_fee?: number;
 };
+
+type BillingCycle = 'MONTHLY' | 'YEARLY';
+
+/**
+ * What a year costs when an admin has not set `yearly_price`. Twelve months at
+ * the monthly rate is the honest default: it promises no discount that checkout
+ * would not honour, since `BillingService.createCheckoutSession` computes the
+ * same fallback.
+ */
+function yearlyTotalFor(plan: Pick<Plan, 'monthly_price' | 'yearly_price'>): number {
+    return plan.yearly_price && plan.yearly_price > 0
+        ? plan.yearly_price
+        : plan.monthly_price * 12;
+}
+
+/** Whole percent saved by paying yearly, or 0 when the year costs 12x monthly. */
+function yearlySavingPercent(plan: Pick<Plan, 'monthly_price' | 'yearly_price'>): number {
+    const twelveMonths = plan.monthly_price * 12;
+    if (twelveMonths <= 0) return 0;
+    const saved = twelveMonths - yearlyTotalFor(plan);
+    return saved > 0 ? Math.round((saved / twelveMonths) * 100) : 0;
+}
 
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
 
@@ -105,6 +143,7 @@ function SignupPageContent() {
         mobile_country_code: DEFAULT_MOBILE_COUNTRY_CODE,
         tenantName: '',
         planCode: 'STANDARD' as Plan['code'],
+        billingCycle: 'MONTHLY' as BillingCycle,
         referralCode: '',
     });
     // Explicit rather than implied. Consent used to be a line of grey text above
@@ -153,6 +192,18 @@ function SignupPageContent() {
                 }
             })
             .catch(() => null);
+    }, [searchParams]);
+
+    // `/pricing` sends the visitor's monthly/yearly choice through so they do
+    // not land on a page showing a different price than the card they clicked.
+    useEffect(() => {
+        const requestedCycle = searchParams.get('cycle');
+        if (requestedCycle === 'yearly' || requestedCycle === 'monthly') {
+            setForm((current) => ({
+                ...current,
+                billingCycle: requestedCycle === 'yearly' ? 'YEARLY' : 'MONTHLY',
+            }));
+        }
     }, [searchParams]);
 
     useEffect(() => {
@@ -244,8 +295,21 @@ function SignupPageContent() {
     const visiblePlans = plans.length > 0 ? plans : FALLBACK_PLANS;
     // Falls back to the code so the sentence still reads if the plan list has
     // not loaded and the code came from `?plan=`.
-    const selectedPlanName =
-        visiblePlans.find((plan) => plan.code === form.planCode)?.name ?? form.planCode;
+    const selectedPlan = visiblePlans.find((plan) => plan.code === form.planCode);
+    const selectedPlanName = selectedPlan?.name ?? form.planCode;
+    const selectedPlanYearlySaving = selectedPlan ? yearlySavingPercent(selectedPlan) : 0;
+    // Whole taka, matching `/pricing` and `/billing`. The default two decimals
+    // read as a precision these prices do not have.
+    const money = (amount: number) =>
+        formatBDT(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    // What checkout will ask for: the cycle's price plus the one-time onboarding
+    // fee. Referral and admin discounts are applied at checkout, not here, so
+    // this is an upper bound rather than a promise — hence "due at checkout".
+    const summarySubscription = selectedPlan
+        ? (form.billingCycle === 'YEARLY' ? yearlyTotalFor(selectedPlan) : selectedPlan.monthly_price)
+        : 0;
+    const summarySetupFee = selectedPlan?.setup_fee ?? 0;
+    const summaryTotal = summarySubscription + summarySetupFee;
     // Deep-links the tier addendum the checkbox is agreeing to, rather than
     // dropping the reader at the top of an eleven-section document.
     const termsSlug = resolvePlanTermsSlug(form.planCode);
@@ -529,8 +593,39 @@ function SignupPageContent() {
                                 name and degrade better for Bangla, which runs ~20%
                                 wider than English and would break an equal-width
                                 segmented strip at 360px. */}
+                            {/* Monthly/yearly, mirroring the pricing page's two
+                                choices rather than a free-form term: the backend
+                                stores a cycle, not a month count, and every
+                                renewal path reads that same field. */}
+                            <div className="mb-2 flex items-center gap-2" role="group" aria-label={t.auth.signup.billingCycleLabel}>
+                                {(['MONTHLY', 'YEARLY'] as const).map((cycle) => {
+                                    const active = form.billingCycle === cycle;
+                                    return (
+                                        <button
+                                            key={cycle}
+                                            type="button"
+                                            aria-pressed={active}
+                                            onClick={() => handleChange('billingCycle', cycle)}
+                                            className={`min-h-touch rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${active
+                                                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            {cycle === 'MONTHLY' ? t.auth.signup.billingMonthly : t.auth.signup.billingYearly}
+                                        </button>
+                                    );
+                                })}
+                                {selectedPlanYearlySaving > 0 && (
+                                    <span className="ms-auto text-xs font-medium text-emerald-600">
+                                        {formatMessage(t.auth.signup.yearlySave, { percent: String(selectedPlanYearlySaving) })}
+                                    </span>
+                                )}
+                            </div>
                             {visiblePlans.map((plan) => {
                                 const selected = form.planCode === plan.code;
+                                const yearly = form.billingCycle === 'YEARLY';
+                                const price = yearly ? yearlyTotalFor(plan) : plan.monthly_price;
+                                const setupFee = plan.setup_fee ?? 0;
                                 return (
                                     <label
                                         key={plan.code}
@@ -549,12 +644,27 @@ function SignupPageContent() {
                                             <span className="flex flex-wrap items-baseline justify-between gap-x-2">
                                                 <span className="text-sm font-semibold text-gray-900">{plan.name}</span>
                                                 <span className="text-sm font-semibold text-gray-900">
-                                                    {formatBDT(plan.monthly_price)}
+                                                    {money(price)}
                                                     <span className="ms-1 text-xs font-normal text-gray-400">
-                                                        {t.auth.signup.monthSuffix}
+                                                        {yearly ? t.auth.signup.yearSuffix : t.auth.signup.monthSuffix}
                                                     </span>
                                                 </span>
                                             </span>
+                                            {yearly && (
+                                                <span className="mt-0.5 block text-xs text-gray-500">
+                                                    {formatMessage(t.auth.signup.perMonthEquivalent, {
+                                                        amount: money(Math.round(price / 12)),
+                                                    })}
+                                                </span>
+                                            )}
+                                            {/* Zero is hidden rather than shown as "no fee": every
+                                                plan reads 0 until an admin sets one, and a row of
+                                                ৳0 across all four would say nothing. */}
+                                            {setupFee > 0 && (
+                                                <span className="mt-0.5 block text-xs text-amber-700">
+                                                    {formatMessage(t.auth.signup.setupFeeLine, { amount: money(setupFee) })}
+                                                </span>
+                                            )}
                                             {plan.description && selected && (
                                                 <span className="mt-0.5 block text-xs text-gray-500">{plan.description}</span>
                                             )}
@@ -563,6 +673,38 @@ function SignupPageContent() {
                                 );
                             })}
                         </fieldset>
+
+                        {/* The first place signup states a total. Without it the
+                            onboarding fee stayed invisible until the in-app
+                            billing page, which is after the account exists. */}
+                        {selectedPlan && (
+                            <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                <p className="mb-2 text-xs font-medium text-gray-600">
+                                    {t.auth.signup.summaryTitle}
+                                </p>
+                                <dl className="space-y-1.5 text-sm">
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <dt className="text-gray-600">
+                                            {form.billingCycle === 'YEARLY'
+                                                ? t.auth.signup.summarySubscriptionYearly
+                                                : t.auth.signup.summarySubscriptionMonthly}
+                                        </dt>
+                                        <dd className="font-medium tabular-nums text-gray-900">{money(summarySubscription)}</dd>
+                                    </div>
+                                    {summarySetupFee > 0 && (
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <dt className="text-gray-600">{t.auth.signup.summarySetupFee}</dt>
+                                            <dd className="font-medium tabular-nums text-gray-900">{money(summarySetupFee)}</dd>
+                                        </div>
+                                    )}
+                                    <div className="flex items-baseline justify-between gap-2 border-t border-gray-200 pt-1.5">
+                                        <dt className="font-semibold text-gray-900">{t.auth.signup.summaryTotal}</dt>
+                                        <dd className="font-semibold tabular-nums text-gray-900">{money(summaryTotal)}</dd>
+                                    </div>
+                                </dl>
+                                <p className="mt-2 text-xs text-gray-500">{t.auth.signup.summaryNote}</p>
+                            </div>
+                        )}
 
                         <div className="md:col-span-2 space-y-1.5">
                             <p className="text-xs font-medium text-gray-600 ms-1">
