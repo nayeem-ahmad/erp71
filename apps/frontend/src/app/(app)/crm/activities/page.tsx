@@ -6,6 +6,9 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CalendarPlus, Eye, PhoneCall, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
@@ -25,6 +28,7 @@ import {
     Button,
     Select,
     StatusBadge,
+    Switch,
     type StatusBadgeTone,
 } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -42,6 +46,8 @@ interface CrmActivityRow {
     customer: { id: string; name: string; phone: string | null } | null;
     lead: { id: string; name: string; mobile: string | null } | null;
     assignee: { id: string; name: string; email: string } | null;
+    is_approved: boolean;
+    approver: { id: string; name: string; email: string } | null;
     created_at: string;
 }
 
@@ -91,6 +97,7 @@ export default function CrmActivitiesPage() {
         channelId: '',
         leadOwner: '',
         assignee: '',
+        approval: '' as '' | 'approved' | 'pending',
         overdueOnly: false,
         createdRange: null as CreatedRange | null,
         dueRange: createdRangeFromPreset('today') as CreatedRange | null,
@@ -102,6 +109,7 @@ export default function CrmActivitiesPage() {
         channelId: channelFilter,
         leadOwner: leadOwnerFilter,
         assignee: assigneeFilter,
+        approval: approvalFilter,
         overdueOnly,
         createdRange,
         dueRange,
@@ -117,6 +125,11 @@ export default function CrmActivitiesPage() {
     // Logging a call or planning one from here, rather than opening the lead
     // first: the composer asks which lead or customer it is against.
     const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
+
+    // Everyone sees who has been signed off; only a reviewer can change it. The
+    // switch is rendered disabled rather than hidden for the rest, so a rep can
+    // tell "nobody has approved this yet" from "you cannot see the approvals".
+    const [canApprove, setCanApprove] = useState(false);
     const { options: memberOptions } = useTeamMemberOptions(m.filters.me);
 
     /**
@@ -150,6 +163,7 @@ export default function CrmActivitiesPage() {
                 overdue: overdueOnly || undefined,
                 leadOwner: leadOwnerFilter || undefined,
                 assignedTo: assigneeFilter || undefined,
+                approval: approvalFilter || undefined,
                 mine: mineOnly || undefined,
                 ...applyDueRangeQuery(dueRange),
                 ...applyCreatedRangeQuery(createdRange),
@@ -169,6 +183,7 @@ export default function CrmActivitiesPage() {
         overdueOnly,
         leadOwnerFilter,
         assigneeFilter,
+        approvalFilter,
         mineOnly,
         dueRange,
         createdRange,
@@ -183,6 +198,32 @@ export default function CrmActivitiesPage() {
         if (!scopeReady) return;
         api.getCrmActivitySummary({ mine: mineOnly || undefined }).then(setSummary).catch(() => null);
     }, [mineOnly, scopeReady]);
+
+    useEffect(() => {
+        api.getMe()
+            .then((me) => {
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
+                    ?? me?.tenants?.[0];
+                setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_CRM_ACTIVITY'));
+            })
+            .catch(() => setCanApprove(false));
+    }, []);
+
+    /**
+     * Flipped in place, not reloaded: the list is filtered and a reload would
+     * pull the row out from under the cursor mid-review. The optimistic write is
+     * rolled back on failure so the switch can never show a sign-off the server
+     * refused.
+     */
+    const toggleApproval = useCallback(async (id: string, approved: boolean) => {
+        setRows((current) => current.map((row) => (row.id === id ? { ...row, is_approved: approved } : row)));
+        try {
+            await api.setCrmActivityApproval(id, approved);
+        } catch {
+            setRows((current) => current.map((row) => (row.id === id ? { ...row, is_approved: !approved } : row)));
+            toast.error(m.approvalFailed);
+        }
+    }, [m.approvalFailed]);
 
     useEffect(() => { void load(); }, [load]);
     useEffect(() => { loadSummary(); }, [loadSummary]);
@@ -241,6 +282,26 @@ export default function CrmActivitiesPage() {
                 </StatusBadge>
             ),
         }),
+        columnHelper.accessor('is_approved', {
+            id: 'approved',
+            header: m.columns.approved,
+            cell: (info) => {
+                const row = info.row.original;
+                // Only a plan can be approved. A DONE row records a call that
+                // already happened and a CANCELLED one never will, so a switch
+                // there would offer a decision that changes nothing.
+                if (row.status !== 'PLANNED') return <span className="text-gray-400">—</span>;
+                return (
+                    <Switch
+                        checked={row.is_approved}
+                        onCheckedChange={(next) => { void toggleApproval(row.id, next); }}
+                        disabled={!canApprove}
+                        aria-label={m.approveActivity}
+                        title={row.approver ? `${m.columns.approved} — ${row.approver.name}` : undefined}
+                    />
+                );
+            },
+        }),
         columnHelper.display({
             id: 'actions',
             header: '',
@@ -259,7 +320,7 @@ export default function CrmActivitiesPage() {
                 );
             },
         }),
-    ], [m, t.common.createdAt]);
+    ], [m, t.common.createdAt, canApprove, toggleApproval]);
 
     return (
         <PageShell>
@@ -318,6 +379,15 @@ export default function CrmActivitiesPage() {
                     <option value="PLANNED">{m.status.PLANNED}</option>
                     <option value="DONE">{m.status.DONE}</option>
                     <option value="CANCELLED">{m.status.CANCELLED}</option>
+                </Select>
+                <Select
+                    value={approvalFilter}
+                    onChange={(e) => setFilter('approval', e.target.value as '' | 'approved' | 'pending')}
+                    className="w-auto max-w-[180px]"
+                >
+                    <option value="">{m.filters.allApprovals}</option>
+                    <option value="approved">{m.filters.approvalApproved}</option>
+                    <option value="pending">{m.filters.approvalPending}</option>
                 </Select>
                 <Select
                     value={targetFilter}

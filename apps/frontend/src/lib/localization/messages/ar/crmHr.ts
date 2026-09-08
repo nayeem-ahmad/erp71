@@ -96,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: 'مخطط',
             emptyMessage: 'لا توجد أنشطة مطابقة لهذه الفلاتر.',
             loadFailed: 'تعذّر تحميل الأنشطة.',
+            approvalFailed: 'تعذّر تحديث الاعتماد.',
+            approveActivity: 'اعتماد هذا النشاط',
             open: 'فتح',
             columns: {
                 subject: 'النشاط',
@@ -103,6 +105,7 @@ export const crmHrMessages = {
                 target: 'عميل محتمل أو زبون',
                 due: 'الاستحقاق',
                 status: 'الحالة',
+                approved: 'معتمد',
             },
             status: { PLANNED: 'مخطط', DONE: 'منجز', CANCELLED: 'ملغى' },
             filters: {
@@ -118,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: 'كل المسؤولين',
                 me: 'أنا',
                 due: 'الاستحقاق',
+                allApprovals: 'كل حالات الاعتماد',
+                approvalApproved: 'معتمد',
+                approvalPending: 'بانتظار الاعتماد',
             },
         },
         setup: {

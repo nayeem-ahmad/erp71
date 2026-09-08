@@ -20,8 +20,10 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CrmActivitiesService } from './crm-activities.service';
 import {
+    type ActivityApprovalFilter,
     CompleteCrmActivityDto,
     CreateCrmActivityDto,
+    SetActivityApprovalDto,
     UpdateCrmActivityDto,
 } from './crm-activities.dto';
 
@@ -69,6 +71,7 @@ export class CrmActivitiesController {
         @Query('leadOwner') leadOwner?: string,
         @Query('purposeId') purposeId?: string,
         @Query('channelId') channelId?: string,
+        @Query('approval') approval?: ActivityApprovalFilter,
         @Query('dueToday') dueToday?: string,
         @Query('overdue') overdue?: string,
         @Query('dueFrom') dueFrom?: string,
@@ -92,6 +95,7 @@ export class CrmActivitiesController {
             leadOwner,
             purposeId,
             channelId,
+            approval,
             dueToday: dueToday === 'true',
             overdue: overdue === 'true',
             dueFrom,
@@ -119,6 +123,21 @@ export class CrmActivitiesController {
         @Body() dto: UpdateCrmActivityDto,
     ) {
         return this.service.update(tenant.tenantId, id, dto, tenant.timezone);
+    }
+
+    /**
+     * The reviewer's switch. Its own permission: signing off on somebody else's
+     * plan is a different job from writing one, so a rep with MANAGE_CRM_TASKS
+     * cannot approve their own work.
+     */
+    @Patch(':id/approval')
+    @RequireStorePermission(StorePermission.APPROVE_CRM_ACTIVITY)
+    setApproval(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: SetActivityApprovalDto,
+    ) {
+        return this.service.setApproval(tenant.tenantId, tenant.userId, id, dto.approved);
     }
 
     @Post(':id/complete')

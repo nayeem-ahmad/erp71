@@ -96,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "Planificadas",
             emptyMessage: "Ninguna actividad coincide con estos filtros.",
             loadFailed: "No se pudieron cargar las actividades.",
+            approvalFailed: "No se pudo actualizar la aprobación.",
+            approveActivity: "Aprobar esta actividad",
             open: "Abrir",
             columns: {
                 subject: "Actividad",
@@ -103,6 +105,7 @@ export const crmHrMessages = {
                 target: "Oportunidad o cliente",
                 due: "Vence",
                 status: "Estado",
+                approved: "Aprobada",
             },
             status: { PLANNED: "Planificada", DONE: "Hecha", CANCELLED: "Cancelada" },
             filters: {
@@ -118,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "Todos los responsables",
                 me: "Yo",
                 due: "Vence",
+                allApprovals: "Todas las aprobaciones",
+                approvalApproved: "Aprobada",
+                approvalPending: "Pendiente de aprobación",
             },
         },
         setup: {

@@ -96,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "नियोजित",
             emptyMessage: "इन फ़िल्टरों से कोई गतिविधि मेल नहीं खाती।",
             loadFailed: "गतिविधियाँ लोड नहीं हो सकीं।",
+            approvalFailed: 'अनुमोदन अपडेट नहीं हो सका।',
+            approveActivity: 'इस गतिविधि को अनुमोदित करें',
             open: "खोलें",
             columns: {
                 subject: "गतिविधि",
@@ -103,6 +105,7 @@ export const crmHrMessages = {
                 target: "लीड या ग्राहक",
                 due: "नियत",
                 status: "स्थिति",
+                approved: 'अनुमोदित',
             },
             status: { PLANNED: "नियोजित", DONE: "हो गया", CANCELLED: "रद्द" },
             filters: {
@@ -118,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "सभी ज़िम्मेदार",
                 me: "मैं",
                 due: "नियत",
+                allApprovals: 'सभी अनुमोदन',
+                approvalApproved: 'अनुमोदित',
+                approvalPending: 'अनुमोदन की प्रतीक्षा में',
             },
         },
         setup: {

@@ -100,6 +100,8 @@ export const crmHrMessages = {
             totalPlanned: 'Planned',
             emptyMessage: 'No activities match these filters.',
             loadFailed: 'Could not load activities.',
+            approvalFailed: 'Could not update approval.',
+            approveActivity: 'Approve this activity',
             open: 'Open',
             columns: {
                 subject: 'Activity',
@@ -107,6 +109,7 @@ export const crmHrMessages = {
                 target: 'Lead or customer',
                 due: 'Due',
                 status: 'Status',
+                approved: 'Approved',
             },
             status: { PLANNED: 'Planned', DONE: 'Done', CANCELLED: 'Cancelled' },
             filters: {
@@ -122,6 +125,9 @@ export const crmHrMessages = {
                 allAssignees: 'All assignees',
                 me: 'Me',
                 due: 'Due',
+                allApprovals: 'All approvals',
+                approvalApproved: 'Approved',
+                approvalPending: 'Awaiting approval',
             },
         },
         setup: {

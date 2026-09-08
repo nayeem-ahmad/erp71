@@ -96,6 +96,8 @@ export const crmHrMessages = {
             totalPlanned: "পরিকল্পিত",
             emptyMessage: "এই ফিল্টারে কোনো কার্যক্রম নেই।",
             loadFailed: "কার্যক্রম লোড করা যায়নি।",
+            approvalFailed: "অনুমোদন হালনাগাদ করা যায়নি।",
+            approveActivity: "এই কার্যক্রম অনুমোদন করুন",
             open: "খুলুন",
             columns: {
                 subject: "কার্যক্রম",
@@ -103,6 +105,7 @@ export const crmHrMessages = {
                 target: "লিড বা গ্রাহক",
                 due: "নির্ধারিত",
                 status: "অবস্থা",
+                approved: "অনুমোদিত",
             },
             status: { PLANNED: "পরিকল্পিত", DONE: "সম্পন্ন", CANCELLED: "বাতিল" },
             filters: {
@@ -118,6 +121,9 @@ export const crmHrMessages = {
                 allAssignees: "সব দায়িত্বপ্রাপ্ত",
                 me: "আমি",
                 due: "সময়সীমা",
+                allApprovals: "সব অনুমোদন",
+                approvalApproved: "অনুমোদিত",
+                approvalPending: "অনুমোদনের অপেক্ষায়",
             },
         },
         setup: {
