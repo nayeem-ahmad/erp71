@@ -3,14 +3,23 @@ import { Throttle } from '@nestjs/throttler';
 import { InvitationsService } from './invitations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 class InviteDto {
     @IsEmail()
     email: string;
 
+    /** Single-role form. Ignored when `tenantRoleIds` is given; one of the two is required. */
+    @IsOptional()
     @IsString()
-    tenantRoleId: string;
+    tenantRoleId?: string;
+
+    /** Every role the invitee will hold — their access is the union of all of them. */
+    @IsOptional()
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsString({ each: true })
+    tenantRoleIds?: string[];
 }
 
 class AcceptInvitationDto {
@@ -38,8 +47,23 @@ class AcceptSignupDto {
 }
 
 class UpdateMemberRoleDto {
+    /** Single-role form. Ignored when `tenantRoleIds` is given; one of the two is required. */
+    @IsOptional()
     @IsString()
-    tenantRoleId: string;
+    tenantRoleId?: string;
+
+    /** The member's whole role set, primary first. */
+    @IsOptional()
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsString({ each: true })
+    tenantRoleIds?: string[];
+}
+
+/** Accepts either the plural `tenantRoleIds` or the older singular `tenantRoleId`. */
+function roleIdsFrom(dto: { tenantRoleId?: string; tenantRoleIds?: string[] }): string[] {
+    if (dto.tenantRoleIds?.length) return dto.tenantRoleIds;
+    return dto.tenantRoleId ? [dto.tenantRoleId] : [];
 }
 
 @Controller('invitations')
@@ -77,7 +101,7 @@ export class InvitationsController {
     async updateMemberRole(@Request() req, @Param('userId') userId: string, @Body() dto: UpdateMemberRoleDto) {
         const tenantId: string | undefined = req.tenantId;
         if (!tenantId) throw new ForbiddenException('Tenant context required. Send x-tenant-id header.');
-        return this.service.updateMemberRole(tenantId, req.user.userId, req.userRole, userId, dto.tenantRoleId);
+        return this.service.updateMemberRole(tenantId, req.user.userId, req.userRole, userId, roleIdsFrom(dto));
     }
 
     @UseGuards(JwtAuthGuard)
@@ -86,7 +110,7 @@ export class InvitationsController {
     async invite(@Request() req, @Body() dto: InviteDto) {
         const tenantId: string | undefined = req.tenantId;
         if (!tenantId) throw new ForbiddenException('Tenant context required. Send x-tenant-id header.');
-        await this.service.invite(tenantId, req.user.userId, req.userRole, dto.email, dto.tenantRoleId);
+        await this.service.invite(tenantId, req.user.userId, req.userRole, dto.email, roleIdsFrom(dto));
         return { message: 'Invitation sent.' };
     }
 

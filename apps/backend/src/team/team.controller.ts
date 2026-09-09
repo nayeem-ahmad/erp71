@@ -26,6 +26,16 @@ import {
     UpdateTenantRoleDto,
 } from './team.dto';
 
+/**
+ * Reads the role set out of a body that may carry either the plural
+ * `tenantRoleIds` or the older singular `tenantRoleId`. Empty is left for the
+ * service to reject, so the message is the same wherever the call came from.
+ */
+function roleIdsFrom(dto: { tenantRoleId?: string; tenantRoleIds?: string[] }): string[] {
+    if (dto.tenantRoleIds?.length) return dto.tenantRoleIds;
+    return dto.tenantRoleId ? [dto.tenantRoleId] : [];
+}
+
 @Controller('team')
 // Every mutating handler here writes its own richer `team.*` audit row.
 @NoAudit()
@@ -75,7 +85,7 @@ export class TeamController {
 
     @Post('invitations')
     invite(@Tenant() ctx: TenantContext, @Body() dto: InviteMemberDto) {
-        return this.team.invite(ctx, dto.email, dto.tenantRoleId);
+        return this.team.invite(ctx, dto.email, roleIdsFrom(dto));
     }
 
     @Delete('invitations/:id')
@@ -88,9 +98,19 @@ export class TeamController {
         return this.team.getMember(ctx, userId);
     }
 
+    /**
+     * Accepts both shapes: `{ tenantRoleIds }` for a member holding several roles,
+     * and the older `{ tenantRoleId }` for one. The route keeps its singular name
+     * so existing clients keep working.
+     */
     @Patch('members/:userId/role')
     updateRole(@Tenant() ctx: TenantContext, @Param('userId') userId: string, @Body() dto: UpdateRoleDto) {
-        return this.team.updateRole(ctx, userId, dto.tenantRoleId);
+        return this.team.updateRoles(ctx, userId, roleIdsFrom(dto));
+    }
+
+    @Patch('members/:userId/roles')
+    updateRoles(@Tenant() ctx: TenantContext, @Param('userId') userId: string, @Body() dto: UpdateRoleDto) {
+        return this.team.updateRoles(ctx, userId, roleIdsFrom(dto));
     }
 
     @Post('members/:userId/stores')

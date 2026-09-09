@@ -437,7 +437,6 @@ model User {
   chatConversationsCreated          ChatConversation[]          @relation("ChatConversationCreator")
   chatParticipations                ChatParticipant[]           @relation("ChatParticipantUser")
   chatMessages                      ChatMessage[]               @relation("ChatMessageSender")
-
 }
 
 /// Why the token was issued. A password reset and a partner invite are the same
@@ -550,6 +549,8 @@ model UserInvitation {
   id             String    @id @default(uuid())
   tenant_id      String
   email          String
+  /// Primary role of the invite — the first of `roles`. Non-null so every
+  /// pre-multi-role read of an invitation still resolves a role name.
   tenant_role_id String
   token_hash     String    @unique
   invited_by     String
@@ -557,11 +558,26 @@ model UserInvitation {
   accepted_at    DateTime?
   created_at     DateTime  @default(now())
 
-  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  tenantRole TenantRole @relation(fields: [tenant_role_id], references: [id], onDelete: Restrict)
-  invitedBy  User       @relation("InvitationSender", fields: [invited_by], references: [id])
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenantRole TenantRole           @relation(fields: [tenant_role_id], references: [id], onDelete: Restrict)
+  invitedBy  User                 @relation("InvitationSender", fields: [invited_by], references: [id])
+  roles      UserInvitationRole[]
 
   @@index([tenant_id, email])
+}
+
+/// Every role an invitee will hold once they accept. Mirrors `TenantUserRole` so
+/// the membership the invite promises is the membership acceptance grants.
+model UserInvitationRole {
+  id             String @id @default(uuid())
+  invitation_id  String
+  tenant_role_id String
+
+  invitation UserInvitation @relation(fields: [invitation_id], references: [id], onDelete: Cascade)
+  tenantRole TenantRole     @relation(fields: [tenant_role_id], references: [id], onDelete: Cascade)
+
+  @@unique([invitation_id, tenant_role_id])
+  @@index([tenant_role_id])
 }
 
 model AuditLog {
@@ -1127,31 +1143,66 @@ model TenantUser {
   tenant_id      String
   user_id        String
   role           UserRole @default(CASHIER)
+  /// The member's primary role — the first of `roles`. Kept because it is what
+  /// every pre-multi-role read still joins on (member lists, the invite flow,
+  /// `sync-role-permissions.ts`) and because a member's coarse `role` enum is
+  /// derived from a name. The full set a member holds lives in `roles`, and
+  /// their effective permissions are the union of all of them.
   tenant_role_id String?
 
   // Relations
-  tenant     Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tenantRole TenantRole? @relation(fields: [tenant_role_id], references: [id], onDelete: SetNull)
+  tenant     Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenantRole TenantRole?      @relation(fields: [tenant_role_id], references: [id], onDelete: SetNull)
+  roles      TenantUserRole[]
 
   @@unique([tenant_id, user_id])
 }
 
-model TenantRole {
-  id          String   @id @default(uuid())
-  tenant_id   String
-  name        String
-  description String?
-  is_system   Boolean  @default(false)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+/// Every TenantRole a member holds. A member may hold several — a Sales Manager
+/// who also does the books — and their access is the union of all of them, which
+/// is what `syncMemberPermissionsFromRole` materializes into
+/// `UserStorePermission`. One row per role rather than a list column so a role
+/// cannot be deleted out from under a member unnoticed and so
+/// `TenantRole.member_count` is a plain relation count.
+model TenantUserRole {
+  id             String   @id @default(uuid())
+  tenant_user_id String
+  tenant_role_id String
+  assigned_at    DateTime @default(now())
 
-  tenant      Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  permissions TenantRolePermission[]
-  members     TenantUser[]
-  invitations UserInvitation[]
+  tenantUser TenantUser @relation(fields: [tenant_user_id], references: [id], onDelete: Cascade)
+  tenantRole TenantRole @relation(fields: [tenant_role_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_user_id, tenant_role_id])
+  @@index([tenant_role_id])
+}
+
+model TenantRole {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  name         String
+  description  String?
+  is_system    Boolean  @default(false)
+  /// The `TENANT_ROLE_TEMPLATES` entry this role was seeded from, and the key the
+  /// template sync finds the tenant's copy by after an owner renames it. Null for
+  /// the three legacy system roles (Manager/Cashier/Accountant, which
+  /// `sync-role-permissions.ts` reconciles by name instead) and for roles an owner
+  /// wrote themselves. Postgres treats NULLs as distinct, so the unique below
+  /// still allows any number of those per tenant.
+  template_key String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant          Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  permissions     TenantRolePermission[]
+  members         TenantUser[]
+  memberRoles     TenantUserRole[]
+  invitations     UserInvitation[]
+  invitationRoles UserInvitationRole[]
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, template_key])
   @@index([tenant_id])
 }
 
