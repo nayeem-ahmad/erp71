@@ -270,13 +270,21 @@ export class TenantsService {
             throw new BadRequestException('mode must be "transactions" or "all"');
         }
 
+        // The whole wipe is one transaction so a half-cleared store is not a
+        // reachable state. Prisma's default interactive-transaction timeout is
+        // 5s, which a store carrying a full demo dataset (thousands of sales,
+        // vouchers and movements across ~60 tables) blows straight through — the
+        // clear then fails mid-way and rolls back, every time.
         await this.db.$transaction(async (tx) => {
             // --- Transactional / operational records ---
 
             // Demo-data batch history (metadata; both modes reset the append counter)
             await tx.demoDataBatch.deleteMany({ where: { tenant_id: tenantId } });
 
-            // CRM operational (before Customer)
+            // CRM operational (before Customer). CrmActivity goes first: it FKs
+            // Lead and Customer with onDelete: Cascade, but an activity attached
+            // to neither would otherwise survive the wipe.
+            await tx.crmActivity.deleteMany({ where: { tenant_id: tenantId } });
             await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation
             await tx.crmFollowUp.deleteMany({ where: { tenant_id: tenantId } });
             await tx.customerInteraction.deleteMany({ where: { tenant_id: tenantId } });
@@ -302,6 +310,7 @@ export class TenantsService {
             await tx.purchase.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseItem
             await tx.purchaseOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseOrderItem
             await tx.purchaseQuotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseQuotationItem
+            await tx.productDemand.deleteMany({ where: { tenant_id: tenantId } }); // cascades ProductDemandItem
 
             // Inventory operational
             await tx.productionJob.deleteMany({ where: { tenantId } });
@@ -309,6 +318,16 @@ export class TenantsService {
             await tx.inventoryShrinkage.deleteMany({ where: { tenant_id: tenantId } }); // cascades InventoryShrinkageItem
             await tx.warehouseTransfer.deleteMany({ where: { tenant_id: tenantId } }); // cascades WarehouseTransferItem
             await tx.stockTakeSession.deleteMany({ where: { tenant_id: tenantId } }); // cascades StockTakeCountLine
+
+            // Records pointing at a Voucher, before the vouchers themselves.
+            await tx.fundTransfer.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.investorProfitRun.deleteMany({ where: { tenant_id: tenantId } }); // cascades InvestorProfitShare
+            await tx.investorCapitalTxn.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.assetDepreciationEntry.deleteMany({ where: { asset: { tenant_id: tenantId } } });
+            await tx.salaryAccrual.deleteMany({ where: { tenant_id: tenantId } });
+            // Depreciation entries are gone, so the running total on the asset is
+            // no longer backed by anything.
+            await tx.fixedAsset.updateMany({ where: { tenant_id: tenantId }, data: { accumulated_depreciation: 0 } });
 
             // Accounting journals
             await tx.voucher.deleteMany({ where: { tenant_id: tenantId } }); // cascades VoucherDetail, PostingEvent
@@ -322,6 +341,11 @@ export class TenantsService {
             await tx.attendanceRecord.deleteMany({ where: { tenant_id: tenantId } });
             await tx.leaveRequest.deleteMany({ where: { tenant_id: tenantId } });
             await tx.leaveBalance.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.payrollRun.deleteMany({ where: { tenant_id: tenantId } }); // cascades PayrollLine
+            await tx.expenseClaim.deleteMany({ where: { tenant_id: tenantId } }); // cascades ExpenseClaimLine
+
+            // In-app notices raised by the records above
+            await tx.notification.deleteMany({ where: { tenant_id: tenantId } });
 
             // Storefront & sessions
             await tx.storefrontOrder.deleteMany({ where: { tenantId } }); // cascades StorefrontOrderItem
@@ -332,6 +356,10 @@ export class TenantsService {
 
             if (mode === 'all') {
                 // --- Master / reference data ---
+
+                // Projects before Employee — a task may be assigned to one.
+                await tx.project.deleteMany({ where: { tenant_id: tenantId } }); // cascades tasks, statuses, milestones
+                await tx.supportThread.deleteMany({ where: { tenantId } }); // cascades SupportMessage
 
                 // BOM before Products
                 await tx.bomRecipe.deleteMany({ where: { tenantId } }); // cascades BomComponent, ProductionJob
@@ -359,11 +387,25 @@ export class TenantsService {
                 await tx.productSubgroup.deleteMany({ where: { tenant_id: tenantId } });
                 await tx.productGroup.deleteMany({ where: { tenant_id: tenantId } });
 
-                // HR master data (operational records deleted above)
+                // CRM contacts (no dependents; captured business cards)
+                await tx.crmContact.deleteMany({ where: { tenant_id: tenantId } });
+
+                // HR master data (operational records deleted above). Employee
+                // first: EmployeeSchedule cascades from it and would otherwise
+                // block the work schedules.
                 await tx.employee.deleteMany({ where: { tenant_id: tenantId } });
                 await tx.designation.deleteMany({ where: { tenant_id: tenantId } });
                 await tx.department.deleteMany({ where: { tenant_id: tenantId } });
                 await tx.leaveType.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.workSchedule.deleteMany({ where: { tenant_id: tenantId } }); // cascades WorkScheduleDay
+                await tx.holiday.deleteMany({ where: { tenant_id: tenantId } });
+
+                // Finance master data (all journals and their sources are gone)
+                await tx.investor.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.fixedAsset.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.accountBudget.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.costCenter.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.fiscalPeriod.deleteMany({ where: { tenant_id: tenantId } });
 
                 // Inventory system data
                 await tx.inventoryReason.deleteMany({ where: { tenant_id: tenantId } });
@@ -377,7 +419,7 @@ export class TenantsService {
                 // until the next container restart runs sync:lead-taxonomy.
                 await seedDefaultLeadTaxonomy(tx, tenantId);
             }
-        });
+        }, { timeout: 300_000, maxWait: 300_000 });
 
         return { cleared: mode };
     }
