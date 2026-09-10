@@ -5,6 +5,8 @@ import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
+import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
+import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
 import CustomerSelection, { type NewCustomerDraft } from './CustomerSelection';
 import TotalsFooter from './TotalsFooter';
 import PaymentSection from './PaymentSection';
@@ -108,6 +110,16 @@ interface SaleEntryLayoutProps {
      */
     showRateHistory?: boolean;
 
+    /**
+     * Warehouse controls. Passing fewer than two warehouses leaves the whole
+     * thing out, which is the single-warehouse shop's experience — unchanged.
+     */
+    warehouses?: WarehouseOption[];
+    warehouseId?: string;
+    setWarehouseId?: (warehouseId: string) => void;
+    perLineWarehouse?: boolean;
+    setPerLineWarehouse?: (perLine: boolean) => void;
+
     /** Buttons for the bottom of the end-hand panel. */
     actions: ReactNode;
     onSubmit?: (e: React.FormEvent) => void;
@@ -151,6 +163,11 @@ export default function SaleEntryLayout({
     payments,
     onPaymentChange,
     showRateHistory = false,
+    warehouses = [],
+    warehouseId = '',
+    setWarehouseId,
+    perLineWarehouse = false,
+    setPerLineWarehouse,
     actions,
     onSubmit,
 }: SaleEntryLayoutProps) {
@@ -163,6 +180,8 @@ export default function SaleEntryLayout({
             historyPartyName: customer?.name as string | undefined,
         }
         : {};
+
+    const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
 
     return (
         <DocumentEntryLayout
@@ -180,7 +199,18 @@ export default function SaleEntryLayout({
                     serialNumber={serialNumber}
                     readOnly={readOnly}
                     refReadOnly={refReadOnly}
-                />
+                >
+                    {setWarehouseId && (
+                        <WarehouseMetaFields
+                            warehouses={warehouses}
+                            value={warehouseId}
+                            onChange={setWarehouseId}
+                            perLine={perLineWarehouse}
+                            onPerLineChange={setPerLineWarehouse ?? (() => {})}
+                            readOnly={readOnly}
+                        />
+                    )}
+                </DocumentMetaBar>
             }
             partyPicker={
                 <CustomerSelection
@@ -211,6 +241,8 @@ export default function SaleEntryLayout({
                     onUpdateItem={onUpdateItem}
                     onRemoveItem={onRemoveItem}
                     readOnly={readOnly}
+                    warehouses={perLineWarehouse ? warehouses : []}
+                    entryWarehouseName={entryWarehouseName}
                     {...history}
                 />
             }

@@ -15,6 +15,7 @@ import SaleEntryLayout, {
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
@@ -62,6 +63,16 @@ function NewSalePageContent() {
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
     const printMenuRef = useRef<HTMLDivElement>(null);
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
+
+    // Which warehouse the goods leave. `defaultWarehouseId` is what the server
+    // would have resolved anyway, so the strip states it from the first render
+    // rather than showing a blank that quietly resolves on save.
+    const { warehouses, defaultWarehouseId } = useWarehouses('sale');
+    const [warehouseId, setWarehouseId] = useState('');
+    const [perLineWarehouse, setPerLineWarehouse] = useState(false);
+    useEffect(() => {
+        setWarehouseId((current) => current || defaultWarehouseId);
+    }, [defaultWarehouseId]);
 
     // Set when the screen was opened by "Convert to Sale" on a quotation or a
     // sales order. Held in state rather than read off the URL at submit time so
@@ -133,6 +144,10 @@ function NewSalePageContent() {
                 setAdjustments(duplicated
                     ? { ...EMPTY_ADJUSTMENTS, rounding: duplicated.rounding }
                     : EMPTY_ADJUSTMENTS);
+                if (duplicated?.warehouseId) setWarehouseId(duplicated.warehouseId);
+                // Reveal the column when the copied sale was genuinely split,
+                // so the overrides carried over are visible rather than silent.
+                if (seeded.items.some((line) => line.warehouseId)) setPerLineWarehouse(true);
                 setSource(seeded.source);
             } catch (error: any) {
                 console.error('Failed to load the document being converted', error);
@@ -302,10 +317,15 @@ function NewSalePageContent() {
         salesOrderId: source?.kind === 'salesOrder' ? source.id : undefined,
         customerId: customerDraft ? undefined : customer?.id,
         newCustomer: newCustomerPayload(customerDraft),
+        warehouseId: warehouseId || undefined,
         items: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
             priceAtSale: item.price,
+            // Only sent while the per-line column is showing: a line keeps its
+            // override in state when the column is hidden, and posting one the
+            // user cannot see would be a trap.
+            warehouseId: perLineWarehouse ? item.warehouseId : undefined,
         })),
         totalAmount: totals.total,
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
@@ -455,6 +475,11 @@ function NewSalePageContent() {
             tenantVatRate={vatRate}
             payments={payments}
             onPaymentChange={updatePayment}
+            warehouses={warehouses}
+            warehouseId={warehouseId}
+            setWarehouseId={setWarehouseId}
+            perLineWarehouse={perLineWarehouse}
+            setPerLineWarehouse={setPerLineWarehouse}
             showRateHistory
             onSubmit={handleSubmit}
             actions={

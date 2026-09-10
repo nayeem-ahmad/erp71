@@ -8,8 +8,27 @@ jest.mock('@/lib/api', () => ({
         getPurchaseReturns: jest.fn(),
         getPurchases: jest.fn(),
         createPurchaseReturn: jest.fn(),
+        getInventoryWarehouses: jest.fn(),
+        getInventorySettings: jest.fn(),
     },
 }));
+
+const MAIN_WAREHOUSE = {
+    id: 'wh-main',
+    name: 'Main Store',
+    code: 'WH-MAIN',
+    store_id: 'store-1',
+    is_default: true,
+    is_active: true,
+};
+const ANNEX_WAREHOUSE = {
+    id: 'wh-annex',
+    name: 'Annex',
+    code: 'WH-ANNEX',
+    store_id: 'store-1',
+    is_default: false,
+    is_active: true,
+};
 
 describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI', () => {
     beforeEach(() => {
@@ -46,6 +65,8 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
             },
         ]);
         api.createPurchaseReturn.mockResolvedValue({ id: 'pret-2' });
+        api.getInventoryWarehouses.mockResolvedValue([MAIN_WAREHOUSE]);
+        api.getInventorySettings.mockResolvedValue({});
     });
 
     it('renders purchase returns loaded from the API', async () => {
@@ -83,7 +104,45 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
                 expect.objectContaining({
                     storeId: 'store-1',
                     purchaseId: 'purchase-1',
-                    items: [{ purchaseItemId: 'item-1', quantity: 2 }],
+                    items: [{ purchaseItemId: 'item-1', quantity: 2, warehouseId: undefined }],
+                }),
+            );
+        });
+        // One warehouse, so no control at all and nothing sent for it.
+        expect(api.createPurchaseReturn.mock.calls[0][0].warehouseId).toBeUndefined();
+        expect(screen.queryByLabelText('Warehouse')).not.toBeInTheDocument();
+    });
+
+    it('returns the goods out of the warehouse the purchase received them into', async () => {
+        const { api } = require('@/lib/api');
+        api.getInventoryWarehouses.mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        const [purchase] = await api.getPurchases();
+        api.getPurchases.mockResolvedValue([{ ...purchase, warehouse_id: 'wh-annex' }]);
+
+        render(<PurchaseReturnsPage />);
+
+        fireEvent.click(screen.getByRole('button', { name: /new return/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /pur-00001/i }));
+        await waitFor(() => {
+            expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument();
+        });
+
+        // Defaulted from the purchase, not from the branch default.
+        await waitFor(() => {
+            expect((screen.getByLabelText('Warehouse') as HTMLSelectElement).value).toBe('wh-annex');
+        });
+
+        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        fireEvent.change(screen.getByLabelText('Warehouse — Coffee Beans'), {
+            target: { value: 'wh-main' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+
+        await waitFor(() => {
+            expect(api.createPurchaseReturn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    warehouseId: 'wh-annex',
+                    items: [{ purchaseItemId: 'item-1', quantity: 2, warehouseId: 'wh-main' }],
                 }),
             );
         });

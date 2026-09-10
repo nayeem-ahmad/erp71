@@ -5,7 +5,7 @@ import { createdAtRange } from '../common/created-range.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseDto } from './purchase.dto';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import { applyInventoryMovement, resolveEntryWarehouses } from '../database/inventory.utils';
 import { costBehaviourFor } from '../database/product-cost.utils';
 import { allocateLandedCost } from '../database/landed-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
@@ -49,7 +49,14 @@ export class PurchasesService {
         const totalAmount = subtotal + taxAmount + freightAmount - discountAmount;
 
         return this.db.$transaction(async (tx) => {
-            const warehouseId = await resolveWarehouseId(tx, tenantId, store.id, dto.warehouseId, 'purchase');
+            const warehouses = await resolveEntryWarehouses(
+                tx,
+                tenantId,
+                store.id,
+                dto.warehouseId,
+                dto.items.map((item) => item.warehouseId),
+                'purchase',
+            );
             let supplierId = dto.supplierId;
 
             if (dto.newSupplier) {
@@ -97,6 +104,7 @@ export class PurchasesService {
                     total_amount: totalAmount,
                     notes: dto.notes,
                     created_by: userId,
+                    warehouse_id: warehouses.entryWarehouseId,
                 },
             });
 
@@ -133,13 +141,17 @@ export class PurchasesService {
                         quantity: item.quantity,
                         unit_cost: item.unitCost,
                         line_total: item.quantity * item.unitCost,
+                        // Only a genuine override is stored; a line with none
+                        // follows the bill, so changing the bill's warehouse
+                        // does not have to rewrite every line.
+                        warehouse_id: item.warehouseId ?? null,
                     },
                 });
 
                 await applyInventoryMovement(tx, {
                     tenantId,
                     productId: item.productId,
-                    warehouseId,
+                    warehouseId: warehouses.warehouseIdFor(item.warehouseId),
                     quantityDelta: item.quantity,
                     movementType: 'PURCHASE_RECEIPT',
                     referenceType: 'PURCHASE',

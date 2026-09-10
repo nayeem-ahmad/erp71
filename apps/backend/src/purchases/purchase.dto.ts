@@ -21,6 +21,15 @@ export class CreatePurchaseItemDto {
     @IsNumber()
     @Min(0)
     unitCost: number;
+
+    /**
+     * Receive this line into a warehouse other than the bill's — one delivery
+     * unloaded into two of the branch's warehouses. Omit it and the line
+     * follows `CreatePurchaseDto.warehouseId`.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 }
 
 export class CreatePurchaseDto {

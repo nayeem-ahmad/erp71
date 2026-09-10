@@ -10,6 +10,7 @@ import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import TotalsFooter from '../../components/TotalsFooter';
 import DocumentMetaBar, { MetaField, metaFieldInputClass } from '@/components/document-entry/DocumentMetaBar';
+import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import {
     applyVoiceEntryReturnQuantities,
@@ -17,6 +18,7 @@ import {
     type VoiceEntryResult,
 } from '@/lib/voice-entry';
 import { useNewSaleCart, type LineItem } from '@/lib/hooks/useNewSaleCart';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { toast } from '@/lib/toast';
 
 /** Units of a sale line not already covered by an earlier return. */
@@ -46,9 +48,22 @@ export default function NewSalesReturnPage() {
     const [searching, setSearching] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
+    // Where the goods are put back. Seeded from the sale below rather than from
+    // the tenant default, so returning what was sold out of the annex puts it
+    // back in the annex — the server applies the same rule, and this makes it
+    // visible and overridable before the return is posted.
+    const { warehouses, defaultWarehouseId } = useWarehouses();
+    const [warehouseId, setWarehouseId] = useState('');
+    const [perLineWarehouse, setPerLineWarehouse] = useState(false);
+    const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
+
     useEffect(() => {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        setWarehouseId((current) => current || defaultWarehouseId);
+    }, [defaultWarehouseId]);
 
     const totals = useMemo(() => {
         const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -97,6 +112,7 @@ export default function NewSalesReturnPage() {
                         quantity: max,
                         maxQuantity: max,
                         discount: 0,
+                        warehouseId: saleItem.warehouse_id ?? undefined,
                     };
                 })
                 .filter((line: LineItem) => (line.maxQuantity ?? 0) > 0);
@@ -107,6 +123,10 @@ export default function NewSalesReturnPage() {
             }
 
             setSale(fullSale);
+            if (fullSale.warehouse_id) setWarehouseId(fullSale.warehouse_id);
+            // Shown rather than hidden behind the switch when the sale really
+            // was split: a warehouse steering a line has to be on the line.
+            if (lines.some((line) => line.warehouseId)) setPerLineWarehouse(true);
             // loadCart resets the whole cart, so carry over any reason already typed.
             loadCart({ items: lines, description });
         } catch (error: any) {
@@ -120,6 +140,8 @@ export default function NewSalesReturnPage() {
     const startOver = () => {
         setSale(null);
         setSerialNumber('');
+        setWarehouseId(defaultWarehouseId);
+        setPerLineWarehouse(false);
         clearCart();
     };
 
@@ -167,9 +189,13 @@ export default function NewSalesReturnPage() {
             await api.createReturn({
                 storeId: sale.store_id,
                 saleId: sale.id,
+                warehouseId: warehouseId || undefined,
                 items: items.map((item) => ({
                     saleItemId: item.sourceLineId,
                     quantity: item.quantity,
+                    // Only sent while the per-line column is showing, so a
+                    // hidden override can never post behind the user's back.
+                    warehouseId: perLineWarehouse ? item.warehouseId : undefined,
                 })),
                 reason: description || undefined,
             });
@@ -244,6 +270,13 @@ export default function NewSalesReturnPage() {
                             {sale?.serial_number || '—'}
                         </span>
                     </MetaField>
+                    <WarehouseMetaFields
+                        warehouses={warehouses}
+                        value={warehouseId}
+                        onChange={setWarehouseId}
+                        perLine={perLineWarehouse}
+                        onPerLineChange={setPerLineWarehouse}
+                    />
                 </DocumentMetaBar>
             }
             picker={
@@ -265,6 +298,8 @@ export default function NewSalesReturnPage() {
                     readOnlyPrice
                     maxQuantityOf={(item) => item.maxQuantity}
                     emptyMessage="Find a sale by its serial number to load the items you can return."
+                    warehouses={perLineWarehouse ? warehouses : []}
+                    entryWarehouseName={entryWarehouseName}
                 />
             }
             note={

@@ -2,13 +2,46 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesReturnsService } from './sales-returns.service';
 import { DatabaseService } from '../database/database.service';
 import { BadRequestException } from '@nestjs/common';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    resolveWarehouseId,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
   resolveWarehouseId: jest.fn(),
+  resolveEntryWarehouses: jest.fn(),
+  reversalWarehouseResolver: jest.fn(),
+  usableWarehouseIds: jest.fn(),
 }));
+
+/**
+ * The warehouse helpers stubbed to the shape the real ones return, so these
+ * tests stay about what the service does with a warehouse rather than about
+ * how one is resolved — `inventory.utils.spec.ts` covers that.
+ */
+function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
+  (resolveWarehouseId as jest.Mock).mockResolvedValue(defaultWarehouseId);
+  (resolveEntryWarehouses as jest.Mock).mockImplementation(
+    async (_tx: unknown, _tenantId: string, _storeId: string, entryWarehouseId?: string) => {
+      const entryId = entryWarehouseId ?? defaultWarehouseId;
+      return {
+        entryWarehouseId: entryId,
+        warehouseIdFor: (lineWarehouseId?: string | null) => lineWarehouseId || entryId,
+      };
+    },
+  );
+  (reversalWarehouseResolver as jest.Mock).mockImplementation(
+    (_tx: unknown, _tenantId: string, _storeId: string, documentWarehouseId?: string | null) =>
+      async (lineWarehouseId?: string | null) =>
+        lineWarehouseId ?? documentWarehouseId ?? defaultWarehouseId,
+  );
+  (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
+}
 
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
@@ -66,7 +99,7 @@ describe('SalesReturnsService', () => {
     }).compile();
 
     service = module.get<SalesReturnsService>(SalesReturnsService);
-    (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+    stubWarehouseResolution();
     (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
     (autoPostFromRules as jest.Mock).mockResolvedValue({
       postingStatus: 'posted',
@@ -115,6 +148,73 @@ describe('SalesReturnsService', () => {
           where: { id: 'cust-1' },
           data: { total_spent: { decrement: 20 } } // 2 * 10
       });
+  });
+
+  it('create() puts the goods back where the sale took them from', async () => {
+      // Without this a two-warehouse tenant gets every return landing in the
+      // configured default, which is exactly the mis-stocking the feature is
+      // meant to prevent.
+      db.sale.findUnique.mockResolvedValue({
+          id: 'sale-1',
+          customer_id: null,
+          warehouse_id: 'wh-main',
+          items: [
+              { id: 'item-1', product_id: 'p-1', quantity: 5, price_at_sale: 10, warehouse_id: null, returns: [] },
+              { id: 'item-2', product_id: 'p-2', quantity: 5, price_at_sale: 10, warehouse_id: 'wh-annex', returns: [] },
+          ],
+      });
+      db.salesReturn.create.mockResolvedValue({ id: 'return-99' });
+      (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set(['wh-main', 'wh-annex']));
+
+      await service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          saleId: 'sale-1',
+          items: [
+              { saleItemId: 'item-1', quantity: 1 },
+              { saleItemId: 'item-2', quantity: 1 },
+          ],
+      });
+
+      expect(db.salesReturn.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ warehouse_id: 'wh-main' }),
+        }),
+      );
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ productId: 'p-1', warehouseId: 'wh-main' }),
+      );
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ productId: 'p-2', warehouseId: 'wh-annex' }),
+      );
+  });
+
+  it('create() ignores a sale warehouse that has since been closed', async () => {
+      // The goods really did come from there, but a deactivated warehouse is no
+      // longer somewhere stock may be booked — and a closed warehouse must not
+      // be able to block a refund.
+      db.sale.findUnique.mockResolvedValue({
+          id: 'sale-1',
+          customer_id: null,
+          warehouse_id: 'wh-closed',
+          items: [
+              { id: 'item-1', product_id: 'p-1', quantity: 5, price_at_sale: 10, warehouse_id: null, returns: [] },
+          ],
+      });
+      db.salesReturn.create.mockResolvedValue({ id: 'return-98' });
+      (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set());
+
+      await service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          saleId: 'sale-1',
+          items: [{ saleItemId: 'item-1', quantity: 1 }],
+      });
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ productId: 'p-1', warehouseId: 'wh-1' }),
+      );
   });
 
   it('create() reduces customer due and writes a credit ledger entry when returning a credit sale', async () => {
@@ -246,7 +346,7 @@ describe('SalesReturnsService — returns without a sale', () => {
       providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
     }).compile();
     service = module.get<SalesReturnsService>(SalesReturnsService);
-    (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+    stubWarehouseResolution();
     (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
     (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted' });
   });

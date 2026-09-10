@@ -471,4 +471,152 @@ describe('Inventory Operations (e2e)', () => {
             expect(posted.status).toBe('POSTED');
         });
     });
+
+    /**
+     * The warehouse a document names is the one its stock actually moves
+     * through, and the one a reversal unwinds against. Proven end to end rather
+     * than against a mocked client, because the value of the stored column is
+     * precisely that it survives a round trip through the database.
+     */
+    describe('Warehouse selection on a sale', () => {
+        let splitSaleId: string;
+        let secondProductId: string;
+
+        const movementsFor = (saleId: string, type: string) => db.inventoryMovement.findMany({
+            where: { tenant_id: tenantId, reference_type: 'SALE', reference_id: saleId, movement_type: type },
+            select: { product_id: true, warehouse_id: true, quantity_delta: true },
+        });
+
+        it('stocks a second product in both warehouses', async () => {
+            const res = await request(app.getHttpServer())
+                .post('/products')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({ name: 'Split Line Item', sku: 'SPLIT-001', price: 20.00, initialStock: 0 })
+                .expect(201);
+
+            secondProductId = bodyOf(res).id;
+
+            // Enough in each warehouse for the sale below to draw from either.
+            for (const warehouseId of [sourceWarehouseId, destWarehouseId]) {
+                await db.productStock.upsert({
+                    where: {
+                        tenant_id_product_id_warehouse_id: {
+                            tenant_id: tenantId,
+                            product_id: secondProductId,
+                            warehouse_id: warehouseId,
+                        },
+                    },
+                    create: {
+                        tenant_id: tenantId,
+                        product_id: secondProductId,
+                        warehouse_id: warehouseId,
+                        quantity: 50,
+                    },
+                    update: { quantity: 50 },
+                });
+            }
+        });
+
+        it('posts each line out of the warehouse it names and records both levels', async () => {
+            const res = await request(app.getHttpServer())
+                .post('/sales')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    storeId,
+                    warehouseId: sourceWarehouseId,
+                    totalAmount: 50,
+                    amountPaid: 50,
+                    items: [
+                        { productId, quantity: 1, priceAtSale: 10 },
+                        { productId: secondProductId, quantity: 2, priceAtSale: 20, warehouseId: destWarehouseId },
+                    ],
+                    payments: [{ paymentMethod: 'Cash', amount: 50 }],
+                })
+                .expect(201);
+
+            splitSaleId = bodyOf(res).id;
+
+            const sale = await db.sale.findUniqueOrThrow({
+                where: { id: splitSaleId },
+                include: { items: true },
+            });
+            expect(sale.warehouse_id).toBe(sourceWarehouseId);
+
+            // The line that said nothing stores nothing and follows the sale;
+            // the one that overrode stores exactly what it overrode with.
+            const follower = sale.items.find((item) => item.product_id === productId);
+            const override = sale.items.find((item) => item.product_id === secondProductId);
+            expect(follower!.warehouse_id).toBeNull();
+            expect(override!.warehouse_id).toBe(destWarehouseId);
+
+            const movements = await movementsFor(splitSaleId, 'SALE');
+            expect(movements).toHaveLength(2);
+            expect(movements).toEqual(expect.arrayContaining([
+                { product_id: productId, warehouse_id: sourceWarehouseId, quantity_delta: -1 },
+                { product_id: secondProductId, warehouse_id: destWarehouseId, quantity_delta: -2 },
+            ]));
+        });
+
+        it('restocks each line into the warehouse it was sold out of when the sale is deleted', async () => {
+            // The regression this guards: before the sale recorded a warehouse,
+            // a delete re-resolved the tenant default and could restock a
+            // warehouse the goods had never been in.
+            const beforeDest = await db.productStock.findFirstOrThrow({
+                where: { product_id: secondProductId, warehouse_id: destWarehouseId },
+            });
+
+            await request(app.getHttpServer())
+                .delete(`/sales/${splitSaleId}`)
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .expect(200);
+
+            const reversals = await movementsFor(splitSaleId, 'SALE_DELETE_REVERSAL');
+            expect(reversals).toEqual(expect.arrayContaining([
+                { product_id: productId, warehouse_id: sourceWarehouseId, quantity_delta: 1 },
+                { product_id: secondProductId, warehouse_id: destWarehouseId, quantity_delta: 2 },
+            ]));
+
+            const afterDest = await db.productStock.findFirstOrThrow({
+                where: { product_id: secondProductId, warehouse_id: destWarehouseId },
+            });
+            expect(afterDest.quantity).toBe(beforeDest.quantity + 2);
+        });
+
+        it('refuses a line warehouse that belongs to another store', async () => {
+            const otherStore = await db.store.create({
+                data: { tenant_id: tenantId, name: 'Other Branch', address: 'Elsewhere' },
+            });
+            const otherWarehouse = await db.warehouse.create({
+                data: {
+                    tenant_id: tenantId,
+                    store_id: otherStore.id,
+                    name: 'Other Branch Warehouse',
+                    code: 'WH-OTHER',
+                },
+            });
+
+            // Reaching another branch's warehouse from a line would move stock
+            // between branches without a transfer.
+            const res = await request(app.getHttpServer())
+                .post('/sales')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    storeId,
+                    totalAmount: 10,
+                    amountPaid: 10,
+                    items: [{ productId, quantity: 1, priceAtSale: 10, warehouseId: otherWarehouse.id }],
+                    payments: [{ paymentMethod: 'Cash', amount: 10 }],
+                });
+
+            expect(res.status).toBe(400);
+        });
+    });
 });
