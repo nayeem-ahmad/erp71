@@ -16,8 +16,20 @@ jest.mock('next/navigation', () => ({
   },
 }));
 
-// Mock API layer
+// Mock API layer. `ApiError` has to be a real class: the page narrows on
+// `instanceof` to tell a rate limit apart from a wrong password.
 jest.mock('../../lib/api', () => ({
+  ApiError: class ApiError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+      public readonly code?: string,
+      public readonly retryAfter?: number,
+    ) {
+      super(message);
+      this.name = 'ApiError';
+    }
+  },
   api: {
     login: jest.fn().mockResolvedValue({
         access_token: 'fake-token',
@@ -108,6 +120,35 @@ describe('Login UI Authentication Mapping', () => {
 
     const errorMsg = await screen.findByText(/Invalid credentials/i);
     expect(errorMsg).toBeInTheDocument();
+  });
+
+  it('tells a throttled visitor how long to wait instead of quoting the server', async () => {
+    const { api, ApiError } = require('../../lib/api');
+    // What the backend sends once the account's sign-in budget is spent. Before
+    // the throttler was split per account, a whole office behind one NAT
+    // address hit this on somebody else's typing.
+    api.login.mockRejectedValueOnce(
+      new ApiError('Too many requests. Please wait 42 seconds and try again.', 429, 'TOO_MANY_REQUESTS', 42),
+    );
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: 'karim@shop.test' } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect(await screen.findByText('Too many sign-in attempts. Please wait 42 seconds and try again.')).toBeInTheDocument();
+  });
+
+  it('falls back to a usable wait when the server sends none', async () => {
+    const { api, ApiError } = require('../../lib/api');
+    api.login.mockRejectedValueOnce(new ApiError('Too Many Requests', 429, 'TOO_MANY_REQUESTS'));
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: 'karim@shop.test' } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect(await screen.findByText(/Please wait 60 seconds and try again/i)).toBeInTheDocument();
   });
 
   it('starts demo sandbox from the demo button', async () => {

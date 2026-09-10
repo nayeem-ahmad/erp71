@@ -103,6 +103,13 @@ export class ApiError extends Error {
          * body carries no code.
          */
         public readonly code?: string,
+        /**
+         * Seconds to wait before retrying, when the backend rate-limited the
+         * call. Read from the body rather than the `Retry-After` header, which
+         * the browser cannot see cross-origin unless the API exposes it — and
+         * the app and the API are on different hosts in production.
+         */
+        public readonly retryAfter?: number,
     ) {
         super(message);
         this.name = 'ApiError';
@@ -119,6 +126,17 @@ function readErrorCode(body: unknown): string | undefined {
         return (nested as Record<string, string>).code;
     }
     return undefined;
+}
+
+/** Reads the wait a rate-limited response asks for, in seconds. */
+function readRetryAfter(body: unknown): number | undefined {
+    if (typeof body !== 'object' || body === null) return undefined;
+    const record = body as Record<string, unknown>;
+    const nested = record.error;
+    const raw = typeof nested === 'object' && nested !== null
+        ? (nested as Record<string, unknown>).retry_after
+        : record.retry_after;
+    return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
@@ -1136,6 +1154,21 @@ export const api = {
      */
     uploadCrmPhoto: (body: { imageBase64: string; mimeType?: string; fileName?: string }) =>
         fetchWithAuth('/crm/photos', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * Store a cropped storefront hero image or logo. Returns the CDN URL, which
+     * the caller then saves through the storefront settings PATCH.
+     */
+    uploadStorefrontImage: (body: {
+        imageBase64: string;
+        kind: 'hero' | 'logo';
+        mimeType?: string;
+        fileName?: string;
+    }): Promise<{ url: string }> =>
+        fetchWithAuth('/tenants/storefront-image', {
             method: 'POST',
             body: JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
@@ -2466,7 +2499,17 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error?.message || body?.message || 'Login failed');
+        // An `ApiError` rather than a bare `Error` so the sign-in page can tell a
+        // rate limit (429, with a wait to quote) from a wrong password, instead
+        // of showing whatever sentence the server happened to send.
+        if (!res.ok) {
+            throw new ApiError(
+                body?.error?.message || body?.message || 'Login failed',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
+        }
         return body && 'data' in body ? body.data : body;
     }),
     verify2FALogin: (userId: string, code: string) => fetch(`${API_BASE}/auth/2fa/verify`, {
@@ -2475,7 +2518,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error?.message || body?.message || '2FA verification failed');
+        if (!res.ok) {
+            throw new ApiError(
+                body?.error?.message || body?.message || '2FA verification failed',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
+        }
         return body && 'data' in body ? body.data : body;
     }),
     // Runtime-configured rather than a NEXT_PUBLIC_ build arg, so turning Google

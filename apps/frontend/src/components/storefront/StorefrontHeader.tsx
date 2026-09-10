@@ -12,6 +12,10 @@ type CustomerSession = {
 type StorefrontHeaderProps = {
     slug: string;
     storeName: string;
+    /** The shop's uploaded logo, when it has one. */
+    logoUrl?: string | null;
+    /** Whether the store name sits beside the logo. Ignored without a logo. */
+    showStoreName?: boolean;
     activeNav: 'home' | 'shop';
     session: CustomerSession | null;
     accountMenuOpen: boolean;
@@ -24,6 +28,8 @@ type StorefrontHeaderProps = {
 export default function StorefrontHeader({
     slug,
     storeName,
+    logoUrl,
+    showStoreName = true,
     activeNav,
     session,
     accountMenuOpen,
@@ -41,15 +47,33 @@ export default function StorefrontHeader({
 
     const closeMobileMenu = () => setMobileMenuOpen(false);
 
+    // A logo with the name switched off is the only case where the name is not
+    // printed — with no logo there would be nothing left in the header at all.
+    const nameVisible = !logoUrl || showStoreName;
+
     return (
         <header className="border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-md z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-20 gap-4">
                     <Link
                         href={`/store/${slug}`}
-                        className="text-xl sm:text-2xl font-bold tracking-tight truncate min-w-0"
+                        className="flex items-center gap-2 min-w-0"
                     >
-                        {storeName}
+                        {logoUrl ? (
+                            <img
+                                src={logoUrl}
+                                // Empty when the name is printed beside it: a
+                                // screen reader would otherwise hear the shop
+                                // named twice in the same link.
+                                alt={nameVisible ? '' : storeName}
+                                className="h-9 sm:h-11 w-auto max-w-[120px] sm:max-w-[200px] object-contain flex-shrink-0"
+                            />
+                        ) : null}
+                        {nameVisible ? (
+                            <span className="text-xl sm:text-2xl font-bold tracking-tight truncate min-w-0">
+                                {storeName}
+                            </span>
+                        ) : null}
                     </Link>
 
                     <nav className="hidden md:flex items-center gap-8 text-sm font-medium">

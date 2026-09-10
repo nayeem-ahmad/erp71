@@ -645,42 +645,51 @@ model DemoDataBatch {
 }
 
 model Tenant {
-  id                       String    @id @default(uuid())
-  name                     String
-  owner_id                 String
-  default_locale           String    @default("en")
+  id                        String    @id @default(uuid())
+  name                      String
+  owner_id                  String
+  default_locale            String    @default("en")
   /// IANA zone the workspace's calendar days are measured in, e.g. `Asia/Dhaka`.
   /// Every "today" window, date-range filter and report bucket resolves through
   /// this; see `common/tenant-time.util.ts`. An IANA name, never an offset —
   /// an offset cannot express DST.
-  timezone                 String    @default("Asia/Dhaka")
+  timezone                  String    @default("Asia/Dhaka")
   /// When false the workspace is English-only and the language switcher is hidden.
-  localization_enabled     Boolean   @default(false)
+  localization_enabled      Boolean   @default(false)
   /// Second language offered alongside English when localization_enabled is true.
-  secondary_locale         String?
-  created_at               DateTime  @default(now())
-  storefront_slug          String?   @unique
-  storefront_enabled       Boolean   @default(false)
-  storefront_banner        String?
-  storefront_hero_image    String?
-  storefront_hero_headline String?
-  brand_primary_color      String?
-  brand_logo_url           String?
-  brand_favicon_url        String?
-  brand_business_name      String?
-  default_vat_rate         Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
-  vat_registration_no      String? // NBR VAT registration number
-  business_tin             String? // Tax Identification Number
-  business_type            String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+  secondary_locale          String?
+  created_at                DateTime  @default(now())
+  storefront_slug           String?   @unique
+  storefront_enabled        Boolean   @default(false)
+  storefront_banner         String?
+  storefront_hero_image     String?
+  storefront_hero_headline  String?
+  /// The shop's own mark, shown in the storefront header. Deliberately not
+  /// `brand_logo_url`: that one is the workspace's identity on invoices and in
+  /// the app chrome, and a shop that trades under a second name needs the two
+  /// to differ.
+  storefront_logo           String?
+  /// Whether the store name is printed beside the logo in the storefront
+  /// header. Only meaningful once a logo exists — with no logo the name is the
+  /// only thing there is to show, so it is rendered regardless.
+  storefront_logo_show_name Boolean   @default(true)
+  brand_primary_color       String?
+  brand_logo_url            String?
+  brand_favicon_url         String?
+  brand_business_name       String?
+  default_vat_rate          Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
+  vat_registration_no       String? // NBR VAT registration number
+  business_tin              String? // Tax Identification Number
+  business_type             String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
   /// Which dashboard this workspace lands on: AUTO | RETAIL | ACCOUNTING.
   /// AUTO defers to the plan's `accountingDashboard` entitlement. This is a
   /// preference, not a capability, which is why it is a column and not a key in
   /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
-  dashboard_preference     String    @default("AUTO")
+  dashboard_preference      String    @default("AUTO")
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
-  onboarding_dismissed_at  DateTime?
-  deleted_at               DateTime?
+  onboarding_dismissed_at   DateTime?
+  deleted_at                DateTime?
 
   /// When this workspace was frozen for non-payment. Non-null means every
   /// state-changing request is rejected by `BillingSuspensionGuard` — the data

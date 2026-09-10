@@ -82,7 +82,7 @@ jest.mock('./session-expiry', () => ({
 }));
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, resetWorkspaceRecoveryForTests } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests } from './api';
 import { handleExpiredSession } from './session-expiry';
 import { resetWorkspaceBootstrapForTests } from './session-store';
 
@@ -2559,6 +2559,41 @@ describe('api.login', () => {
         }));
 
         await expect(api.login({ email: 'x', password: 'y' })).rejects.toThrow('Login failed');
+    });
+
+    it('keeps the status, code and wait from a rate-limited response', async () => {
+        mockFetch.mockReturnValueOnce(Promise.resolve({
+            ok: false,
+            status: 429,
+            json: async () => ({
+                error: {
+                    code: 'TOO_MANY_REQUESTS',
+                    message: 'Too many requests. Please wait 42 seconds and try again.',
+                    retry_after: 42,
+                },
+            }),
+        }));
+
+        // The sign-in page needs all three to say the wait in the reader's own
+        // language rather than echoing the server's English sentence.
+        await expect(api.login({ email: 'x', password: 'y' })).rejects.toMatchObject({
+            name: 'ApiError',
+            status: 429,
+            code: 'TOO_MANY_REQUESTS',
+            retryAfter: 42,
+        });
+    });
+
+    it('leaves retryAfter unset when the body carries no usable wait', async () => {
+        mockFetch.mockReturnValueOnce(Promise.resolve({
+            ok: false,
+            status: 429,
+            json: async () => ({ error: { code: 'TOO_MANY_REQUESTS', message: 'Too Many Requests', retry_after: 'soon' } }),
+        }));
+
+        const error = await api.login({ email: 'x', password: 'y' }).catch((err: unknown) => err);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).retryAfter).toBeUndefined();
     });
 });
 
