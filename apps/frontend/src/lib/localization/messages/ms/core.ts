@@ -504,6 +504,7 @@ export const coreMessages = {
                 signUpForFree: "Daftar secara percuma",
                 version: "Platform ERP71 v0.1",
                 defaultError: "Log masuk gagal. Sila semak kelayakan anda.",
+                tooManyAttempts: "Terlalu banyak percubaan log masuk. Sila tunggu {seconds, plural, other {# saat}} dan cuba lagi.",
                 demoFailed: "Log masuk demo gagal. Sila cuba lagi.",
                 sessionExpired: "Sesi anda telah tamat. Sila log masuk semula.",
                 googleFailed: "Log masuk Google gagal. Sila cuba lagi.",

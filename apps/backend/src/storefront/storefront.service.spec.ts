@@ -21,6 +21,8 @@ const mockTenant = {
     storefront_banner: 'banner.jpg',
     storefront_hero_image: 'hero.jpg',
     storefront_hero_headline: 'Welcome',
+    storefront_logo: 'logo.png',
+    storefront_logo_show_name: false,
     loyalty_points_enabled: false,
     loyalty_earn_rate: null,
     loyalty_redeem_rate: null,
@@ -204,6 +206,17 @@ describe('StorefrontService', () => {
             expect(result.trending_products[0].stock_quantity).toBe(8);
             expect(result.all_products).toHaveLength(1);
             expect(result.all_products[0].group_name).toBe('Uncategorized');
+        });
+
+        it('carries the storefront logo and its name preference to the shopper', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.productGroup.findMany.mockResolvedValue([]);
+            db.product.findMany.mockResolvedValue([]);
+
+            const result = await service.getStorefront(slug);
+
+            expect(result.tenant.storefront_logo).toBe('logo.png');
+            expect(result.tenant.storefront_logo_show_name).toBe(false);
         });
 
         it('maps loyalty fields when loyalty is enabled', async () => {

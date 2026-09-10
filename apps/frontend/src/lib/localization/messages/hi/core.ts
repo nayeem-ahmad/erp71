@@ -504,6 +504,7 @@ export const coreMessages = {
             signUpForFree: "मुफ़्त साइन अप करें",
             version: "ERP71 प्लेटफ़ॉर्म v0.1",
             defaultError: "लॉगिन विफल। कृपया अपने क्रेडेंशियल जाँचें।",
+            tooManyAttempts: "साइन इन की बहुत ज़्यादा कोशिशें हो चुकी हैं। {seconds, plural, one {# सेकंड} other {# सेकंड}} रुककर दोबारा कोशिश करें।",
             demoFailed: "डेमो लॉगिन विफल। कृपया फिर से प्रयास करें।",
             sessionExpired: "आपका सत्र समाप्त हो गया है। कृपया फिर से साइन इन करें।",
             googleFailed: "Google साइन-इन विफल। कृपया फिर से प्रयास करें।",
