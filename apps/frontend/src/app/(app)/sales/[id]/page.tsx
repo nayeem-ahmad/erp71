@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown } from 'lucide-react';
+import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, Ban } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -19,6 +19,9 @@ import SaleEntryLayout, {
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { toast } from '@/lib/toast';
+import { CancelEntryModal } from '@/components/CancelEntryModal';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { hasPermission, isOwner } from '@/lib/permissions';
 
 const SALE_STATUSES = ['COMPLETED', 'REFUNDED', 'PARTIAL_REFUND'];
 
@@ -27,6 +30,7 @@ const statusBadgeClass: Record<string, string> = {
     COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     REFUNDED: 'bg-red-50 text-red-700 border-red-200',
     PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
+    CANCELLED: 'bg-gray-100 text-gray-500 border-gray-300',
 };
 
 function SaleDetailPageContent() {
@@ -60,11 +64,19 @@ function SaleDetailPageContent() {
     const [saleDate, setSaleDate] = useState('');
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+    const [showCancelModal, setShowCancelModal] = useState(false);
     const [showPaperMenu, setShowPaperMenu] = useState(false);
     const printMenuRef = useRef<HTMLDivElement>(null);
 
+    // Cancelling reverses stock, balances and the ledger, so the action is
+    // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
+    // bypasses the guard server-side and may hold no grant rows at all.
+    const { permissions, role } = useTenantPlanFeatures();
+    const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
+
     const isEditMode = searchParams.get('edit') === 'true';
     const isDraft = sale?.status === 'DRAFT';
+    const isCancelled = sale?.status === 'CANCELLED';
     const saleId = params.id as string;
 
     const isInsidePrintMenu = useCallback(
@@ -211,6 +223,14 @@ function SaleDetailPageContent() {
         }
     };
 
+    const handleCancelEntry = async (note: string) => {
+        if (!sale) return;
+        await api.cancelSale(sale.id, note);
+        setShowCancelModal(false);
+        await loadSale(sale.id);
+        toast.success(t.entryCancellation.saleCancelled);
+    };
+
     const printHeader = usePrintHeader('SALES_INVOICE');
 
     const handlePOSPrint = async () => {
@@ -335,6 +355,19 @@ function SaleDetailPageContent() {
             {isDraft && (
                 <span className="text-xs text-amber-700">{t.sales.detail.draftBanner}</span>
             )}
+            {/* The reason lives on the document, not only in the audit log —
+                this line is what a tenant reads months later. */}
+            {isCancelled && (
+                <span className="flex min-w-0 items-center gap-1.5 text-xs text-gray-600">
+                    <Ban className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                        {formatMessage(t.entryCancellation.cancelledOn, {
+                            date: formatDate(sale.cancelled_at ?? sale.created_at, locale),
+                        })}
+                        {sale.cancellation_note ? ` — ${sale.cancellation_note}` : ''}
+                    </span>
+                </span>
+            )}
             {isEditMode && (
                 <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
                     <Pencil className="w-3.5 h-3.5" />
@@ -434,14 +467,29 @@ function SaleDetailPageContent() {
                     {finalizing ? t.sales.detail.completing : t.sales.detail.completeSale}
                 </button>
             )}
-            <button
-                type="button"
-                onClick={() => router.push(`/sales/${sale.id}?edit=true`)}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-1.5"
-            >
-                <Pencil className="w-4 h-4" />
-                {t.common.edit}
-            </button>
+            {canCancel && !isCancelled && (
+                <button
+                    type="button"
+                    onClick={() => setShowCancelModal(true)}
+                    className="px-3 py-2 border border-red-200 rounded text-red-600 hover:bg-red-50 text-sm flex items-center gap-1.5"
+                >
+                    <Ban className="w-4 h-4" />
+                    {t.entryCancellation.action}
+                </button>
+            )}
+            {/* A cancelled entry has had every impact reversed; editing it would
+                replay stock and postings against a void document, which the API
+                refuses. Offer print and duplicate instead. */}
+            {!isCancelled && (
+                <button
+                    type="button"
+                    onClick={() => router.push(`/sales/${sale.id}?edit=true`)}
+                    className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-1.5"
+                >
+                    <Pencil className="w-4 h-4" />
+                    {t.common.edit}
+                </button>
+            )}
         </>
     );
 
@@ -478,6 +526,7 @@ function SaleDetailPageContent() {
     );
 
     return (
+        <>
         <SaleEntryLayout
             title={sale.serial_number}
             backHref="/sales/list"
@@ -506,6 +555,15 @@ function SaleDetailPageContent() {
             onPaymentChange={updatePayment}
             actions={isEditMode ? editActions : viewActions}
         />
+        {showCancelModal && (
+            <CancelEntryModal
+                entryLabel={sale.serial_number}
+                entryAmount={formatBDT(parseFloat(sale.total_amount), { locale })}
+                onConfirm={handleCancelEntry}
+                onClose={() => setShowCancelModal(false)}
+            />
+        )}
+        </>
     );
 }
 

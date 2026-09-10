@@ -106,6 +106,7 @@ enum StorePermission {
   CREATE_RETURN
   CREATE_SALES_ORDER
   CREATE_QUOTATION
+  CANCEL_ENTRY
 
   // Accounting
   VIEW_LEDGER
@@ -1905,9 +1906,21 @@ model Purchase {
   total_amount     Decimal  @default(0) @db.Decimal(12, 2)
   paid_amount      Decimal  @default(0) @db.Decimal(12, 2)
   payment_status   String   @default("UNPAID") // UNPAID | PARTIAL | PAID
+  /// RECORDED | CANCELLED. A purchase had no lifecycle column until entry
+  /// cancellation needed one — `payment_status` answers "is the bill settled?",
+  /// which a cancelled bill is not, so the two cannot share a column. Every
+  /// money query filters on this, the way the sales side filters `Sale.status`.
+  status           String   @default("RECORDED")
   notes            String?
   created_by       String?
   created_at       DateTime @default(now())
+
+  /// Set together by `PurchasesService.cancel`, never on their own. The note is
+  /// mandatory at the API boundary: a reversed purchase changes stock, the
+  /// payable and the ledger, and the reason has to survive with the document.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
 
   tenant             Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store              Store                       @relation(fields: [store_id], references: [id])
@@ -1921,6 +1934,7 @@ model Purchase {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
+  @@index([tenant_id, status])
   @@index([tenant_id, reference_number])
 }
 
@@ -2284,6 +2298,15 @@ model Sale {
   /// document. Both stay null on an ordinary counter sale.
   quotation_id   String?
   sales_order_id String?
+
+  /// Set together by `SalesService.cancel`, alongside `status = 'CANCELLED'`.
+  /// The note is mandatory at the API boundary: cancelling puts the goods back,
+  /// unwinds loyalty, credit and lifetime spend and voids the vouchers, and the
+  /// reason for all of that has to survive with the document rather than only
+  /// in the audit log.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
 
   // Relations
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
