@@ -325,5 +325,15 @@ export const routes = {
     chat: '/chat',
     smsCredits: '/sms-credits',
     aiCredits: '/ai-credits',
-    manufacturing: '/manufacturing',
+    /**
+     * Manufacturing was one page with a tab strip; the tabs are sidebar submenu
+     * items now, so each has its own route. `root` is the Bill of Materials
+     * screen — the tab that used to open by default — rather than a separate hub.
+     */
+    manufacturing: {
+        root: '/manufacturing',
+        jobs: '/manufacturing/jobs',
+        analytics: '/manufacturing/analytics',
+        productPL: '/manufacturing/product-pl',
+    },
 } as const;
