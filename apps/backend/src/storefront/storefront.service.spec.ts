@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
+import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -34,6 +35,7 @@ describe('StorefrontService', () => {
     let priceListsService: any;
     let totpService: any;
     let auditService: any;
+    let storefrontPagesService: any;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -132,6 +134,10 @@ describe('StorefrontService', () => {
             logForUserTenants: jest.fn().mockResolvedValue(undefined),
         };
 
+        storefrontPagesService = {
+            resolveMenu: jest.fn().mockResolvedValue([]),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
@@ -140,6 +146,7 @@ describe('StorefrontService', () => {
                 { provide: PriceListsService, useValue: priceListsService },
                 { provide: TotpService, useValue: totpService },
                 { provide: AuditService, useValue: auditService },
+                { provide: StorefrontPagesService, useValue: storefrontPagesService },
             ],
         }).compile();
 

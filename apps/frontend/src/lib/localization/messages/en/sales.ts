@@ -280,6 +280,8 @@ export const salesMessages = {
                 warrantyClaims: { title: 'Warranty Claims', description: 'Track customer warranty submissions and resolutions.' },
                 storefrontOrders: { title: 'Online Orders', description: 'Review and fulfill orders placed on your public storefront.' },
                 storefrontSettings: { title: 'Storefront Settings', description: 'Configure your online shop branding, hero, and catalog visibility.' },
+                storefrontPages: { title: 'Storefront Pages', description: 'Write standing pages for your shop — About us, delivery, returns.' },
+                storefrontMenu: { title: 'Storefront Menu', description: 'Choose the links in your shop’s header and the order they appear in.' },
                 customers: { title: 'Customers', description: 'Manage customer profiles, contacts, and credit limits.' },
                 crmFollowUps: { title: 'Follow-ups', description: 'Assign follow-ups linked to customers and deals.' },
                 crmCampaigns: { title: 'Campaigns', description: 'Plan and monitor outbound sales campaigns.' },

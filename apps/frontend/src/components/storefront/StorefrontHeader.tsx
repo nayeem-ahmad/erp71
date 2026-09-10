@@ -9,10 +9,28 @@ type CustomerSession = {
     customer: { name: string; email: string };
 };
 
+/** One shop-authored entry, as `/storefront/:slug` and `/storefront/:slug/menu` return it. */
+export type StorefrontMenuLink = {
+    id: string;
+    label: string;
+    href: string;
+    external: boolean;
+    open_in_new_tab: boolean;
+};
+
 type StorefrontHeaderProps = {
     slug: string;
     storeName: string;
-    activeNav: 'home' | 'shop';
+    activeNav: 'home' | 'shop' | 'page';
+    /**
+     * Links the shop added itself, appended after Home and Shop. Home, Shop and
+     * Contact are not in this list and are not removable: they are the
+     * storefront's spine, and a menu that could hide the way to the products
+     * would be a footgun sold as a feature.
+     */
+    menuLinks?: StorefrontMenuLink[];
+    /** Highlights one shop-authored entry — the page currently being read. */
+    activeHref?: string;
     session: CustomerSession | null;
     accountMenuOpen: boolean;
     onAccountMenuToggle: () => void;
@@ -25,6 +43,8 @@ export default function StorefrontHeader({
     slug,
     storeName,
     activeNav,
+    menuLinks = [],
+    activeHref,
     session,
     accountMenuOpen,
     onAccountMenuToggle,
@@ -40,6 +60,29 @@ export default function StorefrontHeader({
         'block py-3 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors border-b border-gray-100 last:border-0';
 
     const closeMobileMenu = () => setMobileMenuOpen(false);
+
+    // `rel` on every external entry, not only the new-tab ones: `noopener` is
+    // what stops the opened page reaching back through `window.opener`, and a
+    // shopper middle-clicking a same-tab link opens it in a tab all the same.
+    const externalRel = 'noopener noreferrer';
+
+    const renderCustomLink = (link: StorefrontMenuLink, className: string, onClick?: () => void) =>
+        link.external ? (
+            <a
+                key={link.id}
+                href={link.href}
+                target={link.open_in_new_tab ? '_blank' : undefined}
+                rel={externalRel}
+                className={className}
+                onClick={onClick}
+            >
+                {link.label}
+            </a>
+        ) : (
+            <Link key={link.id} href={link.href} className={className} onClick={onClick}>
+                {link.label}
+            </Link>
+        );
 
     return (
         <header className="border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-md z-40">
@@ -65,6 +108,14 @@ export default function StorefrontHeader({
                         >
                             {m.nav.shop}
                         </Link>
+                        {menuLinks.map((link) =>
+                            renderCustomLink(
+                                link,
+                                link.href === activeHref
+                                    ? 'text-gray-900'
+                                    : 'text-gray-500 hover:text-gray-900 transition-colors',
+                            ),
+                        )}
                         <a href="#contact" className="text-gray-500 hover:text-gray-900 transition-colors">
                             {m.nav.contact}
                         </a>
@@ -150,6 +201,13 @@ export default function StorefrontHeader({
                     >
                         {m.nav.shop}
                     </Link>
+                    {menuLinks.map((link) =>
+                        renderCustomLink(
+                            link,
+                            `${navLinkCls} ${link.href === activeHref ? 'text-gray-900 font-semibold' : ''}`,
+                            closeMobileMenu,
+                        ),
+                    )}
                     <a href="#contact" className={navLinkCls} onClick={closeMobileMenu}>
                         {m.nav.contact}
                     </a>

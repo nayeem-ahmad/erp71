@@ -13,6 +13,7 @@ import { paginate } from '../common/pagination.dto';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
 import { AUTH_SCOPE_STOREFRONT } from '../auth/token-scope';
+import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class StorefrontService {
         private readonly priceListsService: PriceListsService,
         private readonly totp: TotpService,
         private readonly audit: AuditService,
+        private readonly storefrontPages: StorefrontPagesService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -153,6 +155,15 @@ export class StorefrontService {
             };
         });
 
+        // Folded into this response rather than fetched separately: the header
+        // renders above the fold on every storefront page, and a second round
+        // trip for it would show the shop's menu popping in after the hero.
+        const menu_links = await this.storefrontPages.resolveMenu(
+            tenant.id,
+            slug,
+            tenant.blogSettings?.enabled ?? false,
+        );
+
         return {
             tenant: {
                 name: tenant.name,
@@ -167,6 +178,7 @@ export class StorefrontService {
             categories,
             trending_products,
             all_products,
+            menu_links,
         };
     }
 
@@ -710,6 +722,7 @@ export class StorefrontService {
                 loyalty_earn_rate: true,
                 loyalty_redeem_rate: true,
                 loyalty_min_redeem: true,
+                blogSettings: { select: { enabled: true } },
             },
         });
         if (!tenant) throw new NotFoundException('Storefront not found or not available');

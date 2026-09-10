@@ -372,6 +372,8 @@ export const coreMessages = {
             orders: 'الطلبات',
             storefrontOrders: 'الطلبات الإلكترونية',
             storefrontSettings: 'المتجر الإلكتروني',
+            storefrontPages: 'صفحات المتجر',
+            storefrontMenu: 'قائمة المتجر',
             tenants: 'المنشآت',
             tenantPayments: 'مدفوعات المنشآت',
             tenantLedger: 'دفتر المنشأة',

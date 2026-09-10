@@ -180,6 +180,9 @@ enum StorePermission {
   MANAGE_BLOG
   PUBLISH_BLOG
 
+  // Storefront pages & menu
+  MANAGE_STOREFRONT_PAGES
+
   // Team chat
   USE_TEAM_CHAT
 }
@@ -904,6 +907,8 @@ model Tenant {
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
   blogSettings               TenantBlogSettings?
+  storefrontPages            StorefrontPage[]
+  storefrontMenuLinks        StorefrontMenuLink[]
   boards                     Board[]
   boardColumns               BoardColumn[]
   boardColumnStatuses        BoardColumnStatus[]
@@ -7255,6 +7260,93 @@ model TenantBlogSettings {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("tenant_blog_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Storefront pages and menu — the parts of a shop's public site that are not
+// products and not blog posts: "About us", "Delivery & returns", "Contact".
+//
+// Separate from the blog on purpose. A blog post is dated and listed in reverse
+// chronological order; a page is undated, standalone, and reached from the
+// header menu. Sharing one table would mean every page appearing in the blog
+// index the day it was written.
+// ---------------------------------------------------------------------------
+
+/// A standalone content page on a shop's storefront, at
+/// `/store/<storefront_slug>/pages/<slug>`.
+model StorefrontPage {
+  id        String @id @default(uuid())
+  tenant_id String
+  slug      String
+  title     String
+
+  /// Markdown, rendered with the same `ArticleMarkdown` the blog uses. Raw HTML
+  /// is never rendered — see that component for why.
+  body_md String
+
+  /// DRAFT | PUBLISHED — see storefront-page-status.ts. A draft is invisible to
+  /// the public even when a menu link points at it.
+  status String @default("DRAFT")
+
+  seo_title       String?
+  seo_description String?
+
+  published_at DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant    Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  menuLinks StorefrontMenuLink[]
+
+  /// Slugs are unique per shop, not globally — two shops may both have a page
+  /// called "about", and each owns the URL under its own storefront.
+  @@unique([tenant_id, slug])
+  @@index([tenant_id, status])
+  @@index([deleted_at])
+  @@map("storefront_pages")
+}
+
+/// One entry in a shop's storefront header menu.
+///
+/// A row is either a pointer at one of the shop's own pages (`PAGE`), at a
+/// built-in storefront destination (`INTERNAL` — home, shop, blog), or at an
+/// arbitrary URL (`EXTERNAL`). The three are one table rather than three
+/// because the menu is ordered as a whole and an owner reorders across kinds.
+model StorefrontMenuLink {
+  id        String @id @default(uuid())
+  tenant_id String
+
+  label String
+
+  /// PAGE | INTERNAL | EXTERNAL — see storefront-menu-link-type.ts.
+  type String @default("PAGE")
+
+  /// Set when `type` is PAGE. Nulled rather than cascading when the page is
+  /// hard-deleted, which leaves a visible broken row for the owner to fix
+  /// instead of silently dropping a menu entry they still expect to see.
+  page_id String?
+
+  /// Set when `type` is INTERNAL (a path relative to the storefront root, e.g.
+  /// `/shop`) or EXTERNAL (an absolute http(s) URL).
+  url String?
+
+  sort_order Int     @default(0)
+  visible    Boolean @default(true)
+
+  /// Only honoured for EXTERNAL links; an internal hop stays in the tab.
+  open_in_new_tab Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  page   StorefrontPage? @relation(fields: [page_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, sort_order])
+  @@index([page_id])
+  @@map("storefront_menu_links")
 }
 
 /// Marketing copy the platform posts to its own social accounts.

@@ -47,6 +47,7 @@ import {
     Mail,
     MapPin,
     Megaphone,
+    Menu,
     MessageCircle,
     MessageSquare,
     MessagesSquare,
@@ -173,6 +174,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Warehouse,
     Briefcase,
     UserSearch,
+    Menu,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {

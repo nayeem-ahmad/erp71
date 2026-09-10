@@ -280,6 +280,8 @@ export const salesMessages = {
                     warrantyClaims: { title: "ওয়ারেন্টি ক্লেইম", description: "ওয়ারেন্টি দাবি ট্র্যাক করুন।" },
                     storefrontOrders: { title: "অনলাইন অর্ডার", description: "স্টোরফ্রন্ট থেকে আসা অর্ডার পর্যালোচনা ও পূরণ করুন।" },
                     storefrontSettings: { title: "স্টোরফ্রন্ট সেটিংস", description: "অনলাইন দোকানের ব্র্যান্ডিং ও ক্যাটালগ কনফিগার করুন।" },
+                    storefrontPages: { title: "স্টোরফ্রন্ট পেজ", description: "দোকানের স্থায়ী পেজ লিখুন — আমাদের কথা, ডেলিভারি, ফেরত।" },
+                    storefrontMenu: { title: "স্টোরফ্রন্ট মেনু", description: "দোকানের হেডারে কোন লিঙ্ক কোন ক্রমে থাকবে তা ঠিক করুন।" },
                     customers: { title: "গ্রাহক", description: "গ্রাহক প্রোফাইল ও ক্রেডিট লিমিট।" },
                     crmFollowUps: { title: "ফলো-আপ", description: "গ্রাহক ফলো-আপ।" },
                     crmCampaigns: { title: "ক্যাম্পেইন", description: "বিক্রয় ক্যাম্পেইন পরিচালনা।" },

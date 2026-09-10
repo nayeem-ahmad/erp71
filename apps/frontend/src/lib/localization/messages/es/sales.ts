@@ -280,6 +280,8 @@ export const salesMessages = {
                 warrantyClaims: { title: "Reclamaciones de garantía", description: "Siga las reclamaciones de garantía de clientes y su resolución." },
                 storefrontOrders: { title: "Pedidos en línea", description: "Revise y prepare los pedidos hechos en su tienda pública." },
                 storefrontSettings: { title: "Ajustes de la tienda", description: "Configure la marca, la portada y la visibilidad del catálogo de su tienda." },
+                storefrontPages: { title: "Páginas de la tienda", description: "Escriba las páginas fijas de su tienda: Quiénes somos, envíos, devoluciones." },
+                storefrontMenu: { title: "Menú de la tienda", description: "Elija los enlaces de la cabecera de su tienda y su orden." },
                 customers: { title: "Clientes", description: "Gestione fichas de cliente, contactos y límites de crédito." },
                 crmFollowUps: { title: "Seguimientos", description: "Asigne seguimientos vinculados a clientes y oportunidades." },
                 crmCampaigns: { title: "Campañas", description: "Planifique y controle campañas comerciales salientes." },

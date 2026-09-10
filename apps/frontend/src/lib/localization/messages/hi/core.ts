@@ -372,6 +372,8 @@ export const coreMessages = {
             orders: "ऑर्डर",
             storefrontOrders: "ऑनलाइन ऑर्डर",
             storefrontSettings: "ऑनलाइन दुकान",
+            storefrontPages: "स्टोरफ्रंट पेज",
+            storefrontMenu: "स्टोरफ्रंट मेन्यू",
             tenants: "टेनेंट",
             tenantPayments: "टेनेंट भुगतान",
             tenantLedger: "टेनेंट बहीखाता",
