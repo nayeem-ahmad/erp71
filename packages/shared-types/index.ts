@@ -227,9 +227,609 @@ export const SYSTEM_TENANT_ROLE_TO_USER_ROLE: Record<string, UserRole> = {
   Accountant: UserRole.ACCOUNTANT,
 };
 
-/** Resolve the coarse UserRole enum for an assigned TenantRole name (default CASHIER). */
+/**
+ * Resolve the coarse UserRole enum for an assigned TenantRole name (default
+ * CASHIER). The three legacy system roles are matched first, then the seeded
+ * `TENANT_ROLE_TEMPLATES` by the name each is created with; anything else — a
+ * renamed role, a role the owner wrote themselves — is CASHIER, which is least
+ * privilege for the workspace-wide gates the enum still guards.
+ */
 export function resolveBaseUserRole(tenantRoleName: string | null | undefined): UserRole {
-  return SYSTEM_TENANT_ROLE_TO_USER_ROLE[(tenantRoleName ?? "").trim()] ?? UserRole.CASHIER;
+  const name = (tenantRoleName ?? "").trim();
+  return (
+    SYSTEM_TENANT_ROLE_TO_USER_ROLE[name] ??
+    TEMPLATE_ROLE_NAME_TO_COARSE_ROLES[name]?.[0] ??
+    UserRole.CASHIER
+  );
+}
+
+/**
+ * Every coarse `UserRole` gate the given roles open, taken together.
+ *
+ * `TenantUser.role` can only hold one value, so a member who is both a Tenant
+ * Admin and an Accounting User would otherwise lose one of the two gates the
+ * moment the other won. `TenantRoleGuard` checks this set rather than the stored
+ * enum alone, which keeps the coarse gates consistent with the rule that a
+ * member's access is the union of their roles.
+ */
+export function resolveCoarseRolesForNames(
+  tenantRoleNames: (string | null | undefined)[],
+): UserRole[] {
+  const union = new Set<UserRole>();
+  for (const raw of tenantRoleNames) {
+    const name = (raw ?? "").trim();
+    const legacy = SYSTEM_TENANT_ROLE_TO_USER_ROLE[name];
+    if (legacy) {
+      union.add(legacy);
+      continue;
+    }
+    for (const role of TEMPLATE_ROLE_NAME_TO_COARSE_ROLES[name] ?? [UserRole.CASHIER]) {
+      union.add(role);
+    }
+  }
+  return [...union];
+}
+
+/* ------------------------- Tenant role templates -------------------------- */
+
+/**
+ * Where a seeded role sits in the two-tier ladder every module gets: a MANAGER
+ * who approves and configures, and a USER who does the day-to-day work of the
+ * same module. ADMIN is the workspace-wide exception — it is not a module role.
+ */
+export const TenantRoleLevel = {
+  ADMIN: "ADMIN",
+  MANAGER: "MANAGER",
+  USER: "USER",
+} as const;
+export type TenantRoleLevel =
+  (typeof TenantRoleLevel)[keyof typeof TenantRoleLevel];
+
+/**
+ * One seeded role. Every tenant gets a copy of each template as a real
+ * `TenantRole` row at signup, so an owner can edit or delete their copy without
+ * touching anybody else's.
+ */
+export interface TenantRoleTemplate {
+  /**
+   * Stable identity, written to `TenantRole.template_key`. It is what makes the
+   * seeding idempotent and what lets a later sync find the tenant's copy after
+   * the owner has renamed it — so it must never be reused for a different role.
+   */
+  key: string;
+  /** Display name the role is first created with. Owners may rename it. */
+  name: string;
+  /** Module this role belongs to. Groups the role picker in Team → Members. */
+  module: string;
+  level: TenantRoleLevel;
+  description: string;
+  /**
+   * The coarse `UserRole` gates this role opens, strongest intent first — the
+   * first is what `TenantUser.role` becomes while it is the member's primary
+   * role, and `TenantRoleGuard` accepts any of them.
+   *
+   * Two entries exist because one enum column cannot say "administrator AND
+   * accountant": MANAGER is what `/invitations` checks before letting someone
+   * add staff, and ACCOUNTANT is what the accounting controllers check, and
+   * Tenant Admin is meant to be both.
+   *
+   * Every module role stays at CASHIER on purpose. The enum gates workspace-wide
+   * actions, and a Sales Manager must not inherit those just for being a manager
+   * of one module — their real reach is the permission set below, materialized
+   * per branch. The exceptions are the administration roles (MANAGER, so they
+   * can staff the workspace) and the accounting roles (ACCOUNTANT, without which
+   * the accounting module refuses them outright).
+   */
+  coarseRoles: UserRole[];
+  permissions: StorePermission[];
+}
+
+/** Everyone can be reached in team chat — see `USE_TEAM_CHAT`'s note above. */
+const CHAT: StorePermission[] = [StorePermission.USE_TEAM_CHAT];
+
+/**
+ * The roles every new tenant is seeded with, on top of the three legacy system
+ * roles (Manager, Cashier, Accountant) that `SYSTEM_TENANT_ROLE_TO_USER_ROLE`
+ * still maps.
+ *
+ * Two per module — manager and user — so a workspace can staff a module without
+ * anybody hand-building a permission matrix, plus the administration roles at
+ * the top. A member may hold several of these at once; their effective access is
+ * the union of every role they hold (see `syncMemberPermissionsFromRole`), which
+ * is why each template stays narrow rather than defensively bundling extras.
+ *
+ * VIEW_ALL_PROJECTS is deliberately in none of them, including Project Manager:
+ * it overrides per-project privacy, so it stays a grant an owner makes on
+ * purpose. Same reasoning as `sync-role-permissions.ts`.
+ */
+export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
+  /* ----------------------------- Administration ---------------------------- */
+  {
+    key: "tenant_admin",
+    name: "Tenant Admin",
+    module: "Administration",
+    level: TenantRoleLevel.ADMIN,
+    description:
+      "Full access to every module and to team, branch and role settings. The workspace owner's deputy.",
+    coarseRoles: [UserRole.MANAGER, UserRole.ACCOUNTANT],
+    permissions: Object.values(StorePermission),
+  },
+  {
+    key: "administration_manager",
+    name: "User Manager",
+    module: "Administration",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Adds and removes staff, branches and POS counters without access to business data.",
+    coarseRoles: [UserRole.MANAGER],
+    permissions: [
+      StorePermission.MANAGE_USERS,
+      StorePermission.MANAGE_USER_STORE_ACCESS,
+      StorePermission.MANAGE_STORES,
+      StorePermission.MANAGE_COUNTERS,
+      StorePermission.SWITCH_STORES,
+      ...CHAT,
+    ],
+  },
+
+  /* --------------------------------- Sales -------------------------------- */
+  {
+    key: "sales_manager",
+    name: "Sales Manager",
+    module: "Sales",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Runs the sales floor: prices, returns, customer credit and cross-branch sales reporting.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.EDIT_PRODUCT_PRICES,
+      StorePermission.CREATE_SALE,
+      StorePermission.CREATE_RETURN,
+      StorePermission.CREATE_SALES_ORDER,
+      StorePermission.CREATE_QUOTATION,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.MANAGE_COUNTERS,
+      StorePermission.SWITCH_STORES,
+      StorePermission.VIEW_CONSOLIDATED_REPORTS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "sales_user",
+    name: "Sales User",
+    module: "Sales",
+    level: TenantRoleLevel.USER,
+    description:
+      "Sells at the counter: invoices, orders and quotations, with no pricing or credit control.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.CREATE_SALE,
+      StorePermission.CREATE_RETURN,
+      StorePermission.CREATE_SALES_ORDER,
+      StorePermission.CREATE_QUOTATION,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      ...CHAT,
+    ],
+  },
+
+  /* ------------------------------- Purchase -------------------------------- */
+  {
+    key: "purchase_manager",
+    name: "Purchase Manager",
+    module: "Purchase",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Owns supplier relationships, purchase orders and sign-off on what the branches ask for.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.EDIT_SUPPLIERS,
+      StorePermission.CREATE_PURCHASE,
+      StorePermission.CREATE_RETURN,
+      StorePermission.CREATE_PRODUCT_DEMAND,
+      StorePermission.APPROVE_PRODUCT_DEMAND,
+      StorePermission.SWITCH_STORES,
+      StorePermission.VIEW_CONSOLIDATED_REPORTS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "purchase_user",
+    name: "Purchase User",
+    module: "Purchase",
+    level: TenantRoleLevel.USER,
+    description:
+      "Raises purchases and product demands; cannot approve them or edit suppliers.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.CREATE_PURCHASE,
+      StorePermission.CREATE_PRODUCT_DEMAND,
+      ...CHAT,
+    ],
+  },
+
+  /* ------------------------------- Inventory ------------------------------- */
+  {
+    key: "inventory_manager",
+    name: "Inventory Manager",
+    module: "Inventory",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Controls stock: adjustments, branch transfers and their approval, stock takes and demands.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.CREATE_INVENTORY_MOVEMENTS,
+      StorePermission.CREATE_GOODS_TRANSFER,
+      StorePermission.APPROVE_GOODS_TRANSFER,
+      StorePermission.STOCK_TAKE,
+      StorePermission.CREATE_PRODUCT_DEMAND,
+      StorePermission.APPROVE_PRODUCT_DEMAND,
+      StorePermission.SWITCH_STORES,
+      StorePermission.VIEW_CONSOLIDATED_REPORTS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "inventory_user",
+    name: "Inventory User",
+    module: "Inventory",
+    level: TenantRoleLevel.USER,
+    description:
+      "Moves and counts stock in one branch; transfers still need a manager's approval.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.CREATE_INVENTORY_MOVEMENTS,
+      StorePermission.CREATE_GOODS_TRANSFER,
+      StorePermission.STOCK_TAKE,
+      StorePermission.CREATE_PRODUCT_DEMAND,
+      ...CHAT,
+    ],
+  },
+
+  /* -------------------------------- Catalog -------------------------------- */
+  {
+    key: "catalog_manager",
+    name: "Catalog Manager",
+    module: "Catalog",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Owns the product master: products, prices, brands and supplier records.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.EDIT_PRODUCTS,
+      StorePermission.EDIT_PRODUCT_PRICES,
+      StorePermission.EDIT_BRANDS,
+      StorePermission.EDIT_SUPPLIERS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "catalog_user",
+    name: "Catalog User",
+    module: "Catalog",
+    level: TenantRoleLevel.USER,
+    description:
+      "Adds and edits products; prices, brands and suppliers stay with the manager.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.EDIT_PRODUCTS,
+      ...CHAT,
+    ],
+  },
+
+  /* ------------------------------- Accounting ------------------------------ */
+  {
+    key: "accounting_manager",
+    name: "Accounting Manager",
+    module: "Accounting",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Approves vouchers and fund transfers and reads every financial report across branches.",
+    coarseRoles: [UserRole.ACCOUNTANT],
+    permissions: [
+      StorePermission.VIEW_LEDGER,
+      StorePermission.CREATE_VOUCHER,
+      StorePermission.APPROVE_VOUCHER,
+      StorePermission.VIEW_FINANCIAL_REPORTS,
+      StorePermission.CREATE_FUND_TRANSFER,
+      StorePermission.APPROVE_FUND_TRANSFER,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.SWITCH_STORES,
+      StorePermission.VIEW_CONSOLIDATED_REPORTS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "accounting_user",
+    name: "Accounting User",
+    module: "Accounting",
+    level: TenantRoleLevel.USER,
+    description:
+      "Books vouchers and transfers for someone else to approve; reads the ledger.",
+    coarseRoles: [UserRole.ACCOUNTANT],
+    permissions: [
+      StorePermission.VIEW_LEDGER,
+      StorePermission.CREATE_VOUCHER,
+      StorePermission.VIEW_FINANCIAL_REPORTS,
+      StorePermission.CREATE_FUND_TRANSFER,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      ...CHAT,
+    ],
+  },
+
+  /* ---------------------------------- CRM ---------------------------------- */
+  {
+    key: "crm_manager",
+    name: "CRM Manager",
+    module: "CRM",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Runs the pipeline: lead ownership, activity sign-off and CRM configuration.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_CRM_INTERACTIONS,
+      StorePermission.CREATE_CRM_INTERACTIONS,
+      StorePermission.MANAGE_CRM_TASKS,
+      StorePermission.APPROVE_CRM_ACTIVITY,
+      StorePermission.VIEW_LEADS,
+      StorePermission.MANAGE_LEADS,
+      StorePermission.VIEW_LEAD_CONVERSATIONS,
+      StorePermission.CREATE_LEAD_CONVERSATIONS,
+      StorePermission.MANAGE_CRM_SETTINGS,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "crm_user",
+    name: "CRM User",
+    module: "CRM",
+    level: TenantRoleLevel.USER,
+    description:
+      "Works leads and logs conversations; approvals and CRM settings stay with the manager.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_CRM_INTERACTIONS,
+      StorePermission.CREATE_CRM_INTERACTIONS,
+      StorePermission.MANAGE_CRM_TASKS,
+      StorePermission.VIEW_LEADS,
+      StorePermission.VIEW_LEAD_CONVERSATIONS,
+      StorePermission.CREATE_LEAD_CONVERSATIONS,
+      ...CHAT,
+    ],
+  },
+
+  /* ---------------------------------- HR ----------------------------------- */
+  {
+    key: "hr_manager",
+    name: "HR Manager",
+    module: "HR",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Owns employee records, attendance, leave and payroll figures.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_HR,
+      StorePermission.MANAGE_HR,
+      StorePermission.VIEW_PAYROLL,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "hr_user",
+    name: "HR User",
+    module: "HR",
+    level: TenantRoleLevel.USER,
+    description:
+      "Reads employee records and attendance. Salary figures need a deliberate grant.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [StorePermission.VIEW_HR, ...CHAT],
+  },
+
+  /* -------------------------------- Projects ------------------------------- */
+  {
+    key: "project_manager",
+    name: "Project Manager",
+    module: "Projects",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Plans and runs projects: tasks, sprints, time and project settings.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PROJECTS,
+      StorePermission.MANAGE_PROJECTS,
+      StorePermission.MANAGE_PROJECT_TASKS,
+      StorePermission.MANAGE_SPRINTS,
+      StorePermission.MANAGE_PROJECT_SETTINGS,
+      StorePermission.LOG_PROJECT_TIME,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "project_user",
+    name: "Project User",
+    module: "Projects",
+    level: TenantRoleLevel.USER,
+    description:
+      "Works the projects they are a member of: their tasks and their time log.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_PROJECTS,
+      StorePermission.MANAGE_PROJECT_TASKS,
+      StorePermission.LOG_PROJECT_TIME,
+      ...CHAT,
+    ],
+  },
+
+  /* -------------------------------- Imports -------------------------------- */
+  {
+    key: "imports_manager",
+    name: "Import Manager",
+    module: "Imports",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Runs LC shipments end to end, including the landed costs that move COGS.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_IMPORTS,
+      StorePermission.MANAGE_IMPORTS,
+      StorePermission.MANAGE_IMPORT_COSTS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "imports_user",
+    name: "Import User",
+    module: "Imports",
+    level: TenantRoleLevel.USER,
+    description:
+      "Tracks shipments and documents. Costing stays with the manager because it moves COGS.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_IMPORTS,
+      StorePermission.MANAGE_IMPORTS,
+      ...CHAT,
+    ],
+  },
+
+  /* --------------------------------- Loans --------------------------------- */
+  {
+    key: "loans_manager",
+    name: "Loan Manager",
+    module: "Loans",
+    level: TenantRoleLevel.MANAGER,
+    description: "Records loans, disbursements and repayments.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_LOANS,
+      StorePermission.MANAGE_LOANS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "loans_user",
+    name: "Loan User",
+    module: "Loans",
+    level: TenantRoleLevel.USER,
+    description: "Reads the loan book without changing it.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [StorePermission.VIEW_LOANS, ...CHAT],
+  },
+
+  /* ------------------------------- Investors ------------------------------- */
+  {
+    key: "investors_manager",
+    name: "Investor Manager",
+    module: "Investors",
+    level: TenantRoleLevel.MANAGER,
+    description: "Maintains investors, their contributions and profit sharing.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_INVESTORS,
+      StorePermission.MANAGE_INVESTORS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "investors_user",
+    name: "Investor User",
+    module: "Investors",
+    level: TenantRoleLevel.USER,
+    description: "Reads investor balances and payouts without changing them.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [StorePermission.VIEW_INVESTORS, ...CHAT],
+  },
+
+  /* ------------------------------- Marketing ------------------------------- */
+  {
+    key: "marketing_manager",
+    name: "Marketing Manager",
+    module: "Marketing",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Owns the storefront blog end to end, including publishing, and the short-link tools.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_BLOG,
+      StorePermission.MANAGE_BLOG,
+      StorePermission.PUBLISH_BLOG,
+      StorePermission.MANAGE_SHORT_LINKS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "marketing_user",
+    name: "Marketing User",
+    module: "Marketing",
+    level: TenantRoleLevel.USER,
+    description:
+      "Writes and edits blog drafts. Putting one on the public shop page needs the manager.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_BLOG,
+      StorePermission.MANAGE_BLOG,
+      StorePermission.MANAGE_SHORT_LINKS,
+      ...CHAT,
+    ],
+  },
+];
+
+/** Template lookup by `TenantRole.template_key`. */
+export const TENANT_ROLE_TEMPLATE_BY_KEY: Record<string, TenantRoleTemplate> =
+  Object.fromEntries(TENANT_ROLE_TEMPLATES.map((tpl) => [tpl.key, tpl]));
+
+/**
+ * Module order for the role picker — declaration order of the templates, so the
+ * UI never has to keep its own list in step with this one.
+ */
+export const TENANT_ROLE_MODULES: string[] = TENANT_ROLE_TEMPLATES.reduce<
+  string[]
+>((acc, tpl) => (acc.includes(tpl.module) ? acc : [...acc, tpl.module]), []);
+
+/**
+ * Base-role fallback for the seeded templates, keyed by the name each is created
+ * with. Deliberately separate from `SYSTEM_TENANT_ROLE_TO_USER_ROLE`: that map is
+ * also the list `sync-role-permissions.ts` reconciles against
+ * `ROLE_DEFAULT_PERMISSIONS`, and a template role's permissions come from its
+ * template, never from a coarse role's defaults.
+ */
+const TEMPLATE_ROLE_NAME_TO_COARSE_ROLES: Record<string, UserRole[]> =
+  Object.fromEntries(TENANT_ROLE_TEMPLATES.map((tpl) => [tpl.name, tpl.coarseRoles]));
+
+/** Strongest first — used to collapse several held roles into one coarse enum. */
+const BASE_USER_ROLE_RANK: Record<UserRole, number> = {
+  [UserRole.OWNER]: 3,
+  [UserRole.MANAGER]: 2,
+  [UserRole.ACCOUNTANT]: 1,
+  [UserRole.CASHIER]: 0,
+};
+
+/**
+ * Collapse every TenantRole a member holds into the single coarse
+ * `TenantUser.role` enum, taking the strongest. The enum is not the permission
+ * model — that is the union of the roles' `StorePermission`s, materialized per
+ * branch — it only drives role display and the few workspace-wide OWNER/MANAGER
+ * gates, so "strongest wins" is the only answer consistent with a member's
+ * access being the union of their roles.
+ */
+export function resolveStrongestBaseUserRole(
+  tenantRoleNames: (string | null | undefined)[],
+): UserRole {
+  return tenantRoleNames.reduce<UserRole>((strongest, name) => {
+    const candidate = resolveBaseUserRole(name);
+    return BASE_USER_ROLE_RANK[candidate] > BASE_USER_ROLE_RANK[strongest]
+      ? candidate
+      : strongest;
+  }, UserRole.CASHIER);
 }
 
 /** Human-readable labels for each store permission (used by the team management UI). */
@@ -424,6 +1024,11 @@ export interface TenantRoleSummary {
   name: string;
   description?: string | null;
   is_system: boolean;
+  /** Set when the role was seeded from `TENANT_ROLE_TEMPLATES`; null if the owner wrote it. */
+  template_key?: string | null;
+  /** Module the role belongs to, for grouping the picker. Null for owner-authored roles. */
+  module?: string | null;
+  level?: TenantRoleLevel | null;
   permissions: StorePermission[];
   member_count?: number;
 }

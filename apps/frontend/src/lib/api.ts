@@ -3167,14 +3167,16 @@ export const api = {
     getTeamMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`),
     getTeamStores: () => fetchWithAuth('/team/stores'),
     getTeamInvitations: () => fetchWithAuth('/team/invitations'),
-    sendTeamInvitation: (data: { email: string; tenantRoleId: string }) => fetchWithAuth('/team/invitations', {
+    // `tenantRoleIds` carries the whole set — the invitee's access is the union of
+    // every role in it, and the first is their primary role.
+    sendTeamInvitation: (data: { email: string; tenantRoleIds: string[] }) => fetchWithAuth('/team/invitations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     revokeTeamInvitation: (id: string) => fetchWithAuth(`/team/invitations/${id}`, { method: 'DELETE' }),
-    updateMemberRole: (userId: string, data: { tenantRoleId: string }) =>
-        fetchWithAuth(`/team/members/${userId}/role`, {
+    updateMemberRoles: (userId: string, data: { tenantRoleIds: string[] }) =>
+        fetchWithAuth(`/team/members/${userId}/roles`, {
             method: 'PATCH',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },

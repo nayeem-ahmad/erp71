@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
+import { resolveCoarseRolesForNames } from '@erp71/shared-types';
 import { TENANT_ROLES_KEY } from './tenant-roles.decorator';
 
 @Injectable()
@@ -42,6 +43,7 @@ export class TenantRoleGuard implements CanActivate {
                     user_id: userId,
                 },
             },
+            include: { roles: { select: { tenantRole: { select: { name: true } } } } },
         });
 
         if (!membership) {
@@ -50,10 +52,20 @@ export class TenantRoleGuard implements CanActivate {
 
         request.tenantRole = membership.role;
 
-        if (!requiredRoles.includes(membership.role)) {
-            throw new ForbiddenException('You do not have access to the accounting module');
+        if (requiredRoles.includes(membership.role)) {
+            return true;
         }
 
-        return true;
+        // `TenantUser.role` holds one value, but a member holds a set of roles and
+        // their access is the union of it. Someone who is both a Tenant Admin and an
+        // Accounting User would otherwise lose whichever gate the stored enum did not
+        // win, so fall back to the gates every role they hold opens. OWNER is never
+        // derived from a role name, so it stays unreachable this way.
+        const heldNames = membership.roles.map((assignment) => assignment.tenantRole.name);
+        if (resolveCoarseRolesForNames(heldNames).some((role) => requiredRoles.includes(role))) {
+            return true;
+        }
+
+        throw new ForbiddenException('You do not have access to the accounting module');
     }
 }

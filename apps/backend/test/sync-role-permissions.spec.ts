@@ -23,6 +23,7 @@ function fakePrisma(seed: Record<string, Row[]>) {
         tenantRole: [],
         tenantRolePermission: [],
         tenantUser: [],
+        tenantUserRole: [],
         userStoreAccess: [],
         userStorePermission: [],
         ...seed,
@@ -53,14 +54,20 @@ const ROLE_IDS = { manager: 'r-manager', cashier: 'r-cashier', accountant: 'r-ac
 
 function seedTenant(overrides: Partial<Record<string, Row[]>> = {}) {
     return fakePrisma({
+        // `template_key: null` marks these as the legacy system roles — the ones
+        // reconciled against ROLE_DEFAULT_PERMISSIONS. Roles seeded from
+        // TENANT_ROLE_TEMPLATES carry a key and are skipped, since their permissions
+        // come from their template.
         tenantRole: [
-            { id: ROLE_IDS.manager, tenant_id: 't1', name: 'Manager', is_system: true },
-            { id: ROLE_IDS.cashier, tenant_id: 't1', name: 'Cashier', is_system: true },
-            { id: ROLE_IDS.accountant, tenant_id: 't1', name: 'Accountant', is_system: true },
+            { id: ROLE_IDS.manager, tenant_id: 't1', name: 'Manager', is_system: true, template_key: null },
+            { id: ROLE_IDS.cashier, tenant_id: 't1', name: 'Cashier', is_system: true, template_key: null },
+            { id: ROLE_IDS.accountant, tenant_id: 't1', name: 'Accountant', is_system: true, template_key: null },
         ],
-        tenantUser: [
-            { user_id: 'u-mgr', tenant_id: 't1', tenant_role_id: ROLE_IDS.manager },
-            { user_id: 'u-cash', tenant_id: 't1', tenant_role_id: ROLE_IDS.cashier },
+        // Members are read through the join table, so a member holding the role
+        // alongside others is reached too, not just one whose primary role it is.
+        tenantUserRole: [
+            { tenant_role_id: ROLE_IDS.manager, tenantUser: { user_id: 'u-mgr', tenant_id: 't1' } },
+            { tenant_role_id: ROLE_IDS.cashier, tenantUser: { user_id: 'u-cash', tenant_id: 't1' } },
         ],
         userStoreAccess: [
             { user_id: 'u-mgr', store_id: 's1', tenant_id: 't1' },
@@ -227,7 +234,7 @@ describe('syncRolePermissions', () => {
 
     it('skips a renamed system role instead of reconciling it as a cashier', async () => {
         const { client, tables } = seedTenant({
-            tenantRole: [{ id: ROLE_IDS.manager, tenant_id: 't1', name: 'Branch Lead', is_system: true }],
+            tenantRole: [{ id: ROLE_IDS.manager, tenant_id: 't1', name: 'Branch Lead', is_system: true, template_key: null }],
         });
 
         const [result] = await syncRolePermissions(client);
@@ -239,7 +246,7 @@ describe('syncRolePermissions', () => {
 
     it('never touches a custom (non-system) role', async () => {
         const { client, tables } = seedTenant({
-            tenantRole: [{ id: 'r-custom', tenant_id: 't1', name: 'Manager', is_system: false }],
+            tenantRole: [{ id: 'r-custom', tenant_id: 't1', name: 'Manager', is_system: false, template_key: null }],
         });
 
         const [result] = await syncRolePermissions(client);
