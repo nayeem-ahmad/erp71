@@ -4,6 +4,8 @@ import { DatabaseService } from '../database/database.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
+import { GoogleTokenService } from '../auth/google-token.service';
+import { FirebaseTokenService } from '../auth/firebase-token.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -36,6 +38,8 @@ describe('StorefrontService', () => {
     let priceListsService: any;
     let totpService: any;
     let auditService: any;
+    let googleTokenService: any;
+    let firebaseTokenService: any;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -134,6 +138,14 @@ describe('StorefrontService', () => {
             logForUserTenants: jest.fn().mockResolvedValue(undefined),
         };
 
+        googleTokenService = {
+            verifyIdToken: jest.fn(),
+        };
+
+        firebaseTokenService = {
+            verifyPhoneIdToken: jest.fn(),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
@@ -142,6 +154,8 @@ describe('StorefrontService', () => {
                 { provide: PriceListsService, useValue: priceListsService },
                 { provide: TotpService, useValue: totpService },
                 { provide: AuditService, useValue: auditService },
+                { provide: GoogleTokenService, useValue: googleTokenService },
+                { provide: FirebaseTokenService, useValue: firebaseTokenService },
             ],
         }).compile();
 
@@ -1266,6 +1280,340 @@ describe('StorefrontService', () => {
                     take: 5,
                 }),
             );
+        });
+    });
+
+    // ── customerGoogleSignIn ──────────────────────────────────────────────────
+
+    describe('customerGoogleSignIn', () => {
+        const slug = 'my-store';
+        const profile = {
+            googleId: 'google-sub-1',
+            email: 'alice@example.com',
+            name: 'Alice',
+            picture: 'https://pic',
+        };
+
+        beforeEach(() => {
+            googleTokenService.verifyIdToken.mockResolvedValue(profile);
+        });
+
+        it('throws NotFoundException when tenant not found', async () => {
+            db.tenant.findFirst.mockResolvedValue(null);
+
+            await expect(service.customerGoogleSignIn(slug, { credential: 'tok' } as any)).rejects.toThrow(
+                NotFoundException,
+            );
+            // The slug is checked before the token, so a bad slug never reaches Google.
+            expect(googleTokenService.verifyIdToken).not.toHaveBeenCalled();
+        });
+
+        it('creates the user and the shop customer when neither exists', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue(null);
+            db.user.create.mockResolvedValue({ id: 'user-1', email: profile.email, name: 'Alice' });
+            db.customer.findFirst.mockResolvedValue(null);
+            db.customer.create.mockResolvedValue({
+                id: 'cust-1',
+                name: 'Alice',
+                email: profile.email,
+                phone: null,
+            });
+
+            const result: any = await service.customerGoogleSignIn(slug, { credential: 'tok' } as any);
+
+            expect(result.access_token).toBe('test-token');
+            expect(result.is_new_user).toBe(true);
+            expect(result.is_new_customer).toBe(true);
+            expect(db.user.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ google_id: profile.googleId, passwordHash: null }),
+                }),
+            );
+            expect(db.customer.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ tenant_id: mockTenant.id, user_id: 'user-1' }),
+                }),
+            );
+        });
+
+        it('links Google to an existing password account with the same address', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce(null)  // by google_id
+                .mockResolvedValueOnce({ id: 'user-1', email: profile.email, google_id: null, name: 'Alice' });
+            db.user.update.mockResolvedValue({ id: 'user-1', email: profile.email, google_id: profile.googleId });
+            db.customer.findFirst.mockResolvedValueOnce({ id: 'cust-1', user_id: 'user-1', email: profile.email, phone: '01700000001' });
+
+            const result: any = await service.customerGoogleSignIn(slug, { credential: 'tok' } as any);
+
+            expect(db.user.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ google_id: profile.googleId }) }),
+            );
+            expect(result.is_new_user).toBe(false);
+            expect(result.is_new_customer).toBe(false);
+            expect(db.customer.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses when the address is already linked to a different Google account', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'user-1', email: profile.email, google_id: 'another-sub' });
+
+            await expect(service.customerGoogleSignIn(slug, { credential: 'tok' } as any)).rejects.toThrow(
+                UnauthorizedException,
+            );
+        });
+
+        it('claims an unlinked customer record the shop keyed in under the same address', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue(null);
+            db.user.create.mockResolvedValue({ id: 'user-1', email: profile.email, name: 'Alice' });
+            db.customer.findFirst
+                .mockResolvedValueOnce(null)  // linked
+                .mockResolvedValueOnce({ id: 'cust-9', user_id: null, email: profile.email, phone: '01700000001' });
+            db.customer.update.mockResolvedValue({
+                id: 'cust-9',
+                user_id: 'user-1',
+                email: profile.email,
+                phone: '01700000001',
+            });
+
+            const result: any = await service.customerGoogleSignIn(slug, { credential: 'tok' } as any);
+
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-9' },
+                data: { user_id: 'user-1' },
+            });
+            expect(result.is_new_customer).toBe(false);
+            expect(db.customer.create).not.toHaveBeenCalled();
+        });
+
+        it('never claims a record on a phone number that was only typed', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue(null);
+            db.user.create.mockResolvedValue({ id: 'user-1', email: profile.email, name: 'Alice' });
+            db.customer.findFirst
+                .mockResolvedValueOnce(null)  // linked
+                .mockResolvedValueOnce(null)  // by verified email
+                .mockResolvedValueOnce({ id: 'someone-else' }); // that number is taken here
+
+            const promise = service.customerGoogleSignIn(slug, {
+                credential: 'tok',
+                phone: '01700000001',
+            } as any);
+
+            await expect(promise).rejects.toThrow(ConflictException);
+            await expect(promise).rejects.toThrow('Phone number already registered');
+            expect(db.customer.update).not.toHaveBeenCalled();
+        });
+
+        it('asks for the second factor instead of minting a session', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce({
+                    id: 'user-1',
+                    email: profile.email,
+                    name: profile.name,
+                    google_id: profile.googleId,
+                    avatar_url: profile.picture,
+                    email_verified_at: new Date(),
+                    totp_secret: 'SECRET',
+                });
+            db.customer.findFirst.mockResolvedValueOnce({ id: 'cust-1', user_id: 'user-1', email: profile.email, phone: '01700000001' });
+            totpService.isEnabled.mockReturnValue(true);
+
+            await expect(service.customerGoogleSignIn(slug, { credential: 'tok' } as any)).resolves.toEqual({
+                requires_2fa: true,
+                user_id: 'user-1',
+            });
+        });
+    });
+
+    // ── customerMobileSignIn ──────────────────────────────────────────────────
+
+    describe('customerMobileSignIn', () => {
+        const slug = 'my-store';
+        const profile = { firebaseUid: 'fb-1', phoneNumber: '+8801712345678' };
+
+        beforeEach(() => {
+            firebaseTokenService.verifyPhoneIdToken.mockResolvedValue(profile);
+        });
+
+        it('throws NotFoundException when tenant not found', async () => {
+            db.tenant.findFirst.mockResolvedValue(null);
+
+            await expect(service.customerMobileSignIn(slug, { idToken: 'tok' } as any)).rejects.toThrow(
+                NotFoundException,
+            );
+            expect(firebaseTokenService.verifyPhoneIdToken).not.toHaveBeenCalled();
+        });
+
+        it('asks for an email and writes nothing when the number belongs to nobody', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue(null);
+
+            await expect(service.customerMobileSignIn(slug, { idToken: 'tok' } as any)).resolves.toEqual({
+                requires_signup: true,
+                mobile: profile.phoneNumber,
+            });
+            expect(db.user.create).not.toHaveBeenCalled();
+            expect(db.customer.create).not.toHaveBeenCalled();
+        });
+
+        it('creates the account once an email address is supplied', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce(null)  // by firebase_uid
+                .mockResolvedValueOnce(null)  // by mobile
+                .mockResolvedValueOnce(null); // by email
+            db.user.create.mockResolvedValue({
+                id: 'user-1',
+                email: 'alice@example.com',
+                name: 'Alice',
+                email_verified_at: null,
+            });
+            db.customer.findFirst.mockResolvedValue(null);
+            db.customer.create.mockResolvedValue({
+                id: 'cust-1',
+                name: 'Alice',
+                email: 'alice@example.com',
+                phone: profile.phoneNumber,
+            });
+
+            const result: any = await service.customerMobileSignIn(slug, {
+                idToken: 'tok',
+                email: '  Alice@Example.com ',
+                name: 'Alice',
+            } as any);
+
+            expect(db.user.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        email: 'alice@example.com',
+                        firebase_uid: profile.firebaseUid,
+                        mobile: profile.phoneNumber,
+                        mobile_country_code: 'BD',
+                    }),
+                }),
+            );
+            expect(db.customer.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ phone: profile.phoneNumber, user_id: 'user-1' }),
+                }),
+            );
+            expect(result.access_token).toBe('test-token');
+            expect(result.is_new_user).toBe(true);
+        });
+
+        it('refuses to attach a verified number to an account someone else already owns by email', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce(null)                    // by firebase_uid
+                .mockResolvedValueOnce(null)                    // by mobile
+                .mockResolvedValueOnce({ id: 'other-user' });   // by email
+
+            await expect(
+                service.customerMobileSignIn(slug, { idToken: 'tok', email: 'alice@example.com' } as any),
+            ).rejects.toThrow(ConflictException);
+            expect(db.user.create).not.toHaveBeenCalled();
+        });
+
+        it('claims the shop record holding the same number in local spelling', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique
+                .mockResolvedValueOnce({
+                    id: 'user-1',
+                    email: 'alice@example.com',
+                    name: 'Alice',
+                    firebase_uid: profile.firebaseUid,
+                    mobile: profile.phoneNumber,
+                    mobile_verified_at: new Date(),
+                    email_verified_at: null,
+                })
+                .mockResolvedValueOnce({
+                    id: 'user-1',
+                    email: 'alice@example.com',
+                    name: 'Alice',
+                    firebase_uid: profile.firebaseUid,
+                    mobile: profile.phoneNumber,
+                    mobile_verified_at: new Date(),
+                    email_verified_at: null,
+                });
+            db.customer.findFirst
+                .mockResolvedValueOnce(null) // linked
+                .mockResolvedValueOnce({ id: 'cust-9', user_id: null, phone: '01712345678', email: null });
+            db.customer.update.mockResolvedValue({
+                id: 'cust-9',
+                user_id: 'user-1',
+                phone: '01712345678',
+                email: null,
+            });
+
+            const result: any = await service.customerMobileSignIn(slug, { idToken: 'tok' } as any);
+
+            // The record is matched across spellings — the shop typed `01712345678`,
+            // Firebase verified `+8801712345678`.
+            expect(db.customer.findFirst).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        phone: { in: expect.arrayContaining(['+8801712345678', '01712345678']) },
+                    }),
+                }),
+            );
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-9' },
+                data: { user_id: 'user-1' },
+            });
+            expect(result.is_new_customer).toBe(false);
+        });
+
+        it('refuses when this shop already ties that number to another account', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            const user = {
+                id: 'user-1',
+                email: 'alice@example.com',
+                name: 'Alice',
+                firebase_uid: profile.firebaseUid,
+                mobile: profile.phoneNumber,
+                mobile_verified_at: new Date(),
+                email_verified_at: null,
+            };
+            db.user.findUnique.mockResolvedValue(user);
+            db.customer.findFirst
+                .mockResolvedValueOnce(null) // linked
+                .mockResolvedValueOnce({ id: 'cust-9', user_id: 'someone-else', phone: profile.phoneNumber });
+
+            await expect(service.customerMobileSignIn(slug, { idToken: 'tok' } as any)).rejects.toThrow(
+                ConflictException,
+            );
+        });
+
+        it('never claims a record on an email address the account has not verified', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            const user = {
+                id: 'user-1',
+                email: 'alice@example.com',
+                name: 'Alice',
+                firebase_uid: profile.firebaseUid,
+                mobile: profile.phoneNumber,
+                mobile_verified_at: new Date(),
+                email_verified_at: null,
+            };
+            db.user.findUnique.mockResolvedValue(user);
+            db.customer.findFirst
+                .mockResolvedValueOnce(null)  // linked
+                .mockResolvedValueOnce(null); // by verified phone
+            db.customer.create.mockResolvedValue({ id: 'cust-1', name: 'Alice', email: user.email, phone: profile.phoneNumber });
+
+            await service.customerMobileSignIn(slug, { idToken: 'tok' } as any);
+
+            // Only two lookups: the email branch is skipped entirely, so an
+            // unverified address can never take over a record the shop holds.
+            expect(db.customer.findFirst).toHaveBeenCalledTimes(2);
+            expect(db.customer.create).toHaveBeenCalled();
         });
     });
 });

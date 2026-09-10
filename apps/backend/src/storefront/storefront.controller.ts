@@ -10,6 +10,7 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { StorefrontService } from './storefront.service';
 import {
     PlaceOrderDto,
@@ -17,6 +18,8 @@ import {
     CustomerSignupDto,
     CustomerLoginDto,
     CustomerTwoFactorLoginDto,
+    CustomerGoogleSignInDto,
+    CustomerMobileSignInDto,
 } from './storefront.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
@@ -97,6 +100,38 @@ export class StorefrontController {
     @Post(':slug/auth/login')
     async customerLogin(@Param('slug') slug: string, @Body() dto: CustomerLoginDto) {
         return this.storefrontService.customerLogin(slug, dto);
+    }
+
+    /**
+     * Public: sign in — or sign up — with Google.
+     *
+     * One route for both, because a Google account this shop has never seen is
+     * given a customer record rather than turned away. Answers `requires_2fa`
+     * like the password path when the account carries a second factor.
+     *
+     * The client id the browser needs comes from `GET /auth/google/config`,
+     * which is public and shared with the ERP login page — a deployment
+     * configures Google once, not once per surface.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post(':slug/auth/google')
+    async customerGoogleSignIn(@Param('slug') slug: string, @Body() dto: CustomerGoogleSignInDto) {
+        return this.storefrontService.customerGoogleSignIn(slug, dto);
+    }
+
+    /**
+     * Public: sign in — or sign up — with a mobile number, once the browser has
+     * verified it by SMS through Firebase.
+     *
+     * Answers `{ requires_signup, mobile }` when the number belongs to nobody
+     * yet: an account needs an email address, which the caller then collects and
+     * posts back with the same token. Firebase's public web config comes from
+     * `GET /auth/firebase/config`.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post(':slug/auth/mobile')
+    async customerMobileSignIn(@Param('slug') slug: string, @Body() dto: CustomerMobileSignInDto) {
+        return this.storefrontService.customerMobileSignIn(slug, dto);
     }
 
     /** Public: second leg of a 2FA storefront sign-in */

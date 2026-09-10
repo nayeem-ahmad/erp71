@@ -280,6 +280,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: 'Track your orders and save your details',
             createAccountButton: 'Create Account',
             backToStore: '← Back to store',
+            dividerOr: 'or',
+            googleFailed: 'Google sign-in failed',
+            mobileAccountTitle: 'Finish creating your account',
+            mobileAccountDescription: '{mobile} is verified. Add an email address so this store can send you order updates.',
         },
         shop: {
             title: 'Shop',

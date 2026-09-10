@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import MobileSignInPanel from '@/components/MobileSignInPanel';
 
 const API_BASE =
     ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
@@ -30,6 +32,11 @@ export default function StorefrontSignInPage() {
     // not mint a session, so we collect the second factor before continuing.
     const [pendingTwoFactorUserId, setPendingTwoFactorUserId] = useState<string | null>(null);
     const [twoFactorCode, setTwoFactorCode] = useState('');
+    // Both providers render nothing unless the backend is configured for them,
+    // so the page only draws its own divider once one of them is really there.
+    const [googleAvailable, setGoogleAvailable] = useState(false);
+    const [mobileAvailable, setMobileAvailable] = useState(false);
+    const [googleBusy, setGoogleBusy] = useState(false);
 
     useEffect(() => {
         if (!slug) return;
@@ -73,6 +80,59 @@ export default function StorefrontSignInPage() {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    /**
+     * Google and mobile answer with the same shapes the password form does — a
+     * session, or a `requires_2fa` challenge this page already knows how to
+     * finish — so both hand their response straight to this.
+     */
+    const handleProviderAuth = (payload: any) => {
+        if (payload?.requires_2fa) {
+            setPendingTwoFactorUserId(payload.user_id);
+            return;
+        }
+        persistSession(payload);
+    };
+
+    const handleGoogleCredential = async (credential: string) => {
+        setError('');
+        setGoogleBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/storefront/${slug}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential }),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.message || a.googleFailed);
+            }
+            handleProviderAuth('data' in json ? json.data : json);
+        } catch (err: any) {
+            setError(err.message || a.defaultError);
+        } finally {
+            setGoogleBusy(false);
+        }
+    };
+
+    /**
+     * Posts the Firebase token the panel has already had verified by SMS. The
+     * panel reads `requires_signup` off what this returns and collects an email
+     * address before calling again, so failures have to surface as a thrown
+     * error rather than a swallowed one.
+     */
+    const exchangeMobileToken = async (payload: { idToken: string; email?: string; name?: string }) => {
+        const res = await fetch(`${API_BASE}/storefront/${slug}/auth/mobile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+            throw new Error(json.message || t.auth.mobile.failed);
+        }
+        return 'data' in json ? json.data : json;
     };
 
     const persistSession = (payload: { access_token: string; customer: unknown }) => {
@@ -215,6 +275,37 @@ export default function StorefrontSignInPage() {
                             {submitting ? 'Signing in…' : 'Sign In'}
                         </button>
                     </form>
+                    )}
+
+                    {!pendingTwoFactorUserId && (googleAvailable || mobileAvailable) && (
+                        <div className="my-6 flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                                {a.dividerOr}
+                            </span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+                    )}
+
+                    {!pendingTwoFactorUserId && (
+                        <div className="space-y-3">
+                            <GoogleSignInButton
+                                onCredential={handleGoogleCredential}
+                                onError={setError}
+                                onAvailabilityChange={setGoogleAvailable}
+                                text="signin_with"
+                                busy={googleBusy}
+                                disabled={submitting}
+                            />
+                            <MobileSignInPanel
+                                onSuccess={handleProviderAuth}
+                                exchange={exchangeMobileToken}
+                                accountCopy={{ title: a.mobileAccountTitle, description: a.mobileAccountDescription }}
+                                onError={setError}
+                                onAvailabilityChange={setMobileAvailable}
+                                disabled={submitting || googleBusy}
+                            />
+                        </div>
                     )}
 
                     {!pendingTwoFactorUserId && (

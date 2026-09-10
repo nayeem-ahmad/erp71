@@ -280,6 +280,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "تابع طلباتك واحفظ بياناتك",
             createAccountButton: "إنشاء حساب",
             backToStore: "← العودة إلى المتجر",
+            dividerOr: "أو",
+            googleFailed: "فشل تسجيل الدخول عبر Google",
+            mobileAccountTitle: "أكمل إنشاء حسابك",
+            mobileAccountDescription: "تم التحقق من {mobile}. أضف بريدًا إلكترونيًا حتى يتمكن المتجر من إرسال تحديثات الطلب إليك.",
         },
         shop: {
             title: "التسوق",

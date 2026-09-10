@@ -280,6 +280,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "اپنے آرڈرز دیکھیں اور اپنی تفصیلات محفوظ کریں",
             createAccountButton: "اکاؤنٹ بنائیں",
             backToStore: "← دکان پر واپس",
+            dividerOr: "یا",
+            googleFailed: "Google سائن اِن ناکام ہوا",
+            mobileAccountTitle: "اپنا اکاؤنٹ بنانا مکمل کریں",
+            mobileAccountDescription: "{mobile} کی تصدیق ہو گئی۔ ای میل پتہ شامل کریں تاکہ یہ دکان آپ کو آرڈر کی اپ ڈیٹ بھیج سکے۔",
         },
         shop: {
             title: "خریداری",

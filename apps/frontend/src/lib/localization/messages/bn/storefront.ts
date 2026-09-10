@@ -280,6 +280,10 @@ export const storefrontMessages = {
                 signUpPageSubtitle: "অর্ডার ট্র্যাক করুন ও তথ্য সংরক্ষণ করুন",
                 createAccountButton: "অ্যাকাউন্ট তৈরি করুন",
                 backToStore: "← স্টোরে ফিরে যান",
+                dividerOr: "অথবা",
+                googleFailed: "Google দিয়ে সাইন ইন ব্যর্থ হয়েছে",
+                mobileAccountTitle: "আপনার অ্যাকাউন্ট তৈরি সম্পন্ন করুন",
+                mobileAccountDescription: "{mobile} যাচাই করা হয়েছে। অর্ডারের আপডেট পেতে একটি ইমেইল ঠিকানা যোগ করুন।",
             },
             shop: {
                 title: "শপ",

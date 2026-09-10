@@ -280,6 +280,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "Bestellungen verfolgen und Angaben speichern",
             createAccountButton: "Konto erstellen",
             backToStore: "← Zurück zum Shop",
+            dividerOr: "oder",
+            googleFailed: "Google-Anmeldung fehlgeschlagen",
+            mobileAccountTitle: "Kontoerstellung abschließen",
+            mobileAccountDescription: "{mobile} ist bestätigt. Füge eine E-Mail-Adresse hinzu, damit dieser Shop dir Bestellupdates senden kann.",
         },
         shop: {
             title: "Shop",
