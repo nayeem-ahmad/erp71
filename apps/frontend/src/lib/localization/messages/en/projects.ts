@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: 'Anyone',
         allProjects: 'All projects',
         anyStatus: 'Any status',
+        anyPriority: 'Any priority',
+        bulkDeletePrompt: 'Delete {count, plural, one {# selected task} other {# selected tasks}}?\n\nThey go from every list, board and sprint. This cannot be undone.',
+        deletedCount: '{count, plural, one {# task deleted} other {# tasks deleted}}',
+        deleteFailedCount: '{count, plural, one {# task could not be deleted} other {# tasks could not be deleted}}',
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: 'Subtasks',
         noTasks: 'No tasks yet.',
         deleted: 'Task deleted',
+        deleteTask: 'Delete task',
+        deletePrompt: 'Delete {title}?\n\nIt goes from every list, board and sprint. This cannot be undone.',
+        deleteFailed: 'Could not delete the task',
         created: 'Task created',
         updated: 'Task updated',
         editTitle: 'Edit title',

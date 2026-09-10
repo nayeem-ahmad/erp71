@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "Cualquiera",
         allProjects: "Todos los proyectos",
         anyStatus: "Cualquier estado",
+        anyPriority: "Cualquier prioridad",
+        bulkDeletePrompt: "¿Eliminar {count, plural, one {# tarea seleccionada} other {# tareas seleccionadas}}?\n\nDesaparecen de todas las listas, tableros y sprints. Esto no se puede deshacer.",
+        deletedCount: "{count, plural, one {# tarea eliminada} other {# tareas eliminadas}}",
+        deleteFailedCount: "{count, plural, one {No se pudo eliminar # tarea} other {No se pudieron eliminar # tareas}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "Subtareas",
         noTasks: "Aún no hay tareas.",
         deleted: "Tarea eliminada",
+        deleteTask: "Eliminar tarea",
+        deletePrompt: "¿Eliminar {title}?\n\nDesaparece de todas las listas, tableros y sprints. Esto no se puede deshacer.",
+        deleteFailed: "No se pudo eliminar la tarea",
         created: "Tarea creada",
         updated: "Tarea actualizada",
         editTitle: "Editar título",

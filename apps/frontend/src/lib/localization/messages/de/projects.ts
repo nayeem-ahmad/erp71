@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "Alle",
         allProjects: "Alle Projekte",
         anyStatus: "Beliebiger Status",
+        anyPriority: "Beliebige Priorität",
+        bulkDeletePrompt: "{count, plural, one {# ausgewählte Aufgabe} other {# ausgewählte Aufgaben}} löschen?\n\nSie verschwinden aus jeder Liste, jedem Board und jedem Sprint. Das lässt sich nicht rückgängig machen.",
+        deletedCount: "{count, plural, one {# Aufgabe gelöscht} other {# Aufgaben gelöscht}}",
+        deleteFailedCount: "{count, plural, one {# Aufgabe konnte nicht gelöscht werden} other {# Aufgaben konnten nicht gelöscht werden}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "Teilaufgaben",
         noTasks: "Noch keine Aufgaben.",
         deleted: "Aufgabe gelöscht",
+        deleteTask: "Aufgabe löschen",
+        deletePrompt: "{title} löschen?\n\nSie verschwindet aus jeder Liste, jedem Board und jedem Sprint. Das lässt sich nicht rückgängig machen.",
+        deleteFailed: "Die Aufgabe konnte nicht gelöscht werden",
         created: "Aufgabe erstellt",
         updated: "Aufgabe aktualisiert",
         editTitle: "Titel bearbeiten",

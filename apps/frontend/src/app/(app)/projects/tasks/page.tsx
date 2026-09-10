@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Upload } from 'lucide-react';
+import { Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -12,9 +12,14 @@ import {
     Field,
     RichTextEditor,
     StatusBadge,
+    ConfirmDialog,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import DataTable from '@/components/data-table/DataTable';
+import CreatedRangeFilter from '@/components/data-table/CreatedRangeFilter';
+import { createdAtColumn } from '@/components/data-table/created-at-column';
+import { createColumnHelper } from '@tanstack/react-table';
+import type { BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import { useServerList } from '@/hooks/useServerList';
@@ -24,11 +29,18 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import {
+    applyCreatedRangeQuery,
+    isCreatedRangeEmpty,
+    type CreatedRange,
+} from '@/lib/created-range';
 
 interface TaskRow {
     id: string;
     title: string;
     priority: string;
+    created_at: string;
     due_date?: string | null;
     estimate_hours?: string | null;
     remaining_hours?: string | null;
@@ -38,6 +50,16 @@ interface TaskRow {
     assignee?: { id: string; name?: string | null; email: string } | null;
     assigneeEmployee?: { id: string; name: string } | null;
 }
+
+/** A row of `/project-tasks/assignees` — whoever holds a task the viewer can see. */
+interface AssigneeOption {
+    key: string;
+    name: string;
+    hint?: string | null;
+    noLogin?: boolean;
+}
+
+const columnHelper = createColumnHelper<TaskRow>();
 
 const CATEGORY_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'info'> = {
     TODO: 'neutral',
@@ -72,6 +94,38 @@ const EMPTY_FORM = {
     estimateHours: '',
 };
 
+/**
+ * The assignee filter's own value space: `me`, `anyone` and `unassigned` are
+ * scopes rather than people, and everything else is one of the
+ * `user:`/`employee:` keys the server hands back — the same key space the task
+ * detail panel's picker uses.
+ */
+const DEFAULT_FILTERS = {
+    search: '',
+    // Defaults to the signed-in user, so this page opens on what "My Tasks"
+    // used to show rather than on every task in the workspace.
+    assignee: 'me' as string,
+    projectId: '',
+    statusCategory: '',
+    priority: '',
+    createdRange: null as CreatedRange | null,
+};
+
+/** What the chosen assignee means to `/project-tasks`, once "me" knows who that is. */
+function assigneeQuery(
+    assignee: string,
+    userId: string | null,
+): { assigneeId?: string; assigneeEmployeeId?: string; unassigned?: string } {
+    if (assignee === 'anyone') return {};
+    if (assignee === 'unassigned') return { unassigned: 'true' };
+    if (assignee === 'me') return { assigneeId: userId ?? undefined };
+    if (assignee.startsWith('user:')) return { assigneeId: assignee.slice('user:'.length) };
+    if (assignee.startsWith('employee:')) {
+        return { assigneeEmployeeId: assignee.slice('employee:'.length) };
+    }
+    return {};
+}
+
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
 /** A task goes to a user or to an employee with no login; show whichever holds it. */
@@ -82,29 +136,38 @@ function assigneeLabel(task: TaskRow): string {
 }
 
 export default function TasksPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects;
 
-    const [search, setSearch] = useState('');
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-tasks', DEFAULT_FILTERS);
+    const { search, assignee, projectId, statusCategory, priority, createdRange } = filters;
+
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    // Defaults to the signed-in user, so this page opens on what "My Tasks"
-    // used to show rather than on every task in the workspace.
-    const [assignee, setAssignee] = useState<'me' | 'anyone'>('me');
-    const [projectId, setProjectId] = useState('');
-    const [statusCategory, setStatusCategory] = useState('');
+    const [typing, setTyping] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
+    const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
     const [formErrors, setFormErrors] = useState<{ projectId?: string; title?: string }>({});
+    const [pendingDelete, setPendingDelete] = useState<TaskRow | null>(null);
+    const [pendingBulkDelete, setPendingBulkDelete] = useState<TaskRow[] | null>(null);
+    const [selectionEpoch, setSelectionEpoch] = useState(0);
+    const [busy, setBusy] = useState(false);
 
+    // Debounced only while somebody is actually typing, so a remembered search
+    // restored on arrival reaches the query at once rather than 300ms late.
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search.trim());
+            return;
+        }
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, typing]);
 
     useEffect(() => {
         api.getMe()
@@ -113,26 +176,65 @@ export default function TasksPage() {
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
             .catch(() => setProjects([]));
+        api.getProjectTaskAssignees()
+            .then((rows: unknown) => setAssignees(Array.isArray(rows) ? (rows as AssigneeOption[]) : []))
+            .catch(() => setAssignees([]));
     }, []);
 
     // Holding the fetch until the user id resolves keeps the default filter from
-    // briefly showing everyone's tasks and then narrowing.
-    const ready = assignee === 'anyone' || userId !== null;
+    // briefly showing everyone's tasks and then narrowing; holding it until the
+    // remembered filters land keeps a return visit from fetching the default
+    // slice and then the remembered one.
+    const ready = filtersReady && (assignee !== 'me' || userId !== null);
 
     const { items, loading, serverPagination, reload } = useServerList<TaskRow>({
         tableId: 'project-tasks',
         enabled: ready,
         initialSort: { id: 'due_date', desc: false },
-        deps: [debouncedSearch, assignee, projectId, statusCategory, userId],
+        deps: [
+            debouncedSearch,
+            assignee,
+            projectId,
+            statusCategory,
+            priority,
+            createdRange?.from,
+            createdRange?.to,
+            userId,
+        ],
         fetch: (params) =>
             api.getProjectTasks({
                 ...params,
                 search: debouncedSearch || undefined,
-                assigneeId: assignee === 'me' ? (userId ?? undefined) : undefined,
+                ...assigneeQuery(assignee, userId),
                 projectId: projectId || undefined,
                 statusCategory: statusCategory || undefined,
+                priority: priority || undefined,
+                ...applyCreatedRangeQuery(createdRange),
             }),
     });
+
+    const filtered =
+        Boolean(debouncedSearch)
+        || assignee !== 'anyone'
+        || Boolean(projectId)
+        || Boolean(statusCategory)
+        || Boolean(priority)
+        || !isCreatedRangeEmpty(createdRange);
+
+    const clearFilters = () => {
+        setTyping(false);
+        setFilter('search', '');
+        // "Anyone", not the page's own default: clearing filters means showing
+        // everything, not narrowing back to the signed-in user.
+        setFilter('assignee', 'anyone');
+        setFilter('projectId', '');
+        setFilter('statusCategory', '');
+        setFilter('priority', '');
+        setFilter('createdRange', null);
+    };
+
+    // DataTable owns the selection; bumping this is how a caller clears it.
+    const clearSelection = useCallback(() => setSelectionEpoch((epoch) => epoch + 1), []);
 
     const openCreate = () => {
         // Whatever project the list is filtered to is almost always the one the
@@ -174,6 +276,44 @@ export default function TasksPage() {
             toast.error(error instanceof Error ? error.message : m.task.createFailed);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setBusy(true);
+        try {
+            await api.deleteProjectTask(pendingDelete.id);
+            toast.success(m.task.deleted);
+            setPendingDelete(null);
+            await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.deleteFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const confirmBulkDelete = async () => {
+        const rows = pendingBulkDelete;
+        if (!rows?.length) return;
+        setBusy(true);
+        try {
+            // No bulk endpoint for tasks, so these go one at a time. `allSettled`
+            // rather than `all`: one task in a project the viewer cannot manage
+            // must not throw away the deletes that did land.
+            const results = await Promise.allSettled(
+                rows.map((row) => api.deleteProjectTask(row.id)),
+            );
+            const failed = results.filter((result) => result.status === 'rejected').length;
+            const deleted = results.length - failed;
+            if (deleted > 0) toast.success(fmt(m.tasks.deletedCount, { count: deleted }));
+            if (failed > 0) toast.error(fmt(m.tasks.deleteFailedCount, { count: failed }));
+            setPendingBulkDelete(null);
+            clearSelection();
+            await reload();
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -254,8 +394,51 @@ export default function TasksPage() {
                 cell: ({ row }: { row: { original: TaskRow } }) =>
                     formatDate(row.original.due_date),
             },
+            createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            {
+                id: 'actions',
+                header: m.fields.actions,
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 90,
+                cell: ({ row }: { row: { original: TaskRow } }) => (
+                    <div className="flex items-center justify-end gap-1">
+                        <button
+                            type="button"
+                            aria-label={t.common.edit}
+                            title={m.task.editTask}
+                            onClick={() => setOpenTaskId(row.original.id)}
+                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
+                        >
+                            <Pencil className="mx-auto h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label={t.common.delete}
+                            title={m.task.deleteTask}
+                            onClick={() => setPendingDelete(row.original)}
+                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
+                        >
+                            <Trash2 className="mx-auto h-4 w-4" />
+                        </button>
+                    </div>
+                ),
+            },
         ],
-        [m],
+        [m, t.common.createdAt, t.common.delete, t.common.edit],
+    );
+
+    const bulkActions: BulkAction<TaskRow>[] = useMemo(
+        () => [
+            {
+                label: t.common.delete,
+                tone: 'danger',
+                icon: <Trash2 className="h-4 w-4" />,
+                onClick: (rows) => setPendingBulkDelete(rows),
+            },
+        ],
+        [t.common.delete],
     );
 
     return (
@@ -274,6 +457,15 @@ export default function TasksPage() {
                         <Button
                             variant="secondary"
                             className="min-h-touch"
+                            aria-label={t.common.refresh}
+                            title={t.common.refresh}
+                            onClick={() => void reload()}
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
                             onClick={() => setImportOpen(true)}
                         >
                             <Upload className="h-4 w-4" />
@@ -287,24 +479,39 @@ export default function TasksPage() {
                 }
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
                 <Input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setTyping(true);
+                        setFilter('search', e.target.value);
+                    }}
                     placeholder={m.tasks.searchPlaceholder}
                     className="md:max-w-xs"
                 />
                 <Select
                     value={assignee}
-                    onChange={(e) => setAssignee(e.target.value as 'me' | 'anyone')}
-                    className="md:w-44"
+                    onChange={(e) => setFilter('assignee', e.target.value)}
+                    aria-label={m.fields.assignee}
+                    className="md:w-52"
                 >
                     <option value="me">{m.tasks.mine}</option>
                     <option value="anyone">{m.tasks.anyone}</option>
+                    <option value="unassigned">{m.task.unassigned}</option>
+                    {assignees.length > 0 && (
+                        <optgroup label={m.fields.assignee}>
+                            {assignees.map((person) => (
+                                <option key={person.key} value={person.key}>
+                                    {person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name}
+                                </option>
+                            ))}
+                        </optgroup>
+                    )}
                 </Select>
                 <Select
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
+                    onChange={(e) => setFilter('projectId', e.target.value)}
+                    aria-label={m.fields.project}
                     className="md:w-52"
                 >
                     <option value="">{m.tasks.allProjects}</option>
@@ -316,7 +523,8 @@ export default function TasksPage() {
                 </Select>
                 <Select
                     value={statusCategory}
-                    onChange={(e) => setStatusCategory(e.target.value)}
+                    onChange={(e) => setFilter('statusCategory', e.target.value)}
+                    aria-label={m.fields.status}
                     className="md:w-44"
                 >
                     <option value="">{m.tasks.anyStatus}</option>
@@ -324,6 +532,29 @@ export default function TasksPage() {
                     <option value="IN_PROGRESS">{m.statusCategory.IN_PROGRESS}</option>
                     <option value="DONE">{m.statusCategory.DONE}</option>
                 </Select>
+                <Select
+                    value={priority}
+                    onChange={(e) => setFilter('priority', e.target.value)}
+                    aria-label={m.fields.priority}
+                    className="md:w-44"
+                >
+                    <option value="">{m.tasks.anyPriority}</option>
+                    {Object.entries(m.priority).map(([key, label]) => (
+                        <option key={key} value={key}>
+                            {label}
+                        </option>
+                    ))}
+                </Select>
+                <CreatedRangeFilter
+                    value={createdRange}
+                    onChange={(next) => setFilter('createdRange', next)}
+                />
+                {filtered && (
+                    <Button variant="ghost" className="min-h-touch" onClick={clearFilters}>
+                        <X className="h-4 w-4" />
+                        {t.common.clearAll}
+                    </Button>
+                )}
             </div>
 
             <DataTable
@@ -336,7 +567,12 @@ export default function TasksPage() {
                 // The search above queries the server; the built-in one would only
                 // sift the page already fetched, which reads as the same control.
                 showSearch={false}
-                emptyMessage={m.tasks.empty}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                clearSelectionSignal={selectionEpoch}
+                bulkActions={bulkActions}
+                bulkActionsDisabled={busy}
+                emptyMessage={filtered ? m.tasks.empty : m.task.noTasks}
             />
 
             <ImportDialog
@@ -452,6 +688,30 @@ export default function TasksPage() {
                     </form>
                 </ModalShell>
             )}
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={m.task.deleteTask}
+                prompt={fmt(m.task.deletePrompt, { title: pendingDelete?.title ?? '' })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={busy}
+                danger
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
+            />
+
+            <ConfirmDialog
+                open={pendingBulkDelete !== null}
+                title={m.task.deleteTask}
+                prompt={fmt(m.tasks.bulkDeletePrompt, { count: pendingBulkDelete?.length ?? 0 })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={busy}
+                danger
+                onConfirm={confirmBulkDelete}
+                onCancel={() => setPendingBulkDelete(null)}
+            />
 
             {openTaskId && (
                 <TaskDetailPanel

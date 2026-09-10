@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "कोई भी",
         allProjects: "सभी परियोजनाएँ",
         anyStatus: "कोई भी स्थिति",
+        anyPriority: "कोई भी प्राथमिकता",
+        bulkDeletePrompt: "{count, plural, one {# चयनित कार्य} other {# चयनित कार्य}} हटाएँ?\n\nये हर सूची, बोर्ड और स्प्रिंट से हट जाएँगे। इसे वापस नहीं लिया जा सकता।",
+        deletedCount: "{count, plural, one {# कार्य हटाया गया} other {# कार्य हटाए गए}}",
+        deleteFailedCount: "{count, plural, one {# कार्य नहीं हटाया जा सका} other {# कार्य नहीं हटाए जा सके}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "उप-कार्य",
         noTasks: "अभी कोई कार्य नहीं।",
         deleted: "कार्य हटा दिया गया",
+        deleteTask: "कार्य हटाएँ",
+        deletePrompt: "{title} हटाएँ?\n\nयह हर सूची, बोर्ड और स्प्रिंट से हट जाएगा। इसे वापस नहीं लिया जा सकता।",
+        deleteFailed: "कार्य हटाया नहीं जा सका",
         created: "कार्य बनाया गया",
         updated: "कार्य अपडेट हुआ",
         editTitle: "शीर्षक संपादित करें",

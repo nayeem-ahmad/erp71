@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "کوئی بھی",
         allProjects: "تمام پروجیکٹس",
         anyStatus: "کوئی بھی حالت",
+        anyPriority: "کوئی بھی ترجیح",
+        bulkDeletePrompt: "{count, plural, one {# منتخب ٹاسک} other {# منتخب ٹاسک}} حذف کریں؟\n\nیہ ہر فہرست، بورڈ اور اسپرنٹ سے ہٹ جائیں گے۔ اسے واپس نہیں لیا جا سکتا۔",
+        deletedCount: "{count, plural, one {# ٹاسک حذف ہوا} other {# ٹاسک حذف ہوئے}}",
+        deleteFailedCount: "{count, plural, one {# ٹاسک حذف نہیں ہو سکا} other {# ٹاسک حذف نہیں ہو سکے}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "ذیلی ٹاسک",
         noTasks: "ابھی کوئی ٹاسک نہیں۔",
         deleted: "ٹاسک حذف ہو گیا",
+        deleteTask: "ٹاسک حذف کریں",
+        deletePrompt: "{title} حذف کریں؟\n\nیہ ہر فہرست، بورڈ اور اسپرنٹ سے ہٹ جائے گا۔ اسے واپس نہیں لیا جا سکتا۔",
+        deleteFailed: "ٹاسک حذف نہیں ہو سکا",
         created: "ٹاسک بن گیا",
         updated: "ٹاسک اپ ڈیٹ ہو گیا",
         editTitle: "عنوان میں ترمیم کریں",

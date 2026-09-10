@@ -57,6 +57,16 @@ export class ProjectTasksController {
         return this.tasks.create(tenant, dto);
     }
 
+    /**
+     * The assignee filter's options: whoever holds a task the caller can see.
+     * Declared before `:id` for the same reason as `import` below.
+     */
+    @Get('assignees')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    assignees(@Tenant() tenant: TenantContext) {
+        return this.tasks.listAssignees(tenant);
+    }
+
     /** Declared before `:id` so `/project-tasks/import` is never read as a task id. */
     @Post('import')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
