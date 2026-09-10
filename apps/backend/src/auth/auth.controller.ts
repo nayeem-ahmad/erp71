@@ -8,6 +8,7 @@ import { GoogleTokenService } from './google-token.service';
 import { FirebaseTokenService } from './firebase-token.service';
 import { TotpService } from './totp.service';
 import { extractRequestMeta } from '../audit/audit-route.util';
+import { ThrottleAccount } from '../common/account-throttle.util';
 
 @Controller('auth')
 export class AuthController {
@@ -24,7 +25,18 @@ export class AuthController {
         return this.authService.signup(dto, extractRequestMeta(req));
     }
 
-    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    /**
+     * Two budgets, because sign-in cannot be rate-limited by address alone.
+     *
+     * The tight one is per account: ten attempts a minute against any one login,
+     * which is what actually stops a password being guessed, and which now holds
+     * however many addresses the guessing comes from. The loose one is per
+     * caller — a ceiling on one host working through a list of accounts, set
+     * high enough that a shop's whole floor or a mobile carrier's NAT pool can
+     * sign in through the single address they share. See account-throttle.util.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 60 } })
+    @ThrottleAccount({ ttl: 60_000, limit: 10 })
     @Post('login')
     async login(@Body() dto: LoginDto, @Request() req) {
         return this.authService.login(dto, extractRequestMeta(req));
@@ -203,7 +215,9 @@ export class AuthController {
         return this.authService.updateAvatar(req.user.userId, file);
     }
 
-    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    /** The second leg of `/auth/login`, and split the same way — `userId` is the account. */
+    @Throttle({ default: { ttl: 60_000, limit: 60 } })
+    @ThrottleAccount({ ttl: 60_000, limit: 10 })
     @Post('2fa/verify')
     async totpVerify(@Body() body: { userId: string; code: string }, @Request() req) {
         await this.totpService.verifyTotpForLogin(body.userId, body.code);

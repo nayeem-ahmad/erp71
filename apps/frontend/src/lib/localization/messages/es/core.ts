@@ -487,6 +487,7 @@ export const coreMessages = {
             signUpForFree: "Regístrate gratis",
             version: "Plataforma ERP71 v0.1",
             defaultError: "Error al iniciar sesión. Comprueba tus credenciales.",
+            tooManyAttempts: "Demasiados intentos de inicio de sesión. Espera {seconds, plural, one {# segundo} other {# segundos}} e inténtalo de nuevo.",
             demoFailed: "Error al iniciar la demo. Inténtalo de nuevo.",
             sessionExpired: "Tu sesión ha caducado. Vuelve a iniciar sesión.",
             googleFailed: "Error al iniciar sesión con Google. Inténtalo de nuevo.",
