@@ -1,7 +1,7 @@
 import type { StatementGroup } from '@/components/accounting/StatementSection';
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 /**
  * Printers for the three financial statements.
@@ -189,15 +189,14 @@ export function printStatementReport(
     </table>
     ${footnoteHtml(meta)}`;
 
+    const headerContext: HeaderContext = { docTitle: meta.title, companyName: meta.businessName };
+
     openPrintWindow({
+        context: headerContext,
         title: `${meta.title} — ${meta.periodValue}`,
         paperSize,
         headerConfig: meta.headerConfig,
-        headerHtml: renderHeaderHtml(
-            meta.headerConfig,
-            { docTitle: meta.title, companyName: meta.businessName },
-            paperSize,
-        ),
+        headerHtml: renderHeaderHtml(meta.headerConfig, headerContext, paperSize),
         bodyHtml,
         styles: STATEMENT_STYLES,
         repeatHeader: true,
@@ -273,15 +272,14 @@ export function printTrialBalanceReport(
     </table>
     ${footnoteHtml(meta)}`;
 
+    const headerContext: HeaderContext = { docTitle: meta.title, companyName: meta.businessName };
+
     openPrintWindow({
+        context: headerContext,
         title: `${meta.title} — ${meta.periodValue}`,
         paperSize,
         headerConfig: meta.headerConfig,
-        headerHtml: renderHeaderHtml(
-            meta.headerConfig,
-            { docTitle: meta.title, companyName: meta.businessName },
-            paperSize,
-        ),
+        headerHtml: renderHeaderHtml(meta.headerConfig, headerContext, paperSize),
         bodyHtml,
         styles: STATEMENT_STYLES,
         repeatHeader: true,
