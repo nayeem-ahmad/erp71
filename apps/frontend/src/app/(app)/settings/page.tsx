@@ -48,7 +48,8 @@ const SECTIONS: Section[] = [
   ]},
   { key: 'advanced', cards: [
     { href: routes.settings.auditLogs, key: 'auditLogs', icon: FileSearch, accent: 'bg-gray-50 text-gray-700 border-gray-200' },
-    { href: routes.settings.urlShortener, key: 'urlShortener', icon: Link2, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+    // A Business-plan tool; opened directly on another plan, the page explains why.
+    { href: routes.settings.urlShortener, key: 'urlShortener', icon: Link2, accent: 'bg-primary-light text-blue-700 border-primary-border', entitlement: 'urlShortener' },
     { href: routes.settings.data, key: 'data', icon: Database, accent: 'bg-slate-50 text-slate-700 border-slate-200' },
   ]},
 ];

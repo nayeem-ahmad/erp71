@@ -8,6 +8,7 @@ import {
 import {
     STORE_PERMISSION_GROUPS,
     STORE_PERMISSION_LABELS,
+    TENANT_ROLE_MODULES,
     type StorePermission,
     type TenantRoleSummary,
 } from '@erp71/shared-types';
@@ -33,7 +34,9 @@ type Member = {
     name: string | null;
     isOwner: boolean;
     roleName: string;
+    roleNames: string[];
     tenantRoleId: string | null;
+    tenantRoleIds: string[];
     isSelf: boolean;
     stores: MemberStore[];
 };
@@ -50,7 +53,9 @@ type MemberDetail = {
     name: string | null;
     isOwner: boolean;
     roleName: string;
+    roleNames: string[];
     tenantRoleId: string | null;
+    tenantRoleIds: string[];
     isSelf: boolean;
     stores: MemberDetailStore[];
 };
@@ -58,7 +63,9 @@ type Invitation = {
     id: string;
     email: string;
     roleName: string;
+    roleNames: string[];
     tenantRoleId: string;
+    tenantRoleIds: string[];
     invitedAt: string;
     expiresAt: string;
 };
@@ -73,6 +80,85 @@ function showToast(state: ToastState) {
     if (!state) return;
     if (state.type === 'success') toast.success(state.message);
     else toast.error(state.message);
+}
+
+/* ------------------------------ Role picker --------------------------- */
+
+/**
+ * Groups roles by the module their template belongs to, in the order the
+ * templates declare. Roles with no module — the legacy system roles and anything
+ * an owner wrote themselves — fall into a trailing group.
+ */
+function groupRolesByModule(roles: TenantRoleSummary[], otherLabel: string) {
+    const groups = new Map<string, TenantRoleSummary[]>();
+    for (const role of roles) {
+        const key = role.module ?? otherLabel;
+        groups.set(key, [...(groups.get(key) ?? []), role]);
+    }
+    const ordered = [...TENANT_ROLE_MODULES, otherLabel].filter((label) => groups.has(label));
+    // Any module the catalog does not know about (a newer backend than this build)
+    // still gets rendered rather than silently dropped.
+    const extras = [...groups.keys()].filter((label) => !ordered.includes(label));
+    return [...ordered, ...extras].map((label) => ({ label, roles: groups.get(label) ?? [] }));
+}
+
+/**
+ * Multi-select over the workspace's roles. A member may hold several — their
+ * access is the union — and the order they were picked in is preserved, so the
+ * first stays the primary role.
+ */
+function RolePicker({
+    roles,
+    selectedIds,
+    onChange,
+    disabled,
+    otherLabel,
+}: {
+    roles: TenantRoleSummary[];
+    selectedIds: string[];
+    onChange: (next: string[]) => void;
+    disabled?: boolean;
+    otherLabel: string;
+}) {
+    const groups = useMemo(() => groupRolesByModule(roles, otherLabel), [roles, otherLabel]);
+
+    const toggle = (roleId: string) => {
+        onChange(
+            selectedIds.includes(roleId)
+                ? selectedIds.filter((id) => id !== roleId)
+                : [...selectedIds, roleId],
+        );
+    };
+
+    return (
+        <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 space-y-3">
+            {groups.map((group) => (
+                <div key={group.label}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">
+                        {group.label}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+                        {group.roles.map((role) => (
+                            <label
+                                key={role.id}
+                                title={role.description ?? undefined}
+                                className="flex items-center gap-2.5 min-h-touch text-sm text-gray-700 cursor-pointer"
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(role.id)}
+                                    onChange={() => toggle(role.id)}
+                                    disabled={disabled}
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className="truncate">{role.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 }
 
 /* --------------------------- Permission matrix ------------------------ */
@@ -371,7 +457,7 @@ function MemberPanel({
     const tm = t.teamManagement.member;
     const [detail, setDetail] = useState<MemberDetail | null>(null);
     const [loading, setLoading] = useState(true);
-    const [tenantRoleId, setTenantRoleId] = useState('');
+    const [tenantRoleIds, setTenantRoleIds] = useState<string[]>([]);
     const [savingRole, setSavingRole] = useState(false);
     const [busyStore, setBusyStore] = useState<string>('');
     const [drafts, setDrafts] = useState<Record<string, Set<string>>>({});
@@ -381,7 +467,7 @@ function MemberPanel({
         try {
             const d: MemberDetail = await api.getTeamMember(userId);
             setDetail(d);
-            setTenantRoleId(d.tenantRoleId ?? '');
+            setTenantRoleIds(d.tenantRoleIds ?? []);
             const next: Record<string, Set<string>> = {};
             d.stores.forEach((s) => { next[s.storeId] = new Set(s.permissions); });
             setDrafts(next);
@@ -394,10 +480,13 @@ function MemberPanel({
     useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId]);
 
     const saveRole = async () => {
-        if (!tenantRoleId) return;
+        if (tenantRoleIds.length === 0) {
+            onToast({ type: 'error', message: tm.selectAtLeastOneRole });
+            return;
+        }
         setSavingRole(true);
         try {
-            await api.updateMemberRole(userId, { tenantRoleId });
+            await api.updateMemberRoles(userId, { tenantRoleIds });
             onToast({ type: 'success', message: tm.roleUpdated });
             onChanged();
             await load();
@@ -484,7 +573,11 @@ function MemberPanel({
     }
 
     const isOwner = detail.isOwner;
-    const roleDirty = !isOwner && tenantRoleId !== (detail.tenantRoleId ?? '');
+    const savedRoleIds = detail.tenantRoleIds ?? [];
+    const roleDirty =
+        !isOwner &&
+        (tenantRoleIds.length !== savedRoleIds.length ||
+            tenantRoleIds.some((id, i) => id !== savedRoleIds[i]));
 
     return (
         <div className="space-y-6">
@@ -504,7 +597,7 @@ function MemberPanel({
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-3">
-                <p className="text-sm font-bold text-gray-800">{tm.role}</p>
+                <p className="text-sm font-bold text-gray-800">{tm.roles}</p>
                 {isOwner ? (
                     <div className="flex items-center gap-2">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${OWNER_BADGE_STYLE}`}>
@@ -513,24 +606,27 @@ function MemberPanel({
                         <p className="text-xs text-gray-400">{tm.ownerUnrestricted}</p>
                     </div>
                 ) : (
-                    <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            value={tenantRoleId}
-                            onChange={(e) => setTenantRoleId(e.target.value)}
+                    <div className="space-y-3">
+                        <p className="text-xs text-gray-500">{tm.rolesHint}</p>
+                        <RolePicker
+                            roles={tenantRoles}
+                            selectedIds={tenantRoleIds}
+                            onChange={setTenantRoleIds}
                             disabled={detail.isSelf}
-                            className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                        >
-                            {tenantRoles.map((r) => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                        </select>
-                        <button
-                            onClick={saveRole}
-                            disabled={savingRole || detail.isSelf || !roleDirty}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {savingRole && <Loader2 className="w-4 h-4 animate-spin" />} {tm.saveRole}
-                        </button>
+                            otherLabel={tm.otherRoles}
+                        />
+                        <div className="flex flex-wrap items-center gap-3">
+                            <p className="text-xs text-gray-500">
+                                {fmt(tm.rolesSelected, { count: tenantRoleIds.length })}
+                            </p>
+                            <button
+                                onClick={saveRole}
+                                disabled={savingRole || detail.isSelf || !roleDirty}
+                                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {savingRole && <Loader2 className="w-4 h-4 animate-spin" />} {tm.saveRole}
+                            </button>
+                        </div>
                     </div>
                 )}
                 {detail.isSelf && !isOwner && <p className="text-xs text-amber-600">{tm.cannotChangeOwnRole}</p>}
@@ -644,7 +740,7 @@ export default function TeamPage() {
     const [selected, setSelected] = useState<string | null>(null);
 
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteTenantRoleId, setInviteTenantRoleId] = useState('');
+    const [inviteTenantRoleIds, setInviteTenantRoleIds] = useState<string[]>([]);
     const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
@@ -660,9 +756,6 @@ export default function TeamPage() {
             const roles: TenantRoleSummary[] = await api.getTeamRoles();
             const list = roles ?? [];
             setTenantRoles(list);
-            if (list.length > 0) {
-                setInviteTenantRoleId((prev) => prev || list[0].id);
-            }
         } catch {
             setTenantRoles([]);
         }
@@ -685,12 +778,13 @@ export default function TeamPage() {
 
     const sendInvite = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inviteEmail.trim() || !inviteTenantRoleId) return;
+        if (!inviteEmail.trim() || inviteTenantRoleIds.length === 0) return;
         setInviting(true);
         try {
-            await api.sendTeamInvitation({ email: inviteEmail.trim(), tenantRoleId: inviteTenantRoleId });
+            await api.sendTeamInvitation({ email: inviteEmail.trim(), tenantRoleIds: inviteTenantRoleIds });
             showToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
             setInviteEmail('');
+            setInviteTenantRoleIds([]);
             await load();
         } catch (err: any) {
             showToast({ type: 'error', message: err?.message || tm.inviteFailed });
@@ -759,8 +853,8 @@ export default function TeamPage() {
                 ) : (
                     <>
                         <form onSubmit={sendInvite} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-                                <div className="flex-1">
+                            <div className="space-y-3">
+                                <div>
                                     <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tm.inviteEmail}</label>
                                     <input
                                         type="email"
@@ -771,26 +865,29 @@ export default function TeamPage() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tm.role}</label>
-                                    <select
-                                        value={inviteTenantRoleId}
-                                        onChange={(e) => setInviteTenantRoleId(e.target.value)}
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tm.roles.pickerLabel}</label>
+                                    <p className="text-xs text-gray-500 mb-1.5">{tm.member.rolesHint}</p>
+                                    <RolePicker
+                                        roles={tenantRoles}
+                                        selectedIds={inviteTenantRoleIds}
+                                        onChange={setInviteTenantRoleIds}
                                         disabled={tenantRoles.length === 0}
-                                        className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                                    >
-                                        {tenantRoles.map((r) => (
-                                            <option key={r.id} value={r.id}>{r.name}</option>
-                                        ))}
-                                    </select>
+                                        otherLabel={tm.member.otherRoles}
+                                    />
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={inviting || !inviteEmail.trim() || !inviteTenantRoleId}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                                >
-                                    {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                                    {tm.sendInvite}
-                                </button>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <p className="text-xs text-gray-500">
+                                        {fmt(tm.member.rolesSelected, { count: inviteTenantRoleIds.length })}
+                                    </p>
+                                    <button
+                                        type="submit"
+                                        disabled={inviting || !inviteEmail.trim() || inviteTenantRoleIds.length === 0}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                                        {tm.sendInvite}
+                                    </button>
+                                </div>
                             </div>
 
                             {invitations.length > 0 && (
@@ -801,9 +898,14 @@ export default function TeamPage() {
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Mail className="w-4 h-4 text-gray-400 shrink-0" />
                                                 <span className="font-semibold text-gray-700 truncate">{inv.email}</span>
-                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ROLE_BADGE_STYLE}`}>
-                                                    {inv.roleName}
-                                                </span>
+                                                {(inv.roleNames ?? [inv.roleName]).map((name) => (
+                                                    <span
+                                                        key={name}
+                                                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ROLE_BADGE_STYLE}`}
+                                                    >
+                                                        {name}
+                                                    </span>
+                                                ))}
                                             </div>
                                             <button onClick={() => revokeInvite(inv.id, inv.email)} className="text-xs font-semibold text-red-500 hover:text-red-700">{tm.revoke}</button>
                                         </div>
@@ -845,6 +947,12 @@ export default function TeamPage() {
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${m.isOwner ? OWNER_BADGE_STYLE : ROLE_BADGE_STYLE}`}>
                                                         {m.roleName}
                                                     </span>
+                                                    {/* One badge plus a count: a member holding six roles must not push the row wide. */}
+                                                    {(m.roleNames?.length ?? 0) > 1 && (
+                                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ROLE_BADGE_STYLE}`}>
+                                                            +{m.roleNames.length - 1}
+                                                        </span>
+                                                    )}
                                                     <ChevronRight className="w-4 h-4 text-gray-300" />
                                                 </div>
                                             </button>

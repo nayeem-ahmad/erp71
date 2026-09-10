@@ -2,8 +2,13 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { UserRole, normalizeMobileToE164, DEFAULT_MOBILE_COUNTRY_CODE, resolveBaseUserRole } from '@erp71/shared-types';
-import { syncMemberPermissionsFromRole } from '../team/role-sync.util';
+import {
+    UserRole,
+    normalizeMobileToE164,
+    DEFAULT_MOBILE_COUNTRY_CODE,
+    resolveStrongestBaseUserRole,
+} from '@erp71/shared-types';
+import { setMemberRoles } from '../team/role-sync.util';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
@@ -22,11 +27,22 @@ export class InvitationsService {
 
     async getInfo(
         rawToken: string,
-    ): Promise<{ tenantName: string; email: string; roleName: string; expiresAt: Date; hasAccount: boolean }> {
+    ): Promise<{
+        tenantName: string;
+        email: string;
+        roleName: string;
+        roleNames: string[];
+        expiresAt: Date;
+        hasAccount: boolean;
+    }> {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const invitation = await this.db.userInvitation.findUnique({
             where: { token_hash: tokenHash },
-            include: { tenant: true, tenantRole: { select: { name: true } } },
+            include: {
+                tenant: true,
+                tenantRole: { select: { name: true } },
+                roles: { select: { tenantRole: { select: { name: true } } } },
+            },
         });
 
         if (!invitation || invitation.accepted_at || invitation.expires_at < new Date()) {
@@ -41,10 +57,15 @@ export class InvitationsService {
             select: { id: true },
         });
 
+        const roleNames = invitation.roles.map((assignment) => assignment.tenantRole.name);
+
         return {
             tenantName: invitation.tenant.name,
             email: invitation.email,
-            roleName: invitation.tenantRole.name,
+            // Joined for the accept page, which shows one line. `roleNames` carries the
+            // set for callers that can render it.
+            roleName: roleNames.length > 0 ? roleNames.join(', ') : invitation.tenantRole.name,
+            roleNames: roleNames.length > 0 ? roleNames : [invitation.tenantRole.name],
             expiresAt: invitation.expires_at,
             hasAccount: Boolean(existingUser),
         };
@@ -63,6 +84,16 @@ export class InvitationsService {
         });
         if (!role) throw new NotFoundException('Role not found.');
         return role;
+    }
+
+    /**
+     * Resolves a role set in the order given — the first is the primary role — and
+     * rejects the whole call if any id belongs to another tenant.
+     */
+    private async getTenantRoles(tenantId: string, tenantRoleIds: string[]) {
+        const unique = [...new Set(tenantRoleIds)];
+        if (unique.length === 0) throw new BadRequestException('Select at least one role.');
+        return Promise.all(unique.map((id) => this.getTenantRole(tenantId, id)));
     }
 
     async listMembers(tenantId: string, callerRole: string) {
@@ -105,6 +136,7 @@ export class InvitationsService {
             },
             include: {
                 tenantRole: { select: { id: true, name: true } },
+                roles: { select: { tenantRole: { select: { id: true, name: true } } } },
                 invitedBy: { select: { id: true, name: true, email: true } },
             },
             orderBy: { created_at: 'desc' },
@@ -114,7 +146,13 @@ export class InvitationsService {
             id: invitation.id,
             email: invitation.email,
             roleName: invitation.tenantRole.name,
+            roleNames: invitation.roles.length > 0
+                ? invitation.roles.map((assignment) => assignment.tenantRole.name)
+                : [invitation.tenantRole.name],
             tenantRoleId: invitation.tenant_role_id,
+            tenantRoleIds: invitation.roles.length > 0
+                ? invitation.roles.map((assignment) => assignment.tenantRole.id)
+                : [invitation.tenant_role_id],
             expires_at: invitation.expires_at,
             created_at: invitation.created_at,
             invited_by: {
@@ -129,8 +167,8 @@ export class InvitationsService {
         callerUserId: string,
         callerRole: string,
         targetUserId: string,
-        tenantRoleId: string,
-    ): Promise<{ user_id: string; tenantRoleId: string }> {
+        tenantRoleIds: string | string[],
+    ): Promise<{ user_id: string; tenantRoleId: string; tenantRoleIds: string[] }> {
         this.assertCanManageTeam(callerRole);
 
         if (targetUserId === callerUserId) {
@@ -151,29 +189,33 @@ export class InvitationsService {
             throw new ForbiddenException('Cannot change the workspace owner\'s role');
         }
 
-        const role = await this.getTenantRole(tenantId, tenantRoleId);
-
-        if (membership.tenant_role_id === tenantRoleId) {
-            return { user_id: targetUserId, tenantRoleId };
-        }
+        const roles = await this.getTenantRoles(
+            tenantId,
+            Array.isArray(tenantRoleIds) ? tenantRoleIds : [tenantRoleIds],
+        );
+        const roleIds = roles.map((role) => role.id);
 
         await this.db.$transaction(async (tx) => {
             await tx.tenantUser.update({
                 where: { tenant_id_user_id: { tenant_id: tenantId, user_id: targetUserId } },
                 // Update the coarse role enum in lockstep so the session's displayed role
-                // and the OWNER/MANAGER authorization gates match the new TenantRole.
-                data: { tenant_role_id: tenantRoleId, role: resolveBaseUserRole(role.name) },
+                // and the OWNER/MANAGER authorization gates match the roles now held.
+                // Strongest of the set, matching the union their permissions form.
+                data: {
+                    tenant_role_id: roleIds[0],
+                    role: resolveStrongestBaseUserRole(roles.map((role) => role.name)),
+                },
             });
 
-            await syncMemberPermissionsFromRole(tx, {
+            await setMemberRoles(tx, {
                 tenantId,
-                userIds: [targetUserId],
-                tenantRoleId,
+                userId: targetUserId,
+                tenantRoleIds: roleIds,
                 grantedBy: callerUserId,
             });
         });
 
-        return { user_id: targetUserId, tenantRoleId };
+        return { user_id: targetUserId, tenantRoleId: roleIds[0], tenantRoleIds: roleIds };
     }
 
     async cancelInvitation(tenantId: string, callerRole: string, invitationId: string): Promise<void> {
@@ -199,11 +241,15 @@ export class InvitationsService {
         invitedByUserId: string,
         callerRole: string,
         inviteeEmail: string,
-        tenantRoleId: string,
+        tenantRoleIds: string | string[],
     ): Promise<void> {
         this.assertCanManageTeam(callerRole);
 
-        await this.getTenantRole(tenantId, tenantRoleId);
+        const roles = await this.getTenantRoles(
+            tenantId,
+            Array.isArray(tenantRoleIds) ? tenantRoleIds : [tenantRoleIds],
+        );
+        const roleIds = roles.map((role) => role.id);
 
         const [tenant, inviter] = await Promise.all([
             this.db.tenant.findUnique({ where: { id: tenantId } }),
@@ -238,10 +284,13 @@ export class InvitationsService {
             data: {
                 tenant_id: tenantId,
                 email: inviteeEmail,
-                tenant_role_id: tenantRoleId,
+                // First of the set is the primary role; the rest ride along in `roles`
+                // and are granted together on acceptance.
+                tenant_role_id: roleIds[0],
                 token_hash: tokenHash,
                 invited_by: invitedByUserId,
                 expires_at: expiresAt,
+                roles: { create: roleIds.map((tenant_role_id) => ({ tenant_role_id })) },
             },
         });
 
@@ -257,6 +306,13 @@ export class InvitationsService {
             include: {
                 tenantRole: {
                     select: { name: true, permissions: { select: { permission: true } } },
+                },
+                roles: {
+                    select: {
+                        tenantRole: {
+                            select: { id: true, name: true, permissions: { select: { permission: true } } },
+                        },
+                    },
                 },
             },
         });
@@ -276,14 +332,26 @@ export class InvitationsService {
         invitation: ValidInvitation,
         userId: string,
     ): Promise<void> {
+        // Invitations written before multi-role have no `roles` rows; fall back to the
+        // single role they were sent with so an old link still grants what it promised.
+        const roles = invitation.roles.length > 0
+            ? invitation.roles.map((assignment) => assignment.tenantRole)
+            : [{
+                id: invitation.tenant_role_id,
+                name: invitation.tenantRole.name,
+                permissions: invitation.tenantRole.permissions,
+            }];
+
         await tx.tenantUser.create({
             data: {
                 tenant_id: invitation.tenant_id,
                 user_id: userId,
-                // Keep the coarse role enum in lockstep with the assigned TenantRole —
-                // it drives role display and the OWNER/MANAGER authorization gates.
-                role: resolveBaseUserRole(invitation.tenantRole.name),
+                // Keep the coarse role enum in lockstep with the roles granted — it drives
+                // role display and the OWNER/MANAGER authorization gates. Strongest of the
+                // set, matching the union their permissions form.
+                role: resolveStrongestBaseUserRole(roles.map((role) => role.name)),
                 tenant_role_id: invitation.tenant_role_id,
+                roles: { create: roles.map((role) => ({ tenant_role_id: role.id })) },
             },
         });
 
@@ -298,7 +366,11 @@ export class InvitationsService {
                 },
             });
 
-            const permissions = invitation.tenantRole.permissions.map((p) => p.permission);
+            // Union across every role granted — holding two roles means holding both
+            // permission sets.
+            const permissions = [
+                ...new Set(roles.flatMap((role) => role.permissions.map((p) => p.permission))),
+            ];
             if (permissions.length > 0) {
                 await tx.userStorePermission.createMany({
                     data: permissions.map((permission) => ({

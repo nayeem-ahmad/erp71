@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldCheck, Store, ChevronRight, Loader2, LogOut, Gift, UserRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { safeAppPath } from '@/lib/safe-redirect';
+import { normalizeWorkspaceSlug, preferredWorkspaceSlug, resolveWorkspaceSlug } from '@/lib/workspace-slug';
+import { routes } from '@/lib/routes';
 import {
     applyPlatformAdminContext,
     applyRefereeContext,
@@ -21,16 +24,31 @@ function SelectAccountContent() {
     const [me, setMe] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // Set when the URL named a workspace this account cannot be dropped into,
+    // so the list explains itself instead of just appearing.
+    const [unresolvedWorkspace, setUnresolvedWorkspace] = useState<string | null>(null);
 
-    const shopRedirect = (() => {
-        const redirect = searchParams.get('redirect');
-        return redirect && redirect.startsWith('/') ? redirect : '/dashboard';
-    })();
+    const shopRedirect = safeAppPath(searchParams.get('redirect'), routes.home);
+    // A `/w/<slug>` link that reached the chooser rather than the shop: either
+    // it arrived here directly, or login handed the slug on after failing to
+    // resolve it. Either way this is the one place that resolves it for good.
+    const workspaceSlug = normalizeWorkspaceSlug(searchParams.get('workspace'));
 
     useEffect(() => {
         api.getMe()
             .then((data: any) => {
                 const { isPlatformAdmin, isReferee, isEmployee, tenants, count } = getLoginContexts(data);
+
+                // The URL already said which shop. Honour it whatever else is
+                // on offer — naming a workspace is a choice, not a preference.
+                const named = resolveWorkspaceSlug(tenants, workspaceSlug);
+                if (named.status === 'matched') {
+                    applyTenantContext(named.tenant);
+                    router.replace(shopRedirect);
+                    return;
+                }
+                if (workspaceSlug) setUnresolvedWorkspace(workspaceSlug);
+
                 // Nothing ambiguous to choose — resolve automatically.
                 if (count <= 1) {
                     if (tenants.length === 1) {
@@ -113,6 +131,13 @@ function SelectAccountContent() {
                         </div>
                     )}
 
+                    {unresolvedWorkspace && !error && (
+                        <output className="block mb-6 p-3 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl text-center">
+                            No workspace of yours matches{' '}
+                            <span className="font-semibold">{unresolvedWorkspace}</span>. Pick one below.
+                        </output>
+                    )}
+
                     <div className="space-y-3">
                         {isEmployee && (
                             <button
@@ -177,9 +202,13 @@ function SelectAccountContent() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <p className="font-semibold text-sm tracking-tight truncate">{tenant.name}</p>
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-gray-500 truncate">
                                         {tenant.role ? tenant.role.charAt(0) + tenant.role.slice(1).toLowerCase() : 'Member'}
                                         {tenant.subscription?.plan?.code ? ` · ${tenant.subscription.plan.code}` : ''}
+                                        {/* The link that opens this shop directly. Shown here because
+                                            this is the screen someone is looking at when they wish they
+                                            could skip it. */}
+                                        {` · ${routes.workspaceEntry(preferredWorkspaceSlug(tenant))}`}
                                     </p>
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />

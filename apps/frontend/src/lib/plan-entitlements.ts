@@ -33,6 +33,14 @@ export function canAccessPlanVoice(
     return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumVoice');
 }
 
+/** The tenant URL shortener — a Business-plan tool, gated server-side on the same key. */
+export function canUseUrlShortener(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+) {
+    return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'urlShortener');
+}
+
 export function isAccountingOnlyPlan(
     planCode: string | null | undefined,
     featuresJson: Record<string, unknown> | null | undefined,

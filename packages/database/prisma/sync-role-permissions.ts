@@ -220,8 +220,15 @@ export async function syncRolePermissions(
     const groups = options.groups ?? PERMISSION_BACKFILL_GROUPS;
     const dryRun = options.dryRun ?? false;
 
+    // Template roles are excluded: their permissions come from their
+    // `TENANT_ROLE_TEMPLATES` entry, never from a coarse role's defaults, and
+    // `SYSTEM_TENANT_ROLE_TO_USER_ROLE` deliberately does not map their names — so
+    // every one of them would otherwise be counted as a renamed role and reported
+    // as unmapped on every deploy. Widening a template is a change to
+    // `TENANT_ROLE_TEMPLATES` plus a group here that names the roles by permission,
+    // not a change to this query.
     const roles = await prisma.tenantRole.findMany({
-        where: { is_system: true },
+        where: { is_system: true, template_key: null },
         select: { id: true, tenant_id: true, name: true },
     });
     if (roles.length === 0) {
@@ -268,10 +275,20 @@ export async function syncRolePermissions(
         // Members carry their own materialized copy of every role permission,
         // written when the role was assigned — so granting the role alone leaves
         // every current member without the capability.
-        const memberRows = grantsByRole.size === 0 ? [] : await prisma.tenantUser.findMany({
+        // Read through the join table: a member holds several roles, and one of the
+        // reconciled roles may be any of them rather than their primary.
+        const assignments = grantsByRole.size === 0 ? [] : await prisma.tenantUserRole.findMany({
             where: { tenant_role_id: { in: [...grantsByRole.keys()] } },
-            select: { user_id: true, tenant_id: true, tenant_role_id: true },
+            select: {
+                tenant_role_id: true,
+                tenantUser: { select: { user_id: true, tenant_id: true } },
+            },
         });
+        const memberRows = assignments.map((row: any) => ({
+            user_id: row.tenantUser.user_id,
+            tenant_id: row.tenantUser.tenant_id,
+            tenant_role_id: row.tenant_role_id,
+        }));
 
         const access = memberRows.length === 0 ? [] : await prisma.userStoreAccess.findMany({
             where: { user_id: { in: [...new Set(memberRows.map((m: any) => m.user_id))] } },

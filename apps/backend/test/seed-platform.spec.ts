@@ -1,3 +1,4 @@
+import { hasPlanEntitlement, normalizePlanFeatures } from '@erp71/shared-types';
 import {
     addMissingKeys,
     seedPlatformReferenceData,
@@ -122,5 +123,22 @@ describe('seedPlatformReferenceData', () => {
         const written = updates.mock.calls[0][0].data.features_json;
         expect(written.maxUsers).toBe(3); // the admin's value survived
         expect(Object.keys(written).length).toBeGreaterThan(1); // and code's new keys arrived
+    });
+
+    it('gives the URL shortener to Business and to no lower plan', async () => {
+        // Read back the way SubscriptionAccessGuard reads a plan, so what is pinned
+        // is the answer a tenant gets rather than how the row happens to spell it.
+        const db = fakePrisma(null);
+        await seedPlatformReferenceData(db);
+
+        const created = (db as never as { subscriptionPlan: { create: jest.Mock } }).subscriptionPlan.create;
+        const entitled = Object.fromEntries(
+            created.mock.calls.map((c) => [
+                c[0].data.code,
+                hasPlanEntitlement(normalizePlanFeatures(c[0].data.features_json, c[0].data.code), 'urlShortener'),
+            ]),
+        );
+
+        expect(entitled).toEqual({ FREE: false, BASIC: false, ACCOUNTING: false, STANDARD: false, PREMIUM: true });
     });
 });

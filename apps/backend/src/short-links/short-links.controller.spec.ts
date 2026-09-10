@@ -1,8 +1,12 @@
+import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA, INTERCEPTORS_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { STORE_PERMISSIONS_KEY } from '../auth/store-permission.decorator';
+import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
+import { SUBSCRIPTION_FEATURE_KEY } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { ShortLinksController } from './short-links.controller';
 import { ShortLinksAdminController } from './short-links-admin.controller';
@@ -87,6 +91,74 @@ describe('ShortLinksController', () => {
 
         it('declares no class-level guards that would contradict the public routes', () => {
             expect(guardsOn(ShortLinksController)).toEqual([]);
+        });
+    });
+
+    /**
+     * The paste-a-URL shortener is a Business-plan tool. Only the tenant routes
+     * are gated: the resolve routes above stay public so links already in
+     * circulation keep working after a downgrade, and quotation share links are
+     * minted through the service rather than through this controller.
+     */
+    describe('plan gate', () => {
+        for (const method of ['list', 'create', 'revoke']) {
+            // SubscriptionAccessGuard reads `request.user`, which JwtAuthGuard is
+            // what sets. Run in the other order, every tenant is refused as having
+            // no tenant context — Business included.
+            it(`${method}() runs SubscriptionAccessGuard after JwtAuthGuard`, () => {
+                const guards = guardsOn(ShortLinksController, method);
+
+                expect(guards).toContain(SubscriptionAccessGuard);
+                expect(guards.indexOf(JwtAuthGuard)).toBeLessThan(guards.indexOf(SubscriptionAccessGuard));
+            });
+
+            it(`${method}() requires the urlShortener entitlement`, () => {
+                const handler = (ShortLinksController.prototype as any)[method];
+
+                expect(Reflect.getMetadata(SUBSCRIPTION_FEATURE_KEY, handler)).toBe('urlShortener');
+            });
+        }
+
+        /**
+         * The real guard against the real decorators. The metadata above only says
+         * which key a route asks for; whether a plan carrying that key gets through
+         * depends on the key surviving `normalizePlanFeatures`, which drops anything
+         * missing from PLAN_ENTITLEMENT_REGISTRY — locking out the very tenants the
+         * tool is for while every assertion above still passed.
+         */
+        describe('against a tenant subscription', () => {
+            const db = {
+                tenantUser: { findUnique: jest.fn() },
+                tenantSubscription: { findUnique: jest.fn() },
+                tenantAddonSubscription: { findMany: jest.fn() },
+            };
+
+            const onPlan = (code: string, features_json: Record<string, unknown>) => {
+                db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+                db.tenantAddonSubscription.findMany.mockResolvedValue([]);
+                db.tenantSubscription.findUnique.mockResolvedValue({ status: 'ACTIVE', plan: { code, features_json } });
+            };
+
+            const canCreate = () =>
+                new SubscriptionAccessGuard(new Reflector(), db as any).canActivate({
+                    switchToHttp: () => ({
+                        getRequest: () => ({ user: { userId: 'user-1' }, headers: { 'x-tenant-id': 'tenant-1' } }),
+                    }),
+                    getHandler: () => ShortLinksController.prototype.create,
+                    getClass: () => ShortLinksController,
+                } as any);
+
+            it('lets a Business tenant through', async () => {
+                onPlan('PREMIUM', { urlShortener: true });
+
+                await expect(canCreate()).resolves.toBe(true);
+            });
+
+            it('refuses a Growth tenant, whose plan does not include it', async () => {
+                onPlan('STANDARD', { urlShortener: false });
+
+                await expect(canCreate()).rejects.toThrow(ForbiddenException);
+            });
         });
     });
 

@@ -8,10 +8,10 @@ import { StorePermission, UserRole } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 
 jest.mock('../team/role-sync.util', () => ({
-    syncMemberPermissionsFromRole: jest.fn().mockResolvedValue(1),
+    setMemberRoles: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { syncMemberPermissionsFromRole } from '../team/role-sync.util';
+import { setMemberRoles } from '../team/role-sync.util';
 
 const db = {
     tenant: { findUnique: jest.fn() },
@@ -86,6 +86,7 @@ describe('InvitationsService', () => {
             expires_at: new Date(Date.now() - 1000),
             tenant: { name: 'Acme' },
             tenantRole: { name: 'Cashier' },
+            roles: [{ tenantRole: { name: 'Cashier' } }],
         });
         await expect(service.getInfo(rawToken)).rejects.toThrow(BadRequestException);
     });
@@ -117,6 +118,7 @@ describe('InvitationsService', () => {
                 expires_at: new Date(Date.now() + 86400_000),
                 created_at: new Date('2026-06-01'),
                 tenantRole: { id: 'role-cashier', name: 'Cashier' },
+                roles: [{ tenantRole: { id: 'role-cashier', name: 'Cashier' } }],
                 invitedBy: { id: 'u1', name: 'Manager', email: 'manager@example.com' },
             },
         ]);
@@ -156,21 +158,54 @@ describe('InvitationsService', () => {
             'role-manager',
         );
 
-        expect(result).toEqual({ user_id: 'cashier-1', tenantRoleId: 'role-manager' });
+        expect(result).toEqual({
+            user_id: 'cashier-1',
+            tenantRoleId: 'role-manager',
+            tenantRoleIds: ['role-manager'],
+        });
         // Coarse role enum must move in lockstep with the granular tenant_role_id.
         expect(db.tenantUser.update).toHaveBeenCalledWith({
             where: { tenant_id_user_id: { tenant_id: 't1', user_id: 'cashier-1' } },
             data: { tenant_role_id: 'role-manager', role: UserRole.MANAGER },
         });
-        expect(syncMemberPermissionsFromRole).toHaveBeenCalledWith(
+        expect(setMemberRoles).toHaveBeenCalledWith(
             db,
             expect.objectContaining({
                 tenantId: 't1',
-                userIds: ['cashier-1'],
-                tenantRoleId: 'role-manager',
+                userId: 'cashier-1',
+                tenantRoleIds: ['role-manager'],
                 grantedBy: 'owner-1',
             }),
         );
+    });
+
+    it('assigns several roles at once and grants the strongest coarse role', async () => {
+        db.tenantRole.findFirst.mockImplementation(async ({ where }: any) =>
+            ({
+                'role-sales-user': { id: 'role-sales-user', name: 'Sales User' },
+                'role-accounting-mgr': { id: 'role-accounting-mgr', name: 'Accounting Manager' },
+            })[where.id as string],
+        );
+        db.tenant.findUnique.mockResolvedValue({ owner_id: 'owner-1' });
+        db.tenantUser.findUnique.mockResolvedValue({
+            tenant_id: 't1',
+            user_id: 'cashier-1',
+            role: UserRole.CASHIER,
+            tenant_role_id: 'role-cashier',
+        });
+
+        const result = await service.updateMemberRole('t1', 'owner-1', UserRole.OWNER, 'cashier-1', [
+            'role-sales-user',
+            'role-accounting-mgr',
+        ]);
+
+        expect(result.tenantRoleIds).toEqual(['role-sales-user', 'role-accounting-mgr']);
+        // Primary role is the first of the set; the enum takes the strongest — Sales
+        // User is CASHIER, Accounting Manager is ACCOUNTANT.
+        expect(db.tenantUser.update).toHaveBeenCalledWith({
+            where: { tenant_id_user_id: { tenant_id: 't1', user_id: 'cashier-1' } },
+            data: { tenant_role_id: 'role-sales-user', role: UserRole.ACCOUNTANT },
+        });
     });
 
     it('blocks changing your own role', async () => {
@@ -212,6 +247,15 @@ describe('InvitationsService', () => {
             tenant_role_id: 'role-cashier',
             invited_by: 'owner',
             tenantRole: { permissions: [{ permission: StorePermission.CREATE_SALE }] },
+            roles: [
+                {
+                    tenantRole: {
+                        id: 'role-cashier',
+                        name: 'Cashier',
+                        permissions: [{ permission: StorePermission.CREATE_SALE }],
+                    },
+                },
+            ],
         });
         db.user.findUnique.mockResolvedValue({ id: 'u2', email: 'wrong@example.com' });
         await expect(service.accept(rawToken, 'u2')).rejects.toThrow(BadRequestException);
@@ -227,6 +271,7 @@ describe('InvitationsService', () => {
             expires_at: new Date(Date.now() + 86400_000),
             tenant: { name: 'Acme' },
             tenantRole: { name: 'Cashier' },
+            roles: [{ tenantRole: { name: 'Cashier' } }],
         });
 
         db.user.findUnique.mockResolvedValueOnce(null);
@@ -249,6 +294,15 @@ describe('InvitationsService', () => {
             tenant_role_id: 'role-manager',
             invited_by: 'owner',
             tenantRole: { name: 'Manager', permissions: [{ permission: StorePermission.CREATE_SALE }] },
+            roles: [
+                {
+                    tenantRole: {
+                        id: 'role-manager',
+                        name: 'Manager',
+                        permissions: [{ permission: StorePermission.CREATE_SALE }],
+                    },
+                },
+            ],
         });
         db.user.findUnique.mockResolvedValue(null); // no existing account
         db.user.findFirst.mockResolvedValue(null); // mobile not taken
@@ -287,6 +341,7 @@ describe('InvitationsService', () => {
             tenant_role_id: 'role-cashier',
             invited_by: 'owner',
             tenantRole: { permissions: [] },
+            roles: [],
         });
         db.user.findUnique.mockResolvedValue({ id: 'existing', email: 'exists@example.com' });
 

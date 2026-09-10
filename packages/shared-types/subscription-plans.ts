@@ -176,6 +176,14 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'modules',
   },
   {
+    key: 'urlShortener',
+    type: 'boolean',
+    label: 'URL shortener',
+    description: 'Short-link tool under Admin, with click counts. Quotation share links work without it.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
     key: 'accountingOnly',
     type: 'boolean',
     label: 'Accounting-only pack',

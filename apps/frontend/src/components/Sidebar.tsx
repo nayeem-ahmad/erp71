@@ -159,6 +159,7 @@ export default function Sidebar({
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
+    canManageShortLinks = false,
     platformAdminMode = false,
     refereeMode = false,
     employeeMode = false,
@@ -181,6 +182,8 @@ export default function Sidebar({
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
+    /** Owner or MANAGE_SHORT_LINKS. The plan half is the link's `urlShortener` entitlement. */
+    canManageShortLinks?: boolean;
     /** When true, hide all shop modules and show only the admin console. */
     platformAdminMode?: boolean;
     /** When true, hide shop/admin modules and show only the referee portal. */
@@ -317,10 +320,15 @@ export default function Sidebar({
                             if (accountingOnlyMode && !ACCOUNTING_ONLY_ADMIN_LINK_HREFS.has(child.href)) {
                                 return false;
                             }
+                            // Plan entitlements from NAV_REGISTRY. This branch never ran the
+                            // generic filter the retail modules use, so without this an
+                            // entitlement on an Admin link (the URL shortener's) was dead config.
+                            if (child.entitlement && !isItemVisible(child, planFeatures)) return false;
                             if (child.href === routes.billing) return canManageBilling;
                             if (child.href === routes.team || child.href === routes.settings.auditLogs) {
                                 return canManageTeam;
                             }
+                            if (child.href === routes.settings.urlShortener) return canManageShortLinks;
                             return true;
                         }),
                     };
@@ -377,6 +385,7 @@ export default function Sidebar({
         canAccessAdmin,
         canManageBilling,
         canManageTeam,
+        canManageShortLinks,
         helpEnabled,
         supportEnabled,
         posEnabled,

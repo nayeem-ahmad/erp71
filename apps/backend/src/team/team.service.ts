@@ -8,9 +8,14 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { InvitationsService } from '../invitations/invitations.service';
-import { StorePermission, UserRole, resolveBaseUserRole } from '@erp71/shared-types';
+import {
+    StorePermission,
+    TENANT_ROLE_TEMPLATE_BY_KEY,
+    UserRole,
+    resolveStrongestBaseUserRole,
+} from '@erp71/shared-types';
 import { TenantContext } from '../database/tenant.decorator';
-import { syncMemberPermissionsFromRole } from './role-sync.util';
+import { setMemberRoles, syncMemberPermissionsFromRoles } from './role-sync.util';
 import { CreateTenantRoleDto, UpdateTenantRoleDto } from './team.dto';
 
 const VALID_PERMISSIONS = new Set<string>(Object.values(StorePermission));
@@ -53,10 +58,56 @@ export class TeamService {
     private async getMembership(tenantId: string, userId: string) {
         const membership = await this.db.tenantUser.findUnique({
             where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
-            include: { tenantRole: { include: { permissions: { select: { permission: true } } } } },
+            include: {
+                tenantRole: { include: { permissions: { select: { permission: true } } } },
+                roles: {
+                    include: { tenantRole: { include: { permissions: { select: { permission: true } } } } },
+                    orderBy: { assigned_at: 'asc' },
+                },
+            },
         });
         if (!membership) throw new NotFoundException('User is not a member of this organization.');
         return membership;
+    }
+
+    /**
+     * Every role the member holds, primary first.
+     *
+     * Falls back to the primary role alone when the join set is empty: between a
+     * deploy and `sync-tenant-role-templates` running, a member written before
+     * multi-role has a `tenant_role_id` and no `TenantUserRole` rows, and reporting
+     * them as holding nothing would read as a member who lost their role.
+     */
+    private heldRoles(membership: {
+        tenant_role_id: string | null;
+        tenantRole: { id: string; name: string } | null;
+        roles: { tenantRole: { id: string; name: string } }[];
+    }) {
+        if (membership.roles.length > 0) {
+            return membership.roles.map((assignment) => assignment.tenantRole);
+        }
+        return membership.tenantRole ? [membership.tenantRole] : [];
+    }
+
+    /** Union of every permission granted by every role the member holds. */
+    private unionPermissions(membership: {
+        tenantRole: { permissions: { permission: string }[] } | null;
+        roles: { tenantRole: { permissions: { permission: string }[] } }[];
+    }): StorePermission[] {
+        // Same pre-backfill fallback as `heldRoles`.
+        const roles =
+            membership.roles.length > 0
+                ? membership.roles.map((assignment) => assignment.tenantRole)
+                : membership.tenantRole
+                  ? [membership.tenantRole]
+                  : [];
+        const union = new Set<StorePermission>();
+        for (const role of roles) {
+            for (const row of role.permissions) {
+                if (VALID_PERMISSIONS.has(row.permission)) union.add(row.permission as StorePermission);
+            }
+        }
+        return [...union];
     }
 
     private async countOwners(tenantId: string): Promise<number> {
@@ -131,6 +182,10 @@ export class TeamService {
                 include: {
                     user: { select: { id: true, email: true, name: true } },
                     tenantRole: { select: { id: true, name: true } },
+                    roles: {
+                        select: { tenantRole: { select: { id: true, name: true } } },
+                        orderBy: { assigned_at: 'asc' },
+                    },
                 },
                 orderBy: { user: { email: 'asc' } },
                 skip,
@@ -153,13 +208,20 @@ export class TeamService {
             permCountMap.set(`${row.user_id}:${row.store_id}`, row._count._all);
         }
 
-        const items = members.map((member) => ({
+        const items = members.map((member) => {
+            const held = this.heldRoles(member);
+            const isOwner = member.role === UserRole.OWNER;
+            return {
             userId: member.user_id,
             email: member.user.email,
             name: member.user.name,
-            isOwner: member.role === UserRole.OWNER,
-            roleName: member.role === UserRole.OWNER ? 'Owner' : member.tenantRole?.name,
+            isOwner,
+            // `roleName` stays a single string for callers that predate multi-role;
+            // `roleNames` is the full set and is what the team UI renders.
+            roleName: isOwner ? 'Owner' : held[0]?.name,
+            roleNames: isOwner ? ['Owner'] : held.map((role) => role.name),
             tenantRoleId: member.tenant_role_id,
+            tenantRoleIds: held.map((role) => role.id),
             isSelf: member.user_id === ctx.userId,
             stores: accessRows
                 .filter((a) => a.user_id === member.user_id)
@@ -169,31 +231,48 @@ export class TeamService {
                     accessLevel: a.access_level,
                     permissionCount: permCountMap.get(`${a.user_id}:${a.store_id}`) ?? 0,
                 })),
-        }));
+            };
+        });
 
         return paginate(items, total, pageNum, limitNum);
     }
 
+    /**
+     * Assigning a role means choosing from this list, so MANAGE_USERS is enough to
+     * read it — a tenant admin who is not the owner still has to staff the
+     * workspace. Creating, editing and deleting roles stay owner-only.
+     */
     async listRoles(ctx: TenantContext) {
-        this.assertOwner(ctx);
+        if (ctx.userRole !== UserRole.OWNER) {
+            await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
+        }
 
         const roles = await this.db.tenantRole.findMany({
             where: { tenant_id: ctx.tenantId },
             include: {
                 permissions: { select: { permission: true } },
-                _count: { select: { members: true } },
+                _count: { select: { memberRoles: true } },
             },
             orderBy: { name: 'asc' },
         });
 
-        return roles.map((role) => ({
-            id: role.id,
-            name: role.name,
-            description: role.description,
-            is_system: role.is_system,
-            permissions: role.permissions.map((p) => p.permission),
-            member_count: role._count.members,
-        }));
+        return roles.map((role) => {
+            const template = role.template_key ? TENANT_ROLE_TEMPLATE_BY_KEY[role.template_key] : undefined;
+            return {
+                id: role.id,
+                name: role.name,
+                description: role.description,
+                is_system: role.is_system,
+                template_key: role.template_key,
+                // Read from the template rather than stored: the module a seeded role
+                // belongs to is a property of the template, and an owner renaming
+                // their copy must not move it out of its group in the picker.
+                module: template?.module ?? null,
+                level: template?.level ?? null,
+                permissions: role.permissions.map((p) => p.permission),
+                member_count: role._count.memberRoles,
+            };
+        });
     }
 
     /** All branches in the tenant — used to render the access/permission matrix. */
@@ -233,13 +312,18 @@ export class TeamService {
             permsByStore.set(p.store_id, list);
         }
 
+        const held = this.heldRoles(membership);
+        const isOwner = membership.role === UserRole.OWNER;
+
         return {
             userId,
             email: user?.email,
             name: user?.name,
-            isOwner: membership.role === UserRole.OWNER,
-            roleName: membership.role === UserRole.OWNER ? 'Owner' : membership.tenantRole?.name,
+            isOwner,
+            roleName: isOwner ? 'Owner' : held[0]?.name,
+            roleNames: isOwner ? ['Owner'] : held.map((role) => role.name),
             tenantRoleId: membership.tenant_role_id,
+            tenantRoleIds: held.map((role) => role.id),
             isSelf: userId === ctx.userId,
             stores: stores.map((s) => ({
                 storeId: s.id,
@@ -329,15 +413,17 @@ export class TeamService {
                     })),
                 });
 
-                const members = await tx.tenantUser.findMany({
-                    where: { tenant_id: ctx.tenantId, tenant_role_id: roleId },
-                    select: { user_id: true },
+                // Everyone holding the role, not just those whose primary role it is:
+                // a member may hold it alongside others, and their permissions are the
+                // union of the whole set.
+                const members = await tx.tenantUserRole.findMany({
+                    where: { tenant_role_id: roleId, tenantUser: { tenant_id: ctx.tenantId } },
+                    select: { tenantUser: { select: { user_id: true } } },
                 });
-                const userIds = members.map((m) => m.user_id);
-                syncedCount = await syncMemberPermissionsFromRole(tx, {
+                const userIds = [...new Set(members.map((m) => m.tenantUser.user_id))];
+                syncedCount = await syncMemberPermissionsFromRoles(tx, {
                     tenantId: ctx.tenantId,
                     userIds,
-                    tenantRoleId: roleId,
                     grantedBy: ctx.userId,
                 });
             }
@@ -361,8 +447,8 @@ export class TeamService {
         this.assertOwner(ctx);
 
         const role = await this.getTenantRole(ctx.tenantId, roleId);
-        const memberCount = await this.db.tenantUser.count({
-            where: { tenant_id: ctx.tenantId, tenant_role_id: roleId },
+        const memberCount = await this.db.tenantUserRole.count({
+            where: { tenant_role_id: roleId, tenantUser: { tenant_id: ctx.tenantId } },
         });
         if (memberCount > 0) {
             throw new BadRequestException('Cannot delete a role that still has members assigned.');
@@ -373,7 +459,15 @@ export class TeamService {
         return { message: 'Role deleted.' };
     }
 
-    async updateRole(ctx: TenantContext, userId: string, tenantRoleId: string) {
+    /**
+     * Replaces the member's whole role set. Their access becomes the union of every
+     * role listed — hold Sales Manager and Accounting User and you get both — which
+     * is materialized into `UserStorePermission` for each branch they can reach.
+     *
+     * The first id is the member's primary role: it is what `TenantUser.tenant_role_id`
+     * keeps pointing at, and callers that predate multi-role still read it.
+     */
+    async updateRoles(ctx: TenantContext, userId: string, tenantRoleIds: string[]) {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
         const membership = await this.getMembership(ctx.tenantId, userId);
 
@@ -384,27 +478,42 @@ export class TeamService {
             throw new BadRequestException('Cannot change the role of an owner.');
         }
 
-        const role = await this.getTenantRole(ctx.tenantId, tenantRoleId);
+        const uniqueIds = [...new Set(tenantRoleIds)];
+        if (uniqueIds.length === 0) {
+            throw new BadRequestException('Select at least one role.');
+        }
+
+        // Loaded in the order given so the first id stays the primary role, and
+        // fetched one by one so an id from another tenant is rejected by name.
+        const roles = await Promise.all(uniqueIds.map((id) => this.getTenantRole(ctx.tenantId, id)));
 
         await this.db.$transaction(async (tx) => {
             await tx.tenantUser.update({
                 where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: userId } },
-                // Keep the coarse role enum in lockstep with the assigned TenantRole —
-                // it drives the session's displayed role, the OWNER/MANAGER authorization
-                // gates, and the platform-admin Edit Tenant view, all of which read the enum.
-                data: { tenant_role_id: tenantRoleId, role: resolveBaseUserRole(role.name) },
+                // Keep the coarse role enum in lockstep with the assigned roles — it
+                // drives the session's displayed role, the OWNER/MANAGER authorization
+                // gates, and the platform-admin Edit Tenant view, all of which read the
+                // enum. With several roles held it takes the strongest, matching the
+                // union the permissions themselves form.
+                data: {
+                    tenant_role_id: roles[0].id,
+                    role: resolveStrongestBaseUserRole(roles.map((role) => role.name)),
+                },
             });
 
-            await syncMemberPermissionsFromRole(tx, {
+            await setMemberRoles(tx, {
                 tenantId: ctx.tenantId,
-                userIds: [userId],
-                tenantRoleId,
+                userId,
+                tenantRoleIds: roles.map((role) => role.id),
                 grantedBy: ctx.userId,
             });
         });
 
-        await this.audit.log('team.role_updated', 'TenantUser', this.auditCtx(ctx), userId, { tenantRoleId });
-        return { message: 'Role updated.' };
+        await this.audit.log('team.role_updated', 'TenantUser', this.auditCtx(ctx), userId, {
+            tenantRoleIds: roles.map((role) => role.id),
+            roleNames: roles.map((role) => role.name),
+        });
+        return { message: 'Roles updated.' };
     }
 
     async grantStoreAccess(
@@ -436,10 +545,9 @@ export class TeamService {
             });
 
             if (!existing && seedDefaults && membership.role !== UserRole.OWNER) {
-                const rolePermissions = membership.tenantRole?.permissions ?? [];
-                const defaults = rolePermissions
-                    .map((p) => p.permission)
-                    .filter((p) => VALID_PERMISSIONS.has(p));
+                // Union of every role the member holds, so a new branch grants them the
+                // same access their existing branches do.
+                const defaults = this.unionPermissions(membership);
                 if (defaults.length > 0) {
                     await tx.userStorePermission.createMany({
                         data: defaults.map((permission) => ({
@@ -553,24 +661,32 @@ export class TeamService {
         const invites = await this.db.userInvitation.findMany({
             where: { tenant_id: ctx.tenantId, accepted_at: null, expires_at: { gt: new Date() } },
             orderBy: { created_at: 'desc' },
-            include: { tenantRole: { select: { id: true, name: true } } },
+            include: {
+                tenantRole: { select: { id: true, name: true } },
+                roles: { select: { tenantRole: { select: { id: true, name: true } } } },
+            },
         });
-        return invites.map((i) => ({
-            id: i.id,
-            email: i.email,
-            roleName: i.tenantRole.name,
-            tenantRoleId: i.tenant_role_id,
-            invitedAt: i.created_at,
-            expiresAt: i.expires_at,
-        }));
+        return invites.map((i) => {
+            const held = i.roles.map((assignment) => assignment.tenantRole);
+            return {
+                id: i.id,
+                email: i.email,
+                roleName: i.tenantRole.name,
+                roleNames: held.length > 0 ? held.map((role) => role.name) : [i.tenantRole.name],
+                tenantRoleId: i.tenant_role_id,
+                tenantRoleIds: held.length > 0 ? held.map((role) => role.id) : [i.tenant_role_id],
+                invitedAt: i.created_at,
+                expiresAt: i.expires_at,
+            };
+        });
     }
 
-    async invite(ctx: TenantContext, email: string, tenantRoleId: string) {
+    async invite(ctx: TenantContext, email: string, tenantRoleIds: string[]) {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
-        await this.invitations.invite(ctx.tenantId, ctx.userId, ctx.userRole ?? '', email, tenantRoleId);
+        await this.invitations.invite(ctx.tenantId, ctx.userId, ctx.userRole ?? '', email, tenantRoleIds);
         await this.audit.log('team.invitation_sent', 'UserInvitation', this.auditCtx(ctx), undefined, {
             email,
-            tenantRoleId,
+            tenantRoleIds,
         });
         return { message: 'Invitation sent.' };
     }

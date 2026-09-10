@@ -339,6 +339,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
+    // The permission half of the /short-links guards; the Sidebar applies the
+    // `urlShortener` plan entitlement itself. Owners bypass StorePermissionGuard.
+    const canManageShortLinks = owner || hasPermission(perms, 'MANAGE_SHORT_LINKS');
     const canAccessAccounting =
         (owner || hasPermission(perms, 'VIEW_LEDGER'))
         && hasPaidPlan
@@ -548,6 +551,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
+                canManageShortLinks={canManageShortLinks}
                 platformAdminMode={inPlatformAdminMode}
                 refereeMode={inRefereeMode}
                 employeeMode={inEmployeeMode}
