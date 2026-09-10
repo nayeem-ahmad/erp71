@@ -8,12 +8,17 @@ import { readingMinutes } from '../blog/reading-time';
 import { BlogStatus, canTransition } from '../blog/blog-status';
 import {
     BLOG_DRAFT_MAX_TOKENS,
+    BLOG_TRANSLATION_MAX_TOKENS,
     BlogAiDraft,
+    BlogAiTranslation,
     buildBlogDraftPrompt,
+    buildBlogTranslationPrompt,
     normalizeBlogDraft,
+    normalizeBlogTranslation,
     resolveDraftLocales,
+    resolveTranslationTargets,
 } from '../blog/blog-ai-draft';
-import { BlogAiDraftDto } from '../blog/blog.dto';
+import { BlogAiDraftDto, BlogAiTranslateDto } from '../blog/blog.dto';
 import {
     UpdateTenantBlogSettingsDto,
     UpsertTenantBlogCategoryDto,
@@ -434,6 +439,48 @@ export class TenantBlogService {
         await this.ai.logUsage(tenantId, 'blog_post_draft', usedModel, usage);
 
         return normalizeBlogDraft(text, { categories, includeAudience: false, locale });
+    }
+
+    /**
+     * Rewrite the post the shop already has in another language.
+     *
+     * The platform editor translates *into* a tab and keeps the source; a shop
+     * post has one title and one body, so there is only one copy and this
+     * replaces it. The editor confirms that before it applies anything — here
+     * the request is simply the copy in, one language's copy out.
+     *
+     * One target, whatever the request asks for, for the same reason
+     * `draftWithAi` writes one language: a second would have nowhere to go and
+     * would only spend the shop's credits.
+     */
+    async translateWithAi(tenantId: string, dto: BlogAiTranslateDto): Promise<{
+        translations: BlogAiTranslation[];
+    }> {
+        await this.ai.enforceCredits(tenantId);
+
+        const [targetLocale] = resolveTranslationTargets(dto.source_locale, dto.target_locales);
+
+        const source: BlogAiTranslation = {
+            locale: dto.source_locale,
+            title: dto.title,
+            body_md: dto.body_md,
+            excerpt: dto.excerpt,
+            seo_title: dto.seo_title,
+            seo_description: dto.seo_description,
+        };
+
+        const model = await this.ai.getDefaultModel();
+        const { systemPrompt, userMessage } = buildBlogTranslationPrompt({ source, targetLocale });
+
+        const { text, usage, model: usedModel } = await this.ai.completeUnbilled(
+            model,
+            systemPrompt,
+            userMessage,
+            BLOG_TRANSLATION_MAX_TOKENS,
+        );
+        await this.ai.logUsage(tenantId, 'blog_post_translate', usedModel, usage);
+
+        return { translations: [normalizeBlogTranslation(text, targetLocale)] };
     }
 
     async createCategory(tenantId: string, dto: UpsertTenantBlogCategoryDto) {

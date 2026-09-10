@@ -31,6 +31,20 @@ function languages(filled: string[] = [], current = 'en') {
     };
 }
 
+/** A shop editor: one title and one body, in a language only the author knows. */
+function oneCopy(hasCopy: boolean, current = 'en') {
+    return {
+        options: [
+            { code: 'en', label: 'English' },
+            { code: 'bn', label: 'বাংলা' },
+            { code: 'ms', label: 'Bahasa Melayu' },
+        ],
+        current,
+        singleCopy: true,
+        hasCopy,
+    };
+}
+
 function setup(overrides: Partial<React.ComponentProps<typeof AiDraftModal>> = {}) {
     const props = {
         open: true,
@@ -233,5 +247,81 @@ describe('AiDraftModal — several languages', () => {
 
         expect(screen.getByRole('checkbox', { name: /বাংলা/ })).not.toBeChecked();
         expect(screen.getByRole('checkbox', { name: /English/ })).toBeChecked();
+    });
+});
+
+describe('AiDraftModal — one copy in one language', () => {
+    /**
+     * The shop editor has one body, so a translation replaces it rather than
+     * filling a tab. Ticking three languages would promise three posts and
+     * deliver one, which is why the targets are a list of one.
+     */
+    it('translates into exactly one language', () => {
+        const props = setup({ prompt: '', languages: oneCopy(true), onTranslate: jest.fn() });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+
+        expect(props.onTranslate).toHaveBeenCalledWith({ source: 'en', targets: ['bn'] });
+    });
+
+    // Nothing says a shop writing in Bangla runs the app in Bangla, and nothing
+    // in one body says which language it is — so every language is on offer and
+    // the author corrects the guess.
+    it('lets the author name the language the post is written in', () => {
+        const props = setup({ prompt: '', languages: oneCopy(true), onTranslate: jest.fn() });
+
+        const source = screen.getByLabelText('Translate from');
+        expect(Array.from(source.querySelectorAll('option')).map((option) => option.value)).toEqual([
+            'en',
+            'bn',
+            'ms',
+        ]);
+
+        fireEvent.change(source, { target: { value: 'bn' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+
+        expect(props.onTranslate).toHaveBeenCalledWith({ source: 'bn', targets: ['en'] });
+    });
+
+    it('never offers to translate a language into itself', () => {
+        setup({ prompt: '', languages: oneCopy(true, 'bn'), onTranslate: jest.fn() });
+
+        const target = screen.getByLabelText('Translate into');
+        expect(Array.from(target.querySelectorAll('option')).map((option) => option.value)).toEqual(['en', 'ms']);
+    });
+
+    it('sends the language the author picked to translate into', () => {
+        const props = setup({ prompt: '', languages: oneCopy(true), onTranslate: jest.fn() });
+
+        fireEvent.change(screen.getByLabelText('Translate into'), { target: { value: 'ms' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+
+        expect(props.onTranslate).toHaveBeenCalledWith({ source: 'en', targets: ['ms'] });
+    });
+
+    /**
+     * Writing is still one language — the one the author is working in — so a
+     * language list on the brief would be a choice with no second slot to fill.
+     */
+    it('asks for no language while writing from a brief', () => {
+        setup({ prompt: 'dead stock', languages: oneCopy(false), onTranslate: jest.fn() });
+
+        expect(screen.queryByLabelText('Translate into')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('What should this post be about?')).toBeInTheDocument();
+    });
+
+    it('offers writing only until the post has words in it', () => {
+        setup({ prompt: 'dead stock', languages: oneCopy(false), onTranslate: jest.fn() });
+
+        expect(screen.getByRole('button', { name: 'Translate existing' })).toBeDisabled();
+        expect(screen.getByText('Write a post in one language first.')).toBeInTheDocument();
+    });
+
+    it('generates into the language the author is working in', () => {
+        const props = setup({ prompt: 'dead stock', languages: oneCopy(false, 'bn'), onTranslate: jest.fn() });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+        expect(props.onGenerate).toHaveBeenCalledWith(['bn']);
     });
 });
