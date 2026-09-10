@@ -6,6 +6,7 @@ import { Printer, Save, Package, FileText, Pencil, X, Trash2 } from 'lucide-reac
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -128,20 +129,19 @@ function ReturnDetailPageContent() {
         const printContent = printRef.current;
         if (!printContent) return;
 
+        const headerContext: HeaderContext = {
+            docTitle: t.shared.print.returnProcessed,
+            docNumber: ret?.return_number,
+            docDate: ret?.created_at ? formatDate(ret.created_at, locale) : undefined,
+            companyName: printHeader.companyName,
+        };
+
         openPrintWindow({
+            context: headerContext,
             title: `${t.shared.print.returnProcessed} ${ret?.return_number ?? ''}`,
             paperSize: 'A4',
             headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(
-                printHeader.headerConfig,
-                {
-                    docTitle: t.shared.print.returnProcessed,
-                    docNumber: ret?.return_number,
-                    docDate: ret?.created_at ? formatDate(ret.created_at, locale) : undefined,
-                    companyName: printHeader.companyName,
-                },
-                'A4',
-            ),
+            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             repeatHeader: true,
             bodyHtml: printContent.innerHTML,

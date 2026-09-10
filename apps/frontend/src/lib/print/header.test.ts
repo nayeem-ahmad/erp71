@@ -1,7 +1,10 @@
 import {
     applyTokens,
+    footerRepeats,
+    hasFooter,
     headerConfigFromBranding,
     headerCss,
+    renderFooterHtml,
     renderHeaderHtml,
     resolveHeaderConfig,
 } from './header';
@@ -171,5 +174,200 @@ describe('headerConfigFromBranding', () => {
 
     it('ignores an invalid primary colour', () => {
         expect(headerConfigFromBranding({ primaryColor: 'teal' }).company?.color).toBe('#1d4ed8');
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Letterhead footer                                                  */
+/* ------------------------------------------------------------------ */
+
+/** A config with the footer switched on and one static line. */
+const withFooter = (
+    footer: DeepPartial<PrintHeaderConfig['footer']> = {},
+): DeepPartial<PrintHeaderConfig> => ({
+    footer: {
+        show: true,
+        lines: [{ text: 'Bank: BRAC 1234', fontSizePt: 9 }],
+        ...footer,
+    },
+});
+
+describe('renderFooterHtml', () => {
+    it('renders nothing for a stored v1 config that has no footer at all', () => {
+        expect(renderFooterHtml({ version: 1, lines: [] }, ctx, 'A4')).toBe('');
+    });
+
+    it('renders nothing while the footer is switched off', () => {
+        expect(renderFooterHtml({ footer: { show: false } }, ctx, 'A4')).toBe('');
+    });
+
+    it('renders the footer lines once switched on', () => {
+        const html = renderFooterHtml(withFooter(), ctx, 'A4');
+
+        expect(html).toContain('p71-ft');
+        expect(html).toContain('Bank: BRAC 1234');
+    });
+
+    it('substitutes tokens in footer lines', () => {
+        const html = renderFooterHtml(withFooter({ lines: [{ text: 'Tel: {{phone}}' }] }), ctx, 'A4');
+
+        expect(html).toContain('Tel: 01711-000000');
+    });
+
+    it('drops a footer line whose tokens all resolve empty', () => {
+        const config = withFooter({ lines: [{ text: 'Tel: {{phone}}' }] });
+
+        expect(renderFooterHtml(config, { ...ctx, phone: undefined }, 'A4')).toBe('');
+    });
+
+    it('escapes markup a tenant types into a footer line', () => {
+        const config = withFooter({ lines: [{ text: '<script>alert(1)</script>' }] });
+
+        expect(renderFooterHtml(config, ctx, 'A4')).not.toContain('<script>');
+    });
+
+    it('renders an empty string when the footer is on but carries no content', () => {
+        expect(renderFooterHtml(withFooter({ lines: [], images: [] }), ctx, 'A4')).toBe('');
+    });
+});
+
+describe('footerRepeats', () => {
+    it('is off unless the tenant asked for it', () => {
+        expect(footerRepeats(withFooter(), 'A4')).toBe(false);
+        expect(footerRepeats(withFooter({ repeatOnEveryPage: true }), 'A4')).toBe(true);
+    });
+
+    it('is forced off on thermal rolls, which have no page bottom', () => {
+        expect(footerRepeats(withFooter({ repeatOnEveryPage: true }), 'Thermal80')).toBe(false);
+    });
+});
+
+describe('hasFooter', () => {
+    it('reports whether a tenant footer would print', () => {
+        expect(hasFooter(undefined, ctx, 'A4')).toBe(false);
+        expect(hasFooter(withFooter(), ctx, 'A4')).toBe(true);
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Letterhead images                                                  */
+/* ------------------------------------------------------------------ */
+
+describe('template images', () => {
+    const signature = { url: 'https://cdn.example.com/sign.png', heightMm: 14, align: 'right' as const };
+
+    it('renders a header image into its alignment bucket', () => {
+        const html = renderHeaderHtml({ images: [signature] }, ctx, 'A4');
+
+        expect(html).toContain('p71-hd-images');
+        expect(html).toContain('p71-img-col--right');
+        expect(html).toContain('https://cdn.example.com/sign.png');
+    });
+
+    it('renders footer images alongside the footer text', () => {
+        const html = renderFooterHtml(withFooter({ images: [signature] }), ctx, 'A4');
+
+        expect(html).toContain('p71-ft-images');
+        expect(html).toContain('https://cdn.example.com/sign.png');
+    });
+
+    it('rejects a javascript: image URL', () => {
+        const html = renderHeaderHtml(
+            // eslint-disable-next-line no-script-url
+            { images: [{ url: 'javascript:alert(1)', heightMm: 10, caption: 'Seal' }] },
+            ctx,
+            'A4',
+        );
+
+        expect(html).not.toContain('javascript:');
+        // The caption still prints — that is the blank signature-line case.
+        expect(html).toContain('Seal');
+    });
+
+    it('prints a blank signature line for a caption with no image', () => {
+        const html = renderFooterHtml(
+            withFooter({ images: [{ heightMm: 12, caption: 'Authorised Signature' }] }),
+            ctx,
+            'A4',
+        );
+
+        expect(html).toContain('Authorised Signature');
+        expect(html).not.toContain('<img');
+    });
+
+    it('escapes a caption containing markup', () => {
+        const html = renderFooterHtml(
+            withFooter({ images: [{ heightMm: 12, caption: '<b>x</b>' }] }),
+            ctx,
+            'A4',
+        );
+
+        expect(html).not.toContain('<b>');
+    });
+
+    it('drops an entry that has neither a usable image nor a caption', () => {
+        expect(renderHeaderHtml({ images: [{ heightMm: 12 }] }, ctx, 'A4')).not.toContain('p71-hd-images');
+    });
+
+    it('hides images on thermal rolls unless they opt in', () => {
+        const off = renderFooterHtml(withFooter({ images: [signature] }), ctx, 'Thermal80');
+        const on = renderFooterHtml(
+            withFooter({ images: [{ ...signature, showOnThermal: true }] }),
+            ctx,
+            'Thermal80',
+        );
+
+        expect(off).not.toContain('p71-ft-images');
+        expect(on).toContain('p71-ft-images');
+    });
+
+    it('clamps an out-of-range image height', () => {
+        const html = renderHeaderHtml({ images: [{ ...signature, heightMm: 9999 }] }, ctx, 'A4');
+
+        expect(html).toContain('height:60mm');
+    });
+
+    it('moves the divider onto the wrapper so it is emitted exactly once', () => {
+        const css = headerCss({ images: [signature] }, 'A4');
+
+        expect(css).toContain('.p71-hd-wrap');
+        expect(css.match(/border-bottom:/g)).toHaveLength(1);
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Line formatting                                                    */
+/* ------------------------------------------------------------------ */
+
+describe('line formatting', () => {
+    // Deliberately untyped: several cases feed values the type forbids, to prove
+    // the renderer sanitises rather than trusting them.
+    const render = (line: Record<string, unknown>) =>
+        renderHeaderHtml({ lines: [line] } as DeepPartial<PrintHeaderConfig>, ctx, 'A4');
+
+    it('applies underline, letter spacing and a per-line font', () => {
+        const html = render({ text: 'Terms apply', underline: true, letterSpacingPx: 3, fontFamily: 'serif' });
+
+        expect(html).toContain('text-decoration:underline');
+        expect(html).toContain('letter-spacing:3px');
+        expect(html).toContain('Georgia');
+    });
+
+    it('falls back to the template font for an unknown per-line font', () => {
+        const html = render({ text: 'Terms apply', fontFamily: 'comic-sans' });
+
+        expect(html).toContain('Arial');
+        expect(html).not.toContain('comic-sans');
+    });
+
+    it('clamps letter spacing to the supported range', () => {
+        expect(render({ text: 'x', letterSpacingPx: 999 })).toContain('letter-spacing:10px');
+    });
+
+    it('rejects an alignment that is not one of the three keywords', () => {
+        const html = render({ text: 'x', align: 'left;position:fixed' });
+
+        expect(html).not.toContain('position:fixed');
+        expect(html).toContain('text-align:left');
     });
 });

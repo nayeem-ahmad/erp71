@@ -6,8 +6,14 @@
  * loading. This module owns all three.
  */
 
-import { headerCss } from './header';
-import { isThermalPaper, type DeepPartial, type PaperSize, type PrintHeaderConfig } from './types';
+import { footerRepeats, headerCss, renderFooterHtml } from './header';
+import {
+    isThermalPaper,
+    type DeepPartial,
+    type HeaderContext,
+    type PaperSize,
+    type PrintHeaderConfig,
+} from './types';
 
 const PAGE_CSS: Record<PaperSize, string> = {
     A4: '@page { size: A4 portrait; margin: 15mm; }',
@@ -35,11 +41,18 @@ export interface PrintDocumentOptions {
     /** Markup from `renderHeaderHtml`; omit for documents without a header. */
     headerHtml?: string;
     bodyHtml: string;
+    /**
+     * The document's own footer. Used only when the tenant's template does not
+     * design one — a tenant who writes their own footer does not also want the
+     * printer's hardcoded "Thank you for your business!" underneath it.
+     */
     footerHtml?: string;
     /** Document-specific CSS, appended last so it wins over the base rules. */
     styles?: string;
-    /** Header config the CSS is generated from — pass what produced headerHtml. */
+    /** Template config the header/footer CSS is generated from. */
     headerConfig?: DeepPartial<PrintHeaderConfig>;
+    /** Values the tenant footer's {{tokens}} resolve against. */
+    context?: HeaderContext;
     /**
      * Repeat the header at the top of every printed page. Uses a table/thead
      * wrapper because Chrome only repeats table headers — `position: fixed`
@@ -53,12 +66,23 @@ export interface PrintDocumentOptions {
 export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const thermal = isThermalPaper(opts.paperSize);
     const header = opts.headerHtml ?? '';
-    const footer = opts.footerHtml ?? '';
 
-    const content = opts.repeatHeader && header
+    // Rendered here rather than by each caller so every print path picks up a
+    // tenant-designed footer without threading it through 13 printers.
+    const tenantFooter = renderFooterHtml(opts.headerConfig, opts.context ?? {}, opts.paperSize);
+    const footer = tenantFooter || (opts.footerHtml ?? '');
+
+    const repeatHeader = !!opts.repeatHeader && !!header;
+    const repeatFooter = !!tenantFooter && footerRepeats(opts.headerConfig, opts.paperSize);
+    // Chrome only repeats table sections across pages — `position: fixed` does
+    // not survive pagination, so a repeating band has to live in thead/tfoot.
+    const useTable = repeatHeader || repeatFooter;
+
+    const content = useTable
         ? `<table class="p71-doc">
-            <thead><tr><td>${header}</td></tr></thead>
-            <tbody><tr><td>${opts.bodyHtml}${footer}</td></tr></tbody>
+            ${repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : ''}
+            ${repeatFooter ? `<tfoot><tr><td>${footer}</td></tr></tfoot>` : ''}
+            <tbody><tr><td>${repeatHeader ? '' : header}${opts.bodyHtml}${repeatFooter ? '' : footer}</td></tr></tbody>
         </table>`
         : `${header}${opts.bodyHtml}${footer}`;
 
@@ -78,6 +102,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         .p71-wrap { ${thermal ? 'padding: 6px;' : 'max-width: 780px; margin: 0 auto;'} }
         .p71-doc { width: 100%; border-collapse: collapse; }
         .p71-doc > thead > tr > td,
+        .p71-doc > tfoot > tr > td,
         .p71-doc > tbody > tr > td { padding: 0; border: 0; }
         ${headerCss(opts.headerConfig, opts.paperSize)}
         ${PAGE_CSS[opts.paperSize]}

@@ -1,5 +1,6 @@
 /**
- * Renders the tenant-designed document header to plain HTML + CSS.
+ * Renders the tenant-designed letterhead — header band and footer band — to
+ * plain HTML + CSS.
  *
  * Pure and DOM-free on purpose: the print windows build an HTML string, the
  * React invoice pages inject the same markup, and the settings preview renders
@@ -17,7 +18,9 @@ import {
     type HeaderContext,
     type HeaderLine,
     type PaperSize,
+    type PrintFontFamily,
     type PrintHeaderConfig,
+    type TemplateImage,
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -45,7 +48,12 @@ function num(value: number | undefined, fallback: number, min: number, max: numb
     return Math.min(max, Math.max(min, value));
 }
 
-/** Data and https URLs only — blocks `javascript:` and friends in the logo slot. */
+/** Only known font keys reach the stylesheet — never a raw string. */
+function fontStack(value: PrintFontFamily | undefined, fallback: PrintFontFamily): string {
+    return FONT_STACKS[value as PrintFontFamily] ?? FONT_STACKS[fallback];
+}
+
+/** Data and https URLs only — blocks `javascript:` and friends in image slots. */
 function safeImageUrl(value: string | undefined): string | undefined {
     if (!value) return undefined;
     const trimmed = value.trim();
@@ -156,6 +164,12 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
         },
         baseFontSizePt: Math.min(config.baseFontSizePt, narrow ? 8 : 9),
         spacingMm: Math.min(config.spacingMm, 2),
+        footer: {
+            ...config.footer,
+            spacingMm: Math.min(config.footer?.spacingMm ?? 4, 2),
+            // A roll has no page bottom to pin a footer to; it prints once.
+            repeatOnEveryPage: false,
+        },
     };
 }
 
@@ -176,6 +190,16 @@ export function resolveHeaderConfig(
 /*  Rendering                                                          */
 /* ------------------------------------------------------------------ */
 
+const ALIGNMENTS = ['left', 'center', 'right'] as const;
+type Alignment = (typeof ALIGNMENTS)[number];
+
+/** Only the three known keywords reach `text-align` / `justify-content`. */
+function alignment(value: string | undefined, fallback: Alignment): Alignment {
+    return (ALIGNMENTS as readonly string[]).includes(value ?? '')
+        ? (value as Alignment)
+        : fallback;
+}
+
 function lineStyle(line: HeaderLine, config: PrintHeaderConfig): string {
     const parts = [
         `font-size:${num(line.fontSizePt, config.baseFontSizePt, 5, 48)}pt`,
@@ -183,19 +207,77 @@ function lineStyle(line: HeaderLine, config: PrintHeaderConfig): string {
     ];
     if (line.bold) parts.push('font-weight:bold');
     if (line.italic) parts.push('font-style:italic');
-    if (line.align) parts.push(`text-align:${line.align}`);
+    if (line.underline) parts.push('text-decoration:underline');
+    if (line.align) parts.push(`text-align:${alignment(line.align, 'left')}`);
+    if (line.fontFamily) parts.push(`font-family:${fontStack(line.fontFamily, config.fontFamily)}`);
+    if (line.letterSpacingPx) parts.push(`letter-spacing:${num(line.letterSpacingPx, 0, 0, 10)}px`);
     return parts.join(';');
 }
 
-function renderLines(config: PrintHeaderConfig, ctx: HeaderContext): string {
-    return config.lines
+function renderLines(
+    lines: HeaderLine[],
+    config: PrintHeaderConfig,
+    ctx: HeaderContext,
+    className: string,
+): string {
+    return (lines ?? [])
         .map((line) => {
             const { text, empty } = applyTokens(line.text ?? '', ctx);
             if (empty) return '';
-            return `<div class="p71-hd-line" style="${lineStyle(line, config)}">${escapeHtml(text)}</div>`;
+            return `<div class="${className}" style="${lineStyle(line, config)}">${escapeHtml(text)}</div>`;
         })
         .filter(Boolean)
         .join('');
+}
+
+/**
+ * Renders images into left/centre/right buckets so a footer can carry a
+ * signature on one side and a company seal on the other.
+ *
+ * An entry with a caption but no usable image still renders — that is the
+ * blank signature line a tenant leaves for someone to sign by hand.
+ */
+function usableImages(
+    images: TemplateImage[] | undefined,
+    paperSize: PaperSize,
+): TemplateImage[] {
+    const thermal = isThermalPaper(paperSize);
+    return (images ?? []).filter((image) => {
+        if (thermal && !image.showOnThermal) return false;
+        return !!safeImageUrl(image.url) || !!image.caption?.trim();
+    });
+}
+
+function renderImages(
+    images: TemplateImage[] | undefined,
+    paperSize: PaperSize,
+    prefix: string,
+): string {
+    const usable = usableImages(images, paperSize);
+    if (usable.length === 0) return '';
+
+    const bucket = (align: Alignment): string => {
+        const entries = usable.filter((image) => alignment(image.align, 'left') === align);
+        if (entries.length === 0) return `<div class="p71-img-col p71-img-col--${align}"></div>`;
+
+        const cells = entries
+            .map((image) => {
+                const url = safeImageUrl(image.url);
+                const height = num(image.heightMm, 14, 3, 60);
+                const caption = image.caption?.trim();
+                const slot = url
+                    ? `<img class="p71-img-el" src="${escapeHtml(url)}" alt="" style="height:${height}mm">`
+                    : `<div class="p71-img-el" style="height:${height}mm"></div>`;
+                const captionHtml = caption
+                    ? `<div class="p71-img-cap">${escapeHtml(caption)}</div>`
+                    : '';
+                return `<div class="p71-img">${slot}${captionHtml}</div>`;
+            })
+            .join('');
+        return `<div class="p71-img-col p71-img-col--${align}">${cells}</div>`;
+    };
+
+    return `<div class="${prefix}-images">${ALIGNMENTS.map(bucket).join('')}</div>`;
 }
 
 function renderLogo(config: PrintHeaderConfig): string {
@@ -235,17 +317,60 @@ export function renderHeaderHtml(
     const nameHtml = resolved.company.show && nameText
         ? `<div class="p71-hd-name">${escapeHtml(nameText)}</div>`
         : '';
-    const linesHtml = renderLines(resolved, ctx);
+    const linesHtml = renderLines(resolved.lines, resolved, ctx, 'p71-hd-line');
     const docHtml = renderDocBlock(resolved, ctx);
+    const imagesHtml = renderImages(resolved.images, paperSize, 'p71-hd');
 
-    if (!logoHtml && !nameHtml && !linesHtml && !docHtml) return '';
+    if (!logoHtml && !nameHtml && !linesHtml && !docHtml && !imagesHtml) return '';
 
     const brandHtml = `<div class="p71-hd-brand">
         ${logoHtml}
         ${nameHtml || linesHtml ? `<div class="p71-hd-text">${nameHtml}${linesHtml}</div>` : ''}
     </div>`;
 
-    return `<div class="p71-hd p71-hd--${resolved.layout}">${brandHtml}${docHtml}</div>`;
+    const bandHtml = `<div class="p71-hd p71-hd--${resolved.layout}">${brandHtml}${docHtml}</div>`;
+    // The image strip sits under the band so it spans the full width rather
+    // than competing with the document block for the space beside it.
+    return imagesHtml ? `<div class="p71-hd-wrap">${bandHtml}${imagesHtml}</div>` : bandHtml;
+}
+
+/**
+ * Builds the footer markup, or an empty string when the tenant has not
+ * designed one — callers then keep whatever footer they already print.
+ */
+export function renderFooterHtml(
+    config: DeepPartial<PrintHeaderConfig> | undefined,
+    ctx: HeaderContext,
+    paperSize: PaperSize,
+): string {
+    const resolved = resolveHeaderConfig(config, paperSize);
+    const footer = resolved.footer;
+    if (!footer?.show) return '';
+
+    const linesHtml = renderLines(footer.lines, resolved, ctx, 'p71-ft-line');
+    const imagesHtml = renderImages(footer.images, paperSize, 'p71-ft');
+    if (!linesHtml && !imagesHtml) return '';
+
+    // Images above the text: a signature block belongs directly under the
+    // content it signs off, with the address strip closing the page.
+    return `<div class="p71-ft">${imagesHtml}${linesHtml}</div>`;
+}
+
+/** Whether a tenant footer would render anything for this config. */
+export function hasFooter(
+    config: DeepPartial<PrintHeaderConfig> | undefined,
+    ctx: HeaderContext,
+    paperSize: PaperSize,
+): boolean {
+    return renderFooterHtml(config, ctx, paperSize) !== '';
+}
+
+/** Whether the footer should repeat at the bottom of every page. */
+export function footerRepeats(
+    config: DeepPartial<PrintHeaderConfig> | undefined,
+    paperSize: PaperSize,
+): boolean {
+    return !!resolveHeaderConfig(config, paperSize).footer?.repeatOnEveryPage;
 }
 
 /**
@@ -263,6 +388,12 @@ export function headerCss(
     const ruleWidth = num(resolved.rule.thicknessPx, 2, 0, 8);
     const centred = resolved.layout === 'logo-above' || resolved.layout === 'logo-center';
 
+    // With images the wrapper is the outer element and carries the divider;
+    // without them the band itself does. Emitted once either way, so switching
+    // the divider off leaves no border declaration behind.
+    const hasImages = usableImages(resolved.images, paperSize).length > 0;
+    const divider = resolved.rule.show ? `border-bottom: ${ruleWidth}px solid ${ruleColor};` : '';
+
     return `
     .p71-hd {
         display: flex;
@@ -270,9 +401,9 @@ export function headerCss(
         align-items: flex-start;
         justify-content: space-between;
         font-family: ${FONT_STACKS[resolved.fontFamily]};
-        padding-bottom: ${spacing}mm;
-        margin-bottom: ${spacing}mm;
-        ${resolved.rule.show ? `border-bottom: ${ruleWidth}px solid ${ruleColor};` : ''}
+        padding-bottom: ${hasImages ? 0 : spacing}mm;
+        margin-bottom: ${hasImages ? Math.max(spacing - 1, 1) : spacing}mm;
+        ${hasImages ? '' : divider}
     }
     .p71-hd--logo-right { flex-direction: row-reverse; }
     .p71-hd--logo-above,
@@ -305,7 +436,78 @@ export function headerCss(
         font-size: ${num(resolved.baseFontSizePt, 10, 5, 24)}pt;
         color: #555555;
         margin-top: 0.5mm;
+    }
+
+    ${hasImages ? `
+    /* The header band plus its image strip. */
+    .p71-hd-wrap {
+        padding-bottom: ${spacing}mm;
+        margin-bottom: ${spacing}mm;
+        ${divider}
+    }` : ''}
+
+    ${imageCss(thermal)}
+    ${footerCssBlock(resolved, paperSize)}`;
+}
+
+/**
+ * Image strips, shared by the header and the footer.
+ *
+ * Three buckets rather than one row so a signature on the left and a seal on
+ * the right land where a tenant expects, whatever order they were added in.
+ */
+function imageCss(thermal: boolean): string {
+    return `
+    .p71-hd-images, .p71-ft-images {
+        display: flex;
+        align-items: flex-end;
+        gap: 4mm;
+        ${thermal ? 'flex-direction: column;' : ''}
+    }
+    .p71-img-col {
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 4mm;
+    }
+    .p71-img-col--left { justify-content: flex-start; }
+    .p71-img-col--center { justify-content: center; }
+    .p71-img-col--right { justify-content: flex-end; }
+    .p71-img-col:empty { ${thermal ? 'display: none;' : ''} }
+    .p71-img { text-align: center; }
+    img.p71-img-el { display: block; width: auto; max-width: 50mm; object-fit: contain; }
+    .p71-img-cap {
+        border-top: 1px solid #999999;
+        margin-top: 1mm;
+        padding-top: 1mm;
+        font-size: 8pt;
+        color: #555555;
+        white-space: nowrap;
     }`;
+}
+
+/** Footer band rules — only emitted when the tenant designed a footer. */
+function footerCssBlock(resolved: PrintHeaderConfig, paperSize: PaperSize): string {
+    const footer = resolved.footer;
+    if (!footer?.show) return '';
+
+    const thermal = isThermalPaper(paperSize);
+    const spacing = num(footer.spacingMm, 4, 0, 30);
+    const ruleWidth = num(footer.rule?.thicknessPx, 1, 0, 8);
+    const ruleColor = cssColor(footer.rule?.color, '#d1d5db');
+
+    return `
+    .p71-ft {
+        font-family: ${fontStack(resolved.fontFamily, 'sans')};
+        padding-top: ${spacing}mm;
+        margin-top: ${spacing}mm;
+        ${footer.rule?.show ? `border-top: ${ruleWidth}px solid ${ruleColor};` : ''}
+        ${thermal ? 'text-align: center;' : ''}
+    }
+    .p71-ft-line { line-height: 1.35; }
+    .p71-ft-images + .p71-ft-line { margin-top: ${Math.max(spacing - 1, 1)}mm; }`;
 }
 
 /**
