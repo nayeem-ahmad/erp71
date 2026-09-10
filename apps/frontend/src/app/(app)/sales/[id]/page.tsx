@@ -11,6 +11,7 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SaleEntryLayout, {
     computeSaleTotals,
     EMPTY_ADJUSTMENTS,
@@ -88,6 +89,13 @@ function SaleDetailPageContent() {
         if (saleId) loadSale(saleId);
     }, [saleId, loadSale]);
 
+    // Unlike the new-sale screen this seeds from the sale itself: a posted sale
+    // already records where its stock came from, and re-resolving the tenant
+    // default here is precisely the bug the stored column exists to stop.
+    const { warehouses } = useWarehouses();
+    const [warehouseId, setWarehouseId] = useState('');
+    const [perLineWarehouse, setPerLineWarehouse] = useState(false);
+
     // Seed the entry form from the loaded sale. A sale stores only its final
     // total, so whatever separates that total from the line subtotal is carried
     // as a single "Adjustment" — the original discount/VAT/transport split is
@@ -103,6 +111,7 @@ function SaleDetailPageContent() {
             subgroup: item.product?.subgroup?.name,
             quantity: item.quantity,
             discount: 0,
+            warehouseId: item.warehouse_id ?? undefined,
         }));
 
         loadCart({
@@ -123,6 +132,10 @@ function SaleDetailPageContent() {
         });
         setStatus(sale.status);
         setSaleDate(toDatetimeLocal(new Date(sale.sale_date ?? sale.created_at)));
+        setWarehouseId(sale.warehouse_id ?? '');
+        // Shown, not hidden behind the switch, when the sale really is split:
+        // a warehouse that steers a line has to be visible on the line.
+        setPerLineWarehouse(cartItems.some((item: any) => item.warehouseId));
     }, [sale, loadCart, t]);
 
     // A stored sale has no recoverable VAT rate — the whole gap between the
@@ -156,10 +169,12 @@ function SaleDetailPageContent() {
                 note: description,
                 saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
                 totalAmount: totals.total,
+                warehouseId: warehouseId || undefined,
                 items: items.map((i) => ({
                     productId: i.productId,
                     quantity: i.quantity,
                     priceAtSale: i.price,
+                    warehouseId: perLineWarehouse ? i.warehouseId : undefined,
                 })),
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
@@ -504,6 +519,11 @@ function SaleDetailPageContent() {
             adjustmentLabel="Adjustment"
             payments={payments}
             onPaymentChange={updatePayment}
+            warehouses={warehouses}
+            warehouseId={warehouseId}
+            setWarehouseId={setWarehouseId}
+            perLineWarehouse={perLineWarehouse}
+            setPerLineWarehouse={setPerLineWarehouse}
             actions={isEditMode ? editActions : viewActions}
         />
     );

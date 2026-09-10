@@ -19,8 +19,27 @@ jest.mock('@/lib/api', () => ({
         getSalesList: jest.fn(),
         getSale: jest.fn(),
         createReturn: jest.fn(),
+        getInventoryWarehouses: jest.fn(),
+        getInventorySettings: jest.fn(),
     },
 }));
+
+const MAIN_WAREHOUSE = {
+    id: 'wh-main',
+    name: 'Main Store',
+    code: 'WH-MAIN',
+    store_id: 'store-1',
+    is_default: true,
+    is_active: true,
+};
+const ANNEX_WAREHOUSE = {
+    id: 'wh-annex',
+    name: 'Annex',
+    code: 'WH-ANNEX',
+    store_id: 'store-1',
+    is_default: false,
+    is_active: true,
+};
 
 const SALE = {
     id: 'sale-1',
@@ -63,6 +82,10 @@ describe('NewSalesReturnPage', () => {
         });
         (api.getSale as jest.Mock).mockResolvedValue(SALE);
         (api.createReturn as jest.Mock).mockResolvedValue({ id: 'return-1' });
+        // One warehouse — the shape of almost every tenant, and the case
+        // where no picker must appear at all.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
     });
 
     it('renders the sale lookup instead of a product search', async () => {
@@ -135,11 +158,66 @@ describe('NewSalesReturnPage', () => {
             expect(api.createReturn).toHaveBeenCalledWith({
                 storeId: 'store-1',
                 saleId: 'sale-1',
-                items: [{ saleItemId: 'line-1', quantity: 3 }],
+                // The single warehouse the shop has; the picker stayed hidden.
+                warehouseId: 'wh-main',
+                items: [{ saleItemId: 'line-1', quantity: 3, warehouseId: undefined }],
                 reason: 'Damaged',
             });
         });
         expect(push).toHaveBeenCalledWith('/sales/returns');
+    });
+
+    it('puts the goods back where the sale took them from', async () => {
+        // The point of the picker on a return: default to the sale's own
+        // warehouse, not the branch default, and say so on screen.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        (api.getSale as jest.Mock).mockResolvedValue({ ...SALE, warehouse_id: 'wh-annex' });
+
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+        await screen.findByText('Rice 5kg');
+
+        expect((screen.getByLabelText('Warehouse') as HTMLSelectElement).value).toBe('wh-annex');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Return/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createReturn).toHaveBeenCalledWith(
+                expect.objectContaining({ warehouseId: 'wh-annex' }),
+            );
+        });
+    });
+
+    it('reveals the per-line column when the sale itself was split', async () => {
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        (api.getSale as jest.Mock).mockResolvedValue({
+            ...SALE,
+            warehouse_id: 'wh-main',
+            items: [{ ...SALE.items[0], warehouse_id: 'wh-annex' }],
+        });
+
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+        await screen.findByText('Rice 5kg');
+
+        // Not hidden behind the switch: a warehouse steering a line has to be
+        // visible on the line, or the return silently restocks elsewhere.
+        expect((screen.getByLabelText('Warehouse — Rice 5kg') as HTMLSelectElement).value)
+            .toBe('wh-annex');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Return/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createReturn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    items: [expect.objectContaining({ warehouseId: 'wh-annex' })],
+                }),
+            );
+        });
     });
 
     it('keeps the submit button disabled until a sale is loaded', async () => {

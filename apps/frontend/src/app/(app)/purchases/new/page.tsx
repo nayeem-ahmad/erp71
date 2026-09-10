@@ -11,12 +11,14 @@ import { useI18n } from '@/lib/i18n';
 import { getWorkspaceItem } from '@/lib/session-store';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
 import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
+import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import ProductSearch, { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import type { PartyOption } from '@/components/document-entry/PartySearchSelect';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem } from '@/lib/hooks/useNewSaleCart';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SupplierSelection, { type NewSupplierDraft } from '../components/SupplierSelection';
 import PurchaseTotals, {
     computePurchaseTotals,
@@ -52,6 +54,18 @@ function NewPurchasePageContent() {
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
+
+    // Where the goods are received. `defaultWarehouseId` is what the server
+    // would have chosen anyway, so the strip shows the truth from the first
+    // render instead of a blank that quietly resolves on save.
+    const { warehouses, defaultWarehouseId } = useWarehouses('purchase');
+    const [warehouseId, setWarehouseId] = useState('');
+    const [perLineWarehouse, setPerLineWarehouse] = useState(false);
+    useEffect(() => {
+        setWarehouseId((current) => current || defaultWarehouseId);
+    }, [defaultWarehouseId]);
+
+    const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
 
     const totals = useMemo(() => computePurchaseTotals(items, adjustments), [items, adjustments]);
 
@@ -136,6 +150,7 @@ function NewPurchasePageContent() {
                     // The purchase payload carries no stock rows, so leave
                     // availability unknown rather than claiming zero.
                     availableQty: undefined,
+                    warehouseId: item.warehouse_id ?? undefined,
                 })));
                 setSupplier(purchase.supplier
                     ? { ...purchase.supplier, id: purchase.supplier_id ?? purchase.supplier.id }
@@ -147,6 +162,12 @@ function NewPurchasePageContent() {
                 });
                 setNotes(purchase.notes ?? '');
                 setDuplicatedFrom(purchase.purchase_number ?? '');
+                // A copy buys the same goods into the same place unless the user
+                // says otherwise, per-line splits included.
+                if (purchase.warehouse_id) setWarehouseId(purchase.warehouse_id);
+                if ((purchase.items ?? []).some((item: any) => item.warehouse_id)) {
+                    setPerLineWarehouse(true);
+                }
             })
             .catch((error: unknown) => {
                 console.error('Failed to load the purchase to duplicate', error);
@@ -210,10 +231,15 @@ function NewPurchasePageContent() {
                           address: supplierDraft.address || undefined,
                       }
                     : undefined,
+                warehouseId: warehouseId || undefined,
                 items: items.map((item) => ({
                     productId: item.productId,
                     quantity: item.quantity,
                     unitCost: item.price,
+                    // Only sent while the per-line column is showing: a line
+                    // keeps its override in state when the column is hidden, and
+                    // posting one the user cannot see would be a trap.
+                    warehouseId: perLineWarehouse ? item.warehouseId : undefined,
                 })),
                 taxAmount: totals.taxAmount,
                 discountAmount: totals.discountAmount,
@@ -253,7 +279,15 @@ function NewPurchasePageContent() {
                     currentUser={currentUser}
                     showRefNumber={false}
                     showDate={false}
-                />
+                >
+                    <WarehouseMetaFields
+                        warehouses={warehouses}
+                        value={warehouseId}
+                        onChange={setWarehouseId}
+                        perLine={perLineWarehouse}
+                        onPerLineChange={setPerLineWarehouse}
+                    />
+                </DocumentMetaBar>
             }
             partyPicker={
                 <SupplierSelection
@@ -289,6 +323,9 @@ function NewPurchasePageContent() {
                     historyType="purchase"
                     historyPartyId={supplier?.id}
                     historyPartyName={supplier?.name}
+                    warehouses={perLineWarehouse ? warehouses : []}
+                    entryWarehouseName={entryWarehouseName}
+                    warehouseLabel={t.common.warehouse}
                 />
             }
             note={

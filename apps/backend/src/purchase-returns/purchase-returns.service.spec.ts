@@ -2,13 +2,46 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PurchaseReturnsService } from './purchase-returns.service';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    resolveWarehouseId,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
     resolveWarehouseId: jest.fn(),
+    resolveEntryWarehouses: jest.fn(),
+    reversalWarehouseResolver: jest.fn(),
+    usableWarehouseIds: jest.fn(),
 }));
+
+/**
+ * The warehouse helpers stubbed to the shape the real ones return, so these
+ * tests stay about what the service does with a warehouse rather than about
+ * how one is resolved — `inventory.utils.spec.ts` covers that.
+ */
+function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
+    (resolveWarehouseId as jest.Mock).mockResolvedValue(defaultWarehouseId);
+    (resolveEntryWarehouses as jest.Mock).mockImplementation(
+        async (_tx: unknown, _tenantId: string, _storeId: string, entryWarehouseId?: string) => {
+            const entryId = entryWarehouseId ?? defaultWarehouseId;
+            return {
+                entryWarehouseId: entryId,
+                warehouseIdFor: (lineWarehouseId?: string | null) => lineWarehouseId || entryId,
+            };
+        },
+    );
+    (reversalWarehouseResolver as jest.Mock).mockImplementation(
+        (_tx: unknown, _tenantId: string, _storeId: string, documentWarehouseId?: string | null) =>
+            async (lineWarehouseId?: string | null) =>
+                lineWarehouseId ?? documentWarehouseId ?? defaultWarehouseId,
+    );
+    (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
+}
 
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
@@ -82,7 +115,7 @@ describe('PurchaseReturnsService', () => {
         }).compile();
 
         service = module.get<PurchaseReturnsService>(PurchaseReturnsService);
-        (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+        stubWarehouseResolution();
         (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
@@ -162,6 +195,49 @@ describe('PurchaseReturnsService', () => {
             }),
         });
         expect(result.id).toBe('pret-1');
+    });
+
+    it('sends the goods back out of the warehouse the purchase received them into', async () => {
+        tx.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+        tx.purchase.findFirst.mockResolvedValue({
+            id: 'purchase-1',
+            tenant_id: 'tenant-1',
+            store_id: 'store-1',
+            supplier_id: null,
+            supplier: null,
+            warehouse_id: 'wh-main',
+            items: [
+                { id: 'item-1', product_id: 'prod-1', unit_cost: 10, quantity: 4, warehouse_id: null, returnItems: [] },
+                { id: 'item-2', product_id: 'prod-2', unit_cost: 10, quantity: 4, warehouse_id: 'wh-annex', returnItems: [] },
+            ],
+        });
+        tx.purchaseReturn.count.mockResolvedValue(0);
+        tx.purchaseReturn.create.mockResolvedValue({ id: 'pret-2', return_number: 'PRET-00002' });
+        tx.purchaseReturn.findFirst.mockResolvedValue({ id: 'pret-2', return_number: 'PRET-00002' });
+        (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set(['wh-main', 'wh-annex']));
+
+        await service.create('tenant-1', 'user-1', {
+            storeId: 'store-1',
+            purchaseId: 'purchase-1',
+            items: [
+                { purchaseItemId: 'item-1', quantity: 1 },
+                { purchaseItemId: 'item-2', quantity: 1 },
+            ],
+        });
+
+        expect(tx.purchaseReturn.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ warehouse_id: 'wh-main' }),
+            }),
+        );
+        expect(applyInventoryMovement).toHaveBeenCalledWith(
+            tx,
+            expect.objectContaining({ productId: 'prod-1', warehouseId: 'wh-main', quantityDelta: -1 }),
+        );
+        expect(applyInventoryMovement).toHaveBeenCalledWith(
+            tx,
+            expect.objectContaining({ productId: 'prod-2', warehouseId: 'wh-annex', quantityDelta: -1 }),
+        );
     });
 
     it('rejects create when purchase item is not part of the source purchase', async () => {
@@ -335,7 +411,7 @@ describe('PurchaseReturnsService — returns without a purchase', () => {
             providers: [PurchaseReturnsService, { provide: DatabaseService, useValue: db }],
         }).compile();
         service = module.get<PurchaseReturnsService>(PurchaseReturnsService);
-        (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+        stubWarehouseResolution();
         (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
         (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted' });
     });

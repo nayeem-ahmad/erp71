@@ -9,6 +9,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
+import WarehouseSelect from '@/components/document-entry/WarehouseSelect';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
 
 interface PurchaseReturnItem {
     id: string;
@@ -20,6 +22,8 @@ interface PurchaseLine {
     quantity: number;
     unit_cost: string | number;
     product_id: string;
+    /** Set only where the line overrode the purchase's own warehouse. */
+    warehouse_id?: string | null;
     product?: {
         name: string;
         sku?: string | null;
@@ -33,6 +37,7 @@ interface PurchaseRecord {
     created_at: string;
     total_amount: string | number;
     store_id: string;
+    warehouse_id?: string | null;
     supplier?: {
         name: string;
     } | null;
@@ -63,6 +68,16 @@ export default function CreatePurchaseReturnModal({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
 
+    // Which warehouse the goods leave. Seeded from the purchase below, so
+    // returning a delivery that was unloaded into the annex takes it back out
+    // of the annex; `returnWarehouses` keys the whole control off there being a
+    // genuine choice to make.
+    const { warehouses, defaultWarehouseId } = useWarehouses();
+    const [warehouseId, setWarehouseId] = useState('');
+    const [lineWarehouses, setLineWarehouses] = useState<Record<string, string>>({});
+    const showWarehouse = warehouses.length > 1;
+    const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
+
     useEffect(() => {
         if (!isOpen) {
             return;
@@ -86,6 +101,7 @@ export default function CreatePurchaseReturnModal({
         setReferenceNumber('');
         setNotes('');
         setReturnQuantities({});
+        setLineWarehouses({});
         setSubmitting(false);
         setError('');
     }, [initialPurchaseId, isOpen]);
@@ -121,6 +137,8 @@ export default function CreatePurchaseReturnModal({
     useEffect(() => {
         if (!selectedPurchase) {
             setReturnQuantities({});
+            setLineWarehouses({});
+            setWarehouseId(defaultWarehouseId);
             return;
         }
 
@@ -133,7 +151,16 @@ export default function CreatePurchaseReturnModal({
 
             return next;
         });
-    }, [selectedPurchase]);
+
+        setWarehouseId(selectedPurchase.warehouse_id || defaultWarehouseId);
+        // Only genuine overrides are seeded; a line that followed its purchase
+        // keeps following the return, which is what the empty value means.
+        setLineWarehouses(Object.fromEntries(
+            selectedPurchase.items
+                .filter((item) => item.warehouse_id)
+                .map((item) => [item.id, item.warehouse_id as string]),
+        ));
+    }, [selectedPurchase, defaultWarehouseId]);
 
     const remainingQuantity = (item: PurchaseLine) => {
         const returned = (item.returnItems || []).reduce((sum, returnItem) => sum + returnItem.quantity, 0);
@@ -194,7 +221,11 @@ export default function CreatePurchaseReturnModal({
         }
 
         const items = selectedItems
-            .map((item) => ({ purchaseItemId: item.id, quantity: returnQuantities[item.id] || 0 }))
+            .map((item) => ({
+                purchaseItemId: item.id,
+                quantity: returnQuantities[item.id] || 0,
+                warehouseId: showWarehouse ? lineWarehouses[item.id] || undefined : undefined,
+            }))
             .filter((item) => item.quantity > 0);
 
         if (items.length === 0) {
@@ -211,6 +242,7 @@ export default function CreatePurchaseReturnModal({
                 purchaseId: selectedPurchase.id,
                 referenceNumber: referenceNumber || undefined,
                 notes: notes || undefined,
+                warehouseId: showWarehouse ? warehouseId || undefined : undefined,
                 items,
             });
 
@@ -359,6 +391,19 @@ export default function CreatePurchaseReturnModal({
                                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                             />
                                         </div>
+                                        {showWarehouse && (
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">
+                                                    {t.common.warehouse}
+                                                </label>
+                                                <WarehouseSelect
+                                                    warehouses={warehouses}
+                                                    value={warehouseId}
+                                                    onChange={setWarehouseId}
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
@@ -374,6 +419,9 @@ export default function CreatePurchaseReturnModal({
                                                 <thead>
                                                     <tr className="border-b border-gray-100 bg-gray-50/80">
                                                         <th className="text-start p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                                        {showWarehouse && (
+                                                            <th className="text-start p-3 text-xs font-medium text-gray-500 w-40">{t.common.warehouse}</th>
+                                                        )}
                                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.purchased}</th>
                                                         <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.remaining}</th>
                                                         <th className="text-end p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
@@ -392,6 +440,22 @@ export default function CreatePurchaseReturnModal({
                                                                     <span className="text-sm font-bold text-gray-900">{item.product?.name || 'Unknown item'}</span>
                                                                     <span className="text-xs text-gray-400 ms-2">{item.product?.sku || ''}</span>
                                                                 </td>
+                                                                {showWarehouse && (
+                                                                    <td className="p-3">
+                                                                        <WarehouseSelect
+                                                                            warehouses={warehouses}
+                                                                            value={lineWarehouses[item.id] ?? ''}
+                                                                            onChange={(lineWarehouseId) => setLineWarehouses((current) => ({
+                                                                                ...current,
+                                                                                [item.id]: lineWarehouseId,
+                                                                            }))}
+                                                                            perLine
+                                                                            entryWarehouseName={entryWarehouseName}
+                                                                            aria-label={`${t.common.warehouse} — ${item.product?.name || item.id}`}
+                                                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                                                                        />
+                                                                    </td>
+                                                                )}
                                                                 <td className="p-3 text-center text-sm font-bold text-gray-700">{item.quantity}</td>
                                                                 <td className="p-3 text-center">
                                                                     <span className={`text-sm font-bold ${remaining > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>

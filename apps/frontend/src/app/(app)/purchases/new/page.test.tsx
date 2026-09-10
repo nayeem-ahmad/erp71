@@ -25,6 +25,8 @@ jest.mock('@/lib/api', () => ({
         getProductRateHistory: jest.fn(),
         createPurchase: jest.fn(),
         getPurchase: jest.fn(),
+        getInventoryWarehouses: jest.fn(),
+        getInventorySettings: jest.fn(),
     },
 }));
 
@@ -34,6 +36,23 @@ const COFFEE = {
     sku: 'CB-001',
     price: '10.00',
     stocks: [{ quantity: 4 }, { quantity: 2 }],
+};
+
+const MAIN_WAREHOUSE = {
+    id: 'wh-main',
+    name: 'Main Store',
+    code: 'WH-MAIN',
+    store_id: 'store-1',
+    is_default: true,
+    is_active: true,
+};
+const ANNEX_WAREHOUSE = {
+    id: 'wh-annex',
+    name: 'Annex',
+    code: 'WH-ANNEX',
+    store_id: 'store-1',
+    is_default: false,
+    is_active: true,
 };
 
 /** The rate hint renders on every staged product; most cases don't exercise it. */
@@ -54,6 +73,10 @@ describe('NewPurchasePage', () => {
             id: 'purchase-2',
             purchase_number: 'PUR-00002',
         });
+        // One warehouse by default — which is the shape of almost every tenant,
+        // and the case where no picker must appear at all.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({ default_purchase_warehouse_id: null });
 
         Object.defineProperty(window, 'localStorage', {
             value: {
@@ -63,6 +86,11 @@ describe('NewPurchasePage', () => {
             },
             writable: true,
         });
+        // The active branch really lives in sessionStorage (it is per tab), and
+        // jest.setup clears storage between tests. Seeding it directly beats
+        // relying on the one-shot localStorage bootstrap, which only runs for
+        // whichever test happens to read the workspace first.
+        window.sessionStorage.setItem('store_id', 'store-1');
     });
 
     const renderPage = async () => {
@@ -113,11 +141,80 @@ describe('NewPurchasePage', () => {
                     storeId: 'store-1',
                     supplierId: 'sup-1',
                     freightAmount: 100,
-                    items: [{ productId: 'prod-1', quantity: 4, unitCost: 12.5 }],
+                    items: [
+                        { productId: 'prod-1', quantity: 4, unitCost: 12.5, warehouseId: undefined },
+                    ],
                 }),
             );
         });
         expect(push).toHaveBeenCalledWith('/purchases/list');
+    });
+
+    it('hides the warehouse controls entirely for a one-warehouse shop', async () => {
+        await renderPage();
+
+        expect(screen.queryByLabelText('Warehouse')).not.toBeInTheDocument();
+        expect(screen.queryByText('Per-line warehouse')).not.toBeInTheDocument();
+    });
+
+    it('posts to the chosen warehouse, and per line once the column is on', async () => {
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        await renderPage();
+
+        // Opens on the branch default rather than blank, so the strip states
+        // where the goods are going before anything is typed.
+        const picker = await screen.findByLabelText('Warehouse');
+        expect((picker as HTMLSelectElement).value).toBe('wh-main');
+
+        await stageProduct();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+        fireEvent.change(screen.getByLabelText('Warehouse — Coffee Beans'), {
+            target: { value: 'wh-annex' },
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createPurchase).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    warehouseId: 'wh-main',
+                    items: [expect.objectContaining({ warehouseId: 'wh-annex' })],
+                }),
+            );
+        });
+    });
+
+    it('does not post a line override the user cannot see', async () => {
+        // Turning the column off is how a user undoes a split, so the override
+        // it leaves behind must not still reach the server.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        await renderPage();
+        await screen.findByLabelText('Warehouse');
+
+        await stageProduct();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+        fireEvent.change(screen.getByLabelText('Warehouse — Coffee Beans'), {
+            target: { value: 'wh-annex' },
+        });
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createPurchase).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    items: [expect.objectContaining({ warehouseId: undefined })],
+                }),
+            );
+        });
     });
 
     it('creates a supplier inline with the purchase', async () => {

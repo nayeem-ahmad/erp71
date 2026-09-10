@@ -23,6 +23,12 @@ export interface LineItem {
     sourceLineId?: string;
     /** Upper bound on quantity, e.g. units of a sale line not yet returned. */
     maxQuantity?: number;
+    /**
+     * Warehouse override for this line. Undefined — the normal case — means the
+     * line follows whatever warehouse the document itself is posting to, and
+     * nothing is stored against the line.
+     */
+    warehouseId?: string;
 }
 
 export interface Payment {

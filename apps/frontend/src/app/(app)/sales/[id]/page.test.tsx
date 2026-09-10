@@ -32,6 +32,8 @@ jest.mock('@/lib/api', () => ({
         getProducts: jest.fn(),
         getPaymentMethods: jest.fn(),
         searchProductsByQuantity: jest.fn(),
+        getInventoryWarehouses: jest.fn().mockResolvedValue([]),
+        getInventorySettings: jest.fn().mockResolvedValue({}),
     },
 }));
 

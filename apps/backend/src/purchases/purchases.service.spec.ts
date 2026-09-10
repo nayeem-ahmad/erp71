@@ -2,13 +2,46 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PurchasesService } from './purchases.service';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    resolveWarehouseId,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
     resolveWarehouseId: jest.fn(),
+    resolveEntryWarehouses: jest.fn(),
+    reversalWarehouseResolver: jest.fn(),
+    usableWarehouseIds: jest.fn(),
 }));
+
+/**
+ * The warehouse helpers stubbed to the shape the real ones return, so these
+ * tests stay about what the service does with a warehouse rather than about
+ * how one is resolved — `inventory.utils.spec.ts` covers that.
+ */
+function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
+    (resolveWarehouseId as jest.Mock).mockResolvedValue(defaultWarehouseId);
+    (resolveEntryWarehouses as jest.Mock).mockImplementation(
+        async (_tx: unknown, _tenantId: string, _storeId: string, entryWarehouseId?: string) => {
+            const entryId = entryWarehouseId ?? defaultWarehouseId;
+            return {
+                entryWarehouseId: entryId,
+                warehouseIdFor: (lineWarehouseId?: string | null) => lineWarehouseId || entryId,
+            };
+        },
+    );
+    (reversalWarehouseResolver as jest.Mock).mockImplementation(
+        (_tx: unknown, _tenantId: string, _storeId: string, documentWarehouseId?: string | null) =>
+            async (lineWarehouseId?: string | null) =>
+                lineWarehouseId ?? documentWarehouseId ?? defaultWarehouseId,
+    );
+    (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
+}
 
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
@@ -69,7 +102,7 @@ describe('PurchasesService', () => {
         }).compile();
 
         service = module.get<PurchasesService>(PurchasesService);
-        (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+        stubWarehouseResolution();
         (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
@@ -110,6 +143,8 @@ describe('PurchasesService', () => {
                 quantity: 4,
                 unit_cost: 8.5,
                 line_total: 34,
+                // Null, not 'wh-1': only a line that overrode the bill stores one.
+                warehouse_id: null,
             },
         });
         expect(applyInventoryMovement).toHaveBeenCalledWith(
