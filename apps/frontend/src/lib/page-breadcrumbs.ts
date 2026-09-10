@@ -38,7 +38,7 @@ const moduleRoots: Record<ModuleKey, string> = {
     storefront: routes.storefront.root,
     team: routes.team,
     help: routes.help,
-    manufacturing: routes.manufacturing,
+    manufacturing: routes.manufacturing.root,
     projects: routes.projects.root,
     profile: routes.profile,
     status: routes.status,
