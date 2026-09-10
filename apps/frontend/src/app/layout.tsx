@@ -84,9 +84,35 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     const initialLocale = resolveLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value ?? DEFAULT_LOCALE);
     const localeInfo = getLocaleConfig(initialLocale);
 
+    /*
+     * The font variables belong on `<html>`, not `<body>`.
+     *
+     * Tailwind's preflight sets `html { font-family: theme('fontFamily.sans') }`,
+     * which compiles to `var(--font-inter), var(--font-bengali), var(--font-arabic), ...`.
+     * With the `next/font` variable classes on `<body>`, those custom properties
+     * are undefined at `<html>`, so the whole declaration is invalid at
+     * computed-value time and `font-family` falls back to the browser default —
+     * which `<body>` then inherits, since preflight's `body` rule sets only
+     * margin and line-height. The intended stack reached exactly those subtrees
+     * that happened to carry an explicit `font-sans`; everything else (the
+     * storefront, the public quotation view, `/demo`, `/app-entry`, the label
+     * sheet, and every dropdown portalled to `document.body`) rendered in the
+     * browser's default font. Under `lang="bn"` that default is resolved
+     * per-language, so Bangla users saw a system Bengali face applied to Latin
+     * text too.
+     *
+     * `font-sans` on `<body>` is deliberate belt-and-braces: the variables are
+     * in scope there either way, so the app keeps its typeface even if the
+     * preflight rule is ever lost.
+     */
     return (
-        <html lang={localeInfo.htmlLang} dir={localeInfo.dir} suppressHydrationWarning>
-            <body className={`${inter.variable} ${notoSansBengali.variable} ${notoSansArabic.variable}`}>
+        <html
+            lang={localeInfo.htmlLang}
+            dir={localeInfo.dir}
+            className={`${inter.variable} ${notoSansBengali.variable} ${notoSansArabic.variable}`}
+            suppressHydrationWarning
+        >
+            <body className="font-sans">
                 <I18nProvider initialLocale={initialLocale}>{children}</I18nProvider>
             </body>
         </html>
