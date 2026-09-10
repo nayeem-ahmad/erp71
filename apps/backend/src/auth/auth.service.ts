@@ -1325,6 +1325,11 @@ export class AuthService {
         return {
             id: membership.tenant.id,
             name: membership.tenant.name,
+            // One of the names a `/w/<slug>` link can address this workspace by
+            // (see `lib/workspace-slug.ts`): already unique platform-wide, and
+            // already the owner's own answer to "what is this shop called in a
+            // URL". Public information — it is in every storefront address.
+            storefront_slug: membership.tenant.storefront_slug ?? null,
             platform_features: platformFeatures,
             default_locale: membership.tenant.default_locale,
             onboarding_dismissed: !!membership.tenant.onboarding_dismissed_at,

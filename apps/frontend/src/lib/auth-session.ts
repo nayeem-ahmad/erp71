@@ -2,6 +2,7 @@ import { api } from './api';
 import { syncLocalePreferenceFromSession } from './localization/preference';
 import { routes } from './routes';
 import { clearStoredSession } from './session-expiry';
+import { resolveWorkspaceSlug } from './workspace-slug';
 import {
     clearLastTenantId,
     clearWorkspace,
@@ -119,6 +120,16 @@ function rememberCurrentTenant() {
 
 export type StoreAuthResult = { redirectTo: string };
 
+/** Options a caller can pass through `storeAuthResponse`. */
+export type StoreAuthOptions = {
+    /**
+     * A workspace named in the URL the user arrived on (`/w/<slug>` or
+     * `?workspace=`). When it resolves to exactly one of their shops, that shop
+     * is entered and the chooser is skipped.
+     */
+    workspaceSlug?: string | null;
+};
+
 /** Remove a key from both backends, whichever one it happens to sit in. */
 function removeStorage(key: string): void {
     localStorage.removeItem(key);
@@ -135,7 +146,11 @@ export function clearSidebarLayoutState(): void {
     removeStorage('sidebar-width');
 }
 
-export async function storeAuthResponse(res: any, rememberMe = false): Promise<StoreAuthResult> {
+export async function storeAuthResponse(
+    res: any,
+    rememberMe = false,
+    options: StoreAuthOptions = {},
+): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
     setCredentials(data, rememberMe);
     // Fresh login → start from a collapsed, default-width sidebar.
@@ -157,10 +172,18 @@ export async function storeAuthResponse(res: any, rememberMe = false): Promise<S
 
     const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(meRes);
 
-    // More than one workspace available → let the user choose which to enter.
+    // More than one workspace available → let the user choose which to enter,
+    // unless the URL they arrived on already said which one they meant.
     if (count > 1) {
+        const named = resolveWorkspaceSlug(tenants, options.workspaceSlug);
+        if (named.status === 'matched') {
+            applyTenantContext(named.tenant);
+            return { redirectTo: routes.home };
+        }
         clearActiveContext();
-        return { redirectTo: '/select-account' };
+        // The slug rides along even when it missed: `/select-account` resolves
+        // it again and tells the user why they are looking at a list.
+        return { redirectTo: routes.selectAccount };
     }
 
     // Exactly one shop → enter it directly.

@@ -63,7 +63,28 @@ You can return to any setting later via **Settings**.
 - If Two-Factor Authentication (2FA) is enabled, enter the six-digit code from your authenticator app.
 - To reset a forgotten password, click **Forgot password?** and follow the email link.
 
-### 1.4 Switching Language
+### 1.4 Opening a Specific Shop Directly
+
+If you belong to more than one shop, signing in normally shows a **Choose a workspace** screen. To skip it, use a workspace link:
+
+```
+https://app.erp71.com/w/karim-electronics
+```
+
+The part after `/w/` names the shop. It can be your shop's name written in lowercase with hyphens (`Karim Electronics` → `karim-electronics`) or, if you have an online storefront, your storefront address. The exact link for each of your shops is shown under its name on the **Choose a workspace** screen.
+
+Anything you add after the shop name is the page it opens, so you can bookmark a shop *and* a screen at once:
+
+```
+https://app.erp71.com/w/karim-electronics/sales/pos      → that shop's POS
+https://app.erp71.com/w/karim-electronics/inventory      → that shop's stock
+```
+
+If you are not signed in, the link asks you to sign in first and then takes you straight there. Useful for the counter tablet's home screen, a browser bookmark, or a link shared in your shop's group chat.
+
+You can only open shops you are already a member of. A link naming a shop you do not belong to simply shows the workspace list again.
+
+### 1.5 Switching Language
 
 Go to **Settings → Localization** to switch the entire interface between English and Bangla (বাংলা). Bangla number formatting (০–৯) can be turned on separately.
 
