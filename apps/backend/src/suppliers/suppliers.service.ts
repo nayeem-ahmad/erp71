@@ -18,6 +18,7 @@ import {
     UpdateSupplierDto,
 } from './supplier.dto';
 import { runImport, ImportResult } from '../common/import.util';
+import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 const SUPPLIER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -210,8 +211,11 @@ export class SuppliersService {
         }
 
         const purchaseIds = allocations.map((a) => a.purchaseId);
+        // A cancelled bill is not payable, so it must not be findable here:
+        // the loop below reports an unmatched id as "does not belong to this
+        // supplier", which is the right refusal for an allocation against one.
         const purchases = await tx.purchase.findMany({
-            where: { id: { in: purchaseIds }, tenant_id: tenantId, supplier_id: supplierId },
+            where: { id: { in: purchaseIds }, tenant_id: tenantId, supplier_id: supplierId, ...ACTIVE_PURCHASE },
             select: { id: true, total_amount: true, paid_amount: true, purchase_number: true },
         });
         const purchaseById = new Map<string, any>(purchases.map((p: any) => [p.id, p]));
@@ -793,7 +797,7 @@ export class SuppliersService {
         if (!supplier) throw new NotFoundException('Supplier not found');
 
         const openBills = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId, supplier_id: supplierId, payment_status: { not: 'PAID' } },
+            where: { tenant_id: tenantId, supplier_id: supplierId, payment_status: { not: 'PAID' }, ...ACTIVE_PURCHASE },
             select: {
                 id: true,
                 purchase_number: true,

@@ -9,6 +9,13 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
+import {
+    fillTemplate,
+    useCrmMessageTemplates,
+    useTemplateIdentity,
+    type CrmMessageTemplate,
+} from '@/lib/crm-message-templates';
+import { formatDate } from '@/lib/format';
 
 /** What `POST /crm/activities` wants: exactly one of the two ids. */
 export type CrmActivityTarget = { lead_id: string } | { customer_id: string };
@@ -33,6 +40,12 @@ type Props = {
      * opening the lead it belongs to.
      */
     target?: CrmActivityTarget;
+    /**
+     * Who `target` names, when the caller has it. Only feeds the `{{name}}` /
+     * `{{phone}}` placeholders in a picked message template — the ids above are
+     * what actually gets saved, so a missing label costs the tokens, nothing else.
+     */
+    targetLabel?: { name?: string | null; phone?: string | null };
     /** Pre-fills the log form, used by the AI drafter on the lead page. */
     draft?: { channelCode?: string; summary: string } | null;
     onClose: () => void;
@@ -55,11 +68,12 @@ const emptyPlan = { subject: '', due_at: '', purpose: '', notes: '', assigned_to
 export default function CrmActivityComposer({
     mode,
     target,
+    targetLabel,
     draft,
     onClose,
     onSaved,
 }: Readonly<Props>) {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.crm.activities;
 
     const { options: channels } = useLeadTaxonomy('channels');
@@ -77,6 +91,26 @@ export default function CrmActivityComposer({
 
     const planAssigneeId = useId();
     const targetInputId = useId();
+    const templateSelectId = useId();
+    // `Field` associates its label only when handed the control's id. The
+    // assignee and target boxes already carried one; the rest are here for the
+    // same reason — an unlabelled control is unreachable by name.
+    const logChannelId = useId();
+    const logSummaryId = useId();
+    const logOutcomeId = useId();
+    const planSubjectId = useId();
+    const planDueId = useId();
+    const planPurposeId = useId();
+    const planNotesId = useId();
+
+    // The log form knows which channel it is on, so it asks only for the
+    // templates that channel offers. The schedule form has no channel field, so
+    // it asks for all of them.
+    const { templates } = useCrmMessageTemplates(
+        mode === 'log' ? 'LOG' : 'SCHEDULE',
+        mode === 'log' ? log.channel || undefined : undefined,
+    );
+    const identity = useTemplateIdentity();
 
     // The channel list arrives after mount, so the select cannot be initialised
     // from it. Fill it once, and only while untouched.
@@ -143,6 +177,84 @@ export default function CrmActivityComposer({
         if (!chosen) return null;
         return chosen.kind === 'lead' ? { lead_id: chosen.id } : { customer_id: chosen.id };
     }, [target, chosen]);
+
+    /**
+     * What a template's `{{tokens}}` resolve to. The name and phone come from
+     * whoever the dialog is pointed at — the row picked here, or the label the
+     * lead / customer page handed down. Neither is guaranteed, and a token with
+     * no value is left standing rather than blanked; see `fillTemplate`.
+     */
+    const templateVars = useMemo(
+        () => ({
+            name: chosen?.name ?? targetLabel?.name ?? null,
+            phone: chosen?.phone ?? targetLabel?.phone ?? null,
+            user: identity.user,
+            business: identity.business,
+            date: formatDate(new Date(), locale),
+        }),
+        [chosen, targetLabel, identity, locale],
+    );
+
+    /**
+     * Drop a template into the form.
+     *
+     * Replaces the fields the template supplies and leaves the rest alone — the
+     * picker sits above them and the hint says as much, so this is the action
+     * the person just asked for rather than a surprise. Everything stays
+     * editable; what is saved is whatever is in the boxes at that point.
+     */
+    const applyTemplate = useCallback(
+        (template: CrmMessageTemplate) => {
+            const body = fillTemplate(template.body, templateVars);
+            if (mode === 'log') {
+                // Only the summary: the channel is not the template's to set.
+                // The list is already narrowed to the channel the form is on, so
+                // a pinned template can only ever name the channel already
+                // chosen — and the channel is what the rep is asserting actually
+                // happened, which nothing picked from a list should overrule.
+                setLog((prev) => ({ ...prev, summary: body }));
+                return;
+            }
+            setPlan((prev) => ({
+                ...prev,
+                // A template with no subject of its own still has to leave one
+                // behind — `subject` is what the activity is listed under, and
+                // the template's own name is the closest thing to a title it has.
+                subject: template.subject ? fillTemplate(template.subject, templateVars) : template.name,
+                notes: body,
+                purpose: template.purpose?.id ?? prev.purpose,
+            }));
+        },
+        [mode, templateVars],
+    );
+
+    /**
+     * Rendered in both dialogs. Resets to the placeholder after each pick so the
+     * same template can be re-applied — a rep who has edited the text into a
+     * corner wants the original back, and a `<select>` that keeps its value
+     * fires no change event the second time.
+     *
+     * Held back in the log dialog until the channel is settled: the channel list
+     * arrives after mount, and offering the unnarrowed list for those few frames
+     * would let someone pick a template meant for a different channel.
+     */
+    const templatePicker = templates.length > 0 && (mode !== 'log' || Boolean(log.channel)) && (
+        <Field label={m.fields.template} hint={m.fields.templateHint} htmlFor={templateSelectId}>
+            <Select
+                id={templateSelectId}
+                value=""
+                onChange={(e) => {
+                    const picked = templates.find((tpl) => tpl.id === e.target.value);
+                    if (picked) applyTemplate(picked);
+                }}
+            >
+                <option value="">{m.fields.templatePlaceholder}</option>
+                {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+            </Select>
+        </Field>
+    );
 
     const savePlan = useCallback(async () => {
         if (!resolvedTarget || !plan.subject.trim()) return;
@@ -253,23 +365,27 @@ export default function CrmActivityComposer({
                 <ModalHeader title={m.logActivity} onClose={onClose} closeLabel={t.common.close} />
                 <div className="space-y-3 overflow-y-auto p-4">
                     {targetPicker}
-                    <Field label={m.fields.channel} required>
-                        <Select value={log.channel} onChange={(e) => setLog({ ...log, channel: e.target.value })}>
+                    {/* Above the picker on purpose: the channel is what narrows
+                        the template list, so it has to be settled first. */}
+                    <Field label={m.fields.channel} required htmlFor={logChannelId}>
+                        <Select id={logChannelId} value={log.channel} onChange={(e) => setLog({ ...log, channel: e.target.value })}>
                             {channels.map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                         </Select>
                     </Field>
-                    <Field label={m.fields.summary} required>
+                    {templatePicker}
+                    <Field label={m.fields.summary} required htmlFor={logSummaryId}>
                         <Textarea
+                            id={logSummaryId}
                             rows={3}
                             value={log.summary}
                             onChange={(e) => setLog({ ...log, summary: e.target.value })}
                             placeholder={m.fields.summaryPlaceholder}
                         />
                     </Field>
-                    <Field label={m.fields.outcome}>
-                        <Input value={log.outcome} onChange={(e) => setLog({ ...log, outcome: e.target.value })} />
+                    <Field label={m.fields.outcome} htmlFor={logOutcomeId}>
+                        <Input id={logOutcomeId} value={log.outcome} onChange={(e) => setLog({ ...log, outcome: e.target.value })} />
                     </Field>
                 </div>
                 <ModalFooter>
@@ -291,22 +407,25 @@ export default function CrmActivityComposer({
             <ModalHeader title={m.scheduleActivity} onClose={onClose} closeLabel={t.common.close} />
             <div className="space-y-3 overflow-y-auto p-4">
                 {targetPicker}
-                <Field label={m.fields.subject} required>
+                {templatePicker}
+                <Field label={m.fields.subject} required htmlFor={planSubjectId}>
                     <Input
+                        id={planSubjectId}
                         value={plan.subject}
                         onChange={(e) => setPlan({ ...plan, subject: e.target.value })}
                         placeholder={m.fields.subjectPlaceholder}
                     />
                 </Field>
-                <Field label={m.fields.dueAt}>
+                <Field label={m.fields.dueAt} htmlFor={planDueId}>
                     <Input
+                        id={planDueId}
                         type="datetime-local"
                         value={plan.due_at}
                         onChange={(e) => setPlan({ ...plan, due_at: e.target.value })}
                     />
                 </Field>
-                <Field label={m.fields.purpose}>
-                    <Select value={plan.purpose} onChange={(e) => setPlan({ ...plan, purpose: e.target.value })}>
+                <Field label={m.fields.purpose} htmlFor={planPurposeId}>
+                    <Select id={planPurposeId} value={plan.purpose} onChange={(e) => setPlan({ ...plan, purpose: e.target.value })}>
                         <option value="">{m.fields.noPurpose}</option>
                         {purposes.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -324,8 +443,9 @@ export default function CrmActivityComposer({
                         ))}
                     </Select>
                 </Field>
-                <Field label={m.fields.notes}>
+                <Field label={m.fields.notes} htmlFor={planNotesId}>
                     <Textarea
+                        id={planNotesId}
                         rows={2}
                         value={plan.notes}
                         onChange={(e) => setPlan({ ...plan, notes: e.target.value })}

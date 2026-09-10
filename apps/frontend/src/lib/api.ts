@@ -103,6 +103,13 @@ export class ApiError extends Error {
          * body carries no code.
          */
         public readonly code?: string,
+        /**
+         * Seconds to wait before retrying, when the backend rate-limited the
+         * call. Read from the body rather than the `Retry-After` header, which
+         * the browser cannot see cross-origin unless the API exposes it — and
+         * the app and the API are on different hosts in production.
+         */
+        public readonly retryAfter?: number,
     ) {
         super(message);
         this.name = 'ApiError';
@@ -119,6 +126,17 @@ function readErrorCode(body: unknown): string | undefined {
         return (nested as Record<string, string>).code;
     }
     return undefined;
+}
+
+/** Reads the wait a rate-limited response asks for, in seconds. */
+function readRetryAfter(body: unknown): number | undefined {
+    if (typeof body !== 'object' || body === null) return undefined;
+    const record = body as Record<string, unknown>;
+    const nested = record.error;
+    const raw = typeof nested === 'object' && nested !== null
+        ? (nested as Record<string, unknown>).retry_after
+        : record.retry_after;
+    return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
@@ -537,6 +555,21 @@ export type CustomFieldDef = { key: string; label: string; order: number };
  * and all edited from the CRM Setup screen.
  */
 export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes';
+
+/**
+ * A CRM message template as the API accepts it. `channel_id` / `purpose_id` are
+ * nullable rather than optional because clearing either — "offer this on every
+ * channel" — is a real edit that has to reach the column.
+ */
+export type CrmMessageTemplatePayload = {
+    name: string;
+    body: string;
+    subject?: string;
+    usage?: 'LOG' | 'SCHEDULE' | 'BOTH';
+    channel_id?: string | null;
+    purpose_id?: string | null;
+    sort_order?: number;
+};
 
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
 
@@ -1140,6 +1173,21 @@ export const api = {
             body: JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * Store a cropped storefront hero image or logo. Returns the CDN URL, which
+     * the caller then saves through the storefront settings PATCH.
+     */
+    uploadStorefrontImage: (body: {
+        imageBase64: string;
+        kind: 'hero' | 'logo';
+        mimeType?: string;
+        fileName?: string;
+    }): Promise<{ url: string }> =>
+        fetchWithAuth('/tenants/storefront-image', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     createSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -1466,6 +1514,35 @@ export const api = {
             `/crm/lead-taxonomy/${kind}/${id}${reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ''}`,
             { method: 'DELETE' },
         ),
+    // CRM message templates (canned messages offered in Log activity / Schedule)
+    getCrmMessageTemplates: (params?: {
+        usage?: 'LOG' | 'SCHEDULE';
+        channelId?: string;
+        includeInactive?: boolean;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.usage) query.set('usage', params.usage);
+        if (params?.channelId) query.set('channelId', params.channelId);
+        if (params?.includeInactive) query.set('includeInactive', 'true');
+        const qs = query.toString();
+        return fetchWithAuth(`/crm/message-templates${qs ? `?${qs}` : ''}`);
+    },
+    createCrmMessageTemplate: (data: CrmMessageTemplatePayload) =>
+        fetchWithAuth('/crm/message-templates', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateCrmMessageTemplate: (
+        id: string,
+        data: Partial<CrmMessageTemplatePayload> & { is_active?: boolean },
+    ) => fetchWithAuth(`/crm/message-templates/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCrmMessageTemplate: (id: string) =>
+        fetchWithAuth(`/crm/message-templates/${id}`, { method: 'DELETE' }),
     // Custom Fields
     getCustomFields: (entity: string) =>
         fetchWithAuth(`/custom-fields?entity=${encodeURIComponent(entity)}`),
@@ -2164,6 +2241,12 @@ export const api = {
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
+    /** Cancel a posted purchase and reverse its impacts. Tenant-admin only. */
+    cancelPurchase: (id: string, note: string) => fetchWithAuth(`/purchases/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -2442,6 +2525,16 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteSale: (id: string) => fetchWithAuth(`/sales/${id}`, { method: 'DELETE' }),
+    /**
+     * Cancel a posted sale and reverse its impacts. Tenant-admin only — the
+     * backend gates it on CANCEL_ENTRY and 403s everyone else, so callers hide
+     * the action rather than letting it fail.
+     */
+    cancelSale: (id: string, note: string) => fetchWithAuth(`/sales/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // Cashier sessions
     openCashierSession: (data: any) => fetchWithAuth('/cashier-sessions/open', {
         method: 'POST',
@@ -2491,7 +2584,17 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error?.message || body?.message || 'Login failed');
+        // An `ApiError` rather than a bare `Error` so the sign-in page can tell a
+        // rate limit (429, with a wait to quote) from a wrong password, instead
+        // of showing whatever sentence the server happened to send.
+        if (!res.ok) {
+            throw new ApiError(
+                body?.error?.message || body?.message || 'Login failed',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
+        }
         return body && 'data' in body ? body.data : body;
     }),
     verify2FALogin: (userId: string, code: string) => fetch(`${API_BASE}/auth/2fa/verify`, {
@@ -2500,7 +2603,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error?.message || body?.message || '2FA verification failed');
+        if (!res.ok) {
+            throw new ApiError(
+                body?.error?.message || body?.message || '2FA verification failed',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
+        }
         return body && 'data' in body ? body.data : body;
     }),
     // Runtime-configured rather than a NEXT_PUBLIC_ build arg, so turning Google

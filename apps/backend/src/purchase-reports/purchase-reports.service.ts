@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { addDays, bucketLabel, bucketStart, percentChange, resolveComparisonRange, type DateRange, type Granularity } from '../common/period.util';
 import { GetPurchaseSummaryDto, GetPurchaseTrendDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
+import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 @Injectable()
 export class PurchaseReportsService {
@@ -14,6 +15,7 @@ export class PurchaseReportsService {
             this.db.purchase.findMany({
                 where: {
                     tenant_id: tenantId,
+                    ...ACTIVE_PURCHASE,
                     ...(query.storeId ? { store_id: query.storeId } : {}),
                     ...dateFilter,
                 },
@@ -158,6 +160,7 @@ export class PurchaseReportsService {
             where: {
                 purchase: {
                     tenant_id: tenantId,
+                    ...ACTIVE_PURCHASE,
                     ...(query.storeId ? { store_id: query.storeId } : {}),
                     ...dateFilter,
                 },
@@ -216,6 +219,7 @@ export class PurchaseReportsService {
         const purchases = await this.db.purchase.findMany({
             where: {
                 tenant_id: tenantId,
+                ...ACTIVE_PURCHASE,
                 ...(query.storeId ? { store_id: query.storeId } : {}),
                 ...dateFilter,
             },

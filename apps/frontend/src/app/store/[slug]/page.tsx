@@ -50,6 +50,8 @@ interface StorefrontData {
     tenant: {
         name: string;
         storefront_banner: string | null;
+        storefront_logo: string | null;
+        storefront_logo_show_name: boolean;
         storefront_hero_image: string | null;
         storefront_hero_headline: string | null;
         loyalty_enabled: boolean;
@@ -326,6 +328,8 @@ export default function StorefrontPage() {
             <StorefrontHeader
                 slug={slug}
                 storeName={data.tenant.name}
+                logoUrl={data.tenant.storefront_logo}
+                showStoreName={data.tenant.storefront_logo_show_name}
                 activeNav="home"
                 menuLinks={data.menu_links ?? []}
                 session={session}

@@ -21,6 +21,10 @@ export type StorefrontMenuLink = {
 type StorefrontHeaderProps = {
     slug: string;
     storeName: string;
+    /** The shop's uploaded logo, when it has one. */
+    logoUrl?: string | null;
+    /** Whether the store name sits beside the logo. Ignored without a logo. */
+    showStoreName?: boolean;
     activeNav: 'home' | 'shop' | 'page';
     /**
      * Links the shop added itself, appended after Home and Shop. Home, Shop and
@@ -42,6 +46,8 @@ type StorefrontHeaderProps = {
 export default function StorefrontHeader({
     slug,
     storeName,
+    logoUrl,
+    showStoreName = true,
     activeNav,
     menuLinks = [],
     activeHref,
@@ -60,6 +66,10 @@ export default function StorefrontHeader({
         'block py-3 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors border-b border-gray-100 last:border-0';
 
     const closeMobileMenu = () => setMobileMenuOpen(false);
+
+    // A logo with the name switched off is the only case where the name is not
+    // printed — with no logo there would be nothing left in the header at all.
+    const nameVisible = !logoUrl || showStoreName;
 
     // `rel` on every external entry, not only the new-tab ones: `noopener` is
     // what stops the opened page reaching back through `window.opener`, and a
@@ -90,9 +100,23 @@ export default function StorefrontHeader({
                 <div className="flex items-center justify-between h-20 gap-4">
                     <Link
                         href={`/store/${slug}`}
-                        className="text-xl sm:text-2xl font-bold tracking-tight truncate min-w-0"
+                        className="flex items-center gap-2 min-w-0"
                     >
-                        {storeName}
+                        {logoUrl ? (
+                            <img
+                                src={logoUrl}
+                                // Empty when the name is printed beside it: a
+                                // screen reader would otherwise hear the shop
+                                // named twice in the same link.
+                                alt={nameVisible ? '' : storeName}
+                                className="h-9 sm:h-11 w-auto max-w-[120px] sm:max-w-[200px] object-contain flex-shrink-0"
+                            />
+                        ) : null}
+                        {nameVisible ? (
+                            <span className="text-xl sm:text-2xl font-bold tracking-tight truncate min-w-0">
+                                {storeName}
+                            </span>
+                        ) : null}
                     </Link>
 
                     <nav className="hidden md:flex items-center gap-8 text-sm font-medium">

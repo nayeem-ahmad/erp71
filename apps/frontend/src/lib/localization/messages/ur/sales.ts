@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: 'مکمل',
                 REFUNDED: 'رقم واپس',
                 PARTIAL_REFUND: 'جزوی واپسی',
+                CANCELLED: 'منسوخ',
             },
             order: {
                 DRAFT: 'مسودہ',
@@ -319,6 +320,7 @@ export const salesMessages = {
             completed: 'مکمل',
             refunded: 'رقم واپس',
             partialRefund: 'جزوی واپسی',
+            cancelled: 'منسوخ',
         },
         dataTable: {
             title: 'فروخت',

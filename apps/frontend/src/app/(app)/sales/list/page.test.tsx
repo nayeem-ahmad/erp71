@@ -15,7 +15,7 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SalesListPage from './page';
 
 jest.mock('next/link', () => {
@@ -28,6 +28,11 @@ jest.mock('@/lib/api', () => ({
     api: {
         getSalesList: jest.fn(),
         getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
+        // The Cancel action is permission-gated, and `useTenantPlanFeatures`
+        // resolves those through /auth/me on mount. No membership → no
+        // CANCEL_ENTRY → the action is hidden, which is the default here.
+        getMe: jest.fn().mockResolvedValue({ tenants: [] }),
+        cancelSale: jest.fn(),
     },
 }));
 
@@ -218,5 +223,89 @@ describe('SalesListPage — Sales Transaction List', () => {
         const link = await screen.findByRole('link', { name: /new sales entry/i });
         expect(link).toHaveAttribute('href', '/sales/new');
         expect(screen.queryByRole('link', { name: /^POS$/i })).toBeNull();
+    });
+
+    describe('cancelling an entry', () => {
+        const asTenantAdmin = () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({
+                tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CANCEL_ENTRY'] }],
+            });
+        };
+
+        it('hides the Cancel action from someone without CANCEL_ENTRY', async () => {
+            render(<SalesListPage />);
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+            expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
+        });
+
+        it('shows it to the workspace owner, who bypasses permission checks server-side', async () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }] });
+
+            render(<SalesListPage />);
+
+            await waitFor(() =>
+                expect(screen.getAllByRole('button', { name: /cancel entry/i }).length).toBeGreaterThan(0),
+            );
+        });
+
+        it('collects a note and posts it with the cancellation', async () => {
+            const { api } = require('@/lib/api');
+            asTenantAdmin();
+            api.cancelSale.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
+
+            render(<SalesListPage />);
+            const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
+            fireEvent.click(actions[0]);
+
+            fireEvent.change(screen.getByLabelText(/reason for cancelling/i), {
+                target: { value: 'Duplicate of SL-00002' },
+            });
+            // The dialog's confirm shares its label with the row action, so
+            // reach for the one inside the dialog.
+            const dialog = screen.getByRole('dialog');
+            fireEvent.click(within(dialog).getByRole('button', { name: /cancel entry/i }));
+
+            await waitFor(() =>
+                expect(api.cancelSale).toHaveBeenCalledWith('sale-1', 'Duplicate of SL-00002'),
+            );
+        });
+
+        it('does not call the API when the note is left empty', async () => {
+            const { api } = require('@/lib/api');
+            asTenantAdmin();
+
+            render(<SalesListPage />);
+            const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
+            fireEvent.click(actions[0]);
+
+            const dialog = screen.getByRole('dialog');
+            fireEvent.click(within(dialog).getByRole('button', { name: /cancel entry/i }));
+
+            expect(
+                await within(dialog).findByText(/a reason is required/i),
+            ).toBeInTheDocument();
+            expect(api.cancelSale).not.toHaveBeenCalled();
+        });
+
+        it('offers no Cancel or Edit action on an already-cancelled sale', async () => {
+            const { api } = require('@/lib/api');
+            asTenantAdmin();
+            api.getSalesList.mockResolvedValue({
+                items: [{ ...mockSales[0], status: 'CANCELLED' }],
+                total: 1,
+                page: 1,
+                limit: 20,
+                pages: 1,
+            });
+
+            render(<SalesListPage />);
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+            expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
+            expect(screen.queryByRole('link', { name: /^edit$/i })).toBeNull();
+        });
     });
 });

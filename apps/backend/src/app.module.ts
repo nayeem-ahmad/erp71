@@ -3,8 +3,10 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { CorrelationMiddleware } from './common/correlation.middleware';
 import { TransformInterceptor } from './common/transform.interceptor';
 import { CommonModule } from './common/common.module';
+import { accountThrottler } from './common/account-throttle.util';
+import { ApiThrottlerGuard } from './common/api-throttler.guard';
 import { CacheModule } from './cache/cache.module';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { DatabaseModule } from './database/database.module';
@@ -107,6 +109,7 @@ import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
+import { CrmMessageTemplatesModule } from './crm-message-templates/crm-message-templates.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
@@ -126,10 +129,15 @@ import { SocialMediaModule } from './social-media/social-media.module';
 @Module({
     imports: [
         SentryModule.forRoot(),
-        ThrottlerModule.forRoot([{
-            ttl: Number(process.env.THROTTLE_TTL_MS ?? 60_000),
-            limit: Number(process.env.THROTTLE_LIMIT ?? 20),
-        }]),
+        ThrottlerModule.forRoot([
+            {
+                ttl: Number(process.env.THROTTLE_TTL_MS ?? 60_000),
+                limit: Number(process.env.THROTTLE_LIMIT ?? 20),
+            },
+            // Inert except on the routes carrying @ThrottleAccount(). See the
+            // file for why sign-in cannot be rate-limited by address alone.
+            accountThrottler,
+        ]),
         ScheduleModule.forRoot(),
         CommonModule,
         CacheModule,
@@ -231,6 +239,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         CrmLeadsModule,
         CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,
+        CrmMessageTemplatesModule,
         CustomFieldsModule,
         ExpensesModule,
         LoansModule,
@@ -249,7 +258,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
     ],
     controllers: [],
     providers: [
-        { provide: APP_GUARD, useClass: ThrottlerGuard },
+        { provide: APP_GUARD, useClass: ApiThrottlerGuard },
         // Freezes writes in a workspace suspended for non-payment. Global so a
         // module added later is covered without wiring — the guarantee is that
         // *nothing* can be entered, which a per-controller opt-in would leak.

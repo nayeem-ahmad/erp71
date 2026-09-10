@@ -57,6 +57,8 @@ export class TenantsService {
             if (dto.storefront_banner !== undefined) data.storefront_banner = dto.storefront_banner || null;
             if (dto.storefront_hero_image !== undefined) data.storefront_hero_image = dto.storefront_hero_image || null;
             if (dto.storefront_hero_headline !== undefined) data.storefront_hero_headline = dto.storefront_hero_headline || null;
+            if (dto.storefront_logo !== undefined) data.storefront_logo = dto.storefront_logo || null;
+            if (dto.storefront_logo_show_name !== undefined) data.storefront_logo_show_name = dto.storefront_logo_show_name;
 
         return this.db.tenant.update({
             where: { id: tenantId },
@@ -69,6 +71,8 @@ export class TenantsService {
                 storefront_banner: true,
                 storefront_hero_image: true,
                 storefront_hero_headline: true,
+                storefront_logo: true,
+                storefront_logo_show_name: true,
             },
         });
     }
@@ -84,6 +88,8 @@ export class TenantsService {
                 storefront_banner: true,
                 storefront_hero_image: true,
                 storefront_hero_headline: true,
+                storefront_logo: true,
+                storefront_logo_show_name: true,
             },
         });
     }

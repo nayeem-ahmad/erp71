@@ -98,6 +98,11 @@ export const purchasesMessages = {
                 total: "মোট",
                 received: "গ্রহণকৃত",
                 voucher: "ভাউচার",
+                status: 'অবস্থা',
+            },
+            statuses: {
+                RECORDED: 'রেকর্ডকৃত',
+                CANCELLED: 'বাতিল',
             },
             printInvoice: "ইনভয়েস প্রিন্ট",
             modal: {

@@ -40,6 +40,8 @@ interface StorefrontData {
     tenant: {
         name: string;
         storefront_banner: string | null;
+        storefront_logo: string | null;
+        storefront_logo_show_name: boolean;
         loyalty_enabled: boolean;
         loyalty_earn_rate: number | null;
         loyalty_redeem_rate: number | null;
@@ -420,6 +422,8 @@ export default function StorefrontShopPage() {
             <StorefrontHeader
                 slug={slug}
                 storeName={data.tenant.name}
+                logoUrl={data.tenant.storefront_logo}
+                showStoreName={data.tenant.storefront_logo_show_name}
                 activeNav="shop"
                 menuLinks={data.menu_links ?? []}
                 session={session}

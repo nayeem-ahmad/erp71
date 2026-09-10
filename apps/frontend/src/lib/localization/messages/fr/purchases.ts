@@ -98,6 +98,11 @@ export const purchasesMessages = {
             total: "Total",
             received: "Réceptionné",
             voucher: "Écriture",
+            status: 'Statut',
+        },
+        statuses: {
+            RECORDED: 'Enregistré',
+            CANCELLED: 'Annulée',
         },
         printInvoice: "Imprimer la facture",
         modal: {

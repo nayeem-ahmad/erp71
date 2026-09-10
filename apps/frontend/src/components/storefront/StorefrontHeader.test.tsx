@@ -2,29 +2,65 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import StorefrontHeader, { type StorefrontMenuLink } from './StorefrontHeader';
 
-jest.mock('next/navigation', () => ({
-    useRouter: jest.fn(() => ({ push: jest.fn() })),
-    usePathname: jest.fn(() => '/store/demo-shop'),
-    useSearchParams: jest.fn(() => ({ get: jest.fn().mockReturnValue(null) })),
-    useParams: jest.fn(() => ({ slug: 'demo-shop' })),
+jest.mock('next/link', () => ({
+    __esModule: true,
+    default: ({ children, href }: any) => <a href={href}>{children}</a>,
 }));
 
-const BASE_PROPS = {
-    slug: 'demo-shop',
-    storeName: 'Demo Shop',
-    activeNav: 'home' as const,
-    session: null,
-    accountMenuOpen: false,
-    onAccountMenuToggle: jest.fn(),
-    onSignOut: jest.fn(),
-    cartCount: 0,
-    onCartOpen: jest.fn(),
-};
+function renderHeader(props: Partial<React.ComponentProps<typeof StorefrontHeader>> = {}) {
+    return render(
+        <StorefrontHeader
+            slug="my-store"
+            storeName="Rahim Traders"
+            activeNav="home"
+            session={null}
+            accountMenuOpen={false}
+            onAccountMenuToggle={jest.fn()}
+            onSignOut={jest.fn()}
+            cartCount={0}
+            onCartOpen={jest.fn()}
+            {...props}
+        />,
+    );
+}
+
+describe('StorefrontHeader branding', () => {
+    it('shows the store name when there is no logo', () => {
+        renderHeader();
+
+        expect(screen.getByText('Rahim Traders')).toBeInTheDocument();
+        expect(document.querySelector('header img')).toBeNull();
+    });
+
+    it('shows the logo beside the name when both are wanted', () => {
+        renderHeader({ logoUrl: 'https://cdn.example/logo.png', showStoreName: true });
+
+        expect(screen.getByText('Rahim Traders')).toBeInTheDocument();
+        expect(document.querySelector('header img')).toHaveAttribute(
+            'src',
+            'https://cdn.example/logo.png',
+        );
+    });
+
+    it('drops the name when the logo is meant to stand alone', () => {
+        renderHeader({ logoUrl: 'https://cdn.example/logo.png', showStoreName: false });
+
+        expect(screen.queryByText('Rahim Traders')).not.toBeInTheDocument();
+        // The name still reaches a screen reader, through the logo's alt text.
+        expect(screen.getByAltText('Rahim Traders')).toBeInTheDocument();
+    });
+
+    it('keeps the name when the preference says hide it but no logo was uploaded', () => {
+        renderHeader({ logoUrl: null, showStoreName: false });
+
+        expect(screen.getByText('Rahim Traders')).toBeInTheDocument();
+    });
+});
 
 const PAGE_LINK: StorefrontMenuLink = {
     id: 'link-1',
     label: 'About us',
-    href: '/store/demo-shop/pages/about',
+    href: '/store/my-store/pages/about',
     external: false,
     open_in_new_tab: false,
 };
@@ -37,25 +73,25 @@ const EXTERNAL_LINK: StorefrontMenuLink = {
     open_in_new_tab: true,
 };
 
-describe('StorefrontHeader', () => {
+describe('StorefrontHeader shop-authored menu links', () => {
     it('keeps Home and Shop whatever the shop adds', () => {
-        render(<StorefrontHeader {...BASE_PROPS} menuLinks={[PAGE_LINK]} />);
+        renderHeader({ menuLinks: [PAGE_LINK] });
 
-        // Twice each: the desktop nav and the (hidden) mobile drawer.
+        // At least once each: the desktop nav, plus the mobile drawer when open.
         expect(screen.getAllByRole('link', { name: 'Home' }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Shop' }).length).toBeGreaterThan(0);
     });
 
     it('renders a shop-authored page link', () => {
-        render(<StorefrontHeader {...BASE_PROPS} menuLinks={[PAGE_LINK]} />);
+        renderHeader({ menuLinks: [PAGE_LINK] });
 
         const [link] = screen.getAllByRole('link', { name: 'About us' });
-        expect(link).toHaveAttribute('href', '/store/demo-shop/pages/about');
+        expect(link).toHaveAttribute('href', '/store/my-store/pages/about');
         expect(link).not.toHaveAttribute('target');
     });
 
     it('opens an external link safely', () => {
-        render(<StorefrontHeader {...BASE_PROPS} menuLinks={[EXTERNAL_LINK]} />);
+        renderHeader({ menuLinks: [EXTERNAL_LINK] });
 
         const [link] = screen.getAllByRole('link', { name: 'Our Facebook' });
         expect(link).toHaveAttribute('href', 'https://facebook.com/demo');
@@ -68,12 +104,7 @@ describe('StorefrontHeader', () => {
     it('marks the same-tab external link noopener too', () => {
         // A shopper middle-clicking a same-tab link opens it in a tab all the
         // same, so the guard cannot be conditional on `target`.
-        render(
-            <StorefrontHeader
-                {...BASE_PROPS}
-                menuLinks={[{ ...EXTERNAL_LINK, open_in_new_tab: false }]}
-            />,
-        );
+        renderHeader({ menuLinks: [{ ...EXTERNAL_LINK, open_in_new_tab: false }] });
 
         const [link] = screen.getAllByRole('link', { name: 'Our Facebook' });
         expect(link).not.toHaveAttribute('target');
@@ -81,7 +112,7 @@ describe('StorefrontHeader', () => {
     });
 
     it('renders nothing extra when the shop has added no links', () => {
-        render(<StorefrontHeader {...BASE_PROPS} />);
+        renderHeader();
 
         expect(screen.queryByRole('link', { name: 'About us' })).not.toBeInTheDocument();
     });

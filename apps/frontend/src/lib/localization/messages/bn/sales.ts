@@ -37,6 +37,7 @@ export const salesMessages = {
                     COMPLETED: "সম্পন্ন",
                     REFUNDED: "ফেরত দেওয়া",
                     PARTIAL_REFUND: "আংশিক ফেরত",
+                    CANCELLED: 'বাতিল',
                 },
                 order: {
                     DRAFT: "খসড়া",
@@ -319,6 +320,7 @@ export const salesMessages = {
                 completed: "সম্পন্ন",
                 refunded: "ফেরত দেওয়া",
                 partialRefund: "আংশিক ফেরত",
+                cancelled: 'বাতিল',
             },
             dataTable: {
                 title: "বিক্রয়",

@@ -16,6 +16,7 @@ import { isPlatformAdminEmail } from './platform-admin.util';
 import { RefreshTokenService } from './refresh-token.service';
 import { accessTokenTtl, accessTokenTtlSeconds } from './access-token-ttl';
 import { AUTH_SCOPE_APP } from './token-scope';
+import { applyVerifiedMobileIdentity } from './verified-mobile.util';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
 import {
     DEFAULT_PLATFORM_FEATURES,
@@ -468,41 +469,6 @@ export class AuthService {
         return this.createUserFromMobile(profile, dto, meta);
     }
 
-    /**
-     * Free up `mobile` for an account that has just proved it by SMS.
-     *
-     * Needed only because the column is unique. Firebase is the authority on
-     * which number an identity holds, so a ported line or a new SIM can point at
-     * a number another account merely typed into a form — and without this the
-     * sign-in would die on a P2002 the user can do nothing about. A proved claim
-     * outranks a typed one, so the number comes off the account that never
-     * confirmed it; that account keeps its login, which was never the number, and
-     * can set a different one. This is the same precedence
-     * `sync-user-mobile-unique.ts` applies to the duplicates already in the data.
-     *
-     * Two accounts that have each *verified* the same number is a different
-     * matter: nothing here can say which is current, and moving a verified number
-     * would hand one person the other's way in. That refuses instead.
-     */
-    private async releaseMobileForVerifiedClaim(tx: any, mobile: string, claimantUserId: string) {
-        const holder = await tx.user.findUnique({
-            where: { mobile },
-            select: { id: true, mobile_verified_at: true },
-        });
-        if (!holder || holder.id === claimantUserId) return;
-
-        if (holder.mobile_verified_at) {
-            throw new ConflictException(
-                'This mobile number is already verified on another account. Please sign in with that account.',
-            );
-        }
-
-        await tx.user.update({
-            where: { id: holder.id },
-            data: { mobile: null, mobile_verified_at: null },
-        });
-    }
-
     private async completeMobileLoginForExistingUser(
         user: {
             id: string;
@@ -514,26 +480,7 @@ export class AuthService {
         profile: FirebasePhoneProfile,
         meta: AuditRequestMeta,
     ) {
-        const patch: Record<string, unknown> = {};
-        if (!user.firebase_uid) patch.firebase_uid = profile.firebaseUid;
-        // Firebase is the authority on which number this identity holds now, so a
-        // number changed there (new SIM, ported line) follows through to here.
-        if (user.mobile !== profile.phoneNumber) {
-            patch.mobile = profile.phoneNumber;
-            patch.mobile_country_code = countryCodeFromE164(profile.phoneNumber) ?? DEFAULT_MOBILE_COUNTRY_CODE;
-        }
-        if (!user.mobile_verified_at || patch.mobile) patch.mobile_verified_at = new Date();
-        if (patch.mobile) {
-            // Taking the number off its previous holder and putting it on this
-            // account has to be one step: a failure in between would leave the
-            // number attached to nobody.
-            await this.db.$transaction(async (tx) => {
-                await this.releaseMobileForVerifiedClaim(tx, patch.mobile as string, user.id);
-                await tx.user.update({ where: { id: user.id }, data: patch });
-            });
-        } else if (Object.keys(patch).length > 0) {
-            await this.db.user.update({ where: { id: user.id }, data: patch });
-        }
+        await applyVerifiedMobileIdentity(this.db, user, profile);
 
         if (this.totp.isEnabled(user.totp_secret)) {
             // The SMS code proves the number, not that they hold the second factor.

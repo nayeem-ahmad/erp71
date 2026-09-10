@@ -106,6 +106,7 @@ enum StorePermission {
   CREATE_RETURN
   CREATE_SALES_ORDER
   CREATE_QUOTATION
+  CANCEL_ENTRY
 
   // Accounting
   VIEW_LEDGER
@@ -406,6 +407,7 @@ model User {
   crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
   crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
   crmActivitiesApproved             CrmActivity[]               @relation("CrmActivityApprover")
+  crmMessageTemplatesCreated        CrmMessageTemplate[]        @relation("CrmMessageTemplateCreator")
   refereeProfile                    Referee?
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
@@ -648,42 +650,51 @@ model DemoDataBatch {
 }
 
 model Tenant {
-  id                       String    @id @default(uuid())
-  name                     String
-  owner_id                 String
-  default_locale           String    @default("en")
+  id                        String    @id @default(uuid())
+  name                      String
+  owner_id                  String
+  default_locale            String    @default("en")
   /// IANA zone the workspace's calendar days are measured in, e.g. `Asia/Dhaka`.
   /// Every "today" window, date-range filter and report bucket resolves through
   /// this; see `common/tenant-time.util.ts`. An IANA name, never an offset —
   /// an offset cannot express DST.
-  timezone                 String    @default("Asia/Dhaka")
+  timezone                  String    @default("Asia/Dhaka")
   /// When false the workspace is English-only and the language switcher is hidden.
-  localization_enabled     Boolean   @default(false)
+  localization_enabled      Boolean   @default(false)
   /// Second language offered alongside English when localization_enabled is true.
-  secondary_locale         String?
-  created_at               DateTime  @default(now())
-  storefront_slug          String?   @unique
-  storefront_enabled       Boolean   @default(false)
-  storefront_banner        String?
-  storefront_hero_image    String?
-  storefront_hero_headline String?
-  brand_primary_color      String?
-  brand_logo_url           String?
-  brand_favicon_url        String?
-  brand_business_name      String?
-  default_vat_rate         Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
-  vat_registration_no      String? // NBR VAT registration number
-  business_tin             String? // Tax Identification Number
-  business_type            String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+  secondary_locale          String?
+  created_at                DateTime  @default(now())
+  storefront_slug           String?   @unique
+  storefront_enabled        Boolean   @default(false)
+  storefront_banner         String?
+  storefront_hero_image     String?
+  storefront_hero_headline  String?
+  /// The shop's own mark, shown in the storefront header. Deliberately not
+  /// `brand_logo_url`: that one is the workspace's identity on invoices and in
+  /// the app chrome, and a shop that trades under a second name needs the two
+  /// to differ.
+  storefront_logo           String?
+  /// Whether the store name is printed beside the logo in the storefront
+  /// header. Only meaningful once a logo exists — with no logo the name is the
+  /// only thing there is to show, so it is rendered regardless.
+  storefront_logo_show_name Boolean   @default(true)
+  brand_primary_color       String?
+  brand_logo_url            String?
+  brand_favicon_url         String?
+  brand_business_name       String?
+  default_vat_rate          Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
+  vat_registration_no       String? // NBR VAT registration number
+  business_tin              String? // Tax Identification Number
+  business_type             String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
   /// Which dashboard this workspace lands on: AUTO | RETAIL | ACCOUNTING.
   /// AUTO defers to the plan's `accountingDashboard` entitlement. This is a
   /// preference, not a capability, which is why it is a column and not a key in
   /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
-  dashboard_preference     String    @default("AUTO")
+  dashboard_preference      String    @default("AUTO")
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
-  onboarding_dismissed_at  DateTime?
-  deleted_at               DateTime?
+  onboarding_dismissed_at   DateTime?
+  deleted_at                DateTime?
 
   /// When this workspace was frozen for non-payment. Non-null means every
   /// state-changing request is rejected by `BillingSuspensionGuard` — the data
@@ -826,6 +837,7 @@ model Tenant {
   crmFollowUps               CrmFollowUp[]
   crmActivities              CrmActivity[]
   crmActivityPurposes        CrmActivityPurpose[]
+  crmMessageTemplates        CrmMessageTemplate[]
   leads                      Lead[]
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
@@ -1899,9 +1911,21 @@ model Purchase {
   total_amount     Decimal  @default(0) @db.Decimal(12, 2)
   paid_amount      Decimal  @default(0) @db.Decimal(12, 2)
   payment_status   String   @default("UNPAID") // UNPAID | PARTIAL | PAID
+  /// RECORDED | CANCELLED. A purchase had no lifecycle column until entry
+  /// cancellation needed one — `payment_status` answers "is the bill settled?",
+  /// which a cancelled bill is not, so the two cannot share a column. Every
+  /// money query filters on this, the way the sales side filters `Sale.status`.
+  status           String   @default("RECORDED")
   notes            String?
   created_by       String?
   created_at       DateTime @default(now())
+
+  /// Set together by `PurchasesService.cancel`, never on their own. The note is
+  /// mandatory at the API boundary: a reversed purchase changes stock, the
+  /// payable and the ledger, and the reason has to survive with the document.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
 
   tenant             Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store              Store                       @relation(fields: [store_id], references: [id])
@@ -1915,6 +1939,7 @@ model Purchase {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
+  @@index([tenant_id, status])
   @@index([tenant_id, reference_number])
 }
 
@@ -2278,6 +2303,15 @@ model Sale {
   /// document. Both stay null on an ordinary counter sale.
   quotation_id   String?
   sales_order_id String?
+
+  /// Set together by `SalesService.cancel`, alongside `status = 'CANCELLED'`.
+  /// The note is mandatory at the API boundary: cancelling puts the goods back,
+  /// unwinds loyalty, credit and lifetime spend and voids the vouchers, and the
+  /// reason for all of that has to survive with the document rather than only
+  /// in the audit log.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
 
   // Relations
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -2760,9 +2794,10 @@ model ConversationChannel {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant        Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   conversations LeadConversation[]
   activities    CrmActivity[]
+  templates     CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2847,8 +2882,9 @@ model CrmActivityPurpose {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant     Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   activities CrmActivity[]
+  templates  CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2935,6 +2971,63 @@ model CrmActivity {
   @@index([tenant_id, status, completed_at])
   @@index([tenant_id, channel_id])
   @@index([tenant_id, purpose_id])
+}
+
+/// A reusable message a rep drops into an activity instead of retyping it — the
+/// "payment reminder" WhatsApp, the "thanks for visiting" SMS, the standing call
+/// script. Tenant-owned and edited from CRM → Setup → Message Templates.
+///
+/// Deliberately not a CrmActivity row: a template is the text, not a touch. It
+/// carries no target, no due date and never appears on a timeline; picking one
+/// fills the composer's fields and the rep edits from there, so nothing here is
+/// sent or stored on the activity beyond the words that end up in it.
+model CrmMessageTemplate {
+  id        String @id @default(uuid())
+  tenant_id String
+
+  /// What the rep picks from the list — "Payment reminder", not the message body.
+  name  String
+  /// Which composer offers it: LOG (something that already happened),
+  /// SCHEDULE (a plan), or BOTH. A call script is worth having in both places;
+  /// "Sorry we missed you" only makes sense once the call is over.
+  usage String @default("BOTH")
+
+  /// Narrows the template to one channel — a WhatsApp blurb should not be
+  /// offered when logging a shop visit. Null means every channel.
+  ///
+  /// SetNull rather than Restrict: deleting a channel from CRM Setup already
+  /// reassigns the activities that used it, and blocking that delete because a
+  /// template mentions the channel would be a surprising place to be stopped.
+  /// The template survives as channel-agnostic, which is the honest degradation.
+  channel_id String?
+  /// Pre-selects the activity purpose when the template is used to schedule.
+  purpose_id String?
+
+  /// Fills "What needs doing" when scheduling. Null on a template that is only
+  /// ever a message body.
+  subject String?
+  /// The message itself. Carries `{{name}}`-style placeholders which the
+  /// composer substitutes at pick time — see lib/crm-message-templates.ts for
+  /// the token list. Stored verbatim, so a rename never rewrites saved text.
+  body    String
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  channel ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: SetNull)
+  purpose CrmActivityPurpose?  @relation(fields: [purpose_id], references: [id], onDelete: SetNull)
+  creator User?                @relation("CrmMessageTemplateCreator", fields: [created_by], references: [id])
+
+  @@unique([tenant_id, name])
+  /// Serves the picker, which reads the active templates for one tenant in
+  /// display order on every open of the Log / Schedule dialog.
+  @@index([tenant_id, is_active, sort_order])
+  @@index([tenant_id, channel_id])
 }
 
 model CustomerCreditTransaction {

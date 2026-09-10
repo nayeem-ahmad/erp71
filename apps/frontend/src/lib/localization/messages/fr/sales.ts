@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: "Terminée",
                 REFUNDED: "Remboursée",
                 PARTIAL_REFUND: "Remboursement partiel",
+                CANCELLED: 'Annulée',
             },
             order: {
                 DRAFT: "Brouillon",
@@ -319,6 +320,7 @@ export const salesMessages = {
             completed: "Terminée",
             refunded: "Remboursée",
             partialRefund: "Remboursement partiel",
+            cancelled: 'Annulée',
         },
         dataTable: {
             title: "Ventes",
