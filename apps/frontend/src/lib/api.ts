@@ -1140,6 +1140,21 @@ export const api = {
             body: JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * Store a cropped storefront hero image or logo. Returns the CDN URL, which
+     * the caller then saves through the storefront settings PATCH.
+     */
+    uploadStorefrontImage: (body: {
+        imageBase64: string;
+        kind: 'hero' | 'logo';
+        mimeType?: string;
+        fileName?: string;
+    }): Promise<{ url: string }> =>
+        fetchWithAuth('/tenants/storefront-image', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     createSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',
         body: JSON.stringify(data),
