@@ -476,6 +476,9 @@ describe('AuthService', () => {
         const result = await service.getMe('user-1');
         expect(result.tenants[0].stores).toHaveLength(1);
         expect(result.tenants[0].stores[0].id).toBe('store-1');
+        // A workspace with no storefront still reports the field, so the client
+        // can fall back to its name when building a `/w/<slug>` link.
+        expect(result.tenants[0].storefront_slug).toBeNull();
         expect(result.tenants[0].tenant_role).toEqual({ id: 'role-manager', name: 'Manager' });
         expect(result.tenants[0].permissions).toEqual(
             expect.arrayContaining([StorePermission.CREATE_SALE, StorePermission.VIEW_LEDGER]),
@@ -517,6 +520,37 @@ describe('AuthService', () => {
 
         expect(result.tenants[0].tenant_role).toBeNull();
         expect(result.tenants[0].permissions).toEqual(Object.values(StorePermission));
+    });
+
+    // One of the names a `/w/<slug>` link can open this workspace by. It is
+    // already public — every storefront address contains it.
+    it('getMe reports a workspace storefront slug so it can be named in a URL', async () => {
+        db.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'owner@example.com',
+            name: 'Owner',
+            preferred_locale: 'en',
+            token_version: 0,
+            email_verified_at: null,
+            storeAccess: [],
+            storePermissions: [],
+            tenantMembers: [{
+                role: 'OWNER',
+                tenant_id: 'tenant-1',
+                tenantRole: null,
+                tenant: {
+                    id: 'tenant-1',
+                    name: 'Karim Electronics',
+                    storefront_slug: 'karim',
+                    default_locale: 'en',
+                    subscription: null,
+                },
+            }],
+        });
+
+        const result = await service.getMe('user-1');
+
+        expect(result.tenants[0].storefront_slug).toBe('karim');
     });
 
     // The platform's own workspace is a tenant a platform admin belongs to, but

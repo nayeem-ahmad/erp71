@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
+import { safeAppPath } from '@/lib/safe-redirect';
+import { normalizeWorkspaceSlug } from '@/lib/workspace-slug';
 import { useI18n } from '@/lib/i18n';
 import BrandLogo from '@/components/BrandLogo';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
@@ -36,25 +38,29 @@ function LoginPageContent() {
     // The server-rendered form is typable before React attaches its handlers;
     // until then a submit would natively reload the page. See useHydrated.
     const hydrated = useHydrated();
-    const postAuthPath = (() => {
-        const redirect = searchParams.get('redirect');
-        return redirect && redirect.startsWith('/') ? redirect : '/dashboard';
-    })();
+    const postAuthPath = safeAppPath(searchParams.get('redirect'), routes.home);
+    // A workspace named in the URL — set by `/w/<slug>` links, and by anything
+    // that wants a shop owner with several shops to land in a specific one.
+    const workspaceSlug = normalizeWorkspaceSlug(searchParams.get('workspace'));
     // Set when an expired token bounced the user out of the app, so the login
     // screen explains why they are here instead of looking like a random logout.
     const sessionExpired = searchParams.get('reason') === 'expired';
 
     // The auth helper tells us where to land (a shop dashboard, the admin
-    // console, or the account chooser). Preserve any ?redirect= the user came
-    // in with: honour it once a single workspace is resolved, or carry it
-    // through the chooser so it applies after selection.
+    // console, or the account chooser). Preserve what the user came in with:
+    // honour `?redirect=` once a single workspace is resolved, and carry both it
+    // and `?workspace=` through the chooser so they still apply after selection.
+    // A workspace that *did* resolve never reaches the chooser at all — the auth
+    // helper entered it and returned the dashboard.
     const resolveDestination = (redirectTo: string) => {
-        if (redirectTo === '/select-account') {
-            return postAuthPath === '/dashboard'
-                ? '/select-account'
-                : `/select-account?redirect=${encodeURIComponent(postAuthPath)}`;
+        if (redirectTo === routes.selectAccount) {
+            const params = new URLSearchParams();
+            if (workspaceSlug) params.set('workspace', workspaceSlug);
+            if (postAuthPath !== routes.home) params.set('redirect', postAuthPath);
+            const query = params.toString();
+            return query ? `${routes.selectAccount}?${query}` : routes.selectAccount;
         }
-        if (redirectTo === '/dashboard') {
+        if (redirectTo === routes.home) {
             return postAuthPath;
         }
         return redirectTo;
@@ -79,7 +85,7 @@ function LoginPageContent() {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe);
+            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
@@ -95,7 +101,7 @@ function LoginPageContent() {
         setError(null);
         try {
             const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe);
+            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
@@ -128,7 +134,7 @@ function LoginPageContent() {
                 setTwoFactorUserId(authRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(authRes, rememberMe);
+            const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
             // A first-time Google account has no workspace yet — the wizard
             // collects the organization details a password signup asks for upfront.
             router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
@@ -148,7 +154,7 @@ function LoginPageContent() {
             setTwoFactorUserId(authRes.user_id);
             return;
         }
-        const { redirectTo } = await storeAuthResponse(authRes, rememberMe);
+        const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
         router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
     };
 
