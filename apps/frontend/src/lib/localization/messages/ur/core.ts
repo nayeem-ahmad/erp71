@@ -490,6 +490,7 @@ export const coreMessages = {
             signUpForFree: 'مفت سائن اپ کریں',
             version: 'ERP71 پلیٹ فارم v0.1',
             defaultError: 'لاگ اِن ناکام۔ اپنی اسناد جانچ لیں۔',
+            tooManyAttempts: 'سائن اِن کی بہت زیادہ کوششیں ہو چکی ہیں۔ {seconds, plural, one {# سیکنڈ} other {# سیکنڈ}} انتظار کر کے دوبارہ کوشش کریں۔',
             demoFailed: 'ڈیمو لاگ اِن ناکام۔ دوبارہ کوشش کریں۔',
             sessionExpired: 'آپ کا سیشن ختم ہو گیا ہے۔ دوبارہ لاگ اِن کریں۔',
             googleFailed: 'گوگل لاگ اِن ناکام۔ دوبارہ کوشش کریں۔',

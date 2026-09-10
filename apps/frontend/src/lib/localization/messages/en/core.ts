@@ -490,6 +490,7 @@ export const coreMessages = {
             signUpForFree: 'Sign up for free',
             version: 'ERP71 Platform v0.1',
             defaultError: 'Login failed. Please check your credentials.',
+            tooManyAttempts: 'Too many sign-in attempts. Please wait {seconds, plural, one {# second} other {# seconds}} and try again.',
             demoFailed: 'Demo login failed. Please try again.',
             sessionExpired: 'Your session has expired. Please sign in again.',
             googleFailed: 'Google sign-in failed. Please try again.',

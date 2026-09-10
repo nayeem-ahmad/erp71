@@ -490,6 +490,7 @@ export const coreMessages = {
             signUpForFree: "Inscrivez-vous gratuitement",
             version: "Plateforme ERP71 v0.1",
             defaultError: "Échec de la connexion. Veuillez vérifier vos identifiants.",
+            tooManyAttempts: "Trop de tentatives de connexion. Veuillez patienter {seconds, plural, one {# seconde} other {# secondes}} avant de réessayer.",
             demoFailed: "Échec de la connexion à la démo. Veuillez réessayer.",
             sessionExpired: "Votre session a expiré. Veuillez vous reconnecter.",
             googleFailed: "Échec de la connexion Google. Veuillez réessayer.",

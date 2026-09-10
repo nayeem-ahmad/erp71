@@ -490,6 +490,7 @@ export const coreMessages = {
             signUpForFree: 'أنشئ حسابًا مجانًا',
             version: 'منصة ERP71 v0.1',
             defaultError: 'فشل تسجيل الدخول. تحقّق من بياناتك.',
+            tooManyAttempts: 'محاولات تسجيل دخول كثيرة جدًا. انتظر {seconds, plural, zero {# ثانية} one {ثانية واحدة} two {ثانيتين} few {# ثوانٍ} many {# ثانية} other {# ثانية}} ثم حاول مرة أخرى.',
             demoFailed: 'فشل الدخول إلى العرض التجريبي. حاول مرة أخرى.',
             sessionExpired: 'انتهت جلستك. الرجاء تسجيل الدخول مجددًا.',
             googleFailed: 'فشل تسجيل الدخول عبر Google. حاول مرة أخرى.',

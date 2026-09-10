@@ -490,6 +490,7 @@ export const coreMessages = {
             signUpForFree: "Kostenlos registrieren",
             version: "ERP71 Plattform v0.1",
             defaultError: "Anmeldung fehlgeschlagen. Bitte prüfen Sie Ihre Zugangsdaten.",
+            tooManyAttempts: "Zu viele Anmeldeversuche. Bitte warten Sie {seconds, plural, one {# Sekunde} other {# Sekunden}} und versuchen Sie es erneut.",
             demoFailed: "Demo-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
             sessionExpired: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
             googleFailed: "Google-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
