@@ -7,6 +7,12 @@ export const routes = {
     onboarding: '/dashboard/onboarding',
     profile: '/profile',
     selectAccount: '/select-account',
+    /**
+     * A link that opens one specific workspace, skipping the account chooser.
+     * `slug` is any name that workspace answers to — see `lib/workspace-slug.ts`.
+     */
+    workspaceEntry: (slug: string, target = '') =>
+        `/w/${slug}${target && target !== '/' ? (target.startsWith('/') ? target : `/${target}`) : ''}` as const,
 
     sales: {
         root: '/sales',
