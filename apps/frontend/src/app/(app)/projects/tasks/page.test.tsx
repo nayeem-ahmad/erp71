@@ -112,6 +112,31 @@ describe('Tasks page', () => {
     });
 
     /**
+     * The rest of the remembering is covered by the toolbar suite below. The
+     * search box is the one filter that debounces, so a restored term has to
+     * bypass the debounce: applying it 300ms late would send one request for
+     * the unsearched list first, and flash it.
+     */
+    it('restores a search term with the first request, not 300ms after it', async () => {
+        const first = render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.change(screen.getByPlaceholderText(/search task title/i), {
+            target: { value: 'meter' },
+        });
+        await waitFor(() => expect(getProjectTasks.mock.calls.at(-1)![0].search).toBe('meter'));
+        first.unmount();
+
+        getProjectTasks.mockClear();
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        for (const call of getProjectTasks.mock.calls) {
+            expect(call[0].search).toBe('meter');
+        }
+    });
+
+    /**
      * The rest of the module imports its lists through the shared dialog; a
      * screen that can only be filled a row at a time is the odd one out.
      */

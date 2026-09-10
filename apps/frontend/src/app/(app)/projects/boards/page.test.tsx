@@ -98,6 +98,34 @@ describe('BoardsPage', () => {
         expect(api.getBoards).toHaveBeenCalledTimes(2);
     });
 
+    /**
+     * Opening a board and coming back should land on the slice it was opened
+     * from; the filters are held for the tab, so a fresh tab still starts wide.
+     */
+    it('comes back to the search and card filter the last visit left set', async () => {
+        (api.getBoards as jest.Mock).mockResolvedValue([
+            { id: 'b1', name: 'Release 4', description: 'Cross-team', card_count: 7 },
+            { id: 'b2', name: 'Support queue', description: 'Triage', card_count: 0 },
+        ]);
+        const first = render(<BoardsPage />);
+        await screen.findByText('Release 4');
+
+        fireEvent.change(screen.getByPlaceholderText(/search board name or description/i), {
+            target: { value: 'queue' },
+        });
+        fireEvent.change(screen.getByDisplayValue('All boards'), { target: { value: 'empty' } });
+        first.unmount();
+
+        render(<BoardsPage />);
+
+        expect(await screen.findByText('Support queue')).toBeInTheDocument();
+        expect(screen.queryByText('Release 4')).not.toBeInTheDocument();
+        expect(screen.getByDisplayValue('Empty boards')).toBeInTheDocument();
+        expect(
+            (screen.getByPlaceholderText(/search board name or description/i) as HTMLInputElement).value,
+        ).toBe('queue');
+    });
+
     it('includes a trimmed description when one is given', async () => {
         render(<BoardsPage />);
         await screen.findByText('Release 4');
