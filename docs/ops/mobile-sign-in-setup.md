@@ -1,9 +1,20 @@
 # Mobile-Number Sign-In Setup (Firebase Phone Auth)
 
 ERP71 supports signing in with a mobile number and a 6-digit SMS code on
-`/login`, and signing up the same way on `/signup`. The option is hidden unless
-the backend has a Firebase project configured, so a deployment without one
-behaves exactly as before.
+`/login`, signing up the same way on `/signup`, and both on every tenant
+storefront's `/store/<slug>/auth/signin` and `/store/<slug>/auth/signup`. The
+option is hidden unless the backend has a Firebase project configured, so a
+deployment without one behaves exactly as before.
+
+One project covers all four pages. The storefront is served from the same domain
+as the app, so nothing needs adding to the authorised-domains list for shoppers
+— but the tokens go to a *different* endpoint
+(`POST /storefront/:slug/auth/mobile`), which mints a storefront-scoped session
+rather than a workspace one. See **Storefront shoppers** below.
+
+A shop selling to shoppers who mostly sign in this way should watch the SMS
+quota: every storefront sign-in spends one message, and there are far more
+shoppers than shop owners.
 
 Firebase sends the SMS and verifies the code; the backend never sees the code,
 only the signed ID token that Firebase issues once the code is accepted.
@@ -68,7 +79,9 @@ curl -s https://api.erp71.com/api/v1/auth/firebase/config
 ```
 
 Then load `/login` — a "Sign in with mobile number" button should appear below
-the divider. If the button is missing, check the config endpoint first. If it
+the divider. The storefront pages read the same endpoint, so a shop with its
+storefront enabled shows the option at `/store/<slug>/auth/signin` at the same
+moment. If the button is missing, check the config endpoint first. If it
 appears but sending the code fails, the domain is almost certainly missing from
 the authorised-domains list (`auth/captcha-check-failed` or
 `auth/operation-not-allowed` in the browser console).
@@ -84,16 +97,20 @@ Google's `securetoken@system` JWKS, issuer `https://securetoken.google.com/
 
 1. **Known Firebase identity** — matched on the token's `sub` (the Firebase
    uid), which survives the person changing their number. Signs in.
-2. **Exactly one account carries this number** — adopts the Firebase identity
-   onto it and stamps `mobile_verified_at`, so someone who signed up with a
-   password can start using the SMS code without ending up with a second, empty
-   workspace.
-3. **Several accounts carry this number** — refused. Mobile numbers were never
-   unique in ERP71 (one person may own several businesses), so there is no
-   honest way to pick one; those users sign in with email and password.
-4. **Nobody matches** — the response is `{ requires_signup: true, mobile }` and
+2. **An account carries this number** — adopts the Firebase identity onto it and
+   stamps `mobile_verified_at`, so someone who signed up with a password can
+   start using the SMS code without ending up with a second, empty workspace.
+   `User.mobile` has been unique since 2026-09-07, so there is at most one such
+   account and the older refusal for a shared number is gone.
+3. **Nobody matches** — the response is `{ requires_signup: true, mobile }` and
    **nothing is written**. The page then collects an email address and posts the
    same token back, which creates the account.
+
+A number that a *different* account merely typed into a form is taken off that
+account rather than blocking the sign-in: a proved claim outranks a typed one,
+and the other account's login was never the number. Two accounts that have each
+*verified* the same number is the one case that refuses, because nothing can say
+which is current.
 
 Three consequences worth knowing:
 
@@ -118,6 +135,30 @@ login rejects it because there is no hash to compare against.
 Unlike Google sign-in, the email address on a mobile-created account is **not**
 pre-verified — Firebase said nothing about it — so a verification email goes out
 at signup and `email_verified` stays false until it is used.
+
+## Storefront shoppers
+
+`POST /api/v1/storefront/:slug/auth/mobile` verifies the token exactly as the
+app endpoint does and resolves the `User` row through the same steps, including
+the `requires_signup` round trip — a shopper still needs an email address,
+because `User.email` is non-null and unique and there is no account to create
+without one. It then finds or creates *this shop's* `Customer` record for that
+person, which is why a single button both signs a returning shopper in and signs
+a new one up.
+
+- The verified number **claims** the shop's existing record for it rather than
+  creating a second one, and it matches across spellings: a shop that typed
+  `01712345678` is found by a Firebase-verified `+8801712345678`. The stored
+  spelling is left alone. A record already tied to someone else's account is a
+  409, not a silent takeover.
+- The email address on a brand-new mobile account is **not** claimed on, because
+  nothing has verified it. It is stored on the record being created, and can
+  claim one on a later sign-in once `email_verified_at` is set.
+- The session it mints is `storefront`-scoped and bound to that shop, so it
+  cannot reach the ERP API and cannot read another shop's storefront. Signing
+  out of it leaves the same person's workspace session alone.
+- 2FA behaves as it does on the app: an account with TOTP still gets
+  `requires_2fa`, finished at `POST /storefront/:slug/auth/2fa/verify`.
 
 ## New workspaces
 

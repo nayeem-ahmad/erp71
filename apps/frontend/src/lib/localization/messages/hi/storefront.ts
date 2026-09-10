@@ -253,6 +253,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "अपने ऑर्डर ट्रैक करें और अपना विवरण सहेजें",
             createAccountButton: "खाता बनाएँ",
             backToStore: "← स्टोर पर वापस",
+            dividerOr: "या",
+            googleFailed: "Google साइन इन विफल रहा",
+            mobileAccountTitle: "अपना खाता बनाना पूरा करें",
+            mobileAccountDescription: "{mobile} सत्यापित हो गया है। ऑर्डर अपडेट पाने के लिए एक ईमेल पता जोड़ें।",
         },
         shop: {
             title: "शॉप",

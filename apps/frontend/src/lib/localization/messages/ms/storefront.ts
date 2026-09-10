@@ -253,6 +253,10 @@ export const storefrontMessages = {
                 signUpPageSubtitle: "Jejaki pesanan dan simpan butiran anda",
                 createAccountButton: "Cipta Akaun",
                 backToStore: "← Kembali ke kedai",
+                dividerOr: "atau",
+                googleFailed: "Log masuk Google gagal",
+                mobileAccountTitle: "Lengkapkan pembukaan akaun anda",
+                mobileAccountDescription: "{mobile} telah disahkan. Tambah alamat e-mel supaya kedai ini boleh menghantar kemas kini pesanan.",
             },
             shop: {
                 title: "Kedai",

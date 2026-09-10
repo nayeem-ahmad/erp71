@@ -32,6 +32,20 @@ export type MobileSignUpFields = {
 export type MobileSignInPanelProps = {
     /** Receives the backend's auth response — the caller stores it and routes. */
     onSuccess: (authResponse: any) => void | Promise<void>;
+    /**
+     * Posts the verified Firebase token and returns what the backend answers.
+     * Defaults to the ERP app's `/auth/mobile`; a storefront passes its own so
+     * the same flow mints a shopper session for one shop instead of a workspace
+     * login. Whatever it returns is read for `requires_signup` exactly as the
+     * app's response is, so a surface that needs an email address to finish
+     * signing someone up gets the extra step for free.
+     */
+    exchange?: (payload: MobileSignUpFields & { idToken: string }) => Promise<any>;
+    /**
+     * Replaces the copy on the account step. The default wording talks about a
+     * workspace, which means nothing to someone buying a shirt.
+     */
+    accountCopy?: { title: string; description: string };
     /** Surfaces failures to the page's own error banner. */
     onError?: (message: string) => void;
     /**
@@ -67,6 +81,8 @@ const inputClass =
  */
 export default function MobileSignInPanel({
     onSuccess,
+    exchange: exchangeToken,
+    accountCopy,
     onError,
     signUpFields,
     disabled = false,
@@ -159,7 +175,9 @@ export default function MobileSignInPanel({
 
     /** Posts a verified Firebase token to ERP71 and routes on what comes back. */
     const exchange = async (idToken: string, extra: MobileSignUpFields) => {
-        const authRes = await api.mobileSignIn({ idToken, ...extra });
+        const authRes = exchangeToken
+            ? await exchangeToken({ idToken, ...extra })
+            : await api.mobileSignIn({ idToken, ...extra });
         if (authRes?.requires_signup) {
             // The number is verified but unknown here — collect an email and
             // send the same token back.
@@ -197,10 +215,14 @@ export default function MobileSignInPanel({
 
         setBusy(true);
         try {
+            const fields = signUpFields?.() ?? {};
             await exchange(idToken, {
-                ...(signUpFields?.() ?? {}),
+                ...fields,
                 email: email.trim(),
-                name: name.trim() || undefined,
+                // Leaving this optional field blank must not erase a name the
+                // host page already collected — the storefront's signup form
+                // asks for one above the button.
+                name: name.trim() || fields.name,
             });
         } catch (err: any) {
             fail(err?.message || copy.failed);
@@ -316,9 +338,11 @@ export default function MobileSignInPanel({
             {step === 'account' && (
                 <div className="space-y-4 rounded-xl border border-gray-200 p-4">
                     <div>
-                        <p className="text-sm font-semibold text-gray-900">{copy.accountTitle}</p>
+                        <p className="text-sm font-semibold text-gray-900">{accountCopy?.title ?? copy.accountTitle}</p>
                         <p className="mt-1 text-xs text-gray-500">
-                            {formatMessage(copy.accountDescription, { mobile: verifiedMobile })}
+                            {formatMessage(accountCopy?.description ?? copy.accountDescription, {
+                                mobile: verifiedMobile,
+                            })}
                         </p>
                     </div>
                     <div className="space-y-2">

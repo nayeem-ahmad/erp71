@@ -253,6 +253,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "Siga sus pedidos y guarde sus datos",
             createAccountButton: "Crear cuenta",
             backToStore: "← Volver a la tienda",
+            dividerOr: "o",
+            googleFailed: "Error al iniciar sesión con Google",
+            mobileAccountTitle: "Termina de crear tu cuenta",
+            mobileAccountDescription: "{mobile} está verificado. Añade un correo electrónico para que esta tienda pueda enviarte novedades de tu pedido.",
         },
         shop: {
             title: "Tienda",

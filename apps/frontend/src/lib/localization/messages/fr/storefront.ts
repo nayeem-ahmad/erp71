@@ -253,6 +253,10 @@ export const storefrontMessages = {
             signUpPageSubtitle: "Suivez vos commandes et enregistrez vos coordonnées",
             createAccountButton: "Créer un compte",
             backToStore: "← Retour à la boutique",
+            dividerOr: "ou",
+            googleFailed: "Échec de la connexion Google",
+            mobileAccountTitle: "Terminez la création de votre compte",
+            mobileAccountDescription: "{mobile} est vérifié. Ajoutez une adresse e-mail pour que cette boutique puisse vous envoyer le suivi de commande.",
         },
         shop: {
             title: "Boutique",
