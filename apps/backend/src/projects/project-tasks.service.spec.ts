@@ -48,10 +48,17 @@ describe('ProjectTasksService', () => {
                 count: jest.fn().mockResolvedValue(0),
                 create: jest.fn().mockResolvedValue({ id: 'task-new' }),
                 update: jest.fn().mockResolvedValue({}),
+                groupBy: jest.fn().mockResolvedValue([]),
             },
             projectTaskStatus: { findFirst: jest.fn().mockResolvedValue(todo) },
-            user: { findFirst: jest.fn().mockResolvedValue({ name: 'Karim', email: 'k@x.com' }) },
-            employee: { findFirst: jest.fn().mockResolvedValue({ name: 'Rahim Uddin' }) },
+            user: {
+                findFirst: jest.fn().mockResolvedValue({ name: 'Karim', email: 'k@x.com' }),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            employee: {
+                findFirst: jest.fn().mockResolvedValue({ name: 'Rahim Uddin' }),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             projectLabel: {
                 count: jest.fn().mockResolvedValue(0),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -688,6 +695,120 @@ describe('ProjectTasksService', () => {
             await expect(
                 service.reorderChecklist(staff('user-9', 'tenant-2'), 'task-1', ['item-a']),
             ).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
+    describe('list filters', () => {
+        const whereOf = () => db.projectTask.findMany.mock.calls.at(-1)[0].where;
+
+        it('narrows to tasks nobody holds — both columns, not just the user one', async () => {
+            await service.list(OWNER, { unassigned: 'true' } as never);
+
+            expect(whereOf()).toMatchObject({ assignee_id: null, assignee_employee_id: null });
+        });
+
+        it('leaves the assignee columns alone unless the flag is really set', async () => {
+            await service.list(OWNER, { unassigned: 'false' } as never);
+
+            expect(whereOf()).not.toHaveProperty('assignee_id');
+            expect(whereOf()).not.toHaveProperty('assignee_employee_id');
+        });
+
+        it('lets "unassigned" win over an assignee sent alongside it', async () => {
+            // The two together describe no task at all. Answering with the more
+            // specific of the two beats returning an empty list nobody asked for.
+            await service.list(OWNER, {
+                assigneeId: 'user-9',
+                unassigned: 'true',
+            } as never);
+
+            expect(whereOf().assignee_id).toBeNull();
+        });
+
+        it('filters on priority', async () => {
+            await service.list(OWNER, { priority: 'URGENT' } as never);
+
+            expect(whereOf()).toMatchObject({ priority: 'URGENT' });
+        });
+
+        it('measures a created-day range in the workspace zone, not the server’s', async () => {
+            await service.list(
+                { ...OWNER, timezone: 'Asia/Dhaka' },
+                { createdFrom: '2026-08-19', createdTo: '2026-08-19' } as never,
+            );
+
+            expect(whereOf().created_at).toEqual({
+                gte: new Date('2026-08-18T18:00:00.000Z'),
+                lte: new Date('2026-08-19T17:59:59.999Z'),
+            });
+        });
+
+        it('adds no created filter when neither bound is given', async () => {
+            await service.list(OWNER, {} as never);
+
+            expect(whereOf()).not.toHaveProperty('created_at');
+        });
+    });
+
+    describe('listAssignees', () => {
+        it('names both kinds of holder under one key space', async () => {
+            db.projectTask.groupBy
+                .mockResolvedValueOnce([{ assignee_id: 'user-9' }])
+                .mockResolvedValueOnce([{ assignee_employee_id: 'emp-3' }]);
+            db.user.findMany.mockResolvedValue([
+                { id: 'user-9', name: 'Karim', email: 'karim@acme.test' },
+            ]);
+            db.employee.findMany.mockResolvedValue([
+                { id: 'emp-3', name: 'Rahim Uddin', employee_code: 'EMP-003' },
+            ]);
+
+            expect(await service.listAssignees(OWNER)).toEqual([
+                {
+                    key: 'user:user-9',
+                    userId: 'user-9',
+                    name: 'Karim',
+                    hint: 'karim@acme.test',
+                    noLogin: false,
+                },
+                {
+                    key: 'employee:emp-3',
+                    employeeId: 'emp-3',
+                    name: 'Rahim Uddin',
+                    hint: 'EMP-003',
+                    noLogin: true,
+                },
+            ]);
+        });
+
+        it('falls back to the email for a user who never set a name', async () => {
+            db.projectTask.groupBy
+                .mockResolvedValueOnce([{ assignee_id: 'user-9' }])
+                .mockResolvedValueOnce([]);
+            db.user.findMany.mockResolvedValue([
+                { id: 'user-9', name: null, email: 'karim@acme.test' },
+            ]);
+
+            expect(await service.listAssignees(OWNER)).toEqual([
+                expect.objectContaining({ name: 'karim@acme.test' }),
+            ]);
+        });
+
+        it('looks nobody up when no task is assigned', async () => {
+            expect(await service.listAssignees(OWNER)).toEqual([]);
+            expect(db.user.findMany).not.toHaveBeenCalled();
+            expect(db.employee.findMany).not.toHaveBeenCalled();
+        });
+
+        it('offers only holders inside projects the viewer can reach', async () => {
+            // Otherwise the filter itself would name who is working on a private
+            // project — the list it filters is already scoped, this must match.
+            await service.listAssignees(staff('user-7'));
+
+            for (const [args] of db.projectTask.groupBy.mock.calls) {
+                expect(args.where).toMatchObject({
+                    AND: [{ project: { OR: visibilityOr('user-7') } }],
+                });
+            }
         });
     });
 

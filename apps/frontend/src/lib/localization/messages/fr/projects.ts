@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "Tout le monde",
         allProjects: "Tous les projets",
         anyStatus: "Tout statut",
+        anyPriority: "Toute priorité",
+        bulkDeletePrompt: "Supprimer {count, plural, one {# tâche sélectionnée} other {# tâches sélectionnées}} ?\n\nElles disparaissent de toutes les listes, de tous les tableaux et de tous les sprints. Cette action est irréversible.",
+        deletedCount: "{count, plural, one {# tâche supprimée} other {# tâches supprimées}}",
+        deleteFailedCount: "{count, plural, one {# tâche n'a pas pu être supprimée} other {# tâches n'ont pas pu être supprimées}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "Sous-tâches",
         noTasks: "Aucune tâche pour le moment.",
         deleted: "Tâche supprimée",
+        deleteTask: "Supprimer la tâche",
+        deletePrompt: "Supprimer {title} ?\n\nElle disparaît de toutes les listes, de tous les tableaux et de tous les sprints. Cette action est irréversible.",
+        deleteFailed: "Impossible de supprimer la tâche",
         created: "Tâche créée",
         updated: "Tâche mise à jour",
         editTitle: "Modifier le titre",

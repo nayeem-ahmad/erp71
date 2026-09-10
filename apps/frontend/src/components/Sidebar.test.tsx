@@ -450,6 +450,26 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Inventory Reports')).not.toBeInTheDocument();
     });
 
+    it('opens the Manufacturing submenu onto its four screens', () => {
+        render(<Sidebar canAccessManufacturing />);
+
+        // The module is an accordion header, not a link — clicking it must reveal
+        // the four screens that used to be tabs rather than navigate anywhere.
+        fireEvent.click(screen.getByText('Manufacturing'));
+
+        const href = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
+        expect(href('Bill of Materials')).toBe('/manufacturing');
+        expect(href('Production Jobs')).toBe('/manufacturing/jobs');
+        expect(href('Production Analytics')).toBe('/manufacturing/analytics');
+        expect(href('Product P&L')).toBe('/manufacturing/product-pl');
+    });
+
+    it('hides Manufacturing when the tenant cannot access it', () => {
+        render(<Sidebar canAccessManufacturing={false} />);
+
+        expect(screen.queryByText('Manufacturing')).not.toBeInTheDocument();
+    });
+
     it('shows the three referee portal destinations in referee mode', () => {
         render(<Sidebar refereeMode />);
 

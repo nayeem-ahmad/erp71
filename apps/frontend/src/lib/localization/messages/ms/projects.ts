@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "Sesiapa sahaja",
         allProjects: "Semua projek",
         anyStatus: "Sebarang status",
+        anyPriority: "Sebarang keutamaan",
+        bulkDeletePrompt: "Padam {count, plural, other {# tugasan dipilih}}?\n\nIa hilang daripada setiap senarai, papan dan sprint. Tindakan ini tidak boleh dibatalkan.",
+        deletedCount: "{count, plural, other {# tugasan dipadam}}",
+        deleteFailedCount: "{count, plural, other {# tugasan tidak dapat dipadam}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: 'Sub-tugasan',
         noTasks: 'Tiada tugasan lagi.',
         deleted: 'Tugasan dipadam',
+        deleteTask: "Padam tugasan",
+        deletePrompt: "Padam {title}?\n\nIa hilang daripada setiap senarai, papan dan sprint. Tindakan ini tidak boleh dibatalkan.",
+        deleteFailed: "Tugasan tidak dapat dipadam",
         created: 'Tugasan dicipta',
         updated: 'Tugasan dikemas kini',
         editTitle: 'Sunting tajuk',

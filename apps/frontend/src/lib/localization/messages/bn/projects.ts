@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "যে কেউ",
         allProjects: "সব প্রকল্প",
         anyStatus: "যেকোনো অবস্থা",
+        anyPriority: "যেকোনো অগ্রাধিকার",
+        bulkDeletePrompt: "{count, plural, one {# টি নির্বাচিত কাজ} other {# টি নির্বাচিত কাজ}} মুছবেন?\n\nএগুলো সব তালিকা, বোর্ড ও স্প্রিন্ট থেকে সরে যাবে। এটি ফেরানো যাবে না।",
+        deletedCount: "{count, plural, one {# টি কাজ মোছা হয়েছে} other {# টি কাজ মোছা হয়েছে}}",
+        deleteFailedCount: "{count, plural, one {# টি কাজ মোছা যায়নি} other {# টি কাজ মোছা যায়নি}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: 'সাব-টাস্ক',
         noTasks: 'এখনও কোনো টাস্ক নেই।',
         deleted: 'টাস্ক মুছে ফেলা হয়েছে',
+        deleteTask: "কাজ মুছুন",
+        deletePrompt: "{title} মুছবেন?\n\nএটি সব তালিকা, বোর্ড ও স্প্রিন্ট থেকে সরে যাবে। এটি ফেরানো যাবে না।",
+        deleteFailed: "কাজটি মোছা যায়নি",
         created: 'টাস্ক তৈরি',
         updated: 'টাস্ক হালনাগাদ হয়েছে',
         editTitle: 'শিরোনাম সম্পাদনা',

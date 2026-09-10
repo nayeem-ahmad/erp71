@@ -11,6 +11,9 @@ export interface ProjectViewer {
     userId: string;
     userRole?: string;
     storeId?: string;
+    /** The workspace's IANA zone, for calendar-day filters. Optional here so a
+     *  caller assembling a viewer by hand (tests, sweeps) need not supply one. */
+    timezone?: string;
 }
 
 /**
