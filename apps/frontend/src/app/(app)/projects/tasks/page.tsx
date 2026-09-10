@@ -23,6 +23,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface TaskRow {
@@ -85,13 +86,25 @@ export default function TasksPage() {
     const { t } = useI18n();
     const m = t.projects;
 
-    const [search, setSearch] = useState('');
+    /**
+     * Remembered for the tab, so opening a task and coming back returns to the
+     * slice it was opened from. On a first visit the assignee defaults to the
+     * signed-in user, so this page opens on what "My Tasks" used to show rather
+     * than on every task in the workspace.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-tasks', {
+        search: '',
+        assignee: 'me' as 'me' | 'anyone',
+        projectId: '',
+        statusCategory: '',
+    });
+    const { search, assignee, projectId, statusCategory } = filters;
+
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    // Defaults to the signed-in user, so this page opens on what "My Tasks"
-    // used to show rather than on every task in the workspace.
-    const [assignee, setAssignee] = useState<'me' | 'anyone'>('me');
-    const [projectId, setProjectId] = useState('');
-    const [statusCategory, setStatusCategory] = useState('');
+    // A search restored from the last visit is not typing: it is already the
+    // term to query, so it applies with the first request rather than 300ms
+    // later, which would fetch the unsearched list first and flash it.
+    const [typing, setTyping] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -102,9 +115,15 @@ export default function TasksPage() {
     const [formErrors, setFormErrors] = useState<{ projectId?: string; title?: string }>({});
 
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search.trim());
+            return;
+        }
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, typing]);
+
+    const effectiveSearch = typing ? debouncedSearch : search.trim();
 
     useEffect(() => {
         api.getMe()
@@ -116,18 +135,20 @@ export default function TasksPage() {
     }, []);
 
     // Holding the fetch until the user id resolves keeps the default filter from
-    // briefly showing everyone's tasks and then narrowing.
-    const ready = assignee === 'anyone' || userId !== null;
+    // briefly showing everyone's tasks and then narrowing. The remembered
+    // filters are the same story: one request for the default slice and another
+    // for the restored one would flash the wrong list in between.
+    const ready = filtersReady && (assignee === 'anyone' || userId !== null);
 
     const { items, loading, serverPagination, reload } = useServerList<TaskRow>({
         tableId: 'project-tasks',
         enabled: ready,
         initialSort: { id: 'due_date', desc: false },
-        deps: [debouncedSearch, assignee, projectId, statusCategory, userId],
+        deps: [effectiveSearch, assignee, projectId, statusCategory, userId],
         fetch: (params) =>
             api.getProjectTasks({
                 ...params,
-                search: debouncedSearch || undefined,
+                search: effectiveSearch || undefined,
                 assigneeId: assignee === 'me' ? (userId ?? undefined) : undefined,
                 projectId: projectId || undefined,
                 statusCategory: statusCategory || undefined,
@@ -290,13 +311,16 @@ export default function TasksPage() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <Input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setTyping(true);
+                        setFilter('search', e.target.value);
+                    }}
                     placeholder={m.tasks.searchPlaceholder}
                     className="md:max-w-xs"
                 />
                 <Select
                     value={assignee}
-                    onChange={(e) => setAssignee(e.target.value as 'me' | 'anyone')}
+                    onChange={(e) => setFilter('assignee', e.target.value as 'me' | 'anyone')}
                     className="md:w-44"
                 >
                     <option value="me">{m.tasks.mine}</option>
@@ -304,7 +328,7 @@ export default function TasksPage() {
                 </Select>
                 <Select
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
+                    onChange={(e) => setFilter('projectId', e.target.value)}
                     className="md:w-52"
                 >
                     <option value="">{m.tasks.allProjects}</option>
@@ -316,7 +340,7 @@ export default function TasksPage() {
                 </Select>
                 <Select
                     value={statusCategory}
-                    onChange={(e) => setStatusCategory(e.target.value)}
+                    onChange={(e) => setFilter('statusCategory', e.target.value)}
                     className="md:w-44"
                 >
                     <option value="">{m.tasks.anyStatus}</option>
@@ -331,7 +355,7 @@ export default function TasksPage() {
                 tableId="project-tasks"
                 columns={columns as never}
                 data={items}
-                isLoading={loading}
+                isLoading={loading || !ready}
                 serverPagination={serverPagination}
                 // The search above queries the server; the built-in one would only
                 // sift the page already fetched, which reads as the same control.

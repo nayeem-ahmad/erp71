@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface BoardSummary {
@@ -37,8 +38,15 @@ export default function BoardsPage() {
 
     const [boards, setBoards] = useState<BoardSummary[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [cardsFilter, setCardsFilter] = useState<CardsFilter>('');
+    /**
+     * Remembered for the tab, so opening a board and coming back lands on the
+     * same slice rather than on every board again.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-boards', {
+        search: '',
+        cardsFilter: '' as CardsFilter,
+    });
+    const { search, cardsFilter } = filters;
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [name, setName] = useState('');
@@ -194,13 +202,13 @@ export default function BoardsPage() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <Input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => setFilter('search', event.target.value)}
                     placeholder={m.searchPlaceholder}
                     className="md:max-w-xs"
                 />
                 <Select
                     value={cardsFilter}
-                    onChange={(event) => setCardsFilter(event.target.value as CardsFilter)}
+                    onChange={(event) => setFilter('cardsFilter', event.target.value as CardsFilter)}
                     className="md:w-44"
                 >
                     <option value="">{m.allBoards}</option>
@@ -216,7 +224,10 @@ export default function BoardsPage() {
                 tableId="project-boards"
                 columns={columns as never}
                 data={filtered}
-                isLoading={loading}
+                // Filtering happens here rather than on the server, so the rows are
+                // held in the loading state until the remembered filters are in —
+                // otherwise the unfiltered list paints first.
+                isLoading={loading || !filtersReady}
                 showSearch={false}
                 emptyMessage={search.trim() || cardsFilter ? m.emptyFiltered : m.empty}
             />

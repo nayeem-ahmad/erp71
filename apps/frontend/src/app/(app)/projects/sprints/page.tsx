@@ -20,6 +20,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Sprint {
@@ -48,9 +49,16 @@ export default function SprintsPage() {
 
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [status, setStatus] = useState('');
-    const [projectId, setProjectId] = useState('');
+    /**
+     * Remembered for the tab, so opening a sprint and coming back returns to the
+     * slice it was opened from rather than to every sprint.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-sprints', {
+        search: '',
+        status: '',
+        projectId: '',
+    });
+    const { search, status, projectId } = filters;
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -58,6 +66,10 @@ export default function SprintsPage() {
     const [form, setForm] = useState({ name: '', goal: '', startDate: '', endDate: '' });
 
     const load = useCallback(async () => {
+        // Nothing is asked for until the remembered filters are in: otherwise a
+        // return visit fetches every sprint and then the remembered project's,
+        // painting the wrong list in between.
+        if (!filtersReady) return;
         setLoading(true);
         try {
             // The endpoint filters by participation, so the project filter is the
@@ -69,7 +81,7 @@ export default function SprintsPage() {
         } finally {
             setLoading(false);
         }
-    }, [m.sprint.loadFailed, projectId]);
+    }, [filtersReady, m.sprint.loadFailed, projectId]);
 
     useEffect(() => {
         load();
@@ -267,11 +279,11 @@ export default function SprintsPage() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <Input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => setFilter('search', e.target.value)}
                     placeholder={m.sprint.searchPlaceholder}
                     className="md:max-w-xs"
                 />
-                <Select value={status} onChange={(e) => setStatus(e.target.value)} className="md:w-44">
+                <Select value={status} onChange={(e) => setFilter('status', e.target.value)} className="md:w-44">
                     <option value="">{m.sprint.anyStatus}</option>
                     <option value="PLANNED">{m.sprint.planned}</option>
                     <option value="ACTIVE">{m.sprint.active}</option>
@@ -279,7 +291,7 @@ export default function SprintsPage() {
                 </Select>
                 <Select
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
+                    onChange={(e) => setFilter('projectId', e.target.value)}
                     className="md:w-52"
                 >
                     <option value="">{m.sprint.allProjects}</option>

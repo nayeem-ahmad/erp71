@@ -97,6 +97,61 @@ describe('Tasks page', () => {
     });
 
     /**
+     * Opening a task and coming back should land on the slice it was opened
+     * from, rather than snapping back to "assigned to me".
+     */
+    it('comes back to the assignee, project and status the last visit left set', async () => {
+        const first = render(<TasksPage />);
+        await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+        await screen.findByText('Wire the meter');
+
+        fireEvent.change(screen.getByDisplayValue('Assigned to me'), { target: { value: 'anyone' } });
+        fireEvent.change(screen.getByDisplayValue('All projects'), { target: { value: 'p1' } });
+        fireEvent.change(screen.getByDisplayValue('Any status'), { target: { value: 'DONE' } });
+        await waitFor(() =>
+            expect(getProjectTasks.mock.calls.at(-1)![0]).toMatchObject({
+                assigneeId: undefined, projectId: 'p1', statusCategory: 'DONE',
+            }),
+        );
+        first.unmount();
+
+        getProjectTasks.mockClear();
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        expect(screen.getByDisplayValue('Anyone')).toBeInTheDocument();
+        // And never a first request for the signed-in user's own tasks.
+        for (const call of getProjectTasks.mock.calls) {
+            expect(call[0]).toMatchObject({
+                assigneeId: undefined, projectId: 'p1', statusCategory: 'DONE',
+            });
+        }
+    });
+
+    /**
+     * The search box debounces, so a restored term has to bypass the debounce:
+     * applying it 300ms late would send one request for the unsearched list first.
+     */
+    it('restores a search term with the first request, not 300ms after it', async () => {
+        const first = render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.change(screen.getByPlaceholderText(/search task title/i), {
+            target: { value: 'meter' },
+        });
+        await waitFor(() => expect(getProjectTasks.mock.calls.at(-1)![0].search).toBe('meter'));
+        first.unmount();
+
+        getProjectTasks.mockClear();
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        for (const call of getProjectTasks.mock.calls) {
+            expect(call[0].search).toBe('meter');
+        }
+    });
+
+    /**
      * The rest of the module imports its lists through the shared dialog; a
      * screen that can only be filled a row at a time is the odd one out.
      */

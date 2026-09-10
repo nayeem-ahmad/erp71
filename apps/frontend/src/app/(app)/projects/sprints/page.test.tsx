@@ -112,6 +112,37 @@ describe('Sprints page', () => {
         await waitFor(() => expect(api.getSprints).toHaveBeenCalledWith('p1'));
     });
 
+    /**
+     * Opening a sprint and coming back should land on the slice it was opened
+     * from. The project filter is the server's, so it also has to be in before
+     * the first request goes out — otherwise every sprint is fetched and then
+     * replaced.
+     */
+    it('comes back to the filters the last visit left set', async () => {
+        (api.getSprints as jest.Mock).mockResolvedValue([
+            sprint(),
+            sprint({ id: 's2', name: 'Hardening', status: 'ACTIVE' }),
+        ]);
+        const first = render(<SprintsPage />);
+        await screen.findByText('Sprint 12');
+
+        fireEvent.change(screen.getByDisplayValue('Any status'), { target: { value: 'ACTIVE' } });
+        fireEvent.change(screen.getByDisplayValue('All projects'), { target: { value: 'p1' } });
+        await waitFor(() => expect(api.getSprints).toHaveBeenCalledWith('p1'));
+        first.unmount();
+
+        (api.getSprints as jest.Mock).mockClear();
+        render(<SprintsPage />);
+
+        expect(await screen.findByText('Hardening')).toBeInTheDocument();
+        expect(screen.queryByText('Sprint 12')).not.toBeInTheDocument();
+        expect(screen.getByDisplayValue('Active')).toBeInTheDocument();
+        // And never a first request for every project's sprints.
+        for (const call of (api.getSprints as jest.Mock).mock.calls) {
+            expect(call[0]).toBe('p1');
+        }
+    });
+
     it('creates a sprint from the modal and reloads the list', async () => {
         (api.createSprint as jest.Mock).mockResolvedValue({ id: 's2' });
         render(<SprintsPage />);
