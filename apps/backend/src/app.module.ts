@@ -106,6 +106,7 @@ import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
+import { CrmMessageTemplatesModule } from './crm-message-templates/crm-message-templates.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
@@ -229,6 +230,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         CrmLeadsModule,
         CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,
+        CrmMessageTemplatesModule,
         CustomFieldsModule,
         ExpensesModule,
         LoansModule,

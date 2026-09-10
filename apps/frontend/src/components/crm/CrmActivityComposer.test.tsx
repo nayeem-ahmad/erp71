@@ -7,6 +7,7 @@ jest.mock('@/lib/api', () => ({
         searchCustomers: jest.fn(),
         createCrmActivity: jest.fn(),
         getLeadTaxonomy: jest.fn(),
+        getCrmMessageTemplates: jest.fn(),
         getTeamMembers: jest.fn(),
         getMe: jest.fn(),
     },
@@ -19,6 +20,18 @@ const { api } = require('@/lib/api');
 const CHANNELS = [{ id: 'ch-call', code: 'CALL', name: 'Call', sort_order: 1, is_system: true, is_active: true }];
 const PURPOSES = [{ id: 'p-col', code: 'COLLECTION', name: 'Collection', sort_order: 1, is_system: true, is_active: true }];
 
+const REMINDER = {
+    id: 'tpl-1',
+    name: 'Payment reminder',
+    usage: 'BOTH' as const,
+    subject: 'Chase {{name}} on the invoice',
+    body: 'Dear {{name}}, your invoice is outstanding. — {{user}}, {{business}}',
+    sort_order: 1,
+    is_active: true,
+    channel: { id: 'ch-wa', name: 'WhatsApp', icon: null },
+    purpose: { id: 'p-col', name: 'Collection', icon: null },
+};
+
 beforeEach(() => {
     jest.clearAllMocks();
     api.getLeadTaxonomy.mockImplementation((kind: string) =>
@@ -28,7 +41,10 @@ beforeEach(() => {
     api.searchCustomers.mockResolvedValue([{ id: 'cust-1', name: 'Karim Store', phone: '01800000000' }]);
     api.createCrmActivity.mockResolvedValue({ id: 'new' });
     api.getTeamMembers.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
-    api.getMe.mockResolvedValue({ id: 'user-1' });
+    api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem', tenants: [{ id: 'tenant-1', name: 'Dhaka Electronics' }] });
+    // No templates by default: every pre-existing case here asserts against a
+    // dialog with no picker in it.
+    api.getCrmMessageTemplates.mockResolvedValue([]);
 });
 
 /** Types into the picker and waits out the 300ms debounce. */
@@ -154,5 +170,156 @@ describe('CrmActivityComposer — opened from a record that already knows its ta
         );
 
         expect(await screen.findByDisplayValue('Drafted by AI')).toBeInTheDocument();
+    });
+});
+
+describe('CrmActivityComposer — picking a message template', () => {
+    beforeEach(() => {
+        api.getCrmMessageTemplates.mockResolvedValue([REMINDER]);
+    });
+
+    /** No templates configured means no picker — not an empty select to squint at. */
+    it('shows no picker when the tenant has no templates', async () => {
+        api.getCrmMessageTemplates.mockResolvedValue([]);
+        render(
+            <CrmActivityComposer
+                mode="log"
+                target={{ lead_id: 'lead-9' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        await screen.findByPlaceholderText(/Spoke to Karim/);
+        expect(screen.queryByLabelText('Message template')).not.toBeInTheDocument();
+    });
+
+    it('fills the log summary, resolving the placeholders against the target', async () => {
+        render(
+            <CrmActivityComposer
+                mode="log"
+                target={{ lead_id: 'lead-9' }}
+                targetLabel={{ name: 'Karim Traders', phone: '01700000000' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        fireEvent.change(await screen.findByLabelText('Message template'), {
+            target: { value: 'tpl-1' },
+        });
+
+        expect(await screen.findByDisplayValue(
+            'Dear Karim Traders, your invoice is outstanding. — Nayeem, Dhaka Electronics',
+        )).toBeInTheDocument();
+    });
+
+    /**
+     * The channel is the rep's assertion about what actually happened; the
+     * template list narrows to it, not the other way round.
+     */
+    it('leaves the channel alone and re-narrows the list when it changes', async () => {
+        api.getLeadTaxonomy.mockImplementation((kind: string) =>
+            Promise.resolve(
+                kind === 'channels'
+                    ? [...CHANNELS, { id: 'ch-wa', code: 'WHATSAPP', name: 'WhatsApp', sort_order: 2, is_system: true, is_active: true }]
+                    : PURPOSES,
+            ),
+        );
+        render(
+            <CrmActivityComposer
+                mode="log"
+                target={{ lead_id: 'lead-9' }}
+                targetLabel={{ name: 'Karim Traders' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        fireEvent.change(await screen.findByLabelText('Message template'), {
+            target: { value: 'tpl-1' },
+        });
+        fireEvent.change(screen.getByLabelText(/^Channel/), { target: { value: 'ch-wa' } });
+
+        await waitFor(() =>
+            expect(api.getCrmMessageTemplates).toHaveBeenCalledWith({
+                usage: 'LOG',
+                channelId: 'ch-wa',
+            }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ channel: 'ch-wa', status: 'DONE' }),
+        );
+    });
+
+    it('fills subject, notes and purpose when scheduling', async () => {
+        render(
+            <CrmActivityComposer
+                mode="schedule"
+                target={{ lead_id: 'lead-9' }}
+                targetLabel={{ name: 'Karim Traders' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        fireEvent.change(await screen.findByLabelText('Message template'), {
+            target: { value: 'tpl-1' },
+        });
+        await screen.findByDisplayValue('Chase Karim Traders on the invoice');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                subject: 'Chase Karim Traders on the invoice',
+                purpose: 'p-col',
+                notes: 'Dear Karim Traders, your invoice is outstanding. — Nayeem, Dhaka Electronics',
+            }),
+        );
+    });
+
+    /**
+     * `subject` is what the activity is listed under, so a template that carries
+     * only a body still has to leave a title behind.
+     */
+    it('falls back to the template name when it has no subject of its own', async () => {
+        api.getCrmMessageTemplates.mockResolvedValue([{ ...REMINDER, subject: null }]);
+        render(
+            <CrmActivityComposer
+                mode="schedule"
+                target={{ lead_id: 'lead-9' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        fireEvent.change(await screen.findByLabelText('Message template'), {
+            target: { value: 'tpl-1' },
+        });
+
+        expect(await screen.findByDisplayValue('Payment reminder')).toBeInTheDocument();
+    });
+
+    /** The log dialog asks only for what the channel it is on offers. */
+    it('asks the server for the channel the log form is on', async () => {
+        render(
+            <CrmActivityComposer
+                mode="log"
+                target={{ lead_id: 'lead-9' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+        await waitFor(() =>
+            expect(api.getCrmMessageTemplates).toHaveBeenCalledWith({
+                usage: 'LOG',
+                channelId: 'ch-call',
+            }),
+        );
     });
 });

@@ -19,6 +19,7 @@ jest.mock('@/lib/api', () => ({
         getAllCrmActivities: jest.fn(),
         getCrmActivitySummary: jest.fn(),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
+        getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
         getTeamMembers: jest.fn(),
         getMe: jest.fn(),
         getLeads: jest.fn(),

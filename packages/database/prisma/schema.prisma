@@ -403,6 +403,7 @@ model User {
   crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
   crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
   crmActivitiesApproved             CrmActivity[]               @relation("CrmActivityApprover")
+  crmMessageTemplatesCreated        CrmMessageTemplate[]        @relation("CrmMessageTemplateCreator")
   refereeProfile                    Referee?
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
@@ -823,6 +824,7 @@ model Tenant {
   crmFollowUps               CrmFollowUp[]
   crmActivities              CrmActivity[]
   crmActivityPurposes        CrmActivityPurpose[]
+  crmMessageTemplates        CrmMessageTemplate[]
   leads                      Lead[]
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
@@ -2755,9 +2757,10 @@ model ConversationChannel {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant        Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   conversations LeadConversation[]
   activities    CrmActivity[]
+  templates     CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2842,8 +2845,9 @@ model CrmActivityPurpose {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant     Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   activities CrmActivity[]
+  templates  CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2930,6 +2934,63 @@ model CrmActivity {
   @@index([tenant_id, status, completed_at])
   @@index([tenant_id, channel_id])
   @@index([tenant_id, purpose_id])
+}
+
+/// A reusable message a rep drops into an activity instead of retyping it — the
+/// "payment reminder" WhatsApp, the "thanks for visiting" SMS, the standing call
+/// script. Tenant-owned and edited from CRM → Setup → Message Templates.
+///
+/// Deliberately not a CrmActivity row: a template is the text, not a touch. It
+/// carries no target, no due date and never appears on a timeline; picking one
+/// fills the composer's fields and the rep edits from there, so nothing here is
+/// sent or stored on the activity beyond the words that end up in it.
+model CrmMessageTemplate {
+  id        String @id @default(uuid())
+  tenant_id String
+
+  /// What the rep picks from the list — "Payment reminder", not the message body.
+  name  String
+  /// Which composer offers it: LOG (something that already happened),
+  /// SCHEDULE (a plan), or BOTH. A call script is worth having in both places;
+  /// "Sorry we missed you" only makes sense once the call is over.
+  usage String @default("BOTH")
+
+  /// Narrows the template to one channel — a WhatsApp blurb should not be
+  /// offered when logging a shop visit. Null means every channel.
+  ///
+  /// SetNull rather than Restrict: deleting a channel from CRM Setup already
+  /// reassigns the activities that used it, and blocking that delete because a
+  /// template mentions the channel would be a surprising place to be stopped.
+  /// The template survives as channel-agnostic, which is the honest degradation.
+  channel_id String?
+  /// Pre-selects the activity purpose when the template is used to schedule.
+  purpose_id String?
+
+  /// Fills "What needs doing" when scheduling. Null on a template that is only
+  /// ever a message body.
+  subject String?
+  /// The message itself. Carries `{{name}}`-style placeholders which the
+  /// composer substitutes at pick time — see lib/crm-message-templates.ts for
+  /// the token list. Stored verbatim, so a rename never rewrites saved text.
+  body    String
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  channel ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: SetNull)
+  purpose CrmActivityPurpose?  @relation(fields: [purpose_id], references: [id], onDelete: SetNull)
+  creator User?                @relation("CrmMessageTemplateCreator", fields: [created_by], references: [id])
+
+  @@unique([tenant_id, name])
+  /// Serves the picker, which reads the active templates for one tenant in
+  /// display order on every open of the Log / Schedule dialog.
+  @@index([tenant_id, is_active, sort_order])
+  @@index([tenant_id, channel_id])
 }
 
 model CustomerCreditTransaction {

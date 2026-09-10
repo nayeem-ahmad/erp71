@@ -31,6 +31,13 @@ type Props = {
     leadId?: string;
     customerId?: string;
     /**
+     * Who that id names. Passed straight to the composer, where it fills the
+     * `{{name}}` / `{{phone}}` placeholders in a picked message template — the
+     * page already has the record on screen, and refetching it here to read one
+     * name would be a round trip for nothing.
+     */
+    targetLabel?: { name?: string | null; phone?: string | null };
+    /**
      * Pre-fills and opens the "Log activity" dialog. The lead page's AI drafter
      * used to write straight into its own conversation form; that form is gone,
      * so it hands the generated text here instead.
@@ -75,6 +82,7 @@ function toLocalInputValue(iso: string | null): string {
 export default function CrmActivityPanel({
     leadId,
     customerId,
+    targetLabel,
     draft,
     onDraftConsumed,
 }: Readonly<Props>) {
@@ -366,6 +374,7 @@ export default function CrmActivityPanel({
                 <CrmActivityComposer
                     mode={composing}
                     target={target}
+                    targetLabel={targetLabel}
                     draft={composerDraft}
                     onClose={() => { setComposing(null); setComposerDraft(null); }}
                     onSaved={load}
