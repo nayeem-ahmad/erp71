@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: 'Could not verify access',
             checkFailedDescription: 'We couldn’t confirm your permissions just now — this may be a connection issue, not a restriction. Try again.',
             retry: 'Try again',
+            notOnPlanTitle: 'Available on the Business plan',
+            notOnPlanDescription: 'The URL shortener comes with the Business plan. Upgrade to create and manage short links — links you have already shared keep working.',
+            viewPlans: 'View plans',
         },
         storeSettings: {
             title: 'Stores',

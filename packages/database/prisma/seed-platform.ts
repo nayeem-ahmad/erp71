@@ -268,6 +268,7 @@ export async function seedPlatformReferenceData(
             premiumCrm: true,
             multiStore: true,
             apiAccess: true,
+            urlShortener: true,
             accountingOnly: false,
             premiumAccountingAdvanced: true,
             premiumManufacturing: true,

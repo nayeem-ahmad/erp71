@@ -905,6 +905,9 @@ export const coreMessages = {
                 checkFailedTitle: "Tidak dapat mengesahkan akses",
                 checkFailedDescription: "Kami tidak dapat mengesahkan kebenaran anda sekarang — ini mungkin masalah sambungan, bukan sekatan. Cuba lagi.",
                 retry: "Cuba lagi",
+                notOnPlanTitle: "Tersedia pada pelan Business",
+                notOnPlanDescription: "Pemendek URL disertakan dengan pelan Business. Naik taraf untuk mencipta dan mengurus pautan pendek — pautan yang telah anda kongsi akan terus berfungsi.",
+                viewPlans: "Lihat pelan",
             },
             storeSettings: {
                 title: "Kedai",

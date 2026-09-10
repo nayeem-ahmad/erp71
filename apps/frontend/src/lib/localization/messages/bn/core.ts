@@ -904,6 +904,9 @@ export const coreMessages = {
                 checkFailedTitle: "অনুমতি যাচাই করা যায়নি",
                 checkFailedDescription: "এই মুহূর্তে আপনার অনুমতি নিশ্চিত করা যায়নি — এটি সংযোগজনিত সমস্যা হতে পারে, বিধিনিষেধ নয়। আবার চেষ্টা করুন।",
                 retry: "আবার চেষ্টা করুন",
+                notOnPlanTitle: "Business প্ল্যানে উপলব্ধ",
+                notOnPlanDescription: "ইউআরএল শর্টনার Business প্ল্যানের অংশ। শর্ট লিংক তৈরি ও পরিচালনা করতে আপগ্রেড করুন — আগে শেয়ার করা লিংকগুলো আগের মতোই কাজ করবে।",
+                viewPlans: "প্ল্যান দেখুন",
             },
             storeSettings: {
                 title: "দোকানসমূহ",

@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: "Impossible de vérifier l'accès",
             checkFailedDescription: "Nous n'avons pas pu confirmer vos autorisations à l'instant — cela peut venir de la connexion, et non d'une restriction. Réessayez.",
             retry: "Réessayer",
+            notOnPlanTitle: "Disponible avec la formule Business",
+            notOnPlanDescription: "Le raccourcisseur d'URL est inclus dans la formule Business. Passez à cette formule pour créer et gérer des liens courts — les liens déjà partagés continuent de fonctionner.",
+            viewPlans: "Voir les formules",
         },
         storeSettings: {
             title: "Boutiques",

@@ -268,7 +268,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.print-templates': { id: 'account-settings.print-templates', kind: 'link', icon: 'Printer', labelKey: 'sidebar.items.printTemplates', href: '/settings/print-templates' },
   'account-settings.payment-methods': { id: 'account-settings.payment-methods', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.paymentMethods', href: '/settings/payment-methods' },
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
-  'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener' },
+  // Business-plan tool. The Sidebar also hides it from users without MANAGE_SHORT_LINKS.
+  'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener', entitlement: 'urlShortener' },
   'account-settings.blog': { id: 'account-settings.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.storefrontBlog', href: '/settings/blog' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },
   'account-settings.billing': { id: 'account-settings.billing', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.modules.billing', href: '/billing', billingGated: true },
@@ -502,6 +503,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
+  layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
   layoutNode('chat', null, 12),
   layoutNode('support', null, 13),

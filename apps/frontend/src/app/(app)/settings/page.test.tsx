@@ -70,4 +70,25 @@ describe('SettingsHubPage', () => {
         expect(screen.queryByRole('link', { name: 'Loyalty Program' })).not.toBeInTheDocument();
         expect(screen.queryByRole('link', { name: 'POS Counters' })).not.toBeInTheDocument();
     });
+
+    it('offers the URL Shortener card on a plan that includes it', async () => {
+        useTenantPlanFeatures.mockReturnValue({ planCode: 'PREMIUM', features: { urlShortener: true }, ready: true });
+
+        render(<SettingsHubPage />);
+
+        expect(await screen.findByRole('link', { name: 'URL Shortener' })).toHaveAttribute(
+            'href',
+            '/settings/url-shortener',
+        );
+    });
+
+    it('leaves the URL Shortener card out below Business', async () => {
+        useTenantPlanFeatures.mockReturnValue({ planCode: 'STANDARD', features: { urlShortener: false }, ready: true });
+
+        render(<SettingsHubPage />);
+
+        // Audit logs shares the card's section, so the section itself did render.
+        expect(await screen.findByRole('link', { name: /audit logs/i })).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'URL Shortener' })).not.toBeInTheDocument();
+    });
 });
