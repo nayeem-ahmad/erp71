@@ -32,6 +32,8 @@ jest.mock('@/lib/api', () => ({
         getProducts: jest.fn(),
         getPaymentMethods: jest.fn(),
         searchProductsByQuantity: jest.fn(),
+        getInventoryWarehouses: jest.fn().mockResolvedValue([]),
+        getInventorySettings: jest.fn().mockResolvedValue({}),
         // The Cancel action is permission-gated, and `useTenantPlanFeatures`
         // resolves those through /auth/me on mount. No membership → no
         // CANCEL_ENTRY → the action is hidden, which is the default here.

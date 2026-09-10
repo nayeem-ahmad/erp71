@@ -4,7 +4,12 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 
@@ -42,13 +47,32 @@ export class PurchaseReturnsService {
                 throw new BadRequestException('Purchase does not belong to the provided store.');
             }
 
+            const storeId = purchase?.store_id ?? dto.storeId;
+
+            // Goods go back out of the warehouse the purchase put them in
+            // unless the user says otherwise. Filtered first, so a warehouse
+            // closed since the purchase falls through to the default rather
+            // than blocking the return.
+            const inheritable = await usableWarehouseIds(tx, tenantId, storeId, [
+                purchase?.warehouse_id,
+                ...(purchase?.items ?? []).map((item: { warehouse_id?: string | null }) => item.warehouse_id),
+            ]);
+            const inherited = (warehouseId?: string | null) =>
+                warehouseId && inheritable.has(warehouseId) ? warehouseId : null;
+
             const returnItemData = purchase
-                ? this.buildReturnItemData(purchase.items, dto.items)
+                ? this.buildReturnItemData(purchase.items, dto.items, undefined, inherited)
                 : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
             const totalAmount = returnItemData.reduce((sum, item) => sum + item.line_total, 0);
             const count = await tx.purchaseReturn.count({ where: { tenant_id: tenantId } });
             const returnNumber = `PRET-${String(count + 1).padStart(5, '0')}`;
-            const warehouseId = await resolveWarehouseId(tx, tenantId, purchase?.store_id ?? dto.storeId);
+            const warehouses = await resolveEntryWarehouses(
+                tx,
+                tenantId,
+                storeId,
+                dto.warehouseId ?? inherited(purchase?.warehouse_id) ?? undefined,
+                returnItemData.map((item) => item.warehouse_id),
+            );
 
             // Create the return row first, so movements can reference its id
             // (every other caller passes the id, not the PRET- string).
@@ -63,6 +87,7 @@ export class PurchaseReturnsService {
                     total_amount: totalAmount,
                     notes: dto.notes,
                     created_by: userId,
+                    warehouse_id: warehouses.entryWarehouseId,
                 },
             });
 
@@ -77,7 +102,7 @@ export class PurchaseReturnsService {
                 await applyInventoryMovement(tx, {
                     tenantId,
                     productId: item.product_id,
-                    warehouseId,
+                    warehouseId: warehouses.warehouseIdFor(item.warehouse_id),
                     quantityDelta: -item.quantity,
                     movementType: 'PURCHASE_RETURN',
                     referenceType: 'PURCHASE_RETURN',
@@ -233,16 +258,43 @@ export class PurchaseReturnsService {
 
             if (dto.items) {
                 // A parentless return has no purchase to take the store from.
-                const warehouseId = await resolveWarehouseId(
+                const storeId = existingReturn.purchase?.store_id ?? existingReturn.store_id;
+
+                const inheritable = await usableWarehouseIds(tx, tenantId, storeId, [
+                    existingReturn.purchase?.warehouse_id,
+                    ...(existingReturn.purchase?.items ?? []).map(
+                        (item: { warehouse_id?: string | null }) => item.warehouse_id,
+                    ),
+                ]);
+                const inherited = (warehouseId?: string | null) =>
+                    warehouseId && inheritable.has(warehouseId) ? warehouseId : null;
+
+                const newItems = existingReturn.purchase
+                    ? this.buildReturnItemData(existingReturn.purchase.items, dto.items, id, inherited)
+                    : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
+
+                const warehouses = await resolveEntryWarehouses(
                     tx,
                     tenantId,
-                    existingReturn.purchase?.store_id ?? existingReturn.store_id,
+                    storeId,
+                    dto.warehouseId ?? existingReturn.warehouse_id ?? undefined,
+                    newItems.map((item) => item.warehouse_id),
+                );
+                updateData.warehouse_id = warehouses.entryWarehouseId;
+
+                // Put the old quantities back where they were taken from, which
+                // the edited return may be moving away from.
+                const reversalWarehouseId = reversalWarehouseResolver(
+                    tx,
+                    tenantId,
+                    storeId,
+                    existingReturn.warehouse_id,
                 );
                 for (const oldItem of existingReturn.items) {
                     await applyInventoryMovement(tx, {
                         tenantId,
                         productId: oldItem.product_id,
-                        warehouseId,
+                        warehouseId: await reversalWarehouseId(oldItem.warehouse_id),
                         quantityDelta: oldItem.quantity,
                         movementType: 'PURCHASE_RETURN_REVERSAL',
                         referenceType: 'PURCHASE_RETURN',
@@ -254,17 +306,13 @@ export class PurchaseReturnsService {
                     });
                 }
 
-                const newItems = existingReturn.purchase
-                    ? this.buildReturnItemData(existingReturn.purchase.items, dto.items, id)
-                    : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
-
                 updateData.total_amount = newItems.reduce((sum, item) => sum + item.line_total, 0);
 
                 for (const item of newItems) {
                     await applyInventoryMovement(tx, {
                         tenantId,
                         productId: item.product_id,
-                        warehouseId,
+                        warehouseId: warehouses.warehouseIdFor(item.warehouse_id),
                         quantityDelta: -item.quantity,
                         movementType: 'PURCHASE_RETURN_EDIT',
                         referenceType: 'PURCHASE_RETURN',
@@ -306,12 +354,17 @@ export class PurchaseReturnsService {
                 throw new NotFoundException('Purchase return not found');
             }
 
+            const reversalWarehouseId = reversalWarehouseResolver(
+                tx,
+                tenantId,
+                existingReturn.store_id,
+                existingReturn.warehouse_id,
+            );
             for (const item of existingReturn.items) {
-                const warehouseId = await resolveWarehouseId(tx, tenantId, existingReturn.store_id);
                 await applyInventoryMovement(tx, {
                     tenantId,
                     productId: item.product_id,
-                    warehouseId,
+                    warehouseId: await reversalWarehouseId(item.warehouse_id),
                     quantityDelta: item.quantity,
                     movementType: 'PURCHASE_RETURN_DELETE',
                     referenceType: 'PURCHASE_RETURN',
@@ -337,7 +390,7 @@ export class PurchaseReturnsService {
     private async buildStandaloneReturnItemData(
         tx: any,
         tenantId: string,
-        items: Array<{ productId?: string; quantity: number; unitCost?: number }>,
+        items: Array<{ productId?: string; quantity: number; unitCost?: number; warehouseId?: string }>,
     ) {
         const seen = new Set<string>();
         const rows = [];
@@ -366,6 +419,7 @@ export class PurchaseReturnsService {
                 quantity: item.quantity,
                 unit_cost: item.unitCost,
                 line_total: item.unitCost * item.quantity,
+                warehouse_id: item.warehouseId ?? null,
             });
         }
 
@@ -378,10 +432,18 @@ export class PurchaseReturnsService {
             product_id: string;
             quantity: number;
             unit_cost: unknown;
+            warehouse_id?: string | null;
             returnItems?: Array<{ quantity: number; return_id: string }>;
         }>,
-        items: Array<{ purchaseItemId?: string; quantity: number }>,
+        items: Array<{ purchaseItemId?: string; quantity: number; warehouseId?: string }>,
         currentReturnId?: string,
+        /**
+         * Maps the purchase line's warehouse onto one the return may still use,
+         * so a line nobody steered goes back out of where it came in. Returns
+         * null where that warehouse is no longer usable, and the line then
+         * follows the return's own.
+         */
+        inheritWarehouseId: (warehouseId?: string | null) => string | null = () => null,
     ) {
         const seen = new Set<string>();
 
@@ -417,6 +479,7 @@ export class PurchaseReturnsService {
                 quantity: item.quantity,
                 unit_cost: unitCost,
                 line_total: unitCost * item.quantity,
+                warehouse_id: item.warehouseId ?? inheritWarehouseId(purchaseItem.warehouse_id),
             };
         });
     }

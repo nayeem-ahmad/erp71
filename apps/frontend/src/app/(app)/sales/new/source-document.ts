@@ -63,6 +63,9 @@ const lineFrom = (
     // Neither document's payload carries stock rows, so leave availability
     // unknown rather than claiming zero — same as a voice-entry line.
     availableQty: undefined,
+    // Only a sale line carries one; a quotation or order has no warehouse at
+    // all, and `?? undefined` is what makes that a no-op rather than a null.
+    warehouseId: item.warehouse_id ?? undefined,
 });
 
 /** Cart contents for a sale being raised from a quotation or proforma. */
@@ -97,7 +100,7 @@ export function seedFromQuotation(quote: any): SeededSale {
  * detail screen does, and for the same reason: the original discount/VAT/
  * transport split is not persisted and must not be invented here.
  */
-export function seedFromSale(sale: any): SeededSale & { rounding: number } {
+export function seedFromSale(sale: any): SeededSale & { rounding: number; warehouseId?: string } {
     const items: LineItem[] = (sale.items ?? []).map((item: any) =>
         lineFrom(item, item.price_at_sale, 1, 'Item'),
     );
@@ -117,6 +120,8 @@ export function seedFromSale(sale: any): SeededSale & { rounding: number } {
         customer: sale.customer ? { ...sale.customer, id: sale.customer_id } : null,
         description: sale.note || '',
         rounding: Number((Number(sale.total_amount ?? 0) - subtotal).toFixed(2)),
+        // A copy sells out of the same place unless the user says otherwise.
+        warehouseId: sale.warehouse_id ?? undefined,
     };
 }
 

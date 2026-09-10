@@ -21,6 +21,14 @@ export class CreateReturnItemDto {
     @IsOptional()
     @IsNumber()
     unitPrice?: number;
+
+    /**
+     * Put this line back into a warehouse other than the return's. Omit it and
+     * the line follows `CreateSalesReturnDto.warehouseId`.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 }
 
 export class CreateSalesReturnDto {
@@ -31,6 +39,14 @@ export class CreateSalesReturnDto {
     @IsOptional()
     @IsString()
     saleId?: string;
+
+    /**
+     * Where the goods are put back. Omitted, it falls to the tenant's default
+     * — which is what every return did before this field existed.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 
     @IsArray()
     items: CreateReturnItemDto[];
@@ -56,12 +72,25 @@ export class UpdateReturnItemDto {
     @IsOptional()
     @IsNumber()
     unitPrice?: number;
+
+    /** Per-line warehouse override; omit to follow the return's own. */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 }
 
 export class UpdateSalesReturnDto {
     @IsOptional()
     @IsString()
     reason?: string;
+
+    /**
+     * Move the whole return to another warehouse. Only read when `items` are
+     * also supplied — that is the edit which reverses and re-applies the stock.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 
     @IsOptional()
     @IsArray()

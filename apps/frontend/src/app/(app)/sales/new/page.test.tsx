@@ -22,12 +22,31 @@ jest.mock('@/lib/api', () => ({
         getQuotation: jest.fn(),
         getOrder: jest.fn(),
         getSale: jest.fn(),
+        getInventoryWarehouses: jest.fn(),
+        getInventorySettings: jest.fn(),
     },
 }));
 
 jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+
+const MAIN_WAREHOUSE = {
+    id: 'wh-main',
+    name: 'Main Store',
+    code: 'WH-MAIN',
+    store_id: 'store-1',
+    is_default: true,
+    is_active: true,
+};
+const ANNEX_WAREHOUSE = {
+    id: 'wh-annex',
+    name: 'Annex',
+    code: 'WH-ANNEX',
+    store_id: 'store-1',
+    is_default: false,
+    is_active: true,
+};
 
 /** The rate hint renders on every staged product; most cases don't exercise it. */
 const EMPTY_RATE_HISTORY = { type: 'sale', forParty: [], recent: [], summary: null };
@@ -67,6 +86,11 @@ describe('NewSalePage — editable sale date', () => {
         ]);
         (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
 
+        // One warehouse — the shape of almost every tenant, and the case where
+        // no picker must appear at all.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
         Object.defineProperty(window, 'localStorage', {
             value: {
                 getItem: jest.fn(() => 'store-1'),
@@ -75,6 +99,11 @@ describe('NewSalePage — editable sale date', () => {
             },
             writable: true,
         });
+        // The active branch really lives in sessionStorage (it is per tab), and
+        // jest.setup clears storage between tests. Seeding it directly beats
+        // relying on the one-shot localStorage bootstrap, which only runs for
+        // whichever test happens to read the workspace first.
+        window.sessionStorage.setItem('store_id', 'store-1');
     });
 
     it('renders an editable datetime-local input seeded to now', async () => {
@@ -149,6 +178,11 @@ describe('NewSalePage — product staging and drafts', () => {
             reference_number: '2607-001',
         });
 
+        // One warehouse — the shape of almost every tenant, and the case where
+        // no picker must appear at all.
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
         Object.defineProperty(window, 'localStorage', {
             value: {
                 getItem: jest.fn(() => 'store-1'),
@@ -157,6 +191,11 @@ describe('NewSalePage — product staging and drafts', () => {
             },
             writable: true,
         });
+        // The active branch really lives in sessionStorage (it is per tab), and
+        // jest.setup clears storage between tests. Seeding it directly beats
+        // relying on the one-shot localStorage bootstrap, which only runs for
+        // whichever test happens to read the workspace first.
+        window.sessionStorage.setItem('store_id', 'store-1');
     });
 
     const stageProduct = async () => {
@@ -177,6 +216,47 @@ describe('NewSalePage — product staging and drafts', () => {
         expect(screen.getByText(/Available 12/)).toBeInTheDocument();
         const priceInput = screen.getByLabelText('Unit Price') as HTMLInputElement;
         expect(priceInput.value).toBe('100');
+    });
+
+    it('sells out of the chosen warehouse, and per line once the column is on', async () => {
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({
+            // The tenant's sales default is the annex, not the branch's own
+            // default warehouse: the picker has to follow the setting the server
+            // would have resolved, or the screen contradicts the posting.
+            default_sales_warehouse_id: 'wh-annex',
+        });
+
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const picker = await screen.findByLabelText('Warehouse');
+        expect((picker as HTMLSelectElement).value).toBe('wh-annex');
+        fireEvent.change(picker, { target: { value: 'wh-main' } });
+
+        await stageProduct();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+        fireEvent.change(screen.getByLabelText('Warehouse — Rice 5kg'), {
+            target: { value: 'wh-annex' },
+        });
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '100' } });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /create sale/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    warehouseId: 'wh-main',
+                    items: [expect.objectContaining({ warehouseId: 'wh-annex' })],
+                }),
+            );
+        });
     });
 
     it('adds the item with the edited unit price and quantity', async () => {
@@ -268,10 +348,14 @@ describe('NewSalePage — converting a quotation or sales order', () => {
         (api.getOrder as jest.Mock).mockResolvedValue(salesOrder);
         (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
 
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
         Object.defineProperty(window, 'localStorage', {
             value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
             writable: true,
         });
+        window.sessionStorage.setItem('store_id', 'store-1');
     });
 
     it('loads the quotation lines, customer and note into the entry form', async () => {
@@ -407,10 +491,14 @@ describe('NewSalePage — duplicating an existing sale', () => {
         (api.getSale as jest.Mock).mockResolvedValue(sale);
         (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00010' });
 
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
         Object.defineProperty(window, 'localStorage', {
             value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
             writable: true,
         });
+        window.sessionStorage.setItem('store_id', 'store-1');
     });
 
     it('loads the lines, customer and note, and names the sale it copied', async () => {

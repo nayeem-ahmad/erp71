@@ -5,6 +5,8 @@ import RateHistoryModal from './RateHistoryModal';
 import { type RateHistoryType } from './RateHistory';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
 import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
+import WarehouseSelect from './WarehouseSelect';
+import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
 
 interface LineItemsTableProps {
     items: LineItem[];
@@ -43,6 +45,15 @@ interface LineItemsTableProps {
     /** The customer/supplier on the document, so their own rates lead the list. */
     historyPartyId?: string;
     historyPartyName?: string;
+    /**
+     * Turn on the per-line warehouse column. Passing an empty list leaves it
+     * off, which is how a single-warehouse shop never sees a column it has no
+     * decision to make in.
+     */
+    warehouses?: WarehouseOption[];
+    /** Name of the document's own warehouse, for the "same as entry" option. */
+    entryWarehouseName?: string;
+    warehouseLabel?: string;
 }
 
 export default function LineItemsTable({
@@ -61,12 +72,16 @@ export default function LineItemsTable({
     historyType,
     historyPartyId,
     historyPartyName,
+    warehouses = [],
+    entryWarehouseName,
+    warehouseLabel = 'Warehouse',
 }: LineItemsTableProps) {
     const priceFrozen = readOnly || readOnlyPrice;
     const showHistory = !!historyType && !priceFrozen;
+    const showWarehouse = warehouses.length > 0;
     // #, Name, Group, Price, Qty, Total and the remove button are always
-    // rendered; Avail and Disc % are the opt-in pair.
-    const columnCount = 7 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
+    // rendered; Avail, Disc % and Warehouse are the opt-in ones.
+    const columnCount = 7 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0) + (showWarehouse ? 1 : 0);
     // The line whose history modal is open, if any.
     const [historyFor, setHistoryFor] = useState<LineItem | null>(null);
 
@@ -93,12 +108,15 @@ export default function LineItemsTable({
     return (
         <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-auto">
-            <table className="w-full text-sm min-w-[620px]">
+            <table className={`w-full text-sm ${showWarehouse ? 'min-w-[760px]' : 'min-w-[620px]'}`}>
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                         <th className="px-2 py-1.5 text-start font-semibold w-8">#</th>
                         <th className="px-2 py-1.5 text-start font-semibold">Name</th>
                         <th className="px-2 py-1.5 text-start font-semibold hidden md:table-cell">Group</th>
+                        {showWarehouse && (
+                            <th className="px-2 py-1.5 text-start font-semibold">{warehouseLabel}</th>
+                        )}
                         {showAvailable && (
                             <th className="px-2 py-1.5 text-end font-semibold hidden md:table-cell">{availableLabel}</th>
                         )}
@@ -126,6 +144,21 @@ export default function LineItemsTable({
                                         {item.group}
                                         {item.subgroup && ` → ${item.subgroup}`}
                                     </td>
+                                    {showWarehouse && (
+                                        <td className="px-2 py-1">
+                                            <WarehouseSelect
+                                                warehouses={warehouses}
+                                                value={item.warehouseId ?? ''}
+                                                onChange={(warehouseId) =>
+                                                    onUpdateItem(item.productId, { warehouseId: warehouseId || undefined })}
+                                                perLine
+                                                entryWarehouseName={entryWarehouseName}
+                                                readOnly={readOnly}
+                                                aria-label={`${warehouseLabel} — ${item.name}`}
+                                                className="w-full min-w-[7rem] px-1.5 py-0.5 border rounded text-sm"
+                                            />
+                                        </td>
+                                    )}
                                     {showAvailable && (
                                         <td className="px-2 py-1 text-end text-xs hidden md:table-cell">
                                             {item.availableQty == null ? (
