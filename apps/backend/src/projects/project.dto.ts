@@ -230,6 +230,25 @@ export class ListTasksDto {
     @IsOptional() @IsUUID()
     assigneeEmployeeId?: string;
 
+    /**
+     * `true` returns only tasks nobody holds — neither a user nor an employee.
+     * A separate flag rather than an empty `assigneeId`, because "not filtered
+     * on an assignee" and "filtered to no assignee" are different questions and
+     * an absent query parameter cannot tell them apart.
+     */
+    @IsOptional() @IsString()
+    unassigned?: string;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    /** Calendar days in the tenant's own zone — see `created-range.util.ts`. */
+    @IsOptional() @IsString()
+    createdFrom?: string;
+
+    @IsOptional() @IsString()
+    createdTo?: string;
+
     @IsOptional() @IsUUID()
     labelId?: string;
 

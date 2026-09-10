@@ -84,6 +84,10 @@ export const projectsMessages = {
         anyone: "أي شخص",
         allProjects: "كل المشاريع",
         anyStatus: "أي حالة",
+        anyPriority: "أي أولوية",
+        bulkDeletePrompt: "حذف {count, plural, zero {# مهام محددة} one {مهمة واحدة محددة} two {مهمتين محددتين} few {# مهام محددة} many {# مهمة محددة} other {# مهمة محددة}}؟\n\nستختفي من كل قائمة ولوحة ودورة. لا يمكن التراجع عن ذلك.",
+        deletedCount: "{count, plural, zero {لم تُحذف مهام} one {حُذفت مهمة واحدة} two {حُذفت مهمتان} few {حُذفت # مهام} many {حُذفت # مهمة} other {حُذفت # مهمة}}",
+        deleteFailedCount: "{count, plural, zero {لم يتعذّر حذف أي مهمة} one {تعذّر حذف مهمة واحدة} two {تعذّر حذف مهمتين} few {تعذّر حذف # مهام} many {تعذّر حذف # مهمة} other {تعذّر حذف # مهمة}}",
     },
 
     tabs: {
@@ -144,6 +148,9 @@ export const projectsMessages = {
         subtasks: "المهام الفرعية",
         noTasks: "لا توجد مهام بعد.",
         deleted: "تم حذف المهمة",
+        deleteTask: "حذف المهمة",
+        deletePrompt: "حذف {title}؟\n\nستختفي من كل قائمة ولوحة ودورة. لا يمكن التراجع عن ذلك.",
+        deleteFailed: "تعذّر حذف المهمة",
         created: "تم إنشاء المهمة",
         updated: "تم تحديث المهمة",
         editTitle: "تعديل العنوان",

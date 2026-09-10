@@ -4445,6 +4445,12 @@ export const api = {
         }
         return fetchPaginated(`/project-tasks?${query}`);
     },
+    /**
+     * Whoever holds a task the caller can see — the Tasks page's assignee filter.
+     * Not `getProjectMemberCandidates`, which needs MANAGE_PROJECTS: reading the
+     * list only takes VIEW_PROJECTS, and its filter must not need more.
+     */
+    getProjectTaskAssignees: () => fetchWithAuth('/project-tasks/assignees'),
     getBoards: () => fetchWithAuth('/projects/boards'),
     getBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`),
     createBoard: (data: { name: string; description?: string }) =>

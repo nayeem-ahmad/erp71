@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
+import { createdAtRange } from '../common/created-range.util';
 import { runImport, type ImportResult } from '../common/import.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
@@ -61,12 +62,23 @@ export class ProjectTasksService {
         const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
         const page = Math.max(query.page ?? 1, 1);
 
+        const created = createdAtRange(query.createdFrom, query.createdTo, viewer.timezone);
+
         const where: Record<string, unknown> = {
             tenant_id: tenantId,
             deleted_at: null,
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.assigneeId ? { assignee_id: query.assigneeId } : {}),
             ...(query.assigneeEmployeeId ? { assignee_employee_id: query.assigneeEmployeeId } : {}),
+            // Both columns at once, because a task is held if either one names
+            // somebody. Spread after the two above so that when a caller sends an
+            // assignee *and* this flag, the flag wins rather than the pair
+            // silently combining into a query that can never match.
+            ...(query.unassigned === 'true'
+                ? { assignee_id: null, assignee_employee_id: null }
+                : {}),
+            ...(query.priority ? { priority: query.priority } : {}),
+            ...(created ? { created_at: created } : {}),
             ...(query.statusId ? { status_id: query.statusId } : {}),
             ...(query.statusCategory
                 ? { status: { category: query.statusCategory.toUpperCase() } }
@@ -103,6 +115,84 @@ export class ProjectTasksService {
 
         const withLogged = await this.attachLoggedHours(tenantId, items as TaskRow[]);
         return paginate(withLogged, total, page, limit);
+    }
+
+    /**
+     * Everyone who holds at least one task the viewer can see — the options for
+     * the Tasks page's assignee filter.
+     *
+     * Drawn from the tasks themselves rather than from the tenant roster
+     * (`/projects/member-candidates`) for two reasons: that endpoint is gated on
+     * MANAGE_PROJECTS, which someone who may only *view* the list has no reason
+     * to hold, and a roster would offer dozens of people whose every selection
+     * returns nothing. Scoped through the same visibility filter as the list, so
+     * a private project cannot leak who is working on it.
+     */
+    async listAssignees(viewer: ProjectViewer) {
+        const base = ProjectAccessService.merge(
+            { tenant_id: viewer.tenantId, deleted_at: null },
+            await this.access.relatedFilter(viewer),
+        );
+
+        // groupBy rather than a distinct findMany: the DISTINCT runs in the
+        // database, so this stays two index reads instead of loading every task row
+        // in the workspace to dedupe in memory. It is reached through a plainly
+        // typed reference because groupBy infers its result from the whole argument
+        // object, and the visibility filter is a `Record<string, unknown>` that no
+        // Prisma `where` type accepts — passing it in collapses that inference into
+        // a circular-reference error rather than a useful complaint.
+        const groupTasksBy = this.db.projectTask.groupBy as unknown as (
+            args: { by: string[]; where: Record<string, unknown> },
+        ) => Promise<Record<string, string | null>[]>;
+
+        const [userRows, employeeRows] = await Promise.all([
+            groupTasksBy({ by: ['assignee_id'], where: { ...base, assignee_id: { not: null } } }),
+            groupTasksBy({
+                by: ['assignee_employee_id'],
+                where: { ...base, assignee_employee_id: { not: null } },
+            }),
+        ]);
+
+        const userIds = userRows.map((row) => row.assignee_id).filter((id): id is string => !!id);
+        const employeeIds = employeeRows
+            .map((row) => row.assignee_employee_id)
+            .filter((id): id is string => !!id);
+
+        const [users, employees] = await Promise.all([
+            userIds.length
+                ? (this.db.user.findMany({
+                      where: { id: { in: userIds } },
+                      select: { id: true, name: true, email: true },
+                      orderBy: { email: 'asc' },
+                  }) as Promise<{ id: string; name: string | null; email: string }[]>)
+                : Promise.resolve([]),
+            employeeIds.length
+                ? (this.db.employee.findMany({
+                      where: { id: { in: employeeIds } },
+                      select: { id: true, name: true, employee_code: true },
+                      orderBy: { name: 'asc' },
+                  }) as Promise<{ id: string; name: string; employee_code: string | null }[]>)
+                : Promise.resolve([]),
+        ]);
+
+        // The same `key` space the task detail panel's picker uses, so one select
+        // can offer both kinds of assignee without two parallel value lists.
+        return [
+            ...users.map((user) => ({
+                key: `user:${user.id}`,
+                userId: user.id,
+                name: user.name || user.email,
+                hint: user.email,
+                noLogin: false,
+            })),
+            ...employees.map((employee) => ({
+                key: `employee:${employee.id}`,
+                employeeId: employee.id,
+                name: employee.name,
+                hint: employee.employee_code ?? undefined,
+                noLogin: true,
+            })),
+        ];
     }
 
     async findOne(viewer: ProjectViewer, taskId: string) {
