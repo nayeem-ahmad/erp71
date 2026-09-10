@@ -3,14 +3,17 @@ import { applyCostMovement } from './product-cost.utils';
 
 type DbLike = any;
 
-const TRANSACTION_DEFAULT_FIELD: Record<string, string> = {
+const TRANSACTION_DEFAULT_FIELD = {
     product: 'default_product_warehouse_id',
     purchase: 'default_purchase_warehouse_id',
     sale: 'default_sales_warehouse_id',
     shrinkage: 'default_shrinkage_warehouse_id',
     transferSource: 'default_transfer_source_warehouse_id',
     transferDestination: 'default_transfer_destination_warehouse_id',
-};
+} as const;
+
+/** The keys of TRANSACTION_DEFAULT_FIELD, as the resolvers below accept them. */
+export type WarehouseTransactionType = keyof typeof TRANSACTION_DEFAULT_FIELD;
 
 export async function ensureDefaultWarehouse(tx: DbLike, tenantId: string, storeId?: string) {
     const existing = await tx.warehouse.findFirst({
@@ -56,7 +59,7 @@ export async function resolveWarehouseId(
     tenantId: string,
     storeId: string,
     explicitWarehouseId?: string,
-    transactionType?: 'product' | 'purchase' | 'sale' | 'shrinkage' | 'transferSource' | 'transferDestination',
+    transactionType?: WarehouseTransactionType,
 ) {
     if (explicitWarehouseId) {
         const warehouse = await tx.warehouse.findFirst({
@@ -101,6 +104,147 @@ export async function resolveWarehouseId(
 
     const warehouse = await ensureDefaultWarehouse(tx, tenantId, storeId);
     return warehouse.id;
+}
+
+/**
+ * Where the lines of one document move stock.
+ *
+ * `entryWarehouseId` is the document's own warehouse — resolved exactly as
+ * `resolveWarehouseId` always did, so a caller that sends nothing still lands
+ * on the tenant's configured default. `warehouseIdFor` then maps each line's
+ * optional override onto a real warehouse id, falling back to the document's.
+ *
+ * Both are returned because both are persisted: the header so an edit or a
+ * delete can unwind against the warehouse the document actually used, the line
+ * so a document split across warehouses survives the round trip.
+ */
+export interface EntryWarehouses {
+    entryWarehouseId: string;
+    warehouseIdFor(lineWarehouseId?: string | null): string;
+}
+
+/**
+ * Resolve a document's warehouse plus any per-line overrides in one pass.
+ *
+ * Overrides are validated as a set rather than line by line: one query for the
+ * distinct ids, so a fifty-line purchase costs the same as a one-line one. Each
+ * must be active and belong to the same store as the document — the same rule
+ * `resolveWarehouseId` applies to an explicit header warehouse, because a line
+ * that could reach another branch's warehouse would move stock across branches
+ * without a transfer.
+ */
+export async function resolveEntryWarehouses(
+    tx: DbLike,
+    tenantId: string,
+    storeId: string,
+    entryWarehouseId: string | undefined,
+    lineWarehouseIds: Array<string | null | undefined>,
+    transactionType?: WarehouseTransactionType,
+): Promise<EntryWarehouses> {
+    const resolvedEntryId = await resolveWarehouseId(
+        tx,
+        tenantId,
+        storeId,
+        entryWarehouseId,
+        transactionType,
+    );
+
+    const overrideIds = [
+        ...new Set(
+            lineWarehouseIds.filter(
+                (id): id is string => Boolean(id) && id !== resolvedEntryId,
+            ),
+        ),
+    ];
+
+    if (overrideIds.length > 0) {
+        const warehouses = await tx.warehouse.findMany({
+            where: {
+                id: { in: overrideIds },
+                tenant_id: tenantId,
+                store_id: storeId,
+                is_active: true,
+            },
+            select: { id: true },
+        });
+
+        if (warehouses.length !== overrideIds.length) {
+            throw new BadRequestException(
+                'One or more line warehouses are inactive or belong to a different store.',
+            );
+        }
+    }
+
+    return {
+        entryWarehouseId: resolvedEntryId,
+        warehouseIdFor: (lineWarehouseId?: string | null) => lineWarehouseId || resolvedEntryId,
+    };
+}
+
+/**
+ * Narrow a set of warehouse ids down to the ones stock may still be booked
+ * against for a store.
+ *
+ * Used where a document inherits a warehouse from the one it reverses: a
+ * return really should put the goods back where the sale took them from, but a
+ * warehouse deactivated since is no longer a valid destination, and refusing
+ * the refund over it would be the wrong trade. Ids dropped here fall back to
+ * the caller's usual default. Caller-supplied ids are *not* run through this —
+ * those are validated strictly, because a warehouse someone picked by hand and
+ * cannot have is a mistake worth reporting.
+ */
+export async function usableWarehouseIds(
+    tx: DbLike,
+    tenantId: string,
+    storeId: string,
+    warehouseIds: Array<string | null | undefined>,
+): Promise<Set<string>> {
+    const candidates = [...new Set(warehouseIds.filter((id): id is string => Boolean(id)))];
+    if (candidates.length === 0) {
+        return new Set();
+    }
+
+    const warehouses = await tx.warehouse.findMany({
+        where: {
+            id: { in: candidates },
+            tenant_id: tenantId,
+            store_id: storeId,
+            is_active: true,
+        },
+        select: { id: true },
+    });
+
+    return new Set(warehouses.map((warehouse: { id: string }) => warehouse.id));
+}
+
+/**
+ * Where a posted document's stock has to go back to when it is edited or
+ * deleted.
+ *
+ * A line stores a warehouse only when it overrode its document's, so the answer
+ * is the line's, then the document's. Rows written before these columns existed
+ * have neither, and for those the tenant's configured default is the right
+ * answer — it is the value the original movement resolved at the time. That
+ * fallback is looked up at most once and only if a line actually needs it, so
+ * the common case costs no query at all.
+ */
+export function reversalWarehouseResolver(
+    tx: DbLike,
+    tenantId: string,
+    storeId: string,
+    documentWarehouseId: string | null | undefined,
+    transactionType?: WarehouseTransactionType,
+): (lineWarehouseId?: string | null) => Promise<string> {
+    let fallbackId = documentWarehouseId ?? null;
+
+    return async (lineWarehouseId?: string | null) => {
+        if (lineWarehouseId) {
+            return lineWarehouseId;
+        }
+
+        fallbackId ??= await resolveWarehouseId(tx, tenantId, storeId, undefined, transactionType);
+        return fallbackId;
+    };
 }
 
 export async function assertWarehouseBelongsToTenant(tx: DbLike, tenantId: string, warehouseId: string) {

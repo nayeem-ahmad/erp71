@@ -37,6 +37,7 @@ export const salesMessages = {
                     COMPLETED: "Selesai",
                     REFUNDED: "Dibayar Balik",
                     PARTIAL_REFUND: "Bayaran Balik Separa",
+                    CANCELLED: 'Dibatalkan',
                 },
                 order: {
                     DRAFT: "Draf",
@@ -280,6 +281,8 @@ export const salesMessages = {
                     warrantyClaims: { title: "Tuntutan Waranti", description: "Jejak tuntutan waranti pelanggan." },
                     storefrontOrders: { title: "Pesanan Dalam Talian", description: "Semak dan penuhi pesanan dari kedai awam anda." },
                     storefrontSettings: { title: "Tetapan Kedai", description: "Konfigurasi penjenamaan dan katalog kedai dalam talian." },
+                    storefrontPages: { title: "Halaman Kedai", description: "Tulis halaman tetap kedai anda — Tentang kami, penghantaran, pemulangan." },
+                    storefrontMenu: { title: "Menu Kedai", description: "Pilih pautan dalam pengepala kedai anda dan susunannya." },
                     customers: { title: "Pelanggan", description: "Profil pelanggan dan had kredit." },
                     crmFollowUps: { title: "Susulan", description: "Susulan pelanggan." },
                     crmCampaigns: { title: "Kempen", description: "Urus kempen jualan." },
@@ -317,6 +320,7 @@ export const salesMessages = {
                 completed: "Selesai",
                 refunded: "Dibayar Balik",
                 partialRefund: "Bayaran Balik Separa",
+                cancelled: 'Dibatalkan',
             },
             dataTable: {
                 title: "Jualan",

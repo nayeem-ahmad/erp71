@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, CheckCircle, Minus, Package, Plus, Search, ShoppingCart, SlidersHorizontal, X } from 'lucide-react';
-import StorefrontHeader from '@/components/storefront/StorefrontHeader';
+import StorefrontHeader, { type StorefrontMenuLink } from '@/components/storefront/StorefrontHeader';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
@@ -40,6 +40,8 @@ interface StorefrontData {
     tenant: {
         name: string;
         storefront_banner: string | null;
+        storefront_logo: string | null;
+        storefront_logo_show_name: boolean;
         loyalty_enabled: boolean;
         loyalty_earn_rate: number | null;
         loyalty_redeem_rate: number | null;
@@ -47,6 +49,7 @@ interface StorefrontData {
     };
     categories: Category[];
     all_products: Product[];
+    menu_links?: StorefrontMenuLink[];
 }
 
 interface CartItem {
@@ -419,7 +422,10 @@ export default function StorefrontShopPage() {
             <StorefrontHeader
                 slug={slug}
                 storeName={data.tenant.name}
+                logoUrl={data.tenant.storefront_logo}
+                showStoreName={data.tenant.storefront_logo_show_name}
                 activeNav="shop"
+                menuLinks={data.menu_links ?? []}
                 session={session}
                 accountMenuOpen={accountMenuOpen}
                 onAccountMenuToggle={() => setAccountMenuOpen((value) => !value)}

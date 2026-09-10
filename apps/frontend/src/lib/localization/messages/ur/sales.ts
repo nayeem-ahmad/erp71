@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: 'مکمل',
                 REFUNDED: 'رقم واپس',
                 PARTIAL_REFUND: 'جزوی واپسی',
+                CANCELLED: 'منسوخ',
             },
             order: {
                 DRAFT: 'مسودہ',
@@ -280,6 +281,8 @@ export const salesMessages = {
                 warrantyClaims: { title: 'وارنٹی کلیمز', description: 'گاہک کی وارنٹی درخواستیں اور ان کا حل دیکھیں۔' },
                 storefrontOrders: { title: 'آن لائن آرڈرز', description: 'اپنے عوامی اسٹور پر دیے گئے آرڈرز دیکھیں اور پورے کریں۔' },
                 storefrontSettings: { title: 'اسٹور کی ترتیبات', description: 'اپنی آن لائن دکان کی برانڈنگ، ہیرو اور کیٹلاگ کی نمائش ترتیب دیں۔' },
+                storefrontPages: { title: 'اسٹور صفحات', description: 'اپنی دکان کے مستقل صفحات لکھیں — ہمارے بارے میں، ڈیلیوری، واپسی۔' },
+                storefrontMenu: { title: 'اسٹور مینو', description: 'اپنی دکان کے ہیڈر کے لنکس اور ان کی ترتیب منتخب کریں۔' },
                 customers: { title: 'گاہک', description: 'گاہکوں کے پروفائل، رابطے اور کریڈٹ حدود سنبھالیں۔' },
                 crmFollowUps: { title: 'فالو اپس', description: 'گاہکوں اور ڈیلز سے منسلک فالو اپ تفویض کریں۔' },
                 crmCampaigns: { title: 'مہمات', description: 'بیرونی سیلز مہمات کی منصوبہ بندی اور نگرانی کریں۔' },
@@ -317,6 +320,7 @@ export const salesMessages = {
             completed: 'مکمل',
             refunded: 'رقم واپس',
             partialRefund: 'جزوی واپسی',
+            cancelled: 'منسوخ',
         },
         dataTable: {
             title: 'فروخت',

@@ -197,6 +197,20 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.APPROVE_CRM_ACTIVITY,
         ],
     },
+    {
+        // Storefront pages and the shop's header menu. Its own group rather than
+        // joining `blog`: that group has already reconciled onto every existing
+        // role, so a permission added to it now would be skipped forever and
+        // reach nobody — see this file's header.
+        //
+        // `ROLE_DEFAULT_PERMISSIONS` gives it to Manager (and Owner, who holds
+        // everything). It opens nothing on its own: a page stays a draft until
+        // someone publishes it, and the storefront itself has its own switch.
+        key: 'storefront-pages',
+        permissions: [
+            StorePermission.MANAGE_STOREFRONT_PAGES,
+        ],
+    },
 ];
 
 export interface GroupResult {

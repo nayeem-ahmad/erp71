@@ -338,6 +338,7 @@ export default function CustomerProfile() {
 
                         <CrmActivityPanel
                             customerId={id as string}
+                            targetLabel={{ name: customer.name, phone: customer.phone }}
                             draft={activityDraft}
                             onDraftConsumed={clearActivityDraft}
                         />

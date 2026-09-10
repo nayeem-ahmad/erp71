@@ -25,11 +25,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
             const code = typeof body === 'object' && body !== null && 'code' in body
                 ? String((body as { code?: string }).code)
                 : HttpStatus[status] ?? 'HTTP_ERROR';
+            // Seconds a rate-limited caller should wait. Carried in the body as
+            // well as in `Retry-After` because a browser cannot read a response
+            // header cross-origin unless it is explicitly exposed, and the app
+            // and API are on different hosts in production.
+            const retryAfter = typeof body === 'object' && body !== null
+                ? Number((body as { retry_after?: number }).retry_after)
+                : NaN;
 
             response.status(status).json({
                 error: {
                     code,
                     message: Array.isArray(message) ? message.join(', ') : (message ?? exception.message),
+                    ...(Number.isFinite(retryAfter) ? { retry_after: retryAfter } : {}),
                 },
             });
             return;

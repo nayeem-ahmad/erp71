@@ -23,6 +23,14 @@ export class CreateSaleItemDto {
     @IsNumber()
     priceAtSale: number;
 
+    /**
+     * Take this line out of a warehouse other than the sale's. Omit it — the
+     * normal case — and the line follows `CreateSaleDto.warehouseId`.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
+
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
@@ -143,6 +151,11 @@ export class FinalizeSaleDto {
     @IsString()
     customerId?: string | null;
 
+    /** Where the goods leave from, if different from what the draft recorded. */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
+
     @IsOptional()
     @IsArray()
     @ArrayMinSize(1)
@@ -192,6 +205,11 @@ export class UpdateSaleItemDto {
     @IsNumber()
     priceAtSale: number;
 
+    /** Per-line warehouse override; omit to follow the sale's own warehouse. */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
+
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
@@ -215,6 +233,15 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsString()
     customerId?: string | null;
+
+    /**
+     * Move the whole sale to another warehouse. Only read when `items` are
+     * also supplied: the stock is reversed and re-applied as one step there,
+     * and without new lines there is nothing to re-post against it.
+     */
+    @IsOptional()
+    @IsString()
+    warehouseId?: string;
 
     @IsOptional()
     @IsString()

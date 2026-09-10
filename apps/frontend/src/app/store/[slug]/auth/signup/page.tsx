@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import MobileSignInPanel from '@/components/MobileSignInPanel';
 
 const API_BASE =
     ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
@@ -29,6 +31,11 @@ export default function StorefrontSignUpPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    // Both providers render nothing unless the backend is configured for them,
+    // so the page only draws its own divider once one of them is really there.
+    const [googleAvailable, setGoogleAvailable] = useState(false);
+    const [mobileAvailable, setMobileAvailable] = useState(false);
+    const [googleBusy, setGoogleBusy] = useState(false);
 
     useEffect(() => {
         if (!slug) return;
@@ -68,17 +75,76 @@ export default function StorefrontSignUpPage() {
                 return;
             }
 
-            localStorage.setItem(
-                `storefront_customer_${slug}`,
-                JSON.stringify({ access_token: payload.access_token, customer: payload.customer }),
-            );
-
-            router.push(`/store/${slug}`);
+            persistSession(payload);
         } catch (err: any) {
             setError(err.message || a.defaultError);
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const persistSession = (payload: { access_token: string; customer: unknown }) => {
+        localStorage.setItem(
+            `storefront_customer_${slug}`,
+            JSON.stringify({ access_token: payload.access_token, customer: payload.customer }),
+        );
+        router.push(`/store/${slug}`);
+    };
+
+    /**
+     * Both providers can land on an account that already exists here and carries
+     * a second factor. The sign-in page owns that code step, so hand off rather
+     * than duplicating the form — the same thing the password path does.
+     */
+    const handleProviderAuth = (payload: any) => {
+        if (payload?.requires_2fa) {
+            router.push(`/store/${slug}/auth/signin`);
+            return;
+        }
+        persistSession(payload);
+    };
+
+    const handleGoogleCredential = async (credential: string) => {
+        setError('');
+        setGoogleBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/storefront/${slug}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // Google never hands over a phone number, so whatever they have
+                // typed into the form above is passed along — a shop with no way
+                // to ring a customer is a shop that cannot deliver.
+                body: JSON.stringify({ credential, phone: phone.trim() || undefined }),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.message || a.googleFailed);
+            }
+            handleProviderAuth('data' in json ? json.data : json);
+        } catch (err: any) {
+            setError(err.message || a.defaultError);
+        } finally {
+            setGoogleBusy(false);
+        }
+    };
+
+    /**
+     * Posts the Firebase token the panel has already had verified by SMS. The
+     * panel reads `requires_signup` off what this returns and collects an email
+     * address before calling again, so failures have to surface as a thrown
+     * error rather than a swallowed one.
+     */
+    const exchangeMobileToken = async (payload: { idToken: string; email?: string; name?: string }) => {
+        const res = await fetch(`${API_BASE}/storefront/${slug}/auth/mobile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+            throw new Error(json.message || t.auth.mobile.failed);
+        }
+        return 'data' in json ? json.data : json;
     };
 
     return (
@@ -180,6 +246,43 @@ export default function StorefrontSignUpPage() {
                             {submitting ? a.signingUp : a.createAccountButton}
                         </button>
                     </form>
+
+                    {(googleAvailable || mobileAvailable) && (
+                        <div className="my-6 flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                                {a.dividerOr}
+                            </span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+                    )}
+
+                    <div className="space-y-3">
+                        <GoogleSignInButton
+                            onCredential={handleGoogleCredential}
+                            onError={setError}
+                            onAvailabilityChange={setGoogleAvailable}
+                            text="signup_with"
+                            busy={googleBusy}
+                            disabled={submitting}
+                        />
+                        <MobileSignInPanel
+                            onSuccess={handleProviderAuth}
+                            exchange={exchangeMobileToken}
+                            accountCopy={{ title: a.mobileAccountTitle, description: a.mobileAccountDescription }}
+                            // Read at exchange time, so whatever is in the form
+                            // above is used and the panel asks for an email
+                            // itself only if that field is still blank.
+                            signUpFields={() => ({
+                                email: email.trim() || undefined,
+                                name: name.trim() || undefined,
+                            })}
+                            onError={setError}
+                            onAvailabilityChange={setMobileAvailable}
+                            intent="signup"
+                            disabled={submitting || googleBusy}
+                        />
+                    </div>
 
                     <p className="mt-6 text-center text-sm text-gray-500">
                         {a.hasAccount}{' '}

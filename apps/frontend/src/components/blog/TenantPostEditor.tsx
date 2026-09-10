@@ -4,18 +4,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Eye, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
-import { hasPlanEntitlement } from '@erp71/shared-types';
+import { ENABLED_LOCALE_CODES, hasPlanEntitlement, type SupportedLocaleCode } from '@erp71/shared-types';
 import { Button, Checkbox, ConfirmDialog, Field, Input, Select, Textarea } from '@/components/ui';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
 import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { getLocaleConfig } from '@/lib/localization/config';
 import { toast } from '@/lib/toast';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { resolveTenantPlanFeatures } from '@/lib/plan-entitlements';
 
 type Category = { id: string; name: string };
+
+function languageName(code: string): string {
+    return getLocaleConfig(code as SupportedLocaleCode).nativeLabel;
+}
 
 /**
  * A shop's post editor.
@@ -25,6 +30,12 @@ type Category = { id: string; name: string };
  * maintain three translations of a sale announcement would leave the feature
  * unused. The platform blog carries translations because it addresses the whole
  * customer base at once.
+ *
+ * Which is not the same as being stuck in one language. A shop that drafted in
+ * Bangla and wants to speak to its English-reading customers can have the AI
+ * Assistant turn the post it has into another language; because the post keeps
+ * one copy, that rewrites it rather than adding a tab, so it goes through the
+ * same replace-confirm a generation does.
  */
 export default function TenantPostEditor({ postId }: { postId?: string }) {
     const { t, locale } = useI18n();
@@ -62,7 +73,12 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
     const [aiOpen, setAiOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiLoading, setAiLoading] = useState(false);
-    const [aiDraft, setAiDraft] = useState<any>(null);
+    // What the assistant produced and is waiting to be allowed to apply. A
+    // generation rewrites the post-level fields too; a translation only the
+    // words — so the confirm has to know which it is holding.
+    const [aiPending, setAiPending] = useState<
+        { kind: 'draft'; draft: any } | { kind: 'translation'; copy: any; locale: string } | null
+    >(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -159,18 +175,79 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
         toast.success(m.ai.filled);
     }
 
-    async function generateDraft() {
+    /**
+     * Swap the post's words for their translation.
+     *
+     * Only the words: the slug, category, cover, author and featured flag
+     * belong to the post rather than to the language it is written in, and a
+     * translation that rewrote the slug would break every link to the article.
+     * An excerpt or SEO field the source did not have is cleared rather than
+     * left behind in the old language.
+     */
+    function applyTranslation(copy: any) {
+        setTitle(copy.title ?? '');
+        setExcerpt(copy.excerpt ?? '');
+        setBody(copy.body_md ?? '');
+        setSeoTitle(copy.seo_title ?? '');
+        setSeoDescription(copy.seo_description ?? '');
+
+        toast.success(m.ai.translated);
+    }
+
+    async function generateDraft(locales?: string[]) {
         setAiLoading(true);
         try {
-            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt, locale });
+            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt, locale: locales?.[0] ?? locale });
             setAiOpen(false);
 
             if (title.trim() || excerpt.trim() || body.trim()) {
-                setAiDraft(draft);
+                setAiPending({ kind: 'draft', draft });
                 return;
             }
 
             applyDraft(draft);
+        } catch (error) {
+            toast.error((error as Error).message);
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
+    /**
+     * Turn the post the owner is looking at into another language.
+     *
+     * The copy travels from the editor rather than from the saved post, so a
+     * draft that has never been saved translates just as well — which is when
+     * an author is most likely to want it. One target, because the post has one
+     * body for the translation to land in.
+     *
+     * Always confirmed: unlike the platform editor, where a translation fills a
+     * language tab that was empty, here it overwrites the only copy there is.
+     */
+    async function translateDraft({ source, targets }: { source: string; targets: string[] }) {
+        const [target] = targets;
+        if (!target) return;
+
+        if (!title.trim() || !body.trim()) {
+            toast.error(m.ai.sourceEmpty);
+            return;
+        }
+
+        setAiLoading(true);
+        try {
+            const result = await api.translateTenantBlogPost({
+                source_locale: source,
+                target_locales: [target],
+                title,
+                body_md: body,
+                excerpt: excerpt || undefined,
+                seo_title: seoTitle || undefined,
+                seo_description: seoDescription || undefined,
+            });
+            setAiOpen(false);
+
+            const copy = result?.translations?.[0];
+            if (copy) setAiPending({ kind: 'translation', copy, locale: target });
         } catch (error) {
             toast.error((error as Error).message);
         } finally {
@@ -407,24 +484,46 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                     promptPlaceholder: m.ai.promptPlaceholder,
                     generate: m.ai.generate,
                     cancel: t.common.cancel,
+                    modeWrite: m.ai.modeWrite,
+                    modeTranslate: m.ai.modeTranslate,
+                    translateFrom: m.ai.translateFrom,
+                    translateInto: m.ai.translateInto,
+                    translateAction: m.ai.translateAction,
+                    translateHint: m.ai.translateHint,
+                    nothingToTranslate: m.ai.nothingToTranslate,
+                }}
+                languages={{
+                    // No `filled` flags: the post has one body, and only the
+                    // owner knows which language they wrote it in.
+                    options: ENABLED_LOCALE_CODES.map((code) => ({ code, label: languageName(code) })),
+                    current: locale,
+                    singleCopy: true,
+                    hasCopy: !!title.trim() && !!body.trim(),
                 }}
                 onPromptChange={setAiPrompt}
                 onClose={() => setAiOpen(false)}
                 onGenerate={generateDraft}
+                onTranslate={translateDraft}
             />
 
             <ConfirmDialog
-                open={!!aiDraft}
-                title={m.ai.overwriteTitle}
-                prompt={m.ai.overwritePrompt}
-                confirmLabel={m.ai.replace}
+                open={!!aiPending}
+                title={aiPending?.kind === 'translation' ? m.ai.translateTitle : m.ai.overwriteTitle}
+                prompt={
+                    aiPending?.kind === 'translation'
+                        ? formatMessage(m.ai.translatePrompt, { language: languageName(aiPending.locale) })
+                        : m.ai.overwritePrompt
+                }
+                confirmLabel={aiPending?.kind === 'translation' ? m.ai.translateAction : m.ai.replace}
                 cancelLabel={t.common.cancel}
                 danger
-                onCancel={() => setAiDraft(null)}
+                onCancel={() => setAiPending(null)}
                 onConfirm={() => {
-                    const draft = aiDraft;
-                    setAiDraft(null);
-                    applyDraft(draft);
+                    const pending = aiPending;
+                    setAiPending(null);
+                    if (!pending) return;
+                    if (pending.kind === 'translation') applyTranslation(pending.copy);
+                    else applyDraft(pending.draft);
                 }}
             />
         </div>

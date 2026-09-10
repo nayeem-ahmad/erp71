@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ClipboardList, Copy, Plus, Printer } from 'lucide-react';
+import { Ban, ClipboardList, Copy, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -15,6 +15,10 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { toast } from '@/lib/toast';
+import { CancelEntryModal } from '@/components/CancelEntryModal';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { hasPermission, isOwner } from '@/lib/permissions';
 
 interface PurchaseItem {
     id: string;
@@ -32,6 +36,8 @@ interface Purchase {
     total_amount: string | number;
     subtotal_amount: string | number;
     created_at: string;
+    status?: string;
+    cancellation_note?: string | null;
     supplier?: {
         name: string;
     } | null;
@@ -39,6 +45,12 @@ interface Purchase {
     posting_status?: string | null;
     voucher_number?: string | null;
 }
+
+const statusColors: Record<string, string> = {
+    RECORDED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    // Grey rather than red: a cancelled entry is void, not an error.
+    CANCELLED: 'bg-gray-100 text-gray-500 border-gray-300',
+};
 
 const columnHelper = createColumnHelper<Purchase>();
 
@@ -49,6 +61,13 @@ export default function PurchasesPage() {
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [cancelTarget, setCancelTarget] = useState<Purchase | null>(null);
+
+    // Cancelling reverses stock, the payable and the ledger, so the action is
+    // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
+    // bypasses the guard server-side and may hold no grant rows at all.
+    const { permissions, role } = useTenantPlanFeatures();
+    const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
 
     useEffect(() => {
         loadPurchases();
@@ -72,6 +91,13 @@ export default function PurchasesPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleCancel = async (purchase: Purchase, note: string) => {
+        await api.cancelPurchase(purchase.id, note);
+        setCancelTarget(null);
+        await loadPurchases();
+        toast.success(t.entryCancellation.purchaseCancelled);
     };
 
     const columns: ColumnDef<Purchase, any>[] = useMemo(
@@ -123,6 +149,24 @@ export default function PurchasesPage() {
                 size: 120,
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            columnHelper.accessor((row) => row.status ?? 'RECORDED', {
+                id: 'status',
+                header: t.purchases.columns.status,
+                cell: (info) => {
+                    const status = info.getValue() as string;
+                    return (
+                        <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
+                                statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
+                            }`}
+                            title={info.row.original.cancellation_note ?? undefined}
+                        >
+                            {t.purchases.statuses[status as keyof typeof t.purchases.statuses] ?? status}
+                        </span>
+                    );
+                },
+                size: 110,
+            }),
             columnHelper.display({
                 id: 'posting',
                 header: t.purchases.columns.voucher,
@@ -154,14 +198,24 @@ export default function PurchasesPage() {
                         >
                             <Copy className="w-4 h-4" />
                         </Link>
+                        {canCancel && (row.original.status ?? 'RECORDED') !== 'CANCELLED' && (
+                            <button
+                                type="button"
+                                onClick={() => setCancelTarget(row.original)}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors inline-flex"
+                                title={t.entryCancellation.action}
+                            >
+                                <Ban className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                 ),
                 enableSorting: false,
                 enableResizing: false,
-                size: 90,
+                size: 120,
             }),
         ],
-        [t, locale],
+        [t, locale, canCancel],
     );
 
     return (
@@ -200,6 +254,15 @@ export default function PurchasesPage() {
                     emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchases.searchPlaceholder}
                 />
+
+                {cancelTarget && (
+                    <CancelEntryModal
+                        entryLabel={cancelTarget.purchase_number}
+                        entryAmount={formatBDT(Number(cancelTarget.total_amount || 0), { locale })}
+                        onConfirm={(note) => handleCancel(cancelTarget, note)}
+                        onClose={() => setCancelTarget(null)}
+                    />
+                )}
     </PageShell>
     );
 }

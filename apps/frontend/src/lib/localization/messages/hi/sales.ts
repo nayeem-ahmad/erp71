@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: "पूर्ण",
                 REFUNDED: "वापस किया गया",
                 PARTIAL_REFUND: "आंशिक रिफंड",
+                CANCELLED: 'रद्द',
             },
             order: {
                 DRAFT: "ड्राफ़्ट",
@@ -280,6 +281,8 @@ export const salesMessages = {
                 warrantyClaims: { title: "वारंटी दावे", description: "ग्राहक वारंटी प्रस्तुतियाँ और समाधान ट्रैक करें।" },
                 storefrontOrders: { title: "ऑनलाइन ऑर्डर", description: "अपने सार्वजनिक स्टोरफ़्रंट पर दिए ऑर्डर देखें और पूरे करें।" },
                 storefrontSettings: { title: "स्टोरफ़्रंट सेटिंग्स", description: "अपनी ऑनलाइन दुकान की ब्रांडिंग, हीरो और कैटलॉग दृश्यता कॉन्फ़िगर करें।" },
+                storefrontPages: { title: "स्टोरफ्रंट पेज", description: "अपनी दुकान के स्थायी पेज लिखें — हमारे बारे में, डिलीवरी, वापसी।" },
+                storefrontMenu: { title: "स्टोरफ्रंट मेन्यू", description: "अपनी दुकान के हेडर के लिंक और उनका क्रम चुनें।" },
                 customers: { title: "ग्राहक", description: "ग्राहक प्रोफ़ाइल, संपर्क और क्रेडिट सीमाएँ प्रबंधित करें।" },
                 crmFollowUps: { title: "फ़ॉलो-अप", description: "ग्राहकों और सौदों से जुड़े फ़ॉलो-अप सौंपें।" },
                 crmCampaigns: { title: "अभियान", description: "बाहर जाने वाले बिक्री अभियानों की योजना बनाएँ और निगरानी करें।" },
@@ -317,6 +320,7 @@ export const salesMessages = {
             completed: "पूर्ण",
             refunded: "वापस किया गया",
             partialRefund: "आंशिक रिफंड",
+            cancelled: 'रद्द',
         },
         dataTable: {
             title: "बिक्री",

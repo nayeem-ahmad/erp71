@@ -5,13 +5,46 @@ import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    resolveWarehouseId,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
   resolveWarehouseId: jest.fn(),
+  resolveEntryWarehouses: jest.fn(),
+  reversalWarehouseResolver: jest.fn(),
+  usableWarehouseIds: jest.fn(),
 }));
+
+/**
+ * The warehouse helpers stubbed to the shape the real ones return, so these
+ * tests stay about what the service does with a warehouse rather than about
+ * how one is resolved — `inventory.utils.spec.ts` covers that.
+ */
+function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
+  (resolveWarehouseId as jest.Mock).mockResolvedValue(defaultWarehouseId);
+  (resolveEntryWarehouses as jest.Mock).mockImplementation(
+    async (_tx: unknown, _tenantId: string, _storeId: string, entryWarehouseId?: string) => {
+      const entryId = entryWarehouseId ?? defaultWarehouseId;
+      return {
+        entryWarehouseId: entryId,
+        warehouseIdFor: (lineWarehouseId?: string | null) => lineWarehouseId || entryId,
+      };
+    },
+  );
+  (reversalWarehouseResolver as jest.Mock).mockImplementation(
+    (_tx: unknown, _tenantId: string, _storeId: string, documentWarehouseId?: string | null) =>
+      async (lineWarehouseId?: string | null) =>
+        lineWarehouseId ?? documentWarehouseId ?? defaultWarehouseId,
+  );
+  (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
+}
 
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
@@ -140,7 +173,7 @@ describe('SalesService', () => {
     }).compile();
 
     service = module.get<SalesService>(SalesService);
-    (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+    stubWarehouseResolution();
     // mockReset (not just clearAllMocks) so any leftover `...Once()` queue from a
     // prior test cannot leak a rejection into the next one.
     (applyInventoryMovement as jest.Mock).mockReset();
@@ -175,7 +208,15 @@ describe('SalesService', () => {
       });
 
       expect(tx.saleItem.create).toHaveBeenCalledWith({
-        data: { sale_id: 'sale-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15, unit_cost_at_sale: null },
+        data: {
+          sale_id: 'sale-1',
+          product_id: 'prod-1',
+          quantity: 2,
+          price_at_sale: 15,
+          unit_cost_at_sale: null,
+          // Null, not 'wh-1': only a line that overrode the sale stores one.
+          warehouse_id: null,
+        },
       });
       expect(applyInventoryMovement).toHaveBeenCalledWith(
         tx,
@@ -188,6 +229,46 @@ describe('SalesService', () => {
         }),
       );
       expect(result.id).toBe('sale-1');
+    });
+
+    it('posts each line out of its own warehouse and records both', async () => {
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false },
+        { id: 'prod-2', name: 'Product 2', warranty_enabled: false },
+      ]);
+      tx.sale.create.mockResolvedValue({ id: 'sale-split', total_amount: 30 });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        warehouseId: 'wh-main',
+        totalAmount: 30,
+        amountPaid: 30,
+        items: [
+          { productId: 'prod-1', quantity: 1, priceAtSale: 15 },
+          { productId: 'prod-2', quantity: 1, priceAtSale: 15, warehouseId: 'wh-annex' },
+        ],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ warehouse_id: 'wh-main' }) }),
+      );
+      // The line that said nothing follows the sale and stores no warehouse of
+      // its own; the one that overrode stores exactly what it overrode with.
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ product_id: 'prod-1', warehouse_id: null }),
+      });
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ product_id: 'prod-2', warehouse_id: 'wh-annex' }),
+      });
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ productId: 'prod-1', warehouseId: 'wh-main' }),
+      );
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ productId: 'prod-2', warehouseId: 'wh-annex' }),
+      );
     });
 
     it('should throw BadRequestException when stock is insufficient', async () => {
@@ -290,6 +371,17 @@ describe('SalesService', () => {
       tx.saleItem.create.mockResolvedValue({});
     });
 
+    it('refuses to park a draft against a warehouse from another branch', async () => {
+      // A draft resolves nothing, so an id it accepts here is only discovered
+      // to be wrong when someone tries to post it days later.
+      (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set());
+
+      await expect(
+        service.create('tenant-1', 'user-1', { ...draftDto, warehouseId: 'wh-other-branch' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
     it('stores the sale as DRAFT with its lines and posts nothing', async () => {
       const result = await service.create('tenant-1', 'user-1', draftDto);
 
@@ -299,7 +391,7 @@ describe('SalesService', () => {
         }),
       );
       expect(tx.saleItem.create).toHaveBeenCalledWith({
-        data: { sale_id: 'draft-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15 },
+        data: { sale_id: 'draft-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15, warehouse_id: null },
       });
       expect(applyInventoryMovement).not.toHaveBeenCalled();
       expect(autoPostFromRules).not.toHaveBeenCalled();
@@ -883,6 +975,35 @@ describe('SalesService', () => {
       expect(tx.sale.delete).not.toHaveBeenCalled();
     });
 
+    it('restocks each line into the warehouse it was sold out of', async () => {
+      // The reason the columns exist: before them a delete re-read the tenant's
+      // default sales warehouse, so changing that setting after the sale made
+      // the reversal restock somewhere the goods had never been.
+      tx.sale.findFirst.mockResolvedValue({
+        ...completedSale,
+        warehouse_id: 'wh-main',
+        items: [
+          { product_id: 'prod-1', quantity: 3, warehouse_id: null },
+          { product_id: 'prod-2', quantity: 1, warehouse_id: 'wh-annex' },
+        ],
+      });
+      tx.loyaltyTransaction.findMany.mockResolvedValue([]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([]);
+
+      await service.remove('tenant-1', 'sale-1');
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({
+        productId: 'prod-1',
+        warehouseId: 'wh-main',
+        movementType: 'SALE_DELETE_REVERSAL',
+      }));
+      expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({
+        productId: 'prod-2',
+        warehouseId: 'wh-annex',
+        movementType: 'SALE_DELETE_REVERSAL',
+      }));
+    });
+
     it('restores stock, reverses loyalty, credit and spend, and voids both posting legs', async () => {
       tx.sale.findFirst.mockResolvedValue(completedSale);
       tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
@@ -940,14 +1061,124 @@ describe('SalesService', () => {
       expect(tx.sale.delete).toHaveBeenCalledWith({ where: { id: 'sale-1' } });
     });
 
-    it('skips customer bookkeeping for a walk-in sale', async () => {
-      tx.sale.findFirst.mockResolvedValue({ ...completedSale, customer_id: null });
+    it('does not reverse a second time when the sale was already cancelled', async () => {
+      tx.sale.findFirst.mockResolvedValue({ ...completedSale, status: 'CANCELLED' });
 
       await service.remove('tenant-1', 'sale-1');
 
+      // Cancelling already put the goods back and paid the due down; doing it
+      // again would credit the customer twice.
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
       expect(tx.customer.update).not.toHaveBeenCalled();
-      expect(applyInventoryMovement).toHaveBeenCalled();
-      expect(tx.sale.delete).toHaveBeenCalled();
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(tx.sale.delete).toHaveBeenCalledWith({ where: { id: 'sale-1' } });
+    });
+  });
+
+  describe('cancel()', () => {
+    const completedSale = {
+      id: 'sale-1',
+      store_id: 'store-1',
+      status: 'COMPLETED',
+      total_amount: 300,
+      customer_id: 'cust-1',
+      items: [{ product_id: 'prod-1', quantity: 3 }],
+      returns: [],
+      warrantyClaims: [],
+      deliveryOrders: [],
+    };
+
+    it('throws NotFoundException for an unknown sale', async () => {
+      tx.sale.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.cancel('tenant-1', 'user-1', 'nope', 'Recorded in error'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('reverses stock, serials, loyalty, credit and spend, and voids both posting legs', async () => {
+      tx.sale.findFirst.mockResolvedValue(completedSale);
+      tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', amount: 120 }]);
+      tx.sale.update.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
+
+      await service.cancel('tenant-1', 'user-9', 'sale-1', 'Customer walked out');
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({
+        productId: 'prod-1',
+        quantityDelta: 3,
+        movementType: 'SALE_CANCELLED',
+        referenceId: 'sale-1',
+      }));
+      expect(tx.productSerial.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'IN_STOCK', source_id: null }),
+      }));
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { loyalty_points: { decrement: 20 } },
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { total_spent: { decrement: 300 }, due_balance: { decrement: 120 } },
+      });
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 'sale-1');
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 'sale-1', 'paid');
+    });
+
+    it('keeps the document, stamping the status, the actor and the note on it', async () => {
+      tx.sale.findFirst.mockResolvedValue(completedSale);
+      tx.sale.update.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
+
+      await service.cancel('tenant-1', 'user-9', 'sale-1', 'Duplicate of INV-00041');
+
+      expect(tx.sale.delete).not.toHaveBeenCalled();
+      expect(tx.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'sale-1' },
+        data: expect.objectContaining({
+          status: 'CANCELLED',
+          cancelled_by: 'user-9',
+          cancellation_note: 'Duplicate of INV-00041',
+          cancelled_at: expect.any(Date),
+        }),
+      }));
+    });
+
+    it.each([
+      ['returns', 'returns'],
+      ['warranty claims', 'warrantyClaims'],
+      ['delivery orders', 'deliveryOrders'],
+    ])('refuses to cancel a sale that still has %s', async (_label, key) => {
+      tx.sale.findFirst.mockResolvedValue({ ...completedSale, [key]: [{ id: 'x' }] });
+
+      await expect(
+        service.cancel('tenant-1', 'user-1', 'sale-1', 'Recorded in error'),
+      ).rejects.toThrow(BadRequestException);
+      expect(tx.sale.update).not.toHaveBeenCalled();
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+    });
+
+    it('refuses a sale that is already cancelled, so nothing reverses twice', async () => {
+      tx.sale.findFirst.mockResolvedValue({ ...completedSale, status: 'CANCELLED' });
+
+      await expect(
+        service.cancel('tenant-1', 'user-1', 'sale-1', 'Trying again'),
+      ).rejects.toThrow(BadRequestException);
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.sale.update).not.toHaveBeenCalled();
+    });
+
+    it('cancels a draft without reversing anything — it posted nothing', async () => {
+      tx.sale.findFirst.mockResolvedValue({ ...completedSale, status: 'DRAFT' });
+      tx.sale.update.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
+
+      await service.cancel('tenant-1', 'user-1', 'sale-1', 'Abandoned at the counter');
+
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(tx.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'CANCELLED' }),
+      }));
     });
   });
 

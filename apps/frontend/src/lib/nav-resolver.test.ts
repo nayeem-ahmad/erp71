@@ -70,6 +70,46 @@ describe('nav-resolver', () => {
         expect(purchaseHrefs.filter((href) => href.startsWith('/purchases/imports'))).toEqual([]);
     });
 
+    it('exposes the four manufacturing screens as flat links under the module', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+        const manufacturing = modules.find((mod) => mod.key === 'manufacturing');
+
+        // These four were tabs on one page. As sidebar links they are one click
+        // away each, and a label resolving to its raw key would show up here.
+        expect((manufacturing?.children ?? []).map((child) => child.label)).toEqual([
+            'Bill of Materials',
+            'Production Jobs',
+            'Production Analytics',
+            'Product P&L',
+        ]);
+        expect((manufacturing?.children ?? []).map((child) => 'type' in child ? child.label : child.href)).toEqual([
+            '/manufacturing',
+            '/manufacturing/jobs',
+            '/manufacturing/analytics',
+            '/manufacturing/product-pl',
+        ]);
+    });
+
+    it('leaves the manufacturing module itself unlinked so its submenu can open', () => {
+        const manufacturing = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'manufacturing');
+
+        // A module that is both a link and an accordion navigates away on the
+        // click that was meant to reveal its children.
+        expect(manufacturing?.href).toBeUndefined();
+    });
+
+    it('marks the BOM link exact so the other manufacturing pages do not highlight both', () => {
+        const manufacturing = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'manufacturing');
+        const boms = (manufacturing?.children ?? [])
+            .find((child) => !('type' in child) && child.href === '/manufacturing');
+
+        // Sidebar `isActive` prefix-matches, and /manufacturing/jobs sits under
+        // /manufacturing, so without `exact` both links light up at once.
+        expect(boms && 'exact' in boms ? boms.exact : undefined).toBe(true);
+    });
+
     it('groups HR under five subgroups, with only Overview and Employees at the top', () => {
         const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
             .find((mod) => mod.key === 'hr');

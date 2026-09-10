@@ -74,6 +74,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.storefront': { id: 'sales.storefront', kind: 'subgroup', icon: 'Globe', labelKey: 'sidebar.modules.storefront' },
   'sales.storefront.orders': { id: 'sales.storefront.orders', kind: 'link', icon: 'ShoppingBag', labelKey: 'sidebar.items.storefrontOrders', href: '/storefront', exact: true },
   'sales.storefront.settings': { id: 'sales.storefront.settings', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.storefrontSettings', href: '/storefront/settings' },
+  'sales.storefront.pages': { id: 'sales.storefront.pages', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.storefrontPages', href: '/storefront/pages' },
+  'sales.storefront.menu': { id: 'sales.storefront.menu', kind: 'link', icon: 'Menu', labelKey: 'sidebar.items.storefrontMenu', href: '/storefront/menu' },
   'sales.customers': { id: 'sales.customers', kind: 'subgroup', icon: 'Users', labelKey: 'sales.hub.customersCrm' },
   'sales.customers.list': { id: 'sales.customers.list', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.customers', href: '/sales/customers' },
   'sales.customers.loyalty': { id: 'sales.customers.loyalty', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.loyaltyPoints', href: '/sales/loyalty' },
@@ -186,7 +188,17 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'inventory.setup.categories': { id: 'inventory.setup.categories', kind: 'link', icon: 'FolderTree', labelKey: 'sidebar.items.categories', href: '/inventory/categories' },
   'inventory.setup.settings': { id: 'inventory.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.inventorySettings', href: '/inventory/settings' },
 
-  manufacturing: { id: 'manufacturing', kind: 'module', icon: 'Factory', labelKey: 'sidebar.modules.manufacturing', href: '/manufacturing', moduleKey: 'manufacturing' },
+  // The module keeps no `href` of its own: its four screens are child links, and
+  // a module that is both a link and an accordion swallows the click that opens
+  // the submenu. `manufacturing.boms` carries the old `/manufacturing` path, so
+  // existing links and bookmarks still land on the tab that used to open first.
+  manufacturing: { id: 'manufacturing', kind: 'module', icon: 'Factory', labelKey: 'sidebar.modules.manufacturing', moduleKey: 'manufacturing' },
+  // `exact` because the other three screens sit under this href and the sidebar's
+  // `isActive` falls back to a prefix match — without it every entry lights up at once.
+  'manufacturing.boms': { id: 'manufacturing.boms', kind: 'link', icon: 'Cog', labelKey: 'sidebar.items.manufacturingBoms', href: '/manufacturing', exact: true },
+  'manufacturing.jobs': { id: 'manufacturing.jobs', kind: 'link', icon: 'Factory', labelKey: 'sidebar.items.manufacturingJobs', href: '/manufacturing/jobs' },
+  'manufacturing.analytics': { id: 'manufacturing.analytics', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.manufacturingAnalytics', href: '/manufacturing/analytics' },
+  'manufacturing.product-pl': { id: 'manufacturing.product-pl', kind: 'link', icon: 'Calculator', labelKey: 'sidebar.items.manufacturingProductPL', href: '/manufacturing/product-pl' },
 
   projects: { id: 'projects', kind: 'module', icon: 'FolderKanban', labelKey: 'sidebar.modules.projects', moduleKey: 'projects' },
   'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
@@ -369,7 +381,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.customers.list', 'sales.setup', 3),
   layoutNode('sales.cashier-sessions', 'sales.setup', 4),
   layoutNode('sales.storefront.settings', 'sales.setup', 5),
-  layoutNode('sales.setup.settings', 'sales.setup', 6),
+  layoutNode('sales.storefront.pages', 'sales.setup', 6),
+  layoutNode('sales.storefront.menu', 'sales.setup', 7),
+  layoutNode('sales.setup.settings', 'sales.setup', 8),
 
   layoutNode('purchase', null, 2),
   layoutNode('purchase.overview', 'purchase', 0),
@@ -470,6 +484,10 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.setup', 'projects', 6),
 
   layoutNode('manufacturing', null, 9),
+  layoutNode('manufacturing.boms', 'manufacturing', 0),
+  layoutNode('manufacturing.jobs', 'manufacturing', 1),
+  layoutNode('manufacturing.analytics', 'manufacturing', 2),
+  layoutNode('manufacturing.product-pl', 'manufacturing', 3),
 
   layoutNode('hr', null, 10),
   layoutNode('hr.overview', 'hr', 0),

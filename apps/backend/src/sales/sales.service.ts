@@ -1,7 +1,12 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
@@ -80,6 +85,7 @@ export class SalesService {
                     reference_number: referenceNumber,
                     quotation_id: source.quotationId,
                     sales_order_id: source.salesOrderId,
+                    warehouse_id: prep.warehouses.entryWarehouseId,
                     total_amount: prep.computedTotal,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
@@ -175,7 +181,14 @@ export class SalesService {
      * a draft is held to exactly the same rules as a direct sale.
      */
     private async prepareSale(tx: any, tenantId: string, dto: CreateSaleDto) {
-        const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
+        const warehouses = await resolveEntryWarehouses(
+            tx,
+            tenantId,
+            dto.storeId,
+            dto.warehouseId,
+            dto.items.map((item) => item.warehouseId),
+            'sale',
+        );
         const productIds = dto.items.map((item) => item.productId);
 
         const [saleProducts, costByProductId] = await Promise.all([
@@ -258,7 +271,7 @@ export class SalesService {
         }
 
         return {
-            warehouseId,
+            warehouses,
             productById,
             costByProductId,
             preLoyaltyTotal,
@@ -283,7 +296,7 @@ export class SalesService {
         prep: Awaited<ReturnType<SalesService['prepareSale']>>,
     ) {
         const {
-            warehouseId,
+            warehouses,
             productById,
             costByProductId,
             preLoyaltyTotal,
@@ -298,6 +311,10 @@ export class SalesService {
             const product = productById.get(item.productId);
             const unitCostAtSale = costByProductId.get(item.productId) ?? null;
 
+            // Where this line actually draws from: its own warehouse if the
+            // entry named one, otherwise the sale's.
+            const lineWarehouseId = warehouses.warehouseIdFor(item.warehouseId);
+
             // Create Sale Item
             await tx.saleItem.create({
                 data: {
@@ -306,13 +323,17 @@ export class SalesService {
                     quantity: item.quantity,
                     price_at_sale: item.priceAtSale,
                     unit_cost_at_sale: unitCostAtSale,
+                    // Only a genuine override is stored. Copying the resolved
+                    // warehouse onto every line would make a later change of
+                    // the sale's warehouse look like fifty deliberate overrides.
+                    warehouse_id: item.warehouseId ?? null,
                 },
             });
 
             await applyInventoryMovement(tx, {
                 tenantId,
                 productId: item.productId,
-                warehouseId,
+                warehouseId: lineWarehouseId,
                 quantityDelta: -item.quantity,
                 movementType: 'SALE',
                 referenceType: 'SALE',
@@ -501,6 +522,17 @@ export class SalesService {
                 throw new BadRequestException('One or more products on this draft no longer exist.');
             }
 
+            // A draft moves no stock, so nothing is resolved to a default here —
+            // an unset warehouse stays unset and finalizeDraft() resolves it at
+            // the moment the stock actually moves. What the user *did* pick is
+            // still checked: an id from another tenant or another branch must
+            // not be parked in this tenant's rows to be discovered on posting.
+            const namedWarehouseIds = [dto.warehouseId, ...dto.items.map((item) => item.warehouseId)];
+            const usableIds = await usableWarehouseIds(tx, tenantId, dto.storeId, namedWarehouseIds);
+            if (namedWarehouseIds.some((id) => id && !usableIds.has(id))) {
+                throw new BadRequestException('Warehouse not found for this store.');
+            }
+
             // A parked draft is picked up again later, so its quick-created
             // customer is saved with it rather than deferred to finalisation.
             if (dto.newCustomer) {
@@ -526,6 +558,8 @@ export class SalesService {
                     reference_number: referenceNumber,
                     quotation_id: source.quotationId,
                     sales_order_id: source.salesOrderId,
+                    // Held as chosen rather than resolved — see the check above.
+                    warehouse_id: dto.warehouseId ?? null,
                     total_amount: dto.totalAmount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
@@ -549,6 +583,7 @@ export class SalesService {
                         product_id: item.productId,
                         quantity: item.quantity,
                         price_at_sale: item.priceAtSale,
+                        warehouse_id: item.warehouseId ?? null,
                     },
                 });
             }
@@ -589,6 +624,7 @@ export class SalesService {
                 productId: item.product_id,
                 quantity: item.quantity,
                 priceAtSale: Number(item.price_at_sale),
+                warehouseId: item.warehouse_id ?? undefined,
             }));
             const payments = dto.payments ?? draft.payments.map((p) => ({
                 paymentMethod: p.payment_method,
@@ -615,6 +651,9 @@ export class SalesService {
             const saleDto: CreateSaleDto = {
                 storeId: draft.store_id,
                 counterId: draft.counter_id ?? undefined,
+                // What the user picked on the way out wins; otherwise the draft
+                // posts from wherever it was parked to come out of.
+                warehouseId: dto.warehouseId ?? draft.warehouse_id ?? undefined,
                 customerId: dto.customerId !== undefined
                     ? (dto.customerId ?? undefined)
                     : (draft.customer_id ?? undefined),
@@ -654,6 +693,10 @@ export class SalesService {
                     total_amount: prep.computedTotal,
                     amount_paid: amountPaid,
                     note: saleDto.note ?? null,
+                    // The resolved id, not the parked one: a draft may have been
+                    // saved with no warehouse at all, and the posted sale must
+                    // record the one its stock actually left.
+                    warehouse_id: prep.warehouses.entryWarehouseId,
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                 },
             });
@@ -834,6 +877,17 @@ export class SalesService {
                 throw new NotFoundException('Sale not found');
             }
 
+            // A cancelled entry has already had every impact reversed. Editing
+            // it would replay stock and postings against a void document, and
+            // *setting* CANCELLED from here would mark it void while reversing
+            // nothing — cancelling is `cancel()`, which does the unwinding.
+            if (sale.status === 'CANCELLED') {
+                throw new BadRequestException('This sale is cancelled and can no longer be edited.');
+            }
+            if (dto.status === 'CANCELLED') {
+                throw new BadRequestException('Use the cancel action to cancel a sale, so its impacts are reversed.');
+            }
+
             // A draft holds no stock and has posted nothing, so editing it must
             // not move inventory — and it can only become a real sale through
             // finalizeDraft(), which runs the full validation and posting path.
@@ -844,15 +898,39 @@ export class SalesService {
                 );
             }
 
+            // Set when the lines are replaced, which is the only edit that
+            // re-posts stock and therefore the only one that can move the sale
+            // to another warehouse.
+            let postedWarehouseId: string | undefined;
+
             // 1. If items are being replaced, reverse old stock and apply new
             if (dto.items) {
-                const warehouseId = await resolveWarehouseId(tx, tenantId, sale.store_id, undefined, 'sale');
-                // Reverse stock for old items (a draft never decremented any)
+                // The warehouse the sale is *moving to*, plus any line overrides
+                // on the replacement lines.
+                const warehouses = await resolveEntryWarehouses(
+                    tx,
+                    tenantId,
+                    sale.store_id,
+                    dto.warehouseId ?? sale.warehouse_id ?? undefined,
+                    dto.items.map((item) => item.warehouseId),
+                    'sale',
+                );
+                postedWarehouseId = warehouses.entryWarehouseId;
+                // Reverse stock for old items (a draft never decremented any).
+                // Each goes back where it came from, which is not necessarily
+                // where the edited sale will now draw from.
+                const reversalWarehouseId = reversalWarehouseResolver(
+                    tx,
+                    tenantId,
+                    sale.store_id,
+                    sale.warehouse_id,
+                    'sale',
+                );
                 for (const oldItem of isDraft ? [] : sale.items) {
                     await applyInventoryMovement(tx, {
                         tenantId,
                         productId: oldItem.product_id,
-                        warehouseId,
+                        warehouseId: await reversalWarehouseId(oldItem.warehouse_id),
                         quantityDelta: oldItem.quantity,
                         movementType: 'SALE_EDIT_REVERSAL',
                         referenceType: 'SALE',
@@ -883,6 +961,7 @@ export class SalesService {
                             quantity: item.quantity,
                             price_at_sale: item.priceAtSale,
                             unit_cost_at_sale: unitCostAtSale,
+                            warehouse_id: item.warehouseId ?? null,
                         },
                     });
 
@@ -890,7 +969,7 @@ export class SalesService {
                         await applyInventoryMovement(tx, {
                             tenantId,
                             productId: item.productId,
-                            warehouseId,
+                            warehouseId: warehouses.warehouseIdFor(item.warehouseId),
                             quantityDelta: -item.quantity,
                             movementType: 'SALE_EDIT',
                             referenceType: 'SALE',
@@ -970,6 +1049,7 @@ export class SalesService {
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                     ...(totalAmount !== undefined && { total_amount: totalAmount }),
                     ...(amountPaid !== undefined && { amount_paid: amountPaid }),
+                    ...(postedWarehouseId !== undefined && { warehouse_id: postedWarehouseId }),
                 },
                 include: {
                     items: { include: { product: true } },
@@ -980,12 +1060,134 @@ export class SalesService {
     }
 
     /**
-     * Delete a sale and undo everything it posted: stock, warranty serials,
-     * loyalty points, customer credit/due, lifetime spend and the accounting
-     * vouchers. Refused outright when another document already references the
-     * sale (returns, warranty claims, delivery orders) — those must be reversed
-     * on their own terms first, or the books would silently lose their anchor.
-     * A DRAFT posted nothing, so it is simply removed.
+     * The impacts a posted sale left behind, undone in the order they were
+     * applied: stock, warranty serials, loyalty points, customer credit and
+     * due, lifetime spend, and both accounting vouchers.
+     *
+     * Shared by `remove` and `cancel` on purpose — they differ only in what
+     * happens to the document afterwards, and a reversal that lived in one of
+     * them would drift from the other the first time a new impact was added to
+     * `create`. A DRAFT posted nothing, so callers skip it entirely.
+     */
+    private async reverseSaleImpacts(
+        tx: any,
+        tenantId: string,
+        sale: {
+            id: string;
+            store_id: string;
+            customer_id: string | null;
+            total_amount: any;
+            warehouse_id: string | null;
+            items: { product_id: string; quantity: number; warehouse_id: string | null }[];
+        },
+        movementType: string,
+    ) {
+        // Each line goes back where it came from — its own warehouse, then the
+        // sale's. Re-resolving the tenant default here instead (which is what
+        // this did before the columns existed) means changing that setting after
+        // the sale makes the reversal restock a warehouse the goods were never
+        // in; only rows written before the columns shipped still fall through to
+        // it, and for those it is the value the original movement used.
+        const reversalWarehouseId = reversalWarehouseResolver(
+            tx,
+            tenantId,
+            sale.store_id,
+            sale.warehouse_id,
+            'sale',
+        );
+        for (const item of sale.items) {
+            await applyInventoryMovement(tx, {
+                tenantId,
+                productId: item.product_id,
+                warehouseId: await reversalWarehouseId(item.warehouse_id),
+                quantityDelta: item.quantity,
+                movementType,
+                referenceType: 'SALE',
+                referenceId: sale.id,
+            });
+        }
+
+        // Return any warranty serials this sale consumed to stock.
+        await tx.productSerial.updateMany({
+            where: { tenant_id: tenantId, source_type: 'SALE', source_id: sale.id },
+            data: { status: 'IN_STOCK', source_type: null, source_id: null, sold_at: null },
+        });
+
+        if (sale.customer_id) {
+            // Loyalty: net out every point movement this sale caused.
+            const loyaltyTxns = await tx.loyaltyTransaction.findMany({
+                where: { tenantId, saleId: sale.id },
+                select: { points: true },
+            });
+            const netPoints = loyaltyTxns.reduce((sum: number, l: { points: number }) => sum + l.points, 0);
+            if (netPoints !== 0) {
+                await tx.customer.update({
+                    where: { id: sale.customer_id },
+                    data: { loyalty_points: { decrement: netPoints } },
+                });
+            }
+            await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: sale.id } });
+
+            // Credit: drop the CREDIT_SALE row and take its amount back
+            // off the customer's outstanding due.
+            const creditTxns = await tx.customerCreditTransaction.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    reference_type: 'SALE',
+                    reference_id: sale.id,
+                },
+                select: { id: true, amount: true },
+            });
+            const creditTotal = creditTxns.reduce((sum: number, c: { amount: any }) => sum + Number(c.amount), 0);
+            await tx.customerCreditTransaction.deleteMany({
+                where: { id: { in: creditTxns.map((c: { id: string }) => c.id) } },
+            });
+
+            await tx.customer.update({
+                where: { id: sale.customer_id },
+                data: {
+                    total_spent: { decrement: Number(sale.total_amount) },
+                    ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
+                },
+            });
+        }
+
+        // Both legs: the main sale voucher and, on a credit sale with a
+        // down-payment, the separate 'paid' leg.
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id);
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id, 'paid');
+    }
+
+    /**
+     * The documents that make a sale un-reversible while they exist. Each one
+     * was raised *against* this sale and carries impacts of its own, so the books
+     * would silently lose their anchor if the sale went away underneath them.
+     */
+    private assertSaleHasNoDependents(sale: {
+        returns: { id: string }[];
+        warrantyClaims: { id: string }[];
+        deliveryOrders: { id: string }[];
+    }) {
+        if (sale.returns.length > 0) {
+            throw new BadRequestException('This sale has returns against it — delete or reverse them first.');
+        }
+        if (sale.warrantyClaims.length > 0) {
+            throw new BadRequestException('This sale has warranty claims against it — resolve them first.');
+        }
+        if (sale.deliveryOrders.length > 0) {
+            throw new BadRequestException('This sale has delivery orders against it — cancel them first.');
+        }
+    }
+
+    /**
+     * Delete a sale and undo everything it posted. Refused outright when another
+     * document already references the sale (returns, warranty claims, delivery
+     * orders) — those must be reversed on their own terms first. A DRAFT posted
+     * nothing, so it is simply removed.
+     *
+     * `cancel` below is the softer sibling and the one the UI offers: it leaves
+     * the document behind with a reason on it. This one is kept for the cases
+     * that genuinely want the row gone.
      */
     async remove(tenantId: string, id: string) {
         return this.db.$transaction(async (tx) => {
@@ -1003,86 +1205,79 @@ export class SalesService {
                 throw new NotFoundException('Sale not found');
             }
 
-            if (sale.returns.length > 0) {
-                throw new BadRequestException('This sale has returns against it — delete or reverse them first.');
-            }
-            if (sale.warrantyClaims.length > 0) {
-                throw new BadRequestException('This sale has warranty claims against it — resolve them first.');
-            }
-            if (sale.deliveryOrders.length > 0) {
-                throw new BadRequestException('This sale has delivery orders against it — cancel them first.');
-            }
+            this.assertSaleHasNoDependents(sale);
 
-            // A draft never touched stock, loyalty, credit or the ledger.
-            if (sale.status !== 'DRAFT') {
-                const warehouseId = await resolveWarehouseId(tx, tenantId, sale.store_id, undefined, 'sale');
-                for (const item of sale.items) {
-                    await applyInventoryMovement(tx, {
-                        tenantId,
-                        productId: item.product_id,
-                        warehouseId,
-                        quantityDelta: item.quantity,
-                        movementType: 'SALE_DELETE_REVERSAL',
-                        referenceType: 'SALE',
-                        referenceId: id,
-                    });
-                }
-
-                // Return any warranty serials this sale consumed to stock.
-                await tx.productSerial.updateMany({
-                    where: { tenant_id: tenantId, source_type: 'SALE', source_id: id },
-                    data: { status: 'IN_STOCK', source_type: null, source_id: null, sold_at: null },
-                });
-
-                if (sale.customer_id) {
-                    // Loyalty: net out every point movement this sale caused.
-                    const loyaltyTxns = await tx.loyaltyTransaction.findMany({
-                        where: { tenantId, saleId: id },
-                        select: { points: true },
-                    });
-                    const netPoints = loyaltyTxns.reduce((sum, l) => sum + l.points, 0);
-                    if (netPoints !== 0) {
-                        await tx.customer.update({
-                            where: { id: sale.customer_id },
-                            data: { loyalty_points: { decrement: netPoints } },
-                        });
-                    }
-                    await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: id } });
-
-                    // Credit: drop the CREDIT_SALE row and take its amount back
-                    // off the customer's outstanding due.
-                    const creditTxns = await tx.customerCreditTransaction.findMany({
-                        where: {
-                            tenant_id: tenantId,
-                            reference_type: 'SALE',
-                            reference_id: id,
-                        },
-                        select: { id: true, amount: true },
-                    });
-                    const creditTotal = creditTxns.reduce((sum, c) => sum + Number(c.amount), 0);
-                    await tx.customerCreditTransaction.deleteMany({
-                        where: { id: { in: creditTxns.map((c) => c.id) } },
-                    });
-
-                    await tx.customer.update({
-                        where: { id: sale.customer_id },
-                        data: {
-                            total_spent: { decrement: Number(sale.total_amount) },
-                            ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
-                        },
-                    });
-                }
-
-                // Both legs: the main sale voucher and, on a credit sale with a
-                // down-payment, the separate 'paid' leg.
-                await voidAutoPostedVoucher(tx, tenantId, 'sale', id);
-                await voidAutoPostedVoucher(tx, tenantId, 'sale', id, 'paid');
+            // A draft never touched stock, loyalty, credit or the ledger, and a
+            // cancelled sale has already had all of it reversed — reversing a
+            // second time would put the goods back twice and pay the customer's
+            // due down below what they owe.
+            if (sale.status !== 'DRAFT' && sale.status !== 'CANCELLED') {
+                await this.reverseSaleImpacts(tx, tenantId, sale, 'SALE_DELETE_REVERSAL');
             }
 
             // Items and payment records cascade off the sale.
             await tx.sale.delete({ where: { id } });
 
             return { deleted: true, id };
+        });
+    }
+
+    /**
+     * Cancel a sales entry: reverse every impact it posted, then keep the
+     * document with `status: 'CANCELLED'` and the admin's note on it.
+     *
+     * Why cancelling rather than deleting is what the UI offers. A deleted sale
+     * takes its invoice number with it, leaves the reversing stock movements
+     * pointing at a row that no longer exists, and answers "why did our stock
+     * jump on the 3rd?" with nothing. The cancelled row keeps the number, keeps
+     * the lines, carries the reason, and drops out of every revenue figure
+     * because `sales-reports` already filters `status: 'COMPLETED'`.
+     *
+     * Gated on `CANCEL_ENTRY` at the controller, which only OWNER and Tenant
+     * Admin hold — the cashier who rang the sale cannot unwind it.
+     */
+    async cancel(tenantId: string, userId: string, id: string, note: string) {
+        return this.db.$transaction(async (tx) => {
+            const sale = await tx.sale.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    items: true,
+                    returns: { select: { id: true } },
+                    warrantyClaims: { select: { id: true } },
+                    deliveryOrders: { select: { id: true } },
+                },
+            });
+
+            if (!sale) {
+                throw new NotFoundException('Sale not found');
+            }
+
+            if (sale.status === 'CANCELLED') {
+                throw new BadRequestException('This sale is already cancelled.');
+            }
+
+            this.assertSaleHasNoDependents(sale);
+
+            // A draft posted nothing, so there is nothing to unwind — but it is
+            // still cancellable, so a parked entry can be closed off with a
+            // reason instead of vanishing.
+            if (sale.status !== 'DRAFT') {
+                await this.reverseSaleImpacts(tx, tenantId, sale, 'SALE_CANCELLED');
+            }
+
+            return tx.sale.update({
+                where: { id },
+                data: {
+                    status: 'CANCELLED',
+                    cancelled_at: new Date(),
+                    cancelled_by: userId,
+                    cancellation_note: note,
+                },
+                include: {
+                    items: { include: { product: true } },
+                    payments: true,
+                },
+            });
         });
     }
 

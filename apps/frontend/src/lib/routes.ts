@@ -242,6 +242,10 @@ export const routes = {
     storefront: {
         root: '/storefront',
         settings: '/storefront/settings',
+        pages: '/storefront/pages',
+        newPage: '/storefront/pages/new',
+        page: (id: string) => `/storefront/pages/${id}` as const,
+        menu: '/storefront/menu',
     },
 
     settings: {
@@ -321,5 +325,15 @@ export const routes = {
     chat: '/chat',
     smsCredits: '/sms-credits',
     aiCredits: '/ai-credits',
-    manufacturing: '/manufacturing',
+    /**
+     * Manufacturing was one page with a tab strip; the tabs are sidebar submenu
+     * items now, so each has its own route. `root` is the Bill of Materials
+     * screen — the tab that used to open by default — rather than a separate hub.
+     */
+    manufacturing: {
+        root: '/manufacturing',
+        jobs: '/manufacturing/jobs',
+        analytics: '/manufacturing/analytics',
+        productPL: '/manufacturing/product-pl',
+    },
 } as const;

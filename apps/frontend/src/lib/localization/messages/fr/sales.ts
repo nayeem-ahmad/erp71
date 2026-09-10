@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: "Terminée",
                 REFUNDED: "Remboursée",
                 PARTIAL_REFUND: "Remboursement partiel",
+                CANCELLED: 'Annulée',
             },
             order: {
                 DRAFT: "Brouillon",
@@ -280,6 +281,8 @@ export const salesMessages = {
                 warrantyClaims: { title: "Dossiers de garantie", description: "Suivez les demandes de garantie des clients et leur résolution." },
                 storefrontOrders: { title: "Commandes en ligne", description: "Consultez et honorez les commandes passées sur votre boutique publique." },
                 storefrontSettings: { title: "Paramètres de la boutique", description: "Configurez l'identité, l'en-tête et la visibilité du catalogue de votre boutique." },
+                storefrontPages: { title: "Pages de la boutique", description: "Rédigez les pages permanentes de votre boutique — À propos, livraison, retours." },
+                storefrontMenu: { title: "Menu de la boutique", description: "Choisissez les liens de l’en-tête de votre boutique et leur ordre." },
                 customers: { title: "Clients", description: "Gérez les fiches clients, les contacts et les limites de crédit." },
                 crmFollowUps: { title: "Relances", description: "Affectez des relances liées aux clients et aux affaires." },
                 crmCampaigns: { title: "Campagnes", description: "Planifiez et suivez vos campagnes commerciales sortantes." },
@@ -317,6 +320,7 @@ export const salesMessages = {
             completed: "Terminée",
             refunded: "Remboursée",
             partialRefund: "Remboursement partiel",
+            cancelled: 'Annulée',
         },
         dataTable: {
             title: "Ventes",

@@ -46,6 +46,21 @@ const COST_BEHAVIOUR: Record<string, CostBehaviour> = {
     // the value leaves at what was paid for it.
     PURCHASE_RETURN: 'REVERSE_RECEIPT',
     PURCHASE_RETURN_EDIT: 'REVERSE_RECEIPT',
+    // Cancelling a purchase entry takes the receipt back out. It must mirror
+    // PURCHASE_RECEIPT above or the pool keeps value for goods that are gone:
+    // a cancellation replayed as QUANTITY_ONLY would remove the quantity at
+    // today's average while leaving the receipt's own value blended in, which
+    // permanently misstates the average for every unit that follows. The
+    // cancel path passes the receipt movement's stored landed cost, so the two
+    // sides net to exactly zero.
+    //
+    // Its sibling PURCHASE_CANCELLED_UNCOSTED is deliberately absent from this
+    // map: it reverses a receipt that never revalued the pool — an imported
+    // `PURCHASE` movement — and pulling a cost out that never went in would
+    // leave the average poorer than before the bill existed. Which of the two
+    // a cancellation uses is decided by `costBehaviourFor` on the receipt it is
+    // undoing, in PurchasesService.cancel.
+    PURCHASE_CANCELLED: 'REVERSE_RECEIPT',
 };
 
 export function costBehaviourFor(movementType: string): CostBehaviour {

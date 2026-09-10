@@ -4,7 +4,12 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
-import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import {
+    applyInventoryMovement,
+    resolveEntryWarehouses,
+    reversalWarehouseResolver,
+    usableWarehouseIds,
+} from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
@@ -33,7 +38,26 @@ export class SalesReturnsService {
             const returnNumber = `RET-${Date.now()}`;
             let totalRefund = 0;
             const returnItemData = [];
-            const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId);
+
+            // Goods go back where the sale took them from unless the user says
+            // otherwise, so a two-warehouse tenant does not have to restate on
+            // every return what the sale already recorded. Filtered first: a
+            // warehouse closed since the sale is no longer somewhere stock can
+            // be booked, and that must not block the refund.
+            const inheritable = await usableWarehouseIds(tx, tenantId, dto.storeId, [
+                sale?.warehouse_id,
+                ...(sale?.items ?? []).map((item: any) => item.warehouse_id),
+            ]);
+            const inherited = (warehouseId?: string | null) =>
+                warehouseId && inheritable.has(warehouseId) ? warehouseId : null;
+
+            const warehouses = await resolveEntryWarehouses(
+                tx,
+                tenantId,
+                dto.storeId,
+                dto.warehouseId ?? inherited(sale?.warehouse_id) ?? undefined,
+                dto.items.map((item) => item.warehouseId),
+            );
 
             // Lines with no parent sale carry no cost of their own, so they fall
             // back to the pool. Resolved in one query up front rather than per
@@ -73,6 +97,7 @@ export class SalesReturnsService {
                         product_id: product.id,
                         quantity: returnItem.quantity,
                         refund_amount: refundAmount,
+                        warehouse_id: returnItem.warehouseId ?? null,
                         // No parent sale to take a cost from, so the pool's
                         // current average is the best available answer for what
                         // these goods cost.
@@ -104,6 +129,10 @@ export class SalesReturnsService {
                     product_id: originalItem.product_id,
                     quantity: returnItem.quantity,
                     refund_amount: refundAmount,
+                    // A line the user did not steer goes back where the sale
+                    // took it from, so the two documents net out per warehouse
+                    // rather than only in total.
+                    warehouse_id: returnItem.warehouseId ?? inherited(originalItem.warehouse_id),
                     // Goods go back on the shelf at the cost they left at. Using
                     // today's average instead would book a profit or loss on the
                     // return itself, which is not what a refund is.
@@ -122,6 +151,7 @@ export class SalesReturnsService {
                     total_refund: totalRefund,
                     reason: dto.reason,
                     created_by: userId,
+                    warehouse_id: warehouses.entryWarehouseId,
                     items: {
                         create: returnItemData
                     }
@@ -134,7 +164,7 @@ export class SalesReturnsService {
                 await applyInventoryMovement(tx, {
                     tenantId,
                     productId: item.product_id,
-                    warehouseId,
+                    warehouseId: warehouses.warehouseIdFor(item.warehouse_id),
                     quantityDelta: item.quantity,
                     movementType: 'SALES_RETURN',
                     referenceType: 'SALES_RETURN',
@@ -295,13 +325,30 @@ export class SalesReturnsService {
             // If items are provided, recalculate everything
             if (dto.items && dto.items.length > 0) {
                 // A parentless return has no sale to take the store from.
-                const warehouseId = await resolveWarehouseId(tx, tenantId, existing.sale?.store_id ?? existing.store_id);
-                // 1. Reverse old stock increments
+                const storeId = existing.sale?.store_id ?? existing.store_id;
+                const warehouses = await resolveEntryWarehouses(
+                    tx,
+                    tenantId,
+                    storeId,
+                    dto.warehouseId ?? existing.warehouse_id ?? undefined,
+                    dto.items.map((item) => item.warehouseId),
+                );
+                updateData.warehouse_id = warehouses.entryWarehouseId;
+
+                // 1. Reverse old stock increments — out of the warehouse each
+                //    line was actually put into, which the edited return may
+                //    well be moving away from.
+                const reversalWarehouseId = reversalWarehouseResolver(
+                    tx,
+                    tenantId,
+                    storeId,
+                    existing.warehouse_id,
+                );
                 for (const oldItem of existing.items) {
                     await applyInventoryMovement(tx, {
                         tenantId,
                         productId: oldItem.product_id,
-                        warehouseId,
+                        warehouseId: await reversalWarehouseId(oldItem.warehouse_id),
                         quantityDelta: -oldItem.quantity,
                         movementType: 'SALES_RETURN_REVERSAL',
                         referenceType: 'SALES_RETURN',
@@ -351,6 +398,7 @@ export class SalesReturnsService {
                             quantity: newItem.quantity,
                             refund_amount: refundAmount,
                             unit_cost_at_return: editCosts.get(newItem.productId) ?? null,
+                            warehouse_id: newItem.warehouseId ?? null,
                         });
                         continue;
                     }
@@ -389,12 +437,13 @@ export class SalesReturnsService {
                         // Same rule as the create path: the cost the goods left
                         // the sale at, not today's average.
                         unit_cost_at_return: originalSaleItem.unit_cost_at_sale ?? null,
+                        warehouse_id: newItem.warehouseId ?? null,
                     });
 
                     await applyInventoryMovement(tx, {
                         tenantId,
                         productId: newItem.productId,
-                        warehouseId,
+                        warehouseId: warehouses.warehouseIdFor(newItem.warehouseId),
                         quantityDelta: newItem.quantity,
                         movementType: 'SALES_RETURN_EDIT',
                         referenceType: 'SALES_RETURN',
@@ -445,13 +494,19 @@ export class SalesReturnsService {
             });
             if (!ret) throw new BadRequestException('Return not found');
 
-            // Reverse stock increments
-            const warehouseId = await resolveWarehouseId(tx, tenantId, ret.store_id);
+            // Reverse stock increments, out of the warehouse each line was put
+            // into rather than wherever the default points today.
+            const reversalWarehouseId = reversalWarehouseResolver(
+                tx,
+                tenantId,
+                ret.store_id,
+                ret.warehouse_id,
+            );
             for (const item of ret.items) {
                 await applyInventoryMovement(tx, {
                     tenantId,
                     productId: item.product_id,
-                    warehouseId,
+                    warehouseId: await reversalWarehouseId(item.warehouse_id),
                     quantityDelta: -item.quantity,
                     movementType: 'SALES_RETURN_DELETE',
                     referenceType: 'SALES_RETURN',

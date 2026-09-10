@@ -1,8 +1,16 @@
 # Google Sign-In Setup
 
 ERP71 supports "Sign in with Google" on `/login` and "Sign up with Google" on
-`/signup`. Both buttons are hidden unless the backend has a Google OAuth client
-id configured, so a deployment without one behaves exactly as before.
+`/signup`, and the same buttons on every tenant storefront's
+`/store/<slug>/auth/signin` and `/store/<slug>/auth/signup`. All of them are
+hidden unless the backend has a Google OAuth client id configured, so a
+deployment without one behaves exactly as before.
+
+One client id covers all four pages. The storefront is served from the same
+origin as the app, so nothing needs adding to the authorised JavaScript origins
+list for shoppers — but the tokens go to a *different* endpoint
+(`POST /storefront/:slug/auth/google`), which mints a storefront-scoped session
+rather than a workspace one. See **Storefront shoppers** below.
 
 ---
 
@@ -63,6 +71,10 @@ the button is missing, check the config endpoint first; if it renders but errors
 on click, the origin is almost certainly missing from the authorised JavaScript
 origins list.
 
+The storefront pages read the same endpoint, so a shop with its storefront
+enabled shows the button at `/store/<slug>/auth/signin` the moment the app's
+does.
+
 ---
 
 ## How sign-in resolves an account
@@ -96,6 +108,27 @@ Two consequences worth knowing:
   sets the first password.
 - Password login and storefront customer login both reject it — there is no
   hash to compare against, so neither can be brute-forced into a match.
+
+## Storefront shoppers
+
+`POST /api/v1/storefront/:slug/auth/google` verifies the token exactly as the
+app endpoint does and resolves the `User` row through the same three steps. It
+then does one more thing: it finds or creates *this shop's* `Customer` record
+for that person, which is why a single button both signs a returning shopper in
+and signs a new one up.
+
+- The record is **claimed, not duplicated**, when the shop already keyed one in
+  under the same address — Google verified it, so the claim is sound. A phone
+  number typed into the sign-up form is *not* an identifier anything is claimed
+  on; it is only stored on a record being created, and refused if the shop
+  already has it (the same 409 the password sign-up gives).
+- The session it mints is `storefront`-scoped and bound to that shop, so it
+  cannot reach the ERP API and cannot read another shop's storefront. Signing
+  out of it leaves the same person's workspace session alone.
+- 2FA behaves as it does on the app: an account with TOTP still gets
+  `requires_2fa`, finished at `POST /storefront/:slug/auth/2fa/verify`.
+- One person shopping at several storefronts has one `User` and one `Customer`
+  record per shop, which is what the `[tenant_id, user_id]` unique key says.
 
 ## New workspaces
 

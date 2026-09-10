@@ -106,6 +106,7 @@ enum StorePermission {
   CREATE_RETURN
   CREATE_SALES_ORDER
   CREATE_QUOTATION
+  CANCEL_ENTRY
 
   // Accounting
   VIEW_LEDGER
@@ -179,6 +180,9 @@ enum StorePermission {
   VIEW_BLOG
   MANAGE_BLOG
   PUBLISH_BLOG
+
+  // Storefront pages & menu
+  MANAGE_STOREFRONT_PAGES
 
   // Team chat
   USE_TEAM_CHAT
@@ -403,6 +407,7 @@ model User {
   crmActivitiesAssigned             CrmActivity[]               @relation("CrmActivityAssignee")
   crmActivitiesCreated              CrmActivity[]               @relation("CrmActivityCreator")
   crmActivitiesApproved             CrmActivity[]               @relation("CrmActivityApprover")
+  crmMessageTemplatesCreated        CrmMessageTemplate[]        @relation("CrmMessageTemplateCreator")
   refereeProfile                    Referee?
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
@@ -645,42 +650,51 @@ model DemoDataBatch {
 }
 
 model Tenant {
-  id                       String    @id @default(uuid())
-  name                     String
-  owner_id                 String
-  default_locale           String    @default("en")
+  id                        String    @id @default(uuid())
+  name                      String
+  owner_id                  String
+  default_locale            String    @default("en")
   /// IANA zone the workspace's calendar days are measured in, e.g. `Asia/Dhaka`.
   /// Every "today" window, date-range filter and report bucket resolves through
   /// this; see `common/tenant-time.util.ts`. An IANA name, never an offset —
   /// an offset cannot express DST.
-  timezone                 String    @default("Asia/Dhaka")
+  timezone                  String    @default("Asia/Dhaka")
   /// When false the workspace is English-only and the language switcher is hidden.
-  localization_enabled     Boolean   @default(false)
+  localization_enabled      Boolean   @default(false)
   /// Second language offered alongside English when localization_enabled is true.
-  secondary_locale         String?
-  created_at               DateTime  @default(now())
-  storefront_slug          String?   @unique
-  storefront_enabled       Boolean   @default(false)
-  storefront_banner        String?
-  storefront_hero_image    String?
-  storefront_hero_headline String?
-  brand_primary_color      String?
-  brand_logo_url           String?
-  brand_favicon_url        String?
-  brand_business_name      String?
-  default_vat_rate         Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
-  vat_registration_no      String? // NBR VAT registration number
-  business_tin             String? // Tax Identification Number
-  business_type            String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+  secondary_locale          String?
+  created_at                DateTime  @default(now())
+  storefront_slug           String?   @unique
+  storefront_enabled        Boolean   @default(false)
+  storefront_banner         String?
+  storefront_hero_image     String?
+  storefront_hero_headline  String?
+  /// The shop's own mark, shown in the storefront header. Deliberately not
+  /// `brand_logo_url`: that one is the workspace's identity on invoices and in
+  /// the app chrome, and a shop that trades under a second name needs the two
+  /// to differ.
+  storefront_logo           String?
+  /// Whether the store name is printed beside the logo in the storefront
+  /// header. Only meaningful once a logo exists — with no logo the name is the
+  /// only thing there is to show, so it is rendered regardless.
+  storefront_logo_show_name Boolean   @default(true)
+  brand_primary_color       String?
+  brand_logo_url            String?
+  brand_favicon_url         String?
+  brand_business_name       String?
+  default_vat_rate          Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
+  vat_registration_no       String? // NBR VAT registration number
+  business_tin              String? // Tax Identification Number
+  business_type             String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
   /// Which dashboard this workspace lands on: AUTO | RETAIL | ACCOUNTING.
   /// AUTO defers to the plan's `accountingDashboard` entitlement. This is a
   /// preference, not a capability, which is why it is a column and not a key in
   /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
-  dashboard_preference     String    @default("AUTO")
+  dashboard_preference      String    @default("AUTO")
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
-  onboarding_dismissed_at  DateTime?
-  deleted_at               DateTime?
+  onboarding_dismissed_at   DateTime?
+  deleted_at                DateTime?
 
   /// When this workspace was frozen for non-payment. Non-null means every
   /// state-changing request is rejected by `BillingSuspensionGuard` — the data
@@ -823,6 +837,7 @@ model Tenant {
   crmFollowUps               CrmFollowUp[]
   crmActivities              CrmActivity[]
   crmActivityPurposes        CrmActivityPurpose[]
+  crmMessageTemplates        CrmMessageTemplate[]
   leads                      Lead[]
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
@@ -904,6 +919,8 @@ model Tenant {
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
   blogSettings               TenantBlogSettings?
+  storefrontPages            StorefrontPage[]
+  storefrontMenuLinks        StorefrontMenuLink[]
   boards                     Board[]
   boardColumns               BoardColumn[]
   boardColumnStatuses        BoardColumnStatus[]
@@ -1305,6 +1322,17 @@ model Warehouse {
   shrinkageWarehouseDefaults           InventorySettings[]  @relation("ShrinkageWarehouseDefault")
   transferSourceWarehouseDefaults      InventorySettings[]  @relation("TransferSourceWarehouseDefault")
   transferDestinationWarehouseDefaults InventorySettings[]  @relation("TransferDestinationWarehouseDefault")
+
+  // Documents that named this warehouse when they were posted. Header and line
+  // are separate relations because a line may override its document.
+  sales               Sale[]               @relation("SaleWarehouse")
+  saleItems           SaleItem[]           @relation("SaleItemWarehouse")
+  salesReturns        SalesReturn[]        @relation("SalesReturnWarehouse")
+  salesReturnItems    SalesReturnItem[]    @relation("SalesReturnItemWarehouse")
+  purchases           Purchase[]           @relation("PurchaseWarehouse")
+  purchaseItems       PurchaseItem[]       @relation("PurchaseItemWarehouse")
+  purchaseReturns     PurchaseReturn[]     @relation("PurchaseReturnWarehouse")
+  purchaseReturnItems PurchaseReturnItem[] @relation("PurchaseReturnItemWarehouse")
 
   @@unique([tenant_id, code])
   @@index([tenant_id, store_id])
@@ -1894,13 +1922,30 @@ model Purchase {
   total_amount     Decimal  @default(0) @db.Decimal(12, 2)
   paid_amount      Decimal  @default(0) @db.Decimal(12, 2)
   payment_status   String   @default("UNPAID") // UNPAID | PARTIAL | PAID
+  /// RECORDED | CANCELLED. A purchase had no lifecycle column until entry
+  /// cancellation needed one — `payment_status` answers "is the bill settled?",
+  /// which a cancelled bill is not, so the two cannot share a column. Every
+  /// money query filters on this, the way the sales side filters `Sale.status`.
+  status           String   @default("RECORDED")
   notes            String?
   created_by       String?
   created_at       DateTime @default(now())
+  /// Which warehouse received the goods, recorded rather than re-derived —
+  /// see `Sale.warehouse_id` for why. Lines may override it when one bill is
+  /// split across warehouses.
+  warehouse_id     String?
+
+  /// Set together by `PurchasesService.cancel`, never on their own. The note is
+  /// mandatory at the API boundary: a reversed purchase changes stock, the
+  /// payable and the ledger, and the reason has to survive with the document.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
 
   tenant             Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store              Store                       @relation(fields: [store_id], references: [id])
   supplier           Supplier?                   @relation(fields: [supplier_id], references: [id])
+  warehouse          Warehouse?                  @relation("PurchaseWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   items              PurchaseItem[]
   returns            PurchaseReturn[]
   paymentAllocations SupplierPaymentAllocation[]
@@ -1910,19 +1955,24 @@ model Purchase {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
+  @@index([tenant_id, status])
   @@index([tenant_id, reference_number])
+  @@index([tenant_id, warehouse_id])
 }
 
 model PurchaseItem {
-  id          String  @id @default(uuid())
-  purchase_id String
-  product_id  String
-  quantity    Int
-  unit_cost   Decimal @db.Decimal(12, 2)
-  line_total  Decimal @db.Decimal(12, 2)
+  id           String  @id @default(uuid())
+  purchase_id  String
+  product_id   String
+  quantity     Int
+  unit_cost    Decimal @db.Decimal(12, 2)
+  line_total   Decimal @db.Decimal(12, 2)
+  /// Per-line override; null means `Purchase.warehouse_id`.
+  warehouse_id String?
 
   purchase    Purchase             @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
   product     Product              @relation(fields: [product_id], references: [id])
+  warehouse   Warehouse?           @relation("PurchaseItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   returnItems PurchaseReturnItem[]
   jobCosts    ProductionJobCost[]
 
@@ -1946,14 +1996,19 @@ model PurchaseReturn {
   created_by       String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
+  /// Which warehouse the goods went back to the supplier from. Lines may
+  /// override it.
+  warehouse_id     String?
 
-  tenant   Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  store    Store                @relation(fields: [store_id], references: [id])
-  purchase Purchase?            @relation(fields: [purchase_id], references: [id])
-  supplier Supplier?            @relation(fields: [supplier_id], references: [id])
-  items    PurchaseReturnItem[]
+  tenant    Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store     Store                @relation(fields: [store_id], references: [id])
+  purchase  Purchase?            @relation(fields: [purchase_id], references: [id])
+  supplier  Supplier?            @relation(fields: [supplier_id], references: [id])
+  warehouse Warehouse?           @relation("PurchaseReturnWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+  items     PurchaseReturnItem[]
 
   @@unique([tenant_id, return_number])
+  @@index([tenant_id, warehouse_id])
 }
 
 model PurchaseReturnItem {
@@ -1965,10 +2020,13 @@ model PurchaseReturnItem {
   quantity         Int
   unit_cost        Decimal @db.Decimal(12, 2)
   line_total       Decimal @db.Decimal(12, 2)
+  /// Per-line override; null means `PurchaseReturn.warehouse_id`.
+  warehouse_id     String?
 
   purchaseReturn PurchaseReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)
   purchaseItem   PurchaseItem?  @relation(fields: [purchase_item_id], references: [id])
   product        Product        @relation(fields: [product_id], references: [id])
+  warehouse      Warehouse?     @relation("PurchaseReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
 }
 
 model PurchaseOrder {
@@ -2274,9 +2332,30 @@ model Sale {
   quotation_id   String?
   sales_order_id String?
 
+  /// Which warehouse the goods left, captured when the entry is posted rather
+  /// than re-derived later. Before this column existed an edit or a delete
+  /// re-read the tenant's default sales warehouse, so changing that setting
+  /// made every reversal restock the wrong place. Null on rows posted before
+  /// the column shipped, and on imports that name no warehouse; those still
+  /// fall back to the configured default.
+  ///
+  /// Lines may override it (`SaleItem.warehouse_id`) for a sale picked from
+  /// more than one warehouse; this is what a line with no override uses.
+  warehouse_id String?
+
+  /// Set together by `SalesService.cancel`, alongside `status = 'CANCELLED'`.
+  /// The note is mandatory at the API boundary: cancelling puts the goods back,
+  /// unwinds loyalty, credit and lifetime spend and voids the vouchers, and the
+  /// reason for all of that has to survive with the document rather than only
+  /// in the audit log.
+  cancelled_at      DateTime?
+  cancelled_by      String?
+  cancellation_note String?
+
   // Relations
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store          Store           @relation(fields: [store_id], references: [id])
+  warehouse      Warehouse?      @relation("SaleWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   counter        PosCounter?     @relation(fields: [counter_id], references: [id])
   customer_id    String?
   customer       Customer?       @relation(fields: [customer_id], references: [id])
@@ -2297,6 +2376,7 @@ model Sale {
   @@index([tenant_id, counter_id])
   @@index([tenant_id, quotation_id])
   @@index([tenant_id, sales_order_id])
+  @@index([tenant_id, warehouse_id])
 }
 
 model Customer {
@@ -2755,9 +2835,10 @@ model ConversationChannel {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant        Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   conversations LeadConversation[]
   activities    CrmActivity[]
+  templates     CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2842,8 +2923,9 @@ model CrmActivityPurpose {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant     Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   activities CrmActivity[]
+  templates  CrmMessageTemplate[]
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
@@ -2930,6 +3012,63 @@ model CrmActivity {
   @@index([tenant_id, status, completed_at])
   @@index([tenant_id, channel_id])
   @@index([tenant_id, purpose_id])
+}
+
+/// A reusable message a rep drops into an activity instead of retyping it — the
+/// "payment reminder" WhatsApp, the "thanks for visiting" SMS, the standing call
+/// script. Tenant-owned and edited from CRM → Setup → Message Templates.
+///
+/// Deliberately not a CrmActivity row: a template is the text, not a touch. It
+/// carries no target, no due date and never appears on a timeline; picking one
+/// fills the composer's fields and the rep edits from there, so nothing here is
+/// sent or stored on the activity beyond the words that end up in it.
+model CrmMessageTemplate {
+  id        String @id @default(uuid())
+  tenant_id String
+
+  /// What the rep picks from the list — "Payment reminder", not the message body.
+  name  String
+  /// Which composer offers it: LOG (something that already happened),
+  /// SCHEDULE (a plan), or BOTH. A call script is worth having in both places;
+  /// "Sorry we missed you" only makes sense once the call is over.
+  usage String @default("BOTH")
+
+  /// Narrows the template to one channel — a WhatsApp blurb should not be
+  /// offered when logging a shop visit. Null means every channel.
+  ///
+  /// SetNull rather than Restrict: deleting a channel from CRM Setup already
+  /// reassigns the activities that used it, and blocking that delete because a
+  /// template mentions the channel would be a surprising place to be stopped.
+  /// The template survives as channel-agnostic, which is the honest degradation.
+  channel_id String?
+  /// Pre-selects the activity purpose when the template is used to schedule.
+  purpose_id String?
+
+  /// Fills "What needs doing" when scheduling. Null on a template that is only
+  /// ever a message body.
+  subject String?
+  /// The message itself. Carries `{{name}}`-style placeholders which the
+  /// composer substitutes at pick time — see lib/crm-message-templates.ts for
+  /// the token list. Stored verbatim, so a rename never rewrites saved text.
+  body    String
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  channel ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: SetNull)
+  purpose CrmActivityPurpose?  @relation(fields: [purpose_id], references: [id], onDelete: SetNull)
+  creator User?                @relation("CrmMessageTemplateCreator", fields: [created_by], references: [id])
+
+  @@unique([tenant_id, name])
+  /// Serves the picker, which reads the active templates for one tenant in
+  /// display order on every open of the Log / Schedule dialog.
+  @@index([tenant_id, is_active, sort_order])
+  @@index([tenant_id, channel_id])
 }
 
 model CustomerCreditTransaction {
@@ -3351,11 +3490,15 @@ model SaleItem {
   quantity          Int
   price_at_sale     Decimal  @db.Decimal(12, 2)
   unit_cost_at_sale Decimal? @db.Decimal(12, 2)
+  /// Per-line warehouse override, for a sale picked from more than one place.
+  /// Null means "wherever the sale says", i.e. `Sale.warehouse_id`.
+  warehouse_id      String?
 
   // Relations
-  sale    Sale              @relation(fields: [sale_id], references: [id], onDelete: Cascade)
-  product Product           @relation(fields: [product_id], references: [id])
-  returns SalesReturnItem[]
+  sale      Sale              @relation(fields: [sale_id], references: [id], onDelete: Cascade)
+  product   Product           @relation(fields: [product_id], references: [id])
+  warehouse Warehouse?        @relation("SaleItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+  returns   SalesReturnItem[]
 
   @@index([sale_id])
   /// Sale entry looks up "what did this item last go out at, and to whom?".
@@ -3381,15 +3524,21 @@ model SalesReturn {
   status           String   @default("COMPLETED")
   created_by       String?
   created_at       DateTime @default(now())
+  /// Where the returned goods were put back. Same reasoning as
+  /// `Sale.warehouse_id`: stored so an edit or a delete unwinds against the
+  /// warehouse the return actually restocked. Lines may override it.
+  warehouse_id     String?
 
   // Relations
-  tenant Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  store  Store             @relation(fields: [store_id], references: [id])
-  sale   Sale?             @relation(fields: [sale_id], references: [id])
-  items  SalesReturnItem[]
+  tenant    Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store     Store             @relation(fields: [store_id], references: [id])
+  sale      Sale?             @relation(fields: [sale_id], references: [id])
+  warehouse Warehouse?        @relation("SalesReturnWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+  items     SalesReturnItem[]
 
   @@unique([tenant_id, return_number])
   @@index([tenant_id, reference_number])
+  @@index([tenant_id, warehouse_id])
 }
 
 model SalesReturnItem {
@@ -3410,11 +3559,14 @@ model SalesReturnItem {
   /// Nullable because a return of stock nobody ever costed still has to be
   /// recordable, and zero would claim the goods were free.
   unit_cost_at_return Decimal? @db.Decimal(12, 2)
+  /// Per-line override; null means `SalesReturn.warehouse_id`.
+  warehouse_id        String?
 
   // Relations
   return    SalesReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)
   sale_item SaleItem?   @relation(fields: [sale_item_id], references: [id])
   product   Product     @relation(fields: [product_id], references: [id])
+  warehouse Warehouse?  @relation("SalesReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
 }
 
 model SalesOrder {
@@ -7255,6 +7407,93 @@ model TenantBlogSettings {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("tenant_blog_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Storefront pages and menu — the parts of a shop's public site that are not
+// products and not blog posts: "About us", "Delivery & returns", "Contact".
+//
+// Separate from the blog on purpose. A blog post is dated and listed in reverse
+// chronological order; a page is undated, standalone, and reached from the
+// header menu. Sharing one table would mean every page appearing in the blog
+// index the day it was written.
+// ---------------------------------------------------------------------------
+
+/// A standalone content page on a shop's storefront, at
+/// `/store/<storefront_slug>/pages/<slug>`.
+model StorefrontPage {
+  id        String @id @default(uuid())
+  tenant_id String
+  slug      String
+  title     String
+
+  /// Markdown, rendered with the same `ArticleMarkdown` the blog uses. Raw HTML
+  /// is never rendered — see that component for why.
+  body_md String
+
+  /// DRAFT | PUBLISHED — see storefront-page-status.ts. A draft is invisible to
+  /// the public even when a menu link points at it.
+  status String @default("DRAFT")
+
+  seo_title       String?
+  seo_description String?
+
+  published_at DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant    Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  menuLinks StorefrontMenuLink[]
+
+  /// Slugs are unique per shop, not globally — two shops may both have a page
+  /// called "about", and each owns the URL under its own storefront.
+  @@unique([tenant_id, slug])
+  @@index([tenant_id, status])
+  @@index([deleted_at])
+  @@map("storefront_pages")
+}
+
+/// One entry in a shop's storefront header menu.
+///
+/// A row is either a pointer at one of the shop's own pages (`PAGE`), at a
+/// built-in storefront destination (`INTERNAL` — home, shop, blog), or at an
+/// arbitrary URL (`EXTERNAL`). The three are one table rather than three
+/// because the menu is ordered as a whole and an owner reorders across kinds.
+model StorefrontMenuLink {
+  id        String @id @default(uuid())
+  tenant_id String
+
+  label String
+
+  /// PAGE | INTERNAL | EXTERNAL — see storefront-menu-link-type.ts.
+  type String @default("PAGE")
+
+  /// Set when `type` is PAGE. Nulled rather than cascading when the page is
+  /// hard-deleted, which leaves a visible broken row for the owner to fix
+  /// instead of silently dropping a menu entry they still expect to see.
+  page_id String?
+
+  /// Set when `type` is INTERNAL (a path relative to the storefront root, e.g.
+  /// `/shop`) or EXTERNAL (an absolute http(s) URL).
+  url String?
+
+  sort_order Int     @default(0)
+  visible    Boolean @default(true)
+
+  /// Only honoured for EXTERNAL links; an internal hop stays in the tab.
+  open_in_new_tab Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  page   StorefrontPage? @relation(fields: [page_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, sort_order])
+  @@index([page_id])
+  @@map("storefront_menu_links")
 }
 
 /// Marketing copy the platform posts to its own social accounts.
