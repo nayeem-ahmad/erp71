@@ -2164,6 +2164,12 @@ export const api = {
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
+    /** Cancel a posted purchase and reverse its impacts. Tenant-admin only. */
+    cancelPurchase: (id: string, note: string) => fetchWithAuth(`/purchases/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -2417,6 +2423,16 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteSale: (id: string) => fetchWithAuth(`/sales/${id}`, { method: 'DELETE' }),
+    /**
+     * Cancel a posted sale and reverse its impacts. Tenant-admin only — the
+     * backend gates it on CANCEL_ENTRY and 403s everyone else, so callers hide
+     * the action rather than letting it fail.
+     */
+    cancelSale: (id: string, note: string) => fetchWithAuth(`/sales/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // Cashier sessions
     openCashierSession: (data: any) => fetchWithAuth('/cashier-sessions/open', {
         method: 'POST',

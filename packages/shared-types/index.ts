@@ -48,6 +48,13 @@ export const StorePermission = {
   CREATE_RETURN: "CREATE_RETURN",
   CREATE_SALES_ORDER: "CREATE_SALES_ORDER",
   CREATE_QUOTATION: "CREATE_QUOTATION",
+  // Cancelling a posted entry unwinds stock, party balances and the ledger in
+  // one move, so it is deliberately not paired with the CREATE_* permission of
+  // any module: the person who records an entry must not be the one who erases
+  // its effects. It is absent from every `TENANT_ROLE_TEMPLATES` module role
+  // and reaches only OWNER and Tenant Admin, both of which take the whole
+  // `StorePermission` list — hence "tenant admin" without a fourth gate.
+  CANCEL_ENTRY: "CANCEL_ENTRY",
 
   // Accounting
   VIEW_LEDGER: "VIEW_LEDGER",
@@ -850,6 +857,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.CREATE_RETURN]: "Process returns",
   [StorePermission.CREATE_SALES_ORDER]: "Create sales orders",
   [StorePermission.CREATE_QUOTATION]: "Create quotations",
+  [StorePermission.CANCEL_ENTRY]: "Cancel sales & purchase entries",
   [StorePermission.VIEW_LEDGER]: "View ledger",
   [StorePermission.CREATE_VOUCHER]: "Create vouchers",
   [StorePermission.APPROVE_VOUCHER]: "Approve & reject vouchers",
