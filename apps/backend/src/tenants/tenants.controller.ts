@@ -1,6 +1,8 @@
-import { Controller, Get, Patch, Delete, Body, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Delete, Body, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { TenantsService } from './tenants.service';
-import { StorefrontSettingsDto } from '../storefront/storefront.dto';
+import { StorefrontMediaService } from './storefront-media.service';
+import { StorefrontSettingsDto, UploadStorefrontImageDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
@@ -12,7 +14,10 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TenantInterceptor)
 export class TenantsController {
-    constructor(private readonly tenantsService: TenantsService) {}
+    constructor(
+        private readonly tenantsService: TenantsService,
+        private readonly storefrontMedia: StorefrontMediaService,
+    ) {}
 
     @Get('storefront-settings')
     async getStorefrontSettings(@Tenant() tenant: TenantContext) {
@@ -25,6 +30,20 @@ export class TenantsController {
         @Body() dto: StorefrontSettingsDto,
     ) {
         return this.tenantsService.updateStorefrontSettings(tenant.tenantId, dto);
+    }
+
+    /**
+     * Store a cropped hero image or logo and hand back its URL, which the
+     * settings PATCH above then persists. Throttled like the other image
+     * routes: the body carries a whole picture.
+     */
+    @Post('storefront-image')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
+    async uploadStorefrontImage(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UploadStorefrontImageDto,
+    ) {
+        return this.storefrontMedia.upload(tenant.tenantId, dto);
     }
 
     @Get('branding')

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AccountCategory, AccountType } from '../accounting/accounting.constants';
 import { DatabaseService } from '../database/database.service';
+import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 /**
  * Read-only, tenant-scoped queries that back the chatbot's breadth tools.
@@ -209,7 +210,7 @@ export class ChatDataService {
                     _count: { _all: true },
                 }),
                 this.db.purchase.aggregate({
-                    where: { tenant_id: tenantId },
+                    where: { tenant_id: tenantId, ...ACTIVE_PURCHASE },
                     _min: { created_at: true },
                     _max: { created_at: true },
                     _count: { _all: true },
@@ -346,6 +347,7 @@ export class ChatDataService {
                 const rows = await this.db.purchase.findMany({
                     where: {
                         tenant_id: tenantId,
+                        ...ACTIVE_PURCHASE,
                         ...(storeId ? { store_id: storeId } : {}),
                         ...(window ? { created_at: window } : {}),
                         ...(searchFilter

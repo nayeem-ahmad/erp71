@@ -3,7 +3,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PurchasesService } from './purchases.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { costBehaviourFor } from '../database/product-cost.utils';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -12,6 +13,7 @@ jest.mock('../database/inventory.utils', () => ({
 
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
+    voidAutoPostedVoucher: jest.fn(),
 }));
 
 describe('PurchasesService', () => {
@@ -20,6 +22,11 @@ describe('PurchasesService', () => {
     let tx: any;
 
     beforeEach(async () => {
+        // The module-level jest.mock factories are shared across tests, so their
+        // call counts accumulate unless cleared. Implementations survive
+        // clearAllMocks; only calls/results are dropped.
+        jest.clearAllMocks();
+
         tx = {
             supplier: {
                 findUnique: jest.fn(),
@@ -34,9 +41,13 @@ describe('PurchasesService', () => {
                 count: jest.fn(),
                 create: jest.fn(),
                 findFirst: jest.fn(),
+                update: jest.fn(),
             },
             purchaseItem: {
                 create: jest.fn(),
+            },
+            inventoryMovement: {
+                findMany: jest.fn().mockResolvedValue([]),
             },
             productStock: {
                 upsert: jest.fn(),
@@ -71,6 +82,7 @@ describe('PurchasesService', () => {
         service = module.get<PurchasesService>(PurchasesService);
         (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
         (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
+        (voidAutoPostedVoucher as jest.Mock).mockResolvedValue(undefined);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
             voucherId: 'voucher-1',
@@ -300,6 +312,152 @@ describe('PurchasesService', () => {
             expect(tx.purchase.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({ subtotal_amount: 1000, freight_amount: 400, total_amount: 1400 }),
             });
+        });
+    });
+
+    describe('cancel', () => {
+        const activePurchase = (overrides: Record<string, unknown> = {}) => ({
+            id: 'purchase-1',
+            tenant_id: 'tenant-1',
+            purchase_number: 'PUR-00001',
+            supplier_id: 'sup-1',
+            total_amount: 1400,
+            status: 'RECORDED',
+            items: [{ id: 'line-1', jobCosts: [] }],
+            returns: [],
+            paymentAllocations: [],
+            importShipment: null,
+            ...overrides,
+        });
+
+        it('reverses the receipt at the cost it came in at, not at today\'s average', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ supplier_id: null }));
+            tx.inventoryMovement.findMany.mockResolvedValue([
+                { product_id: 'prod-1', warehouse_id: 'wh-9', quantity_delta: 10, unit_cost: 140, movement_type: 'PURCHASE_RECEIPT' },
+            ]);
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Wrong supplier billed us');
+
+            expect(applyInventoryMovement).toHaveBeenCalledWith(
+                tx,
+                expect.objectContaining({
+                    productId: 'prod-1',
+                    // The receipt's own warehouse, not the tenant's current
+                    // default — it may have been re-pointed since.
+                    warehouseId: 'wh-9',
+                    quantityDelta: -10,
+                    movementType: 'PURCHASE_CANCELLED',
+                    referenceType: 'PURCHASE',
+                    referenceId: 'purchase-1',
+                    // The landed figure the receipt was stamped with, so the
+                    // two sides net to exactly zero in the cost pool.
+                    unitCost: 140,
+                }),
+            );
+        });
+
+        it('reverses an imported receipt without disturbing the average it never moved', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ supplier_id: null }));
+            // external-sync writes `PURCHASE`, which is QUANTITY_ONLY — it
+            // never blended a cost into the pool, so its reversal must not pull
+            // one out. Filtering the lookup to PURCHASE_RECEIPT would have left
+            // an imported bill's stock standing after it was cancelled.
+            tx.inventoryMovement.findMany.mockResolvedValue([
+                { product_id: 'prod-1', warehouse_id: 'wh-9', quantity_delta: 4, unit_cost: 25, movement_type: 'PURCHASE' },
+            ]);
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Imported in error');
+
+            expect(applyInventoryMovement).toHaveBeenCalledWith(
+                tx,
+                expect.objectContaining({
+                    quantityDelta: -4,
+                    movementType: 'PURCHASE_CANCELLED_UNCOSTED',
+                }),
+            );
+            expect(costBehaviourFor('PURCHASE_CANCELLED_UNCOSTED')).toBe('QUANTITY_ONLY');
+            expect(costBehaviourFor('PURCHASE_CANCELLED')).toBe('REVERSE_RECEIPT');
+        });
+
+        it('takes the bill back off the payable and voids the voucher', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase());
+            tx.supplier.findFirst.mockResolvedValue({ due_balance: 2000 });
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Goods never arrived');
+
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    supplier_id: 'sup-1',
+                    // A reversing entry, not a deleted row: the supplier ledger
+                    // is a running statement.
+                    type: 'ADJUSTMENT',
+                    amount: -1400,
+                    balance_after: 600,
+                    reference_type: 'PURCHASE',
+                    reference_id: 'purchase-1',
+                    notes: 'Purchase PUR-00001 cancelled: Goods never arrived',
+                }),
+            });
+            expect(tx.supplier.update).toHaveBeenCalledWith({
+                where: { id: 'sup-1' },
+                data: { due_balance: 600 },
+            });
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
+        });
+
+        it('stamps the status, the actor and the note on the document', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ supplier_id: null }));
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-7', 'purchase-1', 'Duplicate of PUR-00002');
+
+            expect(tx.purchase.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'purchase-1' },
+                    data: expect.objectContaining({
+                        status: 'CANCELLED',
+                        cancelled_by: 'user-7',
+                        cancellation_note: 'Duplicate of PUR-00002',
+                        cancelled_at: expect.any(Date),
+                    }),
+                }),
+            );
+        });
+
+        it('refuses a purchase that is already cancelled, so nothing reverses twice', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ status: 'CANCELLED' }));
+
+            await expect(
+                service.cancel('tenant-1', 'user-1', 'purchase-1', 'Trying again'),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.purchase.update).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['returns', { returns: [{ id: 'ret-1' }] }],
+            ['allocated supplier payments', { paymentAllocations: [{ id: 'alloc-1' }] }],
+            ['an import shipment', { importShipment: { id: 'ship-1' } }],
+            ['production job costs', { items: [{ id: 'line-1', jobCosts: [{ id: 'cost-1' }] }] }],
+        ])('refuses a purchase that has %s against it', async (_label, overrides) => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase(overrides));
+
+            await expect(
+                service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error'),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(tx.purchase.update).not.toHaveBeenCalled();
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+        });
+
+        it('404s an unknown purchase', async () => {
+            tx.purchase.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.cancel('tenant-1', 'user-1', 'nope', 'Recorded in error'),
+            ).rejects.toBeInstanceOf(NotFoundException);
         });
     });
 });

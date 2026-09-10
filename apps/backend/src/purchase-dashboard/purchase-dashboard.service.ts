@@ -7,6 +7,7 @@ import {
     type DateWindow,
 } from '../common/dashboard-window';
 import { PurchaseDashboardQueryDto } from './purchase-dashboard.dto';
+import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
@@ -62,7 +63,7 @@ export class PurchaseDashboardService {
 
         const [purchases, returns] = await Promise.all([
             this.db.purchase.aggregate({
-                where: { tenant_id: tenantId, created_at: inWindow },
+                where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: inWindow },
                 _sum: { total_amount: true },
                 _count: { _all: true },
             }),
@@ -97,8 +98,8 @@ export class PurchaseDashboardService {
                 where: { tenant_id: tenantId, deleted_at: null },
                 _sum: { due_balance: true },
             }),
-            this.db.purchase.count({ where: { tenant_id: tenantId, payment_status: 'UNPAID' } }),
-            this.db.purchase.count({ where: { tenant_id: tenantId, payment_status: 'PARTIAL' } }),
+            this.db.purchase.count({ where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, payment_status: 'UNPAID' } }),
+            this.db.purchase.count({ where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, payment_status: 'PARTIAL' } }),
         ]);
 
         return {
@@ -168,7 +169,7 @@ export class PurchaseDashboardService {
     private async getTopSuppliers(tenantId: string, window: DateWindow) {
         const grouped = await this.db.purchase.groupBy({
             by: ['supplier_id'],
-            where: { tenant_id: tenantId, created_at: { gte: window.fromDate, lte: window.toDate } },
+            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             _sum: { total_amount: true },
             _count: { _all: true },
         });
@@ -202,7 +203,7 @@ export class PurchaseDashboardService {
         const grouped = await this.db.purchaseItem.groupBy({
             by: ['product_id'],
             where: {
-                purchase: { tenant_id: tenantId, created_at: { gte: window.fromDate, lte: window.toDate } },
+                purchase: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             },
             _sum: { quantity: true, line_total: true },
         });
@@ -227,7 +228,7 @@ export class PurchaseDashboardService {
 
     private async getRecent(tenantId: string) {
         const rows = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE },
             orderBy: { created_at: 'desc' },
             take: RECENT_PURCHASES,
             select: {
@@ -255,7 +256,7 @@ export class PurchaseDashboardService {
         const window = resolveDateWindow(query, timezone);
 
         const purchases = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId, created_at: { gte: window.fromDate, lte: window.toDate } },
+            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             select: { created_at: true, total_amount: true },
         });
 

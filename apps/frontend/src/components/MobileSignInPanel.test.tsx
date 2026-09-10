@@ -149,6 +149,63 @@ describe('MobileSignInPanel', () => {
         }));
     });
 
+    it('posts through the caller\'s own exchange when it supplies one', async () => {
+        const onSuccess = jest.fn();
+        const exchange = jest.fn().mockResolvedValue({ access_token: 'storefront-token' });
+
+        render(<MobileSignInPanel onSuccess={onSuccess} exchange={exchange} />);
+        await verifyNumber();
+
+        // The storefront mints its own shopper session; nothing may reach the
+        // ERP app's endpoint, which would hand out a workspace token instead.
+        expect(exchange).toHaveBeenCalledWith({ idToken: 'firebase-id-token' });
+        expect(mobileSignIn).not.toHaveBeenCalled();
+        await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ access_token: 'storefront-token' }));
+    });
+
+    it('keeps a name the host page collected when its own name field is blank', async () => {
+        const exchange = jest
+            .fn()
+            .mockResolvedValueOnce({ requires_signup: true, mobile: '+8801712345678' })
+            .mockResolvedValueOnce({ access_token: 'storefront-token' });
+
+        render(
+            <MobileSignInPanel
+                onSuccess={jest.fn()}
+                exchange={exchange}
+                signUpFields={() => ({ name: 'Alice Rahman' })}
+            />,
+        );
+        await verifyNumber();
+
+        fireEvent.change(await screen.findByLabelText(/email address/i), { target: { value: 'alice@example.com' } });
+        fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+        await waitFor(() =>
+            expect(exchange).toHaveBeenLastCalledWith({
+                idToken: 'firebase-id-token',
+                email: 'alice@example.com',
+                name: 'Alice Rahman',
+            }),
+        );
+    });
+
+    it('shows the caller\'s own copy on the account step', async () => {
+        const exchange = jest.fn().mockResolvedValue({ requires_signup: true, mobile: '+8801712345678' });
+
+        render(
+            <MobileSignInPanel
+                onSuccess={jest.fn()}
+                exchange={exchange}
+                accountCopy={{ title: 'Finish creating your account', description: '{mobile} is verified.' }}
+            />,
+        );
+        await verifyNumber();
+
+        expect(await screen.findByText('Finish creating your account')).toBeInTheDocument();
+        expect(screen.getByText('+8801712345678 is verified.')).toBeInTheDocument();
+    });
+
     it('surfaces a wrong code without losing the flow', async () => {
         const onError = jest.fn();
         confirm.mockRejectedValue(Object.assign(new Error('bad code'), { code: 'auth/invalid-verification-code' }));

@@ -98,6 +98,11 @@ export const purchasesMessages = {
             total: 'Total',
             received: 'Received',
             voucher: 'Voucher',
+            status: 'Status',
+        },
+        statuses: {
+            RECORDED: 'Recorded',
+            CANCELLED: 'Cancelled',
         },
         printInvoice: 'Print Invoice',
         modal: {
