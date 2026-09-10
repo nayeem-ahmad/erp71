@@ -281,6 +281,8 @@ export const salesMessages = {
                 warrantyClaims: { title: 'مطالبات الضمان', description: 'تابع طلبات الضمان من الزبائن وطريقة حلّها.' },
                 storefrontOrders: { title: 'الطلبات الإلكترونية', description: 'راجع ونفّذ الطلبات الواردة من متجرك العام.' },
                 storefrontSettings: { title: 'إعدادات المتجر', description: 'اضبط هوية متجرك الإلكتروني وواجهته وظهور المنتجات.' },
+                storefrontPages: { title: 'صفحات المتجر', description: 'اكتب صفحات متجرك الثابتة — من نحن، التوصيل، الإرجاع.' },
+                storefrontMenu: { title: 'قائمة المتجر', description: 'اختر روابط ترويسة متجرك وترتيب ظهورها.' },
                 customers: { title: 'الزبائن', description: 'أدر ملفات الزبائن وجهات الاتصال وحدود الائتمان.' },
                 crmFollowUps: { title: 'المتابعات', description: 'أسنِد متابعات مرتبطة بالزبائن والصفقات.' },
                 crmCampaigns: { title: 'الحملات', description: 'خطّط لحملات المبيعات الصادرة وراقبها.' },

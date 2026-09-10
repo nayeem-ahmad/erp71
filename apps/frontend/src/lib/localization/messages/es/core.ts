@@ -392,6 +392,8 @@ export const coreMessages = {
             orders: "Pedidos",
             storefrontOrders: "Pedidos online",
             storefrontSettings: "Tienda online",
+            storefrontPages: "Páginas de la tienda",
+            storefrontMenu: "Menú de la tienda",
             tenants: "Inquilinos",
             tenantPayments: "Pagos de inquilinos",
             tenantLedger: "Mayor de inquilinos",

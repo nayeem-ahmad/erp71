@@ -392,6 +392,8 @@ export const coreMessages = {
             orders: "Bestellungen",
             storefrontOrders: "Onlinebestellungen",
             storefrontSettings: "Onlineshop",
+            storefrontPages: "Shop-Seiten",
+            storefrontMenu: "Shop-Menü",
             tenants: "Mandanten",
             tenantPayments: "Mandantenzahlungen",
             tenantLedger: "Mandantenkonto",

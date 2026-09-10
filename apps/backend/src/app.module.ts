@@ -65,6 +65,7 @@ import { FeedbackAutomationModule } from './feedback-automation/feedback-automat
 import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
+import { StorefrontPagesModule } from './storefront-pages/storefront-pages.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
@@ -201,6 +202,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         ContactModule,
         ApiKeysModule,
         StorefrontModule,
+        StorefrontPagesModule,
         TenantsModule,
         DeliveryModule,
         ManufacturingModule,

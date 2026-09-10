@@ -391,6 +391,8 @@ export const coreMessages = {
                 orders: "Pesanan",
                 storefrontOrders: "Pesanan Dalam Talian",
                 storefrontSettings: "Kedai Dalam Talian",
+                storefrontPages: "Halaman Kedai",
+                storefrontMenu: "Menu Kedai",
                 tenants: "Penyewa",
                 tenantPayments: "Pembayaran Penyewa",
                 tenantLedger: "Lejar Penyewa",

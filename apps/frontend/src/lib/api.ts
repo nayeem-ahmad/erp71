@@ -2486,6 +2486,31 @@ export const api = {
     updateTenantBlogCategory: (id: string, data: any) =>
         fetchWithAuth(`/blog/manage/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteTenantBlogCategory: (id: string) => fetchWithAuth(`/blog/manage/categories/${id}`, { method: 'DELETE' }),
+
+    // ---- Storefront pages & menu (a shop's standing pages and header links) ----
+    getStorefrontPages: () => fetchWithAuth('/storefront-pages'),
+    getStorefrontPage: (id: string) => fetchWithAuth(`/storefront-pages/${id}`),
+    createStorefrontPage: (data: any) =>
+        fetchWithAuth('/storefront-pages', { method: 'POST', body: JSON.stringify(data) }),
+    updateStorefrontPage: (id: string, data: any) =>
+        fetchWithAuth(`/storefront-pages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    setStorefrontPageStatus: (id: string, status: string) =>
+        fetchWithAuth(`/storefront-pages/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteStorefrontPage: (id: string) => fetchWithAuth(`/storefront-pages/${id}`, { method: 'DELETE' }),
+    getStorefrontMenuLinks: () => fetchWithAuth('/storefront-pages/menu'),
+    createStorefrontMenuLink: (data: any) =>
+        fetchWithAuth('/storefront-pages/menu', { method: 'POST', body: JSON.stringify(data) }),
+    updateStorefrontMenuLink: (id: string, data: any) =>
+        fetchWithAuth(`/storefront-pages/menu/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    setStorefrontMenuLinkVisibility: (id: string, visible: boolean) =>
+        fetchWithAuth(`/storefront-pages/menu/${id}/visibility`, {
+            method: 'PATCH',
+            body: JSON.stringify({ visible }),
+        }),
+    deleteStorefrontMenuLink: (id: string) =>
+        fetchWithAuth(`/storefront-pages/menu/${id}`, { method: 'DELETE' }),
+    reorderStorefrontMenu: (links: { id: string; sort_order: number }[]) =>
+        fetchWithAuth('/storefront-pages/menu/reorder', { method: 'PATCH', body: JSON.stringify({ links }) }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),

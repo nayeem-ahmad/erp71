@@ -242,6 +242,10 @@ export const routes = {
     storefront: {
         root: '/storefront',
         settings: '/storefront/settings',
+        pages: '/storefront/pages',
+        newPage: '/storefront/pages/new',
+        page: (id: string) => `/storefront/pages/${id}` as const,
+        menu: '/storefront/menu',
     },
 
     settings: {

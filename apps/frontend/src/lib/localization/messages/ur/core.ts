@@ -392,6 +392,8 @@ export const coreMessages = {
             orders: 'آرڈرز',
             storefrontOrders: 'آن لائن آرڈرز',
             storefrontSettings: 'اسٹور',
+            storefrontPages: 'اسٹور صفحات',
+            storefrontMenu: 'اسٹور مینو',
             tenants: 'ٹیننٹ',
             tenantPayments: 'ٹیننٹ کی ادائیگیاں',
             tenantLedger: 'ٹیننٹ کھاتہ',

@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
+import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
 import { GoogleTokenService } from '../auth/google-token.service';
 import { FirebaseTokenService } from '../auth/firebase-token.service';
 import { JwtService } from '@nestjs/jwt';
@@ -38,6 +39,7 @@ describe('StorefrontService', () => {
     let priceListsService: any;
     let totpService: any;
     let auditService: any;
+    let storefrontPagesService: any;
     let googleTokenService: any;
     let firebaseTokenService: any;
 
@@ -138,6 +140,10 @@ describe('StorefrontService', () => {
             logForUserTenants: jest.fn().mockResolvedValue(undefined),
         };
 
+        storefrontPagesService = {
+            resolveMenu: jest.fn().mockResolvedValue([]),
+        };
+
         googleTokenService = {
             verifyIdToken: jest.fn(),
         };
@@ -154,6 +160,7 @@ describe('StorefrontService', () => {
                 { provide: PriceListsService, useValue: priceListsService },
                 { provide: TotpService, useValue: totpService },
                 { provide: AuditService, useValue: auditService },
+                { provide: StorefrontPagesService, useValue: storefrontPagesService },
                 { provide: GoogleTokenService, useValue: googleTokenService },
                 { provide: FirebaseTokenService, useValue: firebaseTokenService },
             ],

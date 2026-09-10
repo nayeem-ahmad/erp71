@@ -129,6 +129,13 @@ export const StorePermission = {
   MANAGE_BLOG: "MANAGE_BLOG",
   PUBLISH_BLOG: "PUBLISH_BLOG",
 
+  // Storefront pages & menu
+  // One permission, not the blog's view/write/publish trio: a page is a short
+  // standing document an owner writes once, so there is no draft-then-approve
+  // workflow to gate. Publishing one is still a public act, which is why it is
+  // not folded into the ungated storefront settings endpoint.
+  MANAGE_STOREFRONT_PAGES: "MANAGE_STOREFRONT_PAGES",
+
   // Team chat
   // Gates access to the feature only. It deliberately has no "manage" sibling:
   // staff conversations are private to their participants, so there is no
@@ -191,6 +198,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_BLOG,
     StorePermission.MANAGE_BLOG,
     StorePermission.PUBLISH_BLOG,
+    StorePermission.MANAGE_STOREFRONT_PAGES,
     StorePermission.USE_TEAM_CHAT,
   ],
   [UserRole.CASHIER]: [
@@ -763,12 +771,13 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     module: "Marketing",
     level: TenantRoleLevel.MANAGER,
     description:
-      "Owns the storefront blog end to end, including publishing, and the short-link tools.",
+      "Owns the storefront blog end to end, including publishing, plus the shop's standing pages, menu and the short-link tools.",
     coarseRoles: [UserRole.CASHIER],
     permissions: [
       StorePermission.VIEW_BLOG,
       StorePermission.MANAGE_BLOG,
       StorePermission.PUBLISH_BLOG,
+      StorePermission.MANAGE_STOREFRONT_PAGES,
       StorePermission.MANAGE_SHORT_LINKS,
       ...CHAT,
     ],
@@ -902,6 +911,8 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_BLOG]: "View storefront blog posts",
   [StorePermission.MANAGE_BLOG]: "Write & edit storefront blog posts",
   [StorePermission.PUBLISH_BLOG]: "Publish storefront blog posts",
+  [StorePermission.MANAGE_STOREFRONT_PAGES]:
+    "Create & edit storefront pages and menu links",
   [StorePermission.USE_TEAM_CHAT]: "Use team chat",
 };
 
@@ -1010,6 +1021,10 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.MANAGE_BLOG,
       StorePermission.PUBLISH_BLOG,
     ],
+  },
+  {
+    label: "Storefront Pages",
+    permissions: [StorePermission.MANAGE_STOREFRONT_PAGES],
   },
   {
     label: "Team Chat",
