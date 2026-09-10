@@ -70,7 +70,7 @@ export default function CreatePurchaseReturnModal({
 
     // Which warehouse the goods leave. Seeded from the purchase below, so
     // returning a delivery that was unloaded into the annex takes it back out
-    // of the annex; `returnWarehouses` keys the whole control off there being a
+    // of the annex. `showWarehouse` keys the whole control off there being a
     // genuine choice to make.
     const { warehouses, defaultWarehouseId } = useWarehouses();
     const [warehouseId, setWarehouseId] = useState('');
