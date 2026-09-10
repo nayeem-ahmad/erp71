@@ -4,6 +4,20 @@ import StorefrontSettingsPage from './page';
 
 jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn(),
+    api: { uploadStorefrontImage: jest.fn() },
+}));
+
+// The image fields own their own cropping and uploading, and both are covered
+// in StorefrontImageField.test.tsx. Here they stand in for what the form does
+// with the URLs they hand back.
+jest.mock('@/components/storefront/StorefrontImageField', () => ({
+    __esModule: true,
+    default: ({ kind, value, onChange, labels }: any) => (
+        <div>
+            <label htmlFor={`stub-${kind}`}>{labels.label}</label>
+            <input id={`stub-${kind}`} value={value} onChange={(e) => onChange(e.target.value)} />
+        </div>
+    ),
 }));
 
 jest.mock('next/navigation', () => ({
@@ -21,6 +35,8 @@ const mockSettings = {
     storefront_banner: 'https://example.com/banner.jpg',
     storefront_hero_image: 'https://example.com/hero.jpg',
     storefront_hero_headline: 'Welcome to My Store',
+    storefront_logo: 'https://example.com/logo.png',
+    storefront_logo_show_name: true,
 };
 
 function getFetchWithAuth() {
@@ -169,5 +185,61 @@ describe('StorefrontSettingsPage', () => {
         await waitFor(() => {
             expect(screen.getByDisplayValue('https://example.com/banner.jpg')).toBeInTheDocument();
         });
+    });
+
+    it('shows a hero image field and a logo field', async () => {
+        render(<StorefrontSettingsPage />);
+        await waitFor(() => {
+            expect(screen.getByLabelText('Hero Image')).toBeInTheDocument();
+        });
+        expect(screen.getByLabelText('Store Logo')).toBeInTheDocument();
+    });
+
+    it('populates the logo from settings', async () => {
+        render(<StorefrontSettingsPage />);
+        await waitFor(() => {
+            expect(screen.getByLabelText('Store Logo')).toHaveValue('https://example.com/logo.png');
+        });
+    });
+
+    it('offers the show-name choice once a logo is set', async () => {
+        render(<StorefrontSettingsPage />);
+        await waitFor(() => {
+            expect(screen.getByLabelText(/show store name next to the logo/i)).toBeChecked();
+        });
+    });
+
+    it('hides the show-name choice when there is no logo to stand alone', async () => {
+        getFetchWithAuth().mockResolvedValue({ ...mockSettings, storefront_logo: null });
+
+        render(<StorefrontSettingsPage />);
+        await waitFor(() => screen.getByLabelText('Store Logo'));
+
+        expect(screen.queryByLabelText(/show store name next to the logo/i)).not.toBeInTheDocument();
+    });
+
+    it('saves the logo and its name preference', async () => {
+        const fetchWithAuth = getFetchWithAuth();
+        fetchWithAuth.mockResolvedValueOnce(mockSettings).mockResolvedValueOnce(mockSettings);
+
+        render(<StorefrontSettingsPage />);
+        await waitFor(() => screen.getByLabelText(/show store name next to the logo/i));
+        fireEvent.click(screen.getByLabelText(/show store name next to the logo/i));
+        fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+        await waitFor(() => {
+            expect(fetchWithAuth).toHaveBeenCalledWith(
+                '/tenants/storefront-settings',
+                expect.objectContaining({
+                    body: expect.stringContaining('"storefront_logo_show_name":false'),
+                }),
+            );
+        });
+        expect(fetchWithAuth).toHaveBeenCalledWith(
+            '/tenants/storefront-settings',
+            expect.objectContaining({
+                body: expect.stringContaining('"storefront_logo":"https://example.com/logo.png"'),
+            }),
+        );
     });
 });
