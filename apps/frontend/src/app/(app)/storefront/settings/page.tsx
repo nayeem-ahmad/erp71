@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { Settings, Globe, ToggleLeft, ToggleRight, Save, ExternalLink } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { PageShell } from '@/components/ui';
+import { Checkbox, PageShell } from '@/components/ui';
+import StorefrontImageField, {
+    type StorefrontImageFieldLabels,
+} from '@/components/storefront/StorefrontImageField';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -23,6 +26,8 @@ interface StorefrontSettings {
     storefront_banner: string | null;
     storefront_hero_image: string | null;
     storefront_hero_headline: string | null;
+    storefront_logo: string | null;
+    storefront_logo_show_name: boolean;
 }
 
 export default function StorefrontSettingsPage() {
@@ -35,6 +40,8 @@ export default function StorefrontSettingsPage() {
     const [banner, setBanner] = useState('');
     const [heroImage, setHeroImage] = useState('');
     const [heroHeadline, setHeroHeadline] = useState('');
+    const [logo, setLogo] = useState('');
+    const [logoShowName, setLogoShowName] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -47,6 +54,8 @@ export default function StorefrontSettingsPage() {
                 setBanner(data.storefront_banner || '');
                 setHeroImage(data.storefront_hero_image || '');
                 setHeroHeadline(data.storefront_hero_headline || '');
+                setLogo(data.storefront_logo || '');
+                setLogoShowName(data.storefront_logo_show_name ?? true);
             })
             .catch((err) => console.error('Failed to load settings', err))
             .finally(() => setLoading(false));
@@ -68,6 +77,8 @@ export default function StorefrontSettingsPage() {
                     storefront_banner: banner.trim() || null,
                     storefront_hero_image: heroImage.trim() || null,
                     storefront_hero_headline: heroHeadline.trim() || null,
+                    storefront_logo: logo.trim() || null,
+                    storefront_logo_show_name: logoShowName,
                 }),
             });
             setSlug(updated.storefront_slug || '');
@@ -75,6 +86,8 @@ export default function StorefrontSettingsPage() {
             setBanner(updated.storefront_banner || '');
             setHeroImage(updated.storefront_hero_image || '');
             setHeroHeadline(updated.storefront_hero_headline || '');
+            setLogo(updated.storefront_logo || '');
+            setLogoShowName(updated.storefront_logo_show_name ?? true);
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
         } catch (err: any) {
@@ -86,6 +99,26 @@ export default function StorefrontSettingsPage() {
 
     const publicStoreUrl =
         isBrowser && slug ? `${globalThis.window.location.origin}/store/${slug}` : null;
+
+    /**
+     * The upload control's own copy is the same for both images; only the
+     * heading, hints and crop title differ, and those live with the field they
+     * describe.
+     */
+    const imageLabels = (field: {
+        label: string;
+        placeholder: string;
+        hint: string;
+        optional: string;
+        cropTitle: string;
+    }): StorefrontImageFieldLabels => ({
+        ...m.imageField,
+        label: field.label,
+        hint: field.hint,
+        optional: field.optional,
+        cropTitle: field.cropTitle,
+        urlPlaceholder: field.placeholder,
+    });
 
     return (
         <PageShell>
@@ -211,22 +244,42 @@ export default function StorefrontSettingsPage() {
                             <p className="text-xs text-gray-400 mt-1">{m.heroHeadline.optional}</p>
                         </div>
 
-                        <div>
-                            <label htmlFor="store-hero-image" className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {m.heroImage.label}
-                            </label>
-                            <input
-                                id="store-hero-image"
-                                type="url"
-                                value={heroImage}
-                                onChange={(e) => setHeroImage(e.target.value)}
-                                placeholder={m.heroImage.placeholder}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        <StorefrontImageField
+                            kind="hero"
+                            value={heroImage}
+                            onChange={setHeroImage}
+                            inputId="store-hero-image"
+                            labels={imageLabels(m.heroImage)}
+                        />
+
+                        <div className="space-y-2">
+                            <StorefrontImageField
+                                kind="logo"
+                                value={logo}
+                                onChange={setLogo}
+                                inputId="store-logo"
+                                labels={imageLabels(m.logo)}
                             />
-                            <p className="text-xs text-gray-400 mt-1">
-                                {m.heroImage.hint}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">{m.heroImage.optional}</p>
+
+                            {/* Only offered once there is a logo: with nothing
+                                but a name to show, hiding it would leave the
+                                storefront header empty. */}
+                            {logo.trim() && (
+                                <div>
+                                    <label
+                                        htmlFor="store-logo-show-name"
+                                        className="flex items-center gap-2 text-sm text-gray-700"
+                                    >
+                                        <Checkbox
+                                            id="store-logo-show-name"
+                                            checked={logoShowName}
+                                            onChange={(e) => setLogoShowName(e.target.checked)}
+                                        />
+                                        {m.logo.showName}
+                                    </label>
+                                    <p className="text-xs text-gray-400 mt-1 ms-6">{m.logo.showNameHint}</p>
+                                </div>
+                            )}
                         </div>
 
                         {saveError && (
