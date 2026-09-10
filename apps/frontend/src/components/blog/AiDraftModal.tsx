@@ -8,8 +8,12 @@ import { Button, Checkbox, Field, Select, Textarea } from '@/components/ui';
 export type AiDraftLanguage = {
     code: string;
     label: string;
-    /** Already carries a title and a body in the editor. */
-    filled: boolean;
+    /**
+     * Already carries a title and a body in the editor. Omitted by a
+     * single-copy editor, which has one body and no way to know which of these
+     * languages it is written in — there the author says so.
+     */
+    filled?: boolean;
 };
 
 export type AiDraftLabels = {
@@ -44,6 +48,15 @@ export type AiDraftModalProps = {
         options: AiDraftLanguage[];
         /** The tab the author has open; what a generation defaults to filling. */
         current: string;
+        /**
+         * The editor keeps one copy rather than a tab per language — a shop's
+         * post has a single title and body. Translating then replaces that copy
+         * instead of filling a second tab, so the author names the language it
+         * is written in and picks the one language to turn it into.
+         */
+        singleCopy?: boolean;
+        /** Single-copy editors only: whether there is yet anything to translate. */
+        hasCopy?: boolean;
     };
     onPromptChange: (value: string) => void;
     onClose: () => void;
@@ -66,6 +79,11 @@ export type AiDraftModalProps = {
  * state and the parent makes its own call, which is what lets the platform
  * editor and the tenant editor — different endpoints, different field sets —
  * share one modal. It also means the prompt survives a locale-tab switch.
+ *
+ * `languages.singleCopy` is the shop editor, whose post has one title and one
+ * body. Translating there rewrites that copy rather than filling a second tab,
+ * so the author says which language it is in and picks one to turn it into —
+ * the same two modes, one language each side instead of a tab per language.
  */
 export default function AiDraftModal({
     open,
@@ -80,11 +98,22 @@ export default function AiDraftModal({
 }: AiDraftModalProps) {
     const options = languages?.options ?? [];
     const current = languages?.current ?? '';
+    const singleCopy = !!languages?.singleCopy;
     const written = options.filter((option) => option.filled).map((option) => option.code);
-    const canTranslate = written.length > 0 && !!onTranslate;
+    const canTranslate = (singleCopy ? !!languages?.hasCopy : written.length > 0) && !!onTranslate;
 
     const otherThan = (code: string) =>
         options.map((option) => option.code).filter((option) => option !== code);
+
+    /**
+     * Every other language, or just the first of them where the editor holds
+     * one copy: translating into two languages there would produce a second
+     * article with nowhere to put it.
+     */
+    const defaultTargets = (from: string) => {
+        const rest = otherThan(from);
+        return singleCopy ? rest.slice(0, 1) : rest;
+    };
 
     const [mode, setMode] = useState<'generate' | 'translate'>('generate');
     const [targets, setTargets] = useState<string[]>(current ? [current] : []);
@@ -96,10 +125,13 @@ export default function AiDraftModal({
     // the author reopened the assistant.
     useEffect(() => {
         if (!open) return;
-        const from = written.includes(current) ? current : written[0] ?? '';
+        // A single-copy editor cannot tell which language its body is in, so it
+        // opens on the one the author is working in and they correct it if the
+        // shop writes in something other than its interface language.
+        const from = singleCopy || written.includes(current) ? current : written[0] ?? '';
         setSource(from);
         setMode(canTranslate ? 'translate' : 'generate');
-        setTargets(canTranslate ? otherThan(from) : current ? [current] : []);
+        setTargets(canTranslate ? defaultTargets(from) : current ? [current] : []);
         // `written`/`options` are rebuilt on every parent render (the prompt is
         // parent state), so they cannot be dependencies without resetting the
         // selection on each keystroke.
@@ -110,12 +142,12 @@ export default function AiDraftModal({
 
     function chooseMode(next: 'generate' | 'translate') {
         setMode(next);
-        setTargets(next === 'translate' ? otherThan(source) : current ? [current] : []);
+        setTargets(next === 'translate' ? defaultTargets(source) : current ? [current] : []);
     }
 
     function chooseSource(next: string) {
         setSource(next);
-        setTargets(otherThan(next));
+        setTargets(defaultTargets(next));
     }
 
     function toggleTarget(code: string) {
@@ -188,7 +220,7 @@ export default function AiDraftModal({
                             onChange={(event) => chooseSource(event.target.value)}
                         >
                             {options
-                                .filter((option) => option.filled)
+                                .filter((option) => singleCopy || option.filled)
                                 .map((option) => (
                                     <option key={option.code} value={option.code}>
                                         {option.label}
@@ -210,29 +242,48 @@ export default function AiDraftModal({
                     </Field>
                 )}
 
-                {languages && (
+                {/* A single-copy editor picks a language only while translating:
+                    generating there fills the one body it has, in the language
+                    the author is already working in. */}
+                {languages && (translating || !singleCopy) && (
                     <Field
                         label={translating ? labels.translateInto : labels.languages}
+                        htmlFor={singleCopy ? 'ai-draft-target' : undefined}
                         hint={translating ? undefined : labels.languagesHint}
                     >
-                        <div className="flex flex-wrap gap-x-4 gap-y-2">
-                            {choices.map((option) => (
-                                <label
-                                    key={option.code}
-                                    className="inline-flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch"
-                                >
-                                    <Checkbox
-                                        checked={targets.includes(option.code)}
-                                        disabled={loading}
-                                        onChange={() => toggleTarget(option.code)}
-                                    />
-                                    {option.label}
-                                    {option.filled && (
-                                        <span className="text-gray-400">{labels.alreadyWritten}</span>
-                                    )}
-                                </label>
-                            ))}
-                        </div>
+                        {singleCopy ? (
+                            <Select
+                                id="ai-draft-target"
+                                value={targets[0] ?? ''}
+                                disabled={loading}
+                                onChange={(event) => setTargets([event.target.value])}
+                            >
+                                {choices.map((option) => (
+                                    <option key={option.code} value={option.code}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </Select>
+                        ) : (
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                {choices.map((option) => (
+                                    <label
+                                        key={option.code}
+                                        className="inline-flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch"
+                                    >
+                                        <Checkbox
+                                            checked={targets.includes(option.code)}
+                                            disabled={loading}
+                                            onChange={() => toggleTarget(option.code)}
+                                        />
+                                        {option.label}
+                                        {option.filled && (
+                                            <span className="text-gray-400">{labels.alreadyWritten}</span>
+                                        )}
+                                    </label>
+                                ))}
+                            </div>
+                        )}
                     </Field>
                 )}
             </div>
