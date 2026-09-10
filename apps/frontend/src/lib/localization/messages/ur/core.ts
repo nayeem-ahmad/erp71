@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: 'رسائی کی تصدیق نہیں ہو سکی',
             checkFailedDescription: 'ہم ابھی آپ کی اجازتوں کی تصدیق نہیں کر سکے — یہ کنکشن کا مسئلہ ہو سکتا ہے، پابندی نہیں۔ دوبارہ کوشش کریں۔',
             retry: 'دوبارہ کوشش کریں',
+            notOnPlanTitle: 'Business پلان میں دستیاب',
+            notOnPlanDescription: 'یو آر ایل شارٹنر Business پلان میں شامل ہے۔ مختصر لنک بنانے اور سنبھالنے کے لیے اپ گریڈ کریں — آپ کے پہلے سے شیئر کیے گئے لنک کام کرتے رہیں گے۔',
+            viewPlans: 'پلان دیکھیں',
         },
         storeSettings: {
             title: 'اسٹورز',

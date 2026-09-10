@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: "No se pudo verificar el acceso",
             checkFailedDescription: "No hemos podido confirmar tus permisos ahora mismo: puede tratarse de un problema de conexión, no de una restricción. Inténtalo de nuevo.",
             retry: "Intentar de nuevo",
+            notOnPlanTitle: "Disponible en el plan Business",
+            notOnPlanDescription: "El acortador de URL está incluido en el plan Business. Mejora tu plan para crear y gestionar enlaces cortos; los enlaces que ya compartiste siguen funcionando.",
+            viewPlans: "Ver planes",
         },
         storeSettings: {
             title: "Tiendas",

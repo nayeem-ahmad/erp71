@@ -8,49 +8,57 @@ import { Button, PageShell } from '@/components/ui';
 import ShortLinkManager from '@/components/short-links/ShortLinkManager';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { extractTenantPlan } from '@/lib/nav-visibility';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { canUseUrlShortener } from '@/lib/plan-entitlements';
 import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
 
-type PermissionState = 'checking' | 'allowed' | 'denied' | 'error';
+type AccessState = 'checking' | 'allowed' | 'notOnPlan' | 'denied' | 'error';
 
 export default function SettingsUrlShortenerPage() {
     const { t } = useI18n();
     const m = t.settings.urlShortener;
 
-    // The backend gates list/create/revoke on MANAGE_SHORT_LINKS for every request
-    // (not just writes), and ShortLinkManager doesn't surface fetchLinks() failures
-    // to its parent — its own load() effect has no catch. So permission has to be
-    // resolved here, before ShortLinkManager ever mounts, the same way
-    // /crm/setup pre-checks with getMe() rather than relying on a caught 403.
+    // The backend gates list/create/revoke on the `urlShortener` plan entitlement
+    // and on MANAGE_SHORT_LINKS for every request (not just writes), and
+    // ShortLinkManager fetches the moment it mounts. So access has to be resolved
+    // here, before it ever mounts, the same way /crm/setup pre-checks with getMe()
+    // rather than relying on a caught 403.
     //
-    // 'error' is deliberately distinct from 'denied': getMe() failing (network
-    // blip, backend hiccup) tells us nothing about whether this user actually has
-    // MANAGE_SHORT_LINKS. Collapsing that into 'denied' would tell a permitted shop
-    // owner on a flaky connection they're not allowed to use a feature they are
-    // allowed to use, with no way out but a reload.
-    const [permission, setPermission] = useState<PermissionState>('checking');
+    // The plan is checked before the permission: below Business, granting the
+    // permission would open nothing, so "ask for access" would be the wrong advice.
+    //
+    // 'error' is deliberately distinct from 'notOnPlan' and 'denied': getMe()
+    // failing (network blip, backend hiccup) tells us nothing about this user's
+    // plan or permissions. Collapsing it into either would tell a Business shop
+    // owner on a flaky connection they can't use a tool they can, with no way out
+    // but a reload.
+    const [access, setAccess] = useState<AccessState>('checking');
 
-    const checkPermission = useCallback(() => {
-        setPermission('checking');
+    const checkAccess = useCallback(() => {
+        setAccess('checking');
         api.getMe()
             .then((me: any) => {
-                const tenant =
-                    me?.tenants?.find((e: { id: string }) => e.id === getWorkspaceItem('tenant_id'))
-                    ?? me?.tenants?.[0];
-                setPermission(
-                    isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_SHORT_LINKS')
-                        ? 'allowed'
-                        : 'denied',
+                const { planCode, features, role, permissions } = extractTenantPlan(
+                    me,
+                    getWorkspaceItem('tenant_id'),
                 );
+                if (!canUseUrlShortener(planCode, features)) {
+                    setAccess('notOnPlan');
+                } else if (isOwner(role) || hasPermission(permissions, 'MANAGE_SHORT_LINKS')) {
+                    setAccess('allowed');
+                } else {
+                    setAccess('denied');
+                }
             })
-            .catch(() => setPermission('error'));
+            .catch(() => setAccess('error'));
     }, []);
 
     useEffect(() => {
-        checkPermission();
-    }, [checkPermission]);
+        checkAccess();
+    }, [checkAccess]);
 
     const fetchLinks = useCallback(() => api.getShortLinks(), []);
     const createLink = useCallback(
@@ -59,7 +67,25 @@ export default function SettingsUrlShortenerPage() {
     );
     const revokeLink = useCallback((id: string) => api.revokeShortLink(id), []);
 
-    if (permission === 'denied') {
+    if (access === 'notOnPlan') {
+        return (
+            <PageShell maxWidth="narrow">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-8 text-center space-y-3">
+                    <Link2 className="w-10 h-10 text-blue-600 mx-auto" />
+                    <h1 className="text-xl font-bold text-gray-900">{m.notOnPlanTitle}</h1>
+                    <p className="text-sm text-gray-700">{m.notOnPlanDescription}</p>
+                    <Link
+                        href={routes.billing}
+                        className="inline-flex min-h-touch items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                        {m.viewPlans}
+                    </Link>
+                </div>
+            </PageShell>
+        );
+    }
+
+    if (access === 'denied') {
         return (
             <PageShell maxWidth="narrow">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-center space-y-3">
@@ -77,14 +103,14 @@ export default function SettingsUrlShortenerPage() {
         );
     }
 
-    if (permission === 'error') {
+    if (access === 'error') {
         return (
             <PageShell maxWidth="narrow">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-center space-y-3">
                     <AlertTriangle className="w-10 h-10 text-amber-600 mx-auto" />
                     <h1 className="text-xl font-bold text-amber-900">{m.checkFailedTitle}</h1>
                     <p className="text-sm text-amber-800">{m.checkFailedDescription}</p>
-                    <Button variant="secondary" onClick={checkPermission}>
+                    <Button variant="secondary" onClick={checkAccess}>
                         {m.retry}
                     </Button>
                 </div>
@@ -106,9 +132,9 @@ export default function SettingsUrlShortenerPage() {
                     )}
                 />
 
-                {permission === 'checking' && <p className="text-sm text-gray-500">{t.common.loading}</p>}
+                {access === 'checking' && <p className="text-sm text-gray-500">{t.common.loading}</p>}
 
-                {permission === 'allowed' && (
+                {access === 'allowed' && (
                     <ShortLinkManager
                         description={m.description}
                         placeholder={m.placeholder}

@@ -3,6 +3,8 @@ import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
+import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { extractRequestMeta } from '../audit/audit-route.util';
@@ -49,25 +51,33 @@ export class ShortLinksController {
         });
     }
 
+    // The tenant shortener is a Business-plan tool, so the three routes below also
+    // need the `urlShortener` entitlement. Only these: resolving stays public so
+    // links already shared keep working after a downgrade, and quotation share
+    // links are minted through ShortLinksService rather than through here.
+    // SubscriptionAccessGuard reads `request.user`, so it has to follow JwtAuthGuard.
     @Get()
-    @UseGuards(JwtAuthGuard, StorePermissionGuard)
+    @UseGuards(JwtAuthGuard, SubscriptionAccessGuard, StorePermissionGuard)
     @UseInterceptors(TenantInterceptor)
+    @RequiresFeature('urlShortener')
     @RequireStorePermission(StorePermission.MANAGE_SHORT_LINKS)
     list(@Tenant() tenant: TenantContext) {
         return this.service.list(tenant.tenantId);
     }
 
     @Post()
-    @UseGuards(JwtAuthGuard, StorePermissionGuard)
+    @UseGuards(JwtAuthGuard, SubscriptionAccessGuard, StorePermissionGuard)
     @UseInterceptors(TenantInterceptor)
+    @RequiresFeature('urlShortener')
     @RequireStorePermission(StorePermission.MANAGE_SHORT_LINKS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateShortLinkDto) {
         return this.service.createManual(tenant.tenantId, tenant.userId, dto);
     }
 
     @Delete(':id')
-    @UseGuards(JwtAuthGuard, StorePermissionGuard)
+    @UseGuards(JwtAuthGuard, SubscriptionAccessGuard, StorePermissionGuard)
     @UseInterceptors(TenantInterceptor)
+    @RequiresFeature('urlShortener')
     @RequireStorePermission(StorePermission.MANAGE_SHORT_LINKS)
     async revoke(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         await this.service.revoke(id, tenant.tenantId);

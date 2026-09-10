@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: "पहुँच सत्यापित नहीं हो सकी",
             checkFailedDescription: "हम अभी आपकी अनुमतियाँ पुष्ट नहीं कर सके — यह कनेक्शन की समस्या हो सकती है, प्रतिबंध नहीं। फिर से प्रयास करें।",
             retry: "फिर से प्रयास करें",
+            notOnPlanTitle: "Business प्लान में उपलब्ध",
+            notOnPlanDescription: "URL शॉर्टनर Business प्लान में शामिल है। छोटे लिंक बनाने और प्रबंधित करने के लिए अपग्रेड करें — आपके पहले से साझा किए गए लिंक काम करते रहेंगे।",
+            viewPlans: "प्लान देखें",
         },
         storeSettings: {
             title: "दुकानें",

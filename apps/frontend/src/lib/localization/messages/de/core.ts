@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: "Zugriff konnte nicht überprüft werden",
             checkFailedDescription: "Wir konnten Ihre Berechtigungen gerade nicht bestätigen — das kann an der Verbindung liegen und ist keine Einschränkung. Versuchen Sie es erneut.",
             retry: "Erneut versuchen",
+            notOnPlanTitle: "Im Business-Tarif verfügbar",
+            notOnPlanDescription: "Der URL-Kürzer ist im Business-Tarif enthalten. Führen Sie ein Upgrade durch, um Kurzlinks zu erstellen und zu verwalten — bereits geteilte Links funktionieren weiterhin.",
+            viewPlans: "Tarife ansehen",
         },
         storeSettings: {
             title: "Geschäfte",

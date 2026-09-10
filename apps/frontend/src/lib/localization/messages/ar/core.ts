@@ -904,6 +904,9 @@ export const coreMessages = {
             checkFailedTitle: 'تعذّر التحقق من الوصول',
             checkFailedDescription: 'لم نتمكن من تأكيد صلاحياتك الآن — قد تكون مشكلة اتصال لا قيدًا. حاول مرة أخرى.',
             retry: 'حاول مرة أخرى',
+            notOnPlanTitle: 'متاح في خطة Business',
+            notOnPlanDescription: 'مختصر الروابط جزء من خطة Business. قم بالترقية لإنشاء الروابط القصيرة وإدارتها — وستظل الروابط التي شاركتها سابقًا تعمل.',
+            viewPlans: 'عرض الخطط',
         },
         storeSettings: {
             title: 'المتاجر',

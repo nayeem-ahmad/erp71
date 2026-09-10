@@ -77,6 +77,7 @@ jest.mock('lucide-react', () => {
         Waves: icon,
         Search: icon,
         X: icon,
+        Link2: icon,
     };
 });
 
@@ -477,5 +478,43 @@ describe('Sidebar — Story 30.1', () => {
         // Only the Reports subgroup chain (parent + subgroup) should be open.
         expect(openKeys.some((k) => k.endsWith(':reports'))).toBe(true);
         expect(openKeys.filter((k) => k.includes(':')).length).toBe(1);
+    });
+});
+
+/**
+ * The URL shortener is a Business-plan tool inside the tenant "Admin" module.
+ * Billing is asserted beside each hidden case to prove the menu actually opened —
+ * otherwise "not in the document" would also pass for a menu that never rendered.
+ */
+describe('Sidebar — URL shortener under Admin', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    it('shows the URL Shortener to a short-link manager on a plan that includes it', () => {
+        render(<Sidebar canManageBilling canManageShortLinks planFeatures={{ urlShortener: true }} />);
+
+        fireEvent.click(screen.getByText('Admin'));
+
+        expect(screen.getByRole('link', { name: 'URL Shortener' })).toHaveAttribute('href', '/settings/url-shortener');
+    });
+
+    it('hides it from a tenant whose plan does not include it', () => {
+        render(<Sidebar canManageBilling canManageShortLinks planFeatures={{ urlShortener: false }} />);
+
+        fireEvent.click(screen.getByText('Admin'));
+
+        expect(screen.getByText('Billing')).toBeInTheDocument();
+        expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
+    });
+
+    it('hides it from staff without short-link permission, even on a plan that includes it', () => {
+        render(<Sidebar canManageBilling planFeatures={{ urlShortener: true }} />);
+
+        fireEvent.click(screen.getByText('Admin'));
+
+        expect(screen.getByText('Billing')).toBeInTheDocument();
+        expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
     });
 });
