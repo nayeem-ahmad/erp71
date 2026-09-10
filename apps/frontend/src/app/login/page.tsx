@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { safeAppPath } from '@/lib/safe-redirect';
 import { normalizeWorkspaceSlug } from '@/lib/workspace-slug';
@@ -19,7 +19,7 @@ import { useHydrated } from '@/hooks/useHydrated';
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
 
 function LoginPageContent() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     // Holds an email address or a mobile number; the backend picks the lookup
     // column by looking for an `@`.
     const [identifier, setIdentifier] = useState('');
@@ -45,6 +45,21 @@ function LoginPageContent() {
     // Set when an expired token bounced the user out of the app, so the login
     // screen explains why they are here instead of looking like a random logout.
     const sessionExpired = searchParams.get('reason') === 'expired';
+
+    /**
+     * What to put on screen when a sign-in attempt fails.
+     *
+     * A 429 is the one failure the server's own sentence is wrong for: it is
+     * English, it says "requests" rather than "sign-in attempts", and this is
+     * the screen a shopkeeper meets the product on. The wait comes back in the
+     * body, so the same number can be said in the reader's language.
+     */
+    const describeAuthError = (err: unknown): string => {
+        if (err instanceof ApiError && err.status === 429) {
+            return fmt(t.auth.login.tooManyAttempts, { seconds: err.retryAfter ?? 60 });
+        }
+        return (err instanceof Error && err.message) || t.auth.login.defaultError;
+    };
 
     // The auth helper tells us where to land (a shop dashboard, the admin
     // console, or the account chooser). Preserve what the user came in with:
@@ -87,8 +102,8 @@ function LoginPageContent() {
             }
             const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
-        } catch (err: any) {
-            setError(err.message || t.auth.login.defaultError);
+        } catch (err: unknown) {
+            setError(describeAuthError(err));
         } finally {
             setIsLoading(false);
         }
@@ -103,8 +118,8 @@ function LoginPageContent() {
             const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
             const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
-        } catch (err: any) {
-            setError(err.message || t.auth.login.defaultError);
+        } catch (err: unknown) {
+            setError(describeAuthError(err));
         } finally {
             setIsLoading(false);
         }
