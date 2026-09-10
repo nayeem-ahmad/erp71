@@ -2389,6 +2389,15 @@ export const api = {
     getTenantBlogCategories: () => fetchWithAuth('/blog/manage/categories'),
     draftTenantBlogPost: (data: { prompt: string; locale?: string }) =>
         fetchWithAuth('/blog/manage/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    translateTenantBlogPost: (data: {
+        source_locale: string;
+        target_locales: string[];
+        title: string;
+        body_md: string;
+        excerpt?: string;
+        seo_title?: string;
+        seo_description?: string;
+    }) => fetchWithAuth('/blog/manage/ai-translate', { method: 'POST', body: JSON.stringify(data) }),
     createTenantBlogCategory: (data: any) =>
         fetchWithAuth('/blog/manage/categories', { method: 'POST', body: JSON.stringify(data) }),
     updateTenantBlogCategory: (id: string, data: any) =>

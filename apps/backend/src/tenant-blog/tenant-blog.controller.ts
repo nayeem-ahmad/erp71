@@ -18,7 +18,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { BlogAiDraftDto } from '../blog/blog.dto';
+import { BlogAiDraftDto, BlogAiTranslateDto } from '../blog/blog.dto';
 import { TenantBlogService } from './tenant-blog.service';
 import {
     PublishTenantBlogPostDto,
@@ -82,6 +82,17 @@ export class TenantBlogController {
     @RequireStorePermission(StorePermission.MANAGE_BLOG)
     draftWithAi(@Tenant() tenant: TenantContext, @Body() dto: BlogAiDraftDto) {
         return this.service.draftWithAi(tenant.tenantId, dto);
+    }
+
+    /**
+     * Turn the post the author is looking at into another language. MANAGE_BLOG
+     * rather than PUBLISH_BLOG: nothing is written here and nothing goes
+     * public — the reply fills the editor and the author still has to save.
+     */
+    @Post('ai-translate')
+    @RequireStorePermission(StorePermission.MANAGE_BLOG)
+    translateWithAi(@Tenant() tenant: TenantContext, @Body() dto: BlogAiTranslateDto) {
+        return this.service.translateWithAi(tenant.tenantId, dto);
     }
 
     @Get('posts')
