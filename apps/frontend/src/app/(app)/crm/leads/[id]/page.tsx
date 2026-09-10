@@ -419,6 +419,7 @@ export default function LeadDetailPage() {
 
                         <CrmActivityPanel
                             leadId={leadId}
+                            targetLabel={{ name: lead.name, phone: lead.mobile ?? lead.phone }}
                             draft={activityDraft}
                             onDraftConsumed={clearActivityDraft}
                         />
