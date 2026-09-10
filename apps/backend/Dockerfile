@@ -168,4 +168,14 @@ ENV GIT_SHA=$GIT_SHA
 # UserInvitationRole rows. Without it an existing workspace sees no new roles to
 # assign and multi-role reads find an empty role set. See
 # prisma/sync-tenant-role-templates.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:cancel-entry-permission grants CANCEL_ENTRY to the Tenant Admin role of
+# tenants that predate entry cancellation, and to the members holding it.
+# REQUIRED and it cannot ride on sync:role-permissions, which deliberately skips
+# template roles (`template_key: null`) — CANCEL_ENTRY belongs to exactly one
+# template role and to none of the three legacy ones, so without this every
+# existing Tenant Admin sees the Cancel action 403 while the owner, who bypasses
+# permission checks, sees it work. Must run AFTER sync:tenant-role-templates,
+# which is what creates the Tenant Admin role it grants onto. See
+# prisma/sync-cancel-entry-permission.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

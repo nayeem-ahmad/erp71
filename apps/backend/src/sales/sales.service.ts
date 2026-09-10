@@ -877,6 +877,17 @@ export class SalesService {
                 throw new NotFoundException('Sale not found');
             }
 
+            // A cancelled entry has already had every impact reversed. Editing
+            // it would replay stock and postings against a void document, and
+            // *setting* CANCELLED from here would mark it void while reversing
+            // nothing — cancelling is `cancel()`, which does the unwinding.
+            if (sale.status === 'CANCELLED') {
+                throw new BadRequestException('This sale is cancelled and can no longer be edited.');
+            }
+            if (dto.status === 'CANCELLED') {
+                throw new BadRequestException('Use the cancel action to cancel a sale, so its impacts are reversed.');
+            }
+
             // A draft holds no stock and has posted nothing, so editing it must
             // not move inventory — and it can only become a real sale through
             // finalizeDraft(), which runs the full validation and posting path.
@@ -1049,12 +1060,134 @@ export class SalesService {
     }
 
     /**
-     * Delete a sale and undo everything it posted: stock, warranty serials,
-     * loyalty points, customer credit/due, lifetime spend and the accounting
-     * vouchers. Refused outright when another document already references the
-     * sale (returns, warranty claims, delivery orders) — those must be reversed
-     * on their own terms first, or the books would silently lose their anchor.
-     * A DRAFT posted nothing, so it is simply removed.
+     * The impacts a posted sale left behind, undone in the order they were
+     * applied: stock, warranty serials, loyalty points, customer credit and
+     * due, lifetime spend, and both accounting vouchers.
+     *
+     * Shared by `remove` and `cancel` on purpose — they differ only in what
+     * happens to the document afterwards, and a reversal that lived in one of
+     * them would drift from the other the first time a new impact was added to
+     * `create`. A DRAFT posted nothing, so callers skip it entirely.
+     */
+    private async reverseSaleImpacts(
+        tx: any,
+        tenantId: string,
+        sale: {
+            id: string;
+            store_id: string;
+            customer_id: string | null;
+            total_amount: any;
+            warehouse_id: string | null;
+            items: { product_id: string; quantity: number; warehouse_id: string | null }[];
+        },
+        movementType: string,
+    ) {
+        // Each line goes back where it came from — its own warehouse, then the
+        // sale's. Re-resolving the tenant default here instead (which is what
+        // this did before the columns existed) means changing that setting after
+        // the sale makes the reversal restock a warehouse the goods were never
+        // in; only rows written before the columns shipped still fall through to
+        // it, and for those it is the value the original movement used.
+        const reversalWarehouseId = reversalWarehouseResolver(
+            tx,
+            tenantId,
+            sale.store_id,
+            sale.warehouse_id,
+            'sale',
+        );
+        for (const item of sale.items) {
+            await applyInventoryMovement(tx, {
+                tenantId,
+                productId: item.product_id,
+                warehouseId: await reversalWarehouseId(item.warehouse_id),
+                quantityDelta: item.quantity,
+                movementType,
+                referenceType: 'SALE',
+                referenceId: sale.id,
+            });
+        }
+
+        // Return any warranty serials this sale consumed to stock.
+        await tx.productSerial.updateMany({
+            where: { tenant_id: tenantId, source_type: 'SALE', source_id: sale.id },
+            data: { status: 'IN_STOCK', source_type: null, source_id: null, sold_at: null },
+        });
+
+        if (sale.customer_id) {
+            // Loyalty: net out every point movement this sale caused.
+            const loyaltyTxns = await tx.loyaltyTransaction.findMany({
+                where: { tenantId, saleId: sale.id },
+                select: { points: true },
+            });
+            const netPoints = loyaltyTxns.reduce((sum: number, l: { points: number }) => sum + l.points, 0);
+            if (netPoints !== 0) {
+                await tx.customer.update({
+                    where: { id: sale.customer_id },
+                    data: { loyalty_points: { decrement: netPoints } },
+                });
+            }
+            await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: sale.id } });
+
+            // Credit: drop the CREDIT_SALE row and take its amount back
+            // off the customer's outstanding due.
+            const creditTxns = await tx.customerCreditTransaction.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    reference_type: 'SALE',
+                    reference_id: sale.id,
+                },
+                select: { id: true, amount: true },
+            });
+            const creditTotal = creditTxns.reduce((sum: number, c: { amount: any }) => sum + Number(c.amount), 0);
+            await tx.customerCreditTransaction.deleteMany({
+                where: { id: { in: creditTxns.map((c: { id: string }) => c.id) } },
+            });
+
+            await tx.customer.update({
+                where: { id: sale.customer_id },
+                data: {
+                    total_spent: { decrement: Number(sale.total_amount) },
+                    ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
+                },
+            });
+        }
+
+        // Both legs: the main sale voucher and, on a credit sale with a
+        // down-payment, the separate 'paid' leg.
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id);
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id, 'paid');
+    }
+
+    /**
+     * The documents that make a sale un-reversible while they exist. Each one
+     * was raised *against* this sale and carries impacts of its own, so the books
+     * would silently lose their anchor if the sale went away underneath them.
+     */
+    private assertSaleHasNoDependents(sale: {
+        returns: { id: string }[];
+        warrantyClaims: { id: string }[];
+        deliveryOrders: { id: string }[];
+    }) {
+        if (sale.returns.length > 0) {
+            throw new BadRequestException('This sale has returns against it — delete or reverse them first.');
+        }
+        if (sale.warrantyClaims.length > 0) {
+            throw new BadRequestException('This sale has warranty claims against it — resolve them first.');
+        }
+        if (sale.deliveryOrders.length > 0) {
+            throw new BadRequestException('This sale has delivery orders against it — cancel them first.');
+        }
+    }
+
+    /**
+     * Delete a sale and undo everything it posted. Refused outright when another
+     * document already references the sale (returns, warranty claims, delivery
+     * orders) — those must be reversed on their own terms first. A DRAFT posted
+     * nothing, so it is simply removed.
+     *
+     * `cancel` below is the softer sibling and the one the UI offers: it leaves
+     * the document behind with a reason on it. This one is kept for the cases
+     * that genuinely want the row gone.
      */
     async remove(tenantId: string, id: string) {
         return this.db.$transaction(async (tx) => {
@@ -1072,92 +1205,79 @@ export class SalesService {
                 throw new NotFoundException('Sale not found');
             }
 
-            if (sale.returns.length > 0) {
-                throw new BadRequestException('This sale has returns against it — delete or reverse them first.');
-            }
-            if (sale.warrantyClaims.length > 0) {
-                throw new BadRequestException('This sale has warranty claims against it — resolve them first.');
-            }
-            if (sale.deliveryOrders.length > 0) {
-                throw new BadRequestException('This sale has delivery orders against it — cancel them first.');
-            }
+            this.assertSaleHasNoDependents(sale);
 
-            // A draft never touched stock, loyalty, credit or the ledger.
-            if (sale.status !== 'DRAFT') {
-                const reversalWarehouseId = reversalWarehouseResolver(
-                    tx,
-                    tenantId,
-                    sale.store_id,
-                    sale.warehouse_id,
-                    'sale',
-                );
-                for (const item of sale.items) {
-                    await applyInventoryMovement(tx, {
-                        tenantId,
-                        productId: item.product_id,
-                        warehouseId: await reversalWarehouseId(item.warehouse_id),
-                        quantityDelta: item.quantity,
-                        movementType: 'SALE_DELETE_REVERSAL',
-                        referenceType: 'SALE',
-                        referenceId: id,
-                    });
-                }
-
-                // Return any warranty serials this sale consumed to stock.
-                await tx.productSerial.updateMany({
-                    where: { tenant_id: tenantId, source_type: 'SALE', source_id: id },
-                    data: { status: 'IN_STOCK', source_type: null, source_id: null, sold_at: null },
-                });
-
-                if (sale.customer_id) {
-                    // Loyalty: net out every point movement this sale caused.
-                    const loyaltyTxns = await tx.loyaltyTransaction.findMany({
-                        where: { tenantId, saleId: id },
-                        select: { points: true },
-                    });
-                    const netPoints = loyaltyTxns.reduce((sum, l) => sum + l.points, 0);
-                    if (netPoints !== 0) {
-                        await tx.customer.update({
-                            where: { id: sale.customer_id },
-                            data: { loyalty_points: { decrement: netPoints } },
-                        });
-                    }
-                    await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: id } });
-
-                    // Credit: drop the CREDIT_SALE row and take its amount back
-                    // off the customer's outstanding due.
-                    const creditTxns = await tx.customerCreditTransaction.findMany({
-                        where: {
-                            tenant_id: tenantId,
-                            reference_type: 'SALE',
-                            reference_id: id,
-                        },
-                        select: { id: true, amount: true },
-                    });
-                    const creditTotal = creditTxns.reduce((sum, c) => sum + Number(c.amount), 0);
-                    await tx.customerCreditTransaction.deleteMany({
-                        where: { id: { in: creditTxns.map((c) => c.id) } },
-                    });
-
-                    await tx.customer.update({
-                        where: { id: sale.customer_id },
-                        data: {
-                            total_spent: { decrement: Number(sale.total_amount) },
-                            ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
-                        },
-                    });
-                }
-
-                // Both legs: the main sale voucher and, on a credit sale with a
-                // down-payment, the separate 'paid' leg.
-                await voidAutoPostedVoucher(tx, tenantId, 'sale', id);
-                await voidAutoPostedVoucher(tx, tenantId, 'sale', id, 'paid');
+            // A draft never touched stock, loyalty, credit or the ledger, and a
+            // cancelled sale has already had all of it reversed — reversing a
+            // second time would put the goods back twice and pay the customer's
+            // due down below what they owe.
+            if (sale.status !== 'DRAFT' && sale.status !== 'CANCELLED') {
+                await this.reverseSaleImpacts(tx, tenantId, sale, 'SALE_DELETE_REVERSAL');
             }
 
             // Items and payment records cascade off the sale.
             await tx.sale.delete({ where: { id } });
 
             return { deleted: true, id };
+        });
+    }
+
+    /**
+     * Cancel a sales entry: reverse every impact it posted, then keep the
+     * document with `status: 'CANCELLED'` and the admin's note on it.
+     *
+     * Why cancelling rather than deleting is what the UI offers. A deleted sale
+     * takes its invoice number with it, leaves the reversing stock movements
+     * pointing at a row that no longer exists, and answers "why did our stock
+     * jump on the 3rd?" with nothing. The cancelled row keeps the number, keeps
+     * the lines, carries the reason, and drops out of every revenue figure
+     * because `sales-reports` already filters `status: 'COMPLETED'`.
+     *
+     * Gated on `CANCEL_ENTRY` at the controller, which only OWNER and Tenant
+     * Admin hold — the cashier who rang the sale cannot unwind it.
+     */
+    async cancel(tenantId: string, userId: string, id: string, note: string) {
+        return this.db.$transaction(async (tx) => {
+            const sale = await tx.sale.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    items: true,
+                    returns: { select: { id: true } },
+                    warrantyClaims: { select: { id: true } },
+                    deliveryOrders: { select: { id: true } },
+                },
+            });
+
+            if (!sale) {
+                throw new NotFoundException('Sale not found');
+            }
+
+            if (sale.status === 'CANCELLED') {
+                throw new BadRequestException('This sale is already cancelled.');
+            }
+
+            this.assertSaleHasNoDependents(sale);
+
+            // A draft posted nothing, so there is nothing to unwind — but it is
+            // still cancellable, so a parked entry can be closed off with a
+            // reason instead of vanishing.
+            if (sale.status !== 'DRAFT') {
+                await this.reverseSaleImpacts(tx, tenantId, sale, 'SALE_CANCELLED');
+            }
+
+            return tx.sale.update({
+                where: { id },
+                data: {
+                    status: 'CANCELLED',
+                    cancelled_at: new Date(),
+                    cancelled_by: userId,
+                    cancellation_note: note,
+                },
+                include: {
+                    items: { include: { product: true } },
+                    payments: true,
+                },
+            });
         });
     }
 

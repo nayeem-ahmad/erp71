@@ -17,6 +17,7 @@ import {
     type RateHistory,
     type RateHistoryType,
 } from './rate-history';
+import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 const CACHE_TTL = 60; // seconds
 
@@ -281,7 +282,9 @@ export class ProductsService {
         partyId: string | undefined,
         take: number,
     ) {
-        const base = { product_id: productId, purchase: { tenant_id: tenantId } };
+        // A cancelled bill's rate is not a rate we paid, so it must not be
+        // offered back to the operator deciding today's.
+        const base = { product_id: productId, purchase: { tenant_id: tenantId, ...ACTIVE_PURCHASE } };
         const query = {
             include: {
                 purchase: { select: { id: true, purchase_number: true, reference_number: true, created_at: true, supplier_id: true, supplier: { select: { name: true } } } },

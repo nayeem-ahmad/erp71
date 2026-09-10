@@ -98,6 +98,11 @@ export const purchasesMessages = {
             total: "الإجمالي",
             received: "الاستلام",
             voucher: "القيد",
+            status: 'الحالة',
+        },
+        statuses: {
+            RECORDED: 'مسجَّل',
+            CANCELLED: 'ملغى',
         },
         printInvoice: "طباعة الفاتورة",
         modal: {

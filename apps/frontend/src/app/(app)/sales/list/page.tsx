@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Copy, Eye, Edit2, FileText, Search, Trash2 } from 'lucide-react';
+import { Receipt, Copy, Eye, Edit2, FileText, Search, Trash2, Ban } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -16,6 +16,9 @@ import { routes } from '@/lib/routes';
 import { PageShell, Input, Select } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
+import { CancelEntryModal } from '@/components/CancelEntryModal';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { hasPermission, isOwner } from '@/lib/permissions';
 
 interface Sale {
     id: string;
@@ -38,6 +41,9 @@ const statusColors: Record<string, string> = {
     COMPLETED: 'bg-green-50 text-green-700 border-green-200',
     REFUNDED: 'bg-danger-light text-danger-text border-red-200',
     PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
+    // Grey rather than red: a cancelled entry is void, not an error, and the
+    // red tone is already carrying "refunded" on this table.
+    CANCELLED: 'bg-gray-100 text-gray-500 border-gray-300',
 };
 
 const columnHelper = createColumnHelper<Sale>();
@@ -45,6 +51,13 @@ const columnHelper = createColumnHelper<Sale>();
 export default function SalesPage() {
     const { t, locale } = useI18n();
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
+
+    // Cancelling reverses stock, balances and the ledger, so the action is
+    // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
+    // bypasses the guard server-side and may hold no grant rows at all.
+    const { permissions, role } = useTenantPlanFeatures();
+    const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -95,6 +108,16 @@ export default function SalesPage() {
             setDeletingId(null);
         }
     }, [t]);
+
+    const handleCancel = useCallback(async (sale: Sale, note: string) => {
+        const updated = await api.cancelSale(sale.id, note);
+        setSales((prev) =>
+            prev.map((row) => (row.id === sale.id ? { ...row, status: updated?.status ?? 'CANCELLED' } : row)),
+        );
+        setCancelTarget(null);
+        void reload();
+        toast.success(t.entryCancellation.saleCancelled);
+    }, [reload, setSales, t]);
 
     const columns: ColumnDef<Sale, any>[] = useMemo(
         () => [
@@ -225,13 +248,27 @@ export default function SalesPage() {
                         >
                             <Copy className="w-4 h-4" />
                         </Link>
-                        <Link
-                            href={`/sales/${info.row.original.id}?edit=true`}
-                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                            title={t.common.edit}
-                        >
-                            <Edit2 className="w-4 h-4" />
-                        </Link>
+                        {/* A cancelled entry has had every impact reversed, so the
+                            API refuses to edit it — don't offer the door. */}
+                        {info.row.original.status !== 'CANCELLED' && (
+                            <Link
+                                href={`/sales/${info.row.original.id}?edit=true`}
+                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                                title={t.common.edit}
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </Link>
+                        )}
+                        {canCancel && info.row.original.status !== 'CANCELLED' && (
+                            <button
+                                type="button"
+                                onClick={() => setCancelTarget(info.row.original)}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                title={t.entryCancellation.action}
+                            >
+                                <Ban className="w-4 h-4" />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => handleDelete(info.row.original)}
@@ -249,7 +286,7 @@ export default function SalesPage() {
                 size: 150,
             }),
         ],
-        [t, locale, handleDelete, deletingId],
+        [t, locale, handleDelete, deletingId, canCancel],
     );
 
     // Was a client-side preset over the whole downloaded set; with server
@@ -261,6 +298,7 @@ export default function SalesPage() {
             { value: 'COMPLETED', label: t.sales.filterPresets.completed },
             { value: 'REFUNDED', label: t.sales.filterPresets.refunded },
             { value: 'PARTIAL_REFUND', label: t.sales.filterPresets.partialRefund },
+            { value: 'CANCELLED', label: t.sales.filterPresets.cancelled },
         ],
         [t],
     );
@@ -323,7 +361,16 @@ export default function SalesPage() {
                     showSearch={false}
                     serverPagination={serverPagination}
                 />
-            
+
+                {cancelTarget && (
+                    <CancelEntryModal
+                        entryLabel={cancelTarget.serial_number}
+                        entryAmount={formatBDT(parseFloat(cancelTarget.total_amount), { locale })}
+                        onConfirm={(note) => handleCancel(cancelTarget, note)}
+                        onClose={() => setCancelTarget(null)}
+                    />
+                )}
+
         </PageShell>
     );
 }

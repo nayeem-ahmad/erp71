@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { PageShell, PageHeader } from '@/components/ui';
 import CrmListPanel from '@/components/crm/CrmListPanel';
 import CrmCustomFieldsPanel from '@/components/crm/CrmCustomFieldsPanel';
+import CrmMessageTemplatesPanel from '@/components/crm/CrmMessageTemplatesPanel';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -12,7 +13,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { getWorkspaceItem } from '@/lib/session-store';
 
-const TABS = ['channels', 'purposes', 'sources', 'categories', 'customFields'] as const;
+const TABS = ['channels', 'purposes', 'templates', 'sources', 'categories', 'customFields'] as const;
 type Tab = (typeof TABS)[number];
 
 function isTab(value: string | null): value is Tab {
@@ -93,9 +94,13 @@ function CrmSetupPage() {
 
             {/* Keyed so switching tabs remounts the panel — otherwise a panel would
                 keep the previous list's rows on screen until its refetch lands. */}
-            {tab === 'customFields'
-                ? <CrmCustomFieldsPanel canManage={canManage} />
-                : <CrmListPanel key={tab} kind={tab} canManage={canManage} />}
+            {tab === 'customFields' ? (
+                <CrmCustomFieldsPanel canManage={canManage} />
+            ) : tab === 'templates' ? (
+                <CrmMessageTemplatesPanel canManage={canManage} />
+            ) : (
+                <CrmListPanel key={tab} kind={tab} canManage={canManage} />
+            )}
         </PageShell>
     );
 }

@@ -37,6 +37,7 @@ export const salesMessages = {
                 COMPLETED: "Abgeschlossen",
                 REFUNDED: "Erstattet",
                 PARTIAL_REFUND: "Teilerstattung",
+                CANCELLED: 'Storniert',
             },
             order: {
                 DRAFT: "Entwurf",
@@ -317,6 +318,7 @@ export const salesMessages = {
             completed: "Abgeschlossen",
             refunded: "Erstattet",
             partialRefund: "Teilerstattung",
+            cancelled: 'Storniert',
         },
         dataTable: {
             title: "Verkäufe",

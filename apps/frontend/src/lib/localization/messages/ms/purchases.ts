@@ -98,6 +98,11 @@ export const purchasesMessages = {
                 total: 'Jumlah',
                 received: 'Diterima',
                 voucher: 'Baucar',
+                status: 'Status',
+            },
+            statuses: {
+                RECORDED: 'Direkodkan',
+                CANCELLED: 'Dibatalkan',
             },
             printInvoice: 'Cetak Invois',
             modal: {

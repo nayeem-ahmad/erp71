@@ -98,6 +98,11 @@ export const purchasesMessages = {
             total: "कुल",
             received: "प्राप्त",
             voucher: "वाउचर",
+            status: 'स्थिति',
+        },
+        statuses: {
+            RECORDED: 'दर्ज',
+            CANCELLED: 'रद्द',
         },
         printInvoice: "चालान प्रिंट करें",
         modal: {

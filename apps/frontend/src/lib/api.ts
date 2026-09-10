@@ -556,6 +556,21 @@ export type CustomFieldDef = { key: string; label: string; order: number };
  */
 export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes';
 
+/**
+ * A CRM message template as the API accepts it. `channel_id` / `purpose_id` are
+ * nullable rather than optional because clearing either — "offer this on every
+ * channel" — is a real edit that has to reach the column.
+ */
+export type CrmMessageTemplatePayload = {
+    name: string;
+    body: string;
+    subject?: string;
+    usage?: 'LOG' | 'SCHEDULE' | 'BOTH';
+    channel_id?: string | null;
+    purpose_id?: string | null;
+    sort_order?: number;
+};
+
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
 
 export type ExternalSyncWarning = {
@@ -1499,6 +1514,35 @@ export const api = {
             `/crm/lead-taxonomy/${kind}/${id}${reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ''}`,
             { method: 'DELETE' },
         ),
+    // CRM message templates (canned messages offered in Log activity / Schedule)
+    getCrmMessageTemplates: (params?: {
+        usage?: 'LOG' | 'SCHEDULE';
+        channelId?: string;
+        includeInactive?: boolean;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.usage) query.set('usage', params.usage);
+        if (params?.channelId) query.set('channelId', params.channelId);
+        if (params?.includeInactive) query.set('includeInactive', 'true');
+        const qs = query.toString();
+        return fetchWithAuth(`/crm/message-templates${qs ? `?${qs}` : ''}`);
+    },
+    createCrmMessageTemplate: (data: CrmMessageTemplatePayload) =>
+        fetchWithAuth('/crm/message-templates', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateCrmMessageTemplate: (
+        id: string,
+        data: Partial<CrmMessageTemplatePayload> & { is_active?: boolean },
+    ) => fetchWithAuth(`/crm/message-templates/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCrmMessageTemplate: (id: string) =>
+        fetchWithAuth(`/crm/message-templates/${id}`, { method: 'DELETE' }),
     // Custom Fields
     getCustomFields: (entity: string) =>
         fetchWithAuth(`/custom-fields?entity=${encodeURIComponent(entity)}`),
@@ -2197,6 +2241,12 @@ export const api = {
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
+    /** Cancel a posted purchase and reverse its impacts. Tenant-admin only. */
+    cancelPurchase: (id: string, note: string) => fetchWithAuth(`/purchases/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -2450,6 +2500,16 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteSale: (id: string) => fetchWithAuth(`/sales/${id}`, { method: 'DELETE' }),
+    /**
+     * Cancel a posted sale and reverse its impacts. Tenant-admin only — the
+     * backend gates it on CANCEL_ENTRY and 403s everyone else, so callers hide
+     * the action rather than letting it fail.
+     */
+    cancelSale: (id: string, note: string) => fetchWithAuth(`/sales/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // Cashier sessions
     openCashierSession: (data: any) => fetchWithAuth('/cashier-sessions/open', {
         method: 'POST',

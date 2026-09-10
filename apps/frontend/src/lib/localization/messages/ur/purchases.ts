@@ -98,6 +98,11 @@ export const purchasesMessages = {
             total: "کل",
             received: "وصول شدہ",
             voucher: "واؤچر",
+            status: 'حالت',
+        },
+        statuses: {
+            RECORDED: 'درج',
+            CANCELLED: 'منسوخ',
         },
         printInvoice: "انوائس چھاپیں",
         modal: {
