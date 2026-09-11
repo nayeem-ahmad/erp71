@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
@@ -184,20 +185,19 @@ function PurchaseReturnDetailPageContent() {
             )
             .join('');
 
+        const headerContext: HeaderContext = {
+            docTitle: t.purchaseReturns.detail.printFooter,
+            docNumber: purchaseReturn.return_number,
+            docDate: formatDate(purchaseReturn.created_at, locale),
+            companyName: printHeader.companyName,
+        };
+
         openPrintWindow({
+            context: headerContext,
             title: purchaseReturn.return_number,
             paperSize: 'A4',
             headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(
-                printHeader.headerConfig,
-                {
-                    docTitle: t.purchaseReturns.detail.printFooter,
-                    docNumber: purchaseReturn.return_number,
-                    docDate: formatDate(purchaseReturn.created_at, locale),
-                    companyName: printHeader.companyName,
-                },
-                'A4',
-            ),
+            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: `${SIMPLE_DOC_STYLES}
                 .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
                 .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }

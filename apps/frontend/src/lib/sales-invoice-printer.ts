@@ -1,6 +1,6 @@
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 export { PAPER_SIZES } from './print';
 export type { PaperSize } from './print';
@@ -204,20 +204,18 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
 export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
 
-    const headerHtml = renderHeaderHtml(
-        data.headerConfig,
-        {
-            docTitle: 'Invoice',
-            docNumber: data.referenceNumber,
-            docDate: data.date,
-            companyName: data.companyName || 'RETAIL STORE',
-            address: data.companyAddress,
-            phone: data.companyPhone,
-        },
-        paperSize,
-    );
+    const headerContext: HeaderContext = {
+        docTitle: 'Invoice',
+        docNumber: data.referenceNumber,
+        docDate: data.date,
+        companyName: data.companyName || 'RETAIL STORE',
+        address: data.companyAddress,
+        phone: data.companyPhone,
+    };
+    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
 
     openPrintWindow({
+        context: headerContext,
         title: `Invoice ${data.referenceNumber}`,
         paperSize,
         headerConfig: data.headerConfig,

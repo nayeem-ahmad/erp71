@@ -12,6 +12,7 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -101,20 +102,19 @@ export default function OrdersPage() {
     };
 
     const handlePrint = (order: SalesOrder) => {
+        const headerContext: HeaderContext = {
+            docTitle: t.shared.print.salesOrder,
+            docNumber: order.order_number,
+            docDate: formatDate(order.created_at, locale),
+            companyName: printHeader.companyName,
+        };
+
         openPrintWindow({
+            context: headerContext,
             title: order.order_number,
             paperSize: 'A4',
             headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(
-                printHeader.headerConfig,
-                {
-                    docTitle: t.shared.print.salesOrder,
-                    docNumber: order.order_number,
-                    docDate: formatDate(order.created_at, locale),
-                    companyName: printHeader.companyName,
-                },
-                'A4',
-            ),
+            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             repeatHeader: true,
             bodyHtml: `

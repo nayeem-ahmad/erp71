@@ -1,6 +1,6 @@
 import type { Column, Table } from '@tanstack/react-table';
 import { SIMPLE_DOC_STYLES, openPrintWindow } from '@/lib/print';
-import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
+import type { DeepPartial, HeaderContext, PrintHeaderConfig } from '@/lib/print';
 import { formatDateTime } from '@/lib/format';
 import { isPinnedColumnId } from './column-order';
 
@@ -174,6 +174,8 @@ export interface PrintTableHeader {
     /** Markup from `renderHeaderHtml` — the tenant's letterhead. */
     html: string;
     config?: DeepPartial<PrintHeaderConfig>;
+    /** Values the tenant footer's tokens resolve against. */
+    context?: HeaderContext;
 }
 
 export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader) {
@@ -197,6 +199,7 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
         paperSize: 'A4',
         headerConfig: header?.config,
         headerHtml: header?.html,
+        context: header?.context,
         styles: SIMPLE_DOC_STYLES,
         // Reports run long — repeat the letterhead on every page.
         repeatHeader: true,

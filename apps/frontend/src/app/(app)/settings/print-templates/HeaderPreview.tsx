@@ -44,12 +44,15 @@ export default function HeaderPreview({ config, paperSize, context, bodyLabel }:
         const headerHtml = renderHeaderHtml(config, context, paperSize);
         const bodyHtml = `<p style="color:#9ca3af;font-size:${isThermalPaper(paperSize) ? '10' : '12'}px">${bodyLabel}</p>`;
 
+        // `buildPrintDocument` renders the tenant footer from the config, so the
+        // preview shows the footer exactly as a real print would.
         return buildPrintDocument({
             title: 'preview',
             paperSize,
             headerConfig: config,
             headerHtml,
             bodyHtml,
+            context,
         });
     }, [config, context, paperSize, bodyLabel]);
 

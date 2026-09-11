@@ -1,6 +1,6 @@
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 export interface CustomerPaymentReceiptData {
     businessName?: string;
@@ -59,14 +59,11 @@ export function printCustomerPaymentReceipt(
     const title = isPayout ? data.labels.paymentVoucher : data.labels.moneyReceipt;
     const subtitle = isPayout ? data.labels.payTitle : data.labels.receiveTitle;
 
-    const headerHtml = renderHeaderHtml(
-        data.headerConfig,
-        {
-            docTitle: title,
-            companyName: data.businessName || 'RETAIL STORE',
-        },
-        paperSize,
-    );
+    const headerContext: HeaderContext = {
+        docTitle: title,
+        companyName: data.businessName || 'RETAIL STORE',
+    };
+    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
 
     const bodyHtml = `
     <div class="doc-subtitle">${escHtml(subtitle)}</div>
@@ -111,6 +108,7 @@ export function printCustomerPaymentReceipt(
     </div>`;
 
     openPrintWindow({
+        context: headerContext,
         title: `${title} ${data.paymentNumber}`,
         paperSize,
         headerConfig: data.headerConfig,

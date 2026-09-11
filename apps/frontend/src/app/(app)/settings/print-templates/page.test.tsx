@@ -138,4 +138,63 @@ describe('PrintTemplatesPage', () => {
 
         await waitFor(() => expect(mockApi.deletePrintTemplate).toHaveBeenCalledWith('tpl1'));
     });
+    it('hides the footer editor until the footer is switched on', async () => {
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+
+        expect(screen.queryByText('Footer text')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText('Print a footer on documents'));
+
+        expect(screen.getByText('Footer text')).toBeInTheDocument();
+        expect(screen.getByText('Footer images')).toBeInTheDocument();
+    });
+
+    it('saves a designed footer with the template', async () => {
+        (mockApi.updatePrintTemplate as jest.Mock).mockResolvedValue(storedTemplate);
+
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+
+        fireEvent.click(screen.getByLabelText('Print a footer on documents'));
+        fireEvent.click(screen.getByLabelText('Repeat the footer at the bottom of every page'));
+        fireEvent.click(screen.getByRole('button', { name: 'Save Template' }));
+
+        await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
+        const [, payload] = (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0];
+        expect(payload.config.footer.show).toBe(true);
+        expect(payload.config.footer.repeatOnEveryPage).toBe(true);
+    });
+
+    it('adds a header image and stores the uploaded url against it', async () => {
+        (mockApi.uploadFile as jest.Mock).mockResolvedValue({ url: 'https://cdn.example.com/seal.png' });
+
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Add image' })[0]);
+        const urlInput = screen.getByLabelText('Image URL');
+        expect(urlInput).toBeInTheDocument();
+
+        // The second file input on the page belongs to the new image row; the
+        // first is the logo slot.
+        const inputs = document.querySelectorAll('input[type="file"]');
+        const file = new File(['x'], 'seal.png', { type: 'image/png' });
+        fireEvent.change(inputs[inputs.length - 1], { target: { files: [file] } });
+
+        await waitFor(() =>
+            expect(screen.getByDisplayValue('https://cdn.example.com/seal.png')).toBeInTheDocument(),
+        );
+    });
+
+    it('removes a header image', async () => {
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Add image' })[0]);
+        expect(screen.getAllByLabelText('Image URL')).toHaveLength(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove image' }));
+        expect(screen.queryByLabelText('Image URL')).not.toBeInTheDocument();
+    });
 });
