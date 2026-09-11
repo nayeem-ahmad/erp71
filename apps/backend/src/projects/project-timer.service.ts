@@ -254,7 +254,8 @@ export class ProjectTimerService {
     /**
      * The task, checked against what this viewer is allowed to see. A private
      * project's task must not become startable just because somebody guessed
-     * its id.
+     * its id, and neither must a teammate's task for a viewer who only reads
+     * their own.
      */
     private async loadTask(viewer: ProjectViewer, taskId: string) {
         const task = await this.db.projectTask.findFirst({
@@ -262,7 +263,7 @@ export class ProjectTimerService {
                 id: taskId,
                 tenant_id: viewer.tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: { id: true, project_id: true, sprint_id: true, remaining_hours: true },
         });

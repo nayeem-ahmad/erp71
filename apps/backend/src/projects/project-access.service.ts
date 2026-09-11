@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { StorePermission } from '@erp71/shared-types';
+import { StorePermission, TenantRecordScope } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -14,6 +14,17 @@ export interface ProjectViewer {
     /** The workspace's IANA zone, for calendar-day filters. Optional here so a
      *  caller assembling a viewer by hand (tests, sweeps) need not supply one. */
     timezone?: string;
+    /**
+     * How much of the module's data this viewer reads — `TenantContext` carries
+     * it, resolved once per request by `TenantInterceptor` as the widest scope
+     * across the roles they hold.
+     *
+     * Optional, and absent means `ALL`: a viewer assembled by hand (a sweep, a
+     * scheduler, a spec) is the system rather than a person, and the system is
+     * not narrowed. Every HTTP path has it, because `@Tenant()` throws when the
+     * interceptor has not run.
+     */
+    recordScope?: TenantRecordScope;
 }
 
 /**
@@ -38,6 +49,19 @@ export interface ProjectViewer {
  * Everything hanging off a project inherits its visibility — tasks, hours,
  * comments, attachments, board cards, sprint rollups. A private project whose
  * tasks still showed up on the cross-project Tasks page would not be private.
+ *
+ * Record scope
+ * ------------
+ * Visibility answers "which projects", and `TenantRole.record_scope` answers
+ * "which rows inside them". A member every one of whose roles says `OWN` reads
+ * only the rows they are on — the tasks assigned to or raised by them, the
+ * hours they logged — and the two filters compose: narrow scope never widens
+ * what visibility allows, and visibility never widens what scope allows.
+ *
+ * Scope is deliberately the *second* axis rather than a third project
+ * visibility: it is a property of the person, not of the project, so the same
+ * project reads differently for a project manager and for the contributor
+ * working one task on it.
  */
 @Injectable()
 export class ProjectAccessService {
@@ -94,6 +118,104 @@ export class ProjectAccessService {
     }
 
     /**
+     * Whether this viewer reads only the rows they are on.
+     *
+     * The scope itself is resolved upstream, once per request, by
+     * `TenantInterceptor` — widest-wins across the roles the member holds, so
+     * one unrestricted role is enough to make them wide and "give them Project
+     * Manager as well" widens them rather than leaving them stuck. Reading it
+     * off the viewer rather than re-querying keeps the filters below free of a
+     * per-call lookup, and keeps the answer identical for every surface within
+     * one request.
+     *
+     * OWNER is never narrow — they bypass every permission check in the app, so
+     * a restriction they could not lift would be the only one of its kind.
+     * A viewer with no scope at all is the system (a sweep, a scheduler), and
+     * the system is not narrowed either.
+     */
+    ownRecordsOnly(viewer: ProjectViewer): boolean {
+        if (viewer.userRole === 'OWNER') return false;
+        if (!viewer.userId) return false;
+        return viewer.recordScope === TenantRecordScope.OWN;
+    }
+
+    /**
+     * The employee record this login is attached to, if any.
+     *
+     * Assignment mirrors `ProjectMember`: a task goes to a User *or* to an
+     * Employee who has no login (see `ProjectTask`). Someone who has both — a
+     * staff member with an ERP account — can therefore hold tasks under either
+     * column, so "my tasks" has to ask about both or half of their work
+     * disappears the day somebody assigns it to their employee card.
+     */
+    private async viewerEmployeeId(viewer: ProjectViewer): Promise<string | null> {
+        if (!viewer.userId) return null;
+        const employee = await this.db.employee.findFirst({
+            where: { tenant_id: viewer.tenantId, user_id: viewer.userId },
+            select: { id: true },
+        });
+        return employee?.id ?? null;
+    }
+
+    /**
+     * A `where` fragment for the `project_tasks` table: project visibility, plus
+     * the record scope when the viewer is narrow.
+     *
+     * Own means assigned to them under either assignee column, **or** raised by
+     * them. `created_by` is in the predicate because a task nobody has assigned
+     * yet would otherwise vanish the moment it was saved — the one thing a
+     * contributor must never lose sight of is the task they just wrote.
+     *
+     * Returns `{}` or a single `AND`, the same shape `relatedFilter` returns, so
+     * it is safe both to spread into a `where` that has no `AND` of its own and
+     * to hand to `merge()`.
+     */
+    async taskFilter(viewer: ProjectViewer): Promise<Record<string, unknown>> {
+        const visibility = await this.relatedFilter(viewer);
+        if (!this.ownRecordsOnly(viewer)) return visibility;
+
+        const employeeId = await this.viewerEmployeeId(viewer);
+        const own = {
+            OR: [
+                { assignee_id: viewer.userId },
+                { created_by: viewer.userId },
+                ...(employeeId ? [{ assignee_employee_id: employeeId }] : []),
+            ],
+        };
+        return ProjectAccessService.merge(visibility, { AND: [own] });
+    }
+
+    /**
+     * The task fragment nested under `task`, for a row addressed by its own id
+     * with no task in the route — checklist items, attachments, board cards.
+     * `{}` stays `{}` so the unrestricted path adds no clause.
+     */
+    async taskRelatedFilter(viewer: ProjectViewer): Promise<Record<string, unknown>> {
+        const filter = await this.taskFilter(viewer);
+        if (Object.keys(filter).length === 0) return {};
+        return { AND: [{ task: filter }] };
+    }
+
+    /**
+     * A `where` fragment for the `project_time_entries` table.
+     *
+     * An hour log belongs to exactly one person, so narrow scope is a plain
+     * equality rather than the OR the tasks need. The employee column is in
+     * there for the same reason as on a task: an entry costed against somebody's
+     * employee card is still their afternoon.
+     */
+    async timeFilter(viewer: ProjectViewer): Promise<Record<string, unknown>> {
+        const visibility = await this.relatedFilter(viewer);
+        if (!this.ownRecordsOnly(viewer)) return visibility;
+
+        const employeeId = await this.viewerEmployeeId(viewer);
+        const own = employeeId
+            ? { OR: [{ user_id: viewer.userId }, { employee_id: employeeId }] }
+            : { user_id: viewer.userId };
+        return ProjectAccessService.merge(visibility, { AND: [own] });
+    }
+
+    /**
      * Combines a caller's `where` with the visibility filter without either one
      * clobbering the other's `OR`/`AND`. An empty filter is returned unchanged,
      * so the owner path adds no clause.
@@ -138,9 +260,13 @@ export class ProjectAccessService {
         return project;
     }
 
-    /** Same check, reached through a task. Returns the task's project id. */
+    /**
+     * Same check, reached through a task — visibility *and* record scope, since
+     * this is the gate every single-task route resolves through. Returns the
+     * task's project id.
+     */
     async assertTaskVisible(viewer: ProjectViewer, taskId: string): Promise<string> {
-        const filter = await this.relatedFilter(viewer);
+        const filter = await this.taskFilter(viewer);
         const task = await this.db.projectTask.findFirst({
             where: {
                 id: taskId,

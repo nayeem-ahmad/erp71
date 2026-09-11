@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
@@ -6,6 +6,12 @@ import BoardPage from './page';
 import { api, ApiError } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { COLUMN_ATTR } from '@/components/projects/board-drag';
+import {
+    BOARD_VIEW_STORAGE_KEY,
+    columnWidthClass,
+    DEFAULT_BOARD_VIEW,
+    type BoardView,
+} from '@/components/projects/board-view';
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'b1' }),
@@ -313,5 +319,106 @@ describe('BoardPage', () => {
         // different flags.
         expect(await screen.findByRole('link', { name: /back/i })).toBeInTheDocument();
         expect(screen.queryByText(/^loading/i)).not.toBeInTheDocument();
+    });
+
+    describe('appearance settings', () => {
+        const storeView = (view: Partial<BoardView>) =>
+            localStorage.setItem(
+                BOARD_VIEW_STORAGE_KEY,
+                JSON.stringify({ ...DEFAULT_BOARD_VIEW, ...view }),
+            );
+
+        afterEach(() => localStorage.clear());
+
+        it('opens the appearance panel from the board header', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+            expect(screen.getByRole('dialog', { name: 'Appearance' })).toBeInTheDocument();
+        });
+
+        it('drops a card field the viewer switched off, and keeps the card', async () => {
+            storeView({ fields: { ...DEFAULT_BOARD_VIEW.fields, project: false } });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            // The project chip is gone; the task it belongs to is not.
+            await waitFor(() => expect(screen.queryByText('ALP')).not.toBeInTheDocument());
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+        });
+
+        it('drops the assignee line rather than leaving an empty row behind it', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            // Scoped to the card: the assignee filter above the board offers an
+            // "Unassigned" option of its own, which this setting does not touch.
+            const card = () =>
+                screen.getByRole('button', { name: /open task: Fix login/i });
+            expect(within(card()).getByText('Unassigned')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+            fireEvent.click(screen.getByRole('checkbox', { name: 'Assignee' }));
+
+            await waitFor(() =>
+                expect(within(card()).queryByText('Unassigned')).not.toBeInTheDocument(),
+            );
+        });
+
+        it('carries the stored column width onto every column', async () => {
+            storeView({ columnWidth: 'narrow' });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const column = () => document.querySelector(`[${COLUMN_ATTR}="c1"]`) as Element;
+            await waitFor(() =>
+                expect(column().className).toContain(columnWidthClass('narrow')),
+            );
+            expect(column().className).not.toContain(columnWidthClass('standard'));
+        });
+
+        it('takes a setting change without dropping the board or re-fetching it', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Compact' }));
+
+            // Appearance is this browser's, not the board's: nothing is saved
+            // server-side and the cards stay where they were.
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
+            expect(JSON.parse(localStorage.getItem(BOARD_VIEW_STORAGE_KEY) ?? '{}').density).toBe(
+                'compact',
+            );
+        });
+
+        it('fills the WIP meter in proportion to what the column holds', async () => {
+            (api.getBoard as jest.Mock).mockResolvedValue({
+                id: 'b1',
+                name: 'Release 4',
+                columns: [
+                    {
+                        id: 'c1',
+                        name: 'To Do',
+                        category: 'TODO',
+                        wip_limit: 4,
+                        tasks: [task('k1', 'Fix login', { id: 'p1', code: 'ALP' })],
+                    },
+                ],
+                unsorted: [],
+            });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const meter = document
+                .querySelector(`[${COLUMN_ATTR}="c1"]`)
+                ?.querySelector('[style*="width"]') as HTMLElement;
+            expect(meter).toHaveStyle({ width: '25%' });
+        });
     });
 });

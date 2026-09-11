@@ -5,7 +5,7 @@ const getProjectTasks = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getMe: jest.fn().mockResolvedValue({ id: 'user-me' }),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-me', tenants: [] }),
         getProjects: jest.fn().mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'P1' }] }),
         getProjectTasks: (...args: unknown[]) => getProjectTasks(...args),
         getProjectTaskAssignees: jest.fn(),
@@ -51,6 +51,7 @@ beforeEach(() => {
         { key: 'user:user-9', userId: 'user-9', name: 'Karim', hint: 'karim@acme.test', noLogin: false },
         { key: 'employee:emp-3', employeeId: 'emp-3', name: 'Rahim Uddin', hint: 'EMP-003', noLogin: true },
     ]);
+    api.getMe.mockReset().mockResolvedValue({ id: 'user-me', tenants: [] });
     api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-new' });
     api.deleteProjectTask.mockReset().mockResolvedValue({ success: true });
     api.importProjectTasks.mockReset().mockResolvedValue({
@@ -348,6 +349,57 @@ describe('Tasks page', () => {
             fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
             await waitFor(() => expect(api.deleteProjectTask).toHaveBeenCalledWith('t1'));
+        });
+    });
+    /**
+     * A member whose every role is narrowed to their own records. The server
+     * filters the list either way; what the page owes them is not offering a
+     * filter whose every other option returns nothing.
+     */
+    describe('a member who reads only their own records', () => {
+        const narrowMe = {
+            id: 'user-me',
+            tenants: [{ id: 'tenant-1', role: 'CASHIER', record_scope: 'OWN' }],
+        };
+
+        beforeEach(() => {
+            const { api } = jest.requireMock('@/lib/api');
+            sessionStorage.setItem('tenant_id', 'tenant-1');
+            api.getMe.mockReset().mockResolvedValue(narrowMe);
+        });
+
+        it('hides the assignee filter', async () => {
+            render(<TasksPage />);
+
+            await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+            expect(screen.queryByLabelText(/assignee/i)).not.toBeInTheDocument();
+        });
+
+        it('asks for everything and lets the server narrow it, in one request', async () => {
+            // "Assigned to me" would drop the tasks they raised that nobody has
+            // picked up yet, which are theirs by any reading. And the scope is
+            // read through rather than written back over the remembered filter,
+            // so the list is fetched once rather than fetched and corrected.
+            render(<TasksPage />);
+
+            await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+            expect(getProjectTasks).toHaveBeenCalledTimes(1);
+            expect(getProjectTasks).toHaveBeenCalledWith(
+                expect.not.objectContaining({ assigneeId: expect.anything() }),
+            );
+        });
+
+        it('still shows the filter to everybody else', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            api.getMe.mockResolvedValue({
+                id: 'user-me',
+                tenants: [{ id: 'tenant-1', role: 'CASHIER', record_scope: 'ALL' }],
+            });
+
+            render(<TasksPage />);
+
+            await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+            expect(assigneeSelect()).toBeInTheDocument();
         });
     });
 });

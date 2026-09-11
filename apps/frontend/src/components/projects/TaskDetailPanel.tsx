@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -28,6 +28,7 @@ import {
     mergeFeed,
     type FeedEntry,
 } from '@/components/projects/task-activity';
+import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -142,6 +143,16 @@ const dateInputValue = (value?: string | null) => (value ? value.slice(0, 10) : 
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 const today = () => new Date().toISOString().slice(0, 10);
+const EMPTY_TIME_FORM = () => ({ hours: '', workDate: today(), note: '', remaining: '' });
+
+/**
+ * Whether a write's response is the task itself. `PATCH /project-tasks/:id`
+ * answers with one, but nothing in the type system says so — and a response
+ * that is not a task must fall back to re-reading the card rather than blanking
+ * it.
+ */
+const isTask = (value: unknown): value is Task =>
+    typeof value === 'object' && value !== null && typeof (value as Task).id === 'string';
 
 export default function TaskDetailPanel({
     taskId,
@@ -152,7 +163,7 @@ export default function TaskDetailPanel({
     onClose: () => void;
     onChanged?: () => void;
 }) {
-    const { t } = useI18n();
+    const { t, localeInfo } = useI18n();
     const m = t.projects;
 
     const [task, setTask] = useState<Task | null>(null);
@@ -160,35 +171,58 @@ export default function TaskDetailPanel({
     const [history, setHistory] = useState<RemainingLog[]>([]);
     const [busy, setBusy] = useState(false);
 
-    const [timeForm, setTimeForm] = useState({ hours: '', workDate: today(), note: '', remaining: '' });
+    const [timeForm, setTimeForm] = useState(EMPTY_TIME_FORM);
 
     const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
     const [members, setMembers] = useState<ProjectMemberRow[]>([]);
 
-    const load = useCallback(async () => {
-        const [detail, log, labels] = await Promise.all([
+    /**
+     * The card and its remaining-hours log — the two things a write from this
+     * panel can move. Everything else the panel shows is reference data loaded
+     * once below, because no edit made here can change a tenant's label
+     * catalogue or a board's columns.
+     */
+    const loadTask = useCallback(async () => {
+        const [detail, log] = await Promise.all([
             api.getProjectTask(taskId),
             api.getTaskRemainingHistory(taskId),
-            api.getProjectLabels(),
         ]);
-        const loaded = detail as Task;
-        setTask(loaded);
+        setTask(detail as Task);
         setHistory(Array.isArray(log) ? log : []);
-        setAllLabels(Array.isArray(labels) ? labels : []);
-
-        // The task's own board, not the tenant template. Since Phase 3L those
-        // are different sets, and offering the template here would let someone
-        // move a card into a column its board does not have.
-        const projectId = loaded?.project?.id;
-        const cols = projectId ? await api.getProjectColumns(projectId) : [];
-        setStatuses(Array.isArray(cols) ? cols : []);
     }, [taskId]);
 
     useEffect(() => {
-        load().catch(() => setTask(null));
-    }, [load]);
+        loadTask().catch(() => setTask(null));
+    }, [loadTask]);
+
+    // On its own rather than beside the task: the label catalogue is the same
+    // whichever card is open, and a tenant with none must not cost the card its
+    // own fetch.
+    useEffect(() => {
+        api.getProjectLabels()
+            .then((labels: unknown) => setAllLabels(Array.isArray(labels) ? labels : []))
+            .catch(() => setAllLabels([]));
+    }, []);
 
     const projectId = task?.project?.id ?? null;
+
+    // The task's own board, not the tenant template. Since Phase 3L those are
+    // different sets, and offering the template here would let someone move a
+    // card into a column its board does not have.
+    useEffect(() => {
+        if (!projectId) return;
+        let live = true;
+        api.getProjectColumns(projectId)
+            .then((cols: unknown) => {
+                if (live) setStatuses(Array.isArray(cols) ? cols : []);
+            })
+            .catch(() => {
+                if (live) setStatuses([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectId]);
 
     // The roster loads on its own, after the task names its project. A project
     // whose members cannot be read still opens — the picker simply falls back to
@@ -209,10 +243,76 @@ export default function TaskDetailPanel({
         };
     }, [projectId]);
 
-    const refresh = async () => {
-        await load();
-        onChanged?.();
-    };
+    /**
+     * The surface behind the modal is reloaded once, when the card is put down.
+     * `onChanged` used to fire on every field save, which on the board meant
+     * re-fetching every column because somebody fixed a typo in a title.
+     */
+    const dirty = useRef(false);
+    const closed = useRef(false);
+
+    const markChanged = useCallback(() => {
+        dirty.current = true;
+        // A blur-commit started by the very click that closed the panel lands
+        // after `close` has already run. Without this its change would never
+        // reach the list behind it.
+        if (closed.current) {
+            dirty.current = false;
+            onChanged?.();
+        }
+    }, [onChanged]);
+
+    const close = useCallback(() => {
+        closed.current = true;
+        if (dirty.current) {
+            dirty.current = false;
+            onChanged?.();
+        }
+        onClose();
+    }, [onChanged, onClose]);
+
+    /**
+     * Puts a write's own response into state instead of re-reading the card.
+     * `ProjectTasksService.update` ends in `findOne`, so `PATCH
+     * /project-tasks/:id` already answers with the whole task — fetching it
+     * again cost four requests and a parent reload per saved field, with the
+     * panel disabled for the round trip.
+     *
+     * Returns false when the response was not a task and the card had to be
+     * re-read anyway, which is how `applyWithLog` knows the log is fresh.
+     */
+    const apply = useCallback(
+        async (updated: unknown): Promise<boolean> => {
+            markChanged();
+            if (!isTask(updated)) {
+                await loadTask();
+                return false;
+            }
+            setTask(updated);
+            return true;
+        },
+        [loadTask, markChanged],
+    );
+
+    /**
+     * For the two writes that can also move the remaining-hours log: a status
+     * crossing into or out of DONE, and an explicit re-estimate. One extra
+     * request rather than the five the old path cost.
+     */
+    const applyWithLog = useCallback(
+        async (updated: unknown) => {
+            if (!(await apply(updated))) return;
+            const log = await api.getTaskRemainingHistory(taskId).catch(() => null);
+            if (Array.isArray(log)) setHistory(log);
+        },
+        [apply, taskId],
+    );
+
+    /** For the endpoints that answer with something other than the task. */
+    const refresh = useCallback(async () => {
+        markChanged();
+        await loadTask();
+    }, [loadTask, markChanged]);
 
     const hours = Number(timeForm.hours || 0);
     const remaining = timeForm.remaining === '' ? undefined : Number(timeForm.remaining);
@@ -241,15 +341,19 @@ export default function TaskDetailPanel({
                     remainingHours: remaining,
                 });
                 toast.success(m.time.logged);
+                setTimeForm(EMPTY_TIME_FORM);
+                // The time endpoint answers with the entry it wrote, not the
+                // task, so this is the one save on the card that re-reads it.
+                await refresh();
             } else {
-                await api.updateProjectTask(taskId, {
+                const updated = await api.updateProjectTask(taskId, {
                     remainingHours: remaining,
                     remainingNote: note,
                 });
                 toast.success(m.task.updated);
+                setTimeForm(EMPTY_TIME_FORM);
+                await applyWithLog(updated);
             }
-            setTimeForm({ hours: '', workDate: today(), note: '', remaining: '' });
-            await refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -260,8 +364,9 @@ export default function TaskDetailPanel({
     const changeStatus = async (statusId: string) => {
         setBusy(true);
         try {
-            await api.updateProjectTask(taskId, { statusId });
-            await refresh();
+            // Crossing into or out of DONE writes a remaining-hours row as well
+            // as the status, so the log is re-read beside the task.
+            await applyWithLog(await api.updateProjectTask(taskId, { statusId }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -283,17 +388,17 @@ export default function TaskDetailPanel({
     };
 
     return (
-        <ModalShell onBackdropClick={onClose} size="2xl">
+        <ModalShell onBackdropClick={close} size="2xl">
             <ModalHeader
                 title={
                     task ? (
-                        <TitleField title={task.title} taskId={taskId} onChanged={refresh} />
+                        <TitleField title={task.title} taskId={taskId} onSaved={apply} />
                     ) : (
                         m.task.title
                     )
                 }
                 subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
-                onClose={onClose}
+                onClose={close}
             />
 
             <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
@@ -329,10 +434,10 @@ export default function TaskDetailPanel({
                                     task={task}
                                     taskId={taskId}
                                     members={members}
-                                    onChanged={refresh}
+                                    onSaved={apply}
                                 />
 
-                                <EstimateField task={task} taskId={taskId} onChanged={refresh} />
+                                <EstimateField task={task} taskId={taskId} onSaved={apply} />
 
                                 {/* Read-only, unlike the estimate above them:
                                     logged is the sum of the time entries and
@@ -351,18 +456,18 @@ export default function TaskDetailPanel({
                                 </div>
                             </section>
 
-                            <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+                            <DatesSection task={task} taskId={taskId} onSaved={apply} />
 
                             {allLabels.length > 0 && (
                                 <LabelsSection
                                     taskId={taskId}
                                     all={allLabels}
                                     selected={labelsOf(task)}
-                                    onChanged={refresh}
+                                    onSaved={apply}
                                 />
                             )}
 
-                            <CoverSection task={task} taskId={taskId} onChanged={refresh} />
+                            <CoverSection task={task} taskId={taskId} onSaved={apply} />
                         </aside>
 
                         <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
@@ -371,7 +476,7 @@ export default function TaskDetailPanel({
                             <DescriptionSection
                                 description={task.description ?? ''}
                                 taskId={taskId}
-                                onChanged={refresh}
+                                onSaved={apply}
                             />
 
                             <ChecklistSection
@@ -485,7 +590,31 @@ export default function TaskDetailPanel({
                                 {history.length === 0 ? (
                                     <p className="text-sm text-gray-500">{m.remaining.empty}</p>
                                 ) : (
-                                    <ul className="divide-y divide-gray-200 text-sm">
+                                    <>
+                                        {/* The shape first, the rows under it. The
+                                            list answers "what happened"; the line
+                                            answers "is this converging", which is
+                                            what someone opening a card wants to
+                                            know — and it doubles as the chart's
+                                            table view, so no figure is reachable
+                                            only by hovering a dot. */}
+                                        <RemainingHoursChart
+                                            history={history}
+                                            estimate={
+                                                task.estimate_hours == null
+                                                    ? null
+                                                    : num(task.estimate_hours)
+                                            }
+                                            dateLocale={localeInfo.dateLocale}
+                                            labels={{
+                                                title: m.remaining.chart,
+                                                remaining: m.overview.remaining,
+                                                estimate: m.overview.estimated,
+                                                now: m.remaining.chartNow,
+                                                upNote: m.remaining.chartUpNote,
+                                            }}
+                                        />
+                                        <ul className="mt-3 divide-y divide-gray-200 text-sm">
                                         {history.map((row) => {
                                             const delta = Number(row.delta);
                                             const up = delta > 0;
@@ -527,18 +656,19 @@ export default function TaskDetailPanel({
                                                 </li>
                                             );
                                         })}
-                                    </ul>
+                                        </ul>
+                                    </>
                                 )}
                             </section>
 
-                            <ActivitySection taskId={taskId} onChanged={onChanged} />
+                            <ActivitySection taskId={taskId} onChanged={markChanged} />
                         </div>
                     </div>
                 )}
             </div>
 
             <ModalFooter>
-                <Button type="button" variant="secondary" onClick={onClose}>
+                <Button type="button" variant="secondary" onClick={close}>
                     {t.common.close}
                 </Button>
             </ModalFooter>
@@ -559,12 +689,12 @@ function AssigneeField({
     task,
     taskId,
     members,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
     members: ProjectMemberRow[];
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -577,13 +707,13 @@ function AssigneeField({
         try {
             // '' rather than undefined: PATCH reads undefined as "leave alone",
             // so only the empty string can mean "nobody".
-            await api.updateProjectTask(taskId, {
+            const updated = await api.updateProjectTask(taskId, {
                 assigneeId: value.startsWith('user:') ? value.slice('user:'.length) : '',
                 assigneeEmployeeId: value.startsWith('employee:')
                     ? value.slice('employee:'.length)
                     : '',
             });
-            await onChanged();
+            await onSaved(updated);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -622,11 +752,11 @@ function AssigneeField({
 function EstimateField({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -646,8 +776,7 @@ function EstimateField({
         }
         setSaving(true);
         try {
-            await api.updateProjectTask(taskId, { estimateHours: hours });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { estimateHours: hours }));
         } catch (error) {
             setValue(current);
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
@@ -692,11 +821,11 @@ function EstimateField({
 function TitleField({
     title,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     title: string;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects.task;
@@ -719,8 +848,7 @@ function TitleField({
         if (!next || next === title) return;
         setSaving(true);
         try {
-            await api.updateProjectTask(taskId, { title: next });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { title: next }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.renameFailed);
         } finally {
@@ -783,11 +911,11 @@ function TitleField({
 function DescriptionSection({
     description,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     description: string;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects.description;
@@ -810,9 +938,9 @@ function DescriptionSection({
         setSaving(true);
         try {
             // '' clears it — the backend stores an empty description as null.
-            await api.updateProjectTask(taskId, { description: next });
+            const updated = await api.updateProjectTask(taskId, { description: next });
             setEditing(false);
-            await onChanged();
+            await onSaved(updated);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
@@ -898,11 +1026,11 @@ function DescriptionSection({
 function CoverSection({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -912,8 +1040,7 @@ function CoverSection({
         setSaving(true);
         try {
             // '' clears it, the same PATCH convention the dates use.
-            await api.updateProjectTask(taskId, { coverColor: color });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { coverColor: color }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.updated);
         } finally {
@@ -1325,11 +1452,11 @@ function ActivitySection({
 function DatesSection({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -1340,8 +1467,7 @@ function DatesSection({
         try {
             // Sends '' rather than undefined to clear: PATCH reads undefined as
             // "leave alone", so only the empty string can mean "no date".
-            await api.updateProjectTask(taskId, { [field]: value });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { [field]: value }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.dates.saveFailed);
         } finally {
@@ -1398,12 +1524,12 @@ function LabelsSection({
     taskId,
     all,
     selected,
-    onChanged,
+    onSaved,
 }: {
     taskId: string;
     all: ProjectLabel[];
     selected: ProjectLabel[];
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects.labels;
@@ -1420,8 +1546,7 @@ function LabelsSection({
         try {
             // The whole set every time — the endpoint replaces rather than
             // patches, so there is no add/remove pair to keep in step.
-            await api.updateProjectTask(taskId, { labelIds: [...next] });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { labelIds: [...next] }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {

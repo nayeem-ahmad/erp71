@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "Heures restantes dans le temps",
+        chartNow: "maintenant",
+        chartUpNote: "En hausse — travail ajouté",
         history: "Historique des heures restantes",
         notePlaceholder: "par ex. le client a ajouté deux pièces",
         empty: "Aucun changement enregistré pour le moment.",
@@ -464,6 +467,35 @@ export const projectsMessages = {
             comments: "{count} commentaire(s)",
             subtasks: "{count} sous-tâche(s)",
             unassigned: "Non assignée",
+        },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "Apparence",
+            reset: "Réinitialiser",
+            cardSize: "Taille des cartes",
+            comfortable: "Confortable",
+            compact: "Compacte",
+            columnWidth: "Largeur des colonnes",
+            narrow: "Étroite",
+            standard: "Standard",
+            wide: "Large",
+            columnColor: "Couleur des colonnes",
+            tintNone: "Neutre",
+            tintCategory: "Par étape",
+            motion: "Animations",
+            motionHint: "Les cartes et les colonnes se posent en douceur. Ignoré lorsque votre appareil demande moins d’animations.",
+            showOnCards: "Afficher sur les cartes",
+            fields: {
+                cover: "Bandeau",
+                labels: "Étiquettes",
+                project: "Projet",
+                badges: "Échéance et priorité",
+                details: "Détails",
+                assignee: "Assignée",
+            },
         },
     },
 

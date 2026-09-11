@@ -321,6 +321,77 @@ describe('TeamService', () => {
         ).rejects.toThrow(BadRequestException);
     });
 
+    /**
+     * The role's second axis. It is read from the role when a request asks, not
+     * materialized into `UserStorePermission`, so writing it must not drag a
+     * member permission re-sync along with it.
+     */
+    describe('record scope', () => {
+        beforeEach(() => {
+            db.tenantRole.create.mockResolvedValue({ id: 'role-new' });
+        });
+
+        it('defaults a new role to ALL by leaving the column alone', async () => {
+            db.tenantRole.findMany.mockResolvedValue([]);
+
+            await service.createRole(owner, {
+                name: 'Contractor',
+                permissions: [StorePermission.VIEW_PROJECTS],
+            });
+
+            const [{ data }] = db.tenantRole.create.mock.calls.at(-1);
+            expect(data.record_scope).toBeUndefined();
+        });
+
+        it('stores OWN when a role is created narrowed', async () => {
+            db.tenantRole.findMany.mockResolvedValue([]);
+
+            await service.createRole(owner, {
+                name: 'Contractor',
+                permissions: [StorePermission.VIEW_PROJECTS],
+                recordScope: 'OWN' as never,
+            });
+
+            const [{ data }] = db.tenantRole.create.mock.calls.at(-1);
+            expect(data.record_scope).toBe('OWN');
+        });
+
+        it('narrows an existing role without re-syncing anybody permissions', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({
+                id: 'role-1',
+                name: 'Contractor',
+                tenant_id: 't1',
+                permissions: [{ permission: StorePermission.VIEW_PROJECTS }],
+            });
+
+            await service.updateRoleTemplate(owner, 'role-1', { recordScope: 'OWN' as never });
+
+            expect(db.tenantRole.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'role-1' },
+                    data: expect.objectContaining({ record_scope: 'OWN' }),
+                }),
+            );
+            // Permissions did not move, so the materialized grants do not either.
+            expect(syncMemberPermissionsFromRoles).not.toHaveBeenCalled();
+            expect(db.tenantRolePermission.deleteMany).not.toHaveBeenCalled();
+        });
+
+        it('leaves the column alone when the caller does not mention it', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({
+                id: 'role-1',
+                name: 'Contractor',
+                tenant_id: 't1',
+                permissions: [{ permission: StorePermission.VIEW_PROJECTS }],
+            });
+
+            await service.updateRoleTemplate(owner, 'role-1', { name: 'Contractors' });
+
+            const [{ data }] = db.tenantRole.update.mock.calls.at(-1);
+            expect(data).not.toHaveProperty('record_scope');
+        });
+    });
+
     it('updateRoleTemplate triggers sync when permissions change', async () => {
         db.tenantRole.findFirst.mockResolvedValue({
             id: 'role-1',

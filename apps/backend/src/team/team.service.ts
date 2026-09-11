@@ -11,6 +11,7 @@ import { InvitationsService } from '../invitations/invitations.service';
 import {
     StorePermission,
     TENANT_ROLE_TEMPLATE_BY_KEY,
+    TenantRecordScope,
     UserRole,
     resolveStrongestBaseUserRole,
 } from '@erp71/shared-types';
@@ -270,6 +271,9 @@ export class TeamService {
                 module: template?.module ?? null,
                 level: template?.level ?? null,
                 permissions: role.permissions.map((p) => p.permission),
+                // The second axis of the role: how much of what those
+                // permissions reach it may read. See `TenantRecordScope`.
+                record_scope: role.record_scope,
                 member_count: role._count.memberRoles,
             };
         });
@@ -353,6 +357,7 @@ export class TeamService {
                     name,
                     description: dto.description?.trim() || null,
                     is_system: false,
+                    ...(dto.recordScope ? { record_scope: dto.recordScope as never } : {}),
                 },
             });
             await tx.tenantRolePermission.createMany({
@@ -367,6 +372,7 @@ export class TeamService {
         await this.audit.log('team.role_created', 'TenantRole', this.auditCtx(ctx), role.id, {
             name,
             permissions,
+            recordScope: dto.recordScope ?? TenantRecordScope.ALL,
         });
         return { message: 'Role created.', roleId: role.id };
     }
@@ -401,6 +407,13 @@ export class TeamService {
                 data: {
                     ...(dto.name !== undefined ? { name } : {}),
                     ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+                    // No member re-sync for this one: the scope is read from the
+                    // role when a request asks, never copied into
+                    // `UserStorePermission`, so changing it takes effect on the
+                    // next request without rewriting anybody's grants.
+                    ...(dto.recordScope !== undefined
+                        ? { record_scope: dto.recordScope as never }
+                        : {}),
                 },
             });
 
@@ -433,6 +446,7 @@ export class TeamService {
             name: dto.name !== undefined ? name : undefined,
             description: dto.description,
             permissions: nextPermissions ?? undefined,
+            recordScope: dto.recordScope,
         });
         if (permissionsChanged) {
             await this.audit.log('team.role_permissions_synced', 'TenantRole', this.auditCtx(ctx), roleId, {

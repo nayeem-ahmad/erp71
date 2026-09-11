@@ -44,6 +44,8 @@ import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/compo
 import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { readsOwnRecordsOnly, tenantFromMe } from '@/lib/permissions';
+import { getWorkspaceItem } from '@/lib/session-store';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -246,6 +248,9 @@ export default function HourLogsPage() {
     const [typing, setTyping] = useState(false);
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [people, setPeople] = useState<PersonOption[]>([]);
+    // A narrowed member only ever reads their own hours, so the person filter
+    // has one option and no purpose. The server enforces it either way.
+    const [ownRecordsOnly, setOwnRecordsOnly] = useState(false);
     const [tags, setTags] = useState<HourLogTag[]>([]);
     const [summary, setSummary] = useState<ReportSummary | null>(null);
     const [dayTotals, setDayTotals] = useState<Record<string, DayTotal>>({});
@@ -293,6 +298,19 @@ export default function HourLogsPage() {
         api.getProjectTimeTags()
             .then((rows: unknown) => setTags(Array.isArray(rows) ? (rows as HourLogTag[]) : []))
             .catch(() => setTags([]));
+    }, []);
+
+    useEffect(() => {
+        api.getMe()
+            .then((me: unknown) => {
+                const payload = me as {
+                    tenants?: { id: string; role?: string | null; record_scope?: string | null }[];
+                };
+                setOwnRecordsOnly(
+                    readsOwnRecordsOnly(tenantFromMe(payload, getWorkspaceItem('tenant_id'))),
+                );
+            })
+            .catch(() => setOwnRecordsOnly(false));
     }, []);
 
     // The person options come from the hours themselves rather than the team
@@ -839,20 +857,22 @@ export default function HourLogsPage() {
                         </option>
                     ))}
                 </Select>
-                <Select
-                    value={personId}
-                    onChange={(e) => setFilter('personId', e.target.value)}
-                    className="md:w-48"
-                    aria-label={hl.person}
-                >
-                    <option value="">{hl.allPeople}</option>
-                    <option value="me">{hl.mine}</option>
-                    {people.map((person) => (
-                        <option key={person.id} value={person.id}>
-                            {person.name || person.email}
-                        </option>
-                    ))}
-                </Select>
+                {!ownRecordsOnly && (
+                    <Select
+                        value={personId}
+                        onChange={(e) => setFilter('personId', e.target.value)}
+                        className="md:w-48"
+                        aria-label={hl.person}
+                    >
+                        <option value="">{hl.allPeople}</option>
+                        <option value="me">{hl.mine}</option>
+                        {people.map((person) => (
+                            <option key={person.id} value={person.id}>
+                                {person.name || person.email}
+                            </option>
+                        ))}
+                    </Select>
+                )}
                 {tags.length > 0 ? (
                     <Select
                         value={tagId}

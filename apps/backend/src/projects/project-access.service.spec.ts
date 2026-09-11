@@ -25,6 +25,8 @@ describe('ProjectAccessService', () => {
         userRole: 'STAFF',
         storeId: 'store-1',
     };
+    /** Same person, every role they hold narrowed to their own records. */
+    const narrowStaff: ProjectViewer = { ...staff, recordScope: 'OWN' };
 
     beforeEach(async () => {
         db = {
@@ -32,6 +34,7 @@ describe('ProjectAccessService', () => {
             projectTask: { findFirst: jest.fn().mockResolvedValue({ project_id: 'project-1' }) },
             projectMember: { upsert: jest.fn().mockResolvedValue({}) },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
+            employee: { findFirst: jest.fn().mockResolvedValue(null) },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -211,6 +214,118 @@ describe('ProjectAccessService', () => {
             // demoted to VIEWER must not be silently promoted back.
             const [call] = db.projectMember.upsert.mock.calls;
             expect(call[0].update).toEqual({});
+        });
+    });
+    /**
+     * The second axis: visibility answers "which projects", the record scope
+     * answers "which rows inside them". The rule under test: a member is narrow
+     * only when every role they hold says OWN, OWNER never is, and a narrow
+     * viewer's filters compose with visibility rather than replacing it.
+     */
+    describe('record scope', () => {
+        it('is wide for a viewer with no scope on the request', () => {
+            // What every member was before the column existed, and what a
+            // hand-built viewer (a sweep, a scheduler) still is.
+            expect(service.ownRecordsOnly(staff)).toBe(false);
+        });
+
+        it('is wide for the workspace owner even when the request says OWN', () => {
+            // They bypass every permission check in the app; a restriction they
+            // could not lift would be the only one of its kind.
+            expect(service.ownRecordsOnly({ ...owner, recordScope: 'OWN' })).toBe(false);
+        });
+
+        it('is narrow for a member whose request resolved to OWN', () => {
+            expect(service.ownRecordsOnly(narrowStaff)).toBe(true);
+        });
+
+        it('adds nothing to a task filter for a wide viewer', async () => {
+            db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+            // Sees every project and every row: no clause at all, which is the
+            // whole point of the empty-filter path.
+            await expect(service.taskFilter(staff)).resolves.toEqual({});
+        });
+
+        it('narrows a task filter to rows the viewer holds, alongside visibility', async () => {
+            const filter = await service.taskFilter(narrowStaff);
+
+            expect(filter).toEqual({
+                AND: [
+                    {
+                        project: {
+                            OR: [
+                                { visibility: 'PUBLIC' },
+                                { manager_id: 'user-staff' },
+                                { members: { some: { user_id: 'user-staff' } } },
+                            ],
+                        },
+                    },
+                    {
+                        OR: [{ assignee_id: 'user-staff' }, { created_by: 'user-staff' }],
+                    },
+                ],
+            });
+        });
+
+        it('keeps the scope when the viewer sees every project', async () => {
+            db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+            // The axes are independent: VIEW_ALL_PROJECTS widens which projects
+            // they reach and says nothing about whose rows they read.
+            await expect(service.taskFilter(narrowStaff)).resolves.toEqual({
+                AND: [{ OR: [{ assignee_id: 'user-staff' }, { created_by: 'user-staff' }] }],
+            });
+        });
+
+        it('matches a task assigned to the viewer employee card as well as their login', async () => {
+            db.employee.findFirst.mockResolvedValue({ id: 'emp-9' });
+
+            const filter = await service.taskFilter(narrowStaff);
+
+            expect((filter.AND as any[])[1]).toEqual({
+                OR: [
+                    { assignee_id: 'user-staff' },
+                    { created_by: 'user-staff' },
+                    { assignee_employee_id: 'emp-9' },
+                ],
+            });
+        });
+
+        it('narrows an hour log to the viewer own entries', async () => {
+            db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+            // One person owns an entry, so this is an equality rather than the
+            // OR a task needs.
+            await expect(service.timeFilter(narrowStaff)).resolves.toEqual({
+                AND: [{ user_id: 'user-staff' }],
+            });
+        });
+
+        it('nests the task filter for a row addressed through one', async () => {
+            db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+            await expect(service.taskRelatedFilter(narrowStaff)).resolves.toEqual({
+                AND: [
+                    {
+                        task: {
+                            AND: [
+                                { OR: [{ assignee_id: 'user-staff' }, { created_by: 'user-staff' }] },
+                            ],
+                        },
+                    },
+                ],
+            });
+        });
+
+        it('reports a teammate task as missing, not forbidden', async () => {
+            // Same answer as an id from another tenant: a narrow viewer must not
+            // be able to confirm that somebody else task exists.
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            await expect(service.assertTaskVisible(narrowStaff, 'task-1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
         });
     });
 });

@@ -301,6 +301,63 @@ export type TenantRoleLevel =
   (typeof TenantRoleLevel)[keyof typeof TenantRoleLevel];
 
 /**
+ * How much of a module's data a role can read.
+ *
+ * `ALL` is every record the role's permissions reach — what every role is
+ * unless somebody narrows it. `OWN` restricts reads to the records the member
+ * is on: in Projects that is the tasks they are assigned or raised and the
+ * hours they logged, so a workspace can staff a module with somebody who may
+ * do the work without reading the rest of the team's rows.
+ *
+ * Deliberately *not* a `StorePermission`. A member's effective access is the
+ * union of every role they hold (`syncMemberPermissionsFromRoles`), and a union
+ * can add but never subtract, so a restriction shaped as a permission would
+ * survive into every other role they were given. Stored on the role and
+ * resolved widest-wins instead — a member is narrow only when **every** role
+ * they hold says `OWN` — which is what makes "give them a second role" widen
+ * them rather than leave them stuck.
+ */
+export const TenantRecordScope = {
+  ALL: "ALL",
+  OWN: "OWN",
+} as const;
+export type TenantRecordScope =
+  (typeof TenantRecordScope)[keyof typeof TenantRecordScope];
+
+/** Role-editor copy for each scope. Kept beside the enum so the two cannot drift. */
+export const TENANT_RECORD_SCOPE_LABELS: Record<
+  TenantRecordScope,
+  { label: string; description: string }
+> = {
+  [TenantRecordScope.ALL]: {
+    label: "All records",
+    description:
+      "Sees every record this role's permissions reach, whoever it belongs to.",
+  },
+  [TenantRecordScope.OWN]: {
+    label: "Own records only",
+    description:
+      "Sees only records they are on — in Projects, the tasks assigned to or raised by them and the hours they logged.",
+  },
+};
+
+/**
+ * The scope a member actually gets from the roles they hold: the widest one.
+ *
+ * A member with no roles is `ALL` — they have no permissions either, so there
+ * is nothing for a scope to narrow, and treating "no roles" as the strictest
+ * setting would quietly make it the default for anybody mid-setup.
+ */
+export function resolveRecordScope(
+  scopes: (TenantRecordScope | null | undefined)[],
+): TenantRecordScope {
+  if (scopes.length === 0) return TenantRecordScope.ALL;
+  return scopes.every((scope) => scope === TenantRecordScope.OWN)
+    ? TenantRecordScope.OWN
+    : TenantRecordScope.ALL;
+}
+
+/**
  * One seeded role. Every tenant gets a copy of each template as a real
  * `TenantRole` row at signup, so an owner can edit or delete their copy without
  * touching anybody else's.
@@ -1053,6 +1110,12 @@ export interface TenantRoleSummary {
   module?: string | null;
   level?: TenantRoleLevel | null;
   permissions: StorePermission[];
+  /**
+   * How much of the data those permissions reach the role may read. Optional so
+   * a client built against an older backend still parses the row; absent means
+   * `ALL`, which is what the column defaults to.
+   */
+  record_scope?: TenantRecordScope;
   member_count?: number;
 }
 

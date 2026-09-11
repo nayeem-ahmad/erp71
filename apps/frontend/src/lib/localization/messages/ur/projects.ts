@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "وقت کے ساتھ باقی گھنٹے",
+        chartNow: "اب",
+        chartUpNote: "بڑھ گئے — کام شامل ہوا",
         history: "باقی گھنٹوں کی تاریخ",
         notePlaceholder: "مثلاً گاہک نے دو مزید کمرے شامل کر دیے",
         empty: "ابھی کوئی تبدیلی درج نہیں۔",
@@ -464,6 +467,35 @@ export const projectsMessages = {
             comments: "{count} تبصرے",
             subtasks: "{count} ذیلی ٹاسک",
             unassigned: "غیر تفویض شدہ",
+        },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "ظاہری شکل",
+            reset: "ری سیٹ",
+            cardSize: "کارڈ کا سائز",
+            comfortable: "کشادہ",
+            compact: "مختصر",
+            columnWidth: "کالم کی چوڑائی",
+            narrow: "تنگ",
+            standard: "معیاری",
+            wide: "چوڑا",
+            columnColor: "کالم کا رنگ",
+            tintNone: "سادہ",
+            tintCategory: "مرحلے کے مطابق",
+            motion: "حرکت",
+            motionHint: "کارڈ اور کالم نرمی سے اپنی جگہ آتے ہیں۔ اگر آپ کا آلہ کم حرکت مانگے تو یہ نظر انداز ہو جاتا ہے۔",
+            showOnCards: "کارڈ پر دکھائیں",
+            fields: {
+                cover: "کور",
+                labels: "لیبل",
+                project: "پروجیکٹ",
+                badges: "آخری تاریخ اور ترجیح",
+                details: "تفصیلات",
+                assignee: "تفویض شدہ",
+            },
         },
     },
 

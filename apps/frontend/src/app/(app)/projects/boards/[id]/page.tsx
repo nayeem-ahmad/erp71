@@ -19,6 +19,16 @@ import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
+import BoardViewMenu from '@/components/projects/BoardViewMenu';
+import { useBoardView } from '@/components/projects/use-board-view';
+import {
+    columnWidthClass,
+    density,
+    motionClass,
+    staggerDelay,
+    tintOf,
+    type BoardView,
+} from '@/components/projects/board-view';
 import {
     CARD_ATTR,
     COLUMN_ATTR,
@@ -88,6 +98,11 @@ export default function BoardPage() {
     const { t } = useI18n();
     const m = t.projects.boards;
     const bm = t.projects.board;
+
+    const boardView = useBoardView();
+    const { view } = boardView;
+    const widthClass = columnWidthClass(view.columnWidth);
+    const d = density(view);
 
     const [board, setBoard] = useState<BoardSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
@@ -347,6 +362,7 @@ export default function BoardPage() {
                             <Plus className="h-4 w-4" />
                             {m.addTasks}
                         </Button>
+                        <BoardViewMenu {...boardView} />
                         <Link href={routes.projects.boardColumns(boardId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.boardSettings}
@@ -370,21 +386,26 @@ export default function BoardPage() {
             <div className="overflow-x-auto pb-2">
                 <div className="flex min-w-max gap-3">
                     {unsorted.length > 0 && (
-                        <div className="flex w-72 flex-col rounded-md border border-amber-300 bg-amber-50">
-                            <div className="border-b border-amber-300 px-3 py-2">
-                                <p className="text-sm font-medium text-amber-800">{m.unsorted}</p>
+                        <div
+                            className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${motionClass(view, 'column')}`}
+                        >
+                            <div aria-hidden className="h-1 w-full bg-amber-400" />
+                            <div className="border-b border-amber-300 bg-white/60 px-3 py-2">
+                                <p className="text-sm font-semibold text-amber-800">{m.unsorted}</p>
                                 <p className="text-xs text-gray-500">{m.unsortedHint}</p>
                             </div>
-                            <div className="flex flex-1 flex-col gap-2 p-2">
+                            <div className={`flex flex-1 flex-col ${d.columnGap} ${d.columnPad}`}>
                                 {visibleUnsorted.length === 0 && (
-                                    <p className="px-1 py-4 text-center text-xs text-gray-400">
+                                    <p className="rounded-md border border-dashed border-amber-200 px-1 py-4 text-center text-xs text-gray-400">
                                         {bm.noMatches}
                                     </p>
                                 )}
-                                {visibleUnsorted.map((task) => (
+                                {visibleUnsorted.map((task, index) => (
                                     <TaskCard
                                         key={task.id}
                                         task={task}
+                                        view={view}
+                                        index={index}
                                         dragging={drag?.active === true && drag.taskId === task.id}
                                         onPointerDownBody={(e) =>
                                             beginDrag(e, task, { fromHandle: false })
@@ -403,7 +424,7 @@ export default function BoardPage() {
                         </div>
                     )}
 
-                    {visibleColumns.map((column) => {
+                    {visibleColumns.map((column, columnIndex) => {
                         const remaining = column.tasks.reduce(
                             (total, task) => total + num(task.remaining_hours),
                             0,
@@ -416,15 +437,32 @@ export default function BoardPage() {
                         // filter must not make an over-limit column look fine.
                         const full = columns.find((c) => c.id === column.id);
                         const overWip = isOverWip(full);
+                        const held = full?.tasks.length ?? column.tasks.length;
+                        const tint = tintOf(view, column.category);
                         return (
                             <div
                                 key={column.id}
                                 {...{ [COLUMN_ATTR]: column.id }}
-                                className="flex w-72 flex-col rounded-md border border-gray-200 bg-gray-50"
+                                className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${motionClass(view, 'column')}`}
+                                style={{ animationDelay: staggerDelay(view, columnIndex) }}
                             >
-                                <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
-                                    <span className="text-sm font-medium">{column.name}</span>
-                                    <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                                {/* The column's stage, as a rule across its head.
+                                    Colour is the fastest way to tell three lanes
+                                    apart at a glance, and it costs no row height. */}
+                                <div aria-hidden className={`h-1 w-full ${tint.bar}`} />
+                                <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white/70 px-3 py-2">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        {view.columnTint === 'category' && (
+                                            <span
+                                                aria-hidden
+                                                className={`h-2 w-2 shrink-0 rounded-full ${tint.dot}`}
+                                            />
+                                        )}
+                                        <span className="truncate text-sm font-medium">
+                                            {column.name}
+                                        </span>
+                                    </span>
+                                    <span className="flex shrink-0 items-center gap-1.5 text-xs text-gray-500">
                                         {column.wip_limit ? (
                                             <StatusBadge
                                                 tone={overWip ? 'danger' : 'neutral'}
@@ -437,27 +475,48 @@ export default function BoardPage() {
                                                         : undefined
                                                 }
                                             >
-                                                {full?.tasks.length ?? column.tasks.length}/
-                                                {column.wip_limit}
+                                                {held}/{column.wip_limit}
                                             </StatusBadge>
                                         ) : (
-                                            <span>{column.tasks.length}</span>
+                                            <span
+                                                className={`rounded-full px-1.5 py-0.5 font-medium transition-colors ${tint.chip}`}
+                                            >
+                                                {column.tasks.length}
+                                            </span>
                                         )}
                                         {remaining > 0 ? `${remaining}${bm.columnTotal}` : ''}
                                     </span>
                                 </div>
 
-                                <div className="flex flex-1 flex-col gap-2 p-2">
+                                {/* How full the column is, as a bar rather than a
+                                    number to read. It grows into place so a card
+                                    dropped here shows its cost immediately. */}
+                                {column.wip_limit ? (
+                                    <div aria-hidden className="h-1 w-full bg-gray-200">
+                                        <div
+                                            className={`h-full transition-all duration-500 ease-out ${
+                                                overWip ? 'bg-red-500' : tint.meter
+                                            }`}
+                                            style={{
+                                                width: `${Math.min(100, Math.round((held / column.wip_limit) * 100))}%`,
+                                            }}
+                                        />
+                                    </div>
+                                ) : null}
+
+                                <div className={`flex flex-1 flex-col ${d.columnGap} ${d.columnPad}`}>
                                     {column.tasks.length === 0 && dropIndex === null && (
-                                        <p className="px-1 py-4 text-center text-xs text-gray-400">
+                                        <p className="rounded-md border border-dashed border-gray-200 px-1 py-4 text-center text-xs text-gray-400">
                                             {filtered ? bm.noMatches : bm.emptyColumn}
                                         </p>
                                     )}
                                     {column.tasks.map((task, index) => (
                                         <Fragment key={task.id}>
-                                            {dropIndex === index && <DropIndicator />}
+                                            {dropIndex === index && <DropIndicator animate={view.animate} />}
                                             <TaskCard
                                                 task={task}
+                                                view={view}
+                                                index={index}
                                                 dragging={drag?.active === true && drag.taskId === task.id}
                                                 onPointerDownBody={(e) =>
                                                     beginDrag(e, task, { fromHandle: false })
@@ -473,7 +532,9 @@ export default function BoardPage() {
                                             />
                                         </Fragment>
                                     ))}
-                                    {dropIndex === column.tasks.length && <DropIndicator />}
+                                    {dropIndex === column.tasks.length && (
+                                        <DropIndicator animate={view.animate} />
+                                    )}
 
                                     <BoardCardComposer
                                         boardId={boardId}
@@ -495,7 +556,12 @@ export default function BoardPage() {
             {drag?.active && (
                 <div
                     aria-hidden
-                    className="pointer-events-none fixed z-modal max-w-[16rem] truncate rounded-md border border-blue-300 bg-white px-2 py-1 text-sm shadow-lg"
+                    // The tilt is the one piece of pure decoration on the board,
+                    // and it earns its place: a card held at an angle reads as
+                    // picked up rather than as a tooltip following the cursor.
+                    className={`pointer-events-none fixed z-modal max-w-[16rem] truncate rounded-md border border-blue-300 bg-white px-2 py-1 text-sm shadow-xl ${
+                        view.animate ? 'motion-safe:-rotate-2' : ''
+                    }`}
                     style={{ left: drag.point.x + 12, top: drag.point.y + 12 }}
                 >
                     {drag.title}
@@ -523,8 +589,20 @@ export default function BoardPage() {
     );
 }
 
-function DropIndicator() {
-    return <div aria-hidden className="h-0.5 rounded-full bg-blue-600" />;
+/**
+ * Where the card would land. A dot on the leading edge rather than a bare rule:
+ * a 2px line alone is easy to lose against a card border mid-drag.
+ */
+function DropIndicator({ animate }: { animate: boolean }) {
+    return (
+        <div
+            aria-hidden
+            className={`flex items-center gap-1 ${animate ? 'motion-safe:animate-board-drop-in' : ''}`}
+        >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+            <span className="h-0.5 flex-1 rounded-full bg-blue-600" />
+        </div>
+    );
 }
 
 function BoardFilterBar({
@@ -643,6 +721,8 @@ function BoardFilterBar({
 
 function TaskCard({
     task,
+    view,
+    index,
     dragging,
     onOpen,
     onRemove,
@@ -653,6 +733,9 @@ function TaskCard({
     onPointerCancel,
 }: {
     task: BoardTask;
+    view: BoardView;
+    /** Position in its column, for the entrance stagger. */
+    index: number;
     dragging: boolean;
     onOpen: () => void;
     onRemove: () => void;
@@ -666,8 +749,11 @@ function TaskCard({
     const c = t.projects.board.card;
     const m = t.projects.boards;
 
-    const labels = labelsOf(task);
-    const cover = coverClass(task.cover_color);
+    const d = density(view);
+    const show = view.fields;
+
+    const labels = show.labels ? labelsOf(task) : [];
+    const cover = show.cover ? coverClass(task.cover_color) : null;
     const checklist = task.checklistItems ?? [];
     const checklistDone = checklist.filter((item) => item.is_done).length;
     const comments = task._count?.comments ?? 0;
@@ -683,6 +769,22 @@ function TaskCard({
 
     const assigneeName = assigneeNameOf(task);
     const projectLabel = projectLabelOf(task.project);
+
+    const showBadges =
+        show.badges && Boolean(due || task.priority === 'HIGH' || task.priority === 'URGENT');
+    // Whether the icon row has anything left to say once the switched-off
+    // fields are dropped. Without this an empty row still takes its margin,
+    // and a stripped-down card would sit on a band of white.
+    const showDetails =
+        show.details &&
+        Boolean(
+            task.description ||
+                checklist.length > 0 ||
+                comments > 0 ||
+                subtasks > 0 ||
+                task.remaining_hours != null,
+        );
+    const showMeta = showDetails || show.assignee;
 
     return (
         <article
@@ -700,16 +802,21 @@ function TaskCard({
                     onOpen();
                 }
             }}
+            style={{ animationDelay: staggerDelay(view, index) }}
             // pan-y keeps the column scrollable by finger; the grip below opts
             // out of that so a touch drag can start there.
-            className={`touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-start text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+            className={`group touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 dragging ? 'opacity-40' : ''
-            }`}
+            } ${motionClass(view, 'card')}`}
         >
             {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}
 
-            <div className="p-2">
+            <div className={d.cardPad}>
             <div className="flex items-start gap-1">
+                {/* Both chrome buttons fade in on hover on a pointer device, so a
+                    full column reads as cards rather than as rows of controls.
+                    They stay put on touch, where the grip is the only way to
+                    start a drag and there is no hover to reveal it. */}
                 <button
                     type="button"
                     aria-label={c.drag}
@@ -718,19 +825,19 @@ function TaskCard({
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
-                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 hover:text-gray-500"
+                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
                 <div className="min-w-0 flex-1 pt-0.5">
-                    <p className="font-medium">{task.title}</p>
+                    <p className={d.title}>{task.title}</p>
                     {/* A card gets read away from its board — two boards open
                         side by side, a screenshot pasted into a chat — so it
                         names its own project. Short name first because the full
                         one does not fit a 18rem column; that goes in the title
                         attribute. Muted and under the heading so it never
                         competes with the task itself. */}
-                    {projectLabel && (
+                    {show.project && projectLabel && (
                         <p
                             title={task.project?.name ?? undefined}
                             className="mt-0.5 flex items-center gap-1 text-xs text-gray-500"
@@ -752,7 +859,7 @@ function TaskCard({
                         e.stopPropagation();
                         onRemove();
                     }}
-                    className="min-h-touch min-w-touch -me-1 rounded px-1 text-gray-300 hover:text-red-600"
+                    className="min-h-touch min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -761,7 +868,7 @@ function TaskCard({
             {/* Above the badges, as on a Trello card: colour is what the eye
                 scans a column by, so it should not be buried in the meta row. */}
             {labels.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className={`${d.row} flex flex-wrap gap-1`}>
                     {labels.map((label) => (
                         <span
                             key={label.id}
@@ -773,8 +880,8 @@ function TaskCard({
                 </div>
             )}
 
-            {(due || task.priority === 'HIGH' || task.priority === 'URGENT') && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {showBadges && (
+                <div className={`${d.row} flex flex-wrap items-center gap-1.5`}>
                     {due && <StatusBadge tone={DUE_TONE[due]}>{dueLabel}</StatusBadge>}
                     {(task.priority === 'HIGH' || task.priority === 'URGENT') && (
                         <StatusBadge tone={task.priority === 'URGENT' ? 'danger' : 'warning'}>
@@ -784,55 +891,64 @@ function TaskCard({
                 </div>
             )}
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500">
-                {task.description && (
-                    <AlignLeft className="h-3.5 w-3.5" aria-label={c.hasDescription} />
-                )}
-                {checklist.length > 0 && (
-                    <span
-                        className={`inline-flex items-center gap-1 ${
-                            checklistDone === checklist.length ? 'text-emerald-600' : ''
-                        }`}
-                        aria-label={c.checklist
-                            .replace('{done}', String(checklistDone))
-                            .replace('{total}', String(checklist.length))}
-                    >
-                        <CheckSquare className="h-3.5 w-3.5" aria-hidden />
-                        {checklistDone}/{checklist.length}
-                    </span>
-                )}
-                {comments > 0 && (
-                    <span
-                        className="inline-flex items-center gap-1"
-                        aria-label={c.comments.replace('{count}', String(comments))}
-                    >
-                        <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-                        {comments}
-                    </span>
-                )}
-                {subtasks > 0 && (
-                    <span
-                        className="inline-flex items-center gap-1"
-                        aria-label={c.subtasks.replace('{count}', String(subtasks))}
-                    >
-                        <GitBranch className="h-3.5 w-3.5" aria-hidden />
-                        {subtasks}
-                    </span>
-                )}
-                {task.remaining_hours != null && <span>{num(task.remaining_hours)}h</span>}
+            {showMeta && (
+                <div
+                    className={`${d.row} flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500`}
+                >
+                    {showDetails && (
+                        <>
+                            {task.description && (
+                                <AlignLeft className="h-3.5 w-3.5" aria-label={c.hasDescription} />
+                            )}
+                            {checklist.length > 0 && (
+                                <span
+                                    className={`inline-flex items-center gap-1 ${
+                                        checklistDone === checklist.length ? 'text-emerald-600' : ''
+                                    }`}
+                                    aria-label={c.checklist
+                                        .replace('{done}', String(checklistDone))
+                                        .replace('{total}', String(checklist.length))}
+                                >
+                                    <CheckSquare className="h-3.5 w-3.5" aria-hidden />
+                                    {checklistDone}/{checklist.length}
+                                </span>
+                            )}
+                            {comments > 0 && (
+                                <span
+                                    className="inline-flex items-center gap-1"
+                                    aria-label={c.comments.replace('{count}', String(comments))}
+                                >
+                                    <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                                    {comments}
+                                </span>
+                            )}
+                            {subtasks > 0 && (
+                                <span
+                                    className="inline-flex items-center gap-1"
+                                    aria-label={c.subtasks.replace('{count}', String(subtasks))}
+                                >
+                                    <GitBranch className="h-3.5 w-3.5" aria-hidden />
+                                    {subtasks}
+                                </span>
+                            )}
+                            {task.remaining_hours != null && <span>{num(task.remaining_hours)}h</span>}
+                        </>
+                    )}
 
-                {assigneeName ? (
-                    <span
-                        title={assigneeName}
-                        aria-label={assigneeName}
-                        className="ms-auto inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-medium text-blue-700"
-                    >
-                        {initialsOf(assigneeName)}
-                    </span>
-                ) : (
-                    <span className="ms-auto text-gray-400">{c.unassigned}</span>
-                )}
-            </div>
+                    {show.assignee &&
+                        (assigneeName ? (
+                            <span
+                                title={assigneeName}
+                                aria-label={assigneeName}
+                                className={`ms-auto inline-flex items-center justify-center rounded-full bg-blue-100 font-medium text-blue-700 ${d.avatar}`}
+                            >
+                                {initialsOf(assigneeName)}
+                            </span>
+                        ) : (
+                            <span className="ms-auto text-gray-400">{c.unassigned}</span>
+                        ))}
+                </div>
+            )}
             </div>
         </article>
     );

@@ -22,7 +22,9 @@ import {
     DEFAULT_PLATFORM_FEATURES,
     ROLE_DEFAULT_PERMISSIONS,
     StorePermission,
+    TenantRecordScope,
     UserRole,
+    resolveRecordScope,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -755,6 +757,10 @@ export class AuthService {
                             },
                         },
                         tenantRole: { select: { id: true, name: true } },
+                        // Every role the member holds, for the record scope
+                        // below: it is resolved widest-wins across the set, so
+                        // the primary role alone cannot answer it.
+                        roles: { select: { tenantRole: { select: { record_scope: true } } } },
                     },
                 },
                 storeAccess: {
@@ -821,6 +827,10 @@ export class AuthService {
                             },
                         },
                         tenantRole: { select: { id: true, name: true } },
+                        // Every role the member holds, for the record scope
+                        // below: it is resolved widest-wins across the set, so
+                        // the primary role alone cannot answer it.
+                        roles: { select: { tenantRole: { select: { record_scope: true } } } },
                     },
                 },
                 storeAccess: {
@@ -1295,6 +1305,19 @@ export class AuthService {
                     : membership.tenantRole
                       ? { id: membership.tenantRole.id, name: membership.tenantRole.name }
                       : null,
+            // How much of a module's data this member reads: `ALL`, or `OWN` when
+            // every role they hold is narrowed. The client gates the
+            // person/assignee filters on it so a narrow member is not offered
+            // pickers whose every other option returns nothing; the server
+            // filters regardless (`ProjectAccessService`).
+            record_scope: resolveRecordScope(
+                membership.role === 'OWNER'
+                    ? []
+                    : (membership.roles ?? []).map(
+                          (assignment: { tenantRole: { record_scope: TenantRecordScope } }) =>
+                              assignment.tenantRole.record_scope,
+                      ),
+            ),
             permissions: await this.resolveTenantPermissions(
                 userId,
                 membership.tenant_id,
