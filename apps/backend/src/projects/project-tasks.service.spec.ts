@@ -5,7 +5,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
-import { OWNER, staff, visibilityOr } from './project-access.test-support';
+import { OWNER, narrow, ownTaskOr, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('ProjectTasksService', () => {
@@ -994,5 +994,67 @@ describe('ProjectTasksService', () => {
                 where: expect.objectContaining({ tenant_id: 'tenant-1' }),
             }),
         );
+    });
+    /**
+     * Record scope. Visibility decides which projects reach the list; this
+     * decides whose rows are in it. The Tasks page's assignee filter is the
+     * viewer's to clear, so the scope has to live in the `where` rather than in
+     * the query string.
+     */
+    describe('own records only', () => {
+        it('narrows the cross-project list to the viewer own tasks', async () => {
+            await service.list(narrow('user-7'), {} as never);
+
+            const [{ where }] = db.projectTask.findMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([
+                { project: { OR: visibilityOr('user-7') } },
+                { OR: ownTaskOr('user-7') },
+            ]);
+        });
+
+        it('keeps the scope when the viewer clears the assignee filter', async () => {
+            // The filter the page sends is additive; dropping it does not widen
+            // the query, which is the regression this whole axis exists for.
+            await service.list(narrow('user-7'), { assigneeId: undefined } as never);
+
+            const [{ where }] = db.projectTask.findMany.mock.calls.at(-1);
+            expect(where.AND).toContainEqual({ OR: ownTaskOr('user-7') });
+        });
+
+        it('narrows the assignee filter options too, so it offers only themselves', async () => {
+            await service.listAssignees(narrow('user-7'));
+
+            for (const call of db.projectTask.groupBy.mock.calls) {
+                expect(call[0].where.AND).toContainEqual({ OR: ownTaskOr('user-7') });
+            }
+        });
+
+        it('reports a teammate task as missing rather than forbidden', async () => {
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            await expect(service.findOne(narrow('user-7'), 'task-1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            const [{ where }] = db.projectTask.findFirst.mock.calls.at(-1);
+            expect(where.AND).toContainEqual({ OR: ownTaskOr('user-7') });
+        });
+
+        it('refuses to edit a teammate task', async () => {
+            // The write gate is the same lookup as the read, so a task they
+            // cannot see is a task they cannot PATCH by id either.
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.update(narrow('user-7'), 'task-1', { title: 'Mine now' } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+
+        it('leaves a wide viewer exactly as they were', async () => {
+            await service.list(staff('user-7'), {} as never);
+
+            const [{ where }] = db.projectTask.findMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([{ project: { OR: visibilityOr('user-7') } }]);
+        });
     });
 });

@@ -209,8 +209,10 @@ export class ProjectTimeService {
             // Hours are the most quietly revealing thing in the module: an
             // entry names its project, its task and who worked on it. The
             // filter goes in the one shared builder so the list, the totals
-            // strip and the report can never disagree about it.
-            ...(await this.access.relatedFilter(viewer)),
+            // strip and the report can never disagree about it — and it carries
+            // the record scope, so a narrow viewer's `userId` filter is no
+            // longer the only thing keeping them off the team's hours.
+            ...(await this.access.timeFilter(viewer)),
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.taskId ? { task_id: query.taskId } : {}),
             ...(query.userId ? { user_id: query.userId } : {}),
@@ -283,7 +285,7 @@ export class ProjectTimeService {
                 id: dto.taskId,
                 tenant_id: tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: {
                 id: true,
@@ -521,7 +523,7 @@ export class ProjectTimeService {
             where: {
                 id: entryId,
                 tenant_id: viewer.tenantId,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.timeFilter(viewer)),
             } as never,
             select: {
                 id: true,
@@ -609,7 +611,7 @@ export class ProjectTimeService {
             where: {
                 id: entryId,
                 tenant_id: tenantId,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.timeFilter(viewer)),
             } as never,
             include: {
                 task: {
@@ -1048,13 +1050,22 @@ export class ProjectTimeService {
         }));
     }
 
-    /** Hours per user for a project — the raw material for Phase 2 costing. */
+    /**
+     * Hours per user for a project — the raw material for Phase 2 costing.
+     *
+     * Scoped, not just visibility-checked: this is a per-person breakdown of
+     * everybody on the project, which is precisely what a narrow viewer must
+     * not read. For them it collapses to their own row.
+     */
     async summary(viewer: ProjectViewer, projectId: string) {
         const tenantId = viewer.tenantId;
         await this.access.assertProjectVisible(viewer, projectId);
         const rows = await this.db.projectTimeEntry.groupBy({
             by: ['user_id'],
-            where: { tenant_id: tenantId, project_id: projectId },
+            where: ProjectAccessService.merge(
+                { tenant_id: tenantId, project_id: projectId },
+                await this.access.timeFilter(viewer),
+            ) as never,
             _sum: { hours: true },
         });
         return rows.map((row) => ({

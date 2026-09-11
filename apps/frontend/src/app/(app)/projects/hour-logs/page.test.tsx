@@ -11,6 +11,7 @@ jest.mock('@/lib/api', () => ({
         getProjectTimeEntries: (...args: unknown[]) => getProjectTimeEntries(...args),
         getProjectTimeReport: (...args: unknown[]) => getProjectTimeReport(...args),
         getProjectTimePeople: jest.fn(),
+        getMe: jest.fn(),
         getProjectTimeTags: jest.fn(),
         getProjectTimer: jest.fn(),
         startProjectTimer: jest.fn(),
@@ -94,6 +95,9 @@ beforeEach(() => {
     api.getProjects.mockReset().mockResolvedValue({
         items: [{ id: 'p1', code: 'PRJ-0001', name: 'Fitout' }],
     });
+    // The page asks who it is serving to decide whether the person filter is
+    // worth rendering: a member narrowed to their own records has one option.
+    api.getMe.mockReset().mockResolvedValue({ id: 'user-1', tenants: [] });
     api.getProjectTimePeople.mockReset().mockResolvedValue([
         { id: 'u1', name: 'Rina', email: 'rina@example.com' },
     ]);
@@ -782,5 +786,29 @@ describe('Hour logs page — remembered filters', () => {
             projectId: undefined,
             userId: undefined,
         });
+    });
+    /**
+     * A member narrowed to their own records reads only their own hours, so the
+     * person filter has one option. The server enforces the scope either way —
+     * this is about not offering a control that cannot do anything.
+     */
+    it('hides the person filter from a member who reads only their own records', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            tenants: [{ id: 'tenant-1', role: 'CASHIER', record_scope: 'OWN' }],
+        });
+
+        render(<HourLogsPage />);
+
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+        expect(screen.queryByLabelText('Person')).not.toBeInTheDocument();
+    });
+
+    it('keeps the person filter for everybody else', async () => {
+        render(<HourLogsPage />);
+
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+        expect(screen.getByLabelText('Person')).toBeInTheDocument();
     });
 });

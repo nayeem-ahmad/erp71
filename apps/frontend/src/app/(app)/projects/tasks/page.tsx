@@ -30,6 +30,8 @@ import { routes } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { readsOwnRecordsOnly, tenantFromMe } from '@/lib/permissions';
+import { getWorkspaceItem } from '@/lib/session-store';
 import {
     applyCreatedRangeQuery,
     isCreatedRangeEmpty,
@@ -145,6 +147,11 @@ export default function TasksPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [typing, setTyping] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+    // Narrowed members read only their own rows, so the assignee filter has
+    // nothing to offer them — see `readsOwnRecordsOnly`. The server filters
+    // regardless; this only decides whether the control is worth rendering.
+    const [ownRecordsOnly, setOwnRecordsOnly] = useState(false);
+    const [scopeReady, setScopeReady] = useState(false);
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -171,8 +178,18 @@ export default function TasksPage() {
 
     useEffect(() => {
         api.getMe()
-            .then((me: unknown) => setUserId((me as { id?: string })?.id ?? null))
-            .catch(() => setUserId(null));
+            .then((me: unknown) => {
+                const payload = me as {
+                    id?: string;
+                    tenants?: { id: string; role?: string | null; record_scope?: string | null }[];
+                };
+                setUserId(payload?.id ?? null);
+                setOwnRecordsOnly(
+                    readsOwnRecordsOnly(tenantFromMe(payload, getWorkspaceItem('tenant_id'))),
+                );
+            })
+            .catch(() => setUserId(null))
+            .finally(() => setScopeReady(true));
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
             .catch(() => setProjects([]));
@@ -181,11 +198,25 @@ export default function TasksPage() {
             .catch(() => setAssignees([]));
     }, []);
 
+    /**
+     * What the chosen assignee means for a member who reads only their own
+     * records: nothing. The server already limits them to the rows they hold,
+     * and the page's own `me` default would narrow that *further* — dropping the
+     * tasks they raised that nobody has picked up yet.
+     *
+     * Read through rather than written back, so their remembered choice survives
+     * their scope being widened later, and so the list is fetched once rather
+     * than once per correction.
+     */
+    const effectiveAssignee = ownRecordsOnly ? 'anyone' : assignee;
+
     // Holding the fetch until the user id resolves keeps the default filter from
     // briefly showing everyone's tasks and then narrowing; holding it until the
     // remembered filters land keeps a return visit from fetching the default
-    // slice and then the remembered one.
-    const ready = filtersReady && (assignee !== 'me' || userId !== null);
+    // slice and then the remembered one. `scopeReady` is the same argument for
+    // the record scope: fetching before it lands would send a filter the member
+    // does not in fact have.
+    const ready = filtersReady && scopeReady && (effectiveAssignee !== 'me' || userId !== null);
 
     const { items, loading, serverPagination, reload } = useServerList<TaskRow>({
         tableId: 'project-tasks',
@@ -193,7 +224,7 @@ export default function TasksPage() {
         initialSort: { id: 'due_date', desc: false },
         deps: [
             debouncedSearch,
-            assignee,
+            effectiveAssignee,
             projectId,
             statusCategory,
             priority,
@@ -205,7 +236,7 @@ export default function TasksPage() {
             api.getProjectTasks({
                 ...params,
                 search: debouncedSearch || undefined,
-                ...assigneeQuery(assignee, userId),
+                ...assigneeQuery(effectiveAssignee, userId),
                 projectId: projectId || undefined,
                 statusCategory: statusCategory || undefined,
                 priority: priority || undefined,
@@ -215,7 +246,9 @@ export default function TasksPage() {
 
     const filtered =
         Boolean(debouncedSearch)
-        || assignee !== 'anyone'
+        // The effective one: a hidden, inert assignee filter must not light up
+        // the "filters applied" state for a member who cannot change it.
+        || effectiveAssignee !== 'anyone'
         || Boolean(projectId)
         || Boolean(statusCategory)
         || Boolean(priority)
@@ -489,25 +522,27 @@ export default function TasksPage() {
                     placeholder={m.tasks.searchPlaceholder}
                     className="md:max-w-xs"
                 />
-                <Select
-                    value={assignee}
-                    onChange={(e) => setFilter('assignee', e.target.value)}
-                    aria-label={m.fields.assignee}
-                    className="md:w-52"
-                >
-                    <option value="me">{m.tasks.mine}</option>
-                    <option value="anyone">{m.tasks.anyone}</option>
-                    <option value="unassigned">{m.task.unassigned}</option>
-                    {assignees.length > 0 && (
-                        <optgroup label={m.fields.assignee}>
-                            {assignees.map((person) => (
-                                <option key={person.key} value={person.key}>
-                                    {person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name}
-                                </option>
-                            ))}
-                        </optgroup>
-                    )}
-                </Select>
+                {!ownRecordsOnly && (
+                    <Select
+                        value={assignee}
+                        onChange={(e) => setFilter('assignee', e.target.value)}
+                        aria-label={m.fields.assignee}
+                        className="md:w-52"
+                    >
+                        <option value="me">{m.tasks.mine}</option>
+                        <option value="anyone">{m.tasks.anyone}</option>
+                        <option value="unassigned">{m.task.unassigned}</option>
+                        {assignees.length > 0 && (
+                            <optgroup label={m.fields.assignee}>
+                                {assignees.map((person) => (
+                                    <option key={person.key} value={person.key}>
+                                        {person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        )}
+                    </Select>
+                )}
                 <Select
                     value={projectId}
                     onChange={(e) => setFilter('projectId', e.target.value)}

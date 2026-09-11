@@ -111,4 +111,69 @@ describe('TenantInterceptor', () => {
         await interceptor.intercept(ctx, next);
         expect(req.storeId).toBe('store-1');
     });
+    /**
+     * Record scope rides the membership lookup, and is resolved widest-wins:
+     * one unrestricted role makes the member wide, so being given a second role
+     * widens them rather than leaving them narrowed.
+     */
+    describe('record scope', () => {
+        const withRoles = (role: string, scopes: string[]) => ({
+            tenant_id: 'tenant-1',
+            role,
+            roles: scopes.map((record_scope) => ({ tenantRole: { record_scope } })),
+        });
+
+        it('is OWN when every role the member holds says so', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.tenantUser.findFirst.mockResolvedValue(withRoles('CASHIER', ['OWN', 'OWN']));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.recordScope).toBe('OWN');
+        });
+
+        it('is ALL as soon as one role is unrestricted', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.tenantUser.findFirst.mockResolvedValue(withRoles('CASHIER', ['OWN', 'ALL']));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.recordScope).toBe('ALL');
+        });
+
+        it('is ALL for a member holding no roles at all', async () => {
+            // They hold no permissions either, so there is nothing to narrow —
+            // and treating "not set up yet" as the strictest setting would make
+            // it the silent default.
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.tenantUser.findFirst.mockResolvedValue(withRoles('CASHIER', []));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.recordScope).toBe('ALL');
+        });
+
+        it('is ALL for the workspace owner whatever their roles say', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.tenantUser.findFirst.mockResolvedValue(withRoles('OWNER', ['OWN']));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.recordScope).toBe('ALL');
+        });
+
+        it('resolves it on the single-workspace path too, where no header is sent', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1' });
+            db.tenantUser.findMany.mockResolvedValue([withRoles('CASHIER', ['OWN'])]);
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.recordScope).toBe('OWN');
+        });
+    });
 });

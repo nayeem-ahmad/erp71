@@ -3294,13 +3294,26 @@ export const api = {
         }),
     // Team & permissions (tenant-scoped staff management)
     getTeamRoles: () => fetchWithAuth('/team/roles'),
-    createTeamRole: (data: { name: string; description?: string; permissions: string[] }) =>
+    createTeamRole: (data: {
+        name: string;
+        description?: string;
+        permissions: string[];
+        recordScope?: 'ALL' | 'OWN';
+    }) =>
         fetchWithAuth('/team/roles', {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    updateTeamRole: (id: string, data: { name?: string; description?: string; permissions?: string[] }) =>
+    updateTeamRole: (
+        id: string,
+        data: {
+            name?: string;
+            description?: string;
+            permissions?: string[];
+            recordScope?: 'ALL' | 'OWN';
+        },
+    ) =>
         fetchWithAuth(`/team/roles/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(data),

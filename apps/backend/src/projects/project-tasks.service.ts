@@ -94,10 +94,12 @@ export class ProjectTasksService {
 
         // The cross-project Tasks page reads every task in the tenant, so this
         // is where a private project's work would otherwise leak in full —
-        // title, assignee, hours and all — to someone who cannot open it.
+        // title, assignee, hours and all — to someone who cannot open it. It is
+        // also where a narrow viewer's own-records scope has to bite, since the
+        // page's assignee filter is theirs to clear.
         // Merged rather than spread so a filter added above can never be
         // overwritten by, or overwrite, this one.
-        const scoped = ProjectAccessService.merge(where, await this.access.relatedFilter(viewer));
+        const scoped = ProjectAccessService.merge(where, await this.access.taskFilter(viewer));
 
         const [items, total] = await Promise.all([
             this.db.projectTask.findMany({
@@ -131,7 +133,7 @@ export class ProjectTasksService {
     async listAssignees(viewer: ProjectViewer) {
         const base = ProjectAccessService.merge(
             { tenant_id: viewer.tenantId, deleted_at: null },
-            await this.access.relatedFilter(viewer),
+            await this.access.taskFilter(viewer),
         );
 
         // groupBy rather than a distinct findMany: the DISTINCT runs in the
@@ -202,7 +204,7 @@ export class ProjectTasksService {
                 id: taskId,
                 tenant_id: tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             include: {
                 ...TASK_INCLUDE,
@@ -881,7 +883,7 @@ export class ProjectTasksService {
      * hops rather than assumed from the route.
      */
     private async assertChecklistItem(viewer: ProjectViewer, itemId: string) {
-        const filter = await this.access.relatedFilter(viewer);
+        const filter = await this.access.taskFilter(viewer);
         const item = await this.db.projectTaskChecklistItem.findFirst({
             where: {
                 id: itemId,
@@ -940,7 +942,7 @@ export class ProjectTasksService {
                 id: taskId,
                 tenant_id: viewer.tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             include: { status: { select: { id: true, name: true, category: true } } },
         });

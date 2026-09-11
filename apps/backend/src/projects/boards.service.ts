@@ -42,14 +42,16 @@ export class BoardsService {
 
     async list(viewer: ProjectViewer) {
         const tenantId = viewer.tenantId;
-        const visible = await this.access.relatedFilter(viewer);
+        const visible = await this.access.taskFilter(viewer);
         const boards = await this.db.board.findMany({
             where: { tenant_id: tenantId, deleted_at: null },
             orderBy: { created_at: 'desc' },
             // Scoped to non-deleted tasks: an unscoped count would advertise
             // cards that findOne() then hides, e.g. "8 cards" rendering as 6.
             // Private projects are filtered on the same principle — a count is
-            // a disclosure too, and boards are shared across projects.
+            // a disclosure too, and boards are shared across projects. A viewer
+            // who only reads their own records counts only their own cards, so
+            // the number still matches the board they then open.
             include: {
                 _count: {
                     select: { cards: { where: { task: { deleted_at: null, ...visible } } } },
@@ -107,8 +109,10 @@ export class BoardsService {
         // A board is tenant-level and its cards come from any project, so the
         // filter belongs on the cards rather than on the board: a shared board
         // stays open to everyone, and the cards drawn from a private project
-        // simply are not on it for anyone outside that project.
-        const visible = await this.access.relatedFilter(viewer);
+        // simply are not on it for anyone outside that project. The same holds
+        // one level in for a narrow viewer — the board opens, and holds their
+        // cards only.
+        const visible = await this.access.taskFilter(viewer);
 
         const [boardColumns, cards] = await Promise.all([
             this.columns.listColumns(tenantId, boardId),
@@ -180,7 +184,7 @@ export class BoardsService {
                 id: { in: uniqueTaskIds },
                 tenant_id: tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: { id: true, project_id: true },
         });
@@ -306,7 +310,7 @@ export class BoardsService {
                 id: taskId,
                 tenant_id: tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: { id: true, project_id: true, status_id: true },
         });

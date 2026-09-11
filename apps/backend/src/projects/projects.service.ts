@@ -143,7 +143,18 @@ export class ProjectsService {
         return { ...project, progress };
     }
 
-    /** Task counts and hour totals for a project, and per milestone. */
+    /**
+     * Task counts and hour totals for a project, and per milestone.
+     *
+     * Whole, never per-viewer — including for a viewer whose record scope is
+     * `OWN`. A project's percent-complete is one shared number about the
+     * project's health, not a per-person breakdown: re-deriving it per reader
+     * would mean two people looking at the same project and disagreeing about
+     * whether it is on track, which is the same call `docs/projects/
+     * project-visibility.md` takes for sprint burndown. The rows behind it stay
+     * scoped — a narrow viewer sees the project's totals and only their own
+     * tasks under them.
+     */
     async progress(tenantId: string, projectId: string) {
         const tasks = await this.db.projectTask.findMany({
             where: { tenant_id: tenantId, project_id: projectId, deleted_at: null },
