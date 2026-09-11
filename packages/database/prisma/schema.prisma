@@ -1195,6 +1195,22 @@ model TenantUserRole {
   @@index([tenant_role_id])
 }
 
+/// How much of a module's data a role can see: `ALL` is every record the role's
+/// permissions reach, `OWN` narrows reads to the records the member is on —
+/// their own tasks and their own hour logs.
+///
+/// Stored on the role and never on the member, so it is granted the same way
+/// permissions are. It cannot be a `StorePermission`, because a member's access
+/// is the *union* of the roles they hold and a union can add but never subtract:
+/// a restriction expressed as a permission would survive into every other role
+/// they pick up. Resolved instead by widest-wins — a member is narrow only when
+/// every role they hold says `OWN` — which is what makes holding a second,
+/// unrestricted role mean what an admin expects.
+enum TenantRecordScope {
+  ALL
+  OWN
+}
+
 model TenantRole {
   id           String   @id @default(uuid())
   tenant_id    String
@@ -1208,6 +1224,10 @@ model TenantRole {
   /// wrote themselves. Postgres treats NULLs as distinct, so the unique below
   /// still allows any number of those per tenant.
   template_key String?
+  /// `ALL` by default: the column arrived after every existing role, and
+  /// defaulting the other way would have narrowed every member in every
+  /// workspace on the morning of the deploy. See `TenantRecordScope`.
+  record_scope TenantRecordScope @default(ALL)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 

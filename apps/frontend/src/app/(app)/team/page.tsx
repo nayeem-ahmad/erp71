@@ -8,7 +8,9 @@ import {
 import {
     STORE_PERMISSION_GROUPS,
     STORE_PERMISSION_LABELS,
+    TENANT_RECORD_SCOPE_LABELS,
     TENANT_ROLE_MODULES,
+    TenantRecordScope,
     type StorePermission,
     type TenantRoleSummary,
 } from '@erp71/shared-types';
@@ -194,6 +196,58 @@ function PermissionMatrix({
     );
 }
 
+/* ---------------------------- Record scope ---------------------------- */
+
+/**
+ * The second half of what a role grants: the permissions above say *what* it can
+ * do, this says *whose records* it may read.
+ *
+ * Copy comes from `TENANT_RECORD_SCOPE_LABELS` rather than the locale files, for
+ * the same reason the permission matrix reads `STORE_PERMISSION_LABELS`: the
+ * vocabulary belongs with the enum, so a new value cannot ship with nothing to
+ * call it.
+ */
+function RecordScopeField({
+    scope,
+    onChange,
+}: {
+    scope: TenantRecordScope;
+    onChange: (scope: TenantRecordScope) => void;
+}) {
+    return (
+        <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                Records this role can see
+            </p>
+            <div className="space-y-2">
+                {(Object.keys(TENANT_RECORD_SCOPE_LABELS) as TenantRecordScope[]).map((value) => (
+                    <label
+                        key={value}
+                        className="flex items-start gap-2.5 text-sm text-gray-700 cursor-pointer"
+                    >
+                        <input
+                            type="radio"
+                            name="record-scope"
+                            checked={scope === value}
+                            onChange={() => onChange(value)}
+                            className="mt-0.5 border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>
+                            <span className="font-semibold">{TENANT_RECORD_SCOPE_LABELS[value].label}</span>
+                            <span className="block text-xs text-gray-500">
+                                {TENANT_RECORD_SCOPE_LABELS[value].description}
+                            </span>
+                        </span>
+                    </label>
+                ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-400">
+                A member holding more than one role gets the widest scope of the roles they hold.
+            </p>
+        </div>
+    );
+}
+
 /* ----------------------------- Roles panel ---------------------------- */
 
 function RolesPanel({
@@ -209,6 +263,7 @@ function RolesPanel({
     const [creating, setCreating] = useState(false);
     const [formName, setFormName] = useState('');
     const [formPerms, setFormPerms] = useState<Set<StorePermission>>(new Set());
+    const [formScope, setFormScope] = useState<TenantRecordScope>(TenantRecordScope.ALL);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -231,6 +286,7 @@ function RolesPanel({
         setEditingId(null);
         setFormName('');
         setFormPerms(new Set());
+        setFormScope(TenantRecordScope.ALL);
     };
 
     const startEdit = (role: TenantRoleSummary) => {
@@ -238,6 +294,7 @@ function RolesPanel({
         setEditingId(role.id);
         setFormName(role.name);
         setFormPerms(new Set(role.permissions));
+        setFormScope(role.record_scope ?? TenantRecordScope.ALL);
     };
 
     const cancelForm = () => {
@@ -245,6 +302,7 @@ function RolesPanel({
         setEditingId(null);
         setFormName('');
         setFormPerms(new Set());
+        setFormScope(TenantRecordScope.ALL);
     };
 
     const togglePerm = (perm: StorePermission) => {
@@ -263,6 +321,7 @@ function RolesPanel({
             await api.createTeamRole({
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
+                recordScope: formScope,
             });
             onToast({ type: 'success', message: tr.roleCreated });
             cancelForm();
@@ -282,9 +341,12 @@ function RolesPanel({
         const permsChanged =
             formPerms.size !== originalPerms.size ||
             Array.from(formPerms).some((p) => !originalPerms.has(p));
+        // Narrowing a role changes what its members can read on their next
+        // request, so it belongs in the same confirmation as a permission edit.
+        const scopeChanged = formScope !== (role.record_scope ?? TenantRecordScope.ALL);
 
         const memberCount = role.member_count ?? 0;
-        if (memberCount > 0 && (nameChanged || permsChanged)) {
+        if (memberCount > 0 && (nameChanged || permsChanged || scopeChanged)) {
             const msg = formatMessage(tr.syncWarning, { count: memberCount });
             if (!confirm(msg)) return;
         }
@@ -294,6 +356,7 @@ function RolesPanel({
             await api.updateTeamRole(role.id, {
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
+                recordScope: formScope,
             });
             onToast({ type: 'success', message: tr.roleUpdated });
             cancelForm();
@@ -350,6 +413,7 @@ function RolesPanel({
                         />
                     </div>
                     <PermissionMatrix permissions={formPerms} onToggle={togglePerm} />
+                    <RecordScopeField scope={formScope} onChange={setFormScope} />
                     <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                         <button
                             onClick={saveCreate}
@@ -388,6 +452,7 @@ function RolesPanel({
                                             />
                                         </div>
                                         <PermissionMatrix permissions={formPerms} onToggle={togglePerm} />
+                                        <RecordScopeField scope={formScope} onChange={setFormScope} />
                                         <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                                             <button
                                                 onClick={() => saveEdit(role)}
@@ -407,6 +472,11 @@ function RolesPanel({
                                                 {role.is_system && (
                                                     <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600">
                                                         {tr.systemRole}
+                                                    </span>
+                                                )}
+                                                {role.record_scope === TenantRecordScope.OWN && (
+                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700">
+                                                        Own records
                                                     </span>
                                                 )}
                                             </div>

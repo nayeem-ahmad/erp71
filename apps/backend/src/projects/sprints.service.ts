@@ -30,6 +30,11 @@ export class SprintsService {
     async list(viewer: ProjectViewer, projectId?: string) {
         const tenantId = viewer.tenantId;
         if (projectId) await this.access.assertProjectVisible(viewer, projectId);
+        // Visibility only, deliberately not the record scope: this filter feeds
+        // the `projects` span below, which is about a project's *identity*
+        // rather than whose rows are in it. Narrowing it would make a sprint
+        // look like it spanned only the projects the viewer holds a task on,
+        // which is a different claim from the one the column makes.
         const visible = await this.access.relatedFilter(viewer);
 
         const participating = projectId
@@ -214,7 +219,7 @@ export class SprintsService {
                 tenant_id: tenantId,
                 id: { in: dto.taskIds },
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             data: { sprint_id: sprintId },
         });
@@ -229,7 +234,7 @@ export class SprintsService {
                 tenant_id: tenantId,
                 sprint_id: sprintId,
                 id: { in: dto.taskIds },
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             data: { sprint_id: null },
         });
