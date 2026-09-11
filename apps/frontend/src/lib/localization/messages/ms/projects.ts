@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: 'Baki jam dari masa ke masa',
+        chartNow: 'kini',
+        chartUpNote: 'Naik — kerja ditambah',
         history: 'Sejarah baki jam',
         notePlaceholder: 'cth. pelanggan menambah dua bilik lagi',
         empty: 'Tiada perubahan direkodkan lagi.',

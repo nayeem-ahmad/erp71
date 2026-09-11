@@ -990,6 +990,188 @@ describe('TaskDetailPanel logging work', () => {
     });
 });
 
+/**
+ * `PATCH /project-tasks/:id` answers with the whole task, so a field that saved
+ * through it has nothing left to fetch. These pin that — and pin the fallback,
+ * because a response that is not a task must re-read the card rather than blank
+ * it.
+ */
+describe('TaskDetailPanel saving without re-reading the card', () => {
+    const saved = (over: Record<string, unknown> = {}) => ({
+        ...withChecklist([]),
+        title: 'Wire the meter',
+        ...over,
+    });
+
+    // Declared inside the module mock rather than beside the others, so it is
+    // not in the shared reset list.
+    const remainingHistory = () =>
+        jest.requireMock('@/lib/api').api.getTaskRemainingHistory as jest.Mock;
+
+    beforeEach(() => remainingHistory().mockClear());
+
+    it('takes the saved task from the response instead of fetching it again', async () => {
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockResolvedValue(saved({ title: 'Wire the sub-board' }));
+        panel();
+
+        await screen.findByRole('button', { name: /Edit title/ });
+        expect(getProjectTask).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByRole('button', { name: /Edit title/ }));
+        fireEvent.change(screen.getByLabelText('Title'), {
+            target: { value: 'Wire the sub-board' },
+        });
+        fireEvent.keyDown(screen.getByLabelText('Title'), { key: 'Enter' });
+
+        await screen.findByRole('button', { name: /Wire the sub-board/ });
+        expect(getProjectTask).toHaveBeenCalledTimes(1);
+        expect(remainingHistory()).toHaveBeenCalledTimes(1);
+    });
+
+    // The label catalogue and the board's columns cannot change from this panel,
+    // so a saved field must not go and re-read either of them.
+    it('leaves the reference data alone when a field saves', async () => {
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockResolvedValue(saved({ estimate_hours: '9' }));
+        panel();
+
+        const estimate = await screen.findByLabelText('Estimate (h)');
+        expect(getProjectLabels).toHaveBeenCalledTimes(1);
+        expect(getProjectColumns).toHaveBeenCalledTimes(1);
+
+        fireEvent.change(estimate, { target: { value: '9' } });
+        fireEvent.blur(estimate);
+
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
+        expect(getProjectLabels).toHaveBeenCalledTimes(1);
+        expect(getProjectColumns).toHaveBeenCalledTimes(1);
+    });
+
+    // Crossing into or out of DONE writes a remaining-hours row alongside the
+    // status, so the log is the one thing a status change still has to re-read.
+    it('re-reads the remaining log after a status change, but not the card', async () => {
+        getProjectColumns.mockResolvedValue([
+            { id: 's1', name: 'Doing', category: 'IN_PROGRESS' },
+            { id: 's2', name: 'Done', category: 'DONE' },
+        ]);
+        getProjectTask.mockResolvedValue(
+            saved({ status: { id: 's1', name: 'Doing', category: 'IN_PROGRESS' } }),
+        );
+        updateProjectTask.mockResolvedValue(
+            saved({ status: { id: 's2', name: 'Done', category: 'DONE' } }),
+        );
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Status'), { target: { value: 's2' } });
+
+        await waitFor(() => expect(remainingHistory()).toHaveBeenCalledTimes(2));
+        expect(getProjectTask).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-reads the card when the response is not a task', async () => {
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockResolvedValue({});
+        panel();
+
+        const estimate = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(estimate, { target: { value: '9' } });
+        fireEvent.blur(estimate);
+
+        await waitFor(() => expect(getProjectTask).toHaveBeenCalledTimes(2));
+    });
+});
+
+/**
+ * The surface behind the modal is reloaded when the card is put down, not after
+ * every field — on the board, `onChanged` per save meant re-fetching every
+ * column because somebody fixed a typo.
+ */
+describe('TaskDetailPanel telling the list behind it', () => {
+    const saved = () => ({ ...withChecklist([]), title: 'Wire the meter' });
+
+    const editEstimate = async (value: string) => {
+        const estimate = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(estimate, { target: { value } });
+        fireEvent.blur(estimate);
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
+    };
+
+    // The header's X and the footer's button are both named Close; the footer is
+    // the deliberate "done with this card" one.
+    const closeCard = () => {
+        const buttons = screen.getAllByRole('button', { name: 'Close' });
+        fireEvent.click(buttons[buttons.length - 1]);
+    };
+
+    it('says nothing while edits are still being made', async () => {
+        const onChanged = jest.fn();
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockResolvedValue(saved());
+        render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} onChanged={onChanged} />);
+
+        await editEstimate('9');
+
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it('reloads it once when the card is closed', async () => {
+        const onChanged = jest.fn();
+        const onClose = jest.fn();
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockResolvedValue(saved());
+        render(<TaskDetailPanel taskId="t1" onClose={onClose} onChanged={onChanged} />);
+
+        await editEstimate('9');
+        closeCard();
+
+        expect(onChanged).toHaveBeenCalledTimes(1);
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not reload it when the card was only read', async () => {
+        const onChanged = jest.fn();
+        getProjectTask.mockResolvedValue(saved());
+        render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} onChanged={onChanged} />);
+
+        await screen.findByLabelText('Estimate (h)');
+        closeCard();
+
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Clicking the backdrop blurs the focused field first, so the commit and the
+     * close are the same gesture and the save lands after `close` has run.
+     * Without the late path its change would never reach the list.
+     */
+    it('still reloads it for a save that lands after the card closed', async () => {
+        const onChanged = jest.fn();
+        let release: (value: unknown) => void = () => {};
+        getProjectTask.mockResolvedValue(saved());
+        updateProjectTask.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} onChanged={onChanged} />);
+
+        const estimate = await screen.findByLabelText('Estimate (h)');
+        fireEvent.change(estimate, { target: { value: '9' } });
+        fireEvent.blur(estimate);
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
+
+        closeCard();
+        expect(onChanged).not.toHaveBeenCalled();
+
+        await act(async () => {
+            release(saved());
+        });
+
+        expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('TaskDetailPanel board columns', () => {
     // Since Phase 3L the tenant template and a board's columns are different
     // sets. Offering the template here would let someone move a card into a

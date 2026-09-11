@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { Test, TestingModule } from '@nestjs/testing';
-import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
+import { HISTORY_LIMIT, RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('RemainingHoursService', () => {
@@ -131,6 +131,48 @@ describe('RemainingHoursService', () => {
             expect(tx.projectTaskRemainingLog.create).toHaveBeenCalled();
             expect(db.projectTask.update).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('RemainingHoursService.history', () => {
+    let service: RemainingHoursService;
+    let db: any;
+
+    beforeEach(async () => {
+        db = {
+            projectTask: { update: jest.fn() },
+            projectTaskRemainingLog: { create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+        };
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [RemainingHoursService, { provide: DatabaseService, useValue: db }],
+        }).compile();
+        service = module.get(RemainingHoursService);
+    });
+
+    const query = () => db.projectTaskRemainingLog.findMany.mock.calls[0][0];
+
+    it('is scoped to the tenant as well as the task', async () => {
+        await service.history('tenant-1', 'task-1');
+
+        expect(query().where).toEqual({ tenant_id: 'tenant-1', task_id: 'task-1' });
+    });
+
+    /**
+     * Without a cap, a task worked for a year answers with every row it has ever
+     * had so a panel can draw a chart a few hundred pixels wide.
+     */
+    it('is bounded', async () => {
+        await service.history('tenant-1', 'task-1');
+
+        expect(query().take).toBe(HISTORY_LIMIT);
+    });
+
+    // Truncation is from the far end: what comes back has to be the recent shape,
+    // not the first 500 rows of a task nobody has touched since.
+    it('takes the newest rows, not the oldest', async () => {
+        await service.history('tenant-1', 'task-1');
+
+        expect(query().orderBy).toEqual({ changed_at: 'desc' });
     });
 });
 

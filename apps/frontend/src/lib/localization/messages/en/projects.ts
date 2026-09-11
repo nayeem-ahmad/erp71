@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: 'Remaining hours over time',
+        chartNow: 'now',
+        chartUpNote: 'Went up — work added',
         history: 'Remaining hours history',
         notePlaceholder: 'e.g. client added two more rooms',
         empty: 'No changes recorded yet.',
