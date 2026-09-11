@@ -465,6 +465,35 @@ export const projectsMessages = {
             subtasks: "{count} उप-कार्य",
             unassigned: "अनासौंपा",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "रूप",
+            reset: "रीसेट",
+            cardSize: "कार्ड का आकार",
+            comfortable: "आरामदेह",
+            compact: "संक्षिप्त",
+            columnWidth: "स्तंभ की चौड़ाई",
+            narrow: "सँकरा",
+            standard: "मानक",
+            wide: "चौड़ा",
+            columnColor: "स्तंभ का रंग",
+            tintNone: "सादा",
+            tintCategory: "चरण अनुसार",
+            motion: "गति",
+            motionHint: "कार्ड और स्तंभ धीरे से अपनी जगह लेते हैं। डिवाइस कम गति माँगे तो यह लागू नहीं होता।",
+            showOnCards: "कार्ड पर दिखाएँ",
+            fields: {
+                cover: "कवर",
+                labels: "लेबल",
+                project: "परियोजना",
+                badges: "नियत तिथि और प्राथमिकता",
+                details: "विवरण",
+                assignee: "सौंपा गया",
+            },
+        },
     },
 
     sprint: {

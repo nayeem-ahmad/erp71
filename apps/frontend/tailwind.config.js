@@ -61,11 +61,37 @@ export default {
                     '0%, 100%': { transform: 'translateY(0)' },
                     '50%': { transform: 'translateY(-12px)' },
                 },
+                // Board motion. Deliberately short and one-shot: a card settling
+                // into its column is feedback about where it landed, and anything
+                // that loops or lasts long enough to notice turns a working
+                // surface into a demo. Every use goes out under `motion-safe:`.
+                'board-card-in': {
+                    from: { opacity: '0', transform: 'translateY(4px) scale(0.98)' },
+                    to: { opacity: '1', transform: 'none' },
+                },
+                'board-column-in': {
+                    from: { opacity: '0', transform: 'translateY(6px)' },
+                    to: { opacity: '1', transform: 'none' },
+                },
+                'board-drop-in': {
+                    from: { opacity: '0', transform: 'scaleX(0.4)' },
+                    to: { opacity: '1', transform: 'none' },
+                },
+                'board-menu-in': {
+                    from: { opacity: '0', transform: 'translateY(-4px) scale(0.98)' },
+                    to: { opacity: '1', transform: 'none' },
+                },
             },
             animation: {
                 'hero-float': 'hero-float 22s ease-in-out infinite',
                 'hero-float-slow': 'hero-float-slow 28s ease-in-out infinite',
                 'hero-drift': 'hero-drift 18s ease-in-out infinite',
+                // `both` so a staggered card is invisible during its delay rather
+                // than painting, vanishing and fading back in.
+                'board-card-in': 'board-card-in 200ms ease-out both',
+                'board-column-in': 'board-column-in 260ms ease-out both',
+                'board-drop-in': 'board-drop-in 140ms ease-out',
+                'board-menu-in': 'board-menu-in 120ms ease-out',
             },
             spacing: {
                 'safe-top': 'env(safe-area-inset-top, 0px)',
