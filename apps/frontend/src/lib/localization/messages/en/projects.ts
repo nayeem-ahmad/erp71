@@ -467,6 +467,35 @@ export const projectsMessages = {
             subtasks: '{count} subtask(s)',
             unassigned: 'Unassigned',
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: 'Appearance',
+            reset: 'Reset',
+            cardSize: 'Card size',
+            comfortable: 'Comfortable',
+            compact: 'Compact',
+            columnWidth: 'Column width',
+            narrow: 'Narrow',
+            standard: 'Standard',
+            wide: 'Wide',
+            columnColor: 'Column colour',
+            tintNone: 'Plain',
+            tintCategory: 'By stage',
+            motion: 'Motion',
+            motionHint: 'Cards and columns settle into place. Ignored when your device asks for less motion.',
+            showOnCards: 'Show on cards',
+            fields: {
+                cover: 'Cover',
+                labels: 'Labels',
+                project: 'Project',
+                badges: 'Due & priority',
+                details: 'Details',
+                assignee: 'Assignee',
+            },
+        },
     },
 
     sprint: {

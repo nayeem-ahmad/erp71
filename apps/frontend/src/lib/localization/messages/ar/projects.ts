@@ -465,6 +465,35 @@ export const projectsMessages = {
             subtasks: "{count} مهمة فرعية",
             unassigned: "غير مسندة",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "المظهر",
+            reset: "إعادة الضبط",
+            cardSize: "حجم البطاقة",
+            comfortable: "مريح",
+            compact: "مضغوط",
+            columnWidth: "عرض العمود",
+            narrow: "ضيق",
+            standard: "قياسي",
+            wide: "عريض",
+            columnColor: "لون العمود",
+            tintNone: "بسيط",
+            tintCategory: "حسب المرحلة",
+            motion: "الحركة",
+            motionHint: "تستقر البطاقات والأعمدة في أماكنها بهدوء. يُتجاهل ذلك إذا طلب جهازك تقليل الحركة.",
+            showOnCards: "العرض على البطاقات",
+            fields: {
+                cover: "الشريط",
+                labels: "التسميات",
+                project: "المشروع",
+                badges: "الاستحقاق والأولوية",
+                details: "التفاصيل",
+                assignee: "المسؤول",
+            },
+        },
     },
 
     sprint: {

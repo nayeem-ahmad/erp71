@@ -465,6 +465,35 @@ export const projectsMessages = {
             subtasks: '{count} sub-tugasan',
             unassigned: 'Tiada penerima',
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: 'Rupa',
+            reset: 'Set semula',
+            cardSize: 'Saiz kad',
+            comfortable: 'Selesa',
+            compact: 'Padat',
+            columnWidth: 'Lebar lajur',
+            narrow: 'Sempit',
+            standard: 'Standard',
+            wide: 'Lebar',
+            columnColor: 'Warna lajur',
+            tintNone: 'Biasa',
+            tintCategory: 'Ikut peringkat',
+            motion: 'Gerakan',
+            motionHint: 'Kad dan lajur turun ke tempatnya. Diabaikan apabila peranti anda meminta kurang gerakan.',
+            showOnCards: 'Papar pada kad',
+            fields: {
+                cover: 'Jalur kulit',
+                labels: 'Label',
+                project: 'Projek',
+                badges: 'Tarikh tamat & keutamaan',
+                details: 'Butiran',
+                assignee: 'Penerima tugasan',
+            },
+        },
     },
 
     sprint: {
