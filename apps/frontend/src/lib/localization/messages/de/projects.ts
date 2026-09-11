@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "Reststunden im Zeitverlauf",
+        chartNow: "jetzt",
+        chartUpNote: "Gestiegen — Arbeit ergänzt",
         history: "Verlauf der Reststunden",
         notePlaceholder: "z. B. Kunde hat zwei weitere Räume ergänzt",
         empty: "Noch keine Änderungen erfasst.",

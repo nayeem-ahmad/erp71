@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "الساعات المتبقية عبر الزمن",
+        chartNow: "الآن",
+        chartUpNote: "ارتفعت — أُضيف عمل",
         history: "سجل الساعات المتبقية",
         notePlaceholder: "مثل: أضاف العميل غرفتين أخريين",
         empty: "لم تُسجَّل تغييرات بعد.",

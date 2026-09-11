@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "وقت کے ساتھ باقی گھنٹے",
+        chartNow: "اب",
+        chartUpNote: "بڑھ گئے — کام شامل ہوا",
         history: "باقی گھنٹوں کی تاریخ",
         notePlaceholder: "مثلاً گاہک نے دو مزید کمرے شامل کر دیے",
         empty: "ابھی کوئی تبدیلی درج نہیں۔",

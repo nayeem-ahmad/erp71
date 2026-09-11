@@ -287,6 +287,9 @@ export const projectsMessages = {
     },
 
     remaining: {
+        chart: "Heures restantes dans le temps",
+        chartNow: "maintenant",
+        chartUpNote: "En hausse — travail ajouté",
         history: "Historique des heures restantes",
         notePlaceholder: "par ex. le client a ajouté deux pièces",
         empty: "Aucun changement enregistré pour le moment.",

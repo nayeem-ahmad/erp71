@@ -1,6 +1,6 @@
 # Project Management — Phase 4: task entry, and watching remaining hours move
 
-**Status:** proposed, nothing built
+**Status:** 4E and 4I shipped 2026-09-11; everything else proposed
 **Written:** 2026-09-11
 **Predecessors:** `project-management-phase-1.md`, `-phase-2.md`, `-phase-3.md`
 
@@ -34,6 +34,11 @@ Six findings. Each is a measurement, not an opinion.
 | 6 | `getTaskAttachments` | `:995` |
 | 7–10 | `getTaskComments`, `getTaskActivity`, `getTaskWatchers`, `getMe` | `:1128-1131` |
 
+*(Line numbers through Part 1 are as measured on 2026-09-11, before 4E. 4E moved
+most of them and took the mount cost from ten requests to eight — it removed the
+two the **reload** path was spending, which was the expensive one. The rest of
+the finding stands; 4F is what takes the mount cost down.)*
+
 Ten round trips to look at one card, on connections that in the target market
 are often a phone tethered over 3G. Six of them (#5–#10) feed sections that are
 below the fold and are not what the card was opened for.
@@ -57,19 +62,19 @@ Monday morning — is 4 writes and **16 wasted reads**, with the whole panel
 
 | Field | How it saves | Where |
 |---|---|---|
-| Title | click the heading → input → Enter or blur | `:692` |
-| Description | click a pencil → editor → **Save / Cancel buttons** | `:783` |
-| Estimate | type → blur or Enter | `:622` |
-| Status, assignee, dates | `<select>`/`<input>` → **on change** | `:317`, `:558`, `:1325` |
-| Labels, cover | click a chip → saves immediately | `:1397`, `:898` |
-| Hours + remaining | a real form with a Save button | `:227` |
+| Title | click the heading → input → Enter or blur | `:821` |
+| Description | click a pencil → editor → **Save / Cancel buttons** | `:911` |
+| Estimate | type → blur or Enter | `:752` |
+| Status, assignee, dates | `<select>`/`<input>` → **on change** | `:422`, `:688`, `:1452` |
+| Labels, cover | click a chip → saves immediately | `:1523`, `:1026` |
+| Hours + remaining | a real form with a Save button | `:327` |
 
 Nothing on screen tells you which field behaves which way, so the honest user
 strategy is "change one thing, wait, check it stuck, change the next" — which is
 exactly the rhythm that reads as cumbersome.
 
 Two of these fight the container: `TitleField` and `EstimateField` both call
-`event.stopPropagation()` on Escape (`:678`, `:768`) so `ModalShell` does not
+`event.stopPropagation()` on Escape (`:807`, `:896`) so `ModalShell` does not
 read it as "close the card" and take the edit with it. That is a symptom. A
 panel with one editing idiom has no such conflict.
 
@@ -93,9 +98,9 @@ dismissing two modals. Creating ten means doing that ten times — there is no
 
 ### 5. The most-used control is the seventh section down
 
-Order in the panel's main column: description (`:371`) → checklist (`:377`) →
-attachments (`:383`) → **log work** (`:386`) → time entries (`:454`) →
-remaining-hours history (`:484`) → activity (`:534`). All inside
+Order in the panel's main column: description (`:476`) → checklist (`:482`) →
+attachments (`:488`) → **log work** (`:491`) → time entries (`:559`) →
+remaining-hours history (`:589`) → activity (`:664`). All inside
 `max-h-[70vh] overflow-y-auto`.
 
 Logging an afternoon — the single most frequent write in the whole module —
@@ -169,14 +174,33 @@ That removes `TitleField`'s and `DescriptionSection`'s editing state machines,
 both `stopPropagation` hacks, and the "which field is this one?" tax on every
 edit.
 
-### 4E — Use the PATCH response
+### 4E — Use the PATCH response — **shipped 2026-09-11**
 
-`setTask(response)` instead of `await load()`. Four fewer requests per edit, and
-the field updates instantly instead of after a round trip with the panel
-disabled. Keep the parent-list refresh, but defer it to panel close.
+`setTask(response)` instead of `await load()`. The panel now has three tiers
+rather than one: `apply` puts the write's own response into state and fetches
+nothing; `applyWithLog` adds one request, for the two writes that can also move
+the remaining-hours log (a status crossing into or out of DONE, and an explicit
+re-estimate); `refresh` re-reads the card, and is left for the endpoints that
+answer with something other than a task — the checklist, and logging time, which
+answers with the entry it wrote.
 
-Cheapest item on this list by a wide margin — roughly a day, no new endpoints, no
-new strings.
+Three things worth recording:
+
+- **The fallback is load-bearing, not defensive dressing.** `apply` checks the
+  response really is a task before trusting it, because nothing in the type
+  system says `updateProjectTask` returns one. A response that is not a task
+  re-reads the card rather than blanking it — which is also what keeps the
+  existing 81 tests meaningful, since their `updateProjectTask` mock answers
+  `{}`.
+- **The label catalogue and the board's columns left the reload path entirely.**
+  They were being re-fetched after every saved field, and no edit made in this
+  panel can change either. They are now two effects that run once.
+- **`onChanged` fires on close, not per save** — on the board it meant
+  re-fetching every column because somebody fixed a typo in a title. The one
+  case that needed care is a blur-commit and a backdrop click being the same
+  gesture: the save then lands *after* the panel closed, so a late write fires
+  `onChanged` itself rather than losing the change. There is a test for exactly
+  that race.
 
 ### 4F — Reorder around frequency, and load the tail lazily
 
@@ -184,7 +208,7 @@ Main column, top to bottom: title · status · assignee · **work row** ·
 description · checklist. Then attachments, time entries, remaining history and
 activity as **collapsed sections with counts**, fetched when opened.
 
-That alone takes opening a card from ten requests to three.
+With 4E done, that takes opening a card from eight requests to three.
 
 ### 4G — The work row, and a timer on the card
 
@@ -205,7 +229,7 @@ date behind a row menu. Most edits then never open the panel at all.
 
 Four candidates, cheapest first. The first one is the recommendation.
 
-### 4I — In the task panel, above the history list ✅ start here
+### 4I — In the task panel, above the history list — **shipped 2026-09-11**
 
 **Zero backend work. The data is already in the browser.**
 
@@ -240,8 +264,39 @@ One caveat to fix while there: `remainingHistory` is an unbounded `findMany`
 (`remaining-hours.service.ts:98`). A long-running task returns every row it ever
 had, to draw a chart 720px wide. Cap it, or aggregate to one point per day.
 
-Roughly 100 lines of SVG modelled on `BurndownChart`, plus legend strings in
-nine catalogs.
+**What shipped.** `components/projects/RemainingHoursChart.tsx`, drawn above the
+history list inside the same section — so the list is both the audit detail and
+the chart's table view, and no figure is reachable only by hovering a dot. The
+query is capped at 500 rows, newest first, so truncation takes the recent shape
+rather than the first 500 rows of a task nobody has touched.
+
+Four things the build turned up that the proposal had not thought through:
+
+- **A step must not emit a segment that goes nowhere.** Carrying the last value
+  forward to "now" adds a reading at the same height, and the naive
+  run-then-jump loop then draws a zero-length vertical. Each half is now emitted
+  only if it moves.
+- **A task created with 16h on it has a positive delta and is not scope growth.**
+  The amber mark means the figure grew *after* there was one, so it keys on
+  `previous_hours != null && delta > 0` rather than on the delta alone. The
+  tooltip stopped saying "0h → 16h" for the same reason — there was nothing
+  there to come from.
+- **Two direct labels is one too many.** The opening figure is by construction
+  the top of the scale, so labelling it put two numbers a few pixels apart
+  saying the same thing. One label, on the value the chart is read for.
+- **A legend entry for a colour the chart is not wearing.** The amber key now
+  renders only when a mark is actually amber, the way the estimate key already
+  behaved.
+
+The palette was checked rather than eyeballed: blue-600 against amber-600 passes
+lightness band, chroma floor, CVD separation (ΔE 32.3 protan / 29.3 tritan),
+normal-vision separation, and 3:1 contrast against the surface. amber-**500**
+fails that last check, which is why the mark is amber-600 — which is also what
+the history list beneath it already uses for an upward row.
+
+Per `docs/rtl-guidelines.md`, the plot carries `dir="ltr"`: a chart axis
+describes something physical rather than reading order, so time runs left to
+right in Arabic and Urdu too.
 
 ### 4J — Project burndown on `/projects/[id]`
 
@@ -332,8 +387,8 @@ than it informs.
 
 | Order | Item | Why here |
 |---|---|---|
-| 1 | **4E** | One day. Cuts four requests per edit and makes every field feel instant. No design decisions, no new strings. |
-| 2 | **4I** | The chart, using data already fetched. Self-contained, no backend, visible immediately. |
+| 1 | **4E** | **shipped 2026-09-11.** Cuts four requests per edit and makes every field feel instant. No design decisions, no new strings. |
+| 2 | **4I** | **shipped 2026-09-11.** The chart, using data already fetched. Self-contained, visible immediately. |
 | 3 | **4A + 4C** | The create path, and the workaround it lets us delete. Biggest felt change to entry. |
 | 4 | **4F** | Ten requests → three, and the work row rises above the fold. |
 | 5 | **4D** | One editing idiom. Largest diff of the phase; do it once the panel's section order has settled. |
@@ -342,5 +397,6 @@ than it informs.
 | 8 | **4H** | Inline row editing. |
 | 9 | **4L** | Sparkline in the list, once 4I has proven the shape. |
 
-Items 1 and 2 are independent of everything else and of each other. If the
-appetite is one afternoon rather than a phase, do those two.
+Items 1 and 2 were independent of everything else and of each other, and are
+done. The next cheapest is **4A + 4C** — the create path, and the workaround it
+lets us delete.
