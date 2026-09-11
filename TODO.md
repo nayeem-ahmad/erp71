@@ -1155,6 +1155,29 @@ Spec: `docs/superpowers/specs/2026-08-09-cross-project-boards-design.md`. The fe
 - [ ] **Chat attachments are not scanned.** `ChatAttachmentsService` checks MIME type and size and nothing else, so a PDF carrying anything at all is stored and served from Cloudinary to every participant. Same exposure the project-attachment path already has — worth solving once, for both.
 - [ ] **A group whose members all leave is never cleaned up.** `removeParticipant` promotes the longest-standing member when the last admin goes, but when the last *member* leaves the conversation row and its messages stay with no live participant, unreachable by anyone and counted by nothing. Harmless today; it is a row that can never be read or deleted through any API.
 
+### Per-user record scope in Projects — "own records only" (gap confirmed 2026-09-11)
+
+Asked for by a tenant admin: give one user one module, one project, and only their own rows — their tasks, their hour logs. The first two work today; the third does not exist.
+
+**What already works.** Module access is a role holding `VIEW_PROJECTS` + `MANAGE_PROJECT_TASKS` + `LOG_PROJECT_TIME` (the seeded `project_user` template), materialized per branch by `syncMemberPermissionsFromRoles` (`apps/backend/src/team/role-sync.util.ts:27`) and enforced by `StorePermissionGuard`. A single project is `visibility = PRIVATE` + a `ProjectMember` row with `VIEW_ALL_PROJECTS` withheld — `ProjectAccessService` then filters the project and everything hanging off it. Because a member's access is the *union* of their roles, the narrow role has to be their only one, and OWNER bypasses all of it.
+
+**What does not.** Inside a project they can see, a Project User reads and writes everyone's rows:
+
+- `/projects/tasks` filters by project, never by assignee (`apps/backend/src/projects/project-tasks.service.ts:100`), and its facet counts group by assignee across every visible project (`:149`) — so teammates' names and open-task counts are in the filter bar.
+- `/projects/hour-logs` treats `userId` as an optional filter the user can clear (`project-time.service.ts:237`, filter at `:216`); the report's by-user grouping (`:752`, `:913-940`, `:989`) and `GET /project-time/people` (`:916`) return the whole roster's hours.
+- Write side is the sharper half: `PATCH`/`DELETE /project-time/:id` require only `LOG_PROJECT_TIME` and scope by project visibility alone (`project-time.service.ts:519`, `:605`), so anyone on a shared project can edit or delete a teammate's hour log. Same for tasks under `MANAGE_PROJECT_TASKS`.
+- `project_user`'s own description already promises "their tasks and their time log", so this is unmet documented intent rather than a new idea.
+
+**Shape to build — one switch at the existing choke point,** not a flag per surface. When a member is narrow: `projectFilter` drops its `{ visibility: 'PUBLIC' }` branch (member-only projects, whatever the tenant's default visibility is), task reads gain `assignee_id = me OR assignee_employee_id = my employee OR created_by = me` (creator included, or a task they raise vanishes before it is assigned), and time reads gain `user_id = me`. Every read path in the module already goes through `ProjectAccessService.projectFilter`/`relatedFilter` (10 services, ~20 call sites), so the filter has exactly one home and each service already has a spec file to extend.
+
+**Decision to take first — where the switch lives.** A *restrictive* `StorePermission` cannot work: effective access is the union of a member's roles (`role-sync.util.ts`), and a union adds but never subtracts, so holding a second role would have to un-restrict them. Two shapes survive that:
+
+- **`record_scope` (`ALL | OWN`, default `ALL`) on `TenantRole`** — narrow only when *every* role a member holds says `OWN` (widest wins). No backfill, no deploy-day behaviour change for existing tenants, and it reads as one radio in the role editor. Costs a column plus either a request-time read of the member's roles or a materialized flag on `TenantUser` written by `syncMemberPermissionsFromRoles`, which already computes the per-member union. **Recommended.**
+- **A broadening `VIEW_TEAM_PROJECT_RECORDS` permission**, narrow by absence, mirroring `VIEW_ALL_PROJECTS`. Cheaper — no schema change, rides the existing permission matrix and the per-branch override endpoint — but it flips the default for every existing tenant, so it needs a backfill onto every role holding `VIEW_PROJECTS` including hand-written ones, and that script is exactly the trap `sync-role-permissions.ts` documents: once an admin deliberately narrows a role, the next boot re-widens it.
+
+Either way, two calls to make with it: sprint burndown and project rollups should be **hidden** from a narrow viewer rather than recomputed over their own rows (a self-only burndown is misleading, not private — the same call `docs/projects/project-visibility.md` already makes for private projects), and the frontend gates the assignee/person filters, the group-by-person views and the assignee picker on the same flag. Related: **`ProjectMemberRole` still gates nothing** (above) is the same family of decision — withhold-only — and is worth taking in the same pass.
+
+
 ---
 
 ## COMPLETED
