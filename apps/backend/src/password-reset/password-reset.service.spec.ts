@@ -5,6 +5,8 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { AuditService } from '../audit/audit.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
+import { DEFAULT_PASSWORD_POLICY } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 
@@ -14,6 +16,8 @@ jest.mock('bcrypt', () => ({
 
 const db = {
     user: { findUnique: jest.fn(), update: jest.fn() },
+    // Read by PasswordPolicyService.getForUser when a reset lands.
+    tenantUser: { findMany: jest.fn() },
     referee: { findFirst: jest.fn() },
     passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
     emailVerificationToken: { deleteMany: jest.fn() },
@@ -42,6 +46,7 @@ describe('PasswordResetService', () => {
         });
         db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
         db.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+        db.tenantUser.findMany.mockResolvedValue([]);
         const mod = await Test.createTestingModule({
             providers: [
                 PasswordResetService,
@@ -49,6 +54,9 @@ describe('PasswordResetService', () => {
                 { provide: EmailService, useValue: emailService },
                 { provide: SmsService, useValue: smsService },
                 { provide: AuditService, useValue: auditService },
+                // The real service over the same db mock, so a reset is checked
+                // against the workspace policy rather than waved through.
+                PasswordPolicyService,
             ],
         }).compile();
         service = mod.get(PasswordResetService);
@@ -224,6 +232,7 @@ describe('PasswordResetService', () => {
                 used: false,
                 purpose: 'REFEREE_INVITE',
                 canResend: true,
+                passwordPolicy: DEFAULT_PASSWORD_POLICY,
             });
         });
 
@@ -261,6 +270,10 @@ describe('PasswordResetService', () => {
                 used: false,
                 purpose: null,
                 canResend: false,
+                // No token means nobody to resolve a policy for. Inventing one
+                // would make the endpoint hint at whether an unknown token
+                // belongs to a strict workspace.
+                passwordPolicy: null,
             });
         });
     });

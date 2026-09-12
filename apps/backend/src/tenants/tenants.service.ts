@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
-import { isDashboardPreference } from '@erp71/shared-types';
+import { isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -8,6 +8,12 @@ import { isValidTimeZone } from '../common/tenant-time.util';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
+import {
+    PASSWORD_POLICY_SELECT,
+    columnsFromPolicy,
+    policyFromColumns,
+} from '../password-policy/password-policy.columns';
+import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 
 @Injectable()
@@ -268,6 +274,69 @@ export class TenantsService {
         });
 
         return { dashboard_preference: tenant.dashboard_preference };
+    }
+
+    /**
+     * The workspace's password rules, readable by any member.
+     *
+     * Not gated on the admin roles the PATCH is: the change-password form shows
+     * every member the rules they have to satisfy, and a rule you are held to but
+     * may not read is just a form that keeps saying no.
+     */
+    async getPasswordPolicy(tenantId: string): Promise<PasswordPolicy> {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: PASSWORD_POLICY_SELECT,
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        return policyFromColumns(tenant);
+    }
+
+    /**
+     * Workspace-wide, so it is restricted to the roles that administer the
+     * workspace — the same OWNER/MANAGER gate the dashboard preference uses.
+     * "Tenant Admin" resolves to MANAGER, so a workspace's admin can set this
+     * without the owner.
+     *
+     * Tightening the policy never invalidates a password anyone already has, and
+     * never signs anybody out: it applies the next time someone *sets* one. That
+     * is a deliberate choice — a workspace that turned on a symbol requirement at
+     * 11pm should not lock out every cashier mid-shift. The settings page says so
+     * in as many words.
+     */
+    async updatePasswordPolicy(
+        tenantId: string,
+        dto: UpdatePasswordPolicyDto,
+        userRole: string | undefined,
+    ): Promise<PasswordPolicy> {
+        if (userRole !== 'OWNER' && userRole !== 'MANAGER') {
+            throw new ForbiddenException('Only an owner or admin can change the password policy.');
+        }
+
+        const current = await this.getPasswordPolicy(tenantId);
+        // Normalized rather than trusted: the DTO bounds `min_length`, and this
+        // re-clamps whatever survives, so no path can write a policy the
+        // evaluator would have to second-guess.
+        const merged = normalizePasswordPolicy({
+            min_length: dto.min_length ?? current.min_length,
+            require_uppercase: dto.require_uppercase ?? current.require_uppercase,
+            require_lowercase: dto.require_lowercase ?? current.require_lowercase,
+            require_number: dto.require_number ?? current.require_number,
+            require_symbol: dto.require_symbol ?? current.require_symbol,
+            block_common: dto.block_common ?? current.block_common,
+        });
+
+        const tenant = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: columnsFromPolicy(merged),
+            select: PASSWORD_POLICY_SELECT,
+        });
+
+        return policyFromColumns(tenant);
     }
 
     async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {

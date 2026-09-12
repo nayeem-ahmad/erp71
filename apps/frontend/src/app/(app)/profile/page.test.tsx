@@ -16,6 +16,15 @@ jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn(),
         updateProfileAvatar: jest.fn(),
+        // The password tab renders the workspace's rules as a live checklist.
+        getTenantPasswordPolicy: jest.fn().mockResolvedValue({
+            min_length: 8,
+            require_uppercase: false,
+            require_lowercase: false,
+            require_number: false,
+            require_symbol: false,
+            block_common: true,
+        }),
     },
     fetchWithAuth: jest.fn(),
 }));
@@ -183,7 +192,7 @@ describe('ProfilePage', () => {
         });
     });
 
-    it('shows error when new password is too short', async () => {
+    it('shows error when the new password does not satisfy the policy', async () => {
         renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
@@ -198,7 +207,7 @@ describe('ProfilePage', () => {
         fireEvent.change(screen.getByPlaceholderText('Enter current password'), {
             target: { value: 'OldPass123' },
         });
-        fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
+        fireEvent.change(screen.getByPlaceholderText('Choose a new password'), {
             target: { value: 'short' },
         });
         fireEvent.change(screen.getByPlaceholderText('Repeat new password'), {
@@ -208,7 +217,9 @@ describe('ProfilePage', () => {
         fireEvent.click(screen.getByRole('button', { name: /change password/i }));
 
         await waitFor(() => {
-            expect(screen.getByText('New password must be at least 8 characters.')).toBeInTheDocument();
+            expect(
+                screen.getByText('Your password does not meet all the requirements listed below.'),
+            ).toBeInTheDocument();
         });
     });
 
@@ -227,7 +238,7 @@ describe('ProfilePage', () => {
         fireEvent.change(screen.getByPlaceholderText('Enter current password'), {
             target: { value: 'OldPass123' },
         });
-        fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
+        fireEvent.change(screen.getByPlaceholderText('Choose a new password'), {
             target: { value: 'NewPass123' },
         });
         fireEvent.change(screen.getByPlaceholderText('Repeat new password'), {
@@ -256,7 +267,7 @@ describe('ProfilePage', () => {
         fireEvent.change(screen.getByPlaceholderText('Enter current password'), {
             target: { value: 'SamePass123' },
         });
-        fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
+        fireEvent.change(screen.getByPlaceholderText('Choose a new password'), {
             target: { value: 'SamePass123' },
         });
         fireEvent.change(screen.getByPlaceholderText('Repeat new password'), {

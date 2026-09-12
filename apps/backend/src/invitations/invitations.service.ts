@@ -7,7 +7,9 @@ import {
     normalizeMobileToE164,
     DEFAULT_MOBILE_COUNTRY_CODE,
     resolveStrongestBaseUserRole,
+    type PasswordPolicy,
 } from '@erp71/shared-types';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { setMemberRoles } from '../team/role-sync.util';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -23,6 +25,7 @@ export class InvitationsService {
         private db: DatabaseService,
         private email: EmailService,
         private planEntitlements: PlanEntitlementsService,
+        private passwordPolicy: PasswordPolicyService,
     ) {}
 
     async getInfo(
@@ -34,6 +37,14 @@ export class InvitationsService {
         roleNames: string[];
         expiresAt: Date;
         hasAccount: boolean;
+        /**
+         * What the password on the create-account half of the page has to
+         * satisfy, so it can show the rules up front rather than after a
+         * rejected submit. The token is already the secret here, and it names
+         * the workspace, so describing its policy leaks nothing its holder does
+         * not have.
+         */
+        passwordPolicy: PasswordPolicy;
     }> {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const invitation = await this.db.userInvitation.findUnique({
@@ -68,6 +79,7 @@ export class InvitationsService {
             roleNames: roleNames.length > 0 ? roleNames : [invitation.tenantRole.name],
             expiresAt: invitation.expires_at,
             hasAccount: Boolean(existingUser),
+            passwordPolicy: await this.passwordPolicy.getForTenant(invitation.tenant_id),
         };
     }
 
@@ -433,6 +445,11 @@ export class InvitationsService {
                 'This mobile number is already linked to another account. Use a different number to accept this invitation.',
             );
         }
+
+        // The inviting workspace's policy, not the invitee's — they are not a
+        // member of anything yet, and this password is being set to join *this*
+        // workspace.
+        await this.passwordPolicy.assertValidForTenant(password, invitation.tenant_id);
 
         const passwordHash = await bcrypt.hash(password, 10);
 

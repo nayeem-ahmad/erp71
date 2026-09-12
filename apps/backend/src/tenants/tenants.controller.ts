@@ -6,6 +6,7 @@ import { StorefrontSettingsDto, UploadStorefrontImageDto } from '../storefront/s
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
+import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -122,6 +123,23 @@ export class TenantsController {
         @Body() dto: UpdateDashboardSettingsDto,
     ) {
         return this.tenantsService.updateDashboardSettings(tenant.tenantId, dto, tenant.userRole);
+    }
+
+    /**
+     * Readable by every member: the change-password form renders the rules it is
+     * about to enforce. Only the PATCH is admin-gated.
+     */
+    @Get('password-policy')
+    async getPasswordPolicy(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getPasswordPolicy(tenant.tenantId);
+    }
+
+    @Patch('password-policy')
+    async updatePasswordPolicy(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdatePasswordPolicyDto,
+    ) {
+        return this.tenantsService.updatePasswordPolicy(tenant.tenantId, dto, tenant.userRole);
     }
 
     @Delete('data')
