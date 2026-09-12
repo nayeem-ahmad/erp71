@@ -29,7 +29,12 @@ export type PostingEventType =
     // rules engine, so they have no PostingRule rows and never will.
     | 'import_cost'
     | 'import_receipt'
-    | 'import_settlement';
+    | 'import_settlement'
+    // The platform's own books (PlatformAccountingService). Like the imports
+    // above, both post through postMultiLeg with accounts fixed by the platform
+    // chart of accounts, so neither has a PostingRule and neither ever will.
+    | 'platform_billing'
+    | 'platform_expense';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -148,6 +153,14 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     import_cost: VoucherType.JOURNAL,
     import_receipt: VoucherType.JOURNAL,
     import_settlement: VoucherType.JOURNAL,
+    // Also postMultiLeg-only, so also never read from this table. Both are
+    // listed for the same reason the imports are — the Record is exhaustive so
+    // that the next event type has to declare its voucher — and both carry the
+    // value postMultiLeg falls back to when the caller passes no voucherType.
+    // In practice the platform always passes one, picked from whether the entry
+    // moved cash; see PlatformAccountingService.resolveVoucherType.
+    platform_billing: VoucherType.JOURNAL,
+    platform_expense: VoucherType.JOURNAL,
 };
 
 function resolveVoucherType(

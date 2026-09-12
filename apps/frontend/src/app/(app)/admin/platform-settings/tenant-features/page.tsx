@@ -20,6 +20,7 @@ type FeatureSettings = {
     external_import_enabled: string;
     projects_enabled: string;
     platform_projects_enabled: string;
+    platform_accounting_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -32,13 +33,14 @@ const DEFAULTS: FeatureSettings = {
     external_import_enabled: 'false',
     projects_enabled: 'false',
     platform_projects_enabled: 'true',
+    platform_accounting_enabled: 'true',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects' | 'platformProjects';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects' | 'platformProjects' | 'platformAccounting';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
@@ -52,6 +54,7 @@ const FEATURE_TOGGLES: Array<{
     // workspace in the admin console. It lives here because this page is where
     // every platform feature switch is, not because tenants are affected by it.
     { key: 'platform_projects_enabled', labelKey: 'platformProjects' },
+    { key: 'platform_accounting_enabled', labelKey: 'platformAccounting' },
 ];
 
 function FeatureSwitch({
@@ -105,6 +108,7 @@ export default function PlatformTenantFeaturesPage() {
                     external_import_enabled: d.external_import_enabled ?? DEFAULTS.external_import_enabled,
                     projects_enabled: d.projects_enabled ?? DEFAULTS.projects_enabled,
                     platform_projects_enabled: d.platform_projects_enabled ?? DEFAULTS.platform_projects_enabled,
+                    platform_accounting_enabled: d.platform_accounting_enabled ?? DEFAULTS.platform_accounting_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))

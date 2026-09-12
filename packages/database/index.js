@@ -1,5 +1,6 @@
 const prisma = require('@prisma/client');
 const accounting = require('./prisma/bootstrap-accounting.js');
+const platformAccounting = require('./prisma/platform-accounting.js');
 const accountCode = require('./prisma/account-code.js');
 const tenantRoles = require('./prisma/tenant-role.seed.js');
 const paymentMethods = require('./prisma/payment-method.seed.js');
@@ -10,10 +11,12 @@ const seedTemplate = require('./prisma/templates/seed-template.js');
 module.exports = {
     ...prisma,
     ...accountCode,
+    applyAccountingTemplate: accounting.applyAccountingTemplate,
     bootstrapDefaultAccountingForTenant: accounting.bootstrapDefaultAccountingForTenant,
     ensureInterBranchAccounts: accounting.ensureInterBranchAccounts,
     DEFAULT_ACCOUNTING_TEMPLATE: accounting.DEFAULT_ACCOUNTING_TEMPLATE,
     DEFAULT_POSTING_RULES: accounting.DEFAULT_POSTING_RULES,
+    ...platformAccounting,
     ...tenantRoles,
     ...paymentMethods,
     ...leadTaxonomy,
