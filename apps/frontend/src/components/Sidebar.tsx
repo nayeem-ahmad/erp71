@@ -156,6 +156,7 @@ export default function Sidebar({
     canAccessPremiumCrm = false,
     canAccessManufacturing = false,
     canAccessProjects = false,
+    canAccessPlatformAccounting = false,
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
@@ -179,6 +180,8 @@ export default function Sidebar({
     canAccessPremiumCrm?: boolean;
     canAccessManufacturing?: boolean;
     canAccessProjects?: boolean;
+    /** The platform's own books in the admin console — its own platform switch. */
+    canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
@@ -334,6 +337,21 @@ export default function Sidebar({
                     };
                 }
 
+                // The admin console carries one subgroup behind a platform
+                // switch. Filtered here rather than by the generic entitlement
+                // path, which reads a tenant's plan — the platform has none.
+                if (module.key === 'admin' && !canAccessPlatformAccounting) {
+                    return {
+                        ...module,
+                        children: module.children.filter(
+                            // `key` is the registry id's last segment — see
+                            // buildNavModulesFromLayout — so this matches the
+                            // `admin.platform-accounting` subgroup.
+                            (child) => !(isNavSubgroup(child) && child.key === 'platform-accounting'),
+                        ),
+                    };
+                }
+
                 if (['sales', 'purchase', 'imports', 'inventory', 'accounting'].includes(module.key)) {
                     const filteredChildren = filterModuleNavChildren(
                         module.children,
@@ -382,6 +400,7 @@ export default function Sidebar({
         canAccessPremiumCrm,
         canAccessManufacturing,
         canAccessProjects,
+        canAccessPlatformAccounting,
         canAccessAdmin,
         canManageBilling,
         canManageTeam,

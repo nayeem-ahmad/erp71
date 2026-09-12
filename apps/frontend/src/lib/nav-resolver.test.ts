@@ -207,6 +207,7 @@ describe('nav-resolver', () => {
         expect((admin?.children ?? []).map((child) => child.label)).toEqual([
             'Overview',
             'Tenant Management',
+            'Platform Accounting',
             'Inbox',
             'Growth',
             'Plans & billing',
@@ -226,6 +227,14 @@ describe('nav-resolver', () => {
             '/admin/tenants',
             '/admin/tenants/ledger',
             '/admin/tenants/reminders',
+        ]);
+        // The platform's own books sit next to the tenant ledger they are
+        // projected from, rather than under Platform with the settings pages.
+        expect(hrefsUnder('Platform Accounting')).toEqual([
+            '/admin/accounting',
+            '/admin/accounting/expenses',
+            '/admin/accounting/ledger',
+            '/admin/accounting/reports',
         ]);
         expect(hrefsUnder('Inbox')).toEqual([
             '/admin/support',
