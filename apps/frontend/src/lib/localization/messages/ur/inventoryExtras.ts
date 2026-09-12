@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "منتقلی بنانے میں ناکامی۔",
         "emptyMessage": "ابھی گوداموں کی کوئی منتقلی درج نہیں",
         "searchPlaceholder": "منتقلیاں تلاش کریں...",
+        "unknownBranch": "غیر متعین شاخ",
+        "allScopes": "تمام شاخیں",
+        "crossBranchOnly": "شاخوں کے درمیان",
+        "withinBranchOnly": "ایک شاخ کے اندر",
+        "withinBranch": "وہی شاخ",
+        "crossBranchNotice": "یہ منتقلی شاخوں کے درمیان ہے، اس لیے یہ منظوری کی منتظر رہے گی — منظوری ملنے تک ماخذ گودام سے کوئی اسٹاک نہیں جائے گا۔",
         "columns": {
             "transferNumber": "منتقلی نمبر",
             "source": "ماخذ",
             "destination": "منزل",
+            "branch": "شاخ",
             "outstanding": "باقی",
             "created": "بنایا گیا",
             "voucher": "واؤچر"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "مسودہ",
             "sent": "بھیجی گئی",
             "partiallyReceived": "جزوی وصول شدہ",
-            "received": "وصول شدہ"
+            "received": "وصول شدہ",
+            "pendingApproval": "منظوری کا منتظر",
+            "rejected": "مسترد"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "اسٹاک وصول کریں",
         "transferSent": "منتقلی منزل گودام کو بھیج دی گئی۔",
         "sendFailed": "منتقلی بھیجنے میں ناکامی۔",
+        "submitForApproval": "منظوری کے لیے بھیجیں",
+        "approveTransfer": "منظور کریں",
+        "rejectTransfer": "مسترد کریں",
+        "transferApproved": "منتقلی منظور ہو گئی — اسٹاک ماخذ گودام سے نکل چکا ہے۔",
+        "approveFailed": "منتقلی منظور نہیں ہو سکی۔",
+        "transferRejected": "منتقلی مسترد کر دی گئی۔",
+        "rejectFailed": "منتقلی مسترد نہیں ہو سکی۔",
+        "awaitingApprovalNotice": "منظوری کا انتظار ہے۔ اسٹاک ابھی ماخذ شاخ میں ہی ہے اور منظوری تک نہیں ہٹے گا۔",
+        "rejectedNotice": "یہ منتقلی مسترد ہوئی، اس لیے کوئی اسٹاک نہیں ہٹا۔",
+        "rejectionReasonLabel": "مسترد کرنے کی وجہ",
+        "rejectionReasonPlaceholder": "درخواست کنندہ کو وجہ بتائیں تاکہ وہ جانیں کیا بدلنا ہے",
+        "confirmRejection": "مسترد کرنے کی تصدیق کریں",
+        "scope": "دائرہ",
+        "crossBranch": "شاخوں کے درمیان",
+        "withinBranch": "ایک شاخ کے اندر",
         "receiptRecorded": "منتقلی کی وصولی درج ہو گئی۔",
         "receiveFailed": "منتقلی وصول کرنے میں ناکامی۔",
         "transferLines": "منتقلی کی سطریں",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "منتقلی کی ٹائم لائن",
         "timeline": {
             "created": "بنایا گیا",
+            "awaitingApproval": "منظوری کا انتظار",
+            "approved": "منظور شدہ",
+            "rejected": "مسترد",
             "sent": "بھیجا گیا",
             "partiallyReceived": "جزوی وصول شدہ",
             "completed": "مکمل"

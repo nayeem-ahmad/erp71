@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "تعذّر إنشاء التحويل.",
         "emptyMessage": "لم تُسجَّل تحويلات مستودعات بعد",
         "searchPlaceholder": "ابحث في التحويلات...",
+        "unknownBranch": "فرع غير مُعيَّن",
+        "allScopes": "كل الفروع",
+        "crossBranchOnly": "بين الفروع",
+        "withinBranchOnly": "داخل فرع واحد",
+        "withinBranch": "نفس الفرع",
+        "crossBranchNotice": "هذا التحويل يتجاوز الفروع، لذا ينتظر الموافقة — لا يخرج أي مخزون من المستودع المصدر حتى يُصرِّح به من يملك حق الموافقة.",
         "columns": {
             "transferNumber": "رقم التحويل",
             "source": "المصدر",
             "destination": "الوجهة",
+            "branch": "الفرع",
             "outstanding": "المتبقي",
             "created": "تاريخ الإنشاء",
             "voucher": "القيد"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "مسودة",
             "sent": "مُرسل",
             "partiallyReceived": "مستلَم جزئيًا",
-            "received": "مستلَم"
+            "received": "مستلَم",
+            "pendingApproval": "في انتظار الموافقة",
+            "rejected": "مرفوض"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "استلام المخزون",
         "transferSent": "أُرسل التحويل إلى مستودع الوجهة.",
         "sendFailed": "تعذّر إرسال التحويل.",
+        "submitForApproval": "إرسال للموافقة",
+        "approveTransfer": "موافقة",
+        "rejectTransfer": "رفض",
+        "transferApproved": "تمت الموافقة على التحويل — خرج المخزون من المستودع المصدر.",
+        "approveFailed": "تعذَّرت الموافقة على التحويل.",
+        "transferRejected": "تم رفض التحويل.",
+        "rejectFailed": "تعذَّر رفض التحويل.",
+        "awaitingApprovalNotice": "في انتظار الموافقة. المخزون لا يزال في الفرع المصدر ولن يتحرك قبل الموافقة.",
+        "rejectedNotice": "تم رفض هذا التحويل، لذا لم يتحرك أي مخزون.",
+        "rejectionReasonLabel": "سبب الرفض",
+        "rejectionReasonPlaceholder": "اذكر السبب لمقدّم الطلب ليعرف ما يجب تغييره",
+        "confirmRejection": "تأكيد الرفض",
+        "scope": "النطاق",
+        "crossBranch": "بين الفروع",
+        "withinBranch": "داخل فرع واحد",
         "receiptRecorded": "تم تسجيل استلام التحويل.",
         "receiveFailed": "تعذّر استلام التحويل.",
         "transferLines": "أسطر التحويل",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "الخط الزمني للتحويل",
         "timeline": {
             "created": "أُنشئ",
+            "awaitingApproval": "في انتظار الموافقة",
+            "approved": "تمت الموافقة",
+            "rejected": "مرفوض",
             "sent": "أُرسل",
             "partiallyReceived": "استُلم جزئيًا",
             "completed": "اكتمل"
