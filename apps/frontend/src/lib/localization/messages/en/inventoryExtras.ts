@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "Failed to create transfer.",
         "emptyMessage": "No warehouse transfers recorded yet",
         "searchPlaceholder": "Search transfers...",
+        "unknownBranch": "Unassigned branch",
+        "allScopes": "All Branches",
+        "crossBranchOnly": "Between branches",
+        "withinBranchOnly": "Within one branch",
+        "withinBranch": "Same branch",
+        "crossBranchNotice": "This transfer crosses branches, so it waits for approval — no stock leaves the source until someone with approval rights releases it.",
         "columns": {
             "transferNumber": "Transfer #",
             "source": "Source",
             "destination": "Destination",
+            "branch": "Branch",
             "outstanding": "Outstanding",
             "created": "Created",
             "voucher": "Voucher"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Draft",
             "sent": "Sent",
             "partiallyReceived": "Partially Received",
-            "received": "Received"
+            "received": "Received",
+            "pendingApproval": "Pending Approval",
+            "rejected": "Rejected"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Receive Stock",
         "transferSent": "Transfer sent to destination warehouse.",
         "sendFailed": "Failed to send transfer.",
+        "submitForApproval": "Submit for Approval",
+        "approveTransfer": "Approve",
+        "rejectTransfer": "Reject",
+        "transferApproved": "Transfer approved — stock has left the source warehouse.",
+        "approveFailed": "Failed to approve transfer.",
+        "transferRejected": "Transfer rejected.",
+        "rejectFailed": "Failed to reject transfer.",
+        "awaitingApprovalNotice": "Waiting for approval. The stock is still at the source branch and will not move until this is approved.",
+        "rejectedNotice": "This transfer was rejected, so no stock moved.",
+        "rejectionReasonLabel": "Reason for rejection",
+        "rejectionReasonPlaceholder": "Tell the requester why, so they know what to change",
+        "confirmRejection": "Confirm Rejection",
+        "scope": "Scope",
+        "crossBranch": "Between branches",
+        "withinBranch": "Within one branch",
         "receiptRecorded": "Transfer receipt recorded.",
         "receiveFailed": "Failed to receive transfer.",
         "transferLines": "Transfer Lines",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Transfer Timeline",
         "timeline": {
             "created": "Created",
+            "awaitingApproval": "Awaiting approval",
+            "approved": "Approved",
+            "rejected": "Rejected",
             "sent": "Sent",
             "partiallyReceived": "Partially received",
             "completed": "Completed"

@@ -198,6 +198,24 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         ],
     },
     {
+        // Inventory > Transfers. `WarehouseTransfersController` was open to every
+        // authenticated member until cross-branch approval shipped — the two
+        // permissions existed in the matrix and were enforced by nothing — so
+        // without this backfill gating it would take transfers away from every
+        // manager and stock clerk in every tenant that predates the guard.
+        //
+        // Both in one group because they ship together and no existing role holds
+        // either. `ROLE_DEFAULT_PERMISSIONS` decides who gets what, and it gives
+        // the coarse Manager the create half only: approving a branch's stock out
+        // of another branch is a separate job, held by Owner and by the Inventory
+        // Manager template role.
+        key: 'goods-transfers',
+        permissions: [
+            StorePermission.CREATE_GOODS_TRANSFER,
+            StorePermission.APPROVE_GOODS_TRANSFER,
+        ],
+    },
+    {
         // Storefront pages and the shop's header menu. Its own group rather than
         // joining `blog`: that group has already reconciled onto every existing
         // role, so a permission added to it now would be skipped forever and

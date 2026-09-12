@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "स्थानांतरण नहीं बन सका।",
         "emptyMessage": "अभी कोई गोदाम स्थानांतरण दर्ज नहीं",
         "searchPlaceholder": "स्थानांतरण खोजें...",
+        "unknownBranch": "अनिर्धारित शाखा",
+        "allScopes": "सभी शाखाएँ",
+        "crossBranchOnly": "शाखाओं के बीच",
+        "withinBranchOnly": "एक शाखा के भीतर",
+        "withinBranch": "वही शाखा",
+        "crossBranchNotice": "यह स्थानांतरण शाखाओं के बीच है, इसलिए यह अनुमोदन की प्रतीक्षा करेगा — अनुमोदन मिलने तक स्रोत गोदाम से कोई स्टॉक नहीं जाएगा।",
         "columns": {
             "transferNumber": "स्थानांतरण #",
             "source": "स्रोत",
             "destination": "गंतव्य",
+            "branch": "शाखा",
             "outstanding": "बकाया",
             "created": "बनाया गया",
             "voucher": "वाउचर"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "ड्राफ़्ट",
             "sent": "भेजा गया",
             "partiallyReceived": "आंशिक रूप से प्राप्त",
-            "received": "प्राप्त"
+            "received": "प्राप्त",
+            "pendingApproval": "अनुमोदन प्रतीक्षित",
+            "rejected": "अस्वीकृत"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "स्टॉक प्राप्त करें",
         "transferSent": "स्थानांतरण गंतव्य गोदाम को भेजा गया।",
         "sendFailed": "स्थानांतरण भेजा नहीं जा सका।",
+        "submitForApproval": "अनुमोदन के लिए भेजें",
+        "approveTransfer": "अनुमोदित करें",
+        "rejectTransfer": "अस्वीकार करें",
+        "transferApproved": "स्थानांतरण अनुमोदित — स्टॉक स्रोत गोदाम से निकल गया है।",
+        "approveFailed": "स्थानांतरण अनुमोदित नहीं हो सका।",
+        "transferRejected": "स्थानांतरण अस्वीकृत।",
+        "rejectFailed": "स्थानांतरण अस्वीकार नहीं हो सका।",
+        "awaitingApprovalNotice": "अनुमोदन की प्रतीक्षा। स्टॉक अभी स्रोत शाखा में ही है और अनुमोदन तक नहीं हटेगा।",
+        "rejectedNotice": "यह स्थानांतरण अस्वीकृत हुआ, इसलिए कोई स्टॉक नहीं हटा।",
+        "rejectionReasonLabel": "अस्वीकृति का कारण",
+        "rejectionReasonPlaceholder": "अनुरोधकर्ता को कारण बताएं, ताकि उन्हें पता चले क्या बदलना है",
+        "confirmRejection": "अस्वीकृति की पुष्टि करें",
+        "scope": "दायरा",
+        "crossBranch": "शाखाओं के बीच",
+        "withinBranch": "एक शाखा के भीतर",
         "receiptRecorded": "स्थानांतरण प्राप्ति दर्ज हुई।",
         "receiveFailed": "स्थानांतरण प्राप्त नहीं हो सका।",
         "transferLines": "स्थानांतरण लाइनें",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "स्थानांतरण समयरेखा",
         "timeline": {
             "created": "बनाया गया",
+            "awaitingApproval": "अनुमोदन प्रतीक्षित",
+            "approved": "अनुमोदित",
+            "rejected": "अस्वीकृत",
             "sent": "भेजा गया",
             "partiallyReceived": "आंशिक रूप से प्राप्त",
             "completed": "पूर्ण"

@@ -1679,6 +1679,10 @@ model WarehouseTransfer {
   transfer_number          String
   source_warehouse_id      String
   destination_warehouse_id String
+  /// DRAFT | PENDING_APPROVAL | SENT | PARTIALLY_RECEIVED | RECEIVED | REJECTED.
+  /// PENDING_APPROVAL is where a cross-branch transfer waits, and it holds the
+  /// stock at the source: nothing moves until someone with
+  /// APPROVE_GOODS_TRANSFER approves it. REJECTED is terminal.
   status                   String    @default("DRAFT")
   notes                    String?
   sent_at                  DateTime?
@@ -1686,13 +1690,35 @@ model WarehouseTransfer {
   created_at               DateTime  @default(now())
   updated_at               DateTime  @updatedAt
 
-  // Cross-branch fields
+  /// The branches the two warehouses belong to, stamped at creation rather than
+  /// joined through `Warehouse` on every read: a branch-level transfer report is
+  /// the common query, and `Warehouse.store_id` is immutable (there is no API
+  /// that moves a warehouse between branches), so the copy cannot go stale.
   source_store_id      String?
   destination_store_id String?
+  /// True when the two warehouses sit in different branches. **Derived, never
+  /// client-supplied** — `create` compares the two warehouses' `store_id`, so a
+  /// caller cannot clear the flag to escape the approval step below.
   is_cross_branch      Boolean   @default(false)
+  /// Whether this transfer must be approved before stock leaves the source.
+  /// Snapshotted at creation from `is_cross_branch` rather than re-derived at
+  /// send time, so the rule a transfer was raised under stays recorded on the
+  /// transfer even if the rule itself later changes.
   requires_approval    Boolean   @default(false)
+  /// Set only when a transfer is actually approved — a rejection records itself
+  /// in the three columns below instead, so the row says which way the decision
+  /// went without having to read `status` to find out.
+  ///
+  /// User ids, not relations, matching how the rest of this schema records
+  /// actors (see `ProductDemand.reviewed_by`): a deleted user must not take the
+  /// transfer history with them.
   approved_by          String?
   approval_date        DateTime?
+  rejected_by          String?
+  rejected_at          DateTime?
+  /// Why the approver turned it down. The requester is the person who has to act
+  /// on a rejection, and a bare status tells them nothing.
+  rejection_reason     String?
 
   tenant               Tenant                  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   sourceWarehouse      Warehouse               @relation("TransferSourceWarehouse", fields: [source_warehouse_id], references: [id])

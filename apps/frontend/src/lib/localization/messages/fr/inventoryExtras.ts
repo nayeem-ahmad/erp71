@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "Impossible de créer le transfert.",
         "emptyMessage": "Aucun transfert entre entrepôts enregistré pour le moment",
         "searchPlaceholder": "Rechercher des transferts...",
+        "unknownBranch": "Succursale non attribuée",
+        "allScopes": "Toutes les succursales",
+        "crossBranchOnly": "Entre succursales",
+        "withinBranchOnly": "Au sein d’une succursale",
+        "withinBranch": "Même succursale",
+        "crossBranchNotice": "Ce transfert franchit les succursales et attend donc une approbation : aucun stock ne quitte l’entrepôt source avant qu’une personne habilitée ne le libère.",
         "columns": {
             "transferNumber": "N° de transfert",
             "source": "Source",
             "destination": "Destination",
+            "branch": "Succursale",
             "outstanding": "En attente",
             "created": "Créé le",
             "voucher": "Écriture"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Brouillon",
             "sent": "Envoyé",
             "partiallyReceived": "Partiellement reçu",
-            "received": "Reçu"
+            "received": "Reçu",
+            "pendingApproval": "En attente d’approbation",
+            "rejected": "Refusé"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Réceptionner le stock",
         "transferSent": "Transfert envoyé à l'entrepôt de destination.",
         "sendFailed": "Impossible d'envoyer le transfert.",
+        "submitForApproval": "Soumettre à approbation",
+        "approveTransfer": "Approuver",
+        "rejectTransfer": "Refuser",
+        "transferApproved": "Transfert approuvé — le stock a quitté l’entrepôt source.",
+        "approveFailed": "Échec de l’approbation du transfert.",
+        "transferRejected": "Transfert refusé.",
+        "rejectFailed": "Échec du refus du transfert.",
+        "awaitingApprovalNotice": "En attente d’approbation. Le stock est encore dans la succursale source et ne bougera pas avant validation.",
+        "rejectedNotice": "Ce transfert a été refusé, aucun stock n’a bougé.",
+        "rejectionReasonLabel": "Motif du refus",
+        "rejectionReasonPlaceholder": "Indiquez le motif au demandeur pour qu’il sache quoi corriger",
+        "confirmRejection": "Confirmer le refus",
+        "scope": "Portée",
+        "crossBranch": "Entre succursales",
+        "withinBranch": "Au sein d’une succursale",
         "receiptRecorded": "Réception du transfert enregistrée.",
         "receiveFailed": "Impossible de réceptionner le transfert.",
         "transferLines": "Lignes du transfert",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Chronologie du transfert",
         "timeline": {
             "created": "Créé",
+            "awaitingApproval": "En attente d’approbation",
+            "approved": "Approuvé",
+            "rejected": "Refusé",
             "sent": "Envoyé",
             "partiallyReceived": "Partiellement reçu",
             "completed": "Terminé"

@@ -925,12 +925,14 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; from?: string; to?: string }) => {
+    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.sourceWarehouseId) query.set('sourceWarehouseId', params.sourceWarehouseId);
         if (params?.destinationWarehouseId) query.set('destinationWarehouseId', params.destinationWarehouseId);
         if (params?.productId) query.set('productId', params.productId);
+        // Explicit undefined check: `false` is a real filter (intra-branch only).
+        if (params?.isCrossBranch !== undefined) query.set('isCrossBranch', String(params.isCrossBranch));
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
@@ -943,6 +945,14 @@ export const api = {
     }),
     sendWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/send`, {
         method: 'POST',
+    }),
+    approveWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/approve`, {
+        method: 'POST',
+    }),
+    rejectWarehouseTransfer: (id: string, data: { reason?: string }) => fetchWithAuth(`/warehouse-transfers/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
     }),
     receiveWarehouseTransfer: (id: string, data: any) => fetchWithAuth(`/warehouse-transfers/${id}/receive`, {
         method: 'POST',

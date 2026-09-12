@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "No se pudo crear el traslado.",
         "emptyMessage": "Aún no hay traslados entre almacenes registrados",
         "searchPlaceholder": "Buscar traslados...",
+        "unknownBranch": "Sucursal sin asignar",
+        "allScopes": "Todas las sucursales",
+        "crossBranchOnly": "Entre sucursales",
+        "withinBranchOnly": "Dentro de una sucursal",
+        "withinBranch": "Misma sucursal",
+        "crossBranchNotice": "Este traspaso cruza sucursales, por lo que espera aprobación: no sale existencia del almacén de origen hasta que alguien con permiso lo libere.",
         "columns": {
             "transferNumber": "N.º de traslado",
             "source": "Origen",
             "destination": "Destino",
+            "branch": "Sucursal",
             "outstanding": "Pendiente",
             "created": "Creado",
             "voucher": "Asiento"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Borrador",
             "sent": "Enviado",
             "partiallyReceived": "Recibido parcialmente",
-            "received": "Recibido"
+            "received": "Recibido",
+            "pendingApproval": "Pendiente de aprobación",
+            "rejected": "Rechazado"
         }
     },
     "inventoryShrinkage": {
@@ -413,6 +422,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Recibir existencias",
         "transferSent": "Traslado enviado al almacén de destino.",
         "sendFailed": "No se pudo enviar el traslado.",
+        "submitForApproval": "Enviar a aprobación",
+        "approveTransfer": "Aprobar",
+        "rejectTransfer": "Rechazar",
+        "transferApproved": "Traspaso aprobado: la existencia ha salido del almacén de origen.",
+        "approveFailed": "No se pudo aprobar el traspaso.",
+        "transferRejected": "Traspaso rechazado.",
+        "rejectFailed": "No se pudo rechazar el traspaso.",
+        "awaitingApprovalNotice": "Pendiente de aprobación. La existencia sigue en la sucursal de origen y no se moverá hasta que se apruebe.",
+        "rejectedNotice": "Este traspaso fue rechazado, así que no se movió existencia.",
+        "rejectionReasonLabel": "Motivo del rechazo",
+        "rejectionReasonPlaceholder": "Explique el motivo al solicitante para que sepa qué cambiar",
+        "confirmRejection": "Confirmar rechazo",
+        "scope": "Ámbito",
+        "crossBranch": "Entre sucursales",
+        "withinBranch": "Dentro de una sucursal",
         "receiptRecorded": "Recepción del traslado registrada.",
         "receiveFailed": "No se pudo recibir el traslado.",
         "transferLines": "Líneas del traslado",
@@ -425,6 +449,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Cronología del traslado",
         "timeline": {
             "created": "Creado",
+            "awaitingApproval": "Pendiente de aprobación",
+            "approved": "Aprobado",
+            "rejected": "Rechazado",
             "sent": "Enviado",
             "partiallyReceived": "Recibido parcialmente",
             "completed": "Completado"
