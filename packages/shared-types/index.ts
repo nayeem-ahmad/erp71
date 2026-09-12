@@ -1677,6 +1677,13 @@ export interface PlatformFeatures {
    * `projects`, which decides whether *shop* users see the module.
    */
   platformProjects: boolean;
+  /**
+   * The platform's own books in the admin console: subscription revenue
+   * projected out of billing, platform expenses, and the ledger and financial
+   * statements over both. Platform-scoped like `platformProjects` — it governs
+   * the operator's accounting, not the accounting module a shop buys.
+   */
+  platformAccounting: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -1689,6 +1696,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   externalImport: false,
   projects: false,
   platformProjects: false,
+  platformAccounting: false,
 };
 
 export type PlatformFeatureKey = keyof PlatformFeatures;
@@ -1703,6 +1711,7 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
   'externalImport',
   'projects',
   'platformProjects',
+  'platformAccounting',
 ];
 
 /**
@@ -1710,11 +1719,12 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
  *
  * Platform-scoped switches govern the admin console rather than a shop, so an
  * "override for this tenant" would be meaningless for them: `platformProjects`
- * decides whether the platform team's own workspace exists, which no customer
- * workspace has an opinion about.
+ * decides whether the platform team's own workspace exists, and
+ * `platformAccounting` whether the platform keeps its own books, neither of
+ * which a customer workspace has an opinion about.
  */
 export const TENANT_OVERRIDABLE_FEATURE_KEYS: PlatformFeatureKey[] = PLATFORM_FEATURE_KEYS.filter(
-  (key) => key !== 'platformProjects',
+  (key) => key !== 'platformProjects' && key !== 'platformAccounting',
 );
 
 /**
@@ -1754,6 +1764,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   externalImport: 'external_import_enabled',
   projects: 'projects_enabled',
   platformProjects: 'platform_projects_enabled',
+  platformAccounting: 'platform_accounting_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -1770,6 +1781,7 @@ export function parsePlatformFeatures(
     externalImport: settings[PLATFORM_FEATURE_SETTING_KEYS.externalImport] === 'true',
     projects: settings[PLATFORM_FEATURE_SETTING_KEYS.projects] === 'true',
     platformProjects: settings[PLATFORM_FEATURE_SETTING_KEYS.platformProjects] === 'true',
+    platformAccounting: settings[PLATFORM_FEATURE_SETTING_KEYS.platformAccounting] === 'true',
   };
 }
 

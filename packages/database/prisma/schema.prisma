@@ -293,6 +293,15 @@ enum PostingRuleEventType {
   import_receipt
   /// Settling a usance LC, where the rate paid differs from the rate booked.
   import_settlement
+  /// A BillingEvent projected into the platform's own books — a subscription
+  /// fee charged, a tenant payment received, an add-on fee, a refund. Posted by
+  /// PlatformAccountingService through `postMultiLeg`, never by a PostingRule:
+  /// the accounts are fixed by the platform chart of accounts, not tenant-
+  /// configurable, exactly like the three `import_*` events above.
+  platform_billing
+  /// The platform's own operating spend — server bills, gateway charges,
+  /// salaries. Same posting route and the same reason as `platform_billing`.
+  platform_expense
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
@@ -1234,11 +1243,11 @@ enum TenantRecordScope {
 }
 
 model TenantRole {
-  id           String   @id @default(uuid())
+  id           String            @id @default(uuid())
   tenant_id    String
   name         String
   description  String?
-  is_system    Boolean  @default(false)
+  is_system    Boolean           @default(false)
   /// The `TENANT_ROLE_TEMPLATES` entry this role was seeded from, and the key the
   /// template sync finds the tenant's copy by after an owner renames it. Null for
   /// the three legacy system roles (Manager/Cashier/Accountant, which
@@ -1250,8 +1259,8 @@ model TenantRole {
   /// defaulting the other way would have narrowed every member in every
   /// workspace on the morning of the deploy. See `TenantRecordScope`.
   record_scope TenantRecordScope @default(ALL)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
 
   tenant          Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   permissions     TenantRolePermission[]
@@ -5804,6 +5813,73 @@ model BankStatementEntry {
 
   @@index([reconciliation_id])
   @@map("bank_statement_entries")
+}
+
+// ── Platform accounting (ERP71's own books) ──────────────────────────────────
+//
+// The platform keeps its books the way a tenant does: in the accounting module,
+// against the internal platform workspace tenant (Tenant.platform_workspace_key
+// — see PlatformWorkspaceService). Revenue posts itself by projecting
+// BillingEvent rows; what the two models below add is the other half, the money
+// going out, which nothing in the product recorded before.
+//
+// Deliberately NOT tenant-scoped, unlike ExpenseCategory/ExpenseEntry which they
+// resemble. A server bill belongs to the platform, not to a workspace, and
+// scoping it to the platform workspace's tenant_id would make it indexable by,
+// and deletable with, a row that is an implementation detail of how the books
+// are stored. The ledger side still lands in that tenant's vouchers.
+
+/// A kind of platform spend, and the account in the platform chart of accounts
+/// it posts to. Seeded from DEFAULT_PLATFORM_EXPENSE_CATEGORIES; admins may add
+/// their own, which is why `code` is a plain string rather than an enum.
+model PlatformExpenseCategory {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  name         String
+  description  String?
+  /// Name of the expense account in the platform chart of accounts this
+  /// category debits. A name rather than an account id so the seed can run
+  /// before the workspace (and therefore the accounts) exists, and so a
+  /// re-bootstrapped chart does not orphan every category.
+  account_name String
+  is_active    Boolean  @default(true)
+  sort_order   Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  expenses PlatformExpense[]
+
+  @@index([is_active, sort_order])
+  @@map("platform_expense_categories")
+}
+
+/// One platform expense — a month of hosting, an SMS gateway invoice, a salary.
+/// Posted to the platform books as Dr <category account> / Cr <paid-from
+/// account> the moment it is saved.
+model PlatformExpense {
+  id             String   @id @default(uuid())
+  category_id    String
+  expense_date   DateTime @db.Date
+  amount         Decimal  @db.Decimal(12, 2)
+  /// What the platform paid it from: CASH | BANK | BKASH | NAGAD. Resolved to a
+  /// cash/bank account by PLATFORM_PAYMENT_ACCOUNTS.
+  paid_from      String   @default("BANK")
+  vendor         String?
+  description    String?
+  reference      String?
+  /// The voucher this expense posted, so the list can link straight to it.
+  /// Null while `posting_status` is anything but 'posted'.
+  voucher_id     String?
+  posting_status String   @default("pending")
+  recorded_by    String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  category PlatformExpenseCategory @relation(fields: [category_id], references: [id])
+
+  @@index([expense_date])
+  @@index([category_id, expense_date])
+  @@map("platform_expenses")
 }
 
 model PlatformSetting {
