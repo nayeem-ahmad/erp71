@@ -250,6 +250,16 @@ export class ProjectsController {
         return this.time.summary(tenant, id);
     }
 
+    /**
+     * Remaining hours for the whole project, day by day. VIEW, not MANAGE:
+     * the same people who can read the project's totals can read their history.
+     */
+    @Get(':id/burndown')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    burndown(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.projects.burndown(tenant.tenantId, id);
+    }
+
     // ── Members ────────────────────────────────────────────────────────────
 
     @Post(':id/members')

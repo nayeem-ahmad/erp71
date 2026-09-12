@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "Die Checkliste konnte nicht aktualisiert werden",
     },
 
+    quickAdd: {
+        placeholder: "Aufgabe hinzufügen — Titel, dann Enter",
+        hint: "Details in derselben Zeile: @person  #label  !high  ~3h  >freitag",
+        add: "Hinzufügen",
+        more: "Weitere Felder",
+        today: "heute",
+        tomorrow: "morgen",
+        me: "Ich",
+        setPriority: "Priorität setzen",
+        addDescription: "+ Beschreibung hinzufügen",
+        saveAndAdd: "Speichern und weitere",
+    },
+
+    timer: {
+        start: "Start",
+        stop: "Stopp",
+        elsewhere: "Für eine andere Aufgabe läuft bereits ein Timer",
+    },
+
     remaining: {
         chart: "Reststunden im Zeitverlauf",
         chartNow: "jetzt",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Dieses Projekt hat kein Zieldatum, also gibt es keinen Vergleichsmaßstab — die Linie zeigt den Verlauf, nicht den Abgleich.",
         title: "Burndown",
         ideal: "Ideal",
         actual: "Verbleibend",

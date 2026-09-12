@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: 'চেকলিস্ট হালনাগাদ করা যায়নি',
     },
 
+    quickAdd: {
+        placeholder: 'কাজ যোগ করুন — শিরোনাম, তারপর Enter',
+        hint: 'একই লাইনে বিস্তারিত: @ব্যক্তি  #লেবেল  !high  ~3h  >friday',
+        add: 'যোগ করুন',
+        more: 'আরও ঘর',
+        today: 'আজ',
+        tomorrow: 'আগামীকাল',
+        me: 'আমি',
+        setPriority: 'অগ্রাধিকার দিন',
+        addDescription: '+ বিবরণ যোগ করুন',
+        saveAndAdd: 'সংরক্ষণ করে আরেকটি',
+    },
+
+    timer: {
+        start: 'শুরু',
+        stop: 'থামান',
+        elsewhere: 'অন্য একটি কাজে টাইমার চলছে',
+    },
+
     remaining: {
         chart: 'সময়ের সাথে বাকি ঘণ্টা',
         chartNow: 'এখন',
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: 'এই প্রকল্পে কোনো লক্ষ্য সমাপ্তি তারিখ নেই, তাই তুলনা করার মতো কিছু নেই — রেখাটি যা ঘটেছে তা দেখায়।',
         title: 'বার্নডাউন',
         ideal: 'আদর্শ',
         actual: 'বাকি',

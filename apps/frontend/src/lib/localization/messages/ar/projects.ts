@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "تعذّر تحديث قائمة التحقق",
     },
 
+    quickAdd: {
+        placeholder: "أضف مهمة — العنوان ثم Enter",
+        hint: "التفاصيل في السطر نفسه: @شخص  #وسم  !high  ~3h  >الجمعة",
+        add: "إضافة",
+        more: "حقول أخرى",
+        today: "اليوم",
+        tomorrow: "غدًا",
+        me: "أنا",
+        setPriority: "تحديد الأولوية",
+        addDescription: "+ إضافة وصف",
+        saveAndAdd: "حفظ وإضافة أخرى",
+    },
+
+    timer: {
+        start: "بدء",
+        stop: "إيقاف",
+        elsewhere: "هناك مؤقّت يعمل بالفعل على مهمة أخرى",
+    },
+
     remaining: {
         chart: "الساعات المتبقية عبر الزمن",
         chartNow: "الآن",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "لا يوجد تاريخ انتهاء مستهدف لهذا المشروع، فلا شيء للمقارنة — الخط يبيّن ما جرى.",
         title: "منحنى الإنجاز",
         ideal: "المثالي",
         actual: "المتبقي",
