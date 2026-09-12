@@ -462,8 +462,8 @@ async function resolveTemplateAccountCode(db, tenantId, name, group, subgroup, p
 	);
 }
 
-async function bootstrapDefaultAccountingForTenant(db, tenantId) {
-	for (const groupDefinition of DEFAULT_ACCOUNTING_TEMPLATE) {
+async function applyAccountingTemplate(db, tenantId, template) {
+	for (const groupDefinition of template) {
 		const group = await upsertTemplateGroup(
 			db,
 			tenantId,
@@ -520,6 +520,10 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 			}
 		}
 	}
+}
+
+async function bootstrapDefaultAccountingForTenant(db, tenantId) {
+	await applyAccountingTemplate(db, tenantId, DEFAULT_ACCOUNTING_TEMPLATE);
 
 	const accounts = await db.account.findMany({
 		where: { tenant_id: tenantId },
@@ -669,6 +673,7 @@ async function ensureInterBranchAccounts(db, tenantId) {
 module.exports = {
 	DEFAULT_ACCOUNTING_TEMPLATE,
 	DEFAULT_POSTING_RULES,
+	applyAccountingTemplate,
 	bootstrapDefaultAccountingForTenant,
 	ensureInterBranchAccounts,
 };

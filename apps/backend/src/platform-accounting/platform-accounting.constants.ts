@@ -27,6 +27,22 @@ import { PLATFORM_ACCOUNT, type PlatformAccountName } from '@erp71/database';
  * credit to it. So the balance of Subscription Receivable in the platform books
  * is the mirror of the sum of every tenant's ledger balance, and the two can be
  * reconciled against each other.
+ *
+ * With two known exceptions, both of them gaps in `ledgerEventDelta` rather than
+ * here. It has no case for `addon_fee`, nor for the gateway collections `IPN`
+ * and `CALLBACK_SUCCESS`, so all three score zero: the admin ledger lists them,
+ * but none moves the tenant's balance, their dunning clock or their suspension.
+ * The consequences differ — an uncounted add-on charge makes a tenant look like
+ * they owe less than they do, an uncounted card payment makes them look like
+ * they owe more, and the fee cron charges every subscription regardless of how
+ * it pays — but the fix is the same and it belongs to billing.
+ *
+ * These books stay correct meanwhile: the platform earned the add-on fee and is
+ * owed it, and the gateway collection really did settle what was owed, so both
+ * post against the receivable like any other charge or payment. Until billing
+ * counts them the platform's receivable will differ from the tenant-ledger total
+ * by exactly those amounts. `platform-accounting.constants.spec.ts` pins the
+ * exceptions, so whoever fixes `ledgerEventDelta` is told to delete this.
  */
 export interface BillingEventPosting {
     /** The account debited — where the value went. */
