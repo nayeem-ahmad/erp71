@@ -45,7 +45,7 @@ describe('SignupPage', () => {
         render(<SignupPage />);
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
         await waitFor(() => expect(api.signup).toHaveBeenCalled());
@@ -60,7 +60,7 @@ describe('SignupPage', () => {
 
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
 
@@ -78,7 +78,7 @@ describe('SignupPage', () => {
 
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(business);
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
@@ -153,7 +153,7 @@ describe('SignupPage', () => {
         render(<SignupPage />);
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
 
         expect(await screen.findByText(/accept the terms of service/i)).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe('SignupPage', () => {
         render(<SignupPage />);
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
 
@@ -192,7 +192,7 @@ describe('SignupPage', () => {
 
         fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
         fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
-        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Dhaka-Shop-2026' } });
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
 

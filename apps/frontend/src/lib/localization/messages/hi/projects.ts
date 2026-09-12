@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "जाँच-सूची अपडेट नहीं हो सकी",
     },
 
+    quickAdd: {
+        placeholder: "कार्य जोड़ें — शीर्षक, फिर Enter",
+        hint: "उसी पंक्ति में विवरण: @व्यक्ति  #लेबल  !high  ~3h  >शुक्रवार",
+        add: "जोड़ें",
+        more: "और फ़ील्ड",
+        today: "आज",
+        tomorrow: "कल",
+        me: "मैं",
+        setPriority: "प्राथमिकता तय करें",
+        addDescription: "+ विवरण जोड़ें",
+        saveAndAdd: "सहेजें और दूसरा जोड़ें",
+    },
+
+    timer: {
+        start: "शुरू करें",
+        stop: "रोकें",
+        elsewhere: "किसी अन्य कार्य पर टाइमर पहले से चल रहा है",
+    },
+
     remaining: {
+        chart: "समय के साथ शेष घंटे",
+        chartNow: "अभी",
+        chartUpNote: "बढ़े — काम जोड़ा गया",
         history: "शेष घंटों का इतिहास",
         notePlaceholder: "जैसे ग्राहक ने दो और कमरे जोड़े",
         empty: "अभी कोई बदलाव दर्ज नहीं।",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} उप-कार्य",
             unassigned: "अनासौंपा",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "रूप",
+            reset: "रीसेट",
+            cardSize: "कार्ड का आकार",
+            comfortable: "आरामदेह",
+            compact: "संक्षिप्त",
+            columnWidth: "स्तंभ की चौड़ाई",
+            narrow: "सँकरा",
+            standard: "मानक",
+            wide: "चौड़ा",
+            columnColor: "स्तंभ का रंग",
+            tintNone: "सादा",
+            tintCategory: "चरण अनुसार",
+            motion: "गति",
+            motionHint: "कार्ड और स्तंभ धीरे से अपनी जगह लेते हैं। डिवाइस कम गति माँगे तो यह लागू नहीं होता।",
+            showOnCards: "कार्ड पर दिखाएँ",
+            fields: {
+                cover: "कवर",
+                labels: "लेबल",
+                project: "परियोजना",
+                badges: "नियत तिथि और प्राथमिकता",
+                details: "विवरण",
+                assignee: "सौंपा गया",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "इस परियोजना की कोई लक्ष्य तिथि नहीं है, इसलिए तुलना के लिए कुछ नहीं — रेखा बताती है कि क्या हुआ।",
         title: "बर्नडाउन",
         ideal: "आदर्श",
         actual: "शेष",

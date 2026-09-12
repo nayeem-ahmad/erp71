@@ -1,7 +1,7 @@
 import * as QRCode from 'qrcode';
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 export interface ReceiptItem {
     name: string;
@@ -109,15 +109,12 @@ export async function printPOSReceipt(
         </tr>
     `).join('');
 
-    const headerHtml = renderHeaderHtml(
-        data.headerConfig,
-        {
-            docTitle: 'Sales Invoice',
-            companyName: data.storeName || 'RETAIL STORE',
-            storeName: data.storeName,
-        },
-        paperSize,
-    );
+    const headerContext: HeaderContext = {
+        docTitle: 'Sales Invoice',
+        companyName: data.storeName || 'RETAIL STORE',
+        storeName: data.storeName,
+    };
+    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
 
     const bodyHtml = `
     <hr class="divider">
@@ -175,6 +172,7 @@ export async function printPOSReceipt(
     <hr class="divider">`;
 
     openPrintWindow({
+        context: headerContext,
         title: `Receipt ${data.serialNumber}`,
         paperSize,
         headerConfig: data.headerConfig,

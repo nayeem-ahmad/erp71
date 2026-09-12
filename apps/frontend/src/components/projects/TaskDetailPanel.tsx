@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Play, Square, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
 import {
@@ -28,6 +28,8 @@ import {
     mergeFeed,
     type FeedEntry,
 } from '@/components/projects/task-activity';
+import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
+import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -77,6 +79,8 @@ interface Task {
     checklistItems?: ChecklistItem[];
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
+    /** From `TASK_INCLUDE`; lets the collapsed feed say how much it holds. */
+    _count?: { comments?: number; subtasks?: number };
 }
 
 /** A row of the project roster, which is where the assignee options come from. */
@@ -142,6 +146,16 @@ const dateInputValue = (value?: string | null) => (value ? value.slice(0, 10) : 
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 const today = () => new Date().toISOString().slice(0, 10);
+const EMPTY_TIME_FORM = () => ({ hours: '', workDate: today(), note: '', remaining: '' });
+
+/**
+ * Whether a write's response is the task itself. `PATCH /project-tasks/:id`
+ * answers with one, but nothing in the type system says so — and a response
+ * that is not a task must fall back to re-reading the card rather than blanking
+ * it.
+ */
+const isTask = (value: unknown): value is Task =>
+    typeof value === 'object' && value !== null && typeof (value as Task).id === 'string';
 
 export default function TaskDetailPanel({
     taskId,
@@ -152,7 +166,7 @@ export default function TaskDetailPanel({
     onClose: () => void;
     onChanged?: () => void;
 }) {
-    const { t } = useI18n();
+    const { t, localeInfo } = useI18n();
     const m = t.projects;
 
     const [task, setTask] = useState<Task | null>(null);
@@ -160,41 +174,72 @@ export default function TaskDetailPanel({
     const [history, setHistory] = useState<RemainingLog[]>([]);
     const [busy, setBusy] = useState(false);
 
-    const [timeForm, setTimeForm] = useState({ hours: '', workDate: today(), note: '', remaining: '' });
+    const [timeForm, setTimeForm] = useState(EMPTY_TIME_FORM);
 
     const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
     const [members, setMembers] = useState<ProjectMemberRow[]>([]);
 
-    const load = useCallback(async () => {
-        const [detail, log, labels] = await Promise.all([
+    /**
+     * The card and its remaining-hours log — the two things a write from this
+     * panel can move. Everything else the panel shows is reference data loaded
+     * once below, because no edit made here can change a tenant's label
+     * catalogue or a board's columns.
+     */
+    const loadTask = useCallback(async () => {
+        const [detail, log] = await Promise.all([
             api.getProjectTask(taskId),
             api.getTaskRemainingHistory(taskId),
-            api.getProjectLabels(),
         ]);
-        const loaded = detail as Task;
-        setTask(loaded);
+        setTask(detail as Task);
         setHistory(Array.isArray(log) ? log : []);
-        setAllLabels(Array.isArray(labels) ? labels : []);
-
-        // The task's own board, not the tenant template. Since Phase 3L those
-        // are different sets, and offering the template here would let someone
-        // move a card into a column its board does not have.
-        const projectId = loaded?.project?.id;
-        const cols = projectId ? await api.getProjectColumns(projectId) : [];
-        setStatuses(Array.isArray(cols) ? cols : []);
     }, [taskId]);
 
     useEffect(() => {
-        load().catch(() => setTask(null));
-    }, [load]);
+        loadTask().catch(() => setTask(null));
+    }, [loadTask]);
+
+    /**
+     * The tenant's label catalogue, fetched the first time somebody wants to
+     * change a card's labels rather than every time a card is opened. The chips
+     * a task already wears come with the task, so the section reads correctly
+     * before this has ever run.
+     */
+    const [labelsWanted, setLabelsWanted] = useState(false);
+    useEffect(() => {
+        if (!labelsWanted) return;
+        api.getProjectLabels()
+            .then((labels: unknown) => setAllLabels(Array.isArray(labels) ? labels : []))
+            .catch(() => setAllLabels([]));
+    }, [labelsWanted]);
 
     const projectId = task?.project?.id ?? null;
 
-    // The roster loads on its own, after the task names its project. A project
-    // whose members cannot be read still opens — the picker simply falls back to
-    // whoever already holds the card.
+    // The task's own board, not the tenant template. Since Phase 3L those are
+    // different sets, and offering the template here would let someone move a
+    // card into a column its board does not have.
     useEffect(() => {
         if (!projectId) return;
+        let live = true;
+        api.getProjectColumns(projectId)
+            .then((cols: unknown) => {
+                if (live) setStatuses(Array.isArray(cols) ? cols : []);
+            })
+            .catch(() => {
+                if (live) setStatuses([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectId]);
+
+    /**
+     * The roster, fetched when the assignee picker is first touched. The card
+     * shows whoever holds it from the task itself, so the field is correct
+     * before this runs — it only needs the list to offer somebody else.
+     */
+    const [membersWanted, setMembersWanted] = useState(false);
+    useEffect(() => {
+        if (!projectId || !membersWanted) return;
         let live = true;
         api.getProject(projectId)
             .then((result: unknown) => {
@@ -207,12 +252,78 @@ export default function TaskDetailPanel({
         return () => {
             live = false;
         };
-    }, [projectId]);
+    }, [projectId, membersWanted]);
 
-    const refresh = async () => {
-        await load();
-        onChanged?.();
-    };
+    /**
+     * The surface behind the modal is reloaded once, when the card is put down.
+     * `onChanged` used to fire on every field save, which on the board meant
+     * re-fetching every column because somebody fixed a typo in a title.
+     */
+    const dirty = useRef(false);
+    const closed = useRef(false);
+
+    const markChanged = useCallback(() => {
+        dirty.current = true;
+        // A blur-commit started by the very click that closed the panel lands
+        // after `close` has already run. Without this its change would never
+        // reach the list behind it.
+        if (closed.current) {
+            dirty.current = false;
+            onChanged?.();
+        }
+    }, [onChanged]);
+
+    const close = useCallback(() => {
+        closed.current = true;
+        if (dirty.current) {
+            dirty.current = false;
+            onChanged?.();
+        }
+        onClose();
+    }, [onChanged, onClose]);
+
+    /**
+     * Puts a write's own response into state instead of re-reading the card.
+     * `ProjectTasksService.update` ends in `findOne`, so `PATCH
+     * /project-tasks/:id` already answers with the whole task — fetching it
+     * again cost four requests and a parent reload per saved field, with the
+     * panel disabled for the round trip.
+     *
+     * Returns false when the response was not a task and the card had to be
+     * re-read anyway, which is how `applyWithLog` knows the log is fresh.
+     */
+    const apply = useCallback(
+        async (updated: unknown): Promise<boolean> => {
+            markChanged();
+            if (!isTask(updated)) {
+                await loadTask();
+                return false;
+            }
+            setTask(updated);
+            return true;
+        },
+        [loadTask, markChanged],
+    );
+
+    /**
+     * For the two writes that can also move the remaining-hours log: a status
+     * crossing into or out of DONE, and an explicit re-estimate. One extra
+     * request rather than the five the old path cost.
+     */
+    const applyWithLog = useCallback(
+        async (updated: unknown) => {
+            if (!(await apply(updated))) return;
+            const log = await api.getTaskRemainingHistory(taskId).catch(() => null);
+            if (Array.isArray(log)) setHistory(log);
+        },
+        [apply, taskId],
+    );
+
+    /** For the endpoints that answer with something other than the task. */
+    const refresh = useCallback(async () => {
+        markChanged();
+        await loadTask();
+    }, [loadTask, markChanged]);
 
     const hours = Number(timeForm.hours || 0);
     const remaining = timeForm.remaining === '' ? undefined : Number(timeForm.remaining);
@@ -241,15 +352,19 @@ export default function TaskDetailPanel({
                     remainingHours: remaining,
                 });
                 toast.success(m.time.logged);
+                setTimeForm(EMPTY_TIME_FORM);
+                // The time endpoint answers with the entry it wrote, not the
+                // task, so this is the one save on the card that re-reads it.
+                await refresh();
             } else {
-                await api.updateProjectTask(taskId, {
+                const updated = await api.updateProjectTask(taskId, {
                     remainingHours: remaining,
                     remainingNote: note,
                 });
                 toast.success(m.task.updated);
+                setTimeForm(EMPTY_TIME_FORM);
+                await applyWithLog(updated);
             }
-            setTimeForm({ hours: '', workDate: today(), note: '', remaining: '' });
-            await refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -260,8 +375,9 @@ export default function TaskDetailPanel({
     const changeStatus = async (statusId: string) => {
         setBusy(true);
         try {
-            await api.updateProjectTask(taskId, { statusId });
-            await refresh();
+            // Crossing into or out of DONE writes a remaining-hours row as well
+            // as the status, so the log is re-read beside the task.
+            await applyWithLog(await api.updateProjectTask(taskId, { statusId }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -283,17 +399,17 @@ export default function TaskDetailPanel({
     };
 
     return (
-        <ModalShell onBackdropClick={onClose} size="2xl">
+        <ModalShell onBackdropClick={close} size="2xl">
             <ModalHeader
                 title={
                     task ? (
-                        <TitleField title={task.title} taskId={taskId} onChanged={refresh} />
+                        <TitleField title={task.title} taskId={taskId} onSaved={apply} />
                     ) : (
                         m.task.title
                     )
                 }
                 subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
-                onClose={onClose}
+                onClose={close}
             />
 
             <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
@@ -329,10 +445,11 @@ export default function TaskDetailPanel({
                                     task={task}
                                     taskId={taskId}
                                     members={members}
-                                    onChanged={refresh}
+                                    onSaved={apply}
+                                    onWanted={() => setMembersWanted(true)}
                                 />
 
-                                <EstimateField task={task} taskId={taskId} onChanged={refresh} />
+                                <EstimateField task={task} taskId={taskId} onSaved={apply} />
 
                                 {/* Read-only, unlike the estimate above them:
                                     logged is the sum of the time entries and
@@ -351,42 +468,34 @@ export default function TaskDetailPanel({
                                 </div>
                             </section>
 
-                            <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+                            <DatesSection task={task} taskId={taskId} onSaved={apply} />
 
-                            {allLabels.length > 0 && (
-                                <LabelsSection
-                                    taskId={taskId}
-                                    all={allLabels}
-                                    selected={labelsOf(task)}
-                                    onChanged={refresh}
-                                />
-                            )}
+                            <LabelsSection
+                                taskId={taskId}
+                                all={allLabels}
+                                selected={labelsOf(task)}
+                                onSaved={apply}
+                                onWanted={() => setLabelsWanted(true)}
+                            />
 
-                            <CoverSection task={task} taskId={taskId} onChanged={refresh} />
+                            <CoverSection task={task} taskId={taskId} onSaved={apply} />
                         </aside>
 
                         <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                            {/* Directly under the title, and given room to breathe:
-                                it is the first thing you read when the card opens. */}
-                            <DescriptionSection
-                                description={task.description ?? ''}
-                                taskId={taskId}
-                                onChanged={refresh}
-                            />
-
-                            <ChecklistSection
-                                taskId={taskId}
-                                items={task.checklistItems ?? []}
-                                onChanged={refresh}
-                            />
-
-                            <AttachmentsSection taskId={taskId} />
-
+                            {/* First, not seventh. Logging an afternoon is the
+                                most frequent write in the module and it used to
+                                sit below the description, the checklist and the
+                                attachments, inside a scroller. */}
                             <section className="rounded-md border border-gray-200 p-3">
-                                <h3 className="text-sm font-medium">{m.time.log}</h3>
-                                <p className="mb-2 mt-0.5 text-xs text-gray-500">{m.time.logHint}</p>
-                                <form onSubmit={saveWork} className="space-y-2">
-                                    <div className="grid gap-2 md:grid-cols-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <h3 className="text-sm font-medium">{m.time.log}</h3>
+                                    <TimerButton taskId={taskId} onChanged={refresh} />
+                                </div>
+                                <form onSubmit={saveWork} className="mt-2 space-y-2">
+                                    {/* One row on a desktop, stacked on a phone.
+                                        Four fields that are one act do not need
+                                        four rows of a modal. */}
+                                    <div className="grid gap-2 md:grid-cols-[5rem_9rem_7rem_1fr_auto] md:items-end">
                                         <Field label={m.time.hours} htmlFor="task-log-hours">
                                             <Input
                                                 id="task-log-hours"
@@ -412,7 +521,6 @@ export default function TaskDetailPanel({
                                         <Field
                                             label={m.time.remainingAfter}
                                             htmlFor="task-log-remaining"
-                                            hint={m.time.remainingHint}
                                         >
                                             <Input
                                                 id="task-log-remaining"
@@ -428,30 +536,52 @@ export default function TaskDetailPanel({
                                                 }
                                             />
                                         </Field>
+                                        <Field label={m.time.note} htmlFor="task-log-note">
+                                            <Input
+                                                id="task-log-note"
+                                                placeholder={m.remaining.notePlaceholder}
+                                                value={timeForm.note}
+                                                onChange={(e) =>
+                                                    setTimeForm((p) => ({ ...p, note: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Button
+                                            type="submit"
+                                            disabled={busy || !canSaveWork}
+                                            className="min-h-touch"
+                                        >
+                                            {t.common.save}
+                                        </Button>
                                     </div>
-                                    <Field label={m.time.note} htmlFor="task-log-note">
-                                        <Input
-                                            id="task-log-note"
-                                            placeholder={m.remaining.notePlaceholder}
-                                            value={timeForm.note}
-                                            onChange={(e) =>
-                                                setTimeForm((p) => ({ ...p, note: e.target.value }))
-                                            }
-                                        />
-                                    </Field>
-                                    <Button
-                                        type="submit"
-                                        disabled={busy || !canSaveWork}
-                                        className="min-h-touch"
-                                    >
-                                        {t.common.save}
-                                    </Button>
                                 </form>
-                                <p className="mt-2 text-xs text-gray-500">{m.remaining.hint}</p>
+                                <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
                             </section>
 
-                            <section>
-                                <h3 className="mb-2 text-sm font-medium">{m.tabs.time}</h3>
+                            <DescriptionSection
+                                description={task.description ?? ''}
+                                taskId={taskId}
+                                onSaved={apply}
+                            />
+
+                            <ChecklistSection
+                                taskId={taskId}
+                                items={task.checklistItems ?? []}
+                                onChanged={refresh}
+                            />
+
+                            {/* Everything below here is the record rather than
+                                the work: read on demand, and fetched on demand
+                                with it. Six of the ten requests opening a card
+                                used to make were for these. */}
+                            <CollapsibleSection title={m.attachments.title}>
+                                <AttachmentsSection taskId={taskId} />
+                            </CollapsibleSection>
+
+                            <CollapsibleSection
+                                title={m.tabs.time}
+                                count={(task.timeEntries ?? []).length}
+                            >
                                 {(task.timeEntries ?? []).length === 0 ? (
                                     <p className="text-sm text-gray-500">{m.time.empty}</p>
                                 ) : (
@@ -478,14 +608,40 @@ export default function TaskDetailPanel({
                                         ))}
                                     </ul>
                                 )}
-                            </section>
+                            </CollapsibleSection>
 
-                            <section>
-                                <h3 className="mb-2 text-sm font-medium">{m.remaining.history}</h3>
+                            <CollapsibleSection
+                                title={m.remaining.history}
+                                count={history.length}
+                            >
                                 {history.length === 0 ? (
                                     <p className="text-sm text-gray-500">{m.remaining.empty}</p>
                                 ) : (
-                                    <ul className="divide-y divide-gray-200 text-sm">
+                                    <>
+                                        {/* The shape first, the rows under it. The
+                                            list answers "what happened"; the line
+                                            answers "is this converging", which is
+                                            what someone opening a card wants to
+                                            know — and it doubles as the chart's
+                                            table view, so no figure is reachable
+                                            only by hovering a dot. */}
+                                        <RemainingHoursChart
+                                            history={history}
+                                            estimate={
+                                                task.estimate_hours == null
+                                                    ? null
+                                                    : num(task.estimate_hours)
+                                            }
+                                            dateLocale={localeInfo.dateLocale}
+                                            labels={{
+                                                title: m.remaining.chart,
+                                                remaining: m.overview.remaining,
+                                                estimate: m.overview.estimated,
+                                                now: m.remaining.chartNow,
+                                                upNote: m.remaining.chartUpNote,
+                                            }}
+                                        />
+                                        <ul className="mt-3 divide-y divide-gray-200 text-sm">
                                         {history.map((row) => {
                                             const delta = Number(row.delta);
                                             const up = delta > 0;
@@ -527,18 +683,24 @@ export default function TaskDetailPanel({
                                                 </li>
                                             );
                                         })}
-                                    </ul>
+                                        </ul>
+                                    </>
                                 )}
-                            </section>
+                            </CollapsibleSection>
 
-                            <ActivitySection taskId={taskId} onChanged={onChanged} />
+                            <CollapsibleSection
+                                title={m.activity.title}
+                                count={task._count?.comments}
+                            >
+                                <ActivitySection taskId={taskId} onChanged={markChanged} />
+                            </CollapsibleSection>
                         </div>
                     </div>
                 )}
             </div>
 
             <ModalFooter>
-                <Button type="button" variant="secondary" onClick={onClose}>
+                <Button type="button" variant="secondary" onClick={close}>
                     {t.common.close}
                 </Button>
             </ModalFooter>
@@ -559,12 +721,15 @@ function AssigneeField({
     task,
     taskId,
     members,
-    onChanged,
+    onSaved,
+    onWanted,
 }: {
     task: Task;
     taskId: string;
     members: ProjectMemberRow[];
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
+    /** Fires when the picker is first touched, so the roster loads then. */
+    onWanted: () => void;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -577,13 +742,13 @@ function AssigneeField({
         try {
             // '' rather than undefined: PATCH reads undefined as "leave alone",
             // so only the empty string can mean "nobody".
-            await api.updateProjectTask(taskId, {
+            const updated = await api.updateProjectTask(taskId, {
                 assigneeId: value.startsWith('user:') ? value.slice('user:'.length) : '',
                 assigneeEmployeeId: value.startsWith('employee:')
                     ? value.slice('employee:'.length)
                     : '',
             });
-            await onChanged();
+            await onSaved(updated);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
@@ -597,6 +762,8 @@ function AssigneeField({
                 id="task-assignee"
                 value={assigneeValueOf(task)}
                 disabled={saving}
+                onFocus={onWanted}
+                onPointerDown={onWanted}
                 onChange={(e) => change(e.target.value)}
             >
                 <option value="">{m.task.unassigned}</option>
@@ -622,11 +789,11 @@ function AssigneeField({
 function EstimateField({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -646,8 +813,7 @@ function EstimateField({
         }
         setSaving(true);
         try {
-            await api.updateProjectTask(taskId, { estimateHours: hours });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { estimateHours: hours }));
         } catch (error) {
             setValue(current);
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
@@ -685,89 +851,155 @@ function EstimateField({
 }
 
 /**
- * The title, editable where it is read. One click on the heading turns it into
- * an input and Enter (or clicking away) saves it — an "Edit task" screen for a
- * single field is three clicks to change a typo.
+ * Start the clock on this task, or stop it if it is already running on one.
+ *
+ * The module has had a `ProjectTimer` and a working `POST /project-time/timer`
+ * since Phase 2, driven only from `/projects/hour-logs` — so the person looking
+ * at the task they are about to work on had to go to another screen to say so,
+ * or type the hours in afterwards from memory. This is the same endpoint, put
+ * where the decision is made.
+ *
+ * There is one timer per person, not one per task, so the button has three
+ * states: start, stop (this task), and running-elsewhere — which is disabled
+ * rather than hidden, because silently doing nothing is how you end up with two
+ * people certain they had a timer going.
+ */
+function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => Promise<void> }) {
+    const { t } = useI18n();
+    const m = t.projects;
+
+    const [runningOn, setRunningOn] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const read = useCallback(async () => {
+        try {
+            const timer = await api.getProjectTimer();
+            const on = (timer as { task?: { id?: string } } | null)?.task?.id ?? null;
+            setRunningOn(on);
+            setFailed(false);
+        } catch {
+            // A card whose timer state cannot be read still opens; the button
+            // simply does not offer to start something it cannot reason about.
+            setFailed(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        void read();
+    }, [read]);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setBusy(true);
+        try {
+            await action();
+            await read();
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (failed) return null;
+
+    const mine = runningOn === taskId;
+    const elsewhere = runningOn != null && !mine;
+
+    return (
+        <Button
+            type="button"
+            variant={mine ? 'secondary' : 'ghost'}
+            className="min-h-touch"
+            disabled={busy || elsewhere}
+            title={elsewhere ? m.timer.elsewhere : undefined}
+            onClick={() =>
+                run(() =>
+                    mine ? api.stopProjectTimer() : api.startProjectTimer({ taskId }),
+                )
+            }
+        >
+            {mine ? (
+                <>
+                    <Square className="h-4 w-4" aria-hidden />
+                    {m.timer.stop}
+                </>
+            ) : (
+                <>
+                    <Play className="h-4 w-4" aria-hidden />
+                    {elsewhere ? m.timer.elsewhere : m.timer.start}
+                </>
+            )}
+        </Button>
+    );
+}
+
+/**
+ * The title, as a field.
+ *
+ * It used to be a heading you clicked to turn into an input — a hidden
+ * affordance, and one of five different ways this panel saved a field. It is now
+ * simply an input styled as a heading: click it, type, leave it, it saves. Same
+ * rule as the estimate, the dates and every other text field on the card.
+ *
+ * Blank is refused rather than saved: a task with no title is not something the
+ * backend takes, and quietly erasing the one thing that names the card would be
+ * worse than ignoring the edit.
  */
 function TitleField({
     title,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     title: string;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects.task;
 
-    const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(title);
     const [saving, setSaving] = useState(false);
 
-    const open = () => {
-        setValue(title);
-        setEditing(true);
-    };
+    useEffect(() => setValue(title), [title]);
 
     const commit = async () => {
-        setEditing(false);
         const next = value.trim();
-        // A blank title is not something the backend will take, and quietly
-        // erasing the one thing that names the card would be worse than
-        // ignoring the edit.
-        if (!next || next === title) return;
+        if (!next || next === title) {
+            setValue(title);
+            return;
+        }
         setSaving(true);
         try {
-            await api.updateProjectTask(taskId, { title: next });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { title: next }));
         } catch (error) {
+            setValue(title);
             toast.error(error instanceof Error ? error.message : m.renameFailed);
         } finally {
             setSaving(false);
         }
     };
 
-    if (!editing) {
-        return (
-            <button
-                type="button"
-                disabled={saving}
-                title={m.editTitle}
-                aria-label={`${m.editTitle}: ${title}`}
-                onClick={open}
-                className="group -mx-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-start hover:bg-gray-100 disabled:opacity-60 max-md:min-h-touch"
-            >
-                <span className="truncate">{title}</span>
-                <Pencil
-                    className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-gray-600"
-                    aria-hidden
-                />
-            </button>
-        );
-    }
-
     return (
         <Input
-            autoFocus
             value={value}
             maxLength={TITLE_MAX}
             disabled={saving}
             aria-label={m.titleField}
-            className="text-base font-semibold"
+            className="border-transparent bg-transparent px-1 text-base font-semibold hover:border-gray-300"
             onChange={(event) => setValue(event.target.value)}
             onBlur={commit}
             onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
-                    commit();
+                    event.currentTarget.blur();
                 }
                 if (event.key === 'Escape') {
                     // Kept off the document, where ModalShell would read it as
-                    // "close the card" and take the rest of the edit with it.
+                    // "close the card" and take the edit with it.
                     event.stopPropagation();
                     setValue(title);
-                    setEditing(false);
                 }
             }}
         />
@@ -775,19 +1007,32 @@ function TitleField({
 }
 
 /**
- * The description, in markdown. Stored as the text the user typed rather than
- * as HTML: it stays legible everywhere else the field surfaces (exports, the
- * API, a notification email) and there is nothing to sanitise on the way out —
- * `Markdown` renders it with raw HTML and images disallowed.
+ * The description, in markdown, under the same rule as every other field on the
+ * card: click it, type, click away, it saves.
+ *
+ * It used to need a pencil button to get into and a Save/Cancel pair to get out
+ * of — the two clicks that made "fix a typo" a four-step errand, and the loudest
+ * of the five different save idioms this panel used to carry.
+ *
+ * **The commit is on the container, not the textarea.** The editor has a
+ * toolbar, and a toolbar button steals focus from the textarea; committing on
+ * the textarea's own blur would save (and close the editor) every time somebody
+ * reached for *bold*. `relatedTarget` inside the container means focus merely
+ * moved within the editor, which is not leaving it.
+ *
+ * Stored as the text the user typed rather than as HTML: it stays legible
+ * everywhere else the field surfaces (exports, the API, a notification email)
+ * and there is nothing to sanitise on the way out — `Markdown` renders it with
+ * raw HTML and images disallowed.
  */
 function DescriptionSection({
     description,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     description: string;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects.description;
@@ -796,97 +1041,75 @@ function DescriptionSection({
     const [value, setValue] = useState(description);
     const [saving, setSaving] = useState(false);
 
-    const open = () => {
-        setValue(description);
-        setEditing(true);
-    };
+    useEffect(() => setValue(description), [description]);
 
-    const save = async () => {
+    const commit = async () => {
+        setEditing(false);
         const next = value.trim();
-        if (next === description.trim()) {
-            setEditing(false);
-            return;
-        }
+        if (next === description.trim()) return;
         setSaving(true);
         try {
             // '' clears it — the backend stores an empty description as null.
-            await api.updateProjectTask(taskId, { description: next });
-            setEditing(false);
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { description: next }));
         } catch (error) {
+            setValue(description);
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
             setSaving(false);
         }
     };
 
-    return (
-        <section>
-            <div className="flex items-center justify-between gap-2">
+    if (!editing) {
+        return (
+            <section>
                 <h3 className="text-sm font-medium">{m.title}</h3>
-                {!editing && description !== '' && (
-                    <button
-                        type="button"
-                        onClick={open}
-                        className="inline-flex min-h-touch items-center gap-1 rounded px-1.5 text-xs text-blue-600 hover:bg-blue-50"
-                    >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden />
-                        {m.edit}
-                    </button>
-                )}
-            </div>
-
-            {editing ? (
-                <div className="mt-2 space-y-2">
-                    <RichTextEditor
-                        autoFocus
-                        rows={6}
-                        value={value}
-                        onChange={setValue}
-                        disabled={saving}
-                        maxLength={DESCRIPTION_MAX}
-                        placeholder={m.placeholder}
-                        ariaLabel={m.title}
-                        onSubmit={save}
-                        onCancel={() => setEditing(false)}
-                    />
-                    <div className="flex gap-2">
-                        <Button
-                            type="button"
-                            className="min-h-touch"
-                            disabled={saving}
-                            onClick={save}
-                        >
-                            {t.common.save}
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className="min-h-touch"
-                            disabled={saving}
-                            onClick={() => setEditing(false)}
-                        >
-                            {t.common.cancel}
-                        </Button>
-                    </div>
-                </div>
-            ) : description !== '' ? (
-                <div className="mt-2 text-sm text-gray-700">
-                    <Suspense
-                        fallback={<p className="whitespace-pre-wrap">{description}</p>}
-                    >
-                        <Markdown content={description} />
-                    </Suspense>
-                </div>
-            ) : (
                 <button
                     type="button"
-                    onClick={open}
-                    className="mt-2 min-h-touch w-full rounded-md border border-dashed border-gray-200 px-3 py-2 text-start text-sm text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                    onClick={() => setEditing(true)}
+                    aria-label={m.title}
+                    className="mt-2 w-full rounded-md border border-transparent px-2 py-1.5 text-start hover:border-gray-300 hover:bg-gray-50"
                 >
-                    {m.add}
+                    {description === '' ? (
+                        <span className="text-sm text-gray-500">{m.add}</span>
+                    ) : (
+                        <span className="block text-sm text-gray-700">
+                            <Suspense fallback={<span className="whitespace-pre-wrap">{description}</span>}>
+                                <Markdown content={description} />
+                            </Suspense>
+                        </span>
+                    )}
                 </button>
-            )}
+            </section>
+        );
+    }
+
+    return (
+        <section>
+            <h3 className="text-sm font-medium">{m.title}</h3>
+            <div
+                className="mt-2"
+                onBlur={(event) => {
+                    // Focus moving to the toolbar is not focus leaving the editor.
+                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    void commit();
+                }}
+            >
+                <RichTextEditor
+                    autoFocus
+                    rows={6}
+                    value={value}
+                    onChange={setValue}
+                    disabled={saving}
+                    maxLength={DESCRIPTION_MAX}
+                    placeholder={m.placeholder}
+                    ariaLabel={m.title}
+                    onSubmit={commit}
+                    onCancel={() => {
+                        setValue(description);
+                        setEditing(false);
+                    }}
+                />
+            </div>
         </section>
     );
 }
@@ -898,11 +1121,11 @@ function DescriptionSection({
 function CoverSection({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -912,8 +1135,7 @@ function CoverSection({
         setSaving(true);
         try {
             // '' clears it, the same PATCH convention the dates use.
-            await api.updateProjectTask(taskId, { coverColor: color });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { coverColor: color }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.updated);
         } finally {
@@ -1325,11 +1547,11 @@ function ActivitySection({
 function DatesSection({
     task,
     taskId,
-    onChanged,
+    onSaved,
 }: {
     task: Task;
     taskId: string;
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -1340,8 +1562,7 @@ function DatesSection({
         try {
             // Sends '' rather than undefined to clear: PATCH reads undefined as
             // "leave alone", so only the empty string can mean "no date".
-            await api.updateProjectTask(taskId, { [field]: value });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { [field]: value }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.dates.saveFailed);
         } finally {
@@ -1398,12 +1619,15 @@ function LabelsSection({
     taskId,
     all,
     selected,
-    onChanged,
+    onSaved,
+    onWanted,
 }: {
     taskId: string;
     all: ProjectLabel[];
     selected: ProjectLabel[];
-    onChanged: () => Promise<void>;
+    onSaved: (updated: unknown) => Promise<unknown>;
+    /** Fires when the section is first opened, so the catalogue loads then. */
+    onWanted: () => void;
 }) {
     const { t } = useI18n();
     const m = t.projects.labels;
@@ -1420,8 +1644,7 @@ function LabelsSection({
         try {
             // The whole set every time — the endpoint replaces rather than
             // patches, so there is no add/remove pair to keep in step.
-            await api.updateProjectTask(taskId, { labelIds: [...next] });
-            await onChanged();
+            await onSaved(await api.updateProjectTask(taskId, { labelIds: [...next] }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
@@ -1429,11 +1652,15 @@ function LabelsSection({
         }
     };
 
+    // The chips a task already wears come with the task; the catalogue is only
+    // needed to offer the ones it does not, so it is fetched on first open.
     return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <h3 className="mb-2 text-sm font-medium">{m.title}</h3>
+        <CollapsibleSection title={m.title} count={selected.length} onFirstOpen={onWanted}>
             <div className="flex flex-wrap gap-1.5">
-                {all.map((label) => {
+                {all.length === 0 && selected.length === 0 && (
+                    <p className="text-sm text-gray-500">{m.empty}</p>
+                )}
+                {(all.length > 0 ? all : selected).map((label) => {
                     const on = selectedIds.has(label.id);
                     return (
                         <button
@@ -1451,7 +1678,7 @@ function LabelsSection({
                     );
                 })}
             </div>
-        </section>
+        </CollapsibleSection>
     );
 }
 

@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: 'চেকলিস্ট হালনাগাদ করা যায়নি',
     },
 
+    quickAdd: {
+        placeholder: 'কাজ যোগ করুন — শিরোনাম, তারপর Enter',
+        hint: 'একই লাইনে বিস্তারিত: @ব্যক্তি  #লেবেল  !high  ~3h  >friday',
+        add: 'যোগ করুন',
+        more: 'আরও ঘর',
+        today: 'আজ',
+        tomorrow: 'আগামীকাল',
+        me: 'আমি',
+        setPriority: 'অগ্রাধিকার দিন',
+        addDescription: '+ বিবরণ যোগ করুন',
+        saveAndAdd: 'সংরক্ষণ করে আরেকটি',
+    },
+
+    timer: {
+        start: 'শুরু',
+        stop: 'থামান',
+        elsewhere: 'অন্য একটি কাজে টাইমার চলছে',
+    },
+
     remaining: {
+        chart: 'সময়ের সাথে বাকি ঘণ্টা',
+        chartNow: 'এখন',
+        chartUpNote: 'বেড়েছে — কাজ যোগ হয়েছে',
         history: 'বাকি ঘণ্টার ইতিহাস',
         notePlaceholder: 'যেমন: গ্রাহক আরও দুটি কক্ষ যোগ করেছেন',
         empty: 'এখনও কোনো পরিবর্তন রেকর্ড হয়নি।',
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: '{count}টি সাব-টাস্ক',
             unassigned: 'কেউ নিযুক্ত নয়',
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: 'চেহারা',
+            reset: 'রিসেট',
+            cardSize: 'কার্ডের আকার',
+            comfortable: 'স্বচ্ছন্দ',
+            compact: 'সংক্ষিপ্ত',
+            columnWidth: 'কলামের প্রস্থ',
+            narrow: 'সরু',
+            standard: 'সাধারণ',
+            wide: 'চওড়া',
+            columnColor: 'কলামের রং',
+            tintNone: 'সাদামাটা',
+            tintCategory: 'ধাপ অনুযায়ী',
+            motion: 'অ্যানিমেশন',
+            motionHint: 'কার্ড ও কলাম মৃদুভাবে জায়গায় বসে। ডিভাইস কম অ্যানিমেশন চাইলে এটি উপেক্ষা করা হয়।',
+            showOnCards: 'কার্ডে দেখান',
+            fields: {
+                cover: 'কভার',
+                labels: 'লেবেল',
+                project: 'প্রকল্প',
+                badges: 'শেষ তারিখ ও অগ্রাধিকার',
+                details: 'বিস্তারিত',
+                assignee: 'দায়িত্বপ্রাপ্ত',
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: 'এই প্রকল্পে কোনো লক্ষ্য সমাপ্তি তারিখ নেই, তাই তুলনা করার মতো কিছু নেই — রেখাটি যা ঘটেছে তা দেখায়।',
         title: 'বার্নডাউন',
         ideal: 'আদর্শ',
         actual: 'বাকি',

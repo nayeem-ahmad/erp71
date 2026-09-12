@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { formatBDT, formatDate } from '@/lib/format';
 
 interface ProjectRow {
@@ -40,19 +41,37 @@ export default function ProjectsPage() {
     const { t } = useI18n();
     const m = t.projects;
 
-    const [search, setSearch] = useState('');
-    const [status, setStatus] = useState('');
-    const [typeId, setTypeId] = useState('');
-    const [visibility, setVisibility] = useState('');
+    /**
+     * Remembered for the tab, so opening a project and coming back returns to
+     * the slice it was opened from rather than to the whole workspace.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('projects', {
+        search: '',
+        status: '',
+        typeId: '',
+        visibility: '',
+    });
+    const { search, status, typeId, visibility } = filters;
+
     const [types, setTypes] = useState<{ id: string; name: string }[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    // A search restored from the last visit is not typing: it is already the
+    // term to query, so it applies with the first request rather than 300ms
+    // later, which would fetch the unsearched list first and flash it.
+    const [typing, setTyping] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<ProjectRow | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search.trim());
+            return;
+        }
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, typing]);
+
+    const effectiveSearch = typing ? debouncedSearch : search.trim();
 
     useEffect(() => {
         api.getProjectTypes()
@@ -62,12 +81,15 @@ export default function ProjectsPage() {
 
     const { items, loading, serverPagination, reload } = useServerList<ProjectRow>({
         tableId: 'projects',
+        // Nothing is fetched until the remembered filters are in, so a return
+        // visit does not request the whole list and then replace it.
+        enabled: filtersReady,
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, status, typeId, visibility],
+        deps: [effectiveSearch, status, typeId, visibility],
         fetch: (params) =>
             api.getProjects({
                 ...params,
-                search: debouncedSearch || undefined,
+                search: effectiveSearch || undefined,
                 status: status || undefined,
                 projectTypeId: typeId || undefined,
                 visibility: visibility || undefined,
@@ -212,11 +234,14 @@ export default function ProjectsPage() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <Input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setTyping(true);
+                        setFilter('search', e.target.value);
+                    }}
                     placeholder={m.searchPlaceholder}
                     className="md:max-w-xs"
                 />
-                <Select value={status} onChange={(e) => setStatus(e.target.value)} className="md:w-44">
+                <Select value={status} onChange={(e) => setFilter('status', e.target.value)} className="md:w-44">
                     <option value="">{m.fields.status}</option>
                     {Object.entries(m.status).map(([key, label]) => (
                         <option key={key} value={key}>
@@ -224,7 +249,7 @@ export default function ProjectsPage() {
                         </option>
                     ))}
                 </Select>
-                <Select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="md:w-44">
+                <Select value={typeId} onChange={(e) => setFilter('typeId', e.target.value)} className="md:w-44">
                     <option value="">{m.fields.type}</option>
                     {types.map((type) => (
                         <option key={type.id} value={type.id}>
@@ -234,7 +259,7 @@ export default function ProjectsPage() {
                 </Select>
                 <Select
                     value={visibility}
-                    onChange={(e) => setVisibility(e.target.value)}
+                    onChange={(e) => setFilter('visibility', e.target.value)}
                     className="md:w-40"
                 >
                     <option value="">{m.fields.visibility}</option>
@@ -251,10 +276,10 @@ export default function ProjectsPage() {
                 tableId="projects"
                 columns={columns as never}
                 data={items}
-                isLoading={loading}
+                isLoading={loading || !filtersReady}
                 serverPagination={serverPagination}
                 emptyMessage={
-                    debouncedSearch || status || typeId || visibility ? m.emptyFiltered : m.empty
+                    effectiveSearch || status || typeId || visibility ? m.emptyFiltered : m.empty
                 }
             />
 

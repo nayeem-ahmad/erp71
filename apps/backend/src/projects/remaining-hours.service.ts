@@ -15,6 +15,13 @@ export const RemainingSource = {
 } as const;
 export type RemainingSource = (typeof RemainingSource)[keyof typeof RemainingSource];
 
+/**
+ * Rows returned by `history`. Generous against what a task really accumulates —
+ * a busy one gathers a handful a week — and bounded against the case nothing
+ * else bounds.
+ */
+export const HISTORY_LIMIT = 500;
+
 export interface RemainingWrite {
     tenantId: string;
     taskId: string;
@@ -93,11 +100,20 @@ export class RemainingHoursService {
         return true;
     }
 
-    /** History for one task, newest first. */
+    /**
+     * History for one task, newest first and capped.
+     *
+     * The cap is what stops a task that has been worked for a year from
+     * answering with every row it has ever had so a panel can draw a chart a few
+     * hundred pixels wide. Truncation is from the far end, so what comes back is
+     * the recent shape — and each row carries its own `previous_hours`, so the
+     * oldest row returned still says what the figure was before it.
+     */
     async history(tenantId: string, taskId: string) {
         return this.db.projectTaskRemainingLog.findMany({
             where: { tenant_id: tenantId, task_id: taskId },
             orderBy: { changed_at: 'desc' },
+            take: HISTORY_LIMIT,
             include: { user: { select: { id: true, name: true, email: true } } },
         });
     }

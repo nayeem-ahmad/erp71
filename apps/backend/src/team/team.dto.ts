@@ -1,7 +1,8 @@
 import { ArrayNotEmpty, IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
-import { StorePermission } from '@erp71/shared-types';
+import { StorePermission, TenantRecordScope } from '@erp71/shared-types';
 
 const STORE_PERMISSION_VALUES = Object.values(StorePermission) as string[];
+const RECORD_SCOPE_VALUES = Object.values(TenantRecordScope) as string[];
 
 export class InviteMemberDto {
     @IsEmail()
@@ -70,6 +71,14 @@ export class CreateTenantRoleDto {
     @IsArray()
     @IsIn(STORE_PERMISSION_VALUES, { each: true })
     permissions: StorePermission[];
+
+    /**
+     * How much of the data those permissions reach the role may read. Omitted
+     * means `ALL` — what every role was before the field existed.
+     */
+    @IsOptional()
+    @IsIn(RECORD_SCOPE_VALUES)
+    recordScope?: TenantRecordScope;
 }
 
 export class UpdateTenantRoleDto {
@@ -85,4 +94,8 @@ export class UpdateTenantRoleDto {
     @IsArray()
     @IsIn(STORE_PERMISSION_VALUES, { each: true })
     permissions?: StorePermission[];
+
+    @IsOptional()
+    @IsIn(RECORD_SCOPE_VALUES)
+    recordScope?: TenantRecordScope;
 }

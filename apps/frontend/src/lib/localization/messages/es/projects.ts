@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "No se pudo actualizar la lista de comprobación",
     },
 
+    quickAdd: {
+        placeholder: "Añadir tarea — título y luego Enter",
+        hint: "Detalles en la misma línea: @persona  #etiqueta  !high  ~3h  >viernes",
+        add: "Añadir",
+        more: "Más campos",
+        today: "hoy",
+        tomorrow: "mañana",
+        me: "Yo",
+        setPriority: "Definir prioridad",
+        addDescription: "+ Añadir descripción",
+        saveAndAdd: "Guardar y añadir otra",
+    },
+
+    timer: {
+        start: "Iniciar",
+        stop: "Detener",
+        elsewhere: "Ya hay un temporizador en otra tarea",
+    },
+
     remaining: {
+        chart: "Horas restantes a lo largo del tiempo",
+        chartNow: "ahora",
+        chartUpNote: "Subió: se añadió trabajo",
         history: "Historial de horas restantes",
         notePlaceholder: "p. ej. el cliente añadió dos habitaciones más",
         empty: "Aún no se han registrado cambios.",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} subtarea(s)",
             unassigned: "Sin asignar",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "Apariencia",
+            reset: "Restablecer",
+            cardSize: "Tamaño de tarjeta",
+            comfortable: "Cómodo",
+            compact: "Compacto",
+            columnWidth: "Ancho de columna",
+            narrow: "Estrecho",
+            standard: "Estándar",
+            wide: "Ancho",
+            columnColor: "Color de columna",
+            tintNone: "Sencillo",
+            tintCategory: "Por etapa",
+            motion: "Animaciones",
+            motionHint: "Las tarjetas y las columnas se asientan con suavidad. Se omite cuando su dispositivo pide menos movimiento.",
+            showOnCards: "Mostrar en las tarjetas",
+            fields: {
+                cover: "Franja",
+                labels: "Etiquetas",
+                project: "Proyecto",
+                badges: "Vencimiento y prioridad",
+                details: "Detalles",
+                assignee: "Asignada",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Este proyecto no tiene fecha objetivo, así que no hay con qué comparar: la línea muestra lo ocurrido.",
         title: "Burndown",
         ideal: "Ideal",
         actual: "Restante",

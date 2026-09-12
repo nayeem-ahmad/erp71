@@ -16,6 +16,7 @@ import {
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
+import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -94,6 +95,8 @@ export default function ProjectDetailPage() {
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+    const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
+    const [hasIdeal, setHasIdeal] = useState(false);
     const [creating, setCreating] = useState(false);
     const [newTask, setNewTask] = useState({ title: '', description: '', estimateHours: '' });
     const [saving, setSaving] = useState(false);
@@ -114,6 +117,25 @@ export default function ProjectDetailPage() {
     useEffect(() => {
         load();
     }, [load]);
+
+    // Loads on its own, after the page: a project whose burndown cannot be read
+    // still opens, it simply has no chart.
+    useEffect(() => {
+        let live = true;
+        api.getProjectBurndown(projectId)
+            .then((result: unknown) => {
+                if (!live) return;
+                const payload = result as { series?: BurndownPoint[]; hasIdeal?: boolean } | null;
+                setBurndown(payload?.series ?? []);
+                setHasIdeal(Boolean(payload?.hasIdeal));
+            })
+            .catch(() => {
+                if (live) setBurndown([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectId]);
 
     const createTask = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -192,6 +214,21 @@ export default function ProjectDetailPage() {
                 <Stat label={m.overview.logged} value={`${progress.loggedHours}h`} />
                 <Stat label={m.overview.remaining} value={`${progress.remainingHours}h`} />
             </section>
+
+            {/* Directly under the figure it is the history of. "Remaining: 120h"
+                cannot tell a project converging from one that has been at 120h
+                for three weeks, which is the question somebody opening a project
+                is actually asking. Absent entirely until there is a shape to
+                draw — a project logged against twice is not a burndown. */}
+            {burndown && burndown.length > 1 && (
+                <section className="rounded-md border border-gray-200 bg-white p-3">
+                    <h2 className="mb-2 text-sm font-medium">{m.burndown.title}</h2>
+                    <BurndownChart series={burndown} hideIdeal={!hasIdeal} />
+                    {!hasIdeal && (
+                        <p className="mt-1 text-xs text-gray-500">{m.burndown.noTarget}</p>
+                    )}
+                </section>
+            )}
 
             <section className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-3 md:col-span-2">

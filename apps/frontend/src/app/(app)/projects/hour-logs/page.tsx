@@ -43,6 +43,9 @@ import HourLogList from '@/components/projects/HourLogList';
 import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/components/projects/hour-log-day';
 import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { readsOwnRecordsOnly, tenantFromMe } from '@/lib/permissions';
+import { getWorkspaceItem } from '@/lib/session-store';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -187,6 +190,14 @@ const EMPTY_FORM = {
     tagIds: [] as string[],
 };
 
+/**
+ * A range restored from the last visit is JSON nobody validated on the way in,
+ * so both ends are checked before it is trusted as the window to query.
+ */
+const isRange = (value: unknown): value is HourLogRange =>
+    typeof (value as HourLogRange | null)?.from === 'string'
+    && typeof (value as HourLogRange | null)?.to === 'string';
+
 /** A 409 from the overlap guard, as opposed to any other failure. */
 const isOverlapConflict = (error: unknown): boolean =>
     error instanceof Error && /overlap/i.test(error.message);
@@ -200,15 +211,46 @@ export default function HourLogsPage() {
     const hl = m.hourLogs;
 
     const [view, setView] = useRememberedView();
-    const [preset, setPreset] = useState<HourLogRangePreset>('30');
-    const [range, setRange] = useState<HourLogRange>(() => hourLogPresetRange('30'));
-    const [search, setSearch] = useState('');
+
+    /**
+     * Remembered for the tab, so opening a task from a row and coming back
+     * returns to the hours that were being read rather than to the last 30 days
+     * of everybody's.
+     *
+     * The *preset* is remembered rather than the dates it stands for: "last 30
+     * days" has to still mean the 30 days ending today when the page is opened
+     * again, not the window it covered when the choice was made. Only a custom
+     * range is stored as dates, because there is nothing else to recompute it
+     * from.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-hour-logs', {
+        preset: '30' as HourLogRangePreset,
+        customRange: hourLogPresetRange('30') as HourLogRange,
+        search: '',
+        projectId: '',
+        personId: '',
+        tagId: '',
+    });
+    const { preset, customRange, search, projectId, personId, tagId } = filters;
+
+    const range = useMemo<HourLogRange>(
+        () =>
+            preset === 'custom' && isRange(customRange)
+                ? customRange
+                : hourLogPresetRange(preset === 'custom' ? '30' : preset),
+        [preset, customRange],
+    );
+
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [projectId, setProjectId] = useState('');
-    const [personId, setPersonId] = useState('');
-    const [tagId, setTagId] = useState('');
+    // A search restored from the last visit is not typing: it is already the
+    // term to query, so it applies with the first request rather than 300ms
+    // later, which would fetch the unsearched list first and flash it.
+    const [typing, setTyping] = useState(false);
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [people, setPeople] = useState<PersonOption[]>([]);
+    // A narrowed member only ever reads their own hours, so the person filter
+    // has one option and no purpose. The server enforces it either way.
+    const [ownRecordsOnly, setOwnRecordsOnly] = useState(false);
     const [tags, setTags] = useState<HourLogTag[]>([]);
     const [summary, setSummary] = useState<ReportSummary | null>(null);
     const [dayTotals, setDayTotals] = useState<Record<string, DayTotal>>({});
@@ -239,9 +281,15 @@ export default function HourLogsPage() {
     const [pendingOverlap, setPendingOverlap] = useState<{ message: string; retry: () => Promise<void> } | null>(null);
 
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search.trim());
+            return;
+        }
         const timeout = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timeout);
-    }, [search]);
+    }, [search, typing]);
+
+    const effectiveSearch = typing ? debouncedSearch : search.trim();
 
     useEffect(() => {
         api.getProjects({ limit: 100 })
@@ -252,10 +300,24 @@ export default function HourLogsPage() {
             .catch(() => setTags([]));
     }, []);
 
+    useEffect(() => {
+        api.getMe()
+            .then((me: unknown) => {
+                const payload = me as {
+                    tenants?: { id: string; role?: string | null; record_scope?: string | null }[];
+                };
+                setOwnRecordsOnly(
+                    readsOwnRecordsOnly(tenantFromMe(payload, getWorkspaceItem('tenant_id'))),
+                );
+            })
+            .catch(() => setOwnRecordsOnly(false));
+    }, []);
+
     // The person options come from the hours themselves rather than the team
     // roster: listing members needs MANAGE_USERS, which someone reading their
     // own timesheet has no reason to hold.
     useEffect(() => {
+        if (!filtersReady) return;
         let cancelled = false;
         api.getProjectTimePeople({ from: range.from, to: range.to, projectId: projectId || undefined })
             .then((rows: unknown) => {
@@ -267,27 +329,33 @@ export default function HourLogsPage() {
         return () => {
             cancelled = true;
         };
-    }, [range.from, range.to, projectId]);
+    }, [filtersReady, range.from, range.to, projectId]);
 
     const valid = range.from <= range.to;
 
     const { items, loading, total, page, pageSize, serverPagination, reload } =
         useServerList<HourLogEntry>({
             tableId: 'project-hour-logs',
-            enabled: valid,
+            // Nothing is fetched until the remembered filters are in, so a return
+            // visit does not request the default window and then replace it.
+            enabled: valid && filtersReady,
             initialSort: { id: 'work_date', desc: true },
-            deps: [range.from, range.to, debouncedSearch, projectId, personId, tagId],
+            deps: [range.from, range.to, effectiveSearch, projectId, personId, tagId],
             fetch: (params) =>
                 api.getProjectTimeEntries({
                     ...params,
                     from: range.from,
                     to: range.to,
-                    search: debouncedSearch || undefined,
+                    search: effectiveSearch || undefined,
                     projectId: projectId || undefined,
                     userId: personId || undefined,
                     tagId: tagId || undefined,
                 }),
         });
+
+    // `useServerList` reports "not loading" while it is held back, so the empty
+    // state would paint for a frame before the remembered filters arrive.
+    const listLoading = loading || !filtersReady;
 
     // The totals strip and every day header come from the report aggregate, not
     // from `items`. Two reasons, and the second is the load-bearing one: the
@@ -296,12 +364,12 @@ export default function HourLogsPage() {
     // hours in its header. Summing the rows in view would quietly report a
     // fraction of a day as the day.
     const loadSummary = useCallback(() => {
-        if (!valid) return;
+        if (!valid || !filtersReady) return;
         api.getProjectTimeReport({
             from: range.from,
             to: range.to,
             groupBy: 'date',
-            search: debouncedSearch || undefined,
+            search: effectiveSearch || undefined,
             projectId: projectId || undefined,
             userId: personId || undefined,
             tagId: tagId || undefined,
@@ -322,7 +390,7 @@ export default function HourLogsPage() {
                 setSummary(null);
                 setDayTotals({});
             });
-    }, [valid, range.from, range.to, debouncedSearch, projectId, personId, tagId]);
+    }, [valid, filtersReady, range.from, range.to, effectiveSearch, projectId, personId, tagId]);
 
     useEffect(() => {
         loadSummary();
@@ -756,8 +824,8 @@ export default function HourLogsPage() {
                 <HourLogRangeFilter
                     preset={preset}
                     range={range}
-                    onPresetChange={setPreset}
-                    onRangeChange={setRange}
+                    onPresetChange={(next) => setFilter('preset', next)}
+                    onRangeChange={(next) => setFilter('customRange', next)}
                     labels={{
                         from: hl.from,
                         to: hl.to,
@@ -769,13 +837,16 @@ export default function HourLogsPage() {
                 />
                 <Input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setTyping(true);
+                        setFilter('search', e.target.value);
+                    }}
                     placeholder={hl.searchPlaceholder}
                     className="md:max-w-xs"
                 />
                 <Select
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
+                    onChange={(e) => setFilter('projectId', e.target.value)}
                     className="md:w-52"
                     aria-label={m.fields.project}
                 >
@@ -786,24 +857,26 @@ export default function HourLogsPage() {
                         </option>
                     ))}
                 </Select>
-                <Select
-                    value={personId}
-                    onChange={(e) => setPersonId(e.target.value)}
-                    className="md:w-48"
-                    aria-label={hl.person}
-                >
-                    <option value="">{hl.allPeople}</option>
-                    <option value="me">{hl.mine}</option>
-                    {people.map((person) => (
-                        <option key={person.id} value={person.id}>
-                            {person.name || person.email}
-                        </option>
-                    ))}
-                </Select>
+                {!ownRecordsOnly && (
+                    <Select
+                        value={personId}
+                        onChange={(e) => setFilter('personId', e.target.value)}
+                        className="md:w-48"
+                        aria-label={hl.person}
+                    >
+                        <option value="">{hl.allPeople}</option>
+                        <option value="me">{hl.mine}</option>
+                        {people.map((person) => (
+                            <option key={person.id} value={person.id}>
+                                {person.name || person.email}
+                            </option>
+                        ))}
+                    </Select>
+                )}
                 {tags.length > 0 ? (
                     <Select
                         value={tagId}
-                        onChange={(e) => setTagId(e.target.value)}
+                        onChange={(e) => setFilter('tagId', e.target.value)}
                         className="md:w-40"
                         aria-label={hl.tags}
                     >
@@ -843,7 +916,7 @@ export default function HourLogsPage() {
                     days={days}
                     dayTotals={dayTotals}
                     showPerson={showPerson}
-                    loading={loading}
+                    loading={listLoading}
                     labels={{
                         today: hl.today,
                         yesterday: hl.yesterday,
@@ -873,7 +946,7 @@ export default function HourLogsPage() {
             ) : (
                 <HourLogList
                     entries={items}
-                    loading={loading}
+                    loading={listLoading}
                     labels={{
                         date: m.time.workDate,
                         project: m.fields.project,

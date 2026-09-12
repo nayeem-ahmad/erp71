@@ -23,7 +23,18 @@ const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
  * readings, and a curve between them would draw hours that were never measured.
  * Gaps (days with no snapshot) break the line instead of interpolating across.
  */
-export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
+export default function BurndownChart({
+    series,
+    hideIdeal,
+}: {
+    series: BurndownPoint[];
+    /**
+     * A project's `target_end_date` is optional where a sprint's dates are not,
+     * so a project without one has no ideal to draw and no legend entry for it
+     * — a key for a line that is not on the chart is worse than no key.
+     */
+    hideIdeal?: boolean;
+}) {
     const { t } = useI18n();
     const m = t.projects.burndown;
 
@@ -134,16 +145,17 @@ export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
                             strokeDasharray="2 3"
                         />
                     ))}
-                    {idealRuns.map((points, i) => (
-                        <polyline
-                            key={`ideal-${i}`}
-                            points={points}
-                            fill="none"
-                            className="stroke-gray-400"
-                            strokeWidth={1.5}
-                            strokeDasharray="5 4"
-                        />
-                    ))}
+                    {!hideIdeal &&
+                        idealRuns.map((points, i) => (
+                            <polyline
+                                key={`ideal-${i}`}
+                                points={points}
+                                fill="none"
+                                className="stroke-gray-400"
+                                strokeWidth={1.5}
+                                strokeDasharray="5 4"
+                            />
+                        ))}
                     {actualRuns.map((points, i) => (
                         <polyline
                             key={`actual-${i}`}
@@ -190,10 +202,12 @@ export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
                     <span className="inline-block h-0.5 w-4 bg-blue-600" />
                     {m.actual}
                 </span>
-                <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-0.5 w-4 bg-gray-400" />
-                    {m.ideal}
-                </span>
+                {!hideIdeal && (
+                    <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-0.5 w-4 bg-gray-400" />
+                        {m.ideal}
+                    </span>
+                )}
                 <span className="flex items-center gap-1.5">
                     <span className="inline-block h-0.5 w-4 bg-amber-500" />
                     {m.committed}

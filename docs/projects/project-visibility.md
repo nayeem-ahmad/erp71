@@ -162,6 +162,11 @@ from it now revokes their access rather than just un-staffing them.
 
 ## Not done
 
+Per-user **record scope** — "only their own tasks and hour logs" inside a
+project they can reach — was the gap this left, and is now its own layer:
+`docs/projects/project-record-scope.md`. Visibility still answers "which
+projects" alone.
+
 `ProjectMemberRole` (`MANAGER | MEMBER | VIEWER`) still does not gate anything.
 Membership is visibility only: a `VIEWER` who holds `MANAGE_PROJECT_TASKS` can
 still edit tasks on a project they are on. Making the role load-bearing is a

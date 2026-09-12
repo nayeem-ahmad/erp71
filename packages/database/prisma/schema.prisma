@@ -744,6 +744,28 @@ model Tenant {
   report_monthly_enabled Boolean @default(false)
   report_email           String? // override email for reports (defaults to owner email)
 
+  /// Password complexity a member of this workspace has to satisfy when they
+  /// change, reset or first set their password. Edited by a tenant admin at
+  /// Settings › Password Policy; evaluated by the one shared rule set in
+  /// `PasswordPolicy` (shared-types) so the form's checklist and the API's
+  /// rejection can never disagree.
+  ///
+  /// The defaults are what the product already enforced — eight characters —
+  /// plus the common-password list, so nothing changes for an existing
+  /// workspace until an admin tightens it. `PASSWORD_MIN_LENGTH_FLOOR` is the
+  /// floor whatever is written here: an admin may only make the rule stricter.
+  ///
+  /// Columns rather than a JSON blob, matching the other per-tenant settings on
+  /// this model, so the policy is queryable and a typo cannot invent a rule.
+  password_min_length        Int     @default(8)
+  password_require_uppercase Boolean @default(false)
+  password_require_lowercase Boolean @default(false)
+  password_require_number    Boolean @default(false)
+  password_require_symbol    Boolean @default(false)
+  /// Refuse the passwords that top every credential-stuffing list. On by
+  /// default: it only ever affects choosing a new password, never signing in.
+  password_block_common      Boolean @default(true)
+
   // Relations
   owner              User                      @relation("TenantOwner", fields: [owner_id], references: [id])
   stores             Store[]
@@ -1195,6 +1217,22 @@ model TenantUserRole {
   @@index([tenant_role_id])
 }
 
+/// How much of a module's data a role can see: `ALL` is every record the role's
+/// permissions reach, `OWN` narrows reads to the records the member is on —
+/// their own tasks and their own hour logs.
+///
+/// Stored on the role and never on the member, so it is granted the same way
+/// permissions are. It cannot be a `StorePermission`, because a member's access
+/// is the *union* of the roles they hold and a union can add but never subtract:
+/// a restriction expressed as a permission would survive into every other role
+/// they pick up. Resolved instead by widest-wins — a member is narrow only when
+/// every role they hold says `OWN` — which is what makes holding a second,
+/// unrestricted role mean what an admin expects.
+enum TenantRecordScope {
+  ALL
+  OWN
+}
+
 model TenantRole {
   id           String   @id @default(uuid())
   tenant_id    String
@@ -1208,6 +1246,10 @@ model TenantRole {
   /// wrote themselves. Postgres treats NULLs as distinct, so the unique below
   /// still allows any number of those per tenant.
   template_key String?
+  /// `ALL` by default: the column arrived after every existing role, and
+  /// defaulting the other way would have narrowed every member in every
+  /// workspace on the morning of the deploy. See `TenantRecordScope`.
+  record_scope TenantRecordScope @default(ALL)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -6631,6 +6673,10 @@ model ProjectTaskRemainingLog {
 
   @@index([tenant_id, sprint_id, changed_at])
   @@index([task_id, changed_at])
+  /// Added 2026-09-11 for the project-level burndown, which replays this table
+  /// scoped by project rather than by sprint. Without it that read is a
+  /// sequential scan — the two indexes above cover every other caller.
+  @@index([tenant_id, project_id, changed_at])
   @@map("project_task_remaining_logs")
 }
 

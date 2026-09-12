@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: 'Senarai semak tidak dapat dikemas kini',
     },
 
+    quickAdd: {
+        placeholder: 'Tambah tugasan — tajuk, kemudian Enter',
+        hint: 'Butiran dalam baris sama: @orang  #label  !high  ~3h  >jumaat',
+        add: 'Tambah',
+        more: 'Medan lain',
+        today: 'hari ini',
+        tomorrow: 'esok',
+        me: 'Saya',
+        setPriority: 'Tetapkan keutamaan',
+        addDescription: '+ Tambah penerangan',
+        saveAndAdd: 'Simpan dan tambah lagi',
+    },
+
+    timer: {
+        start: 'Mula',
+        stop: 'Henti',
+        elsewhere: 'Pemasa sedang berjalan pada tugasan lain',
+    },
+
     remaining: {
+        chart: 'Baki jam dari masa ke masa',
+        chartNow: 'kini',
+        chartUpNote: 'Naik — kerja ditambah',
         history: 'Sejarah baki jam',
         notePlaceholder: 'cth. pelanggan menambah dua bilik lagi',
         empty: 'Tiada perubahan direkodkan lagi.',
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: '{count} sub-tugasan',
             unassigned: 'Tiada penerima',
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: 'Rupa',
+            reset: 'Set semula',
+            cardSize: 'Saiz kad',
+            comfortable: 'Selesa',
+            compact: 'Padat',
+            columnWidth: 'Lebar lajur',
+            narrow: 'Sempit',
+            standard: 'Standard',
+            wide: 'Lebar',
+            columnColor: 'Warna lajur',
+            tintNone: 'Biasa',
+            tintCategory: 'Ikut peringkat',
+            motion: 'Gerakan',
+            motionHint: 'Kad dan lajur turun ke tempatnya. Diabaikan apabila peranti anda meminta kurang gerakan.',
+            showOnCards: 'Papar pada kad',
+            fields: {
+                cover: 'Jalur kulit',
+                labels: 'Label',
+                project: 'Projek',
+                badges: 'Tarikh tamat & keutamaan',
+                details: 'Butiran',
+                assignee: 'Penerima tugasan',
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: 'Projek ini tiada tarikh tamat sasaran, jadi tiada rentak untuk dibandingkan — garis ini menunjukkan apa yang berlaku.',
         title: 'Burndown',
         ideal: 'Unggul',
         actual: 'Baki',

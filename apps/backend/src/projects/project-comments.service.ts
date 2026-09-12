@@ -82,14 +82,14 @@ export class ProjectCommentsService {
         return { success: true };
     }
 
-    /** A task in a project the viewer cannot open is not a task they can discuss. */
+    /** A task the viewer cannot read is not a task they can discuss. */
     private async assertTask(viewer: ProjectViewer, taskId: string) {
         const task = await this.db.projectTask.findFirst({
             where: {
                 id: taskId,
                 tenant_id: viewer.tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: { id: true, project_id: true, title: true },
         });

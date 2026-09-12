@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "چیک لسٹ اپ ڈیٹ نہیں ہو سکی",
     },
 
+    quickAdd: {
+        placeholder: "کام شامل کریں — عنوان، پھر Enter",
+        hint: "اسی سطر میں تفصیل: @شخص  #لیبل  !high  ~3h  >جمعہ",
+        add: "شامل کریں",
+        more: "مزید خانے",
+        today: "آج",
+        tomorrow: "کل",
+        me: "میں",
+        setPriority: "ترجیح مقرر کریں",
+        addDescription: "+ تفصیل شامل کریں",
+        saveAndAdd: "محفوظ کر کے مزید",
+    },
+
+    timer: {
+        start: "شروع",
+        stop: "روکیں",
+        elsewhere: "کسی اور کام پر ٹائمر پہلے سے چل رہا ہے",
+    },
+
     remaining: {
+        chart: "وقت کے ساتھ باقی گھنٹے",
+        chartNow: "اب",
+        chartUpNote: "بڑھ گئے — کام شامل ہوا",
         history: "باقی گھنٹوں کی تاریخ",
         notePlaceholder: "مثلاً گاہک نے دو مزید کمرے شامل کر دیے",
         empty: "ابھی کوئی تبدیلی درج نہیں۔",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} ذیلی ٹاسک",
             unassigned: "غیر تفویض شدہ",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "ظاہری شکل",
+            reset: "ری سیٹ",
+            cardSize: "کارڈ کا سائز",
+            comfortable: "کشادہ",
+            compact: "مختصر",
+            columnWidth: "کالم کی چوڑائی",
+            narrow: "تنگ",
+            standard: "معیاری",
+            wide: "چوڑا",
+            columnColor: "کالم کا رنگ",
+            tintNone: "سادہ",
+            tintCategory: "مرحلے کے مطابق",
+            motion: "حرکت",
+            motionHint: "کارڈ اور کالم نرمی سے اپنی جگہ آتے ہیں۔ اگر آپ کا آلہ کم حرکت مانگے تو یہ نظر انداز ہو جاتا ہے۔",
+            showOnCards: "کارڈ پر دکھائیں",
+            fields: {
+                cover: "کور",
+                labels: "لیبل",
+                project: "پروجیکٹ",
+                badges: "آخری تاریخ اور ترجیح",
+                details: "تفصیلات",
+                assignee: "تفویض شدہ",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "اس منصوبے کی کوئی ہدف تاریخ نہیں، اس لیے موازنے کے لیے کچھ نہیں — لکیر بتاتی ہے کیا ہوا۔",
         title: "برن ڈاؤن",
         ideal: "مثالی",
         actual: "باقی",

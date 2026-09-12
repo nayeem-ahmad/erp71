@@ -62,6 +62,7 @@ import {
 } from './column-order';
 import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn } from './export-utils';
 import { renderHeaderHtml } from '@/lib/print';
+import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import BulkActionBar, { type BulkAction } from './BulkActionBar';
 import ExportDialog, { type ExportFormat, type ExportRowScope } from './ExportDialog';
@@ -814,13 +815,14 @@ export default function DataTable<T>({
                         <button
                             onClick={async () => {
                                 const header = await printHeader.resolve();
+                                const headerContext: HeaderContext = {
+                                    docTitle: title,
+                                    companyName: header.companyName,
+                                };
                                 printTable(table, title, {
-                                    html: renderHeaderHtml(
-                                        header.headerConfig,
-                                        { docTitle: title, companyName: header.companyName },
-                                        'A4',
-                                    ),
+                                    html: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
                                     config: header.headerConfig,
+                                    context: headerContext,
                                 });
                             }}
                             className={toolbarBtnBase}

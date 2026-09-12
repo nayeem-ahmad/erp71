@@ -3,6 +3,7 @@ import type {
     AiChatConversationSummary,
     AiChatResponse,
     DashboardPreference,
+    PasswordPolicy,
     PlatformFeatureKey,
     PlatformFeatures,
     SupportedLocaleCode,
@@ -3294,13 +3295,26 @@ export const api = {
         }),
     // Team & permissions (tenant-scoped staff management)
     getTeamRoles: () => fetchWithAuth('/team/roles'),
-    createTeamRole: (data: { name: string; description?: string; permissions: string[] }) =>
+    createTeamRole: (data: {
+        name: string;
+        description?: string;
+        permissions: string[];
+        recordScope?: 'ALL' | 'OWN';
+    }) =>
         fetchWithAuth('/team/roles', {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    updateTeamRole: (id: string, data: { name?: string; description?: string; permissions?: string[] }) =>
+    updateTeamRole: (
+        id: string,
+        data: {
+            name?: string;
+            description?: string;
+            permissions?: string[];
+            recordScope?: 'ALL' | 'OWN';
+        },
+    ) =>
         fetchWithAuth(`/team/roles/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -3410,6 +3424,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /** Readable by every member: the change-password form renders these rules. */
+    getTenantPasswordPolicy: (): Promise<PasswordPolicy> => fetchWithAuth('/tenants/password-policy'),
+    updateTenantPasswordPolicy: (data: Partial<PasswordPolicy>): Promise<PasswordPolicy> =>
+        fetchWithAuth('/tenants/password-policy', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     changePassword: (data: { currentPassword: string; newPassword: string }) => fetchWithAuth('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -4330,6 +4352,7 @@ export const api = {
         }),
     deleteProject: (id: string) => fetchWithAuth(`/projects/${id}`, { method: 'DELETE' }),
     getProjectTimeSummary: (id: string) => fetchWithAuth(`/projects/${id}/time-summary`),
+    getProjectBurndown: (id: string) => fetchWithAuth(`/projects/${id}/burndown`),
 
     addProjectMember: (projectId: string, data: { userId?: string; employeeId?: string; role?: string }) =>
         fetchWithAuth(`/projects/${projectId}/members`, {

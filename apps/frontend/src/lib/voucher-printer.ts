@@ -1,6 +1,6 @@
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 export interface VoucherPrintLine {
     accountName: string;
@@ -67,14 +67,11 @@ export function printVoucher(data: VoucherPrintData, paperSize: PaperSize = 'A4'
         </tr>
     `).join('');
 
-    const headerHtml = renderHeaderHtml(
-        data.headerConfig,
-        {
-            docTitle: data.labels.title,
-            companyName: data.businessName,
-        },
-        paperSize,
-    );
+    const headerContext: HeaderContext = {
+        docTitle: data.labels.title,
+        companyName: data.businessName,
+    };
+    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
 
     const bodyHtml = `
     <table class="meta">
@@ -97,6 +94,7 @@ export function printVoucher(data: VoucherPrintData, paperSize: PaperSize = 'A4'
     <div class="total">${escHtml(data.labels.total)}: ${escHtml(formatBDT(data.totalAmount))}</div>`;
 
     openPrintWindow({
+        context: headerContext,
         title: `${data.labels.title} ${data.voucherNumber}`,
         paperSize,
         headerConfig: data.headerConfig,

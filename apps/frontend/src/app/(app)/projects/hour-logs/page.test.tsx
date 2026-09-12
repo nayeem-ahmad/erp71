@@ -11,6 +11,7 @@ jest.mock('@/lib/api', () => ({
         getProjectTimeEntries: (...args: unknown[]) => getProjectTimeEntries(...args),
         getProjectTimeReport: (...args: unknown[]) => getProjectTimeReport(...args),
         getProjectTimePeople: jest.fn(),
+        getMe: jest.fn(),
         getProjectTimeTags: jest.fn(),
         getProjectTimer: jest.fn(),
         startProjectTimer: jest.fn(),
@@ -94,6 +95,9 @@ beforeEach(() => {
     api.getProjects.mockReset().mockResolvedValue({
         items: [{ id: 'p1', code: 'PRJ-0001', name: 'Fitout' }],
     });
+    // The page asks who it is serving to decide whether the person filter is
+    // worth rendering: a member narrowed to their own records has one option.
+    api.getMe.mockReset().mockResolvedValue({ id: 'user-1', tenants: [] });
     api.getProjectTimePeople.mockReset().mockResolvedValue([
         { id: 'u1', name: 'Rina', email: 'rina@example.com' },
     ]);
@@ -116,6 +120,20 @@ beforeEach(() => {
     // decides what every test after it opens on.
     localStorage.clear();
 });
+
+/**
+ * The page reads "today" from the local clock, the same way the range filter
+ * does — a Dhaka evening is already tomorrow in UTC.
+ */
+const isoDay = (date: Date): string =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+/** The first day of an N-day window ending today. */
+const expectedFrom = (days: number): string => {
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    return isoDay(start);
+};
 
 describe('Hour logs page', () => {
     it('opens on a date range so the list is never an unbounded history', async () => {
@@ -657,5 +675,140 @@ describe('Hour logs page', () => {
                 expect.objectContaining({ page: 1, limit: 100 }),
             );
         });
+    });
+});
+
+describe('Hour logs page — remembered filters', () => {
+    const lastCall = () => getProjectTimeEntries.mock.calls.at(-1)![0];
+
+    it('comes back to the person and project the last visit left set', async () => {
+        const first = render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'me' } });
+        fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p1' } });
+        await waitFor(() => expect(lastCall()).toMatchObject({ userId: 'me', projectId: 'p1' }));
+        first.unmount();
+
+        getProjectTimeEntries.mockClear();
+        getProjectTimeReport.mockClear();
+        render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        expect((screen.getByLabelText('Person') as HTMLSelectElement).value).toBe('me');
+        // Never everybody's hours on the way, in the list or in the totals above it.
+        for (const call of getProjectTimeEntries.mock.calls) {
+            expect(call[0]).toMatchObject({ userId: 'me', projectId: 'p1' });
+        }
+        for (const call of getProjectTimeReport.mock.calls) {
+            expect(call[0]).toMatchObject({ userId: 'me', projectId: 'p1' });
+        }
+    });
+
+    /**
+     * The search box debounces, so a restored term has to bypass the debounce:
+     * applying it 300ms late would query the unsearched range first.
+     */
+    it('restores a search term with the first request, not 300ms after it', async () => {
+        const first = render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByPlaceholderText(/search a task title or a note/i), {
+            target: { value: 'conduit' },
+        });
+        await waitFor(() => expect(lastCall().search).toBe('conduit'));
+        first.unmount();
+
+        getProjectTimeEntries.mockClear();
+        render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        for (const call of getProjectTimeEntries.mock.calls) {
+            expect(call[0].search).toBe('conduit');
+        }
+    });
+
+    /**
+     * The preset is what is remembered, not the dates it stood for: "last 7
+     * days" has to still mean the seven days ending today when the page is
+     * opened again, not the week it covered when the choice was made.
+     */
+    it('re-resolves a remembered preset against today rather than restoring stale dates', async () => {
+        const first = render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText('Custom range'), { target: { value: '7' } });
+        await waitFor(() => expect(lastCall().from).toBe(expectedFrom(7)));
+        first.unmount();
+
+        // A day passes with the tab still open.
+        jest.useFakeTimers().setSystemTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
+        try {
+            getProjectTimeEntries.mockClear();
+            render(<HourLogsPage />);
+            await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+            expect((screen.getByLabelText('Custom range') as HTMLSelectElement).value).toBe('7');
+            expect(lastCall().from).toBe(expectedFrom(7));
+            expect(lastCall().to).toBe(isoDay(new Date()));
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('restores a custom range as the dates it was given, since nothing else defines it', async () => {
+        const first = render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-05' } });
+        fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-19' } });
+        await waitFor(() => expect(lastCall()).toMatchObject({ from: '2026-01-05', to: '2026-01-19' }));
+        first.unmount();
+
+        getProjectTimeEntries.mockClear();
+        render(<HourLogsPage />);
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+
+        expect((screen.getByLabelText('Custom range') as HTMLSelectElement).value).toBe('custom');
+        for (const call of getProjectTimeEntries.mock.calls) {
+            expect(call[0]).toMatchObject({ from: '2026-01-05', to: '2026-01-19' });
+        }
+    });
+
+    it('opens on the default 30 days when nothing has been remembered yet', async () => {
+        render(<HourLogsPage />);
+
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+        expect(lastCall()).toMatchObject({
+            from: expectedFrom(30),
+            to: isoDay(new Date()),
+            search: undefined,
+            projectId: undefined,
+            userId: undefined,
+        });
+    });
+    /**
+     * A member narrowed to their own records reads only their own hours, so the
+     * person filter has one option. The server enforces the scope either way —
+     * this is about not offering a control that cannot do anything.
+     */
+    it('hides the person filter from a member who reads only their own records', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            tenants: [{ id: 'tenant-1', role: 'CASHIER', record_scope: 'OWN' }],
+        });
+
+        render(<HourLogsPage />);
+
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+        expect(screen.queryByLabelText('Person')).not.toBeInTheDocument();
+    });
+
+    it('keeps the person filter for everybody else', async () => {
+        render(<HourLogsPage />);
+
+        await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
+        expect(screen.getByLabelText('Person')).toBeInTheDocument();
     });
 });

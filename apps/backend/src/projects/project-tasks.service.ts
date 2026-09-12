@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { paginate } from '../common/pagination.dto';
@@ -34,6 +35,9 @@ const TASK_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
     sort_order: (dir) => ({ sort_order: dir }),
 };
+
+/** How many readings the list sparkline draws. Enough for a shape, not a chart. */
+const TREND_POINTS = 10;
 
 const TASK_INCLUDE = {
     project: { select: { id: true, code: true, name: true, short_name: true } },
@@ -94,10 +98,12 @@ export class ProjectTasksService {
 
         // The cross-project Tasks page reads every task in the tenant, so this
         // is where a private project's work would otherwise leak in full —
-        // title, assignee, hours and all — to someone who cannot open it.
+        // title, assignee, hours and all — to someone who cannot open it. It is
+        // also where a narrow viewer's own-records scope has to bite, since the
+        // page's assignee filter is theirs to clear.
         // Merged rather than spread so a filter added above can never be
         // overwritten by, or overwrite, this one.
-        const scoped = ProjectAccessService.merge(where, await this.access.relatedFilter(viewer));
+        const scoped = ProjectAccessService.merge(where, await this.access.taskFilter(viewer));
 
         const [items, total] = await Promise.all([
             this.db.projectTask.findMany({
@@ -114,7 +120,57 @@ export class ProjectTasksService {
         ]);
 
         const withLogged = await this.attachLoggedHours(tenantId, items as TaskRow[]);
-        return paginate(withLogged, total, page, limit);
+        const withTrend = await this.attachRemainingTrend(tenantId, withLogged as TaskRow[]);
+        return paginate(withTrend, total, page, limit);
+    }
+
+    /**
+     * The last few remaining-hours readings per task, oldest first, for the
+     * sparkline in the list's Remaining column.
+     *
+     * **One query for the whole page, whatever its length.** The obvious
+     * implementation — a `findMany` per row — is an N+1 that grows with the page
+     * size, and the naive single query (every log row for these tasks, trimmed
+     * in JS) is unbounded: one task worked for a year would return thousands of
+     * rows to draw fifty pixels. A window function does the trimming in the
+     * database, so the cost is `page size × TREND_POINTS` rows and one round
+     * trip.
+     *
+     * Tasks with fewer than two readings get no array at all — a single point
+     * has no shape, and the column shows the figure alone.
+     */
+    private async attachRemainingTrend(tenantId: string, tasks: TaskRow[]) {
+        const ids = tasks.map((task) => task.id);
+        if (ids.length === 0) return tasks;
+
+        const rows = await this.db.$queryRaw<{ task_id: string; new_hours: string }[]>`
+            SELECT task_id, new_hours
+            FROM (
+                SELECT task_id,
+                       new_hours,
+                       changed_at,
+                       row_number() OVER (
+                           PARTITION BY task_id ORDER BY changed_at DESC
+                       ) AS rn
+                FROM project_task_remaining_logs
+                WHERE tenant_id = ${tenantId}
+                  AND task_id IN (${Prisma.join(ids)})
+            ) ranked
+            WHERE rn <= ${TREND_POINTS}
+            ORDER BY task_id, changed_at ASC
+        `;
+
+        const byTask = new Map<string, number[]>();
+        for (const row of rows) {
+            const points = byTask.get(row.task_id) ?? [];
+            points.push(Number(row.new_hours));
+            byTask.set(row.task_id, points);
+        }
+
+        return tasks.map((task) => {
+            const trend = byTask.get(task.id);
+            return trend && trend.length > 1 ? { ...task, remaining_trend: trend } : task;
+        });
     }
 
     /**
@@ -131,7 +187,7 @@ export class ProjectTasksService {
     async listAssignees(viewer: ProjectViewer) {
         const base = ProjectAccessService.merge(
             { tenant_id: viewer.tenantId, deleted_at: null },
-            await this.access.relatedFilter(viewer),
+            await this.access.taskFilter(viewer),
         );
 
         // groupBy rather than a distinct findMany: the DISTINCT runs in the
@@ -202,7 +258,7 @@ export class ProjectTasksService {
                 id: taskId,
                 tenant_id: tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             include: {
                 ...TASK_INCLUDE,
@@ -881,7 +937,7 @@ export class ProjectTasksService {
      * hops rather than assumed from the route.
      */
     private async assertChecklistItem(viewer: ProjectViewer, itemId: string) {
-        const filter = await this.access.relatedFilter(viewer);
+        const filter = await this.access.taskFilter(viewer);
         const item = await this.db.projectTaskChecklistItem.findFirst({
             where: {
                 id: itemId,
@@ -940,7 +996,7 @@ export class ProjectTasksService {
                 id: taskId,
                 tenant_id: viewer.tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             include: { status: { select: { id: true, name: true, category: true } } },
         });

@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: 'Could not update the checklist',
     },
 
+    quickAdd: {
+        placeholder: 'Add a task — title, then Enter',
+        hint: 'Add detail inline: @person  #label  !high  ~3h  >friday',
+        add: 'Add',
+        more: 'More fields',
+        today: 'today',
+        tomorrow: 'tomorrow',
+        me: 'Me',
+        setPriority: 'Set priority',
+        addDescription: '+ Add description',
+        saveAndAdd: 'Save and add another',
+    },
+
+    timer: {
+        start: 'Start',
+        stop: 'Stop',
+        elsewhere: 'A timer is already running on another task',
+    },
+
     remaining: {
+        chart: 'Remaining hours over time',
+        chartNow: 'now',
+        chartUpNote: 'Went up — work added',
         history: 'Remaining hours history',
         notePlaceholder: 'e.g. client added two more rooms',
         empty: 'No changes recorded yet.',
@@ -467,6 +489,35 @@ export const projectsMessages = {
             subtasks: '{count} subtask(s)',
             unassigned: 'Unassigned',
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: 'Appearance',
+            reset: 'Reset',
+            cardSize: 'Card size',
+            comfortable: 'Comfortable',
+            compact: 'Compact',
+            columnWidth: 'Column width',
+            narrow: 'Narrow',
+            standard: 'Standard',
+            wide: 'Wide',
+            columnColor: 'Column colour',
+            tintNone: 'Plain',
+            tintCategory: 'By stage',
+            motion: 'Motion',
+            motionHint: 'Cards and columns settle into place. Ignored when your device asks for less motion.',
+            showOnCards: 'Show on cards',
+            fields: {
+                cover: 'Cover',
+                labels: 'Labels',
+                project: 'Project',
+                badges: 'Due & priority',
+                details: 'Details',
+                assignee: 'Assignee',
+            },
+        },
     },
 
     sprint: {
@@ -512,6 +563,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: 'No target end date on this project, so there is nothing to pace against — the line is what happened, not how it compares.',
         title: 'Burndown',
         ideal: 'Ideal',
         actual: 'Remaining',

@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "Impossible de mettre à jour la liste de contrôle",
     },
 
+    quickAdd: {
+        placeholder: "Ajouter une tâche — titre, puis Entrée",
+        hint: "Détails sur la même ligne : @personne  #étiquette  !high  ~3h  >vendredi",
+        add: "Ajouter",
+        more: "Autres champs",
+        today: "aujourd'hui",
+        tomorrow: "demain",
+        me: "Moi",
+        setPriority: "Définir la priorité",
+        addDescription: "+ Ajouter une description",
+        saveAndAdd: "Enregistrer et en ajouter une",
+    },
+
+    timer: {
+        start: "Démarrer",
+        stop: "Arrêter",
+        elsewhere: "Un minuteur tourne déjà sur une autre tâche",
+    },
+
     remaining: {
+        chart: "Heures restantes dans le temps",
+        chartNow: "maintenant",
+        chartUpNote: "En hausse — travail ajouté",
         history: "Historique des heures restantes",
         notePlaceholder: "par ex. le client a ajouté deux pièces",
         empty: "Aucun changement enregistré pour le moment.",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} sous-tâche(s)",
             unassigned: "Non assignée",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "Apparence",
+            reset: "Réinitialiser",
+            cardSize: "Taille des cartes",
+            comfortable: "Confortable",
+            compact: "Compacte",
+            columnWidth: "Largeur des colonnes",
+            narrow: "Étroite",
+            standard: "Standard",
+            wide: "Large",
+            columnColor: "Couleur des colonnes",
+            tintNone: "Neutre",
+            tintCategory: "Par étape",
+            motion: "Animations",
+            motionHint: "Les cartes et les colonnes se posent en douceur. Ignoré lorsque votre appareil demande moins d’animations.",
+            showOnCards: "Afficher sur les cartes",
+            fields: {
+                cover: "Bandeau",
+                labels: "Étiquettes",
+                project: "Projet",
+                badges: "Échéance et priorité",
+                details: "Détails",
+                assignee: "Assignée",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Ce projet n'a pas de date cible, il n'y a donc rien à quoi se comparer : la ligne montre ce qui s'est passé.",
         title: "Burndown",
         ideal: "Idéal",
         actual: "Restant",

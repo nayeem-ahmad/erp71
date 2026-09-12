@@ -22,7 +22,9 @@ import {
     DEFAULT_PLATFORM_FEATURES,
     ROLE_DEFAULT_PERMISSIONS,
     StorePermission,
+    TenantRecordScope,
     UserRole,
+    resolveRecordScope,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -33,9 +35,11 @@ import {
     resolveTenantFeatures,
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
+    DEFAULT_PASSWORD_POLICY,
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
 import { normalizeBillingCycle, type BillingCycle } from '../billing/billing-cycle.util';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -74,6 +78,7 @@ export class AuthService {
         private readonly google: GoogleTokenService,
         private readonly firebase: FirebaseTokenService,
         private readonly refreshTokens: RefreshTokenService,
+        private readonly passwordPolicy: PasswordPolicyService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -97,6 +102,11 @@ export class AuthService {
         }
 
         this.assertTermsAccepted(dto.acceptedTermsVersion);
+
+        // Signup creates the workspace, so there is no tenant policy to read yet
+        // — the platform default is the whole rule here. The owner's own policy
+        // starts applying the next time they change this password.
+        this.passwordPolicy.assertValid(dto.password, DEFAULT_PASSWORD_POLICY);
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const displayName = dto.name?.trim() || dto.email.split('@')[0];
@@ -755,6 +765,10 @@ export class AuthService {
                             },
                         },
                         tenantRole: { select: { id: true, name: true } },
+                        // Every role the member holds, for the record scope
+                        // below: it is resolved widest-wins across the set, so
+                        // the primary role alone cannot answer it.
+                        roles: { select: { tenantRole: { select: { record_scope: true } } } },
                     },
                 },
                 storeAccess: {
@@ -821,6 +835,10 @@ export class AuthService {
                             },
                         },
                         tenantRole: { select: { id: true, name: true } },
+                        // Every role the member holds, for the record scope
+                        // below: it is resolved widest-wins across the set, so
+                        // the primary role alone cannot answer it.
+                        roles: { select: { tenantRole: { select: { record_scope: true } } } },
                     },
                 },
                 storeAccess: {
@@ -961,9 +979,9 @@ export class AuthService {
             throw new BadRequestException('New password must differ from your current password');
         }
 
-        if (dto.newPassword.length < 8) {
-            throw new BadRequestException('New password must be at least 8 characters');
-        }
+        // The workspace's own rule, not a bare length check — and the strictest
+        // one when this person is a member of several. See `getForUser`.
+        await this.passwordPolicy.assertValidForUser(dto.newPassword, userId);
 
         const newHash = await bcrypt.hash(dto.newPassword, 10);
         // A password change revokes every session on every surface — the storefront
@@ -1295,6 +1313,19 @@ export class AuthService {
                     : membership.tenantRole
                       ? { id: membership.tenantRole.id, name: membership.tenantRole.name }
                       : null,
+            // How much of a module's data this member reads: `ALL`, or `OWN` when
+            // every role they hold is narrowed. The client gates the
+            // person/assignee filters on it so a narrow member is not offered
+            // pickers whose every other option returns nothing; the server
+            // filters regardless (`ProjectAccessService`).
+            record_scope: resolveRecordScope(
+                membership.role === 'OWNER'
+                    ? []
+                    : (membership.roles ?? []).map(
+                          (assignment: { tenantRole: { record_scope: TenantRecordScope } }) =>
+                              assignment.tenantRole.record_scope,
+                      ),
+            ),
             permissions: await this.resolveTenantPermissions(
                 userId,
                 membership.tenant_id,

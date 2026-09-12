@@ -264,6 +264,7 @@ export const routes = {
         team: '/team',
         counters: '/settings/counters',
         localization: '/settings/localization',
+        passwordPolicy: '/settings/password-policy',
         dashboard: '/settings/dashboard',
         data: '/settings/data',
         stores: '/settings/stores',

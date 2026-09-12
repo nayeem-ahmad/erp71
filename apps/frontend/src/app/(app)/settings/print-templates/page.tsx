@@ -81,17 +81,22 @@ export default function PrintTemplatesPage() {
         void loadTemplates();
     }, [loadTemplates]);
 
-    const handleUploadLogo = async (file: File) => {
+    /**
+     * Shared by the logo slot and every header/footer image — returns the URL
+     * so each caller decides which part of the config it lands in.
+     */
+    const uploadImage = useCallback(async (file: File): Promise<string | null> => {
         setUploading(true);
         try {
             const result = await api.uploadFile(file);
-            if (result?.url) setConfig((current) => ({ ...current, logo: { ...current.logo, url: result.url } }));
+            return result?.url ?? null;
         } catch {
             toast.error(copy.uploadFailed);
+            return null;
         } finally {
             setUploading(false);
         }
-    };
+    }, [copy.uploadFailed]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -220,7 +225,7 @@ export default function PrintTemplatesPage() {
                             onDocTypesChange={setDocTypes}
                             config={config}
                             onConfigChange={setConfig}
-                            onUploadLogo={handleUploadLogo}
+                            onUpload={uploadImage}
                             uploading={uploading}
                         />
 

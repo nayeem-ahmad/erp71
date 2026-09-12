@@ -85,7 +85,7 @@ describe('Sales Returns & Orders (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'ret-test@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Returns Tester',
                     tenantName: 'Returns Tenant',
                     storeName: 'Returns Store',
@@ -98,7 +98,7 @@ describe('Sales Returns & Orders (e2e)', () => {
 
             const loginRes = await request(app.getHttpServer())
                 .post('/auth/login')
-                .send({ email: 'ret-test@example.com', password: 'password123' })
+                .send({ email: 'ret-test@example.com', password: 'Dhaka-Shop-2026' })
                 .expect(201);
 
             loginPayload = bodyOf(loginRes);
@@ -317,7 +317,7 @@ describe('Sales Returns & Orders (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'other-tenant@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Other Tenant User',
                     tenantName: 'Other Tenant',
                     storeName: 'Other Store',

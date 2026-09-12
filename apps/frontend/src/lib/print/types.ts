@@ -1,10 +1,11 @@
 /**
  * Shared print types.
  *
- * `PrintHeaderConfig` is the tenant-designed header that every printed document
- * renders. It is stored as a versioned JSON blob so new options can be added
- * without a migration — always bump `version` and handle the older shape in
- * `resolveHeaderConfig` when that happens.
+ * `PrintHeaderConfig` is the tenant-designed letterhead — header band, optional
+ * footer band, and the imagery and typography of both — that every printed
+ * document renders. It is stored as a versioned JSON blob so new options can be
+ * added without a migration — always bump `version` and handle the older shape
+ * in `resolveHeaderConfig` when that happens.
  */
 
 export type PaperSize = 'A4' | 'A5' | 'Letter' | 'Thermal80' | 'Thermal58';
@@ -41,12 +42,65 @@ export interface HeaderLine {
     fontSizePt?: number;
     bold?: boolean;
     italic?: boolean;
+    underline?: boolean;
     align?: 'left' | 'center' | 'right';
     color?: string;
+    /** Overrides the template font for this line only. */
+    fontFamily?: PrintFontFamily;
+    letterSpacingPx?: number;
+}
+
+/**
+ * An image placed on the letterhead beyond the logo — a signature, a seal, a
+ * certification badge, a bank QR code.
+ *
+ * Images render in a row in the order they are listed, so a footer carrying a
+ * signature and a company seal prints them side by side.
+ */
+export interface TemplateImage {
+    /** https:// or data:image/ — anything else is dropped by the renderer. */
+    url?: string;
+    heightMm: number;
+    align?: 'left' | 'center' | 'right';
+    /** Printed under the image, e.g. "Authorised Signature". */
+    caption?: string;
+    /** Narrow rolls rarely render extra imagery legibly — opt in per image. */
+    showOnThermal?: boolean;
+}
+
+/**
+ * The tenant-designed footer band. Same building blocks as the header — text
+ * lines with tokens, plus images — so a tenant can print bank details, terms
+ * and a signature block without the app hardcoding any of it.
+ */
+export interface PrintFooterConfig {
+    show: boolean;
+    lines: HeaderLine[];
+    images: TemplateImage[];
+    /** Divider drawn above the footer. */
+    rule: {
+        show: boolean;
+        thicknessPx: number;
+        color: string;
+    };
+    spacingMm: number;
+    /**
+     * Repeat at the bottom of every printed page rather than printing once
+     * after the content. Uses a `<tfoot>` for the same reason the header uses
+     * `<thead>` — see print-window.ts.
+     */
+    repeatOnEveryPage: boolean;
 }
 
 export interface PrintHeaderConfig {
-    version: 1;
+    /**
+     * 1 — header only. 2 — adds `images` and `footer`.
+     *
+     * Both shapes are readable: every field added in 2 is filled from
+     * `DEFAULT_HEADER_CONFIG` by `resolveHeaderConfig`, so a stored v1 config
+     * renders unchanged and only gains a footer once a tenant designs one.
+     */
+    version: 1 | 2;
     layout: HeaderLayout;
     logo: {
         url?: string;
@@ -70,11 +124,14 @@ export interface PrintHeaderConfig {
         color: string;
     };
     lines: HeaderLine[];
+    /** Extra header imagery beside the logo — badges, certifications, a QR. */
+    images: TemplateImage[];
     rule: {
         show: boolean;
         thicknessPx: number;
         color: string;
     };
+    footer: PrintFooterConfig;
     fontFamily: PrintFontFamily;
     baseFontSizePt: number;
     spacingMm: number;
@@ -101,8 +158,26 @@ export interface HeaderContext {
     tin?: string;
 }
 
+/**
+ * The footer a tenant gets the first time they switch one on.
+ *
+ * It reproduces the "Thank you for your business!" line the printers used to
+ * hardcode, so enabling the footer starts from what was already printing and
+ * is edited from there rather than from a blank band.
+ */
+export const DEFAULT_FOOTER_CONFIG: PrintFooterConfig = {
+    show: false,
+    lines: [
+        { text: 'Thank you for your business.', fontSizePt: 9, align: 'center', color: '#666666' },
+    ],
+    images: [],
+    rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+    spacingMm: 4,
+    repeatOnEveryPage: false,
+};
+
 export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
-    version: 1,
+    version: 2,
     layout: 'logo-left',
     logo: { heightMm: 16, showOnThermal: true },
     company: { show: true, fontSizePt: 16, bold: true, color: '#1d4ed8' },
@@ -111,7 +186,9 @@ export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
         { text: '{{address}}', fontSizePt: 9, color: '#555555' },
         { text: 'Tel: {{phone}}', fontSizePt: 9, color: '#555555' },
     ],
+    images: [],
     rule: { show: true, thicknessPx: 2, color: '#1d4ed8' },
+    footer: DEFAULT_FOOTER_CONFIG,
     fontFamily: 'sans',
     baseFontSizePt: 10,
     spacingMm: 4,
@@ -124,6 +201,7 @@ export const DEFAULT_THERMAL_OVERRIDES: DeepPartial<PrintHeaderConfig> = {
     company: { fontSizePt: 12, color: '#000000' },
     title: { fontSizePt: 10, letterSpacingPx: 0, color: '#000000' },
     rule: { thicknessPx: 1, color: '#000000' },
+    footer: { rule: { thicknessPx: 1, color: '#000000' }, spacingMm: 2 },
     fontFamily: 'mono',
     baseFontSizePt: 8,
     spacingMm: 2,

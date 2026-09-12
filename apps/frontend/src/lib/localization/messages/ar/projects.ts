@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "تعذّر تحديث قائمة التحقق",
     },
 
+    quickAdd: {
+        placeholder: "أضف مهمة — العنوان ثم Enter",
+        hint: "التفاصيل في السطر نفسه: @شخص  #وسم  !high  ~3h  >الجمعة",
+        add: "إضافة",
+        more: "حقول أخرى",
+        today: "اليوم",
+        tomorrow: "غدًا",
+        me: "أنا",
+        setPriority: "تحديد الأولوية",
+        addDescription: "+ إضافة وصف",
+        saveAndAdd: "حفظ وإضافة أخرى",
+    },
+
+    timer: {
+        start: "بدء",
+        stop: "إيقاف",
+        elsewhere: "هناك مؤقّت يعمل بالفعل على مهمة أخرى",
+    },
+
     remaining: {
+        chart: "الساعات المتبقية عبر الزمن",
+        chartNow: "الآن",
+        chartUpNote: "ارتفعت — أُضيف عمل",
         history: "سجل الساعات المتبقية",
         notePlaceholder: "مثل: أضاف العميل غرفتين أخريين",
         empty: "لم تُسجَّل تغييرات بعد.",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} مهمة فرعية",
             unassigned: "غير مسندة",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "المظهر",
+            reset: "إعادة الضبط",
+            cardSize: "حجم البطاقة",
+            comfortable: "مريح",
+            compact: "مضغوط",
+            columnWidth: "عرض العمود",
+            narrow: "ضيق",
+            standard: "قياسي",
+            wide: "عريض",
+            columnColor: "لون العمود",
+            tintNone: "بسيط",
+            tintCategory: "حسب المرحلة",
+            motion: "الحركة",
+            motionHint: "تستقر البطاقات والأعمدة في أماكنها بهدوء. يُتجاهل ذلك إذا طلب جهازك تقليل الحركة.",
+            showOnCards: "العرض على البطاقات",
+            fields: {
+                cover: "الشريط",
+                labels: "التسميات",
+                project: "المشروع",
+                badges: "الاستحقاق والأولوية",
+                details: "التفاصيل",
+                assignee: "المسؤول",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "لا يوجد تاريخ انتهاء مستهدف لهذا المشروع، فلا شيء للمقارنة — الخط يبيّن ما جرى.",
         title: "منحنى الإنجاز",
         ideal: "المثالي",
         actual: "المتبقي",

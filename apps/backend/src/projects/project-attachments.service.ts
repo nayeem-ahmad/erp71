@@ -145,7 +145,7 @@ export class ProjectAttachmentsService {
     async remove(viewer: ProjectViewer, attachmentId: string) {
         // Addressed by its own id with no task in the route, so the project it
         // belongs to has to be resolved through the task before deleting it.
-        const filter = await this.access.relatedFilter(viewer);
+        const filter = await this.access.taskFilter(viewer);
         const existing = await this.db.projectAttachment.findFirst({
             where: {
                 id: attachmentId,
@@ -176,7 +176,7 @@ export class ProjectAttachmentsService {
                 id: taskId,
                 tenant_id: viewer.tenantId,
                 deleted_at: null,
-                ...(await this.access.relatedFilter(viewer)),
+                ...(await this.access.taskFilter(viewer)),
             } as never,
             select: { id: true, project_id: true },
         });

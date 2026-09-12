@@ -3,7 +3,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { ProjectTimeService } from './project-time.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectAccessService } from './project-access.service';
-import { OWNER, staff, visibilityOr } from './project-access.test-support';
+import { OWNER, attachEmployeeLookup, narrow, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
 describe('ProjectTimeService', () => {
@@ -718,4 +718,90 @@ describe('ProjectTimeService', () => {
         });
     });
 
+    /**
+     * Record scope on hours. `userId` is a filter the Hour Logs page offers and
+     * the viewer can clear, so "only my hours" has to be in the `where` — and
+     * on the write paths too, which were scoped by project alone and so let
+     * anyone on a shared project edit a teammate's afternoon.
+     */
+    describe('own records only', () => {
+        beforeEach(() => {
+            // Reached only on the narrow path: the filters ask whether this
+            // login has an employee card that tasks might be assigned to.
+            attachEmployeeLookup(db);
+            // `summary()` visibility-checks the project before grouping.
+            db.project = { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) };
+        });
+
+        it('narrows the list to the viewer own entries', async () => {
+            await service.list(narrow('user-7'), {} as never);
+
+            const [{ where }] = db.projectTimeEntry.findMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([
+                { project: { OR: visibilityOr('user-7') } },
+                { user_id: 'user-7' },
+            ]);
+        });
+
+        it('narrows every grouping in the report, so the totals match the list', async () => {
+            await service.report(narrow('user-7'), {} as never);
+
+            for (const call of db.projectTimeEntry.groupBy.mock.calls) {
+                expect(call[0].where.AND).toContainEqual({ user_id: 'user-7' });
+            }
+        });
+
+        it('narrows the person filter, so it cannot name the rest of the team', async () => {
+            await service.people(narrow('user-7'), {});
+
+            const [call] = db.projectTimeEntry.groupBy.mock.calls.at(-1);
+            expect(call.where.AND).toContainEqual({ user_id: 'user-7' });
+        });
+
+        it('narrows the per-project hours summary to their own row', async () => {
+            await service.summary(narrow('user-7'), 'project-1');
+
+            const [call] = db.projectTimeEntry.groupBy.mock.calls.at(-1);
+            expect(call.where.AND).toContainEqual({ user_id: 'user-7' });
+        });
+
+        it('refuses to edit a teammate entry', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.update(narrow('user-7'), 'entry-1', { hours: 99 } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.projectTimeEntry.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses to delete a teammate entry', async () => {
+            db.projectTimeEntry.findFirst.mockResolvedValue(null);
+
+            await expect(service.remove(narrow('user-7'), 'entry-1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.projectTimeEntry.delete).not.toHaveBeenCalled();
+        });
+
+        it('refuses to log time against a teammate task', async () => {
+            // A task they cannot read is not one they can book an afternoon to.
+            db.projectTask.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.create(narrow('user-7'), {
+                    taskId: 'task-1',
+                    workDate: '2026-09-11',
+                    hours: 3,
+                } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.projectTimeEntry.create).not.toHaveBeenCalled();
+        });
+
+        it('leaves a wide viewer exactly as they were', async () => {
+            await service.list(staff('user-7'), {} as never);
+
+            const [{ where }] = db.projectTimeEntry.findMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([{ project: { OR: visibilityOr('user-7') } }]);
+        });
+    });
 });

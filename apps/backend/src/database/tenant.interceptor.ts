@@ -7,6 +7,7 @@ import {
     ForbiddenException,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { TenantRecordScope, resolveRecordScope } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from './tenant-timezone.service';
 
@@ -41,8 +42,16 @@ export class TenantInterceptor implements NestInterceptor {
                 // `timezone` rides along on a query that already runs. It is
                 // needed by nearly every endpoint downstream, so fetching it
                 // here costs a column on an existing join rather than a second
-                // round trip per request.
-                select: { tenant_id: true, role: true, tenant: { select: { timezone: true } } },
+                // round trip per request. The roles ride along for the same
+                // reason: the member's record scope is the widest of theirs, and
+                // reading it here keeps it off the request path of every service
+                // that filters on it.
+                select: {
+                    tenant_id: true,
+                    role: true,
+                    tenant: { select: { timezone: true } },
+                    roles: { select: { tenantRole: { select: { record_scope: true } } } },
+                },
             });
 
             if (!membership) {
@@ -58,10 +67,16 @@ export class TenantInterceptor implements NestInterceptor {
             resolvedTenantId = tenantId as string;
             request.userRole = membership.role;
             request.timezone = membership.tenant?.timezone ?? undefined;
+            request.recordScope = resolveMemberRecordScope(membership);
         } else {
             const memberships = await this.db.tenantUser.findMany({
                 where: { user_id: userId, tenant: { deleted_at: null } },
-                select: { tenant_id: true, role: true, tenant: { select: { timezone: true } } },
+                select: {
+                    tenant_id: true,
+                    role: true,
+                    tenant: { select: { timezone: true } },
+                    roles: { select: { tenantRole: { select: { record_scope: true } } } },
+                },
                 take: 2,
             });
 
@@ -69,6 +84,7 @@ export class TenantInterceptor implements NestInterceptor {
                 resolvedTenantId = memberships[0].tenant_id;
                 request.userRole = memberships[0].role;
                 request.timezone = memberships[0].tenant?.timezone ?? undefined;
+                request.recordScope = resolveMemberRecordScope(memberships[0]);
             } else if (memberships.length > 1) {
                 throw new BadRequestException('Tenant context is required for this request.');
             } else {
@@ -119,4 +135,20 @@ export class TenantInterceptor implements NestInterceptor {
 
         return next.handle();
     }
+}
+
+/**
+ * The record scope a membership resolves to: the widest of the roles it holds.
+ *
+ * OWNER is always `ALL` — they bypass every permission check downstream, so
+ * narrowing their reads would be the one restriction in the app they could not
+ * lift. A member with no roles is `ALL` too (see `resolveRecordScope`): they
+ * hold no permissions either, so there is nothing for a scope to narrow.
+ */
+function resolveMemberRecordScope(membership: {
+    role: string;
+    roles?: { tenantRole: { record_scope: TenantRecordScope } }[];
+}): TenantRecordScope {
+    if (membership.role === 'OWNER') return TenantRecordScope.ALL;
+    return resolveRecordScope((membership.roles ?? []).map((row) => row.tenantRole.record_scope));
 }

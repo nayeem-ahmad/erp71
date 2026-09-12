@@ -1,14 +1,26 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Trash2, Upload } from 'lucide-react';
-import { Button, Checkbox, Field, Input, Select } from '@/components/ui';
-import { HEADER_TOKENS, type HeaderLayout, type HeaderLine, type PrintDocType, type PrintFontFamily, type PrintHeaderConfig } from '@/lib/print';
+import { Field, Input, Select } from '@/components/ui';
+import type {
+    HeaderLayout,
+    PrintDocType,
+    PrintFontFamily,
+    PrintFooterConfig,
+    PrintHeaderConfig,
+} from '@/lib/print';
 import { useI18n } from '@/lib/i18n';
+import {
+    CheckboxRow,
+    ColorField,
+    ImageListEditor,
+    LineListEditor,
+    NumberField,
+    Section,
+    UploadButton,
+} from './TemplateBlocks';
 
 const LAYOUTS: HeaderLayout[] = ['logo-left', 'logo-right', 'logo-center', 'logo-above', 'text-only'];
 const FONTS: PrintFontFamily[] = ['sans', 'serif', 'mono', 'bengali'];
-const ALIGNS: Array<'left' | 'center' | 'right'> = ['left', 'center', 'right'];
 const DOC_TYPES: PrintDocType[] = [
     'SALES_INVOICE',
     'POS_RECEIPT',
@@ -33,7 +45,8 @@ interface HeaderEditorProps {
     onDocTypesChange: (docTypes: PrintDocType[]) => void;
     config: PrintHeaderConfig;
     onConfigChange: (config: PrintHeaderConfig) => void;
-    onUploadLogo: (file: File) => void;
+    /** Resolves to the uploaded URL, or null when the upload failed. */
+    onUpload: (file: File) => Promise<string | null>;
     uploading: boolean;
 }
 
@@ -46,25 +59,16 @@ export default function HeaderEditor({
     onDocTypesChange,
     config,
     onConfigChange,
-    onUploadLogo,
+    onUpload,
     uploading,
 }: HeaderEditorProps) {
     const { t } = useI18n();
     const copy = t.settingsExtras.printTemplates;
     const fields = copy.fields;
-    const fileRef = useRef<HTMLInputElement>(null);
 
     const patch = (changes: Partial<PrintHeaderConfig>) => onConfigChange({ ...config, ...changes });
-    const patchLine = (index: number, changes: Partial<HeaderLine>) =>
-        patch({ lines: config.lines.map((line, i) => (i === index ? { ...line, ...changes } : line)) });
-
-    const moveLine = (index: number, delta: number) => {
-        const target = index + delta;
-        if (target < 0 || target >= config.lines.length) return;
-        const lines = [...config.lines];
-        [lines[index], lines[target]] = [lines[target], lines[index]];
-        patch({ lines });
-    };
+    const patchFooter = (changes: Partial<PrintFooterConfig>) =>
+        patch({ footer: { ...config.footer, ...changes } });
 
     const toggleDocType = (docType: PrintDocType) =>
         onDocTypesChange(
@@ -113,26 +117,13 @@ export default function HeaderEditor({
                             onChange={(e) => patch({ logo: { ...config.logo, url: e.target.value } })}
                             placeholder={fields.logoPlaceholder}
                         />
-                        <input
-                            ref={fileRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) onUploadLogo(file);
-                                e.target.value = '';
+                        <UploadButton
+                            uploading={uploading}
+                            onFile={async (file) => {
+                                const url = await onUpload(file);
+                                if (url) patch({ logo: { ...config.logo, url } });
                             }}
                         />
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => fileRef.current?.click()}
-                            disabled={uploading}
-                        >
-                            <Upload className="h-4 w-4" />
-                            {uploading ? fields.uploading : fields.upload}
-                        </Button>
                     </div>
                 </Field>
 
@@ -233,88 +224,20 @@ export default function HeaderEditor({
             </Section>
 
             <Section title={copy.sections.lines}>
-                <p className="text-xs text-gray-400">{fields.tokensHint}</p>
-                <p className="text-xs text-gray-400">
-                    {HEADER_TOKENS.map((token) => `{{${token}}}`).join('  ')}
-                </p>
+                <LineListEditor
+                    lines={config.lines}
+                    baseFontSizePt={config.baseFontSizePt}
+                    onChange={(lines) => patch({ lines })}
+                />
+            </Section>
 
-                {config.lines.map((line, index) => (
-                    <div key={index} className="space-y-2 rounded-md border border-gray-200 p-2.5">
-                        <div className="flex items-start gap-2">
-                            <Input
-                                className="min-w-0 flex-1"
-                                aria-label={fields.lineText}
-                                value={line.text}
-                                onChange={(e) => patchLine(index, { text: e.target.value })}
-                            />
-                            <IconButton
-                                label={fields.moveUp}
-                                onClick={() => moveLine(index, -1)}
-                                disabled={index === 0}
-                            >
-                                <ArrowUp className="h-4 w-4" />
-                            </IconButton>
-                            <IconButton
-                                label={fields.moveDown}
-                                onClick={() => moveLine(index, 1)}
-                                disabled={index === config.lines.length - 1}
-                            >
-                                <ArrowDown className="h-4 w-4" />
-                            </IconButton>
-                            <IconButton
-                                label={fields.removeLine}
-                                onClick={() => patch({ lines: config.lines.filter((_, i) => i !== index) })}
-                            >
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                            </IconButton>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                            <NumberField
-                                label={fields.fontSize}
-                                value={line.fontSizePt ?? config.baseFontSizePt}
-                                min={5}
-                                max={48}
-                                onChange={(fontSizePt) => patchLine(index, { fontSizePt })}
-                            />
-                            <Field label={fields.align}>
-                                <Select
-                                    value={line.align ?? 'left'}
-                                    onChange={(e) => patchLine(index, { align: e.target.value as HeaderLine['align'] })}
-                                >
-                                    {ALIGNS.map((align) => (
-                                        <option key={align} value={align}>{copy.aligns[align]}</option>
-                                    ))}
-                                </Select>
-                            </Field>
-                            <ColorField
-                                label={fields.color}
-                                value={line.color ?? '#555555'}
-                                onChange={(color) => patchLine(index, { color })}
-                            />
-                            <div className="flex items-end gap-3 pb-1.5">
-                                <CheckboxRow
-                                    label={fields.bold}
-                                    checked={!!line.bold}
-                                    onChange={(bold) => patchLine(index, { bold })}
-                                />
-                                <CheckboxRow
-                                    label={fields.italic}
-                                    checked={!!line.italic}
-                                    onChange={(italic) => patchLine(index, { italic })}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => patch({ lines: [...config.lines, { text: '', fontSizePt: config.baseFontSizePt }] })}
-                >
-                    {fields.addLine}
-                </Button>
+            <Section title={copy.sections.images}>
+                <ImageListEditor
+                    images={config.images ?? []}
+                    onChange={(images) => patch({ images })}
+                    onUpload={onUpload}
+                    uploading={uploading}
+                />
             </Section>
 
             <Section title={copy.sections.rule}>
@@ -337,6 +260,72 @@ export default function HeaderEditor({
                         onChange={(color) => patch({ rule: { ...config.rule, color } })}
                     />
                 </div>
+            </Section>
+
+            <Section title={copy.sections.footer}>
+                <p className="text-xs text-gray-400">{fields.footerHint}</p>
+                <CheckboxRow
+                    label={fields.showFooter}
+                    checked={config.footer.show}
+                    onChange={(show) => patchFooter({ show })}
+                />
+
+                {config.footer.show ? (
+                    <div className="space-y-3 border-t border-gray-200 pt-3">
+                        <h3 className="text-xs font-semibold text-gray-600">{copy.sections.footerLines}</h3>
+                        <LineListEditor
+                            lines={config.footer.lines}
+                            baseFontSizePt={config.baseFontSizePt}
+                            onChange={(lines) => patchFooter({ lines })}
+                        />
+
+                        <h3 className="border-t border-gray-200 pt-3 text-xs font-semibold text-gray-600">
+                            {copy.sections.footerImages}
+                        </h3>
+                        <ImageListEditor
+                            images={config.footer.images ?? []}
+                            onChange={(images) => patchFooter({ images })}
+                            onUpload={onUpload}
+                            uploading={uploading}
+                        />
+
+                        <div className="space-y-3 border-t border-gray-200 pt-3">
+                            <CheckboxRow
+                                label={fields.showFooterRule}
+                                checked={config.footer.rule.show}
+                                onChange={(show) => patchFooter({ rule: { ...config.footer.rule, show } })}
+                            />
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <NumberField
+                                    label={fields.thickness}
+                                    value={config.footer.rule.thicknessPx}
+                                    min={0}
+                                    max={8}
+                                    onChange={(thicknessPx) =>
+                                        patchFooter({ rule: { ...config.footer.rule, thicknessPx } })
+                                    }
+                                />
+                                <ColorField
+                                    label={fields.color}
+                                    value={config.footer.rule.color}
+                                    onChange={(color) => patchFooter({ rule: { ...config.footer.rule, color } })}
+                                />
+                                <NumberField
+                                    label={fields.spacing}
+                                    value={config.footer.spacingMm}
+                                    min={0}
+                                    max={30}
+                                    onChange={(spacingMm) => patchFooter({ spacingMm })}
+                                />
+                            </div>
+                            <CheckboxRow
+                                label={fields.repeatFooter}
+                                checked={config.footer.repeatOnEveryPage}
+                                onChange={(repeatOnEveryPage) => patchFooter({ repeatOnEveryPage })}
+                            />
+                        </div>
+                    </div>
+                ) : null}
             </Section>
 
             <Section title={copy.sections.typography}>
@@ -368,121 +357,5 @@ export default function HeaderEditor({
                 </div>
             </Section>
         </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Small building blocks                                              */
-/* ------------------------------------------------------------------ */
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-    return (
-        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-            <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
-            {children}
-        </section>
-    );
-}
-
-function CheckboxRow({
-    label,
-    checked,
-    onChange,
-    className = '',
-}: {
-    label: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-    className?: string;
-}) {
-    return (
-        <label className={`flex cursor-pointer items-center gap-2 ${className}`}>
-            <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
-            <span className="text-xs text-gray-700">{label}</span>
-        </label>
-    );
-}
-
-function NumberField({
-    label,
-    value,
-    min,
-    max,
-    onChange,
-}: {
-    label: string;
-    value: number;
-    min: number;
-    max: number;
-    onChange: (value: number) => void;
-}) {
-    return (
-        <Field label={label}>
-            <Input
-                type="number"
-                min={min}
-                max={max}
-                value={value}
-                onChange={(e) => {
-                    const next = Number(e.target.value);
-                    // Ignore a cleared input rather than writing NaN into the config.
-                    if (Number.isFinite(next)) onChange(Math.min(max, Math.max(min, next)));
-                }}
-            />
-        </Field>
-    );
-}
-
-function ColorField({
-    label,
-    value,
-    onChange,
-}: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-}) {
-    return (
-        <Field label={label}>
-            <div className="flex items-center gap-2">
-                <input
-                    type="color"
-                    aria-label={label}
-                    value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000'}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="h-8 w-10 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
-                />
-                <Input
-                    className="min-w-0 flex-1 font-mono"
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                />
-            </div>
-        </Field>
-    );
-}
-
-function IconButton({
-    label,
-    onClick,
-    disabled,
-    children,
-}: {
-    label: string;
-    onClick: () => void;
-    disabled?: boolean;
-    children: ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            title={label}
-            aria-label={label}
-            onClick={onClick}
-            disabled={disabled}
-            className="rounded-md border border-gray-200 p-1.5 text-gray-500 hover:bg-gray-50 disabled:opacity-40 max-md:min-h-touch max-md:min-w-touch"
-        >
-            {children}
-        </button>
     );
 }

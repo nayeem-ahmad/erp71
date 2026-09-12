@@ -5,6 +5,13 @@ import { ProjectSettingsService } from './project-settings.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import {
+    buildBurndownSeries,
+    eachDate,
+    replayDailyTotals,
+    toDateKey,
+    type RemainingLogEntry,
+} from './burndown.util';
+import {
     CreateMilestoneDto,
     CreateProjectDto,
     ListProjectsDto,
@@ -143,7 +150,88 @@ export class ProjectsService {
         return { ...project, progress };
     }
 
-    /** Task counts and hour totals for a project, and per milestone. */
+    /**
+     * Remaining hours for a whole project, day by day.
+     *
+     * Replayed from `ProjectTaskRemainingLog` rather than cached: a project has
+     * no equivalent of `SprintSnapshot` and does not need one, because the whole
+     * log for one project is a single indexed read and the replay is one pass
+     * over it. If that stops being true, the nightly job that writes sprint
+     * snapshots already has the shape to write project ones.
+     *
+     * **The ideal line is drawn only when the project says where it ends.**
+     * `target_end_date` is optional, unlike a sprint's dates, and a made-up
+     * deadline would make every project without one look late. Where there is
+     * no target, the chart carries the actual line alone — which still answers
+     * "is this converging", just not "against what".
+     *
+     * Whole, never per-viewer, for the reason `progress` above gives.
+     */
+    async burndown(tenantId: string, projectId: string) {
+        const project = await this.db.project.findFirst({
+            where: { id: projectId, tenant_id: tenantId },
+            select: { start_date: true, target_end_date: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
+
+        const logs = await this.db.projectTaskRemainingLog.findMany({
+            where: { tenant_id: tenantId, project_id: projectId },
+            orderBy: { changed_at: 'asc' },
+            select: { task_id: true, new_hours: true, changed_at: true },
+        });
+        if (logs.length === 0) return { series: [], hasIdeal: false };
+
+        const entries: RemainingLogEntry[] = logs.map((log) => ({
+            taskId: log.task_id,
+            hours: Number(log.new_hours),
+            changedAt: log.changed_at,
+        }));
+
+        // The window opens on the earlier of "the project started" and "work was
+        // first recorded" — a task logged before the nominal start date is still
+        // work that happened — and runs to today, or to the target if that is
+        // still ahead, so a project on schedule does not look finished early.
+        const firstWrite = entries[0].changedAt;
+        const today = new Date();
+        const start =
+            project.start_date && project.start_date < firstWrite ? project.start_date : firstWrite;
+        const end =
+            project.target_end_date && project.target_end_date > today
+                ? project.target_end_date
+                : today;
+
+        const days = eachDate(start, end);
+        const totals = replayDailyTotals(entries, days);
+
+        // An ideal line needs both ends. `start_date` alone says when work began,
+        // not when it is due.
+        const hasIdeal = Boolean(project.start_date && project.target_end_date);
+        const series = buildBurndownSeries({
+            startDate: start,
+            endDate: end,
+            snapshots: totals,
+        }).map((point) => (hasIdeal ? point : { ...point, ideal: null }));
+
+        return {
+            series,
+            hasIdeal,
+            startDate: toDateKey(start),
+            endDate: toDateKey(end),
+        };
+    }
+
+    /**
+     * Task counts and hour totals for a project, and per milestone.
+     *
+     * Whole, never per-viewer — including for a viewer whose record scope is
+     * `OWN`. A project's percent-complete is one shared number about the
+     * project's health, not a per-person breakdown: re-deriving it per reader
+     * would mean two people looking at the same project and disagreeing about
+     * whether it is on track, which is the same call `docs/projects/
+     * project-visibility.md` takes for sprint burndown. The rows behind it stay
+     * scoped — a narrow viewer sees the project's totals and only their own
+     * tasks under them.
+     */
     async progress(tenantId: string, projectId: string) {
         const tasks = await this.db.projectTask.findMany({
             where: { tenant_id: tenantId, project_id: projectId, deleted_at: null },

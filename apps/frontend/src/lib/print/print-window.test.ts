@@ -147,3 +147,103 @@ describe('openPrintWindow', () => {
         expect(openPrintWindow(base)).toBeNull();
     });
 });
+
+describe('buildPrintDocument — tenant footer', () => {
+    const withFooter = (footer: Record<string, unknown> = {}) => ({
+        footer: {
+            show: true,
+            lines: [{ text: 'Bank: BRAC 1234' }],
+            ...footer,
+        },
+    });
+
+    it('keeps the document’s own footer when the tenant designed none', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            bodyHtml: '<p>body</p>',
+            footerHtml: '<div>Thank you for your business!</div>',
+        });
+
+        expect(html).toContain('Thank you for your business!');
+    });
+
+    it('replaces the document’s footer with the tenant’s, rather than printing both', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            bodyHtml: '<p>body</p>',
+            footerHtml: '<div>Thank you for your business!</div>',
+            headerConfig: withFooter(),
+        });
+
+        expect(html).toContain('Bank: BRAC 1234');
+        expect(html).not.toContain('Thank you for your business!');
+    });
+
+    it('resolves footer tokens against the supplied context', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            bodyHtml: '<p>body</p>',
+            headerConfig: withFooter({ lines: [{ text: 'Tel: {{phone}}' }] }),
+            context: { phone: '01711-000000' },
+        });
+
+        expect(html).toContain('Tel: 01711-000000');
+    });
+
+    it('prints the footer inside the content flow by default', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            bodyHtml: '<p>body</p>',
+            headerConfig: withFooter(),
+        });
+
+        expect(html).not.toContain('<tfoot>');
+        expect(html).toContain('Bank: BRAC 1234');
+    });
+
+    it('moves the footer into a tfoot when it repeats on every page', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            bodyHtml: '<p>body</p>',
+            headerConfig: withFooter({ repeatOnEveryPage: true }),
+        });
+
+        // Chrome repeats tfoot across pages; the body must not carry a copy.
+        expect(html).toContain('<tfoot>');
+        expect(html.match(/Bank: BRAC 1234/g)).toHaveLength(1);
+    });
+
+    it('keeps the header out of the thead when only the footer repeats', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            headerHtml: '<div class="p71-hd">letterhead</div>',
+            bodyHtml: '<p>body</p>',
+            headerConfig: withFooter({ repeatOnEveryPage: true }),
+        });
+
+        expect(html).not.toContain('<thead>');
+        expect(html.match(/letterhead/g)).toHaveLength(1);
+    });
+
+    it('repeats both bands when the header and the footer both repeat', () => {
+        const html = buildPrintDocument({
+            title: 'Invoice',
+            paperSize: 'A4',
+            headerHtml: '<div class="p71-hd">letterhead</div>',
+            bodyHtml: '<p>body</p>',
+            repeatHeader: true,
+            headerConfig: withFooter({ repeatOnEveryPage: true }),
+        });
+
+        expect(html).toContain('<thead>');
+        expect(html).toContain('<tfoot>');
+        // tfoot before tbody — the ordering every browser repeats correctly.
+        expect(html.indexOf('<tfoot>')).toBeLessThan(html.indexOf('<tbody>'));
+    });
+});

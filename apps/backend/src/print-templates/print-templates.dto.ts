@@ -135,13 +135,59 @@ export class HeaderLineDto {
     italic?: boolean;
 
     @IsOptional()
+    @IsBoolean()
+    underline?: boolean;
+
+    @IsOptional()
     @IsIn(ALIGNMENTS)
     align?: (typeof ALIGNMENTS)[number];
 
     @IsOptional()
     @IsHexColor()
     color?: string;
+
+    @IsOptional()
+    @IsIn(FONT_FAMILIES)
+    fontFamily?: (typeof FONT_FAMILIES)[number];
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(10)
+    letterSpacingPx?: number;
 }
+
+/**
+ * An image on the letterhead beyond the logo — signature, seal, badge, QR.
+ *
+ * `url` is optional on purpose: an entry with only a caption prints a blank
+ * signature line for someone to sign by hand.
+ */
+export class TemplateImageDto {
+    @IsOptional()
+    @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+    @MaxLength(2048)
+    url?: string;
+
+    @IsNumber()
+    @Min(3)
+    @Max(60)
+    heightMm: number;
+
+    @IsOptional()
+    @IsIn(ALIGNMENTS)
+    align?: (typeof ALIGNMENTS)[number];
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    caption?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    showOnThermal?: boolean;
+}
+
 
 export class HeaderRuleDto {
     @IsBoolean()
@@ -156,9 +202,38 @@ export class HeaderRuleDto {
     color: string;
 }
 
+/** The tenant-designed footer band. */
+export class PrintFooterConfigDto {
+    @IsBoolean()
+    show: boolean;
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => HeaderLineDto)
+    lines: HeaderLineDto[];
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => TemplateImageDto)
+    images: TemplateImageDto[];
+
+    @ValidateNested()
+    @Type(() => HeaderRuleDto)
+    rule: HeaderRuleDto;
+
+    @IsNumber()
+    @Min(0)
+    @Max(30)
+    spacingMm: number;
+
+    @IsBoolean()
+    repeatOnEveryPage: boolean;
+}
+
 export class PrintHeaderConfigDto {
+    /** 1 — header only. 2 — adds `images` and `footer`. Both are accepted. */
     @IsInt()
-    @IsIn([1])
+    @IsIn([1, 2])
     version: number;
 
     @IsIn(LAYOUTS)
@@ -181,9 +256,22 @@ export class PrintHeaderConfigDto {
     @Type(() => HeaderLineDto)
     lines: HeaderLineDto[];
 
+    /** Absent on stored v1 configs — the renderer defaults it to empty. */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => TemplateImageDto)
+    images?: TemplateImageDto[];
+
     @ValidateNested()
     @Type(() => HeaderRuleDto)
     rule: HeaderRuleDto;
+
+    /** Absent on stored v1 configs — no footer prints until one is designed. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PrintFooterConfigDto)
+    footer?: PrintFooterConfigDto;
 
     @IsIn(FONT_FAMILIES)
     fontFamily: (typeof FONT_FAMILIES)[number];

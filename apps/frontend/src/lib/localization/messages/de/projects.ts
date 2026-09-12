@@ -286,7 +286,29 @@ export const projectsMessages = {
         saveFailed: "Die Checkliste konnte nicht aktualisiert werden",
     },
 
+    quickAdd: {
+        placeholder: "Aufgabe hinzufügen — Titel, dann Enter",
+        hint: "Details in derselben Zeile: @person  #label  !high  ~3h  >freitag",
+        add: "Hinzufügen",
+        more: "Weitere Felder",
+        today: "heute",
+        tomorrow: "morgen",
+        me: "Ich",
+        setPriority: "Priorität setzen",
+        addDescription: "+ Beschreibung hinzufügen",
+        saveAndAdd: "Speichern und weitere",
+    },
+
+    timer: {
+        start: "Start",
+        stop: "Stopp",
+        elsewhere: "Für eine andere Aufgabe läuft bereits ein Timer",
+    },
+
     remaining: {
+        chart: "Reststunden im Zeitverlauf",
+        chartNow: "jetzt",
+        chartUpNote: "Gestiegen — Arbeit ergänzt",
         history: "Verlauf der Reststunden",
         notePlaceholder: "z. B. Kunde hat zwei weitere Räume ergänzt",
         empty: "Noch keine Änderungen erfasst.",
@@ -465,6 +487,35 @@ export const projectsMessages = {
             subtasks: "{count} Teilaufgabe(n)",
             unassigned: "Nicht zugewiesen",
         },
+
+        // The board's own appearance controls. The board is read very
+        // differently by a lead scanning for what is late and by someone
+        // working one lane, so the card layout is a setting, not a decision.
+        view: {
+            title: "Darstellung",
+            reset: "Zurücksetzen",
+            cardSize: "Kartengröße",
+            comfortable: "Komfortabel",
+            compact: "Kompakt",
+            columnWidth: "Spaltenbreite",
+            narrow: "Schmal",
+            standard: "Standard",
+            wide: "Breit",
+            columnColor: "Spaltenfarbe",
+            tintNone: "Schlicht",
+            tintCategory: "Nach Phase",
+            motion: "Bewegung",
+            motionHint: "Karten und Spalten gleiten an ihren Platz. Wird ignoriert, wenn Ihr Gerät weniger Bewegung anfordert.",
+            showOnCards: "Auf Karten anzeigen",
+            fields: {
+                cover: "Farbstreifen",
+                labels: "Labels",
+                project: "Projekt",
+                badges: "Fälligkeit & Priorität",
+                details: "Details",
+                assignee: "Zuständig",
+            },
+        },
     },
 
     sprint: {
@@ -510,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Dieses Projekt hat kein Zieldatum, also gibt es keinen Vergleichsmaßstab — die Linie zeigt den Verlauf, nicht den Abgleich.",
         title: "Burndown",
         ideal: "Ideal",
         actual: "Verbleibend",
