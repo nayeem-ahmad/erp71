@@ -35,9 +35,11 @@ import {
     resolveTenantFeatures,
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
+    DEFAULT_PASSWORD_POLICY,
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
 import { normalizeBillingCycle, type BillingCycle } from '../billing/billing-cycle.util';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -76,6 +78,7 @@ export class AuthService {
         private readonly google: GoogleTokenService,
         private readonly firebase: FirebaseTokenService,
         private readonly refreshTokens: RefreshTokenService,
+        private readonly passwordPolicy: PasswordPolicyService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -99,6 +102,11 @@ export class AuthService {
         }
 
         this.assertTermsAccepted(dto.acceptedTermsVersion);
+
+        // Signup creates the workspace, so there is no tenant policy to read yet
+        // — the platform default is the whole rule here. The owner's own policy
+        // starts applying the next time they change this password.
+        this.passwordPolicy.assertValid(dto.password, DEFAULT_PASSWORD_POLICY);
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const displayName = dto.name?.trim() || dto.email.split('@')[0];
@@ -971,9 +979,9 @@ export class AuthService {
             throw new BadRequestException('New password must differ from your current password');
         }
 
-        if (dto.newPassword.length < 8) {
-            throw new BadRequestException('New password must be at least 8 characters');
-        }
+        // The workspace's own rule, not a bare length check — and the strictest
+        // one when this person is a member of several. See `getForUser`.
+        await this.passwordPolicy.assertValidForUser(dto.newPassword, userId);
 
         const newHash = await bcrypt.hash(dto.newPassword, 10);
         // A password change revokes every session on every surface — the storefront

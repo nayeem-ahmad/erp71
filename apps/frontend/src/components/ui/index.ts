@@ -12,6 +12,8 @@ export { FormGrid } from './FormGrid';
 export { FormFooter } from './FormFooter';
 export { StatusBadge, statusToneFor } from './StatusBadge';
 export type { StatusBadgeTone } from './StatusBadge';
+export { PasswordRequirements } from './PasswordRequirements';
+export type { PasswordRequirementsProps } from './PasswordRequirements';
 export { Alert } from './Alert';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';

@@ -13,6 +13,7 @@ import { FirebaseTokenService } from './firebase-token.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { CURRENT_TERMS_VERSION, StorePermission } from '@erp71/shared-types';
 
@@ -68,7 +69,7 @@ describe('AuthService', () => {
             findMany: jest.fn(),
         },
         tenant: { create: jest.fn() },
-        tenantUser: { create: jest.fn() },
+        tenantUser: { create: jest.fn(), findMany: jest.fn() },
         tenantRole: { create: jest.fn() },
         tenantRolePermission: { createMany: jest.fn() },
         paymentMethod: { createMany: jest.fn() },
@@ -192,6 +193,8 @@ describe('AuthService', () => {
         auditService.logForUserTenants.mockResolvedValue(undefined);
         db.user.findFirst.mockResolvedValue(null);
         db.user.findMany.mockResolvedValue([]);
+        // Read by PasswordPolicyService.getForUser: no membership → platform default.
+        db.tenantUser.findMany.mockResolvedValue([]);
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue(null);
         platformSettings.getPlatformFeatures.mockResolvedValue({
@@ -216,6 +219,7 @@ describe('AuthService', () => {
                 { provide: GoogleTokenService, useValue: googleTokenService },
                 { provide: FirebaseTokenService, useValue: firebaseTokenService },
                 { provide: RefreshTokenService, useValue: refreshTokens },
+                PasswordPolicyService,
                 PlanEntitlementsService,
             ],
         }).compile();
@@ -237,7 +241,7 @@ describe('AuthService', () => {
 
         const result = await service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             name: 'Owner',
             mobile: '01712345678',
             mobile_country_code: 'BD',
@@ -321,7 +325,7 @@ describe('AuthService', () => {
         const signupWithCode = () =>
             service.signup({
                 email: 'owner@example.com',
-                password: 'password123',
+                password: 'Dhaka-Shop-2026',
                 name: 'Owner',
                 tenantName: 'Tenant One',
                 storeName: 'Main Store',
@@ -415,7 +419,7 @@ describe('AuthService', () => {
 
         await service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             name: 'Owner',
             mobile: '01712345678',
             mobile_country_code: 'BD',
@@ -618,7 +622,7 @@ describe('AuthService', () => {
 
         await service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             mobile: '01712345678',
             mobile_country_code: 'BD',
             tenantName: 'Tenant One',
@@ -648,7 +652,7 @@ describe('AuthService', () => {
 
         await service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'PREMIUM',
@@ -674,7 +678,7 @@ describe('AuthService', () => {
 
         await service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'BASIC',
@@ -697,7 +701,7 @@ describe('AuthService', () => {
 
         await expect(service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'PREMIUM',
@@ -710,7 +714,7 @@ describe('AuthService', () => {
 
         await expect(service.signup({
             email: 'owner@example.com',
-            password: 'password123',
+            password: 'Dhaka-Shop-2026',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             acceptedTermsVersion: CURRENT_TERMS_VERSION,
@@ -739,7 +743,7 @@ describe('AuthService', () => {
                 .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
             (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-            const result = await service.login({ identifier: '01712345678', password: 'password123' } as any);
+            const result = await service.login({ identifier: '01712345678', password: 'Dhaka-Shop-2026' } as any);
 
             expect(db.user.findUnique).toHaveBeenNthCalledWith(1, { where: { mobile: '+8801712345678' } });
             expect(result).toHaveProperty('access_token', 'jwt-token');
@@ -753,7 +757,7 @@ describe('AuthService', () => {
 
             await service.login({
                 identifier: '9812345678',
-                password: 'password123',
+                password: 'Dhaka-Shop-2026',
                 mobile_country_code: 'IN',
             } as any);
 
@@ -774,7 +778,7 @@ describe('AuthService', () => {
             db.user.findUnique.mockResolvedValue({ ...account('user-1', 'owner@example.com'), passwordHash: null });
 
             await expect(
-                service.login({ identifier: '01712345678', password: 'password123' } as any),
+                service.login({ identifier: '01712345678', password: 'Dhaka-Shop-2026' } as any),
             ).rejects.toThrow(UnauthorizedException);
             expect(bcrypt.compare as jest.Mock).not.toHaveBeenCalled();
         });
@@ -783,13 +787,13 @@ describe('AuthService', () => {
             db.user.findUnique.mockResolvedValue(null);
 
             await expect(
-                service.login({ identifier: '01712345678', password: 'password123' } as any),
+                service.login({ identifier: '01712345678', password: 'Dhaka-Shop-2026' } as any),
             ).rejects.toThrow(UnauthorizedException);
         });
 
         it('rejects an unusable number without touching the database', async () => {
             await expect(
-                service.login({ identifier: '123', password: 'password123' } as any),
+                service.login({ identifier: '123', password: 'Dhaka-Shop-2026' } as any),
             ).rejects.toThrow(UnauthorizedException);
             expect(db.user.findUnique).not.toHaveBeenCalled();
         });
@@ -802,14 +806,14 @@ describe('AuthService', () => {
                 .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
             (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-            const result = await service.login({ email: 'owner@example.com', password: 'password123' } as any);
+            const result = await service.login({ email: 'owner@example.com', password: 'Dhaka-Shop-2026' } as any);
 
             expect(result).toHaveProperty('access_token', 'jwt-token');
             expect(db.user.findUnique).toHaveBeenNthCalledWith(1, { where: { email: 'owner@example.com' } });
         });
 
         it('rejects a request carrying neither identifier nor email', async () => {
-            await expect(service.login({ password: 'password123' } as any)).rejects.toThrow(BadRequestException);
+            await expect(service.login({ password: 'Dhaka-Shop-2026' } as any)).rejects.toThrow(BadRequestException);
         });
     });
 
@@ -821,7 +825,7 @@ describe('AuthService', () => {
 
             await expect(service.signup({
                 email: 'new@example.com',
-                password: 'password123',
+                password: 'Dhaka-Shop-2026',
                 tenantName: 'Tenant Two',
                 mobile: '01712345678',
                 acceptedTermsVersion: CURRENT_TERMS_VERSION,
@@ -844,7 +848,7 @@ describe('AuthService', () => {
 
             await service.signup({
                 email: 'new@example.com',
-                password: 'password123',
+                password: 'Dhaka-Shop-2026',
                 tenantName: 'Tenant Two',
                 mobile: '01712345678',
                 acceptedTermsVersion: CURRENT_TERMS_VERSION,
@@ -1038,12 +1042,20 @@ describe('AuthService', () => {
     });
 });
 
+/**
+ * The real policy service over a db that reports no memberships, so these
+ * constructions enforce the platform default rather than a stub that would
+ * accept anything.
+ */
+const passwordPolicy = () =>
+    new PasswordPolicyService({ tenantUser: { findMany: jest.fn().mockResolvedValue([]) } } as any);
+
 describe('AuthService.getSignupDefaults', () => {
     const platformSettings = { getRawValue: jest.fn() };
     const service = new AuthService(
         {} as any, {} as any, {} as any, {} as any, {} as any,
         {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-        {} as any, {} as any,
+        {} as any, {} as any, passwordPolicy() as any,
     );
 
     beforeEach(() => jest.clearAllMocks());
@@ -1078,7 +1090,7 @@ describe('AuthService.signup', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, {} as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            {} as any, refreshTokens as any,
+            {} as any, refreshTokens as any, passwordPolicy() as any,
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
@@ -1109,7 +1121,7 @@ describe('AuthService.signup', () => {
 
     it('creates account with only org name + email + password', async () => {
         const svc = makeService();
-        await svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Dhaka Retail Co.', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
+        await svc.signup({ email: 'owner@shop.com', password: 'Dhaka-Shop-2026', tenantName: 'Dhaka Retail Co.', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
         expect(createdUser.name).toBe('owner');            // email local-part
         expect(createdUser.mobile).toBeNull();             // no mobile provided
         expect(db.user.findFirst).not.toHaveBeenCalled();  // no mobile uniqueness lookup
@@ -1122,7 +1134,7 @@ describe('AuthService.signup', () => {
 
     it('stores a mobile nobody else holds', async () => {
         const svc = makeService();
-        await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
+        await svc.signup({ email: 'a@b.com', password: 'Dhaka-Shop-2026', tenantName: 'Org', mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any);
         expect(createdUser.mobile).toBe('+8801712345678');
     });
 
@@ -1134,7 +1146,7 @@ describe('AuthService.signup', () => {
             .mockImplementationOnce(async () => ({ id: 'someone-else' }));
 
         await expect(svc.signup({
-            email: 'a@b.com', password: 'password1', tenantName: 'Org',
+            email: 'a@b.com', password: 'Dhaka-Shop-2026', tenantName: 'Org',
             mobile: '01712345678', acceptedTermsVersion: CURRENT_TERMS_VERSION,
         } as any)).rejects.toBeInstanceOf(ConflictException);
         expect(createdUser).toBeUndefined();
@@ -1145,7 +1157,7 @@ describe('AuthService.signup', () => {
         await svc.signup(
             {
                 email: 'owner@shop.com',
-                password: 'password1',
+                password: 'Dhaka-Shop-2026',
                 tenantName: 'Dhaka Retail Co.',
                 planCode: 'BASIC',
                 acceptedTermsVersion: CURRENT_TERMS_VERSION,
@@ -1171,7 +1183,7 @@ describe('AuthService.signup', () => {
     it('refuses a signup that did not accept the terms', async () => {
         const svc = makeService();
         await expect(
-            svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Org' } as any),
+            svc.signup({ email: 'owner@shop.com', password: 'Dhaka-Shop-2026', tenantName: 'Org' } as any),
         ).rejects.toBeInstanceOf(BadRequestException);
         // Nothing was written — the check runs before the transaction opens.
         expect(tx.user.create).not.toHaveBeenCalled();
@@ -1182,7 +1194,7 @@ describe('AuthService.signup', () => {
         await expect(
             svc.signup({
                 email: 'owner@shop.com',
-                password: 'password1',
+                password: 'Dhaka-Shop-2026',
                 tenantName: 'Org',
                 acceptedTermsVersion: '2019-01-01',
             } as any),
@@ -1193,7 +1205,7 @@ describe('AuthService.signup', () => {
     it('truncates an oversized user agent', async () => {
         const svc = makeService();
         await svc.signup(
-            { email: 'owner@shop.com', password: 'password1', tenantName: 'Org', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any,
+            { email: 'owner@shop.com', password: 'Dhaka-Shop-2026', tenantName: 'Org', acceptedTermsVersion: CURRENT_TERMS_VERSION } as any,
             { userAgent: 'x'.repeat(5000) },
         );
 
@@ -1234,7 +1246,7 @@ describe('AuthService.googleSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, google as any,
-            {} as any, refreshTokens as any,
+            {} as any, refreshTokens as any, passwordPolicy() as any,
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
@@ -1455,7 +1467,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            firebase as any, refreshTokens as any,
+            firebase as any, refreshTokens as any, passwordPolicy() as any,
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });

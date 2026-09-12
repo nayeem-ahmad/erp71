@@ -20,10 +20,12 @@ import {
     resolveAiCreditsMonthly,
     resolveTenantFeatures,
     SubscriptionPlanCode,
+    DEFAULT_PASSWORD_POLICY,
     type TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
@@ -100,6 +102,7 @@ export class AdminTenantsService {
         private readonly demoDataService: DemoDataService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly addonModules: AddonModulesService,
+        private readonly passwordPolicy: PasswordPolicyService,
     ) {}
 
     private resolveMobileFields(
@@ -1093,6 +1096,12 @@ export class AdminTenantsService {
         const mobileFields = this.resolveMobileFields(dto.mobile, dto.mobile_country_code);
         await this.assertMobileAvailable(mobileFields.mobile);
 
+        // The platform default, not a workspace policy: this account belongs to
+        // the platform team, not to any tenant, so no tenant admin sets its
+        // rules — but it is also the most privileged account in the system, and
+        // a bare length check is not enough for one.
+        this.passwordPolicy.assertValid(dto.password, DEFAULT_PASSWORD_POLICY);
+
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const user = await this.db.user.create({
             data: {
@@ -1230,6 +1239,9 @@ export class AdminTenantsService {
         if (!user || !this.isEffectivePlatformAdmin(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
+
+        // Same reasoning as `createPlatformAdminUser`: the platform default.
+        this.passwordPolicy.assertValid(dto.newPassword, DEFAULT_PASSWORD_POLICY);
 
         const passwordHash = await bcrypt.hash(dto.newPassword, 10);
         await this.db.user.update({

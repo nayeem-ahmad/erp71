@@ -28,6 +28,7 @@ import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -177,6 +178,9 @@ describe('AdminTenantsService', () => {
       providers: [
         AdminTenantsService,
         { provide: DatabaseService, useValue: db },
+        // The real service: a platform admin's password is held to the platform
+        // default, which is the rule these tests should be exercising.
+        PasswordPolicyService,
         { provide: BillingService, useValue: billingService },
         { provide: JwtService, useValue: jwtService },
         { provide: AuditService, useValue: auditService },
@@ -1676,6 +1680,44 @@ describe('AdminTenantsService', () => {
 
       const notIn = db.billingEvent.findMany.mock.calls[0][0].where.event_type.notIn;
       expect(notIn).toContain('subscription_fee_voided');
+    });
+  });
+  describe('platform admin passwords', () => {
+    /**
+     * These accounts belong to the platform team rather than a workspace, so no
+     * tenant admin sets their rules — but they are the most privileged accounts
+     * in the system, and the platform default is the floor for them too.
+     */
+    it('refuses a common password when creating a platform admin', async () => {
+      db.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createPlatformAdminUser({ email: 'ops@erp71.com', password: 'Password123' } as any, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(db.user.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts one that satisfies the platform default', async () => {
+      db.user.findUnique.mockResolvedValue(null);
+      db.user.create.mockResolvedValue({ id: 'u-new', email: 'ops@erp71.com', name: null, created_at: new Date() });
+
+      await service.createPlatformAdminUser(
+        { email: 'ops@erp71.com', password: 'Dhaka-Ops-2026' } as any,
+        'admin-1',
+      );
+
+      expect(db.user.create).toHaveBeenCalled();
+    });
+
+    it('refuses a common password on an admin-driven reset', async () => {
+      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'ops@erp71.com', is_platform_admin: true });
+
+      await expect(
+        service.resetPlatformAdminUserPassword('u-1', { newPassword: 'letmein123' }, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(db.user.update).not.toHaveBeenCalled();
     });
   });
 });

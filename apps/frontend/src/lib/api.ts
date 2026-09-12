@@ -3,6 +3,7 @@ import type {
     AiChatConversationSummary,
     AiChatResponse,
     DashboardPreference,
+    PasswordPolicy,
     PlatformFeatureKey,
     PlatformFeatures,
     SupportedLocaleCode,
@@ -3423,6 +3424,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /** Readable by every member: the change-password form renders these rules. */
+    getTenantPasswordPolicy: (): Promise<PasswordPolicy> => fetchWithAuth('/tenants/password-policy'),
+    updateTenantPasswordPolicy: (data: Partial<PasswordPolicy>): Promise<PasswordPolicy> =>
+        fetchWithAuth('/tenants/password-policy', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     changePassword: (data: { currentPassword: string; newPassword: string }) => fetchWithAuth('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify(data),

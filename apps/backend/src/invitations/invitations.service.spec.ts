@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { StorePermission, UserRole } from '@erp71/shared-types';
 import * as crypto from 'crypto';
@@ -47,6 +48,9 @@ describe('InvitationsService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: EmailService, useValue: emailService },
                 { provide: PlanEntitlementsService, useValue: planEntitlements },
+                // The real service over the same db mock, so an invitee's password is
+                // checked against the inviting workspace's policy for real.
+                PasswordPolicyService,
             ],
         }).compile();
         service = mod.get(InvitationsService);

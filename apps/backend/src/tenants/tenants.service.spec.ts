@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
@@ -39,6 +39,94 @@ describe('TenantsService', () => {
         }).compile();
 
         service = module.get(TenantsService);
+    });
+
+    describe('password policy', () => {
+        const columns = (overrides: Record<string, unknown> = {}) => ({
+            password_min_length: 8,
+            password_require_uppercase: false,
+            password_require_lowercase: false,
+            password_require_number: false,
+            password_require_symbol: false,
+            password_block_common: true,
+            ...overrides,
+        });
+
+        it('reads the workspace policy for any member', async () => {
+            db.tenant.findUnique.mockResolvedValue(columns({ password_min_length: 10 }));
+
+            await expect(service.getPasswordPolicy('tenant-1')).resolves.toEqual({
+                min_length: 10,
+                require_uppercase: false,
+                require_lowercase: false,
+                require_number: false,
+                require_symbol: false,
+                block_common: true,
+            });
+        });
+
+        it('404s rather than inventing a default for a tenant that is gone', async () => {
+            db.tenant.findUnique.mockResolvedValue(null);
+
+            await expect(service.getPasswordPolicy('missing')).rejects.toThrow(NotFoundException);
+        });
+
+        it('lets an owner tighten the rules', async () => {
+            db.tenant.findUnique.mockResolvedValue(columns());
+            db.tenant.update.mockResolvedValue(
+                columns({ password_min_length: 12, password_require_symbol: true }),
+            );
+
+            await expect(
+                service.updatePasswordPolicy('tenant-1', { min_length: 12, require_symbol: true }, 'OWNER'),
+            ).resolves.toMatchObject({ min_length: 12, require_symbol: true });
+
+            expect(db.tenant.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        password_min_length: 12,
+                        password_require_symbol: true,
+                    }),
+                }),
+            );
+        });
+
+        it('keeps the switches a PATCH left out', async () => {
+            db.tenant.findUnique.mockResolvedValue(columns({ password_require_number: true }));
+            db.tenant.update.mockResolvedValue(columns({ password_require_number: true, password_min_length: 10 }));
+
+            await service.updatePasswordPolicy('tenant-1', { min_length: 10 }, 'MANAGER');
+
+            expect(db.tenant.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        password_min_length: 10,
+                        password_require_number: true,
+                    }),
+                }),
+            );
+        });
+
+        it('clamps a minimum below the platform floor rather than writing it', async () => {
+            db.tenant.findUnique.mockResolvedValue(columns());
+            db.tenant.update.mockResolvedValue(columns());
+
+            await service.updatePasswordPolicy('tenant-1', { min_length: 4 }, 'OWNER');
+
+            expect(db.tenant.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ password_min_length: 8 }),
+                }),
+            );
+        });
+
+        it('refuses a cashier — the policy is workspace-wide', async () => {
+            await expect(
+                service.updatePasswordPolicy('tenant-1', { min_length: 12 }, 'CASHIER'),
+            ).rejects.toThrow(ForbiddenException);
+
+            expect(db.tenant.update).not.toHaveBeenCalled();
+        });
     });
 
     describe('storefront enable gate', () => {

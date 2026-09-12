@@ -14,8 +14,10 @@ import {
     DEFAULT_MOBILE_COUNTRY_CODE,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
+    evaluatePassword,
     normalizeMobileToE164,
 } from '@erp71/shared-types';
+import { PasswordRequirements } from '@/components/ui';
 import BrandLogo from '@/components/BrandLogo';
 import PhoneNumberField from '@/components/PhoneNumberField';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
@@ -327,8 +329,10 @@ function SignupPageContent() {
             setError(t.auth.signup.emailInvalid);
             return;
         }
-        if (form.password.length < 8) {
-            setError(t.auth.signup.passwordTooShort);
+        // No workspace exists yet, so the platform default is the whole rule
+        // here — the same one the API applies. `evaluatePassword` defaults to it.
+        if (!evaluatePassword(form.password).valid) {
+            setError(t.auth.signup.passwordPolicyUnmet);
             return;
         }
         if (!form.tenantName.trim()) {
@@ -387,8 +391,6 @@ function SignupPageContent() {
                 setError(t.auth.signup.emailTaken);
             } else if (/email/i.test(msg) && /valid/i.test(msg)) {
                 setError(t.auth.signup.emailInvalid);
-            } else if (/password.*8|8.*character/i.test(msg)) {
-                setError(t.auth.signup.passwordTooShort);
             } else {
                 setError(msg || t.auth.signup.defaultError);
             }
@@ -527,8 +529,11 @@ function SignupPageContent() {
                             <label htmlFor="signup-password" className="text-xs font-medium text-gray-600 ms-1">{t.auth.signup.passwordLabel}</label>
                             <div className="relative">
                                 <Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-password" type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="At least 8 characters" />
+                                <input id="signup-password" type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 ps-10 pe-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder={t.auth.signup.passwordPlaceholder} />
                             </div>
+                            {/* No workspace yet, so no policy to fetch — the
+                                checklist falls back to the platform default. */}
+                            <PasswordRequirements password={form.password} touched={form.password.length > 0} className="ms-1" />
                         </div>
 
                         <div className="space-y-1.5">
