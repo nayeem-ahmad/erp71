@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { BillingModule } from '../billing/billing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PasswordPolicyModule } from '../password-policy/password-policy.module';
 import { PasswordResetModule } from '../password-reset/password-reset.module';
 import { DemoDataModule } from '../demo-data/demo-data.module';
 import { AddonModulesModule } from '../addon-modules/addon-modules.module';
@@ -15,6 +16,7 @@ import { AdminTenantsService } from './admin-tenants.service';
     imports: [
         BillingModule,
         NotificationsModule,
+        PasswordPolicyModule,
         PasswordResetModule,
         DemoDataModule,
         AddonModulesModule,

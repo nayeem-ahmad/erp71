@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, ArrowLeft, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useHydrated } from '@/hooks/useHydrated';
+import { PasswordRequirements } from '@/components/ui';
+import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 
 const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
@@ -31,6 +33,12 @@ function ResetPasswordContent() {
      * password reset needs no proof beyond the mailbox.
      */
     const [canResendInvite, setCanResendInvite] = useState(false);
+    /**
+     * The policy of the workspace this account belongs to, handed over by the
+     * same token check below. Null until it arrives (or for a token that names
+     * nobody), which the checklist reads as the platform default.
+     */
+    const [policy, setPolicy] = useState<PasswordPolicy | null>(null);
     const [isResending, setIsResending] = useState(false);
     const [resent, setResent] = useState(false);
 
@@ -53,6 +61,7 @@ function ResetPasswordContent() {
             .then((res) => (res.ok ? res.json() : null))
             .then((status) => {
                 if (cancelled || !status) return;
+                setPolicy(status.passwordPolicy ?? null);
                 if (status.valid) return;
                 setCanResendInvite(!!status.canResend);
                 setError(status.canResend ? m.expiredInviteTitle : m.defaultError);
@@ -94,8 +103,8 @@ function ResetPasswordContent() {
             setError(m.mismatch);
             return;
         }
-        if (newPassword.length < 8) {
-            setError(m.tooShort);
+        if (!evaluatePassword(newPassword, policy ?? undefined).valid) {
+            setError(m.policyUnmet);
             return;
         }
 
@@ -209,6 +218,12 @@ function ResetPasswordContent() {
                                                 placeholder={m.newPasswordPlaceholder}
                                             />
                                         </div>
+                                        <PasswordRequirements
+                                            password={newPassword}
+                                            policy={policy}
+                                            touched={newPassword.length > 0}
+                                            className="ms-1"
+                                        />
                                     </div>
 
                                     <div className="space-y-2">

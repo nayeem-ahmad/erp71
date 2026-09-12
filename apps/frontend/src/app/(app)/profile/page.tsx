@@ -8,7 +8,8 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import AvatarCropModal from '@/components/AvatarCropModal';
-import { PageShell } from '@/components/ui';
+import { PageShell, PasswordRequirements } from '@/components/ui';
+import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 import { toast } from '@/lib/toast';
 
 type ToastState = { type: 'success' | 'error'; message: string } | null;
@@ -148,6 +149,23 @@ function PasswordTab({ onToast }: { onToast: (t: ToastState) => void }) {
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNext, setShowNext] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    // The workspace's own rules, so the checklist below shows what the API is
+    // about to enforce. A failed load leaves it null and the component falls
+    // back to the platform default — the backend is the one that decides either
+    // way, so a stale policy here only ever costs one rejected submit.
+    const [policy, setPolicy] = useState<PasswordPolicy | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        api.getTenantPasswordPolicy()
+            .then((loaded) => {
+                if (active) setPolicy(loaded);
+            })
+            .catch(() => {});
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -156,8 +174,8 @@ function PasswordTab({ onToast }: { onToast: (t: ToastState) => void }) {
             onToast({ type: 'error', message: t.settings.password.currentRequired });
             return;
         }
-        if (next.length < 8) {
-            onToast({ type: 'error', message: t.settings.password.tooShort });
+        if (!evaluatePassword(next, policy ?? undefined).valid) {
+            onToast({ type: 'error', message: t.settings.password.policyUnmet });
             return;
         }
         if (next !== confirm) {
@@ -204,8 +222,8 @@ function PasswordTab({ onToast }: { onToast: (t: ToastState) => void }) {
                 show={showNext}
                 onToggle={() => setShowNext((v) => !v)}
                 placeholder={t.settings.password.newPlaceholder}
-                hint={t.settings.password.hint}
             />
+            <PasswordRequirements password={next} policy={policy} touched={next.length > 0} />
             <PasswordInput
                 label={t.settings.password.confirmLabel}
                 value={confirm}

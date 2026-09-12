@@ -1924,3 +1924,4 @@ export * from './campaign-rows';
 export * from './careers';
 export * from './locales';
 export * from './terms';
+export * from './password-policy';

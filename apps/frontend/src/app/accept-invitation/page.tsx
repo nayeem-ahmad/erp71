@@ -9,6 +9,8 @@ import { formatDate } from '@/lib/format';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { getAccessToken, setCredentials, setLastTenantId, setWorkspaceItem } from '@/lib/session-store';
+import { PasswordRequirements } from '@/components/ui';
+import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 
 type PageStatus = 'loading' | 'ready' | 'accepting' | 'success' | 'error';
 
@@ -19,6 +21,8 @@ interface InvitationInfo {
     role?: string;
     expiresAt: string;
     hasAccount?: boolean;
+    /** The inviting workspace's password rules, for the create-account form. */
+    passwordPolicy?: PasswordPolicy;
 }
 
 function AcceptInvitationContent() {
@@ -137,8 +141,8 @@ function AcceptInvitationContent() {
             setFormError(m.allFieldsRequired);
             return;
         }
-        if (password.length < 8) {
-            setFormError(m.passwordTooShort);
+        if (!evaluatePassword(password, info?.passwordPolicy).valid) {
+            setFormError(m.passwordPolicyUnmet);
             return;
         }
         setStatus('accepting');
@@ -266,7 +270,11 @@ function AcceptInvitationContent() {
                                             className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
                                         />
                                     </div>
-                                    <p className="text-xs text-gray-400">{m.passwordHint}</p>
+                                    <PasswordRequirements
+                                        password={password}
+                                        policy={info.passwordPolicy}
+                                        touched={password.length > 0}
+                                    />
                                     {formError && <p className="text-sm text-red-600">{formError}</p>}
                                     <button
                                         type="submit"

@@ -1,9 +1,11 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PasswordResetPurpose } from '@prisma/client';
+import type { PasswordPolicy } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { AuditService } from '../audit/audit.service';
+import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { renderRefereeInviteSms, resolveEmailLocale } from '../email/templates/referee-invite';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -64,6 +66,7 @@ export class PasswordResetService {
         private email: EmailService,
         private sms: SmsService,
         private audit: AuditService,
+        private passwordPolicy: PasswordPolicyService,
     ) {}
 
     private hash(rawToken: string): string {
@@ -104,6 +107,12 @@ export class PasswordResetService {
         if (!record || record.used_at || record.expires_at < new Date()) {
             throw new BadRequestException('Invalid or expired reset token');
         }
+
+        // Checked after the token, so an invalid token never reveals a
+        // workspace's policy to someone guessing links. `inspectToken` is the
+        // supported way for the reset page to read it, and that needs the real
+        // token too.
+        await this.passwordPolicy.assertValidForUser(newPassword, record.user_id);
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
@@ -226,14 +235,29 @@ export class PasswordResetService {
         purpose: PasswordResetPurpose | null;
         /** Only an unexpired, unused invite can be resent from the page. */
         canResend: boolean;
+        /**
+         * The policy this reset has to satisfy, so `/reset-password` can render
+         * the checklist before the first keystroke rather than after a rejected
+         * submit. Null for a token that names nobody — there is no policy to
+         * describe, and inventing one would make the endpoint say whether an
+         * unknown token belongs to a strict workspace.
+         */
+        passwordPolicy: PasswordPolicy | null;
     }> {
         const record = await this.db.passwordResetToken.findUnique({
             where: { token_hash: this.hash(rawToken) },
-            select: { purpose: true, used_at: true, expires_at: true },
+            select: { purpose: true, used_at: true, expires_at: true, user_id: true },
         });
 
         if (!record) {
-            return { valid: false, expired: false, used: false, purpose: null, canResend: false };
+            return {
+                valid: false,
+                expired: false,
+                used: false,
+                purpose: null,
+                canResend: false,
+                passwordPolicy: null,
+            };
         }
 
         const used = !!record.used_at;
@@ -243,6 +267,7 @@ export class PasswordResetService {
             expired,
             used,
             purpose: record.purpose,
+            passwordPolicy: await this.passwordPolicy.getForUser(record.user_id),
             // A used invite means the partner already has a password; sending another
             // is not recovery, it is a password reset they did not ask for.
             canResend: record.purpose === PasswordResetPurpose.REFEREE_INVITE && !used,
