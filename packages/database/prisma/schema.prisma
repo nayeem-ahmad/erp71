@@ -349,6 +349,12 @@ model User {
   // application in progress. A password change bumps all three.
   applicant_token_version  Int       @default(0)
   is_platform_admin        Boolean   @default(false)
+  /// Set when an admin provisions the password rather than the owner choosing
+  /// it — today only `EmployeeLoginService`, which hands a generated password to
+  /// HR to pass on. While it is true the person may sign in but may do nothing
+  /// else until they set their own, so the password HR read off the screen stops
+  /// working the first time it is used. `changePassword` clears it.
+  must_change_password     Boolean   @default(false)
   /// Last time this person opened the in-app "What's new" feed. The unread dot
   /// is a comparison against the newest published post, which is why there is
   /// no per-user-per-post row: writing a Notification for every user of every

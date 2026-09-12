@@ -6,6 +6,7 @@ import { Menu, Zap, X } from 'lucide-react';
 import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
@@ -530,6 +531,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
 
     const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
+
+    // Somebody still on a password an admin chose for them — today that means an
+    // employee whose login HR just created. `JwtAuthGuard` refuses every endpoint
+    // but the four the gate needs, so rendering the shell here would paint a
+    // sidebar over a screenful of 403s. Returned in place of it, before any of
+    // the chrome below, so no page can mount behind the gate.
+    if (hasResolvedUser && user?.must_change_password) {
+        return (
+            <TenantLocaleProvider tenant={tenantLocaleConfig}>
+                <SetPasswordGate />
+            </TenantLocaleProvider>
+        );
+    }
 
     return (
         <BrandingProvider>

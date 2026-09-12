@@ -7,6 +7,25 @@ import { runImport, ImportResult } from '../common/import.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { canViewPayroll, stripPayrollFields } from '../common/payroll-visibility';
 
+/**
+ * What the HR screens need to know about the login behind an employee.
+ *
+ * `mobile` is the identifier they actually sign in with — `email` is often a
+ * placeholder for staff who have none (see `placeholderEmailFor`), so showing it
+ * would be showing a machine address. `must_change_password` is true while an
+ * HR-set password has not been replaced, which the detail page surfaces so
+ * nobody wonders why the person cannot get past the sign-in screen.
+ *
+ * Nothing sensitive: no hash, no token version, no 2FA secret.
+ */
+const EMPLOYEE_USER_SELECT = {
+    id: true,
+    email: true,
+    name: true,
+    mobile: true,
+    must_change_password: true,
+} as const;
+
 @Injectable()
 export class EmployeesService {
     constructor(
@@ -187,7 +206,7 @@ export class EmployeesService {
                 ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
-            include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
@@ -215,7 +234,7 @@ export class EmployeesService {
         const [items, total, seesSalary] = await Promise.all([
             this.db.employee.findMany({
                 where,
-                include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+                include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
                 orderBy: { created_at: 'desc' },
                 skip,
                 take: limit,
@@ -235,7 +254,7 @@ export class EmployeesService {
     async findOne(tenantId: string, id: string, viewer?: TenantContext) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },
-            include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         if (!employee) throw new NotFoundException('Employee not found');
         return stripPayrollFields(this.decryptEmployee(employee), await this.canSeeSalary(viewer));
@@ -284,7 +303,7 @@ export class EmployeesService {
                 ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
-            include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
@@ -378,7 +397,7 @@ export class EmployeesService {
         const record = await this.db.employee.update({
             where: { id },
             data: { user_id: userId },
-            include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         return this.decryptEmployee(record);
     }
@@ -392,7 +411,7 @@ export class EmployeesService {
         const record = await this.db.employee.update({
             where: { id },
             data: { user_id: null },
-            include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
+            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         return this.decryptEmployee(record);
     }

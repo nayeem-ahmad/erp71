@@ -417,6 +417,20 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
 
+/**
+ * What the HR screen knows about an employee's login. Everything here is
+ * derivable from the employee row, which is why there is no endpoint to read it
+ * — it comes back from whichever call last changed it.
+ */
+export type EmployeeLoginState = {
+    employee_id: string;
+    has_login: boolean;
+    portal_access: boolean;
+    /** The mobile number they type into the sign-in form. */
+    sign_in_identifier: string | null;
+    must_change_password: boolean;
+};
+
 export interface Paginated<T = any> {
     items: T[];
     total: number;
@@ -3488,6 +3502,15 @@ export const api = {
         fetchWithAuth(`/employees/${id}/portal-access`, { method: 'POST' }),
     revokeEmployeePortalAccess: (id: string) =>
         fetchWithAuth(`/employees/${id}/portal-access/revoke`, { method: 'PATCH' }),
+
+    // Employee login. `password` comes back on create and reset only — it is
+    // stored as a hash, so the response is the one place it can ever be read.
+    createEmployeeLogin: (id: string): Promise<EmployeeLoginState & { password: string }> =>
+        fetchWithAuth(`/employees/${id}/login`, { method: 'POST' }),
+    resetEmployeeLoginPassword: (id: string): Promise<EmployeeLoginState & { password: string }> =>
+        fetchWithAuth(`/employees/${id}/login/reset-password`, { method: 'POST' }),
+    revokeEmployeeLogin: (id: string): Promise<EmployeeLoginState> =>
+        fetchWithAuth(`/employees/${id}/login`, { method: 'DELETE' }),
 
     // Holidays & work schedules (HRIS Phase 2)
     getHolidays: (year?: number) =>
