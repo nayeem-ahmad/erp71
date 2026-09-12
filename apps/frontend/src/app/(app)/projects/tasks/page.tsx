@@ -11,7 +11,6 @@ import {
     Select,
     Field,
     RichTextEditor,
-    StatusBadge,
     ConfirmDialog,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
@@ -22,6 +21,19 @@ import { createColumnHelper } from '@tanstack/react-table';
 import type { BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import TaskQuickAdd from '@/components/projects/TaskQuickAdd';
+import TaskRowSelect, {
+    assigneeOptions,
+    statusOptions,
+} from '@/components/projects/TaskRowSelect';
+import { useProjectMeta } from '@/components/projects/use-project-meta';
+import {
+    assigneeColumns,
+    assigneeKeyOf,
+    assigneeLabelOf,
+    defaultAssigneeFor,
+} from '@/components/projects/task-assignee';
+import { Sparkline } from '@/components/dashboard/Sparkline';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -46,6 +58,8 @@ interface TaskRow {
     due_date?: string | null;
     estimate_hours?: string | null;
     remaining_hours?: string | null;
+    /** Recent remaining readings, oldest first. Absent below two readings. */
+    remaining_trend?: number[];
     status?: { id: string; name: string; category: string };
     project?: { id: string; code: string; name: string };
     sprint?: { id: string; name: string; status: string } | null;
@@ -92,6 +106,8 @@ const EMPTY_FORM = {
     title: '',
     description: '',
     priority: 'MEDIUM',
+    // The one field the modal used to omit, and the one thing always set next.
+    assignee: '',
     dueDate: '',
     estimateHours: '',
 };
@@ -130,15 +146,10 @@ function assigneeQuery(
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
-/** A task goes to a user or to an employee with no login; show whichever holds it. */
-function assigneeLabel(task: TaskRow): string {
-    if (task.assignee) return task.assignee.name || task.assignee.email;
-    if (task.assigneeEmployee) return task.assigneeEmployee.name;
-    return '—';
-}
+const assigneeLabel = (task: TaskRow): string => assigneeLabelOf(task);
 
 export default function TasksPage() {
-    const { t, fmt } = useI18n();
+    const { t, fmt, localeInfo } = useI18n();
     const m = t.projects;
 
     const [filters, setFilter, filtersReady] = useRememberedFilters('project-tasks', DEFAULT_FILTERS);
@@ -164,6 +175,13 @@ export default function TasksPage() {
     const [pendingBulkDelete, setPendingBulkDelete] = useState<TaskRow[] | null>(null);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [busy, setBusy] = useState(false);
+    // The composer's own project, held across saves so a run of tasks for one
+    // project is one choice rather than one per task.
+    const [quickProject, setQuickProject] = useState('');
+    const [allLabels, setAllLabels] = useState<{ id: string; name: string }[]>([]);
+    const [showPriority, setShowPriority] = useState(false);
+    const [showDescription, setShowDescription] = useState(false);
+    const projectMeta = useProjectMeta();
 
     // Debounced only while somebody is actually typing, so a remembered search
     // restored on arrival reaches the query at once rather than 300ms late.
@@ -196,6 +214,13 @@ export default function TasksPage() {
         api.getProjectTaskAssignees()
             .then((rows: unknown) => setAssignees(Array.isArray(rows) ? (rows as AssigneeOption[]) : []))
             .catch(() => setAssignees([]));
+        // For the composer's `#label` tokens. A tenant with no labels simply has
+        // no `#` grammar; nothing else depends on this.
+        api.getProjectLabels()
+            .then((rows: unknown) =>
+                setAllLabels(Array.isArray(rows) ? (rows as { id: string; name: string }[]) : []),
+            )
+            .catch(() => setAllLabels([]));
     }, []);
 
     /**
@@ -269,16 +294,61 @@ export default function TasksPage() {
     // DataTable owns the selection; bumping this is how a caller clears it.
     const clearSelection = useCallback(() => setSelectionEpoch((epoch) => epoch + 1), []);
 
+    // Whatever project the list is filtered to is almost always the one a new
+    // task belongs to; a single-project workspace never has to choose.
+    const presetProject = projectId || (projects.length === 1 ? projects[0].id : '');
+
     const openCreate = () => {
-        // Whatever project the list is filtered to is almost always the one the
-        // new task belongs to; a single-project workspace never has to choose.
-        const preset = projectId || (projects.length === 1 ? projects[0].id : '');
-        setForm({ ...EMPTY_FORM, projectId: preset });
+        setForm({
+            ...EMPTY_FORM,
+            projectId: quickProject || presetProject,
+            // The holder the task would get anyway, shown rather than implied —
+            // the field is there to be changed, not to be a surprise.
+            assignee: assignee.startsWith('user:') || assignee.startsWith('employee:')
+                ? assignee
+                : assignee === 'unassigned' || !userId
+                  ? ''
+                  : `user:${userId}`,
+        });
         setFormErrors({});
+        setShowPriority(false);
+        setShowDescription(false);
         setCreating(true);
     };
 
-    const createTask = async (event: React.FormEvent) => {
+    /** One line from the composer: parsed tokens, then the same defaults. */
+    const quickCreate = async (parsed: {
+        title: string;
+        assigneeId?: string;
+        assigneeEmployeeId?: string;
+        labelIds?: string[];
+        priority?: string;
+        estimateHours?: number;
+        dueDate?: string;
+    }) => {
+        const holder =
+            parsed.assigneeId || parsed.assigneeEmployeeId
+                ? { assigneeId: parsed.assigneeId, assigneeEmployeeId: parsed.assigneeEmployeeId }
+                : defaultAssigneeFor(assignee, userId);
+        try {
+            await api.createProjectTask({
+                projectId: quickProject || presetProject,
+                title: parsed.title.trim(),
+                ...holder,
+                ...(parsed.labelIds ? { labelIds: parsed.labelIds } : {}),
+                ...(parsed.priority ? { priority: parsed.priority } : {}),
+                ...(parsed.estimateHours != null ? { estimateHours: parsed.estimateHours } : {}),
+                ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
+            });
+            toast.success(m.task.created);
+            await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.createFailed);
+        }
+    };
+
+    /** `again` keeps the dialog open with the project, for filing a run of tasks. */
+    const createTask = async (event: React.FormEvent, again = false) => {
         event.preventDefault();
         const errors: { projectId?: string; title?: string } = {};
         if (!form.projectId) errors.projectId = m.task.projectRequired;
@@ -288,27 +358,40 @@ export default function TasksPage() {
 
         setSaving(true);
         try {
-            const created = await api.createProjectTask({
+            await api.createProjectTask({
                 projectId: form.projectId,
                 title: form.title.trim(),
                 description: form.description.trim() || undefined,
                 priority: form.priority,
                 dueDate: form.dueDate || undefined,
                 estimateHours: form.estimateHours ? Number(form.estimateHours) : undefined,
+                // An explicit choice wins; an untouched field falls back to the
+                // same default the composer uses.
+                ...(form.assignee
+                    ? assigneeColumns(form.assignee)
+                    : defaultAssigneeFor(assignee, userId)),
             });
             toast.success(m.task.created);
-            setCreating(false);
-            setForm(EMPTY_FORM);
+            // The task now lands inside the current filter, so the list showing
+            // it is the confirmation — no second dialog, which is what the
+            // forced-open detail panel used to be standing in for.
+            if (again) setForm({ ...EMPTY_FORM, projectId: form.projectId, assignee: form.assignee });
+            else setCreating(false);
             await reload();
-            // A new task has no assignee, so under the default "assigned to me"
-            // filter it lands outside the list. Open it instead of leaving the
-            // page looking as though nothing happened.
-            const createdId = (created as { id?: string } | null)?.id;
-            if (createdId) setOpenTaskId(createdId);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.createFailed);
         } finally {
             setSaving(false);
+        }
+    };
+
+    /** An inline row edit. Saves, then refreshes just the list behind it. */
+    const patchRow = async (taskId: string, data: Record<string, unknown>) => {
+        try {
+            await api.updateProjectTask(taskId, data);
+            await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         }
     };
 
@@ -384,20 +467,51 @@ export default function TasksPage() {
             {
                 id: 'status',
                 header: m.fields.status,
-                cell: ({ row }: { row: { original: TaskRow } }) =>
-                    row.original.status ? (
-                        <StatusBadge tone={CATEGORY_TONE[row.original.status.category] ?? 'neutral'}>
-                            {row.original.status.name}
-                        </StatusBadge>
-                    ) : (
-                        '—'
-                    ),
+                // Editable in place: "mark it done" and "move it along" are the
+                // two commonest edits in the module, and neither is worth the
+                // ten requests of opening the card.
+                cell: ({ row }: { row: { original: TaskRow } }) => {
+                    const task = row.original;
+                    const project = task.project?.id ?? '';
+                    if (!task.status || !project) return '—';
+                    return (
+                        <TaskRowSelect
+                            testId="row-status"
+                            label={m.fields.status}
+                            value={task.status.id}
+                            current={task.status.name}
+                            options={statusOptions(projectMeta.peek(project))}
+                            onOpen={() => void projectMeta.load(project)}
+                            onChange={(statusId) => patchRow(task.id, { statusId })}
+                            disabled={busy}
+                            tone={CATEGORY_TONE[task.status.category] === 'success'
+                                ? 'text-emerald-700'
+                                : undefined}
+                        />
+                    );
+                },
             },
             {
                 id: 'assignee',
                 header: m.fields.assignee,
                 meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: TaskRow } }) => assigneeLabel(row.original),
+                cell: ({ row }: { row: { original: TaskRow } }) => {
+                    const task = row.original;
+                    const project = task.project?.id ?? '';
+                    if (!project) return assigneeLabel(task);
+                    return (
+                        <TaskRowSelect
+                            testId="row-assignee"
+                            label={m.fields.assignee}
+                            value={assigneeKeyOf(task)}
+                            current={assigneeLabel(task)}
+                            options={assigneeOptions(projectMeta.peek(project), m.task.unassigned)}
+                            onOpen={() => void projectMeta.load(project)}
+                            onChange={(key) => patchRow(task.id, assigneeColumns(key))}
+                            disabled={busy}
+                        />
+                    );
+                },
             },
             {
                 id: 'sprint',
@@ -417,7 +531,28 @@ export default function TasksPage() {
                 id: 'remaining',
                 header: m.overview.remaining,
                 meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: TaskRow } }) => `${num(row.original.remaining_hours)}h`,
+                // The figure, and where it has been. A column of bare numbers
+                // cannot tell a task converging from one stuck at 12h for a
+                // fortnight, which is the whole question somebody scanning this
+                // list is asking.
+                cell: ({ row }: { row: { original: TaskRow } }) => {
+                    const trend = row.original.remaining_trend;
+                    return (
+                        <span className="flex items-center justify-end gap-2">
+                            <span className="tabular-nums">{num(row.original.remaining_hours)}h</span>
+                            {trend && trend.length > 1 && (
+                                <span className="w-14 shrink-0" data-testid="remaining-trend">
+                                    <Sparkline
+                                        points={trend}
+                                        // Down is the good direction here, which
+                                        // is the opposite of a sales tile.
+                                        positive={trend[trend.length - 1] <= trend[0]}
+                                    />
+                                </span>
+                            )}
+                        </span>
+                    );
+                },
             },
             {
                 id: 'due_date',
@@ -459,7 +594,11 @@ export default function TasksPage() {
                 ),
             },
         ],
-        [m, t.common.createdAt, t.common.delete, t.common.edit],
+        // `patchRow` closes over `reload`, which useServerList recreates every
+        // render; listing it would rebuild every column on every keystroke in
+        // the search box.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [m, t.common.createdAt, t.common.delete, t.common.edit, busy, projectMeta],
     );
 
     const bulkActions: BulkAction<TaskRow>[] = useMemo(
@@ -592,6 +731,33 @@ export default function TasksPage() {
                 )}
             </div>
 
+            <TaskQuickAdd
+                projects={projects}
+                projectId={quickProject || presetProject}
+                onProjectChange={setQuickProject}
+                vocabulary={{
+                    labels: allLabels,
+                    assignees: assignees
+                        .filter((option) => option.key.includes(':'))
+                        .map((option) => ({ key: option.key, name: option.name })),
+                    locale: localeInfo.dateLocale,
+                    today: m.quickAdd.today,
+                    tomorrow: m.quickAdd.tomorrow,
+                }}
+                labels={{
+                    placeholder: m.quickAdd.placeholder,
+                    hint: m.quickAdd.hint,
+                    project: m.fields.project,
+                    selectProject: m.task.selectProject,
+                    add: m.quickAdd.add,
+                    more: m.quickAdd.more,
+                    noProjects: m.task.noProjects,
+                }}
+                busy={busy}
+                onCreate={quickCreate}
+                onOpenFull={openCreate}
+            />
+
             <DataTable
                 title={m.tasks.title}
                 tableId="project-tasks"
@@ -668,20 +834,39 @@ export default function TasksPage() {
                                     autoFocus
                                 />
                             </Field>
-                            <div className="grid grid-cols-2 gap-3">
-                                <Field label={m.fields.priority} htmlFor="new-task-priority">
-                                    <Select
-                                        id="new-task-priority"
-                                        value={form.priority}
-                                        onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                                    >
-                                        {Object.entries(m.priority).map(([key, label]) => (
-                                            <option key={key} value={key}>
-                                                {label}
+                            {/* The field the modal used to leave out, and the one
+                                thing always set next. It opens on the holder the
+                                task would get anyway rather than blank, so the
+                                default is visible instead of implied. */}
+                            <Field label={m.fields.assignee} htmlFor="new-task-assignee">
+                                <Select
+                                    id="new-task-assignee"
+                                    value={form.assignee}
+                                    onFocus={() => form.projectId && void projectMeta.load(form.projectId)}
+                                    onChange={(e) => setForm((f) => ({ ...f, assignee: e.target.value }))}
+                                >
+                                    <option value="">{m.task.unassigned}</option>
+                                    {(projectMeta.peek(form.projectId)?.assignees ?? []).map((person) => (
+                                        <option key={person.value} value={person.value}>
+                                            {person.label}
+                                        </option>
+                                    ))}
+                                    {/* Whoever is preselected, even before the
+                                        roster has loaded — otherwise the select
+                                        falls back to its first option and the
+                                        form quietly disagrees with itself. */}
+                                    {form.assignee &&
+                                        !(projectMeta.peek(form.projectId)?.assignees ?? []).some(
+                                            (person) => person.value === form.assignee,
+                                        ) && (
+                                            <option value={form.assignee}>
+                                                {assignees.find((a) => a.key === form.assignee)?.name ??
+                                                    m.quickAdd.me}
                                             </option>
-                                        ))}
-                                    </Select>
-                                </Field>
+                                        )}
+                                </Select>
+                            </Field>
+                            <div className="grid grid-cols-2 gap-3">
                                 <Field label={m.task.dueDate} htmlFor="new-task-due">
                                     <Input
                                         id="new-task-due"
@@ -690,31 +875,88 @@ export default function TasksPage() {
                                         onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                                     />
                                 </Field>
+                                <Field label={m.task.estimate} htmlFor="new-task-estimate">
+                                    <Input
+                                        id="new-task-estimate"
+                                        type="number"
+                                        min="0"
+                                        step="0.25"
+                                        value={form.estimateHours}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, estimateHours: e.target.value }))
+                                        }
+                                    />
+                                </Field>
                             </div>
-                            <Field label={m.task.estimate} htmlFor="new-task-estimate">
-                                <Input
-                                    id="new-task-estimate"
-                                    type="number"
-                                    min="0"
-                                    step="0.25"
-                                    value={form.estimateHours}
-                                    onChange={(e) => setForm((f) => ({ ...f, estimateHours: e.target.value }))}
-                                />
-                            </Field>
-                            <Field label={m.description.title}>
-                                <RichTextEditor
-                                    rows={4}
-                                    maxLength={5000}
-                                    value={form.description}
-                                    placeholder={m.description.placeholder}
-                                    ariaLabel={m.description.title}
-                                    onChange={(value) => setForm((f) => ({ ...f, description: value }))}
-                                />
-                            </Field>
+
+                            {/* Priority is quiet until it is not MEDIUM. Four
+                                tasks in five never leave the default, and a
+                                select that always says "Medium" is a row of the
+                                form spent saying nothing. */}
+                            {showPriority || form.priority !== 'MEDIUM' ? (
+                                <Field label={m.fields.priority} htmlFor="new-task-priority">
+                                    <Select
+                                        id="new-task-priority"
+                                        value={form.priority}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, priority: e.target.value }))
+                                        }
+                                    >
+                                        {Object.entries(m.priority).map(([key, label]) => (
+                                            <option key={key} value={key}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPriority(true)}
+                                    className="min-h-touch text-sm text-blue-600 hover:underline"
+                                >
+                                    {m.quickAdd.setPriority}
+                                </button>
+                            )}
+
+                            {/* Collapsed, because it was the tallest control in
+                                the dialog serving the field most tasks never
+                                get. */}
+                            {showDescription || form.description ? (
+                                <Field label={m.description.title}>
+                                    <RichTextEditor
+                                        rows={4}
+                                        maxLength={5000}
+                                        value={form.description}
+                                        placeholder={m.description.placeholder}
+                                        ariaLabel={m.description.title}
+                                        onChange={(value) => setForm((f) => ({ ...f, description: value }))}
+                                    />
+                                </Field>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDescription(true)}
+                                    className="min-h-touch text-sm text-blue-600 hover:underline"
+                                >
+                                    {m.quickAdd.addDescription}
+                                </button>
+                            )}
                         </div>
                         <ModalFooter>
                             <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
                                 {t.common.cancel}
+                            </Button>
+                            {/* Filing a run of tasks is the case the old dialog
+                                served worst: one save, one dismissal, one reopen,
+                                one re-pick of the project, for every task. */}
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={saving || projects.length === 0}
+                                onClick={(event) => void createTask(event, true)}
+                            >
+                                {m.quickAdd.saveAndAdd}
                             </Button>
                             <Button type="submit" disabled={saving || projects.length === 0}>
                                 {t.common.save}

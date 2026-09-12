@@ -6651,6 +6651,10 @@ model ProjectTaskRemainingLog {
 
   @@index([tenant_id, sprint_id, changed_at])
   @@index([task_id, changed_at])
+  /// Added 2026-09-11 for the project-level burndown, which replays this table
+  /// scoped by project rather than by sprint. Without it that read is a
+  /// sequential scan — the two indexes above cover every other caller.
+  @@index([tenant_id, project_id, changed_at])
   @@map("project_task_remaining_logs")
 }
 

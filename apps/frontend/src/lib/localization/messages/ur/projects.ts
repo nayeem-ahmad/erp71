@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "چیک لسٹ اپ ڈیٹ نہیں ہو سکی",
     },
 
+    quickAdd: {
+        placeholder: "کام شامل کریں — عنوان، پھر Enter",
+        hint: "اسی سطر میں تفصیل: @شخص  #لیبل  !high  ~3h  >جمعہ",
+        add: "شامل کریں",
+        more: "مزید خانے",
+        today: "آج",
+        tomorrow: "کل",
+        me: "میں",
+        setPriority: "ترجیح مقرر کریں",
+        addDescription: "+ تفصیل شامل کریں",
+        saveAndAdd: "محفوظ کر کے مزید",
+    },
+
+    timer: {
+        start: "شروع",
+        stop: "روکیں",
+        elsewhere: "کسی اور کام پر ٹائمر پہلے سے چل رہا ہے",
+    },
+
     remaining: {
         chart: "وقت کے ساتھ باقی گھنٹے",
         chartNow: "اب",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "اس منصوبے کی کوئی ہدف تاریخ نہیں، اس لیے موازنے کے لیے کچھ نہیں — لکیر بتاتی ہے کیا ہوا۔",
         title: "برن ڈاؤن",
         ideal: "مثالی",
         actual: "باقی",

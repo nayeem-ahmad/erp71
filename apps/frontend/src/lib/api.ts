@@ -4343,6 +4343,7 @@ export const api = {
         }),
     deleteProject: (id: string) => fetchWithAuth(`/projects/${id}`, { method: 'DELETE' }),
     getProjectTimeSummary: (id: string) => fetchWithAuth(`/projects/${id}/time-summary`),
+    getProjectBurndown: (id: string) => fetchWithAuth(`/projects/${id}/burndown`),
 
     addProjectMember: (projectId: string, data: { userId?: string; employeeId?: string; role?: string }) =>
         fetchWithAuth(`/projects/${projectId}/members`, {
