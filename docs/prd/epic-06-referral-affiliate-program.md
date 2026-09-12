@@ -18,6 +18,7 @@ This epic was implemented directly against production needs (2026-07-02 → 2026
 3. A commission record is created per referred signup and moves PENDING → EARNED when that tenant's invoice is paid, and → PAID when an admin records a payout.
 4. Platform admins can view a full per-referee ledger (referrals, commissions, payments) and record manual payments.
 5. Referees can log in to a dedicated, scoped `/referrals` dashboard to see their code, signup link, balance due, commission history, and payment history.
+6. A platform admin can attribute an existing tenant to a referee after the fact, for a business the partner brought in that never entered the code.
 
 ### Stories
 
@@ -40,6 +41,10 @@ This epic was implemented directly against production needs (2026-07-02 → 2026
 5. **Story 5: Referee Self-Service Portal**
    * **Description:** Auto-provisioned login linked to `Referee.user_id`, dedicated invite email, scoped `/referrals` dashboard (copy code/signup link, balance due, commissions, payments), workspace chooser integration for users who are also referees.
    * Status: Done — `referee.guard.ts`, `referee-portal.controller.ts`, `apps/frontend/src/app/(app)/referrals/page.tsx`.
+
+6. **Story 6: Manual attribution**
+   * **Description:** A platform admin can attach an existing tenant to a referee from the referee's ledger page, and detach one again while the commission is still `PENDING`.
+   * Status: Done (2026-09-12) — `referrals.service.ts` (`listAttachableTenants`, `attachTenant`, `detachTenant`), `apps/frontend/src/components/admin/referrals/AttachTenantModal.tsx`.
 
 ### Commission rules (as built)
 
@@ -75,7 +80,22 @@ flagged `reversed_after_paid` and the amount nets against the partner's next pay
 through the ledger's `overpaid_amount`.
 
 **A partner cannot use their own code.** Self-referral is rejected at signup, checked
-both by linked account and by email address.
+both by linked account and by email address. The same check runs when an admin
+attaches a tenant by hand, against every member of that workspace.
+
+**An admin can attribute a tenant that never entered the code**, from the referee's
+ledger page. It writes the same `PENDING` row the signup path writes — no amount, no
+`EARNED` — so the commission is still earned by the billing path on that tenant's
+next activation, and an admin cannot create a balance with it. The rates default to
+the partner's current terms and are editable, because a business that already paid
+list price is not owed a signup discount. `signed_up_at` is backdated to the tenant's
+own creation date. A tenant another partner already holds is refused; the attribution
+can be detached again only while `PENDING`, since past that it is ledger history.
+Both writes are audit-logged.
+
+**The consequence worth stating to partners:** attaching does not credit the period a
+tenant has already paid for. A business attached after its annual invoice earns the
+partner nothing until that invoice renews.
 
 **Payouts are reconciled.** A recorded payment defaults to exactly what the selected
 commissions are worth; a different figure requires an explicit `allow_partial`.
