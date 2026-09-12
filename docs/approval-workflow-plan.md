@@ -26,16 +26,16 @@ parameters of the entry.
 
 | Entry | Where | Approval state | Permission | Routing |
 |---|---|---|---|---|
-| Voucher | `schema.prisma:3395` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
-| Leave request | `schema.prisma:5186` | `status`, `approval_level`, `LeaveRequestApproval[]` (`:5225`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4474`), anyone holding the permission |
-| Expense claim | `schema.prisma:4787` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
-| Warehouse transfer | `schema.prisma:1676` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
-| Product demand | `schema.prisma:1809` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single approver |
-| CRM activity | `schema.prisma:3025` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
-| Fund transfer | `schema.prisma:3996` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
-| Payroll run | `schema.prisma:4869` | `status`, `approved_by`, `approved_at` | — | single approver |
-| Stock take | `InventorySettings`, `schema.prisma:1656` | `discrepancy_approval_threshold` | — | a threshold, hard-coded in shape |
-| Warranty claim | `schema.prisma:4028` | status enum incl. `APPROVED` | — | single approver |
+| Voucher | `schema.prisma:3410` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
+| Leave request | `schema.prisma:5201` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5240`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4489`), anyone holding the permission |
+| Expense claim | `schema.prisma:4802` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
+| Warehouse transfer | `schema.prisma:1691` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
+| Product demand | `schema.prisma:1824` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single approver |
+| CRM activity | `schema.prisma:3040` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
+| Fund transfer | `schema.prisma:4011` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
+| Payroll run | `schema.prisma:4884` | `status`, `approved_by`, `approved_at` | — | single approver |
+| Stock take | `InventorySettings`, `schema.prisma:1671` | `discrepancy_approval_threshold` | — | a threshold, hard-coded in shape |
+| Warranty claim | `schema.prisma:4043` | status enum incl. `APPROVED` | — | single approver |
 
 Twelve `approved_by` columns across the schema.
 
@@ -67,7 +67,7 @@ Three lessons from it that the generic engine must inherit, not relitigate:
 1. **Off by default, and off must be free.** No new query on the hot path for a
    tenant with no policy.
 2. **Never queue machine-generated documents behind a human by default.**
-   `auto_approve_system_vouchers` (`schema.prisma:3334`) exists because holding
+   `auto_approve_system_vouchers` (`schema.prisma:3349`) exists because holding
    back auto-posted vouchers stalls sales, purchases and payroll.
 3. **Pure util + spec, service on top.** `voucher-approval.util.ts`,
    `leave-policy.util.ts`, `posting-status.util.ts` are all pure functions with
@@ -83,10 +83,10 @@ permission, N times." Authority does not vary with the entry.
 Also missing, and needed for people-based routing:
 
 - **`Employee.manager_id`** — there is no reporting line on `Employee`
-  (`schema.prisma:4377`). `hiring_manager_id` on `JobPost` and `manager_id` on
+  (`schema.prisma:4392`). `hiring_manager_id` on `JobPost` and `manager_id` on
   `Project` are the only manager fields in the schema, and neither is a
   hierarchy.
-- **`Department.head_employee_id`** — `Department` (`schema.prisma:4347`) is a
+- **`Department.head_employee_id`** — `Department` (`schema.prisma:4362`) is a
   name and nothing else.
 
 ---
@@ -133,7 +133,7 @@ model ApprovalPolicy {
   allow_self_approval Boolean @default(false)
 
   /// Reports and lists default to approved-only. Generalises
-  /// `AccountingSettings.reports_approved_only` (schema.prisma:3336).
+  /// `AccountingSettings.reports_approved_only` (schema.prisma:3352).
   reports_approved_only Boolean @default(false)
 
   created_at DateTime  @default(now())
@@ -263,7 +263,7 @@ model ApprovalAction {
   /// APPROVED | REJECTED | DELEGATED | COMMENTED | AUTO_APPROVED | SUPERSEDED
   decision    String
   /// User id, not a relation — the rest of the schema records actors this way
-  /// (see the note at schema.prisma:1824) and a deleted user must not take the
+  /// (see the note at schema.prisma:1840) and a deleted user must not take the
   /// history with them.
   approver_id String?
   /// Snapshot of who they were at the time, for the same reason.
@@ -375,8 +375,8 @@ with `conditions: null` matching everything, which is how the catch-all row at
 
 | Type | Resolves to | Source |
 |---|---|---|
-| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:3957`) — the existing matrix |
-| `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1180`) |
+| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:3972`) — the existing matrix |
+| `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1195`) |
 | `USER` | one named user | `approver_ref` is the user id |
 | `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`** |
 | `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`** |
@@ -459,7 +459,7 @@ handler writes the leave days into `AttendanceRecord`.
 `ApprovalRequest` to answer "is this approved?"**
 
 `Voucher.approval_status` stays exactly where it is, means exactly what it
-means, and keeps its index (`schema.prisma:3436`). Every existing report, filter
+means, and keeps its index (`schema.prisma:3451`). Every existing report, filter
 and `approvalVoucherFilter()` call keeps working untouched. `ApprovalRequest`
 holds only the *process* — which step, who is waiting, what was decided and why.
 
@@ -493,7 +493,7 @@ purchase. Convert at fact-extraction time, store the original alongside as
 
 ### 6.4 Deleted approvers
 `approver_id` is a plain string, not a relation — matching how the schema
-already handles actors (`schema.prisma:1824`) — plus `approver_name` snapshotted
+already handles actors (`schema.prisma:1840`) — plus `approver_name` snapshotted
 on the action, so the history survives the user row.
 
 ### 6.5 Performance
