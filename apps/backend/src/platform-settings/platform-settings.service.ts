@@ -91,6 +91,11 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // customer is billed for, so this is a kill switch rather than a rollout
         // gate. Independent of `projects_enabled`, which governs shop users.
         platform_projects_enabled: { isSecret: false, default: 'true' },
+        // The platform's own books. On by default for the same reason as
+        // platform_projects_enabled: it is the operator's own bookkeeping, not
+        // something sold to a tenant, so this is a kill switch. Independent of
+        // whether any tenant's plan includes the accounting module.
+        platform_accounting_enabled: { isSecret: false, default: 'true' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
     },
     navigation: {

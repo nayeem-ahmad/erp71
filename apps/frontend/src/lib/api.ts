@@ -2964,6 +2964,110 @@ export const api = {
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/tenants/ledger${suffix}`);
     },
+    // ── The platform's own books (Admin › Accounting) ────────────────────────
+    // Separate from the `/accounting/*` calls below, which are a shop's ledger
+    // and send a workspace header. These send none: the admin console has no
+    // workspace, and the server resolves the platform's own books itself.
+    getPlatformAccountingOverview: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/overview${suffix}`);
+    },
+    syncPlatformAccounting: (data?: { from?: string; to?: string }) => fetchWithAuth('/platform/accounting/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data ?? {}),
+    }),
+    getPlatformExpenses: (params?: {
+        categoryId?: string;
+        from?: string;
+        to?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.categoryId) query.set('categoryId', params.categoryId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.search) query.set('search', params.search);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/expenses${suffix}`);
+    },
+    createPlatformExpense: (data: {
+        categoryId: string;
+        amount: number;
+        expenseDate: string;
+        paidFrom?: string;
+        vendor?: string;
+        description?: string;
+        reference?: string;
+    }) => fetchWithAuth('/platform/accounting/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    updatePlatformExpense: (id: string, data: Record<string, unknown>) => fetchWithAuth(`/platform/accounting/expenses/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    deletePlatformExpense: (id: string) => fetchWithAuth(`/platform/accounting/expenses/${id}`, { method: 'DELETE' }),
+    getPlatformExpenseCategories: () => fetchWithAuth('/platform/accounting/expense-categories'),
+    createPlatformExpenseCategory: (data: { name: string; accountName: string; description?: string }) =>
+        fetchWithAuth('/platform/accounting/expense-categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    updatePlatformExpenseCategory: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/platform/accounting/expense-categories/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    deletePlatformExpenseCategory: (id: string) =>
+        fetchWithAuth(`/platform/accounting/expense-categories/${id}`, { method: 'DELETE' }),
+    getPlatformAccountingAccounts: (params?: { type?: string; search?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.type) query.set('type', params.type);
+        if (params?.search) query.set('search', params.search);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/accounts${suffix}`);
+    },
+    getPlatformAccountingVouchers: (params?: { from?: string; to?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/vouchers${suffix}`);
+    },
+    getPlatformAccountingLedger: (accountId: string, params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/ledger/${accountId}${suffix}`);
+    },
+    getPlatformAccountingReport: (
+        report: 'profit-loss' | 'balance-sheet' | 'trial-balance',
+        // `from`/`to` for the P&L, which covers a period; `asOfDate` for the
+        // balance sheet and trial balance, which are a snapshot.
+        params?: { from?: string; to?: string; asOfDate?: string },
+    ) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/reports/${report}${suffix}`);
+    },
     getAdminTenantReminders: (params?: { tenantId?: string }) => {
         const query = new URLSearchParams();
         if (params?.tenantId) query.set('tenantId', params.tenantId);

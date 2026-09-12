@@ -12,6 +12,8 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { Button, Input, PageShell } from '@/components/ui';
+import AuditDescriptionCell from '@/components/audit/AuditDescriptionCell';
+import { describeAuditRow } from '@/lib/audit-description';
 
 interface AuditUser {
     id: string;
@@ -78,52 +80,51 @@ export default function AuditLogsPage() {
     const columns: ColumnDef<AuditLogRow, any>[] = useMemo(
         () => [
             createdAtColumn(columnHelper, { header: t.settings.audit.columns.when }),
-            columnHelper.accessor('action', {
-                header: t.settings.audit.columns.action,
+            // The technical trio the table used to lead with — raw `action`,
+            // `entity` and the `entity_id` UUID — is deliberately gone. None of
+            // it means anything to a shopkeeper, and the id is internal
+            // plumbing they can do nothing with. What replaces it is one
+            // sentence, with the readable payload folded behind a toggle.
+            columnHelper.accessor((row) => describeAuditRow(row), {
+                id: 'description',
+                header: t.settings.audit.columns.description,
                 cell: (info) => (
-                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200">
-                        {info.getValue()}
-                    </span>
+                    <AuditDescriptionCell
+                        row={info.row.original}
+                        detailsLabel={t.settings.audit.columns.details}
+                        noDetailsLabel={t.settings.audit.noDetails}
+                    />
                 ),
-                size: 120,
+                size: 420,
             }),
-            columnHelper.accessor('entity', {
-                header: t.settings.audit.columns.entity,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>
-                ),
-                size: 120,
-            }),
-            columnHelper.accessor('entity_id', {
-                header: t.settings.audit.columns.entityId,
-                cell: (info) => (
-                    <span className="text-xs font-mono text-gray-500">{info.getValue() || '—'}</span>
-                ),
-                size: 180,
-            }),
-            columnHelper.accessor((row) => row.user?.email ?? row.user?.name ?? '—', {
+            columnHelper.accessor((row) => row.user?.name ?? row.user?.email ?? '—', {
                 id: 'user',
                 header: t.settings.audit.columns.user,
-                cell: (info) => (
-                    <span className="text-sm text-gray-600">{info.getValue()}</span>
-                ),
-                size: 180,
-            }),
-            columnHelper.accessor('payload', {
-                header: t.settings.audit.columns.details,
                 cell: (info) => {
-                    const payload = info.getValue();
-                    if (!payload || Object.keys(payload).length === 0) {
-                        return <span className="text-gray-400">—</span>;
-                    }
-                    const text = JSON.stringify(payload);
+                    const user = info.row.original.user;
                     return (
-                        <span className="text-xs text-gray-500 line-clamp-2 font-mono" title={text}>
-                            {text}
-                        </span>
+                        <div className="flex flex-col">
+                            <span className="text-sm text-gray-800">
+                                {user?.name ?? user?.email ?? '—'}
+                            </span>
+                            {user?.name && user.email && (
+                                <span className="text-xs text-gray-500">{user.email}</span>
+                            )}
+                        </div>
                     );
                 },
-                size: 280,
+                size: 200,
+            }),
+            // Kept because "who signed in, and from where" is a question an
+            // owner genuinely asks — it is the one piece of technical data
+            // that answers a real tenant-side question.
+            columnHelper.accessor('ip_address', {
+                header: t.settings.audit.columns.ip,
+                cell: (info) => (
+                    <span className="text-xs text-gray-500">{info.getValue() || '—'}</span>
+                ),
+                size: 130,
+                meta: { hideOnMobile: true },
             }),
         ],
         [t],

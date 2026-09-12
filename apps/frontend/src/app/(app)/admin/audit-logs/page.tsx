@@ -10,6 +10,8 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { Alert, Button, Input, PageShell, Select } from '@/components/ui';
+import AuditDescriptionCell from '@/components/audit/AuditDescriptionCell';
+import { describeAuditRow } from '@/lib/audit-description';
 
 type Scope = 'platform' | 'tenant' | 'all';
 
@@ -121,6 +123,21 @@ export default function AdminAuditLogsPage() {
                 },
                 size: 160,
             }),
+            // Platform admins keep the raw `action`/`entity`/`entity_id`
+            // columns below — they debug with them — but they benefit from the
+            // readable line too, so it leads and the technical fields follow.
+            columnHelper.accessor((row) => describeAuditRow(row), {
+                id: 'description',
+                header: t.settings.audit.columns.description,
+                cell: (info) => (
+                    <AuditDescriptionCell
+                        row={info.row.original}
+                        detailsLabel={t.settings.audit.columns.details}
+                        noDetailsLabel={t.settings.audit.noDetails}
+                    />
+                ),
+                size: 320,
+            }),
             columnHelper.accessor('action', {
                 header: t.settings.audit.columns.action,
                 cell: (info) => (
@@ -157,23 +174,6 @@ export default function AdminAuditLogsPage() {
                     <span className="text-xs font-mono text-gray-500">{info.getValue() || '—'}</span>
                 ),
                 size: 120,
-                meta: { hideOnMobile: true },
-            }),
-            columnHelper.accessor('payload', {
-                header: t.settings.audit.columns.details,
-                cell: (info) => {
-                    const payload = info.getValue();
-                    if (!payload || Object.keys(payload).length === 0) {
-                        return <span className="text-gray-400">—</span>;
-                    }
-                    const text = JSON.stringify(payload);
-                    return (
-                        <span className="text-xs text-gray-500 line-clamp-2 font-mono" title={text}>
-                            {text}
-                        </span>
-                    );
-                },
-                size: 240,
                 meta: { hideOnMobile: true },
             }),
         ],

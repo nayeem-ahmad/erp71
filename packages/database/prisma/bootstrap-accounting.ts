@@ -404,7 +404,7 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
     },
 ];
 
-type AccountingBootstrapClient = PrismaClient | Prisma.TransactionClient;
+export type AccountingBootstrapClient = PrismaClient | Prisma.TransactionClient;
 
 export interface DefaultPostingRuleDefinition {
     event_type: PostingRuleEventType;
@@ -672,11 +672,25 @@ async function resolveTemplateAccountCode(
     );
 }
 
-export async function bootstrapDefaultAccountingForTenant(
+/**
+ * Upsert a chart-of-accounts template onto one tenant: groups, then subgroups,
+ * then accounts, each keeping whatever code it already holds.
+ *
+ * Split out of `bootstrapDefaultAccountingForTenant` so the platform's own books
+ * can be seeded from a different template (see `platform-accounting.ts`) without
+ * a second copy of the code-resolution rules — which are the part with the
+ * tenant-specific edge cases, and the part nobody wants to get subtly wrong
+ * twice. Posting rules stay with the tenant bootstrap: the platform posts
+ * through `postMultiLeg` with fixed accounts and has no rules to provision.
+ *
+ * Idempotent, which is what lets it run on every admin visit.
+ */
+export async function applyAccountingTemplate(
     db: AccountingBootstrapClient,
     tenantId: string,
+    template: DefaultAccountingGroupDefinition[],
 ) {
-    for (const groupDefinition of DEFAULT_ACCOUNTING_TEMPLATE) {
+    for (const groupDefinition of template) {
         const group = await upsertTemplateGroup(
             db,
             tenantId,
@@ -733,6 +747,13 @@ export async function bootstrapDefaultAccountingForTenant(
             }
         }
     }
+}
+
+export async function bootstrapDefaultAccountingForTenant(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+) {
+    await applyAccountingTemplate(db, tenantId, DEFAULT_ACCOUNTING_TEMPLATE);
 
     const accounts = await db.account.findMany({
         where: { tenant_id: tenantId },
