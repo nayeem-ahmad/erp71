@@ -3,13 +3,36 @@ import TasksPage from './page';
 
 const getProjectTasks = jest.fn();
 
+// jsdom answers no media query, so `useIsMdUp` reads false and `DataTable`
+// drops every `hideOnMobile` column — assignee and remaining among them. These
+// suites are about a desktop list, so say so once here.
+beforeAll(() => {
+    Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+            matches: query.includes('min-width'),
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        }),
+    });
+});
+
 jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn().mockResolvedValue({ id: 'user-me', tenants: [] }),
         getProjects: jest.fn().mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'P1' }] }),
         getProjectTasks: (...args: unknown[]) => getProjectTasks(...args),
         getProjectTaskAssignees: jest.fn(),
+        getProjectLabels: jest.fn(),
+        getProjectColumns: jest.fn(),
+        getProject: jest.fn(),
         createProjectTask: jest.fn(),
+        updateProjectTask: jest.fn(),
         deleteProjectTask: jest.fn(),
         importProjectTasks: jest.fn(),
     },
@@ -38,7 +61,12 @@ const task = (overrides: Record<string, unknown> = {}) => ({
 /** The last query the list sent, whatever re-fetches happened before it. */
 const lastQuery = () => getProjectTasks.mock.calls.at(-1)?.[0];
 
-const assigneeSelect = () => screen.getByLabelText(/assignee/i);
+const isFilter = (element: HTMLElement) => !element.getAttribute('data-testid');
+
+/** The toolbar's assignee filter — rows carry a picker of the same name. */
+const assigneeSelect = () =>
+    screen.getAllByLabelText(/assignee/i).filter(isFilter)[0] as HTMLElement;
+
 
 beforeEach(() => {
     const { api } = jest.requireMock('@/lib/api');
@@ -52,7 +80,23 @@ beforeEach(() => {
         { key: 'employee:emp-3', employeeId: 'emp-3', name: 'Rahim Uddin', hint: 'EMP-003', noLogin: true },
     ]);
     api.getMe.mockReset().mockResolvedValue({ id: 'user-me', tenants: [] });
+    api.getProjectLabels.mockReset().mockResolvedValue([
+        { id: 'l1', name: 'Bug' },
+        { id: 'l2', name: 'Client waiting' },
+    ]);
+    api.getProjectColumns.mockReset().mockResolvedValue([
+        { id: 's1', name: 'To do', category: 'TODO' },
+        { id: 's2', name: 'Done', category: 'DONE' },
+    ]);
+    api.getProject.mockReset().mockResolvedValue({
+        id: 'p1',
+        members: [
+            { user: { id: 'user-9', name: 'Karim', email: 'karim@acme.test' } },
+            { employee: { id: 'emp-3', name: 'Rahim Uddin' } },
+        ],
+    });
     api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-new' });
+    api.updateProjectTask.mockReset().mockResolvedValue({ id: 't1' });
     api.deleteProjectTask.mockReset().mockResolvedValue({ success: true });
     api.importProjectTasks.mockReset().mockResolvedValue({
         created: 0, updated: 0, skipped: 0, errors: [],
@@ -103,13 +147,73 @@ describe('Tasks page', () => {
 
         await waitFor(() =>
             expect(api.createProjectTask).toHaveBeenCalledWith(
-                // The one project in the workspace is picked for them.
-                expect.objectContaining({ projectId: 'p1', title: 'Paint the shutters' }),
+                // The one project in the workspace is picked for them, and the
+                // task lands on its creator so the default "assigned to me"
+                // filter can show it.
+                expect.objectContaining({
+                    projectId: 'p1',
+                    title: 'Paint the shutters',
+                    assigneeId: 'user-me',
+                }),
             ),
         );
-        // A new task has no assignee, so the default "assigned to me" list cannot
-        // show it — it opens instead, rather than seeming to vanish.
-        expect(await screen.findByTestId('task-detail-panel')).toHaveTextContent('task-new');
+    });
+
+    /**
+     * The dialog used to force the detail panel open after every create, because
+     * an unheld task fell outside the page's own default filter and the list
+     * looked broken. Giving the task a holder fixes the cause, so the second
+     * dialog can go.
+     */
+    it('does not open the task after creating it — the list shows it', async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+        fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'Paint it' } });
+        fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+        await waitFor(() => expect(getProjectTasks).toHaveBeenCalledTimes(2));
+        expect(screen.queryByTestId('task-detail-panel')).not.toBeInTheDocument();
+    });
+
+    it('keeps the dialog and the project for Save and add another', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+        fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'First' } });
+        fireEvent.click(screen.getByRole('button', { name: /save and add another/i }));
+
+        await waitFor(() => expect(api.createProjectTask).toHaveBeenCalledTimes(1));
+        // Still open, title cleared, project kept.
+        expect(await screen.findByLabelText(/^title/i)).toHaveValue('');
+        expect(screen.getByRole('button', { name: /save and add another/i })).toBeInTheDocument();
+    });
+
+    // Four tasks in five never leave MEDIUM; a select that always says "Medium"
+    // is a row of the form spent saying nothing.
+    it('keeps priority behind a link until somebody wants it', async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+
+        // Scoped to the dialog: the page's own priority *filter* is also on screen.
+        const dialog = within(screen.getByRole('dialog'));
+        expect(dialog.queryByLabelText(/^priority/i)).not.toBeInTheDocument();
+        fireEvent.click(dialog.getByRole('button', { name: /set priority/i }));
+        expect(await dialog.findByLabelText(/^priority/i)).toBeInTheDocument();
+    });
+
+    it('keeps the description collapsed until somebody wants it', async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+
+        expect(screen.queryByLabelText(/^description/i)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /add description/i }));
+        expect(await screen.findByLabelText(/^description/i)).toBeInTheDocument();
     });
 
     /**
@@ -372,7 +476,7 @@ describe('Tasks page', () => {
             render(<TasksPage />);
 
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
-            expect(screen.queryByLabelText(/assignee/i)).not.toBeInTheDocument();
+            expect(screen.queryAllByLabelText(/assignee/i).filter(isFilter)).toHaveLength(0);
         });
 
         it('asks for everything and lets the server narrow it, in one request', async () => {
@@ -401,5 +505,207 @@ describe('Tasks page', () => {
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
             expect(assigneeSelect()).toBeInTheDocument();
         });
+    });
+});
+
+/**
+ * The one-line composer. The whole point is that capturing a title costs one
+ * keystroke and no dialog, so these pin the keystroke path rather than the
+ * button.
+ */
+describe('Tasks page quick add', () => {
+    const composer = () => screen.getByLabelText(/add a task/i);
+
+    const type = async (value: string) => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+        fireEvent.change(composer(), { target: { value } });
+        return composer();
+    };
+
+    it('creates on Enter, with the project the list is filtered to', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        const input = await type('Paint the shutters');
+
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() =>
+            expect(api.createProjectTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    projectId: 'p1',
+                    title: 'Paint the shutters',
+                    assigneeId: 'user-me',
+                }),
+            ),
+        );
+    });
+
+    it('clears the line and keeps focus, so the next task is just typing', async () => {
+        const input = await type('Paint the shutters');
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => expect(composer()).toHaveValue(''));
+        expect(composer()).toHaveFocus();
+    });
+
+    it('reads the tokens into real fields', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        const input = await type('Rewire the board @karim #bug !high ~4h');
+
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() =>
+            expect(api.createProjectTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Rewire the board',
+                    assigneeId: 'user-9',
+                    labelIds: ['l1'],
+                    priority: 'HIGH',
+                    estimateHours: 4,
+                }),
+            ),
+        );
+    });
+
+    it('says which tokens it will apply before you commit', async () => {
+        await type('Rewire @karim !high');
+
+        expect(await screen.findByTestId('quick-add-applied')).toHaveTextContent('@karim');
+    });
+
+    // The rule the grammar is built around, asserted end to end.
+    it('leaves a title that merely looks like tokens alone', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        const input = await type('Email @bkash about #f3f4f6');
+
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => expect(api.createProjectTask).toHaveBeenCalled());
+        const sent = api.createProjectTask.mock.calls[0][0];
+        expect(sent.title).toBe('Email @bkash about #f3f4f6');
+        expect(sent.labelIds).toBeUndefined();
+    });
+
+    it('will not create a task that is only tokens', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        const input = await type('@karim !high');
+
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => expect(screen.getByTestId('quick-add-applied')).toBeInTheDocument());
+        expect(api.createProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('opens the full dialog for the fields the line does not carry', async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.click(screen.getByRole('button', { name: /more fields/i }));
+
+        expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    });
+});
+
+describe('Tasks page inline row editing', () => {
+    const statusCell = () => screen.getAllByTestId('row-status')[0];
+
+    it('shows the row’s own value before any options are loaded', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        expect(statusCell()).toHaveTextContent('To do');
+        // Nothing fetched for a list nobody has touched a picker on.
+        expect(api.getProjectColumns).not.toHaveBeenCalled();
+    });
+
+    it('loads the row’s own project’s columns when the picker is touched', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.focus(statusCell());
+
+        await waitFor(() => expect(api.getProjectColumns).toHaveBeenCalledWith('p1'));
+    });
+
+    /**
+     * Per project, not per row — the obvious implementation is an N+1 that grows
+     * with the page.
+     */
+    it('fetches a project once however many of its rows are touched', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        getProjectTasks.mockResolvedValue({
+            items: [task(), task({ id: 't2', title: 'Second' })],
+            total: 2,
+            page: 1,
+            limit: 25,
+            pages: 1,
+        });
+        render(<TasksPage />);
+        await screen.findByText('Second');
+
+        for (const cell of screen.getAllByTestId('row-status')) fireEvent.focus(cell);
+
+        await waitFor(() => expect(api.getProjectColumns).toHaveBeenCalled());
+        expect(api.getProjectColumns).toHaveBeenCalledTimes(1);
+    });
+
+    it('saves a status change without opening the card', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.focus(statusCell());
+        await waitFor(() => expect(api.getProjectColumns).toHaveBeenCalled());
+        fireEvent.change(statusCell(), { target: { value: 's2' } });
+
+        await waitFor(() =>
+            expect(api.updateProjectTask).toHaveBeenCalledWith('t1', { statusId: 's2' }),
+        );
+        expect(screen.queryByTestId('task-detail-panel')).not.toBeInTheDocument();
+    });
+
+    it('clears both holder columns when the assignee changes', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        // Re-queried each time: the row re-renders once the roster lands, and a
+        // captured node is detached by then.
+        const cell = () => screen.getAllByTestId('row-assignee')[0];
+        fireEvent.focus(cell());
+        await waitFor(() => expect(within(cell()).getByText('Rahim Uddin')).toBeInTheDocument());
+        fireEvent.change(cell(), { target: { value: 'employee:emp-3' } });
+
+        await waitFor(() =>
+            expect(api.updateProjectTask).toHaveBeenCalledWith('t1', {
+                assigneeId: '',
+                assigneeEmployeeId: 'emp-3',
+            }),
+        );
+    });
+});
+
+describe('Tasks page remaining trend', () => {
+    it('draws the shape beside the figure when the server sends one', async () => {
+        getProjectTasks.mockResolvedValue({
+            items: [task({ remaining_hours: '5', remaining_trend: [16, 12, 9, 5] })],
+            total: 1,
+            page: 1,
+            limit: 25,
+            pages: 1,
+        });
+        render(<TasksPage />);
+
+        expect(await screen.findByTestId('remaining-trend')).toBeInTheDocument();
+    });
+
+    // One reading has no shape; the column shows the figure alone.
+    it('draws nothing for a task with no trend', async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        expect(screen.queryByTestId('remaining-trend')).not.toBeInTheDocument();
     });
 });

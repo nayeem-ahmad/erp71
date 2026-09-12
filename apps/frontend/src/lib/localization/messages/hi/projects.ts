@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "जाँच-सूची अपडेट नहीं हो सकी",
     },
 
+    quickAdd: {
+        placeholder: "कार्य जोड़ें — शीर्षक, फिर Enter",
+        hint: "उसी पंक्ति में विवरण: @व्यक्ति  #लेबल  !high  ~3h  >शुक्रवार",
+        add: "जोड़ें",
+        more: "और फ़ील्ड",
+        today: "आज",
+        tomorrow: "कल",
+        me: "मैं",
+        setPriority: "प्राथमिकता तय करें",
+        addDescription: "+ विवरण जोड़ें",
+        saveAndAdd: "सहेजें और दूसरा जोड़ें",
+    },
+
+    timer: {
+        start: "शुरू करें",
+        stop: "रोकें",
+        elsewhere: "किसी अन्य कार्य पर टाइमर पहले से चल रहा है",
+    },
+
     remaining: {
         chart: "समय के साथ शेष घंटे",
         chartNow: "अभी",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "इस परियोजना की कोई लक्ष्य तिथि नहीं है, इसलिए तुलना के लिए कुछ नहीं — रेखा बताती है कि क्या हुआ।",
         title: "बर्नडाउन",
         ideal: "आदर्श",
         actual: "शेष",

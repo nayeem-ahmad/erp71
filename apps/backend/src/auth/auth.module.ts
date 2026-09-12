@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AssetsModule } from '../assets/assets.module';
+import { PasswordPolicyModule } from '../password-policy/password-policy.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
@@ -24,6 +25,7 @@ import { FirebaseTokenService } from './firebase-token.service';
 @Module({
     imports: [
         AssetsModule,
+        PasswordPolicyModule,
         PlatformSettingsModule,
         ReferralsModule,
         SubscriptionPlansModule,

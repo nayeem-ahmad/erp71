@@ -119,3 +119,65 @@ export function buildBurndownSeries(input: BurndownInput): BurndownPoint[] {
 export function round2(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+/** One row of `ProjectTaskRemainingLog`, reduced to what a replay needs. */
+export interface RemainingLogEntry {
+    taskId: string;
+    hours: number;
+    changedAt: Date;
+}
+
+/**
+ * Replays a remaining-hours log into one figure per day.
+ *
+ * **One pass, not one query per day.** `SprintSnapshotService.computeFromLog`
+ * answers "where did this stand on date X" with a query, which is right for
+ * filling a single missed night and wrong for drawing a line — a ninety-day
+ * project would be ninety queries. The log is already ordered, so walking it
+ * forward alongside the calendar gives every day for the cost of reading it
+ * once.
+ *
+ * `committed` is the sum of each task's *opening* figure, so a task added in
+ * week three raises the committed line rather than silently flattening the
+ * slope. That is the same definition the sprint replay uses, and the reason a
+ * project's scope growth is visible at all.
+ */
+export function replayDailyTotals(
+    entries: RemainingLogEntry[],
+    days: string[],
+): Map<string, { remaining: number; committed: number }> {
+    const ordered = [...entries].sort((a, b) => a.changedAt.getTime() - b.changedAt.getTime());
+    const latest = new Map<string, number>();
+    const opening = new Map<string, number>();
+    const totals = new Map<string, { remaining: number; committed: number }>();
+
+    let remaining = 0;
+    let committed = 0;
+    let cursor = 0;
+
+    for (const day of days) {
+        // End of that day, so a write at 23:50 counts towards the day it happened.
+        const end = fromDateKey(day);
+        end.setUTCDate(end.getUTCDate() + 1);
+
+        while (cursor < ordered.length && ordered[cursor].changedAt.getTime() < end.getTime()) {
+            const entry = ordered[cursor];
+            const previous = latest.get(entry.taskId);
+            remaining += entry.hours - (previous ?? 0);
+            latest.set(entry.taskId, entry.hours);
+            if (!opening.has(entry.taskId)) {
+                opening.set(entry.taskId, entry.hours);
+                committed += entry.hours;
+            }
+            cursor += 1;
+        }
+
+        // A day before the project had any log row at all is not a reading of
+        // zero — it is a day there is nothing to say about, and a chart must
+        // leave it blank rather than draw the line along the floor.
+        if (latest.size === 0) continue;
+        totals.set(day, { remaining: round2(remaining), committed: round2(committed) });
+    }
+
+    return totals;
+}

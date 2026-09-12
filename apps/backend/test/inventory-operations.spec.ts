@@ -88,7 +88,7 @@ describe('Inventory Operations (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'inv-test@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Inventory Tester',
                     tenantName: 'Inventory Tenant',
                     storeName: 'Inventory Store',
@@ -102,7 +102,7 @@ describe('Inventory Operations (e2e)', () => {
 
             const loginRes = await request(app.getHttpServer())
                 .post('/auth/login')
-                .send({ email: 'inv-test@example.com', password: 'password123' })
+                .send({ email: 'inv-test@example.com', password: 'Dhaka-Shop-2026' })
                 .expect(201);
 
             loginPayload = bodyOf(loginRes);

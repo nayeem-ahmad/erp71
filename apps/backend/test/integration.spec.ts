@@ -105,7 +105,7 @@ describe('Integration Tests (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'test@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Test User',
                     tenantName: 'Integration Tenant',
                     storeName: 'Integration Store',
@@ -131,7 +131,7 @@ describe('Integration Tests (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'business@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Business Owner',
                     tenantName: 'Business Tenant',
                     storeName: 'Business Store',
@@ -152,7 +152,7 @@ describe('Integration Tests (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'stale@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     tenantName: 'Stale Tenant',
                     storeName: 'Stale Store',
                     acceptedTermsVersion: '2019-01-01',
@@ -166,7 +166,7 @@ describe('Integration Tests (e2e)', () => {
                 .post('/auth/login')
                 .send({
                     email: 'test@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                 });
 
             loginPayload = bodyOf(response);
@@ -276,7 +276,7 @@ describe('Integration Tests (e2e)', () => {
                 .post('/auth/signup')
                 .send({
                     email: 'second@example.com',
-                    password: 'password123',
+                    password: 'Dhaka-Shop-2026',
                     name: 'Second User',
                     tenantName: 'Second Tenant',
                     storeName: 'Second Store',

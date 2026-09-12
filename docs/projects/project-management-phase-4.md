@@ -1,6 +1,6 @@
 # Project Management — Phase 4: task entry, and watching remaining hours move
 
-**Status:** 4E and 4I shipped 2026-09-11; everything else proposed
+**Status:** complete — 4E and 4I shipped 2026-09-11, the rest 2026-09-12
 **Written:** 2026-09-11
 **Predecessors:** `project-management-phase-1.md`, `-phase-2.md`, `-phase-3.md`
 
@@ -34,10 +34,14 @@ Six findings. Each is a measurement, not an opinion.
 | 6 | `getTaskAttachments` | `:995` |
 | 7–10 | `getTaskComments`, `getTaskActivity`, `getTaskWatchers`, `getMe` | `:1128-1131` |
 
-*(Line numbers through Part 1 are as measured on 2026-09-11, before 4E. 4E moved
-most of them and took the mount cost from ten requests to eight — it removed the
-two the **reload** path was spending, which was the expensive one. The rest of
-the finding stands; 4F is what takes the mount cost down.)*
+*(Line numbers through Part 1 are as measured on 2026-09-11, before 4E.)*
+
+**A correction to what was written here on 2026-09-11.** The PR for 4E said the
+mount cost was "now eight". It was not: 4E cut the four requests the **reload**
+path spent after every saved field, and left the mount at ten. Counting them
+again before starting 4F found all ten still there. **4F is what took it to
+three** — the task, its remaining-hours log, and the board's columns — and there
+is now a test that fails if a fourth appears.
 
 Ten round trips to look at one card, on connections that in the target market
 are often a phone tethered over 3G. Six of them (#5–#10) feed sections that are
@@ -121,7 +125,7 @@ opening the modal, i.e. the ten requests from finding 1.
 Ordered by payoff per hour of work. Items are lettered to match the phase-3
 convention.
 
-### 4A — Quick add: one line, no modal
+### 4A — Quick add: one line, no modal — **shipped 2026-09-12**
 
 The pattern already exists in this module: `BoardCardComposer` puts an "add a
 card" line at the foot of every board column. Bring it to `/projects/tasks` as a
@@ -146,7 +150,7 @@ lose its text.
 This is the single biggest win. The common case — capture a title, move on —
 stops involving a modal at all.
 
-### 4B — Reduce the full modal, and let it repeat
+### 4B — Reduce the full modal, and let it repeat — **shipped 2026-09-12**
 
 Keep it; it is the right control for carefully filing one task. But:
 
@@ -155,7 +159,7 @@ Keep it; it is the right control for carefully filing one task. But:
   **+ Add description** and expands on click.
 - Add **Save and add another**, which keeps the project and clears the rest.
 
-### 4C — Default the assignee, then delete the auto-open workaround
+### 4C — Default the assignee, then delete the auto-open workaround — **shipped 2026-09-12**
 
 Set the new task's assignee to the creator, or to whoever the list is filtered
 by. The task then lands inside the current filter and simply appears in the
@@ -164,7 +168,7 @@ list — and `tasks/page.tsx:273-274` can go.
 This also settles the standing TODO item about the board composer creating
 title-only cards: with 4A's tokens, it does not have to.
 
-### 4D — One editing idiom in the panel
+### 4D — One editing idiom in the panel — **shipped 2026-09-12**
 
 Pick one rule and apply it everywhere: **text commits on blur or Enter, pickers
 commit on change.** Delete click-to-edit and the pencil button entirely — title
@@ -202,7 +206,7 @@ Three things worth recording:
   `onChanged` itself rather than losing the change. There is a test for exactly
   that race.
 
-### 4F — Reorder around frequency, and load the tail lazily
+### 4F — Reorder around frequency, and load the tail lazily — **shipped 2026-09-12**
 
 Main column, top to bottom: title · status · assignee · **work row** ·
 description · checklist. Then attachments, time entries, remaining history and
@@ -210,7 +214,7 @@ activity as **collapsed sections with counts**, fetched when opened.
 
 With 4E done, that takes opening a card from eight requests to three.
 
-### 4G — The work row, and a timer on the card
+### 4G — The work row, and a timer on the card — **shipped 2026-09-12**
 
 Collapse the log-work form to one line — `hours · date · remaining · note ·
 Save` — and put a **▶ Start** button beside it that starts the existing
@@ -218,7 +222,7 @@ Save` — and put a **▶ Start** button beside it that starts the existing
 `HourLogCaptureBar` already drives it). The common case becomes one click and no
 typing.
 
-### 4H — Edit from the list row
+### 4H — Edit from the list row — **shipped 2026-09-12**
 
 Status and assignee as inline selects in the `DataTable` row; priority and due
 date behind a row menu. Most edits then never open the panel at all.
@@ -298,7 +302,7 @@ Per `docs/rtl-guidelines.md`, the plot carries `dir="ltr"`: a chart axis
 describes something physical rather than reading order, so time runs left to
 right in Arabic and Urdu too.
 
-### 4J — Project burndown on `/projects/[id]`
+### 4J — Project burndown on `/projects/[id]` — **shipped 2026-09-12**
 
 The manager's version of the same question. That page shows remaining hours as a
 **single number today** (`[id]/page.tsx:193`) — a figure with no history, which
@@ -344,7 +348,7 @@ does not reopen that question — but say so explicitly in the PR.
 (`sprints/[id]/page.tsx:80-84`), and scrum mode on the board draws it above the
 columns. Listed so nobody rebuilds it.
 
-### 4L — A sparkline in the Remaining column
+### 4L — A sparkline in the Remaining column — **shipped 2026-09-12**
 
 `/projects/tasks` has a **Remaining** column showing `Nh`
 (`tasks/page.tsx:384-388`). `components/dashboard/Sparkline.tsx` is a 100×30
@@ -389,6 +393,7 @@ than it informs.
 |---|---|---|
 | 1 | **4E** | **shipped 2026-09-11.** Cuts four requests per edit and makes every field feel instant. No design decisions, no new strings. |
 | 2 | **4I** | **shipped 2026-09-11.** The chart, using data already fetched. Self-contained, visible immediately. |
+| 3–9 | **everything else** | **shipped 2026-09-12**, in one pass. |
 | 3 | **4A + 4C** | The create path, and the workaround it lets us delete. Biggest felt change to entry. |
 | 4 | **4F** | Ten requests → three, and the work row rises above the fold. |
 | 5 | **4D** | One editing idiom. Largest diff of the phase; do it once the panel's section order has settled. |
@@ -397,6 +402,31 @@ than it informs.
 | 8 | **4H** | Inline row editing. |
 | 9 | **4L** | Sparkline in the list, once 4I has proven the shape. |
 
-Items 1 and 2 were independent of everything else and of each other, and are
-done. The next cheapest is **4A + 4C** — the create path, and the workaround it
-lets us delete.
+The phase is complete. What it changed, in one line each: creating a task is a
+line and a keypress instead of a dialog; the dialog that remains asks for the
+assignee and can repeat; a card opens in three requests instead of ten and saves
+a field in one instead of five; every field on it saves the same way; logging an
+afternoon is the first thing on the card rather than the seventh, with a timer
+beside it; the list edits status and assignee in place; and remaining hours have
+a shape at task, project and list level.
+
+**What is still open** is in `TODO.md`, and the honest headline is that none of
+this has been through the running app — the evidence is the test suites, the
+type checker, and components rendered into headless Chromium, which is how the
+layout defects below were caught but not how a touch keyboard or a real API
+behaves.
+
+### Defects the build found that the plan had not
+
+- **`fold()` ate decimal points.** The parser folded punctuation out of names so
+  `#clientwaiting` could find "Client waiting" — and then reused the same helper
+  on figures, so `~1.5h` parsed as fifteen hours and `~-2` as two. Names and
+  numbers are different comparisons and now use different helpers.
+- **`focus()` on a disabled input is a no-op.** The composer cleared itself and
+  refocused inside the save, while the input was still disabled for the request
+  — so the caret went nowhere and the next task needed a click, which is the one
+  thing the whole item exists to avoid. It refocuses in an effect now, after the
+  render that re-enables it.
+- **A captured DOM node goes stale.** Not shipped code, but worth recording: the
+  row-picker test held onto the `<select>` across the re-render that fills its
+  options, and then asserted against a detached node. Re-query, don't capture.

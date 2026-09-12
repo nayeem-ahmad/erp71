@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: 'Senarai semak tidak dapat dikemas kini',
     },
 
+    quickAdd: {
+        placeholder: 'Tambah tugasan — tajuk, kemudian Enter',
+        hint: 'Butiran dalam baris sama: @orang  #label  !high  ~3h  >jumaat',
+        add: 'Tambah',
+        more: 'Medan lain',
+        today: 'hari ini',
+        tomorrow: 'esok',
+        me: 'Saya',
+        setPriority: 'Tetapkan keutamaan',
+        addDescription: '+ Tambah penerangan',
+        saveAndAdd: 'Simpan dan tambah lagi',
+    },
+
+    timer: {
+        start: 'Mula',
+        stop: 'Henti',
+        elsewhere: 'Pemasa sedang berjalan pada tugasan lain',
+    },
+
     remaining: {
         chart: 'Baki jam dari masa ke masa',
         chartNow: 'kini',
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: 'Projek ini tiada tarikh tamat sasaran, jadi tiada rentak untuk dibandingkan — garis ini menunjukkan apa yang berlaku.',
         title: 'Burndown',
         ideal: 'Unggul',
         actual: 'Baki',
