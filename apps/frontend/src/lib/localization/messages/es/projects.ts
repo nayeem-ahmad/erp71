@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "No se pudo actualizar la lista de comprobación",
     },
 
+    quickAdd: {
+        placeholder: "Añadir tarea — título y luego Enter",
+        hint: "Detalles en la misma línea: @persona  #etiqueta  !high  ~3h  >viernes",
+        add: "Añadir",
+        more: "Más campos",
+        today: "hoy",
+        tomorrow: "mañana",
+        me: "Yo",
+        setPriority: "Definir prioridad",
+        addDescription: "+ Añadir descripción",
+        saveAndAdd: "Guardar y añadir otra",
+    },
+
+    timer: {
+        start: "Iniciar",
+        stop: "Detener",
+        elsewhere: "Ya hay un temporizador en otra tarea",
+    },
+
     remaining: {
         chart: "Horas restantes a lo largo del tiempo",
         chartNow: "ahora",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Este proyecto no tiene fecha objetivo, así que no hay con qué comparar: la línea muestra lo ocurrido.",
         title: "Burndown",
         ideal: "Ideal",
         actual: "Restante",

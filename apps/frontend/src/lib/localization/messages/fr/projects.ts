@@ -286,6 +286,25 @@ export const projectsMessages = {
         saveFailed: "Impossible de mettre à jour la liste de contrôle",
     },
 
+    quickAdd: {
+        placeholder: "Ajouter une tâche — titre, puis Entrée",
+        hint: "Détails sur la même ligne : @personne  #étiquette  !high  ~3h  >vendredi",
+        add: "Ajouter",
+        more: "Autres champs",
+        today: "aujourd'hui",
+        tomorrow: "demain",
+        me: "Moi",
+        setPriority: "Définir la priorité",
+        addDescription: "+ Ajouter une description",
+        saveAndAdd: "Enregistrer et en ajouter une",
+    },
+
+    timer: {
+        start: "Démarrer",
+        stop: "Arrêter",
+        elsewhere: "Un minuteur tourne déjà sur une autre tâche",
+    },
+
     remaining: {
         chart: "Heures restantes dans le temps",
         chartNow: "maintenant",
@@ -542,6 +561,7 @@ export const projectsMessages = {
     },
 
     burndown: {
+        noTarget: "Ce projet n'a pas de date cible, il n'y a donc rien à quoi se comparer : la ligne montre ce qui s'est passé.",
         title: "Burndown",
         ideal: "Idéal",
         actual: "Restant",
