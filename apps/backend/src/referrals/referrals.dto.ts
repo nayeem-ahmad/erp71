@@ -265,3 +265,39 @@ export class ListRefereesQueryDto {
     @IsBoolean()
     include_archived?: boolean;
 }
+
+/**
+ * Body for crediting an existing business to a partner by hand.
+ *
+ * The two rates are optional overrides, not required fields: the ordinary case is
+ * a business the partner genuinely brought in that simply never typed the code,
+ * and the partner's current terms are the right answer for that. They exist at
+ * all because a retroactive attribution is often negotiated separately — a tenant
+ * who already paid list price is not getting a signup discount, so an admin sets
+ * `discount_pct` to 0 rather than promising a refund nobody agreed to.
+ */
+export class AttachTenantDto {
+    @IsUUID()
+    tenant_id: string;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    discount_pct?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    commission_pct?: number;
+}
+
+/** Query for the attach picker's tenant search. */
+export class ListAttachableTenantsQueryDto {
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(120)
+    search?: string;
+}

@@ -30,8 +30,12 @@ describe('ReferralsService', () => {
             aggregate: jest.fn(),
             groupBy: jest.fn(),
             findMany: jest.fn(),
+            findUnique: jest.fn(),
             updateMany: jest.fn(),
+            create: jest.fn(),
+            delete: jest.fn(),
         },
+        tenant: { findFirst: jest.fn(), findMany: jest.fn() },
         refereePayment: { create: jest.fn(), findMany: jest.fn(), aggregate: jest.fn() },
         refereePayoutRequest: {
             create: jest.fn(),
@@ -55,6 +59,7 @@ describe('ReferralsService', () => {
     } as any;
     const platformSettings = { getRawGroup: jest.fn(), getRawValue: jest.fn() } as any;
     const accounting = { createVoucher: jest.fn() } as any;
+    const audit = { log: jest.fn() } as any;
 
     let service: ReferralsService;
 
@@ -83,7 +88,8 @@ describe('ReferralsService', () => {
         platformSettings.getRawValue.mockResolvedValue('1000');
         accounting.createVoucher.mockResolvedValue({ id: 'voucher-1' });
         db.$transaction.mockImplementation(async (cb: any) => cb(tx));
-        service = new ReferralsService(db, passwordReset, email, platformSettings, accounting);
+        audit.log.mockResolvedValue(undefined);
+        service = new ReferralsService(db, passwordReset, email, platformSettings, accounting, audit);
     });
 
     // --- Referee creation and login provisioning ---------------------------------
@@ -884,6 +890,293 @@ describe('ReferralsService', () => {
             await expect(service.updateReferee('referee-1', { name: 'New' })).rejects.toThrow(
                 BadRequestException,
             );
+        });
+    });
+
+    // --- Manual attribution ------------------------------------------------------
+
+    /**
+     * Attaching is the only way a business that signed up without the code can ever
+     * be credited to the partner who brought it in, and it is the only place an
+     * admin writes into the commission ledger by hand. The cases below are the ones
+     * where getting it wrong pays the wrong person: crediting a business somebody
+     * else already holds, crediting a partner for their own subscription, and
+     * deleting a row that money has already been recorded against.
+     */
+    describe('attachTenant', () => {
+        const referee = (overrides: Record<string, unknown> = {}) => ({
+            id: 'referee-1',
+            name: 'Rahman Traders',
+            email: 'rahman@example.com',
+            referral_code: 'RAHM1B2C3D',
+            user_id: null,
+            commission_rate: 10,
+            signup_discount: 5,
+            deleted_at: null,
+            ...overrides,
+        });
+
+        const tenant = (overrides: Record<string, unknown> = {}) => ({
+            id: 'tenant-1',
+            name: 'Karim Store',
+            created_at: new Date('2026-03-02T00:00:00.000Z'),
+            referralSignup: null,
+            users: [{ user: { id: 'user-1', email: 'karim@example.com' } }],
+            ...overrides,
+        });
+
+        it("defaults both rates to the partner's current terms and backdates to the tenant's signup", async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(tenant());
+            db.referralSignup.create.mockResolvedValue(signup({ discount_pct: 5, commission_pct: 10 }));
+
+            await service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1');
+
+            expect(db.referralSignup.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: {
+                        referee_id: 'referee-1',
+                        tenant_id: 'tenant-1',
+                        discount_pct: 5,
+                        commission_pct: 10,
+                        status: 'PENDING',
+                        signed_up_at: new Date('2026-03-02T00:00:00.000Z'),
+                    },
+                }),
+            );
+        });
+
+        it("takes explicit rates over the partner's terms, so a business that already paid list price gets no discount", async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(tenant());
+            db.referralSignup.create.mockResolvedValue(signup({ discount_pct: 0, commission_pct: 7.5 }));
+
+            await service.attachTenant(
+                'referee-1',
+                { tenant_id: 'tenant-1', discount_pct: 0, commission_pct: 7.5 },
+                'admin-1',
+            );
+
+            expect(db.referralSignup.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ discount_pct: 0, commission_pct: 7.5 }),
+                }),
+            );
+        });
+
+        it('never writes a commission amount — the money is still earned by the billing path', async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(tenant());
+            db.referralSignup.create.mockResolvedValue(signup());
+
+            const result = await service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1');
+
+            const written = db.referralSignup.create.mock.calls[0][0].data;
+            expect(written.status).toBe('PENDING');
+            expect(written).not.toHaveProperty('commission_amount');
+            expect(written).not.toHaveProperty('earned_at');
+            expect(result.commission_amount).toBeNull();
+        });
+
+        it('refuses a business another partner is already credited for', async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(
+                tenant({
+                    referralSignup: { id: 'commission-9', referee: { id: 'referee-2', name: 'Other Partner' } },
+                }),
+            );
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(ConflictException);
+            expect(db.referralSignup.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a partner their own workspace, matched on email when they have never logged in', async () => {
+            db.referee.findUnique.mockResolvedValue(referee({ user_id: null }));
+            db.tenant.findFirst.mockResolvedValue(
+                tenant({ users: [{ user: { id: 'user-9', email: 'Rahman@Example.com' } }] }),
+            );
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.referralSignup.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a partner their own workspace, matched on the linked account', async () => {
+            db.referee.findUnique.mockResolvedValue(referee({ user_id: 'user-7' }));
+            db.tenant.findFirst.mockResolvedValue(
+                tenant({ users: [{ user: { id: 'user-7', email: 'someone-else@example.com' } }] }),
+            );
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('refuses an archived referee', async () => {
+            db.referee.findUnique.mockResolvedValue(referee({ deleted_at: new Date() }));
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.tenant.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('reports a deleted or unknown tenant as not found', async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('turns a lost race on the unique tenant into a conflict, not a 500', async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(tenant());
+            db.referralSignup.create.mockRejectedValue(
+                Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+            );
+
+            await expect(
+                service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1'),
+            ).rejects.toThrow(ConflictException);
+        });
+
+        it('records who attributed what', async () => {
+            db.referee.findUnique.mockResolvedValue(referee());
+            db.tenant.findFirst.mockResolvedValue(tenant());
+            db.referralSignup.create.mockResolvedValue(signup());
+
+            await service.attachTenant('referee-1', { tenant_id: 'tenant-1' }, 'admin-1');
+
+            expect(audit.log).toHaveBeenCalledWith(
+                'REFERRAL_SIGNUP_ATTACHED',
+                'ReferralSignup',
+                { userId: 'admin-1', tenantId: 'tenant-1' },
+                'commission-1',
+                expect.objectContaining({ referee_id: 'referee-1', referral_code: 'RAHM1B2C3D' }),
+            );
+        });
+    });
+
+    describe('detachTenant', () => {
+        it('deletes an attribution nothing has been earned against', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'commission-1',
+                status: 'PENDING',
+                referee_id: 'referee-1',
+                tenant_id: 'tenant-1',
+                tenant: { name: 'Karim Store' },
+            });
+
+            const result = await service.detachTenant('commission-1', 'admin-1');
+
+            expect(db.referralSignup.delete).toHaveBeenCalledWith({ where: { id: 'commission-1' } });
+            expect(result).toEqual({ id: 'commission-1', detached: true });
+        });
+
+        for (const status of ['EARNED', 'PAID', 'REVERSED']) {
+            it(`refuses to delete a ${status} commission — that is ledger history`, async () => {
+                db.referralSignup.findUnique.mockResolvedValue({
+                    id: 'commission-1',
+                    status,
+                    referee_id: 'referee-1',
+                    tenant_id: 'tenant-1',
+                    tenant: { name: 'Karim Store' },
+                });
+
+                await expect(service.detachTenant('commission-1', 'admin-1')).rejects.toThrow(
+                    ConflictException,
+                );
+                expect(db.referralSignup.delete).not.toHaveBeenCalled();
+            });
+        }
+
+        it('reports an unknown attachment as not found', async () => {
+            db.referralSignup.findUnique.mockResolvedValue(null);
+
+            await expect(service.detachTenant('commission-1', 'admin-1')).rejects.toThrow(
+                NotFoundException,
+            );
+        });
+    });
+
+    describe('listAttachableTenants', () => {
+        it('excludes deleted tenants and the platform workspace, and caps the page', async () => {
+            db.tenant.findMany.mockResolvedValue([]);
+
+            await service.listAttachableTenants({});
+
+            expect(db.tenant.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { deleted_at: null, platform_workspace_key: null },
+                    take: 20,
+                }),
+            );
+        });
+
+        it('searches business name and owner alike, case-insensitively', async () => {
+            db.tenant.findMany.mockResolvedValue([]);
+
+            await service.listAttachableTenants({ search: '  karim ' });
+
+            const where = db.tenant.findMany.mock.calls[0][0].where;
+            expect(where.OR).toEqual([
+                { name: { contains: 'karim', mode: 'insensitive' } },
+                { owner: { email: { contains: 'karim', mode: 'insensitive' } } },
+                { owner: { name: { contains: 'karim', mode: 'insensitive' } } },
+            ]);
+        });
+
+        it('returns an already-credited business with the partner holding it, rather than hiding it', async () => {
+            db.tenant.findMany.mockResolvedValue([
+                {
+                    id: 'tenant-1',
+                    name: 'Karim Store',
+                    created_at: new Date('2026-03-02T00:00:00.000Z'),
+                    owner: { name: 'Karim', email: 'karim@example.com' },
+                    subscription: { status: 'ACTIVE', billing_cycle: 'MONTHLY', plan: { code: 'PRO', name: 'Pro' } },
+                    referralSignup: {
+                        id: 'commission-9',
+                        status: 'EARNED',
+                        referee: { id: 'referee-2', name: 'Other Partner', referral_code: 'OTHR1234' },
+                    },
+                },
+            ]);
+
+            const [row] = await service.listAttachableTenants({});
+
+            expect(row.plan_code).toBe('PRO');
+            expect(row.subscription_status).toBe('ACTIVE');
+            expect(row.attached_to).toEqual({
+                signup_id: 'commission-9',
+                status: 'EARNED',
+                referee_id: 'referee-2',
+                referee_name: 'Other Partner',
+                referral_code: 'OTHR1234',
+            });
+        });
+
+        it('marks an unattached tenant as free to attach', async () => {
+            db.tenant.findMany.mockResolvedValue([
+                {
+                    id: 'tenant-2',
+                    name: 'Nadia Pharmacy',
+                    created_at: new Date('2026-05-05T00:00:00.000Z'),
+                    owner: { name: 'Nadia', email: 'nadia@example.com' },
+                    subscription: null,
+                    referralSignup: null,
+                },
+            ]);
+
+            const [row] = await service.listAttachableTenants({});
+
+            expect(row.attached_to).toBeNull();
+            expect(row.plan_code).toBeNull();
+            expect(row.owner_email).toBe('nadia@example.com');
         });
     });
 

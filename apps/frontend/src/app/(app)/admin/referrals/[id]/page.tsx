@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Link2, Link2Off, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { PageShell, Button, StatusBadge } from '@/components/ui';
+import { PageShell, Button, ConfirmDialog, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
+import AttachTenantModal from '@/components/admin/referrals/AttachTenantModal';
 import RefereePaymentModal from '@/components/admin/referrals/RefereePaymentModal';
 import PayoutRequestsPanel from '@/components/admin/referrals/PayoutRequestsPanel';
 import type {
@@ -28,9 +29,10 @@ const paymentHelper = createColumnHelper<RefereePayment>();
 export default function AdminRefereeDetailPage() {
     const params = useParams<{ id: string }>();
     const refereeId = params.id;
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.admin.referrals;
     const d = m.detail;
+    const a = m.attach;
     const [ledger, setLedger] = useState<RefereeLedger | null>(null);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +44,10 @@ export default function AdminRefereeDetailPage() {
     const [settling, setSettling] = useState<RefereePayoutRequest | null>(null);
     // Bumped after a payment lands so the requests panel picks up the new status.
     const [payoutsVersion, setPayoutsVersion] = useState(0);
+    const [attachOpen, setAttachOpen] = useState(false);
+    /** The attribution the admin is about to undo, held for the confirm dialog. */
+    const [detaching, setDetaching] = useState<ReferralCommission | null>(null);
+    const [detachSubmitting, setDetachSubmitting] = useState(false);
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -59,6 +65,21 @@ export default function AdminRefereeDetailPage() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    const handleDetach = async () => {
+        if (!detaching) return;
+        setDetachSubmitting(true);
+        try {
+            await api.detachAdminReferralSignup(detaching.id);
+            toast.success(fmt(a.detachSuccess, { tenant: detaching.tenant?.name ?? detaching.tenant_id }));
+            setDetaching(null);
+            void load();
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : a.detachFailed);
+        } finally {
+            setDetachSubmitting(false);
+        }
+    };
 
     const commissionColumns: ColumnDef<ReferralCommission, unknown>[] = useMemo(() => [
         commissionHelper.accessor((row) => row.tenant?.name ?? row.tenant_id, {
@@ -102,7 +123,23 @@ export default function AdminRefereeDetailPage() {
             header: d.commissionColumns.signedUp,
             cell: (info) => formatDate(info.getValue()),
         }),
-    ], [d]);
+        commissionHelper.display({
+            id: 'actions',
+            header: d.commissionColumns.actions,
+            // Only offered while nothing has been earned. Past PENDING the row is
+            // ledger history, and the server refuses to delete it — so the button
+            // is absent rather than present and failing.
+            cell: (info) => info.row.original.status === 'PENDING' ? (
+                <Button
+                    variant="ghost"
+                    onClick={() => setDetaching(info.row.original)}
+                    icon={<Link2Off className="h-4 w-4" />}
+                >
+                    {a.detach}
+                </Button>
+            ) : null,
+        }),
+    ], [a, d]);
 
     const paymentColumns: ColumnDef<RefereePayment, unknown>[] = useMemo(() => [
         paymentHelper.accessor('paid_at', {
@@ -160,11 +197,19 @@ export default function AdminRefereeDetailPage() {
                     ledger?.referee.name ?? '…',
                 )}
                 actions={(
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Link href="/admin/referrals" className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                             <ArrowLeft className="w-4 h-4" />
                             {d.back}
                         </Link>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setAttachOpen(true)}
+                            disabled={!ledger || Boolean(ledger.referee.deleted_at)}
+                        >
+                            <Link2 className="w-4 h-4" />
+                            {a.action}
+                        </Button>
                         <Button
                             variant="primary"
                             onClick={() => setPaymentOpen(true)}
@@ -242,6 +287,38 @@ export default function AdminRefereeDetailPage() {
                     </div>
                 </>
             ) : null}
+
+            {/* Mounted only while open, so each attach starts from an empty picker
+                rather than reopening on the business the last one just used. */}
+            {ledger && attachOpen && (
+                <AttachTenantModal
+                    open
+                    refereeId={refereeId}
+                    refereeName={ledger.referee.name}
+                    defaultDiscountPct={ledger.referee.signup_discount}
+                    defaultCommissionPct={ledger.referee.commission_rate}
+                    onClose={() => setAttachOpen(false)}
+                    onSuccess={(message) => {
+                        toast.success(message);
+                        void load();
+                    }}
+                />
+            )}
+
+            <ConfirmDialog
+                open={detaching !== null}
+                title={a.detachConfirmTitle}
+                prompt={fmt(a.detachConfirmBody, {
+                    tenant: detaching?.tenant?.name ?? detaching?.tenant_id ?? '',
+                })}
+                confirmLabel={a.detachConfirm}
+                cancelLabel={a.cancel}
+                workingLabel={a.detaching}
+                loading={detachSubmitting}
+                danger
+                onConfirm={() => void handleDetach()}
+                onCancel={() => setDetaching(null)}
+            />
 
             <RefereePaymentModal
                 // Remounts per request so the amount field re-seeds from it rather

@@ -963,6 +963,9 @@ describe('AuthService', () => {
                     token_version: { increment: 1 },
                     storefront_token_version: { increment: 1 },
                     applicant_token_version: { increment: 1 },
+                    // The password is now one they chose, so the hold
+                    // `JwtAuthGuard` puts on an admin-set password lifts.
+                    must_change_password: false,
                 },
             });
         });

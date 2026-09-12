@@ -127,6 +127,8 @@ export type RefereeLedger = {
         referral_code: string;
         /** Discount the referred business gets, as a percentage — printed on the one-pager. */
         signup_discount: number;
+        /** The partner's share, as a percentage. Prefills the manual attach form. */
+        commission_rate: number;
         deleted_at?: string | null;
     };
     summary: {
@@ -149,4 +151,24 @@ export type RefereeLedger = {
     activity: ReferralActivityPoint[];
     commissions: ReferralCommission[];
     payments: RefereePayment[];
+};
+/** A business an admin may credit to a partner by hand. */
+export type AttachableTenant = {
+    id: string;
+    name: string;
+    created_at: string;
+    owner_name: string | null;
+    owner_email: string | null;
+    plan_code: string | null;
+    plan_name: string | null;
+    subscription_status: string | null;
+    billing_cycle: string | null;
+    /** Null when nobody is credited for this business yet — the only attachable state. */
+    attached_to: {
+        signup_id: string;
+        status: ReferralCommissionStatus;
+        referee_id: string;
+        referee_name: string;
+        referral_code: string;
+    } | null;
 };
