@@ -3184,6 +3184,30 @@ export const api = {
         }),
     sendAdminRefereeInvite: (id: string) =>
         fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
+    /**
+     * Businesses an admin can credit to a partner. Already-credited tenants come
+     * back too, carrying `attached_to` — the picker shows who holds them rather
+     * than pretending they do not exist.
+     */
+    getAdminAttachableTenants: (params?: { search?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/referrals/attachable-tenants${suffix}`);
+    },
+    /** Credits an existing business to a partner. Omit the rates to use the partner's current terms. */
+    attachAdminRefereeTenant: (id: string, data: {
+        tenant_id: string;
+        discount_pct?: number;
+        commission_pct?: number;
+    }) => fetchWithAuth(`/admin/referrals/referees/${id}/signups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    /** Undoes an attribution. Refused once the commission has left PENDING. */
+    detachAdminReferralSignup: (signupId: string) =>
+        fetchWithAuth(`/admin/referrals/signups/${signupId}`, { method: 'DELETE' }),
     /** Paged: returns `{ items, total, limit, offset, has_more }`, not a bare array. */
     getAdminReferralCommissions: (params?: {
         referee_id?: string;
