@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
 import {
@@ -31,6 +32,7 @@ import {
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { api } from '@/lib/api';
+import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
@@ -178,7 +180,7 @@ const isTask = (value: unknown): value is Task =>
  * there is no second copy of "how a card saves" to keep in step. Narrowing it
  * is a later refactor, not part of making the body reusable.
  */
-function TaskCardBody({
+export function TaskCardBody({
     task,
     taskId,
     statuses,
@@ -520,17 +522,26 @@ function TaskCardBody({
     );
 }
 
-export default function TaskDetailPanel({
-    taskId,
-    onClose,
-    onChanged,
-}: {
-    taskId: string;
-    onClose: () => void;
-    onChanged?: () => void;
-}) {
+/**
+ * Everything a task card needs to read and write itself, with no opinion about
+ * where it is drawn.
+ *
+ * Extracted so the modal and the page at `/projects/tasks/<id>` share one copy
+ * of "how a card loads and saves". Two copies would drift, and the rules here
+ * are the subtle ones — `apply` trusting a PATCH response, the lazy fetches
+ * keyed on first touch, and `markChanged` catching a blur-commit that lands
+ * after the card is already closed.
+ *
+ * `onClose` is optional: a page has nothing to close back to, so it omits it
+ * and ignores `close`.
+ */
+export function useTaskCard(
+    taskId: string,
+    { onClose, onChanged }: { onClose?: () => void; onChanged?: () => void } = {},
+) {
     const { t, localeInfo } = useI18n();
     const m = t.projects;
+
 
     const [task, setTask] = useState<Task | null>(null);
     const [statuses, setStatuses] = useState<{ id: string; name: string; category: string }[]>([]);
@@ -783,6 +794,57 @@ export default function TaskDetailPanel({
         }
     };
 
+
+    const hoursLeftAfter = Math.max(num(task?.remaining_hours) - hours, 0);
+
+    return {
+        task, statuses, history, busy, timeForm, setTimeForm,
+        hours, canSaveWork, hoursLeftAfter,
+        allLabels, members, stories, localeInfo,
+        apply, refresh, markChanged, close,
+        changeStatus, saveWork, deleteEntry,
+        onLabelsWanted: () => setLabelsWanted(true),
+        onMembersWanted: () => setMembersWanted(true),
+        onStoriesWanted: () => setStoriesWanted(true),
+    };
+}
+
+export default function TaskDetailPanel({
+    taskId,
+    onClose,
+    onChanged,
+}: {
+    taskId: string;
+    onClose: () => void;
+    onChanged?: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const card = useTaskCard(taskId, { onClose, onChanged });
+    const {
+        task,
+        close,
+        statuses,
+        history,
+        busy,
+        timeForm,
+        setTimeForm,
+        hours,
+        canSaveWork,
+        allLabels,
+        members,
+        stories,
+        localeInfo,
+        apply,
+        refresh,
+        markChanged,
+        changeStatus,
+        saveWork,
+        deleteEntry,
+        onLabelsWanted,
+        onMembersWanted,
+        onStoriesWanted,
+    } = card;
     return (
         <ModalShell onBackdropClick={close} size="2xl">
             <ModalHeader
@@ -795,7 +857,18 @@ export default function TaskDetailPanel({
                 }
                 subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
                 onClose={close}
-            />
+            >
+                {/* A link rather than a button: it navigates, so middle-click
+                    and copy-link-address should behave like any other link. */}
+                <Link
+                    href={routes.projects.taskDetail(taskId)}
+                    aria-label={m.task.openFull}
+                    title={m.task.openFull}
+                    className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                >
+                    <Maximize2 className="h-4 w-4" aria-hidden />
+                </Link>
+            </ModalHeader>
 
             <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
                 {!task ? (
@@ -821,9 +894,9 @@ export default function TaskDetailPanel({
                         changeStatus={changeStatus}
                         saveWork={saveWork}
                         deleteEntry={deleteEntry}
-                        onLabelsWanted={() => setLabelsWanted(true)}
-                        onMembersWanted={() => setMembersWanted(true)}
-                        onStoriesWanted={() => setStoriesWanted(true)}
+                        onLabelsWanted={onLabelsWanted}
+                        onMembersWanted={onMembersWanted}
+                        onStoriesWanted={onStoriesWanted}
                     />
                 )}
             </div>

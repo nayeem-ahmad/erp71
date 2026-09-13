@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: 'Give the task a title.',
         noProjects: 'Create a project first — every task belongs to one.',
         createFailed: 'Could not create the task',
+        openFull: 'Open full page',
     },
 
     description: {

@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "कार्य को एक शीर्षक दें।",
         noProjects: "पहले एक परियोजना बनाएँ — हर कार्य किसी एक से जुड़ा होता है।",
         createFailed: "कार्य नहीं बन सका",
+        openFull: "पूरा पृष्ठ खोलें",
     },
 
     description: {

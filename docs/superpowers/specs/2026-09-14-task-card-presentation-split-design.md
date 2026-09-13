@@ -235,7 +235,7 @@ so it can be reverted on evidence rather than argued about.
 | Order | Item | Why here |
 |---|---|---|
 | 1 | Extract `TaskCardBody`, no behaviour change | Prove 98 tests green before anything moves. |
-| 2 | The route + `taskDetail()` + expand control | Small, independently shippable, no visual risk. |
+| 2 | The route + `taskDetail()` + expand control + `useTaskCard` | Independently shippable, no visual change — but **not small**: see below. |
 | 3 | Chip row + `ChipPopover` | The payoff. Biggest diff; do it on a settled body. |
 | 4 | Facts as key/value | Same sidebar, follows naturally from 3. |
 | 5 | Read-first reorder | One move once 3 and 4 have settled the column. |
@@ -244,3 +244,17 @@ so it can be reverted on evidence rather than argued about.
 
 Steps 1 and 2 are safe to land alone. If the phase stops after 2, the card is
 already shareable and nothing looks different.
+
+**Correction, written while doing step 2.** This document called step 2 "small".
+It is not. A page cannot mount `TaskCardBody` without the card's state and
+handlers, which lived inside `TaskDetailPanel` — so step 2 also had to lift 252
+lines (the task, the four lazy fetches keyed on first touch, `apply` /
+`applyWithLog` / `refresh`, `markChanged` / `close`, `saveWork`, `changeStatus`,
+`deleteEntry`) into a `useTaskCard` hook that both presentations call. The
+alternative was a second copy of how a card loads and saves, which would drift
+on exactly the subtle rules — trusting a PATCH response, and catching a
+blur-commit that lands after the card is closed.
+
+It stays behaviour-free and the gate still holds (98/98, lint clean, no new
+`tsc` errors), but "small" understated it, and the sequencing table above now
+says so.

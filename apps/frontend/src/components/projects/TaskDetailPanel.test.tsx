@@ -25,6 +25,7 @@ const getTaskAttachments = jest.fn();
 const addTaskAttachment = jest.fn();
 const deleteTaskAttachment = jest.fn();
 const getProject = jest.fn();
+const getProjectStories = jest.fn();
 const logProjectTime = jest.fn();
 
 jest.mock('@/lib/api', () => ({
@@ -52,6 +53,7 @@ jest.mock('@/lib/api', () => ({
         addTaskAttachment: (...args: unknown[]) => addTaskAttachment(...args),
         deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
         getProject: (...args: unknown[]) => getProject(...args),
+        getProjectStories: (...args: unknown[]) => getProjectStories(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
         deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
@@ -97,6 +99,7 @@ beforeEach(() => {
         addTaskAttachment,
         deleteTaskAttachment,
         getProject,
+        getProjectStories,
         logProjectTime,
     ]) {
         mock.mockReset();
@@ -108,6 +111,7 @@ beforeEach(() => {
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
     getProjectColumns.mockResolvedValue([]);
+    getProjectStories.mockResolvedValue([]);
     getTaskAttachments.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
