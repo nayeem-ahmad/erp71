@@ -32,6 +32,75 @@ export type PublicBeneficiaryBank = {
     swift_code: string | null;
 };
 
+/**
+ * The seller's letterhead, so a shared quotation reads as the seller's own
+ * paper rather than as a page on our domain.
+ *
+ * `config` is the tenant's stored print template — the same design the app
+ * prints an internal copy with. It is validated field by field by
+ * `print-templates.dto.ts` on the way in and rendered by the frontend's
+ * `renderHeaderHtml`, which escapes every value and drops a logo URL that is
+ * not http(s) or a data image. It carries a design, never a record.
+ *
+ * `context` is deliberately not the seller's contact card. It holds only the
+ * {{tokens}} that this particular design prints, so a seller whose letterhead
+ * never mentions its TIN does not publish its TIN on a link anyone can open.
+ */
+export type PublicLetterhead = {
+    config: Record<string, unknown>;
+    context: PublicLetterheadContext;
+};
+
+export type PublicLetterheadContext = {
+    company_name?: string;
+    store_name?: string;
+    address?: string;
+    vat_reg_no?: string;
+    tin?: string;
+};
+
+/**
+ * Token slots this payload can fill, minus `company_name`, which travels
+ * whenever there is one because the renderer prints it as the letterhead's
+ * company line rather than only through a token.
+ *
+ * `{{phone}}`, `{{email}}` and `{{website}}` are absent because no tenant
+ * column holds them — a seller who wants them on the paper types them into a
+ * letterhead line, and that line travels inside `config`.
+ */
+const CONTEXT_TOKENS = ['store_name', 'address', 'vat_reg_no', 'tin'] as const;
+
+const TOKEN_RE = /\{\{\s*([a-z_]+)\s*\}\}/gi;
+
+/**
+ * Pairs the design with just enough of the seller's details to render it.
+ *
+ * Which details those are is read off the design itself: every string in the
+ * stored config is scanned for {{tokens}}, and a value whose token is never
+ * printed is not sent. Scanning the serialised config rather than walking a
+ * known set of fields means a token added to a caption, an override or a
+ * section that does not exist yet is still honoured — and, more to the point,
+ * that a value can never travel for a slot nothing renders.
+ */
+export function toPublicLetterhead(
+    config: Record<string, unknown> | null | undefined,
+    values: PublicLetterheadContext,
+): PublicLetterhead {
+    const design = config ?? {};
+    const referenced = new Set(
+        [...JSON.stringify(design).matchAll(TOKEN_RE)].map((match) => match[1].toLowerCase()),
+    );
+
+    const context: PublicLetterheadContext = {};
+    if (values.company_name?.trim()) context.company_name = values.company_name.trim();
+    for (const token of CONTEXT_TOKENS) {
+        const value = values[token]?.trim();
+        if (value && referenced.has(token)) context[token] = value;
+    }
+
+    return { config: design, context };
+}
+
 export type PublicQuotation = {
     quote_number: string;
     version: number;
@@ -57,11 +126,19 @@ export type PublicQuotation = {
     delivery_lead_time_days: number | null;
     country_of_origin: string | null;
     beneficiary_bank: PublicBeneficiaryBank | null;
+
+    /// The seller's letterhead, or null when it could not be resolved. The page
+    /// falls back to a plain seller-name header rather than failing.
+    letterhead: PublicLetterhead | null;
 };
 
 const money = (value: unknown): number => Number(value ?? 0);
 
-export function toPublicQuotation(row: any, bank?: any): PublicQuotation {
+export function toPublicQuotation(
+    row: any,
+    bank?: any,
+    letterhead?: PublicLetterhead | null,
+): PublicQuotation {
     const items: PublicQuotationItem[] = (row.items ?? []).map((item: any) => {
         const quantity = Number(item.quantity ?? 0);
         const unit_price = money(item.unit_price);
@@ -120,5 +197,6 @@ export function toPublicQuotation(row: any, bank?: any): PublicQuotation {
                   swift_code: bank.bank_swift_code ?? null,
               }
             : null,
+        letterhead: letterhead ?? null,
     };
 }

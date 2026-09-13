@@ -3,6 +3,7 @@ import { SalesQuotationsService } from './sales-quotations.service';
 import { DatabaseService } from '../database/database.service';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { ShortLinksService } from '../short-links/short-links.service';
+import { PrintTemplatesService } from '../print-templates/print-templates.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('SalesQuotationsService', () => {
@@ -10,6 +11,7 @@ describe('SalesQuotationsService', () => {
   let db: any;
   let ordersService: any;
   let shortLinks: any;
+  let printTemplates: any;
 
   beforeEach(async () => {
     db = {
@@ -46,12 +48,17 @@ describe('SalesQuotationsService', () => {
         createForEntity: jest.fn(),
     };
 
+    printTemplates = {
+        resolve: jest.fn().mockResolvedValue({ template_id: null, name: null, config: {} }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesQuotationsService,
         { provide: DatabaseService, useValue: db },
         { provide: SalesOrdersService, useValue: ordersService },
-        { provide: ShortLinksService, useValue: shortLinks }
+        { provide: ShortLinksService, useValue: shortLinks },
+        { provide: PrintTemplatesService, useValue: printTemplates },
       ],
     }).compile();
 
@@ -493,6 +500,91 @@ describe('SalesQuotationsService', () => {
     it('throws the same not-found error whether the token is missing or revoked', async () => {
       db.quotation.findFirst.mockResolvedValue(null);
       await expect(service.findByShareToken('nonexistent')).rejects.toThrow('This link is no longer available');
+    });
+
+    it('carries the tenant letterhead, resolved for the document kind', async () => {
+      db.quotation.findFirst.mockResolvedValue({
+        tenant_id: 'tenant-1',
+        quote_number: 'Q-1',
+        version: 1,
+        status: 'SENT',
+        created_at: new Date('2026-08-01'),
+        valid_until: null,
+        notes: null,
+        total_amount: '100.00',
+        doc_kind: 'QUOTE',
+        customer: { name: 'Rahim Traders' },
+        store: { name: 'Main Branch', address: '12 Motijheel C/A' },
+        tenant: {
+          name: 'Workspace',
+          brand_business_name: 'Rahim Electricals',
+          vat_registration_no: '000000000-0101',
+          business_tin: '123456789012',
+        },
+        items: [],
+      });
+      printTemplates.resolve.mockResolvedValue({
+        template_id: 'tpl-1',
+        name: 'Quote paper',
+        config: { lines: [{ text: '{{address}}' }] },
+      });
+
+      const result = await service.findByShareToken('some-token');
+
+      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'QUOTE');
+      expect(result.letterhead?.config).toEqual({ lines: [{ text: '{{address}}' }] });
+      // The design prints the address and nothing else, so the VAT number and
+      // TIN this tenant holds stay off a page anyone with the link can open.
+      expect(result.letterhead?.context).toEqual({
+        company_name: 'Rahim Electricals',
+        address: '12 Motijheel C/A',
+      });
+    });
+
+    it('resolves the proforma template for a proforma', async () => {
+      db.quotation.findFirst.mockResolvedValue({
+        tenant_id: 'tenant-1',
+        quote_number: 'PI-1',
+        version: 1,
+        status: 'SENT',
+        created_at: new Date('2026-08-01'),
+        valid_until: null,
+        notes: null,
+        total_amount: '100.00',
+        doc_kind: 'PROFORMA',
+        customer: { name: 'Rahim Traders' },
+        store: { name: 'Main Branch', address: null },
+        tenant: { name: 'Workspace', brand_business_name: null, vat_registration_no: null, business_tin: null },
+        items: [],
+      });
+      db.salesSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      await service.findByShareToken('some-token');
+
+      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'PROFORMA_INVOICE');
+    });
+
+    it('still serves the document when the letterhead cannot be resolved', async () => {
+      db.quotation.findFirst.mockResolvedValue({
+        tenant_id: 'tenant-1',
+        quote_number: 'Q-1',
+        version: 1,
+        status: 'SENT',
+        created_at: new Date('2026-08-01'),
+        valid_until: null,
+        notes: null,
+        total_amount: '100.00',
+        customer: { name: 'Rahim Traders' },
+        store: { name: 'Main Branch', address: null },
+        tenant: { name: 'Workspace', brand_business_name: null, vat_registration_no: null, business_tin: null },
+        items: [],
+      });
+      printTemplates.resolve.mockRejectedValue(new Error('db down'));
+
+      const result = await service.findByShareToken('some-token');
+
+      expect(result.letterhead).toBeNull();
+      expect(result.quote_number).toBe('Q-1');
     });
 
     it('orders line items deterministically', async () => {
