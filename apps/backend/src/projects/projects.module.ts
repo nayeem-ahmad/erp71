@@ -4,6 +4,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AssetsModule } from '../assets/assets.module';
 import { BoardsController } from './boards.controller';
 import { ProjectsController } from './projects.controller';
+import { ProjectStoriesController } from './project-stories.controller';
 import { ProjectTasksController } from './project-tasks.controller';
 import { ProjectTimeController } from './project-time.controller';
 import { SprintsController } from './sprints.controller';
@@ -11,6 +12,7 @@ import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
+import { ProjectStoriesService } from './project-stories.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
@@ -30,6 +32,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         // ProjectsController's `:id` route.
         BoardsController,
         ProjectsController,
+        ProjectStoriesController,
         ProjectTasksController,
         ProjectTimeController,
         SprintsController,
@@ -39,6 +42,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         ProjectsService,
         BoardsService,
         BoardColumnsService,
+        ProjectStoriesService,
         ProjectTasksService,
         ProjectTimeService,
         ProjectTimerService,

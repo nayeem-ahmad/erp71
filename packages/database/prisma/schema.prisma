@@ -441,6 +441,7 @@ model User {
   projectMemberships                ProjectMember[]             @relation("ProjectMemberUser")
   assignedProjectTasks              ProjectTask[]               @relation("ProjectTaskAssignee")
   createdProjectTasks               ProjectTask[]               @relation("ProjectTaskCreator")
+  createdProjectUserStories         ProjectUserStory[]          @relation("ProjectUserStoryCreator")
   projectTimeEntries                ProjectTimeEntry[]          @relation("ProjectTimeEntryUser")
   projectTimers                     ProjectTimer[]              @relation("ProjectTimerUser")
   projectRemainingLogs              ProjectTaskRemainingLog[]   @relation("RemainingLogUser")
@@ -912,6 +913,7 @@ model Tenant {
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
   projectMilestones          ProjectMilestone[]
+  projectUserStories         ProjectUserStory[]
   projectTaskStatuses        ProjectTaskStatus[]
   projectTasks               ProjectTask[]
   projectTaskRemainingLogs   ProjectTaskRemainingLog[]
@@ -6488,6 +6490,17 @@ enum SprintStatus {
   COMPLETED
 }
 
+/// Where a story sits in the backlog, independent of the board columns its
+/// tasks move through. A story is a requirement rather than a unit of work, so
+/// it is groomed (BACKLOG -> READY) before anybody starts it, and the tasks
+/// under it can be half-done while the story itself is still not accepted.
+enum ProjectUserStoryStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  DONE
+}
+
 /// Why a task's remaining hours changed. Burning down through logged work and
 /// burning up through re-estimation are opposite events; a bare value cannot
 /// tell them apart, and that distinction is the whole scope-creep signal.
@@ -6539,6 +6552,7 @@ model Project {
 
   members        ProjectMember[]
   milestones     ProjectMilestone[]
+  userStories    ProjectUserStory[]
   tasks          ProjectTask[]
   timeEntries    ProjectTimeEntry[]
   comments       ProjectComment[]
@@ -6617,6 +6631,68 @@ model ProjectMilestone {
   @@map("project_milestones")
 }
 
+/// A user story: the requirement in the words of whoever wants it, with the
+/// tasks that deliver it hanging off it.
+///
+/// Deliberately a second axis rather than a reuse of `ProjectTask.parent_task_id`.
+/// A subtask is a smaller piece of the same work and shares its parent's board
+/// column, assignee and hours; a story is a *requirement*, which several tasks
+/// across several columns deliver and which is finished only when the thing it
+/// describes actually works. Folding the two together would mean a story that
+/// sits in a board column and burns hours of its own, which is exactly the
+/// double-counting `progress()` and the burndown are built to avoid — every
+/// hour in this module belongs to a task, and a story never has any.
+///
+/// It sits beside `ProjectMilestone` rather than replacing it: a milestone is a
+/// date the project is measured against, a story is a piece of scope. A task may
+/// carry one, both, or neither.
+model ProjectUserStory {
+  id         String @id @default(uuid())
+  tenant_id  String
+  project_id String
+  /// Per-project counter, rendered as `US-3`. A story is the thing people name
+  /// out loud in a standup, and "the bKash one" does not survive a backlog of
+  /// forty. Allocated the same way `Project.code` is — count + 1, retried on the
+  /// unique violation — because a sequence table for this would be the only one
+  /// in the schema.
+  reference  Int
+  title      String
+
+  /// The classic template, kept as three columns rather than one blob so the
+  /// card can render "As a … I want … so that …" in any of the app's languages
+  /// and so a story missing its *why* is visibly missing it. All optional: a
+  /// one-line story is still a story, and refusing to save one would just push
+  /// people back to writing tasks.
+  as_a    String?
+  i_want  String?
+  so_that String?
+
+  /// What "done" means for this story, in the author's own words. Free text
+  /// rather than a checklist: a task's `ProjectTaskChecklistItem` already covers
+  /// tick-off work, and acceptance criteria are read as a whole.
+  acceptance_criteria String?
+
+  status       ProjectUserStoryStatus @default(BACKLOG)
+  priority     ProjectPriority        @default(MEDIUM)
+  /// Relative size, not hours. Hours live on the tasks and roll up from them;
+  /// a story that carried both would invite the two to disagree.
+  story_points Int?
+  sort_order   Int                    @default(0)
+  created_by   String?
+  created_at   DateTime               @default(now())
+  updated_at   DateTime               @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  creator User?   @relation("ProjectUserStoryCreator", fields: [created_by], references: [id])
+
+  tasks ProjectTask[]
+
+  @@unique([project_id, reference])
+  @@index([tenant_id, project_id, sort_order])
+  @@map("project_user_stories")
+}
+
 /// Tenant-managed board columns. Ordering here is the ordering on the board.
 /// Board columns. A Trello list belongs to one board, so as of Phase 3L these
 /// belong to one project.
@@ -6664,6 +6740,10 @@ model ProjectTask {
   tenant_id            String
   project_id           String
   milestone_id         String?
+  /// The story this task delivers a piece of. Independent of `parent_task_id`:
+  /// a task can be a subtask of another task *and* belong to a story, and a
+  /// subtask inherits nothing here — it is set, or it is not.
+  user_story_id        String?
   sprint_id            String?
   parent_task_id       String?
   title                String
@@ -6698,6 +6778,7 @@ model ProjectTask {
   tenant           Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project          Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
   milestone        ProjectMilestone? @relation(fields: [milestone_id], references: [id])
+  userStory        ProjectUserStory? @relation(fields: [user_story_id], references: [id])
   sprint           Sprint?           @relation(fields: [sprint_id], references: [id])
   parentTask       ProjectTask?      @relation("ProjectTaskSubtask", fields: [parent_task_id], references: [id])
   subtasks         ProjectTask[]     @relation("ProjectTaskSubtask")
@@ -6719,6 +6800,7 @@ model ProjectTask {
 
   @@index([tenant_id, project_id, deleted_at])
   @@index([tenant_id, sprint_id])
+  @@index([tenant_id, user_story_id])
   @@index([tenant_id, assignee_id])
   @@index([tenant_id, assignee_employee_id])
   @@index([project_id, status_id, sort_order])

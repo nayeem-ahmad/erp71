@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: 'পুনরায় খুলুন',
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'ইউজার স্টোরি',
+        add: 'নতুন স্টোরি',
+        edit: 'স্টোরি সম্পাদনা',
+        empty: 'এখনও কোনো ইউজার স্টোরি নেই। এই প্রকল্পের কাছে কী চাওয়া হচ্ছে, তা লিখুন।',
+        reference: 'US-{number}',
+        asA: 'আমি একজন',
+        iWant: 'আমি চাই',
+        soThat: 'যাতে',
+        asAPlaceholder: 'দোকানদার',
+        iWantPlaceholder: 'কাউন্টারে বিকাশে পেমেন্ট নিতে',
+        soThatPlaceholder: 'ভাংতি গুনতে না হয়',
+        narrative: 'আমি একজন {asA}, আমি চাই {iWant}, যাতে {soThat}।',
+        acceptance: 'গ্রহণযোগ্যতার শর্ত',
+        acceptancePlaceholder: 'এই স্টোরি শেষ ধরার আগে যা সত্য হতে হবে।',
+        points: 'পয়েন্ট',
+        pointsHint: 'আপেক্ষিক আকার, ঘণ্টা নয় — ঘণ্টা টাস্কেই থাকে।',
+        pointsShort: '{points} পয়েন্ট',
+        statuses: {
+            BACKLOG: 'ব্যাকলগ',
+            READY: 'প্রস্তুত',
+            IN_PROGRESS: 'চলমান',
+            DONE: 'সম্পন্ন',
+        },
+        taskProgress: '{done}/{total} টাস্ক',
+        noTasks: 'এই স্টোরির অধীনে এখনও কোনো টাস্ক নেই।',
+        addTask: 'টাস্ক যোগ',
+        taskPlaceholder: 'কী তৈরি করতে হবে',
+        none: 'কোনো স্টোরি নয়',
+        field: 'ইউজার স্টোরি',
+        created: 'স্টোরি তৈরি হয়েছে',
+        updated: 'স্টোরি সংরক্ষিত',
+        deleted: 'স্টোরি মুছে ফেলা হয়েছে',
+        deleteStory: 'স্টোরি মুছুন',
+        deletePrompt: '{title} মুছবেন?\n\nএর অধীনের টাস্কগুলো থেকে যাবে — শুধু গ্রুপিংটি চলে যাবে।',
+        saveFailed: 'স্টোরি সংরক্ষণ করা যায়নি',
+        deleteFailed: 'স্টোরি মোছা যায়নি',
+        loadFailed: 'ইউজার স্টোরি লোড করা যায়নি',
+        titleRequired: 'স্টোরির একটি শিরোনাম দিন।',
+    },
+
     task: {
         title: 'টাস্ক',
         newTask: 'নতুন টাস্ক',

@@ -45,6 +45,7 @@ const TASK_INCLUDE = {
     assignee: { select: { id: true, name: true, email: true } },
     assigneeEmployee: { select: { id: true, name: true } },
     milestone: { select: { id: true, name: true } },
+    userStory: { select: { id: true, reference: true, title: true, status: true } },
     sprint: { select: { id: true, name: true, status: true } },
     checklistItems: { orderBy: { sort_order: 'asc' } },
     labels: { include: { label: true } },
@@ -88,6 +89,10 @@ export class ProjectTasksService {
                 ? { status: { category: query.statusCategory.toUpperCase() } }
                 : {}),
             ...(query.milestoneId ? { milestone_id: query.milestoneId } : {}),
+            ...(query.userStoryId ? { user_story_id: query.userStoryId } : {}),
+            // Spread after the id for the reason `unassigned` is spread after
+            // the assignee columns: a caller sending both meant the flag.
+            ...(query.noUserStory === 'true' ? { user_story_id: null } : {}),
             ...(query.labelId ? { labels: { some: { label_id: query.labelId } } } : {}),
         };
         if (query.backlogOnly === 'true') where.sprint_id = null;
@@ -293,6 +298,7 @@ export class ProjectTasksService {
                 throw new BadRequestException('A subtask cannot have subtasks of its own.');
             }
         }
+        if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, dto.projectId);
         if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         const sortOrder = await this.nextSortOrder(tenantId, dto.projectId, statusId);
@@ -312,6 +318,7 @@ export class ProjectTasksService {
                 assignee_id: dto.assigneeId ?? null,
                 assignee_employee_id: dto.assigneeEmployeeId ?? null,
                 milestone_id: dto.milestoneId ?? null,
+                user_story_id: dto.userStoryId ?? null,
                 sprint_id: dto.sprintId ?? null,
                 parent_task_id: dto.parentTaskId ?? null,
                 start_date: dto.startDate ? new Date(dto.startDate) : null,
@@ -503,6 +510,7 @@ export class ProjectTasksService {
             if (becameUndone) completedAt = null;
         }
 
+        if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, task.project_id);
         if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         await this.db.projectTask.update({
@@ -517,6 +525,7 @@ export class ProjectTasksService {
                     ? { assignee_employee_id: dto.assigneeEmployeeId || null }
                     : {}),
                 ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
+                ...(dto.userStoryId !== undefined ? { user_story_id: dto.userStoryId || null } : {}),
                 ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
                 ...(dto.startDate !== undefined
                     ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
@@ -1023,6 +1032,25 @@ export class ProjectTasksService {
             throw new BadRequestException('That column belongs to a different project.');
         }
         return status;
+    }
+
+    /**
+     * A story belongs to exactly one project, so a task can only join one of
+     * its own project's stories. Unlike a sprint — which is tenant-level and
+     * open to any project's work — a story is the requirement *this* project is
+     * delivering, and a card filed under another project's story would be
+     * counted into a backlog nobody looking at this board can see.
+     */
+    private async assertUserStory(tenantId: string, storyId: string, projectId: string) {
+        const story = await this.db.projectUserStory.findFirst({
+            where: { id: storyId, tenant_id: tenantId },
+            select: { id: true, project_id: true },
+        });
+        if (!story) throw new NotFoundException('User story not found');
+        if (story.project_id !== projectId) {
+            throw new BadRequestException('That user story belongs to a different project.');
+        }
+        return story;
     }
 
     /**

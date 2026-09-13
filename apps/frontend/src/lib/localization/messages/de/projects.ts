@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: "Wieder öffnen",
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'User Storys',
+        add: 'Neue Story',
+        edit: 'Story bearbeiten',
+        empty: 'Noch keine User Storys. Schreiben Sie eine, um festzuhalten, was von diesem Projekt verlangt wird.',
+        reference: 'US-{number}',
+        asA: 'Als',
+        iWant: 'möchte ich',
+        soThat: 'damit',
+        asAPlaceholder: 'Ladenbesitzer',
+        iWantPlaceholder: 'an der Kasse eine bKash-Zahlung annehmen',
+        soThatPlaceholder: 'ich kein Wechselgeld zählen muss',
+        narrative: 'Als {asA} möchte ich {iWant}, damit {soThat}.',
+        acceptance: 'Akzeptanzkriterien',
+        acceptancePlaceholder: 'Was zutreffen muss, bevor diese Story fertig ist.',
+        points: 'Punkte',
+        pointsHint: 'Relative Größe, keine Stunden — Stunden bleiben an den Aufgaben.',
+        pointsShort: '{points} Pkt.',
+        statuses: {
+            BACKLOG: 'Backlog',
+            READY: 'Bereit',
+            IN_PROGRESS: 'In Arbeit',
+            DONE: 'Fertig',
+        },
+        taskProgress: '{done}/{total} Aufgaben',
+        noTasks: 'Noch keine Aufgaben unter dieser Story.',
+        addTask: 'Aufgabe hinzufügen',
+        taskPlaceholder: 'Was gebaut werden muss',
+        none: 'Keine Story',
+        field: 'User Story',
+        created: 'Story erstellt',
+        updated: 'Story gespeichert',
+        deleted: 'Story gelöscht',
+        deleteStory: 'Story löschen',
+        deletePrompt: '{title} löschen?\n\nDie Aufgaben darunter bleiben erhalten — nur die Gruppierung entfällt.',
+        saveFailed: 'Story konnte nicht gespeichert werden',
+        deleteFailed: 'Story konnte nicht gelöscht werden',
+        loadFailed: 'User Storys konnten nicht geladen werden',
+        titleRequired: 'Geben Sie der Story einen Titel.',
+    },
+
     task: {
         title: "Aufgabe",
         newTask: "Neue Aufgabe",
