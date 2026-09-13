@@ -26,6 +26,10 @@ type LcRow = {
     latest_shipment_date: string | null;
     days_to_expiry: number | null;
     is_expired: boolean;
+    accepted_at: string | null;
+    acceptance_due_date: string | null;
+    days_to_maturity: number | null;
+    recoverable_to_date_bdt: number;
     costs_to_date_bdt: number;
 };
 
@@ -66,7 +70,7 @@ export default function LcRegisterPage() {
                 subtitle={copy.subtitle}
                 breadcrumbs={nestedPageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
-                    t.sidebar.modules.purchase,
+                    t.sidebar.modules.imports,
                     'purchases',
                     [{ label: t.imports.title, href: routes.purchases.imports.root }],
                     copy.title,
@@ -108,9 +112,13 @@ export default function LcRegisterPage() {
                                     <th className="p-3">{t.imports.columns.reference}</th>
                                     <th className="p-3">{t.imports.columns.lcNumber}</th>
                                     <th className="hidden p-3 md:table-cell">{t.imports.columns.supplier}</th>
-                                    <th className="hidden p-3 lg:table-cell">Bank</th>
+                                    <th className="hidden p-3 lg:table-cell">{t.imports.detail.bank}</th>
                                     <th className="p-3 text-end">{t.imports.columns.invoiceValue}</th>
+                                    <th className="hidden p-3 text-end lg:table-cell">
+                                        {t.imports.columns.invoiceValueBdt}
+                                    </th>
                                     <th className="p-3">{copy.daysToExpiry}</th>
+                                    <th className="hidden p-3 lg:table-cell">{copy.maturity}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -130,6 +138,12 @@ export default function LcRegisterPage() {
                                         <td className="p-3 text-end text-gray-900">
                                             {formatCurrency(row.invoice_value_fc, { currency: row.currency, locale })}
                                         </td>
+                                        {/* Read zero for every BDT-denominated LC
+                                            until the backend stopped multiplying
+                                            by a null exchange rate. */}
+                                        <td className="hidden p-3 text-end text-gray-700 lg:table-cell">
+                                            {formatBDT(row.invoice_value_bdt, { locale })}
+                                        </td>
                                         <td className={`p-3 ${expiryClass(row)}`}>
                                             {row.lc_expiry_date === null ? (
                                                 '—'
@@ -140,6 +154,18 @@ export default function LcRegisterPage() {
                                                     {row.days_to_expiry}
                                                     <span className="ms-2 text-xs font-normal text-gray-400">
                                                         {formatDate(row.lc_expiry_date, locale)}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </td>
+                                        <td className="hidden p-3 text-gray-700 lg:table-cell">
+                                            {row.acceptance_due_date === null ? (
+                                                '—'
+                                            ) : (
+                                                <>
+                                                    {row.days_to_maturity}
+                                                    <span className="ms-2 text-xs text-gray-400">
+                                                        {formatDate(row.acceptance_due_date, locale)}
                                                     </span>
                                                 </>
                                             )}

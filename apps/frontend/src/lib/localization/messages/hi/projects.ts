@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: "फिर खोलें",
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'यूज़र स्टोरी',
+        add: 'नई स्टोरी',
+        edit: 'स्टोरी संपादित करें',
+        empty: 'अभी कोई यूज़र स्टोरी नहीं है। लिखें कि इस प्रोजेक्ट से क्या माँगा जा रहा है।',
+        reference: 'US-{number}',
+        asA: 'एक',
+        iWant: 'मैं चाहता/चाहती हूँ',
+        soThat: 'ताकि',
+        asAPlaceholder: 'दुकानदार',
+        iWantPlaceholder: 'काउंटर पर bKash से भुगतान लेना',
+        soThatPlaceholder: 'मुझे खुले पैसे न गिनने पड़ें',
+        narrative: 'एक {asA} के रूप में, मैं {iWant} चाहता/चाहती हूँ ताकि {soThat}।',
+        acceptance: 'स्वीकृति की शर्तें',
+        acceptancePlaceholder: 'इस स्टोरी को पूरा मानने से पहले क्या सही होना चाहिए।',
+        points: 'पॉइंट',
+        pointsHint: 'सापेक्ष आकार, घंटे नहीं — घंटे टास्क पर ही रहते हैं।',
+        pointsShort: '{points} पॉइंट',
+        statuses: {
+            BACKLOG: 'बैकलॉग',
+            READY: 'तैयार',
+            IN_PROGRESS: 'चालू',
+            DONE: 'पूर्ण',
+        },
+        taskProgress: '{done}/{total} टास्क',
+        noTasks: 'इस स्टोरी के अंतर्गत अभी कोई टास्क नहीं है।',
+        addTask: 'टास्क जोड़ें',
+        taskPlaceholder: 'क्या बनाना है',
+        none: 'कोई स्टोरी नहीं',
+        field: 'यूज़र स्टोरी',
+        created: 'स्टोरी बनाई गई',
+        updated: 'स्टोरी सहेजी गई',
+        deleted: 'स्टोरी हटाई गई',
+        deleteStory: 'स्टोरी हटाएँ',
+        deletePrompt: '{title} हटाएँ?\n\nइसके टास्क बने रहेंगे — बस समूह हट जाएगा।',
+        saveFailed: 'स्टोरी सहेजी नहीं जा सकी',
+        deleteFailed: 'स्टोरी हटाई नहीं जा सकी',
+        loadFailed: 'यूज़र स्टोरी लोड नहीं हो सकीं',
+        titleRequired: 'स्टोरी को एक शीर्षक दें।',
+    },
+
     task: {
         title: "कार्य",
         newTask: "नया कार्य",

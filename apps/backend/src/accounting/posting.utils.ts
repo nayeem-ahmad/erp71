@@ -28,8 +28,10 @@ export type PostingEventType =
     // Imports under an LC. All three post through postMultiLeg rather than the
     // rules engine, so they have no PostingRule rows and never will.
     | 'import_cost'
+    | 'import_acceptance'
     | 'import_receipt'
     | 'import_settlement'
+    | 'import_write_off'
     // The platform's own books (PlatformAccountingService). Like the imports
     // above, both post through postMultiLeg with accounts fixed by the platform
     // chart of accounts, so neither has a PostingRule and neither ever will.
@@ -151,8 +153,10 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // out would cost more than it saves. The values match what postMultiLeg
     // actually writes, so the table stays truthful rather than merely complete.
     import_cost: VoucherType.JOURNAL,
+    import_acceptance: VoucherType.JOURNAL,
     import_receipt: VoucherType.JOURNAL,
     import_settlement: VoucherType.JOURNAL,
+    import_write_off: VoucherType.JOURNAL,
     // Also postMultiLeg-only, so also never read from this table. Both are
     // listed for the same reason the imports are — the Record is exhaustive so
     // that the next event type has to declare its voucher — and both carry the
