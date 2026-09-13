@@ -81,6 +81,9 @@ describe('ProjectTasksService', () => {
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 3 } }),
             },
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
+            projectUserStory: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'story-1', project_id: 'project-1' }),
+            },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             // Both forms: the interactive callback move() uses, and the array of
             // promises reorderChecklist() batches.
@@ -148,6 +151,48 @@ describe('ProjectTasksService', () => {
             } as never);
 
             expect(remaining.write).not.toHaveBeenCalled();
+        });
+
+        it('files the task under a user story of its own project', async () => {
+            await service.create(OWNER, {
+                projectId: 'project-1',
+                title: 'Wire up the bKash callback',
+                userStoryId: 'story-1',
+            } as never);
+
+            expect(db.projectTask.create.mock.calls[0][0].data).toMatchObject({
+                user_story_id: 'story-1',
+            });
+        });
+
+        it('refuses a user story belonging to another project', async () => {
+            // Not merely wrong: the card would be counted into a backlog nobody
+            // looking at this project's board can see.
+            db.projectUserStory.findFirst.mockResolvedValue({
+                id: 'story-1',
+                project_id: 'project-other',
+            });
+
+            await expect(
+                service.create(OWNER, {
+                    projectId: 'project-1',
+                    title: 'Wire up the bKash callback',
+                    userStoryId: 'story-1',
+                } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectTask.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a story that does not exist', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.create(OWNER, {
+                    projectId: 'project-1',
+                    title: 'Wire up the bKash callback',
+                    userStoryId: 'story-gone',
+                } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
         });
 
         it('refuses a subtask of a subtask', async () => {
@@ -251,6 +296,30 @@ describe('ProjectTasksService', () => {
             expect(remaining.write).toHaveBeenCalledWith(
                 expect.objectContaining({ note: 'client added two more rooms' }),
             );
+        });
+
+        it('moves a task under a story, and an empty string takes it back out', async () => {
+            await service.update(OWNER, 'task-1', { userStoryId: 'story-1' } as never);
+            expect(db.projectTask.update.mock.calls[0][0].data).toMatchObject({
+                user_story_id: 'story-1',
+            });
+
+            await service.update(OWNER, 'task-1', { userStoryId: '' } as never);
+            expect(db.projectTask.update.mock.calls[1][0].data).toMatchObject({
+                user_story_id: null,
+            });
+        });
+
+        it('checks a reassigned story against the task’s project, not the request', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue({
+                id: 'story-1',
+                project_id: 'project-other',
+            });
+
+            await expect(
+                service.update(OWNER, 'task-1', { userStoryId: 'story-1' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectTask.update).not.toHaveBeenCalled();
         });
     });
 
@@ -729,6 +798,27 @@ describe('ProjectTasksService', () => {
             await service.list(OWNER, { priority: 'URGENT' } as never);
 
             expect(whereOf()).toMatchObject({ priority: 'URGENT' });
+        });
+
+        it('filters to the tasks under one story', async () => {
+            await service.list(OWNER, { userStoryId: 'story-1' } as never);
+
+            expect(whereOf()).toMatchObject({ user_story_id: 'story-1' });
+        });
+
+        it('narrows to what the backlog grooming missed', async () => {
+            await service.list(OWNER, { noUserStory: 'true' } as never);
+
+            expect(whereOf().user_story_id).toBeNull();
+        });
+
+        it('lets "no story" win over a story id sent alongside it', async () => {
+            await service.list(OWNER, {
+                userStoryId: 'story-1',
+                noUserStory: 'true',
+            } as never);
+
+            expect(whereOf().user_story_id).toBeNull();
         });
 
         it('measures a created-day range in the workspace zone, not the server’s', async () => {

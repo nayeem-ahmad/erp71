@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: "Reabrir",
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'Historias de usuario',
+        add: 'Nueva historia',
+        edit: 'Editar historia',
+        empty: 'Aún no hay historias de usuario. Escribe una para dejar claro qué se le pide a este proyecto.',
+        reference: 'US-{number}',
+        asA: 'Como',
+        iWant: 'quiero',
+        soThat: 'para que',
+        asAPlaceholder: 'tendero',
+        iWantPlaceholder: 'cobrar con bKash en el mostrador',
+        soThatPlaceholder: 'no tenga que contar cambio',
+        narrative: 'Como {asA}, quiero {iWant} para que {soThat}.',
+        acceptance: 'Criterios de aceptación',
+        acceptancePlaceholder: 'Lo que debe cumplirse antes de dar esta historia por terminada.',
+        points: 'Puntos',
+        pointsHint: 'Tamaño relativo, no horas: las horas se quedan en las tareas.',
+        pointsShort: '{points} pts',
+        statuses: {
+            BACKLOG: 'Pendiente',
+            READY: 'Lista',
+            IN_PROGRESS: 'En curso',
+            DONE: 'Hecha',
+        },
+        taskProgress: '{done}/{total} tareas',
+        noTasks: 'Todavía no hay tareas bajo esta historia.',
+        addTask: 'Añadir tarea',
+        taskPlaceholder: 'Qué hay que construir',
+        none: 'Sin historia',
+        field: 'Historia de usuario',
+        created: 'Historia creada',
+        updated: 'Historia guardada',
+        deleted: 'Historia eliminada',
+        deleteStory: 'Eliminar historia',
+        deletePrompt: '¿Eliminar {title}?\n\nLas tareas que agrupa se conservan: solo pierden la agrupación.',
+        saveFailed: 'No se pudo guardar la historia',
+        deleteFailed: 'No se pudo eliminar la historia',
+        loadFailed: 'No se pudieron cargar las historias de usuario',
+        titleRequired: 'Ponle un título a la historia.',
+    },
+
     task: {
         title: "Tarea",
         newTask: "Nueva tarea",

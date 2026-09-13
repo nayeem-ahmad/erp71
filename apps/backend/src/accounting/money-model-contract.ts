@@ -50,12 +50,12 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     {
         model: 'ImportShipment',
         postsVia: 'import_receipt',
-        note: 'Receipt emits an ordinary Purchase at landed cost and posts Dr Inventory / Cr Goods in Transit + Purchase Payable. A usance LC posts again via import_settlement, which recognises the realised FX difference.',
+        note: 'Receipt emits an ordinary Purchase at landed cost and posts Dr Inventory / Cr Goods in Transit + Purchase Payable. Acceptance (import_acceptance) then moves that payable from the supplier to the bank, and import_settlement clears the bank and recognises the realised FX difference. Cancelling before receipt writes any capitalised charges off via import_write_off.',
     },
     {
         model: 'ImportCost',
         postsVia: 'import_cost',
-        note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account is accrued, not posted — it still allocates into the landed cost at receipt.',
+        note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account credits Accrued Import Charges instead of cash, so it reaches the ledger when recorded; paying it later posts a second voucher (legKey "payment") clearing that accrual.',
     },
     { model: 'SalaryPayment', postsVia: 'salary_payment' },
     { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_SALE row mirrors the Sale, which posts' },

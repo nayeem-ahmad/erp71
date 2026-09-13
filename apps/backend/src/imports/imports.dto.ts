@@ -18,8 +18,10 @@ import {
     IMPORT_COST_TYPES,
     IMPORT_DOC_TYPES,
     LC_TYPES,
+    SHIPMENT_SORTABLE,
     SHIPMENT_STATUSES,
 } from './imports.constants';
+import { PaginationDto } from '../common/pagination.dto';
 
 const ALLOCATION_BASES = ['VALUE', 'QTY', 'WEIGHT', 'CBM'];
 
@@ -290,27 +292,58 @@ export class SettleShipmentDto {
     settledAt?: string;
 }
 
+/** Recording that the bank accepted the documents. See `ImportsService.accept`. */
+export class AcceptShipmentDto {
+    @IsOptional()
+    @IsDateString()
+    acceptedAt?: string;
+}
+
+export class CancelShipmentDto {
+    /** Appended to the shipment's notes, so the file says why it was abandoned. */
+    @IsOptional()
+    @IsString()
+    @Length(1, 500)
+    reason?: string;
+
+    @IsOptional()
+    @IsDateString()
+    cancelledAt?: string;
+}
+
+/** Paying a charge that was recorded before the money left. */
+export class PayImportCostDto {
+    @IsString()
+    paidFromAccountId: string;
+
+    @IsOptional()
+    @IsDateString()
+    paidAt?: string;
+}
+
 export class CreateImportDocumentDto {
     @IsIn(IMPORT_DOC_TYPES)
     docType: string;
 
+    /**
+     * A `data:` URL or a bare base64 string. This used to be a `storageKey`
+     * that no endpoint produced, which is why nothing ever uploaded a file: the
+     * table and the API both existed and there was no way to fill either.
+     */
     @IsString()
-    fileName: string;
+    fileBase64: string;
 
+    @IsOptional()
     @IsString()
-    storageKey: string;
+    @Length(1, 200)
+    fileName?: string;
 
     @IsOptional()
     @IsString()
     mimeType?: string;
-
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    fileSize?: number;
 }
 
-export class ListShipmentsQueryDto {
+export class ListShipmentsQueryDto extends PaginationDto {
     @IsOptional()
     @IsIn(SHIPMENT_STATUSES)
     status?: string;
@@ -323,4 +356,27 @@ export class ListShipmentsQueryDto {
     @IsOptional()
     @IsString()
     openOnly?: string;
+
+    /** Matched against reference, LC number, BL, BE and supplier name. */
+    @IsOptional()
+    @IsString()
+    @Length(1, 120)
+    search?: string;
+
+    @IsOptional()
+    @IsDateString()
+    etaFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    etaTo?: string;
+
+    /** Anything outside the allowlist falls back to `created_at`. */
+    @IsOptional()
+    @IsIn(SHIPMENT_SORTABLE as unknown as string[])
+    sortBy?: string;
+
+    @IsOptional()
+    @IsIn(['asc', 'desc'])
+    sortDir?: 'asc' | 'desc';
 }

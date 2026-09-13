@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
@@ -11,19 +16,28 @@ import {
     ImportAccount,
     ImportCostType,
     RECEIVABLE_ACCOUNT_BY_COST_TYPE,
+    SHIPMENT_SORTABLE,
+    ShipmentSortable,
     ShipmentStatus,
     STATUS_SET_BY_ACTION,
     canTransition,
 } from './imports.constants';
 import {
+    AcceptShipmentDto,
+    CancelShipmentDto,
     CreateImportCostDto,
     CreateImportDocumentDto,
     CreateImportShipmentDto,
+    ListShipmentsQueryDto,
+    PayImportCostDto,
     ReceiveShipmentDto,
     SettleShipmentDto,
     UpdateImportCostDto,
     UpdateImportShipmentDto,
 } from './imports.dto';
+import { paginatedFindMany } from '../common/list-pagination.util';
+import { AssetsService } from '../assets/assets.service';
+import { parseAttachmentUpload, resourceTypeFor } from '../common/file-upload.util';
 
 const num = (value: unknown) => Number(value ?? 0);
 
@@ -41,7 +55,10 @@ const num = (value: unknown) => Number(value ?? 0);
  */
 @Injectable()
 export class ImportsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly assets: AssetsService,
+    ) {}
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -106,6 +123,31 @@ export class ImportsService {
             throw new BadRequestException(`An exchange rate is required for an amount in ${currency}.`);
         }
         return Math.round(amount * fxRate * 100) / 100;
+    }
+
+    /**
+     * BDT per unit of the shipment's currency, or 0 when a foreign shipment
+     * carries no rate.
+     *
+     * One function because the same three lines were written four different
+     * ways — and one of them, `lcRegister`, left out the `'BDT' -> 1` case and
+     * so reported every BDT-denominated LC as worth nothing. A local
+     * back-to-back LC is denominated in taka and is exactly the shipment that
+     * read zero.
+     */
+    private rateFor(shipment: { currency: string; fx_rate_at_open: unknown }): number {
+        return shipment.currency === 'BDT' ? 1 : num(shipment.fx_rate_at_open);
+    }
+
+    /** The same rate, refusing rather than returning 0 when it is missing. */
+    private requireRate(shipment: { currency: string; fx_rate_at_open: unknown }): number {
+        const rate = this.rateFor(shipment);
+        if (!rate) {
+            throw new BadRequestException(
+                `This shipment is in ${shipment.currency} but carries no exchange rate, so it cannot be costed.`,
+            );
+        }
+        return rate;
     }
 
     private shipmentColumns(dto: Partial<CreateImportShipmentDto>) {
@@ -224,26 +266,92 @@ export class ImportsService {
         });
     }
 
-    async findAll(
-        tenantId: string,
-        opts?: { status?: string; supplierId?: string; openOnly?: boolean },
-    ) {
+    /**
+     * One page of shipments, filtered and ordered by the database.
+     *
+     * This used to return every shipment a tenant had ever opened, each with its
+     * full item and cost lists, and let the browser do the searching and
+     * sorting. That is the shape `sales/list` carried until an imported tenant
+     * with 2,238 rows turned the page into twenty-odd requests and a blank
+     * table; the fix there is the fix here. `costs_to_date_bdt` is aggregated in
+     * SQL rather than by shipping the rows, because the list needs the total and
+     * nothing else from them.
+     */
+    async findAll(tenantId: string, query: ListShipmentsQueryDto) {
         const closedStates = [ShipmentStatus.RECEIVED, ShipmentStatus.CLOSED, ShipmentStatus.CANCELLED];
+        const search = query.search?.trim();
 
-        return this.db.importShipment.findMany({
-            where: {
-                tenant_id: tenantId,
-                ...(opts?.status ? { status: opts.status } : {}),
-                ...(opts?.supplierId ? { supplier_id: opts.supplierId } : {}),
-                ...(opts?.openOnly ? { status: { notIn: closedStates } } : {}),
-            },
-            include: {
-                supplier: { select: { id: true, name: true, country: true } },
-                items: { select: { id: true, quantity: true } },
-                costs: { select: { amount_bdt: true, is_capitalized: true } },
-            },
-            orderBy: { created_at: 'desc' },
+        const where: Prisma.ImportShipmentWhereInput = {
+            tenant_id: tenantId,
+            ...(query.status ? { status: query.status } : {}),
+            ...(query.supplierId ? { supplier_id: query.supplierId } : {}),
+            ...(query.openOnly === 'true' ? { status: { notIn: closedStates } } : {}),
+            ...(query.etaFrom || query.etaTo
+                ? {
+                      eta: {
+                          ...(query.etaFrom ? { gte: new Date(query.etaFrom) } : {}),
+                          ...(query.etaTo ? { lte: new Date(query.etaTo) } : {}),
+                      },
+                  }
+                : {}),
+            ...(search
+                ? {
+                      OR: [
+                          { reference_number: { contains: search, mode: 'insensitive' } },
+                          { lc_number: { contains: search, mode: 'insensitive' } },
+                          { bl_number: { contains: search, mode: 'insensitive' } },
+                          { be_number: { contains: search, mode: 'insensitive' } },
+                          { supplier: { name: { contains: search, mode: 'insensitive' } } },
+                      ],
+                  }
+                : {}),
+        };
+
+        const sortBy = (SHIPMENT_SORTABLE as readonly string[]).includes(query.sortBy ?? '')
+            ? (query.sortBy as ShipmentSortable)
+            : 'created_at';
+        const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc';
+
+        const page = await paginatedFindMany({
+            findMany: (args) =>
+                this.db.importShipment.findMany({
+                    ...args,
+                    include: {
+                        supplier: { select: { id: true, name: true, country: true } },
+                        _count: { select: { items: true } },
+                    },
+                }),
+            count: (args) => this.db.importShipment.count(args as any),
+            where,
+            // Nulls last on the optional columns, or a shipment with no ETA
+            // heads a list somebody is reading for what arrives next.
+            orderBy:
+                sortBy === 'created_at' || sortBy === 'reference_number' || sortBy === 'status'
+                    ? { [sortBy]: sortDir }
+                    : { [sortBy]: { sort: sortDir, nulls: 'last' } },
+            page: query.page,
+            limit: query.limit,
         });
+
+        const costTotals = page.items.length
+            ? await this.db.importCost.groupBy({
+                  by: ['shipment_id'],
+                  where: { tenant_id: tenantId, shipment_id: { in: page.items.map((row) => row.id) } },
+                  _sum: { amount_bdt: true },
+              })
+            : [];
+        const costByShipment = new Map(costTotals.map((row) => [row.shipment_id, num(row._sum.amount_bdt)]));
+
+        return {
+            ...page,
+            items: page.items.map((shipment) => ({
+                ...shipment,
+                item_count: shipment._count.items,
+                costs_to_date_bdt: Math.round((costByShipment.get(shipment.id) ?? 0) * 100) / 100,
+                invoice_value_bdt:
+                    Math.round(num(shipment.invoice_value_fc) * this.rateFor(shipment) * 100) / 100,
+            })),
+        };
     }
 
     async findOne(tenantId: string, id: string) {
@@ -288,11 +396,110 @@ export class ImportsService {
             throw new BadRequestException('Use the receive action to mark a shipment received.');
         }
 
+        if (status === ShipmentStatus.CANCELLED) {
+            // Cancelling has a ledger consequence — see `cancel` — so it cannot
+            // be a plain column write. Routed rather than refused: the status
+            // dropdown is where a user reaches for it.
+            return this.cancel(tenantId, id, {});
+        }
+
         if (!canTransition(shipment.status, status)) {
             throw new BadRequestException(`A shipment cannot move from ${shipment.status} to ${status}.`);
         }
 
         return this.db.importShipment.update({ where: { id }, data: { status } });
+    }
+
+    /**
+     * Abandons a shipment, and takes its capitalised charges off the books.
+     *
+     * Freight, duty and the C&F agent's bill sit in Goods in Transit waiting for
+     * receipt to turn them into inventory. If the goods never arrive that never
+     * happens, and the charges stay there indefinitely — an asset balance
+     * against cargo that does not exist. They are a loss the moment the shipment
+     * is abandoned, so cancelling writes them off:
+     *
+     *     Dr Import Charges Written Off   capitalised charges posted so far
+     *         Cr Goods in Transit
+     *
+     * Non-capitalised charges are left alone: rebatable VAT and creditable AIT
+     * are still claimable, and a bank commission was always an expense. Accrued
+     * charges are left alone too — the bill is still owed whether or not the
+     * goods came.
+     */
+    async cancel(tenantId: string, id: string, dto: CancelShipmentDto) {
+        const shipment = await this.getShipmentOrThrow(tenantId, id);
+
+        if (!canTransition(shipment.status, ShipmentStatus.CANCELLED)) {
+            throw new BadRequestException(
+                shipment.status === ShipmentStatus.CANCELLED
+                    ? 'This shipment is already cancelled.'
+                    : 'A received shipment cannot be cancelled. Raise a purchase return instead.',
+            );
+        }
+
+        // Only what actually reached Goods in Transit: an accrued charge now
+        // credits Accrued Import Charges, but one recorded before that change
+        // shipped posted nothing at all, and crediting transit for it would
+        // write off a debit nobody made.
+        const inTransit =
+            Math.round(
+                shipment.costs
+                    .filter((cost) => cost.is_capitalized && cost.voucher_id)
+                    .reduce((sum, cost) => sum + num(cost.amount_bdt), 0) * 100,
+            ) / 100;
+
+        const cancelledAt = dto.cancelledAt ? new Date(dto.cancelledAt) : new Date();
+
+        return this.db.$transaction(async (tx) => {
+            let posting: { voucherId?: string; voucherNumber?: string } | null = null;
+
+            if (inTransit > 0) {
+                posting = await postMultiLeg({
+                    tx,
+                    tenantId,
+                    eventType: 'import_write_off',
+                    sourceModule: 'imports',
+                    sourceType: 'import_shipment',
+                    sourceId: shipment.id,
+                    storeId: shipment.store_id,
+                    description: `Import cancelled ${shipment.reference_number}`,
+                    referenceNumber: shipment.reference_number,
+                    date: cancelledAt,
+                    legs: [
+                        {
+                            accountId: await this.accountIdByName(tx, tenantId, ImportAccount.CHARGES_WRITTEN_OFF),
+                            debit: inTransit,
+                            comment: dto.reason ?? 'Shipment cancelled before receipt',
+                        },
+                        {
+                            accountId: await this.accountIdByName(tx, tenantId, ImportAccount.GOODS_IN_TRANSIT),
+                            credit: inTransit,
+                        },
+                    ],
+                });
+            }
+
+            // Conditional rather than unconditional: two cancels racing would
+            // otherwise both post a write-off for the same charges.
+            const claimed = await tx.importShipment.updateMany({
+                where: { id, tenant_id: tenantId, status: { not: ShipmentStatus.CANCELLED } },
+                data: {
+                    status: ShipmentStatus.CANCELLED,
+                    notes: dto.reason
+                        ? `${shipment.notes ? `${shipment.notes}\n\n` : ''}Cancelled: ${dto.reason}`
+                        : shipment.notes,
+                },
+            });
+            if (claimed.count === 0) throw new BadRequestException('This shipment is already cancelled.');
+
+            return {
+                cancelled: true,
+                written_off_bdt: inTransit,
+                voucher_id: posting?.voucherId ?? null,
+                voucher_number: posting?.voucherNumber ?? null,
+            };
+        });
     }
 
     async remove(tenantId: string, id: string) {
@@ -328,10 +535,12 @@ export class ImportsService {
      *   inventory. Capitalising rebatable VAT is the single most common
      *   landed-cost error and overstates COGS on every later sale.
      *
-     * A charge with no `paidFromAccountId` is accrued rather than paid, and is
-     * recorded without posting: there is nowhere honest to credit it. It still
-     * allocates into the landed cost at receipt, which is what a C&F bill that
-     * arrives before payment needs.
+     * A charge with no `paidFromAccountId` is accrued rather than paid, and
+     * credits **Accrued Import Charges** instead of cash. It used not to post at
+     * all, which was wrong twice over: the charge reached the landed cost but
+     * never the ledger, and the receipt then credited Goods in Transit for a
+     * debit nobody had made, leaving that asset account in credit. `payCost`
+     * clears the accrual when the money actually leaves.
      */
     async addCost(tenantId: string, userId: string, shipmentId: string, dto: CreateImportCostDto) {
         const shipment = await this.getShipmentOrThrow(tenantId, shipmentId);
@@ -374,13 +583,16 @@ export class ImportsService {
                 },
             });
 
-            if (!dto.paidFromAccountId || amountBdt === 0) {
-                return cost;
-            }
+            // A zero charge is a row, not an entry: postMultiLeg rejects a
+            // voucher that nets to nothing, and rightly.
+            if (amountBdt === 0) return cost;
 
             const debitAccountId = isCapitalized
                 ? await this.accountIdByName(tx, tenantId, ImportAccount.GOODS_IN_TRANSIT)
                 : receivableAccountId!;
+
+            const creditAccountId =
+                dto.paidFromAccountId ?? (await this.accountIdByName(tx, tenantId, ImportAccount.ACCRUED_CHARGES));
 
             const posting = await postMultiLeg({
                 tx,
@@ -395,13 +607,84 @@ export class ImportsService {
                 date: dto.paidAt ? new Date(dto.paidAt) : new Date(),
                 legs: [
                     { accountId: debitAccountId, debit: amountBdt, comment: dto.description ?? costType },
-                    { accountId: dto.paidFromAccountId, credit: amountBdt },
+                    { accountId: creditAccountId, credit: amountBdt },
                 ],
             });
 
             return tx.importCost.update({
                 where: { id: cost.id },
                 data: { voucher_id: posting.voucherId ?? null },
+            });
+        });
+    }
+
+    /**
+     * Pays a charge that was accrued, and clears the accrual.
+     *
+     *     Dr Accrued Import Charges   what was accrued
+     *         Cr Bank / Cash
+     *
+     * **Allowed after receipt, deliberately**, where every other cost mutation
+     * is not. `assertOpen` refuses changes once the goods are on the shelf
+     * because re-allocating would rewrite `ProductCost` behind the stock that
+     * came out of it — but this changes no allocation and no landed cost. The
+     * charge was already capitalised at the figure on the bill; only the cash
+     * leg was outstanding. Refusing it is what left the C&F agent's bill — which
+     * routinely arrives weeks after the goods — with no way to be settled at all.
+     */
+    async payCost(tenantId: string, shipmentId: string, costId: string, dto: PayImportCostDto) {
+        const shipment = await this.getShipmentOrThrow(tenantId, shipmentId);
+
+        const cost = shipment.costs.find((row) => row.id === costId);
+        if (!cost) throw new NotFoundException('Import cost not found');
+        if (cost.paid_from_account_id) {
+            throw new BadRequestException('This charge has already been paid.');
+        }
+
+        const amountBdt = num(cost.amount_bdt);
+        const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
+
+        return this.db.$transaction(async (tx) => {
+            // Claim the row first: the guard above read outside this
+            // transaction, and two clicks would otherwise pay the bill twice.
+            const claimed = await tx.importCost.updateMany({
+                where: { id: costId, tenant_id: tenantId, paid_from_account_id: null },
+                data: { paid_from_account_id: dto.paidFromAccountId, paid_at: paidAt },
+            });
+            if (claimed.count === 0) throw new BadRequestException('This charge has already been paid.');
+
+            if (amountBdt === 0) {
+                return tx.importCost.findUniqueOrThrow({ where: { id: costId } });
+            }
+
+            const posting = await postMultiLeg({
+                tx,
+                tenantId,
+                eventType: 'import_cost',
+                // The accrual already owns `import_cost:<cost id>`; without a
+                // leg key this second voucher would collide with it and be
+                // silently dropped as a replay.
+                legKey: 'payment',
+                sourceModule: 'imports',
+                sourceType: 'import_cost',
+                sourceId: cost.id,
+                storeId: shipment.store_id,
+                description: `${cost.cost_type} paid on ${shipment.reference_number}`,
+                referenceNumber: shipment.reference_number,
+                date: paidAt,
+                legs: [
+                    {
+                        accountId: await this.accountIdByName(tx, tenantId, ImportAccount.ACCRUED_CHARGES),
+                        debit: amountBdt,
+                        comment: cost.description ?? cost.cost_type,
+                    },
+                    { accountId: dto.paidFromAccountId, credit: amountBdt },
+                ],
+            });
+
+            return tx.importCost.update({
+                where: { id: costId },
+                data: { payment_voucher_id: posting.voucherId ?? null },
             });
         });
     }
@@ -418,6 +701,15 @@ export class ImportsService {
             // re-add, which reverses cleanly.
             throw new BadRequestException(
                 'This cost has already been posted. Delete it and add a corrected one.',
+            );
+        }
+        if (dto.paidFromAccountId || dto.paidAt) {
+            // These used to be accepted here and then quietly dropped — the DTO
+            // inherits them from the create shape — so a user who thought they
+            // had recorded a payment had done nothing at all. Paying is its own
+            // action because it posts a voucher, which an edit does not.
+            throw new BadRequestException(
+                'Use the pay action to record that a charge has been paid.',
             );
         }
 
@@ -459,18 +751,57 @@ export class ImportsService {
 
     // ── Documents ────────────────────────────────────────────────────────────
 
+    /**
+     * Stores a BL, Bill of Entry or LC copy against the shipment.
+     *
+     * Built on `uploadBuffer` and a `storage_key` rather than the older
+     * `uploadFile`, which returns a URL that cannot be turned back into a
+     * Cloudinary `public_id` — without the key, deleting a row strands the file
+     * and it is billed forever. Same reasoning, and the same helpers, as
+     * project task attachments.
+     *
+     * The table and the API existed from the start; nothing ever put a file in
+     * one, because the DTO asked for a storage key that no endpoint produced.
+     */
     async addDocument(tenantId: string, userId: string, shipmentId: string, dto: CreateImportDocumentDto) {
         await this.getShipmentOrThrow(tenantId, shipmentId);
+
+        const { buffer, mimeType } = parseAttachmentUpload(dto.fileBase64, dto.mimeType);
+
+        if (!this.assets.isEnabled()) {
+            // Not a transient failure — it will not fix itself on retry, and
+            // the operator is the one who has to act.
+            throw new ServiceUnavailableException(
+                'File storage is not configured, so the document could not be kept.',
+            );
+        }
+
+        const stem = (dto.fileName ?? dto.docType).replace(/\.[^.]+$/, '').slice(0, 100);
+        const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'document';
+        const extension = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] ?? 'jpg');
+
+        let stored: { url: string; publicId: string; bytes: number };
+        try {
+            stored = await this.assets.uploadBuffer(
+                buffer,
+                `${tenantId}/imports`,
+                safeStem,
+                resourceTypeFor(mimeType),
+            );
+        } catch {
+            throw new ServiceUnavailableException('The document could not be uploaded.');
+        }
 
         return this.db.importDocument.create({
             data: {
                 tenant_id: tenantId,
                 shipment_id: shipmentId,
                 doc_type: dto.docType,
-                file_name: dto.fileName,
-                storage_key: dto.storageKey,
-                mime_type: dto.mimeType ?? null,
-                file_size: dto.fileSize ?? null,
+                file_name: `${safeStem}.${extension}`,
+                storage_key: stored.publicId,
+                file_url: stored.url,
+                mime_type: mimeType,
+                file_size: stored.bytes ?? buffer.byteLength,
                 uploaded_by: userId,
             },
         });
@@ -483,6 +814,13 @@ export class ImportsService {
         if (!document) throw new NotFoundException('Document not found');
 
         await this.db.importDocument.delete({ where: { id: documentId } });
+
+        // After the row, not before: a failed delete here strands a few bytes,
+        // while the reverse leaves a row pointing at nothing — a broken link is
+        // worse than orphaned storage.
+        if (document.storage_key && this.assets.isEnabled()) {
+            await this.assets.deleteFile(document.storage_key, resourceTypeFor(document.mime_type ?? ''));
+        }
         return { deleted: true };
     }
 
@@ -518,7 +856,7 @@ export class ImportsService {
             is_capitalized: boolean;
         }>;
     }) {
-        const rate = shipment.currency === 'BDT' ? 1 : num(shipment.fx_rate_at_open);
+        const rate = this.rateFor(shipment);
 
         const lines = shipment.items.map((item) => ({
             key: item.id,
@@ -615,17 +953,23 @@ export class ImportsService {
             throw new BadRequestException('This shipment has no items to receive.');
         }
 
-        const rate = shipment.currency === 'BDT' ? 1 : num(shipment.fx_rate_at_open);
-        if (!rate) {
-            throw new BadRequestException(
-                `This shipment is in ${shipment.currency} but carries no exchange rate, so it cannot be costed.`,
-            );
-        }
+        const rate = this.requireRate(shipment);
 
         const sheet = this.buildCostSheet(shipment);
         const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
 
         return this.db.$transaction(async (tx) => {
+            // The guards above ran against a row read outside this transaction.
+            // Claim the shipment first, so two receipts racing — a double-click
+            // on a slow connection is enough — cannot both write a Purchase,
+            // move the stock twice and post two vouchers, with the second
+            // update quietly orphaning the first purchase.
+            const claimed = await tx.importShipment.updateMany({
+                where: { id, tenant_id: tenantId, purchase_id: null, status: { not: ShipmentStatus.CANCELLED } },
+                data: { status: ShipmentStatus.RECEIVED },
+            });
+            if (claimed.count === 0) throw new BadRequestException('This shipment has already been received.');
+
             const warehouseId = await resolveWarehouseId(tx, tenantId, shipment.store_id, dto.warehouseId, 'purchase');
 
             // Derived from the shipment's own reference rather than drawn from
@@ -761,10 +1105,149 @@ export class ImportsService {
         });
     }
 
-    // ── Settlement (Phase 5) ─────────────────────────────────────────────────
+    // ── Acceptance and settlement ────────────────────────────────────────────
 
     /**
-     * Settles a usance LC and recognises the realised FX gain or loss.
+     * The bank accepts the documents: the debt moves from the supplier to the bank.
+     *
+     *     Dr Purchase Payable          the supplier's invoice, at the opening rate
+     *         Cr LC Acceptance Payable
+     *
+     * **This is the step the module was missing.** `receive` books the
+     * supplier's invoice to Purchase Payable and raises `due_balance`, exactly
+     * as an ordinary purchase does. `settle` then paid the *bank* and cleared
+     * LC Acceptance Payable — an account nothing had ever credited. The result
+     * of a full, correct run was a permanent debit balance on a liability
+     * account, Purchase Payable overstated by the whole invoice value, and a
+     * supplier still showing the full amount due after the bank had paid them.
+     *
+     * The supplier really has been paid — by the bank, against the LC — so this
+     * also writes a `SupplierCreditTransaction` and brings `due_balance` down,
+     * which is what makes a supplier statement reconcile.
+     *
+     * Requires receipt only because that is where the payable is created. An LC
+     * is accepted when documents arrive, usually before the goods clear
+     * customs; the module books the purchase at receipt instead, and acceptance
+     * has to follow whatever created the debt.
+     */
+    async accept(tenantId: string, userId: string, id: string, dto: AcceptShipmentDto) {
+        const shipment = await this.getShipmentOrThrow(tenantId, id);
+
+        if (!shipment.purchase_id) {
+            throw new BadRequestException('Receive the shipment before recording the bank\'s acceptance.');
+        }
+        if (shipment.accepted_at) {
+            throw new BadRequestException('This shipment has already been accepted.');
+        }
+
+        const acceptedAt = dto.acceptedAt ? new Date(dto.acceptedAt) : new Date();
+
+        return this.db.$transaction(async (tx) => {
+            const result = await this.acceptWithin(tx, tenantId, userId, shipment, acceptedAt);
+            return { ...result, accepted_at: acceptedAt };
+        });
+    }
+
+    /**
+     * The acceptance move itself, inside a caller's transaction.
+     *
+     * Split out because `settle` performs it implicitly for a shipment that was
+     * never explicitly accepted. A sight LC is paid on presentation and has no
+     * acceptance period at all, so making its user click Accept and then Settle
+     * would be ceremony for a step that, for them, is one event.
+     */
+    private async acceptWithin(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        userId: string,
+        shipment: { id: string; store_id: string; reference_number: string; supplier_id: string | null; currency: string; fx_rate_at_open: unknown; invoice_value_fc: unknown; tenor_days: number | null; notes?: string | null },
+        acceptedAt: Date,
+    ) {
+        const rate = this.requireRate(shipment);
+        const bookedBdt = Math.round(num(shipment.invoice_value_fc) * rate * 100) / 100;
+
+        // Claim first: the caller's guard read outside this transaction.
+        const claimed = await tx.importShipment.updateMany({
+            where: { id: shipment.id, tenant_id: tenantId, accepted_at: null },
+            data: {
+                accepted_at: acceptedAt,
+                acceptance_due_date: shipment.tenor_days
+                    ? new Date(acceptedAt.getTime() + shipment.tenor_days * 24 * 60 * 60 * 1000)
+                    : null,
+            },
+        });
+        if (claimed.count === 0) throw new BadRequestException('This shipment has already been accepted.');
+
+        if (bookedBdt === 0) {
+            return { booked_bdt: 0, voucher_id: null, voucher_number: null };
+        }
+
+        // The supplier has been paid, by the bank. Without this the supplier
+        // statement shows the invoice outstanding forever, and the only way a
+        // user could clear it — an ordinary supplier payment — would credit
+        // Bank a second time for money that leaves once.
+        if (shipment.supplier_id) {
+            const supplier = await tx.supplier.findFirst({
+                where: { id: shipment.supplier_id, tenant_id: tenantId },
+                select: { due_balance: true },
+            });
+            const balanceAfter = Math.round((num(supplier?.due_balance) - bookedBdt) * 100) / 100;
+
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    supplier_id: shipment.supplier_id,
+                    type: 'PAYMENT',
+                    amount: new Prisma.Decimal(bookedBdt),
+                    balance_after: new Prisma.Decimal(balanceAfter),
+                    reference_type: 'IMPORT_SHIPMENT',
+                    reference_id: shipment.id,
+                    notes: `Settled by the bank under LC ${shipment.reference_number}`,
+                    created_by: userId,
+                },
+            });
+
+            await tx.supplier.update({
+                where: { id: shipment.supplier_id },
+                data: { due_balance: new Prisma.Decimal(balanceAfter) },
+            });
+        }
+
+        const posting = await postMultiLeg({
+            tx,
+            tenantId,
+            eventType: 'import_acceptance',
+            sourceModule: 'imports',
+            sourceType: 'import_shipment',
+            sourceId: shipment.id,
+            storeId: shipment.store_id,
+            description: `LC acceptance ${shipment.reference_number}`,
+            referenceNumber: shipment.reference_number,
+            date: acceptedAt,
+            legs: [
+                {
+                    accountId: await this.accountIdByName(tx, tenantId, ImportAccount.PURCHASE_PAYABLE),
+                    debit: bookedBdt,
+                    ...(shipment.supplier_id
+                        ? { partyType: 'SUPPLIER' as const, partyId: shipment.supplier_id }
+                        : {}),
+                },
+                {
+                    accountId: await this.accountIdByName(tx, tenantId, ImportAccount.LC_ACCEPTANCE_PAYABLE),
+                    credit: bookedBdt,
+                },
+            ],
+        });
+
+        return {
+            booked_bdt: bookedBdt,
+            voucher_id: posting.voucherId ?? null,
+            voucher_number: posting.voucherNumber ?? null,
+        };
+    }
+
+    /**
+     * Settles the LC with the bank and recognises the realised FX gain or loss.
      *
      * The liability was booked at `fx_rate_at_open`; the bank is paid at
      * whatever the rate is on the day. The difference is a realised gain or
@@ -779,8 +1262,13 @@ export class ImportsService {
      *         Cr Bank                    value at the settlement rate
      *         Cr FX Gain                 the difference, if the taka strengthened
      *     — or Dr FX Loss                the difference, if it weakened
+     *
+     * A shipment that was never explicitly accepted is accepted here first, in
+     * the same transaction, so the account this debits is one something has
+     * credited. That is the whole of what was broken before: the debit had no
+     * matching credit anywhere in the system.
      */
-    async settle(tenantId: string, id: string, dto: SettleShipmentDto) {
+    async settle(tenantId: string, userId: string, id: string, dto: SettleShipmentDto) {
         const shipment = await this.getShipmentOrThrow(tenantId, id);
 
         if (shipment.fx_rate_at_settle) {
@@ -790,10 +1278,7 @@ export class ImportsService {
             throw new BadRequestException('Receive the shipment before settling the LC.');
         }
 
-        const openRate = shipment.currency === 'BDT' ? 1 : num(shipment.fx_rate_at_open);
-        if (!openRate) {
-            throw new BadRequestException('This shipment has no opening rate to settle against.');
-        }
+        const openRate = this.requireRate(shipment);
 
         const invoiceFc = num(shipment.invoice_value_fc);
         const bookedBdt = Math.round(invoiceFc * openRate * 100) / 100;
@@ -803,6 +1288,17 @@ export class ImportsService {
         const settledAt = dto.settledAt ? new Date(dto.settledAt) : new Date();
 
         return this.db.$transaction(async (tx) => {
+            // Claim before posting, for the same reason `receive` does.
+            const claimed = await tx.importShipment.updateMany({
+                where: { id, tenant_id: tenantId, fx_rate_at_settle: null },
+                data: { fx_rate_at_settle: dto.fxRateAtSettle, status: ShipmentStatus.CLOSED },
+            });
+            if (claimed.count === 0) throw new BadRequestException('This shipment has already been settled.');
+
+            const acceptance = shipment.accepted_at
+                ? null
+                : await this.acceptWithin(tx, tenantId, userId, shipment, settledAt);
+
             const payableAccountId = await this.accountIdByName(tx, tenantId, ImportAccount.LC_ACCEPTANCE_PAYABLE);
 
             const legs: Array<{ accountId: string; debit?: number; credit?: number }> = [
@@ -831,10 +1327,7 @@ export class ImportsService {
                 legs,
             });
 
-            const updated = await tx.importShipment.update({
-                where: { id },
-                data: { fx_rate_at_settle: dto.fxRateAtSettle, status: ShipmentStatus.CLOSED },
-            });
+            const updated = await tx.importShipment.findUniqueOrThrow({ where: { id } });
 
             return {
                 ...updated,
@@ -842,6 +1335,8 @@ export class ImportsService {
                 settled_bdt: settledBdt,
                 fx_gain: difference > 0 ? difference : 0,
                 fx_loss: difference < 0 ? -difference : 0,
+                /** Set when settling accepted the shipment on the caller's behalf. */
+                acceptance_voucher_number: acceptance?.voucher_number ?? null,
                 voucher_id: posting.voucherId ?? null,
                 voucher_number: posting.voucherNumber ?? null,
             };
@@ -885,7 +1380,7 @@ export class ImportsService {
             },
             include: {
                 supplier: { select: { name: true } },
-                costs: { select: { amount_bdt: true } },
+                costs: { select: { amount_bdt: true, is_capitalized: true } },
             },
             // Nulls last so a shipment with no expiry recorded does not head
             // the list a user is reading for urgency.
@@ -899,6 +1394,7 @@ export class ImportsService {
             const daysToExpiry = expiry
                 ? Math.ceil((expiry.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
                 : null;
+            const maturity = shipment.acceptance_due_date;
 
             return {
                 id: shipment.id,
@@ -910,15 +1406,32 @@ export class ImportsService {
                 status: shipment.status,
                 currency: shipment.currency,
                 invoice_value_fc: num(shipment.invoice_value_fc),
+                // `rateFor`, not a bare multiply: a BDT-denominated LC carries
+                // no rate, and multiplying by `num(null)` reported every one of
+                // them as worth nothing.
                 invoice_value_bdt:
-                    Math.round(num(shipment.invoice_value_fc) * num(shipment.fx_rate_at_open) * 100) / 100,
+                    Math.round(num(shipment.invoice_value_fc) * this.rateFor(shipment) * 100) / 100,
                 lc_date: shipment.lc_date,
                 lc_expiry_date: expiry,
                 latest_shipment_date: shipment.latest_shipment_date,
                 days_to_expiry: daysToExpiry,
                 is_expired: daysToExpiry !== null && daysToExpiry < 0,
+                accepted_at: shipment.accepted_at,
+                acceptance_due_date: shipment.acceptance_due_date,
+                days_to_maturity: maturity
+                    ? Math.ceil((maturity.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+                    : null,
+                // Split, because one number mixing them answers no question: the
+                // capitalised half is what the goods are costing, the rest is
+                // money coming back.
                 costs_to_date_bdt:
                     Math.round(shipment.costs.reduce((sum, cost) => sum + num(cost.amount_bdt), 0) * 100) / 100,
+                recoverable_to_date_bdt:
+                    Math.round(
+                        shipment.costs
+                            .filter((cost) => !cost.is_capitalized)
+                            .reduce((sum, cost) => sum + num(cost.amount_bdt), 0) * 100,
+                    ) / 100,
             };
         });
     }
@@ -928,19 +1441,30 @@ export class ImportsService {
      * return needs. Dated on `paid_at` rather than `created_at`, because the
      * return reports what was paid in the period, not what was typed in.
      */
-    async dutyReport(tenantId: string, range: { from?: string; to?: string }) {
+    async dutyReport(tenantId: string, range: { from?: string; to?: string; includeUnpaid?: boolean }) {
+        const window = range.from || range.to
+            ? {
+                  ...(range.from ? { gte: new Date(range.from) } : {}),
+                  ...(range.to ? { lte: new Date(range.to) } : {}),
+              }
+            : undefined;
+
         const costs = await this.db.importCost.findMany({
             where: {
                 tenant_id: tenantId,
                 cost_type: { in: ['CUSTOMS_DUTY', 'VAT', 'AIT', 'RD', 'SD'] },
-                ...(range.from || range.to
-                    ? {
-                          paid_at: {
-                              ...(range.from ? { gte: new Date(range.from) } : {}),
-                              ...(range.to ? { lte: new Date(range.to) } : {}),
-                          },
-                      }
-                    : { paid_at: { not: null } }),
+                // Unpaid assessments are excluded by default because the VAT
+                // return reports what was paid. They are still worth being able
+                // to see — an assessed-but-unpaid duty is a bill due — so
+                // `includeUnpaid` widens the window to `created_at` for the rows
+                // that have no `paid_at` yet.
+                ...(range.includeUnpaid
+                    ? window
+                        ? { OR: [{ paid_at: window }, { paid_at: null, created_at: window }] }
+                        : {}
+                    : window
+                      ? { paid_at: window }
+                      : { paid_at: { not: null } }),
             },
             include: {
                 shipment: { select: { reference_number: true, be_number: true, be_date: true } },
@@ -965,6 +1489,11 @@ export class ImportsService {
             total_bdt: Math.round([...byType.values()].reduce((sum, value) => sum + value, 0) * 100) / 100,
             /** VAT and AIT — claimable back, so not a cost of the goods. */
             recoverable_bdt: Math.round(recoverable * 100) / 100,
+            /** Assessed but not yet paid. Zero unless `includeUnpaid` was set. */
+            unpaid_bdt:
+                Math.round(
+                    costs.filter((cost) => !cost.paid_at).reduce((sum, cost) => sum + num(cost.amount_bdt), 0) * 100,
+                ) / 100,
             lines: costs.map((cost) => ({
                 shipment_reference: cost.shipment.reference_number,
                 be_number: cost.shipment.be_number,
@@ -973,6 +1502,7 @@ export class ImportsService {
                 amount_bdt: num(cost.amount_bdt),
                 is_recoverable: !cost.is_capitalized,
                 paid_at: cost.paid_at,
+                is_paid: cost.paid_at !== null,
             })),
         };
     }
@@ -1005,9 +1535,8 @@ export class ImportsService {
 
         for (const shipment of shipments) {
             const bank = shipment.bank_name!;
-            const rate = shipment.currency === 'BDT' ? 1 : num(shipment.fx_rate_at_open);
             const entry = byBank.get(bank) ?? { outstanding_bdt: 0, open_lcs: 0 };
-            entry.outstanding_bdt += num(shipment.invoice_value_fc) * rate;
+            entry.outstanding_bdt += num(shipment.invoice_value_fc) * this.rateFor(shipment);
             entry.open_lcs += 1;
             byBank.set(bank, entry);
         }
