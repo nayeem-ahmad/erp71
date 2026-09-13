@@ -208,6 +208,18 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
                     },
+                    // An import charge recorded before it is paid — the C&F
+                    // agent's bill that routinely arrives weeks after the
+                    // goods. Without it an accrued capitalised charge reaches
+                    // the landed cost but never the ledger, and the receipt
+                    // then credits Goods in Transit for a debit that was never
+                    // made, leaving that account in credit.
+                    {
+                        name: 'Accrued Import Charges',
+                        code: '210103',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
             {
@@ -371,6 +383,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: 'FX Loss',
                         code: '510103',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Freight, duty and C&F already spent on a shipment that
+                    // was then cancelled. The goods never arrive, so the
+                    // charges can never reach inventory — they are a loss, and
+                    // leaving them in Goods in Transit would overstate an
+                    // asset against cargo that does not exist.
+                    {
+                        name: 'Import Charges Written Off',
+                        code: '510104',
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
