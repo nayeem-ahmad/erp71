@@ -288,11 +288,21 @@ enum PostingRuleEventType {
   investor_profit_accrual
   investor_profit_payout
   /// LC margin paid to the bank, and every cost booked against a shipment.
+  /// Carries a second `legKey: 'payment'` voucher when an accrued charge is
+  /// later paid — the accrual and its settlement both belong to one ImportCost.
   import_cost
+  /// The bank accepting the documents: the debt moves off the supplier's
+  /// payable and onto LC Acceptance Payable, which is what `import_settlement`
+  /// then clears. Without it that settlement debited an account nothing had
+  /// ever credited.
+  import_acceptance
   /// Goods in transit becoming inventory at landed cost.
   import_receipt
   /// Settling a usance LC, where the rate paid differs from the rate booked.
   import_settlement
+  /// A cancelled shipment's capitalised charges leaving Goods in Transit for
+  /// expense — the goods never arrive, so they can never become inventory.
+  import_write_off
   /// A BillingEvent projected into the platform's own books — a subscription
   /// fee charged, a tenant payment received, an add-on fee, a refund. Posted by
   /// PlatformAccountingService through `postMultiLeg`, never by a PostingRule:
@@ -2225,6 +2235,16 @@ model ImportShipment {
   /// The rate actually paid at settlement. The difference against
   /// `fx_rate_at_open` is realised FX gain or loss.
   fx_rate_at_settle Decimal? @db.Decimal(12, 6)
+
+  /// When the bank accepted the documents and the debt moved from the supplier
+  /// to the bank. Set by `accept`, which posts Dr Purchase Payable / Cr LC
+  /// Acceptance Payable — the step that gives `settle` something to clear. Null
+  /// means the supplier is still the creditor.
+  accepted_at         DateTime?
+  /// `accepted_at` + `tenor_days`. Stored rather than derived so "what matures
+  /// this week" is a query rather than a scan, which is the whole point of
+  /// recording a tenor.
+  acceptance_due_date DateTime?
   /// Supplier invoice value in `currency`. Decimal(16,2) rather than (12,2):
   /// a container of electronics quoted in a weak currency overflows twelve
   /// digits, and this column is the one that holds a foreign figure.
@@ -2264,6 +2284,8 @@ model ImportShipment {
   @@index([tenant_id, lc_number])
   @@index([tenant_id, lc_expiry_date])
   @@index([tenant_id, created_at])
+  /// Drives "which acceptances mature this week" without scanning the table.
+  @@index([tenant_id, acceptance_due_date])
 }
 
 model ImportShipmentItem {
@@ -2325,8 +2347,14 @@ model ImportCost {
 
   paid_at              DateTime?
   paid_from_account_id String?
-  /// The voucher this charge posted through, once it has.
+  /// The voucher this charge posted through, once it has. A charge recorded
+  /// before payment posts here too — against Accrued Import Charges — so the
+  /// ledger never waits on the cash.
   voucher_id           String?
+  /// The second voucher, written when an accrued charge is later paid: Dr
+  /// Accrued Import Charges / Cr wherever the money left. Separate from
+  /// `voucher_id` because both exist at once and neither replaces the other.
+  payment_voucher_id   String?
 
   created_by String?
   created_at DateTime @default(now())
@@ -2351,7 +2379,13 @@ model ImportDocument {
   /// BILL_OF_ENTRY | RELEASE_ORDER | OTHER
   doc_type    String
   file_name   String
+  /// Cloudinary's public_id, kept so deleting the row can delete the file.
+  /// Without it a removed document is billed forever — the leak logged against
+  /// the older `uploadFile` path in TODO.md.
   storage_key String
+  /// Where to fetch it. Null only for a row written before the upload endpoint
+  /// existed, when the API took a bare storage key and nothing served it.
+  file_url    String?
   mime_type   String?
   file_size   Int?
 
