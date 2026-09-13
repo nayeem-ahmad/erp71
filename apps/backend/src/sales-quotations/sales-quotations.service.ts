@@ -14,7 +14,9 @@ import {
 import { DocumentSeries, nextDocumentNumber } from '../database/document-number.utils';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { ShortLinksService } from '../short-links/short-links.service';
-import { toPublicQuotation } from './public-quotation.dto';
+import { toPublicLetterhead, toPublicQuotation, type PublicLetterhead } from './public-quotation.dto';
+import { PrintDocType } from '../print-templates/print-templates.dto';
+import { PrintTemplatesService } from '../print-templates/print-templates.service';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 
 /**
@@ -34,7 +36,8 @@ export class SalesQuotationsService {
     constructor(
         private db: DatabaseService,
         private ordersService: SalesOrdersService,
-        private readonly shortLinks: ShortLinksService
+        private readonly shortLinks: ShortLinksService,
+        private readonly printTemplates: PrintTemplatesService,
     ) {}
 
     /**
@@ -503,7 +506,21 @@ export class SalesQuotationsService {
                 // USD proforma has no business being shown what the seller
                 // expects to book it at.
                 customer: { select: { name: true } },
-                store: { select: { name: true } },
+                // `address` joins `name` for the letterhead's {{address}} token —
+                // the branch the document was written at, not the workspace.
+                store: { select: { name: true, address: true } },
+                // Letterhead values only. Everything selected here is something
+                // the seller already prints on the paper it hands a customer;
+                // `toPublicLetterhead` then drops whatever this tenant's design
+                // does not actually print.
+                tenant: {
+                    select: {
+                        name: true,
+                        brand_business_name: true,
+                        vat_registration_no: true,
+                        business_tin: true,
+                    },
+                },
                 items: {
                     // QuotationItem has no sort column, so `id` is the only stable
                     // order available. Without it Postgres is free to return rows
@@ -539,6 +556,50 @@ export class SalesQuotationsService {
               })
             : null;
 
-        return toPublicQuotation(quote, bank);
+        return toPublicQuotation(quote, bank, await this.shareLetterhead(quote));
+    }
+
+    /**
+     * The letterhead a shared quotation prints on: the tenant's template for
+     * this document kind, falling back — inside `PrintTemplatesService` — to one
+     * derived from their branding, so a seller who has never opened the template
+     * editor still gets their logo and accent colour.
+     *
+     * Failure resolves to null rather than propagating. A letterhead is how the
+     * document looks; the quotation is what the customer came for, and a
+     * template lookup that trips must not turn a readable document into "this
+     * link is no longer available".
+     */
+    private async shareLetterhead(quote: {
+        tenant_id: string;
+        doc_kind: string | null;
+        store: { name: string; address: string | null } | null;
+        tenant: {
+            name: string;
+            brand_business_name: string | null;
+            vat_registration_no: string | null;
+            business_tin: string | null;
+        } | null;
+    }): Promise<PublicLetterhead | null> {
+        try {
+            const { config } = await this.printTemplates.resolve(
+                quote.tenant_id,
+                quote.doc_kind === 'PROFORMA'
+                    ? PrintDocType.PROFORMA_INVOICE
+                    : PrintDocType.QUOTE,
+            );
+
+            return toPublicLetterhead(config, {
+                // The trading name the tenant chose for its paperwork, falling
+                // back to the workspace name the account was opened under.
+                company_name: quote.tenant?.brand_business_name || quote.tenant?.name || undefined,
+                store_name: quote.store?.name || undefined,
+                address: quote.store?.address || undefined,
+                vat_reg_no: quote.tenant?.vat_registration_no || undefined,
+                tin: quote.tenant?.business_tin || undefined,
+            });
+        } catch {
+            return null;
+        }
     }
 }
