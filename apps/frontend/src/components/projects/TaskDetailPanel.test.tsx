@@ -804,25 +804,34 @@ describe('TaskDetailPanel assignee', () => {
             ],
         });
 
+    /** The chip, closed. It reads the holder from the task alone. */
+    const chip = async () => screen.findByRole('button', { name: 'Assignee' });
+
     /**
-     * The roster is fetched when the picker is first touched rather than on
-     * mount, so every case here focuses the select and then waits for an option
-     * — the select itself is on screen before either.
+     * The roster is fetched when the picker is first *opened* rather than on
+     * mount, so every case here clicks the chip and then waits for an option.
+     * The panel is portalled to document.body, so options are queried from
+     * `screen` rather than from inside the chip.
      */
     const picker = async () => {
-        fireEvent.focus(await screen.findByLabelText('Assignee'));
+        fireEvent.click(await chip());
         await screen.findByRole('option', { name: 'Karim' });
-        return screen.getByLabelText('Assignee');
+    };
+
+    /** Picking is a click on a row now, not a change event on a select. */
+    const pick = async (name: string | RegExp) => {
+        await picker();
+        fireEvent.click(screen.getByRole('option', { name }));
     };
 
     it('offers the project roster, including the employees with no login', async () => {
         roster();
         panel();
 
-        const select = within(await picker());
-        expect(select.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
-        expect(select.getByRole('option', { name: 'Rahim Uddin' })).toBeInTheDocument();
-        expect(select.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument();
+        await picker();
+        expect(screen.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Rahim Uddin' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument();
     });
 
     it('shows who holds the card before the roster has loaded at all', async () => {
@@ -830,7 +839,7 @@ describe('TaskDetailPanel assignee', () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Assignee' })).toHaveTextContent('Karim'));
         // Nothing fetched: the field is correct from the task itself, and only
         // needs the list to offer somebody else.
         expect(getProject).not.toHaveBeenCalled();
@@ -842,7 +851,7 @@ describe('TaskDetailPanel assignee', () => {
         roster();
         panel();
 
-        fireEvent.change(await picker(), { target: { value: 'user:user-2' } });
+        await pick('Karim');
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -856,7 +865,7 @@ describe('TaskDetailPanel assignee', () => {
         roster();
         panel();
 
-        fireEvent.change(await picker(), { target: { value: 'employee:emp-1' } });
+        await pick('Rahim Uddin');
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -873,7 +882,8 @@ describe('TaskDetailPanel assignee', () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        fireEvent.change(await screen.findByLabelText('Assignee'), { target: { value: '' } });
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: 'Unassigned' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -883,22 +893,23 @@ describe('TaskDetailPanel assignee', () => {
         );
     });
 
-    // Otherwise the select falls back to its first option and the card reads as
-    // assigned to somebody it is not.
+    // Otherwise the chip would name nobody and the card would read as
+    // unassigned when it is not.
     it('still lists the holder after they have left the project', async () => {
         getProject.mockResolvedValue({ id: 'project-1', members: [] });
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
-        expect(screen.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Assignee' })).toHaveTextContent('Karim'));
+        fireEvent.click(screen.getByRole('button', { name: 'Assignee' }));
+        expect(await screen.findByRole('option', { name: 'Karim' })).toBeInTheDocument();
     });
 
     it('opens with the picker usable when the roster cannot be read', async () => {
         getProject.mockRejectedValue(new Error('nope'));
         panel();
 
-        expect(await screen.findByLabelText('Assignee')).toBeInTheDocument();
+        expect(await chip()).toBeInTheDocument();
         expect(screen.getByText('Pull the cable')).toBeInTheDocument();
     });
 });
@@ -1212,7 +1223,8 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
         );
         panel();
 
-        fireEvent.change(await screen.findByLabelText('Status'), { target: { value: 's2' } });
+        fireEvent.click(await screen.findByRole('button', { name: 'Status' }));
+        fireEvent.click(await screen.findByRole('option', { name: 'Done' }));
 
         await waitFor(() => expect(remainingHistory()).toHaveBeenCalledTimes(2));
         expect(getProjectTask).toHaveBeenCalledTimes(1);
@@ -1329,7 +1341,11 @@ describe('TaskDetailPanel board columns', () => {
         getProjectColumns.mockResolvedValue([{ id: 's1', name: 'Site visit', category: 'TODO' }]);
         panel();
 
-        expect(await screen.findByText('Site visit')).toBeInTheDocument();
+        // The status chip names only what the card is set to, so the offered
+        // columns are observable with the popover open — unlike the select this
+        // replaced, which rendered every option into the DOM permanently.
+        fireEvent.click(await screen.findByRole('button', { name: 'Status' }));
+        expect(await screen.findByRole('option', { name: 'Site visit' })).toBeInTheDocument();
         await waitFor(() => expect(getProjectColumns).toHaveBeenCalledWith('project-1'));
         const { api } = jest.requireMock('@/lib/api');
         expect(api.getProjectTaskStatuses).not.toHaveBeenCalled();

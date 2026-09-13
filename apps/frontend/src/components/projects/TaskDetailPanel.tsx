@@ -10,7 +10,6 @@ import {
     Checkbox,
     Input,
     RichTextEditor,
-    Select,
     Textarea,
     Field,
     StatusBadge,
@@ -31,6 +30,7 @@ import {
 } from '@/components/projects/task-activity';
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
+import ChipPopover from '@/components/projects/ChipPopover';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -73,6 +73,7 @@ interface Task {
     due_date?: string | null;
     project?: { id: string; code: string; name: string } | null;
     status?: { id: string; name: string; category: string };
+    priority?: string;
     assignee?: { id: string; name?: string | null; email: string } | null;
     // Phase 2 made an employee without a login assignable, so "who holds this"
     // is two columns and anything that reads one has to read the other.
@@ -198,6 +199,7 @@ export function TaskCardBody({
     refresh,
     markChanged,
     changeStatus,
+    changePriority,
     saveWork,
     deleteEntry,
     onLabelsWanted,
@@ -221,6 +223,7 @@ export function TaskCardBody({
     refresh: () => Promise<void>;
     markChanged: () => void;
     changeStatus: (statusId: string) => Promise<void>;
+    changePriority: (priority: string) => Promise<void>;
     saveWork: (event: React.FormEvent) => Promise<void>;
     deleteEntry: (entryId: string) => Promise<void>;
     onLabelsWanted: () => void;
@@ -241,36 +244,70 @@ export function TaskCardBody({
                 <section className="space-y-3 rounded-md border border-gray-200 p-3">
                     <h3 className="text-sm font-medium">{m.task.details}</h3>
 
-                    <Field label={m.fields.status} htmlFor="task-status">
-                        <Select
-                            id="task-status"
+                    {/* The four pickers, as chips rather than stacked
+                        selects. A native select is right for four options and
+                        wrong for a twenty-person roster or a groomed backlog:
+                        it cannot be typed into. Dates, labels and the cover
+                        keep their own sections below — dates because start and
+                        due share a cross-field check that does not fit one
+                        chip. */}
+                    <div className="flex flex-wrap gap-1.5">
+                        <ChipPopover
+                            label={m.fields.status}
                             value={task.status?.id ?? ''}
-                            onChange={(e) => changeStatus(e.target.value)}
+                            display={task.status?.name ?? m.fields.status}
+                            tone={task.status ? 'default' : 'muted'}
+                            options={statuses.map((status) => ({
+                                value: status.id,
+                                label: status.name,
+                            }))}
                             disabled={busy}
-                        >
-                            {statuses.map((status) => (
-                                <option key={status.id} value={status.id}>
-                                    {status.name}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
+                            onPick={changeStatus}
+                        />
 
-                    <AssigneeField
-                        task={task}
-                        taskId={taskId}
-                        members={members}
-                        onSaved={apply}
-                        onWanted={onMembersWanted}
-                    />
+                        <AssigneeField
+                            task={task}
+                            taskId={taskId}
+                            members={members}
+                            onSaved={apply}
+                            onWanted={onMembersWanted}
+                        />
 
-                    <UserStoryField
-                        task={task}
-                        taskId={taskId}
-                        stories={stories}
-                        onSaved={apply}
-                        onWanted={onStoriesWanted}
-                    />
+                        <UserStoryField
+                            task={task}
+                            taskId={taskId}
+                            stories={stories}
+                            onSaved={apply}
+                            onWanted={onStoriesWanted}
+                        />
+
+                        {/* New here. Priority was only ever set from the create
+                            modal and filtered from the list — the card itself
+                            could not change it. `UpdateTaskDto` already takes
+                            it, so this is the picker catching up. */}
+                        <ChipPopover
+                            label={m.fields.priority}
+                            value={task.priority ?? ''}
+                            display={
+                                task.priority
+                                    ? m.priority[task.priority as keyof typeof m.priority]
+                                    : m.fields.priority
+                            }
+                            tone={
+                                task.priority === 'URGENT' || task.priority === 'HIGH'
+                                    ? 'warning'
+                                    : task.priority
+                                      ? 'default'
+                                      : 'muted'
+                            }
+                            options={Object.entries(m.priority).map(([value, label]) => ({
+                                value,
+                                label: label as string,
+                            }))}
+                            disabled={busy}
+                            onPick={changePriority}
+                        />
+                    </div>
 
                     <EstimateField task={task} taskId={taskId} onSaved={apply} />
 
@@ -768,6 +805,19 @@ export function useTaskCard(
         }
     };
 
+    const changePriority = async (priority: string) => {
+        setBusy(true);
+        try {
+            // Unlike a status change this cannot move the remaining-hours log,
+            // so it takes the plain `apply` rather than `applyWithLog`.
+            await apply(await api.updateProjectTask(taskId, { priority }));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const changeStatus = async (statusId: string) => {
         setBusy(true);
         try {
@@ -802,7 +852,7 @@ export function useTaskCard(
         hours, canSaveWork, hoursLeftAfter,
         allLabels, members, stories, localeInfo,
         apply, refresh, markChanged, close,
-        changeStatus, saveWork, deleteEntry,
+        changeStatus, changePriority, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
         onMembersWanted: () => setMembersWanted(true),
         onStoriesWanted: () => setStoriesWanted(true),
@@ -839,6 +889,7 @@ export default function TaskDetailPanel({
         refresh,
         markChanged,
         changeStatus,
+        changePriority,
         saveWork,
         deleteEntry,
         onLabelsWanted,
@@ -892,6 +943,7 @@ export default function TaskDetailPanel({
                         refresh={refresh}
                         markChanged={markChanged}
                         changeStatus={changeStatus}
+                        changePriority={changePriority}
                         saveWork={saveWork}
                         deleteEntry={deleteEntry}
                         onLabelsWanted={onLabelsWanted}
@@ -958,24 +1010,21 @@ function AssigneeField({
         }
     };
 
+    const holder = options.find((option) => option.value === assigneeValueOf(task));
+
     return (
-        <Field label={m.task.assignee} htmlFor="task-assignee">
-            <Select
-                id="task-assignee"
-                value={assigneeValueOf(task)}
-                disabled={saving}
-                onFocus={onWanted}
-                onPointerDown={onWanted}
-                onChange={(e) => change(e.target.value)}
-            >
-                <option value="">{m.task.unassigned}</option>
-                {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </Select>
-        </Field>
+        <ChipPopover
+            label={m.task.assignee}
+            value={assigneeValueOf(task)}
+            display={holder?.label ?? m.task.unassigned}
+            tone={holder ? 'default' : 'muted'}
+            options={options.map((option) => ({ value: option.value, label: option.label }))}
+            disabled={saving}
+            onOpen={onWanted}
+            onPick={change}
+            emptyLabel={m.task.unassigned}
+            filterable
+        />
     );
 }
 
@@ -1028,24 +1077,26 @@ function UserStoryField({
         }
     };
 
+    const reference = (story: StoryOption) =>
+        fmt(m.stories.reference, { number: story.reference });
+
     return (
-        <Field label={m.stories.field} htmlFor="task-user-story">
-            <Select
-                id="task-user-story"
-                value={task.userStory?.id ?? ''}
-                disabled={saving}
-                onFocus={onWanted}
-                onPointerDown={onWanted}
-                onChange={(e) => change(e.target.value)}
-            >
-                <option value="">{m.stories.none}</option>
-                {options.map((story) => (
-                    <option key={story.id} value={story.id}>
-                        {fmt(m.stories.reference, { number: story.reference })} · {story.title}
-                    </option>
-                ))}
-            </Select>
-        </Field>
+        <ChipPopover
+            label={m.stories.field}
+            value={task.userStory?.id ?? ''}
+            display={task.userStory ? reference(task.userStory) : m.stories.none}
+            tone={task.userStory ? 'default' : 'muted'}
+            options={options.map((story) => ({
+                value: story.id,
+                label: reference(story),
+                subtitle: story.title,
+            }))}
+            disabled={saving}
+            onOpen={onWanted}
+            onPick={change}
+            emptyLabel={m.stories.none}
+            filterable
+        />
     );
 }
 

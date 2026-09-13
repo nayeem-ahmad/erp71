@@ -86,6 +86,7 @@ export default function TaskDetailPage() {
                     refresh={card.refresh}
                     markChanged={card.markChanged}
                     changeStatus={card.changeStatus}
+                    changePriority={card.changePriority}
                     saveWork={card.saveWork}
                     deleteEntry={card.deleteEntry}
                     onLabelsWanted={card.onLabelsWanted}

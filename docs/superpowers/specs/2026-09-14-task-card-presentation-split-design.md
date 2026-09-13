@@ -122,17 +122,68 @@ a popover on click:
 | Status | the project's columns, type-to-filter | on select (4D) |
 | Assignee | project roster, type-to-filter, avatar + name | on select |
 | Story | project backlog, type-to-filter, `US-3 · title` | on select |
-| Due | date input + `Today` / `Tomorrow` / `Next week` | on select |
 | Priority | the four values | on select |
-| Labels | catalogue as toggles, `onFirstOpen` fetch | on toggle |
+| ~~Due~~ | *deferred* — needs start + due and their inverted-range check | — |
+| ~~Labels~~ | *deferred* — `LabelsSection` already toggles chips in place | — |
 
 A chip shows its value when set and its field name when not. Due renders amber
 when overdue, via the existing `dueStateOf()`. Labels render through the
 existing `labelClass()`; the fixed six-colour palette is tenant data, so the
 one-accent rule does not apply (already documented in `board-tasks.ts`).
 
-**One new component, `ChipPopover`,** built on the existing `Field`/`Input`
-primitives — not a new dropdown library, and not per-chip bespoke markup.
+**One new component, `ChipPopover`,** built on the existing `AnchoredDropdown`
+(`components/document-entry/AnchoredDropdown.tsx`) — not a new dropdown library,
+and not per-chip bespoke markup.
+
+`AnchoredDropdown` rather than the simpler in-flow pattern `BoardViewMenu` uses,
+for one reason: in the modal the chip row sits inside `overflow-y-auto`, which
+is the exact clipping `AnchoredDropdown` was written to escape (it portals into
+`document.body` and flips above the anchor when the room below runs out). The
+interaction grammar still follows the module's own precedent — `BoardViewMenu`
+for `useDismissOnClickOutside`, Escape returning focus to the trigger, and
+`aria-expanded` / `aria-haspopup` / `aria-controls`; `PartySearchSelect` for
+type-to-filter with arrow keys and Enter.
+
+### Decided 2026-09-14: four chips first, dates and labels later
+
+Chips for the four *pickers* only — **Status, Assignee, Story, Priority**.
+`DatesSection` and `LabelsSection` stay exactly as they are for now.
+
+Why split it: the four pickers are where the unsearchable-`<select>` complaint
+actually bites (a 20-person roster, a groomed backlog), and they are the cheapest
+to prove `ChipPopover` on. Dates are the fiddly case — `DatesSection` edits start
+*and* due with a cross-field inverted-range check between them, so a single "Due"
+chip would silently drop both; that needs a popover holding two inputs and its
+own validation, and is not worth bundling into the first pass.
+
+**What this costs in tests, which the earlier draft of this document did not
+say.** Thirteen of the 98 panel tests assert on *native form-control values* for
+these fields. A chip has no `value`, so this pass rewrote **nine** of them: the
+seven in the `assignee` block, the one in `board columns`, and one in `saving
+without re-reading the card` that drove a status change through
+`fireEvent.change`. Dates staying put is what kept the other four untouched.
+
+Two of those nine turned out to be worth more than a mechanical port:
+
+- **`board columns`** asserted `findByText('Site visit')`, which passed only
+  because a `<select>` renders every option into the DOM permanently. A chip
+  names just what the card is set to, so the test now opens the popover — which
+  is what "the card offers its own board's columns" actually means.
+- **The assignee block's four `updateProjectTask` payload assertions carried
+  over unchanged**, which is the real evidence the port preserved behaviour: the
+  same PATCH, both columns still cleared together, `''` still meaning nobody.
+
+**Priority is a new field on the card, not a replacement.** It appears nowhere in
+`TaskDetailPanel` today — only in the create modal and the list filters — so the
+priority chip adds an edit the card never had. `UpdateTaskDto` already accepts it
+(`@IsEnum(ProjectPriorityDto)`: LOW / MEDIUM / HIGH / URGENT), so this is
+frontend-only.
+
+**The `''`-clearing risk is already handled.** Every field these chips can clear
+— `assigneeId`, `assigneeEmployeeId`, `userStoryId`, `milestoneId`, `sprintId`,
+`startDate`, `dueDate`, `coverColor` — already carries
+`@ValidateIf((_, value) => value !== '')` in `UpdateTaskDto`. The trap logged in
+`TODO.md` does not apply to anything here.
 
 ### Facts stop being form controls
 
