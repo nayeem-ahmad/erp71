@@ -55,7 +55,12 @@ export class AuthController {
         };
     }
 
-    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    /**
+     * No account key exists before the Google credential is verified, so this
+     * gets a per-caller ceiling only — set to the same number as `/auth/login`,
+     * which is what a shop's floor or a carrier NAT needs to fit inside.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 60 } })
     @Post('google')
     async googleSignIn(@Body() dto: GoogleSignInDto, @Request() req) {
         return this.authService.googleSignIn(dto, extractRequestMeta(req));
@@ -75,7 +80,8 @@ export class AuthController {
         };
     }
 
-    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    /** Same reasoning as `/auth/google`: a per-caller ceiling, sized for a NAT. */
+    @Throttle({ default: { ttl: 60_000, limit: 60 } })
     @Post('mobile')
     async mobileSignIn(@Body() dto: MobileSignInDto, @Request() req) {
         return this.authService.mobileSignIn(dto, extractRequestMeta(req));
@@ -87,8 +93,18 @@ export class AuthController {
      * Unauthenticated on purpose: the caller reaches here precisely because its
      * access token is no longer accepted, so `JwtAuthGuard` would reject every
      * legitimate request. The refresh token in the body is the credential.
+     *
+     * Split into two budgets for the reason `/auth/login` is, and more urgently:
+     * a refusal here is invisible. The frontend cannot tell a rate-limited
+     * renewal from a revoked session, so 30/min shared across every signed-in
+     * tab behind one office NAT read as "your session ended" and dropped whoever
+     * lost the race at the login screen — where they then spent their sign-in
+     * budget too. The tight budget now keys on the refresh token, which names
+     * the session exactly; the per-caller number is a ceiling a NAT full of
+     * hourly renewals cannot reach by accident. See account-throttle.util.
      */
-    @Throttle({ default: { ttl: 60_000, limit: 30 } })
+    @Throttle({ default: { ttl: 60_000, limit: 300 } })
+    @ThrottleAccount({ ttl: 60_000, limit: 30 })
     @HttpCode(HttpStatus.OK)
     @Post('refresh')
     async refresh(@Body() dto: RefreshTokenDto, @Request() req) {
