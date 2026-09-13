@@ -1937,4 +1937,5 @@ export * from './careers';
 export * from './locales';
 export * from './terms';
 export * from './password-policy';
+export * from './board-background';
 export * from './placeholder-email';

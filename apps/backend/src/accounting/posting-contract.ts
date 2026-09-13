@@ -43,9 +43,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // These do not go through autoPostFromRules at all. They are listed so the
     // registry stays a complete census of what posts, and so the guard below
     // proves no rule ever shadows them.
-    { eventType: 'import_cost', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts addCost', expectation: 'multi-leg' },
+    { eventType: 'import_cost', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts addCost / payCost', expectation: 'multi-leg' },
+    { eventType: 'import_acceptance', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts accept', expectation: 'multi-leg' },
     { eventType: 'import_receipt', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts receive', expectation: 'multi-leg' },
     { eventType: 'import_settlement', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts settle', expectation: 'multi-leg' },
+    { eventType: 'import_write_off', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts cancel', expectation: 'multi-leg' },
 
     // ── the platform's own books ─────────────────────────────────────────────
     // Neither goes through autoPostFromRules either, and neither is posted into

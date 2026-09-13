@@ -2,6 +2,7 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    BoardBackgroundColor,
     DashboardPreference,
     PasswordPolicy,
     PlatformFeatureKey,
@@ -140,33 +141,103 @@ function readRetryAfter(body: unknown): number | undefined {
     return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
+/**
+ * How a renewal attempt settled.
+ *
+ * Only `rejected` means the session is over. The distinction is the whole point
+ * of this type: every outcome used to collapse into `false`, so a rate limit, a
+ * 502 or a dropped connection ended the session exactly as a revoked token did
+ * — and took the still-valid refresh token with it, so the recovery was to type
+ * a password rather than to try again a second later.
+ */
+export type RenewalOutcome = 'renewed' | 'rejected' | 'unavailable';
+
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
-let renewalInFlight: Promise<boolean> | null = null;
+let renewalInFlight: Promise<RenewalOutcome> | null = null;
 
-async function performRenewal(): Promise<boolean> {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
+/**
+ * How long to leave `/auth/refresh` alone after an attempt that got no verdict.
+ *
+ * Without a pause here, one tab whose access token has lapsed asks again on
+ * *every* request it makes: the stored expiry stays in the past, so
+ * `renewIfNearExpiry` keeps firing and nothing records that the last answer was
+ * "not now". That tab alone can drain a shared address's refresh budget in
+ * seconds — and the neighbours it locks out are then signed out too, which is
+ * how a single stale tab in a shop empties the whole floor.
+ */
+const RENEWAL_BACKOFF_MS = 5_000;
 
+/** Ceiling on a server-suggested wait, so a large `Retry-After` cannot park the tab. */
+const MAX_RENEWAL_BACKOFF_MS = 60_000;
+
+/** When the next renewal may be attempted. Epoch ms; 0 means "now". */
+let renewalBlockedUntil = 0;
+
+/** Test-only: forget an in-progress renewal backoff between cases. */
+export function resetSessionRenewalForTests(): void {
+    renewalBlockedUntil = 0;
+    renewalInFlight = null;
+}
+
+/** How long to wait after a refusal that carried no verdict on the token. */
+async function renewalBackoffFrom(response: Response): Promise<number> {
     try {
-        const response = await fetch(`${API_BASE}/auth/refresh`, {
+        const seconds = readRetryAfter(await response.json());
+        if (seconds) return Math.min(seconds * 1000, MAX_RENEWAL_BACKOFF_MS);
+    } catch {
+        // No body, or not JSON. The fixed backoff below is the answer either way.
+    }
+    return RENEWAL_BACKOFF_MS;
+}
+
+async function performRenewal(): Promise<RenewalOutcome> {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return 'rejected';
+
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: refreshToken }),
         });
-        if (!response.ok) return false;
-
-        const body = await response.json();
-        const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
-        if (!tokens?.access_token) return false;
-
-        updateCredentials(tokens);
-        return true;
     } catch {
-        // Offline, or the API is unreachable. Indistinguishable from a dead
-        // refresh token from here, and the caller has already had a 401 from a
-        // server that was answering a moment ago, so it is treated the same.
-        return false;
+        // Offline, DNS, a connection dropped mid-flight — the request never
+        // reached a verdict, so it says nothing about whether the session is
+        // still good. Holding on to the credentials means the attempt after the
+        // network comes back renews, instead of asking for a password.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
     }
+
+    // The one answer that ends a session, and the only one: `refreshSession`
+    // throws `UnauthorizedException` for every way a token can be no good —
+    // unknown, revoked, expired, replayed — and nothing else on this route
+    // judges the token at all. A 403 here is the CSRF middleware refusing the
+    // Origin; a 404 is a route missing mid-deploy. Reading either as "your
+    // session ended" would empty every shop on the platform over a
+    // misconfiguration, which is the failure this whole triage exists to stop.
+    if (response.status === 401) return 'rejected';
+
+    if (!response.ok) {
+        // A 429, a 5xx, or one of the above. The token was never judged, only
+        // unheard.
+        const backoff = await renewalBackoffFrom(response);
+        renewalBlockedUntil = Date.now() + backoff;
+        return 'unavailable';
+    }
+
+    const body = await response.json().catch(() => null);
+    const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
+    if (!tokens?.access_token) {
+        // A 200 with nothing in it is a server fault, not a verdict on the token.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
+    }
+
+    renewalBlockedUntil = 0;
+    updateCredentials(tokens);
+    return 'renewed';
 }
 
 /**
@@ -235,16 +306,37 @@ function resolveTenantHeader(): string | null {
  * exchange — firing six of them would look exactly like a replay and get the
  * session revoked.
  *
- * Resolves `false` rather than throwing, so the caller decides what a failed
- * renewal means.
+ * Resolves rather than throwing, so the caller decides what each outcome means.
+ * While a backoff is running it answers `unavailable` without a round trip: the
+ * point of the pause is that nothing is sent, not that the answer is ignored.
  */
-export function renewSession(): Promise<boolean> {
+export function renewSession(): Promise<RenewalOutcome> {
+    if (Date.now() < renewalBlockedUntil) return Promise.resolve('unavailable');
+
     if (!renewalInFlight) {
         renewalInFlight = performRenewal().finally(() => {
             renewalInFlight = null;
         });
     }
     return renewalInFlight;
+}
+
+/**
+ * What a caller gets instead of being signed out when the renewal never reached
+ * a verdict. `503` rather than the `401` that prompted it: the session has not
+ * been judged dead, the server merely could not be asked.
+ */
+const RENEWAL_UNAVAILABLE_MESSAGE =
+    'Could not renew your sign-in — the server is unreachable or busy. Please try again in a moment.';
+
+function renewalUnavailableError(): ApiError {
+    const waitMs = renewalBlockedUntil - Date.now();
+    return new ApiError(
+        RENEWAL_UNAVAILABLE_MESSAGE,
+        503,
+        'SESSION_RENEWAL_UNAVAILABLE',
+        waitMs > 0 ? Math.ceil(waitMs / 1000) : undefined,
+    );
 }
 
 /**
@@ -286,10 +378,12 @@ export async function fetchBlobWithAuth(
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return fetchBlobWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return fetchBlobWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
@@ -369,10 +463,12 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return requestWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return requestWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
@@ -2283,13 +2379,26 @@ export const api = {
         method: 'DELETE',
     }),
     // ── Imports (LC) ────────────────────────────────────────────────────────
-    getImportShipments: (params?: { status?: string; supplierId?: string; openOnly?: boolean }) => {
+    /** One server-paginated page, for `useServerList`. */
+    getImportShipments: (params?: {
+        page?: number;
+        limit?: number;
+        status?: string;
+        supplierId?: string;
+        openOnly?: boolean;
+        search?: string;
+        etaFrom?: string;
+        etaTo?: string;
+        sortBy?: string;
+        sortDir?: 'asc' | 'desc';
+    }): Promise<Paginated<any>> => {
         const query = new URLSearchParams();
-        if (params?.status) query.set('status', params.status);
-        if (params?.supplierId) query.set('supplierId', params.supplierId);
-        if (params?.openOnly) query.set('openOnly', 'true');
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value === undefined || value === null || value === '') continue;
+            query.set(key, String(value));
+        }
         const suffix = query.toString();
-        return fetchWithAuth(`/imports${suffix ? `?${suffix}` : ''}`);
+        return fetchPaginated(`/imports${suffix ? `?${suffix}` : ''}`);
     },
     getImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`),
     createImportShipment: (data: any) =>
@@ -2307,23 +2416,39 @@ export const api = {
         fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteImportCost: (id: string, costId: string) =>
         fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'DELETE' }),
+    /**
+     * Settles a charge recorded before the money left — the C&F agent's bill
+     * that arrives weeks after the goods. Works after receipt, where editing a
+     * cost does not: the landed cost is already fixed, only the cash leg is not.
+     */
+    payImportCost: (id: string, costId: string, data: { paidFromAccountId: string; paidAt?: string }) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}/pay`, { method: 'POST', body: JSON.stringify(data) }),
 
     /** Emits an ordinary Purchase at landed cost and moves the stock. */
     receiveImportShipment: (id: string, data: any = {}) =>
         fetchWithAuth(`/imports/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+    /** Moves the debt from the supplier to the bank. See ImportsService.accept. */
+    acceptImportShipment: (id: string, data: { acceptedAt?: string } = {}) =>
+        fetchWithAuth(`/imports/${id}/accept`, { method: 'POST', body: JSON.stringify(data) }),
     settleImportShipment: (id: string, data: any) =>
         fetchWithAuth(`/imports/${id}/settle`, { method: 'POST', body: JSON.stringify(data) }),
+    /** Writes any capitalised charges off to expense — the goods never arrive. */
+    cancelImportShipment: (id: string, data: { reason?: string; cancelledAt?: string } = {}) =>
+        fetchWithAuth(`/imports/${id}/cancel`, { method: 'POST', body: JSON.stringify(data) }),
 
-    addImportDocument: (id: string, data: any) =>
-        fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+    addImportDocument: (
+        id: string,
+        data: { docType: string; fileBase64: string; fileName?: string; mimeType?: string },
+    ) => fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
     deleteImportDocument: (id: string, documentId: string) =>
         fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
 
     getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
-    getImportDutyReport: (params?: { from?: string; to?: string }) => {
+    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.includeUnpaid) query.set('includeUnpaid', 'true');
         const suffix = query.toString();
         return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
     },
@@ -4536,6 +4661,37 @@ export const api = {
     deleteProjectMilestone: (milestoneId: string) =>
         fetchWithAuth(`/projects/milestones/${milestoneId}`, { method: 'DELETE' }),
 
+    /**
+     * User stories. `projectId` is optional on the list — omitted returns every
+     * story the caller can reach — but every screen that has a project passes
+     * one, because a backlog is read one project at a time.
+     */
+    getProjectStories: (params: { projectId?: string; status?: string; search?: string } = {}) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value) query.set(key, String(value));
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/project-stories${suffix ? `?${suffix}` : ''}`);
+    },
+    /** One story with the tasks filed under it. */
+    getProjectStory: (storyId: string) => fetchWithAuth(`/project-stories/${storyId}`),
+    createProjectStory: (data: Record<string, unknown>) =>
+        fetchWithAuth('/project-stories', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectStory: (storyId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-stories/${storyId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The tasks under it are detached, never deleted with it. */
+    deleteProjectStory: (storyId: string) =>
+        fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
+
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),
     createProjectType: (data: { name: string; sortOrder?: number }) =>
@@ -4633,13 +4789,39 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    updateBoard: (id: string, data: { name?: string; description?: string }) =>
+    updateBoard: (
+        id: string,
+        data: {
+            name?: string;
+            description?: string;
+            /** A key from BOARD_BACKGROUND_COLORS, or null for the plain board. */
+            backgroundColor?: BoardBackgroundColor | null;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`, { method: 'DELETE' }),
+    /**
+     * Uploads the picture and hangs it on the board in one call — unlike the
+     * storefront's upload-then-PATCH, because a board background has no form to
+     * save and an upload that landed nowhere would be a file nobody asked for.
+     * Returns the updated board.
+     */
+    setBoardBackgroundImage: (
+        id: string,
+        data: { imageBase64: string; mimeType?: string; fileName?: string },
+    ) =>
+        fetchWithAuth(`/projects/boards/${id}/background/image`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Back to the plain board, whichever kind of background it was wearing. */
+    clearBoardBackground: (id: string) =>
+        fetchWithAuth(`/projects/boards/${id}/background`, { method: 'DELETE' }),
     addBoardTasks: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/projects/boards/${id}/tasks`, {
             method: 'POST',

@@ -1,17 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
 
 describe('BoardsService', () => {
     let service: BoardsService;
     let db: any;
     let columns: any;
     let tasks: any;
+    let assets: any;
 
     const tenantId = 't1';
     const userId = 'u1';
@@ -85,6 +91,13 @@ describe('BoardsService', () => {
             assertTask: jest.fn().mockResolvedValue({ id: 'k1' }),
             create: jest.fn().mockResolvedValue({ id: 'k9', project_id: 'p1' }),
         };
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest
+                .fn()
+                .mockResolvedValue({ url: 'https://cdn/new.jpg', publicId: 'retail/t1/project-boards/new', bytes: 10 }),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -93,6 +106,7 @@ describe('BoardsService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: BoardColumnsService, useValue: columns },
                 { provide: ProjectTasksService, useValue: tasks },
+                { provide: AssetsService, useValue: assets },
             ],
         }).compile();
         service = module.get(BoardsService);
@@ -486,6 +500,197 @@ describe('BoardsService', () => {
         expect(db.board.update).toHaveBeenCalledWith({
             where: { id: 'b1' },
             data: { deleted_at: expect.any(Date) },
+        });
+    });
+
+    describe('background', () => {
+        /** A board already wearing an uploaded picture. */
+        const withImage = () =>
+            db.board.findFirst.mockResolvedValue({
+                id: 'b1',
+                tenant_id: tenantId,
+                name: 'Release',
+                background_color: null,
+                background_image_url: 'https://cdn/old.jpg',
+                background_image_key: 'retail/t1/project-boards/old',
+            });
+
+        const pixel =
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+        it('renames without touching the background', async () => {
+            withImage();
+
+            await service.update(tenantId, 'b1', { name: 'Release 2' });
+
+            expect(db.board.update).toHaveBeenCalledWith({
+                where: { id: 'b1' },
+                data: { name: 'Release 2' },
+            });
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('drops the image when a colour is picked, file and all', async () => {
+            withImage();
+
+            await service.update(tenantId, 'b1', { backgroundColor: 'BLUE' });
+
+            expect(db.board.update).toHaveBeenCalledWith({
+                where: { id: 'b1' },
+                data: {
+                    background_color: 'BLUE',
+                    background_image_url: null,
+                    background_image_key: null,
+                },
+            });
+            // Or the tenant is billed forever for a picture no board can show.
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t1/project-boards/old', 'image');
+        });
+
+        it('clears the colour with an explicit null', async () => {
+            await service.update(tenantId, 'b1', { backgroundColor: null });
+
+            expect(db.board.update).toHaveBeenCalledWith({
+                where: { id: 'b1' },
+                data: {
+                    background_color: null,
+                    background_image_url: null,
+                    background_image_key: null,
+                },
+            });
+        });
+
+        it('stores an uploaded image with the key needed to delete it later', async () => {
+            await service.setBackgroundImage(tenantId, 'b1', { imageBase64: pixel });
+
+            expect(assets.uploadBuffer).toHaveBeenCalledWith(
+                expect.any(Buffer),
+                't1/project-boards',
+                'background',
+                'image',
+            );
+            expect(db.board.update).toHaveBeenCalledWith({
+                where: { id: 'b1' },
+                data: {
+                    background_image_url: 'https://cdn/new.jpg',
+                    background_image_key: 'retail/t1/project-boards/new',
+                    background_color: null,
+                },
+            });
+        });
+
+        it('removes the picture it replaced', async () => {
+            withImage();
+
+            await service.setBackgroundImage(tenantId, 'b1', { imageBase64: pixel });
+
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t1/project-boards/old', 'image');
+        });
+
+        it('refuses a payload that is not an image', async () => {
+            await expect(
+                service.setBackgroundImage(tenantId, 'b1', {
+                    imageBase64: 'data:application/pdf;base64,JVBERi0=',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(assets.uploadBuffer).not.toHaveBeenCalled();
+        });
+
+        it('says so plainly when storage is not configured', async () => {
+            assets.isEnabled.mockReturnValue(false);
+
+            await expect(
+                service.setBackgroundImage(tenantId, 'b1', { imageBase64: pixel }),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+            expect(db.board.update).not.toHaveBeenCalled();
+        });
+
+        it('clearing takes both columns and the file', async () => {
+            withImage();
+
+            await service.clearBackground(tenantId, 'b1');
+
+            expect(db.board.update).toHaveBeenCalledWith({
+                where: { id: 'b1' },
+                data: {
+                    background_color: null,
+                    background_image_url: null,
+                    background_image_key: null,
+                },
+            });
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t1/project-boards/old', 'image');
+        });
+
+        it('sends the background out with the board', async () => {
+            db.board.findFirst.mockResolvedValue({
+                id: 'b1',
+                tenant_id: tenantId,
+                name: 'Release',
+                description: null,
+                background_color: 'PURPLE',
+                background_image_url: null,
+            });
+
+            const board = await service.findOne(owner, 'b1');
+
+            expect(board.background_color).toBe('PURPLE');
+            expect(board.background_image_url).toBeNull();
+        });
+
+        it('sends it out with the board list too, so the list can show it', async () => {
+            db.board.findMany.mockResolvedValue([
+                {
+                    id: 'b1',
+                    name: 'Release',
+                    description: null,
+                    created_at: new Date(),
+                    background_color: 'AMBER',
+                    background_image_url: null,
+                    _count: { cards: 2 },
+                },
+            ]);
+
+            const [board] = await service.list(owner);
+
+            expect(board.background_color).toBe('AMBER');
+        });
+
+        it('never leaks the storage key to the browser', async () => {
+            withImage();
+            db.board.findMany.mockResolvedValue([
+                {
+                    id: 'b1',
+                    name: 'Release',
+                    description: null,
+                    created_at: new Date(),
+                    background_image_url: 'https://cdn/old.jpg',
+                    background_image_key: 'retail/t1/project-boards/old',
+                    _count: { cards: 0 },
+                },
+            ]);
+            // What the writes hand back, not just what the reads do: the
+            // `public_id` is how this service deletes a replaced picture, and
+            // the browser has no use for it on any route.
+            db.board.update.mockResolvedValue({
+                id: 'b1',
+                name: 'Release',
+                background_image_url: 'https://cdn/new.jpg',
+                background_image_key: 'retail/t1/project-boards/new',
+            });
+
+            const [listed] = await service.list(owner);
+            const opened = await service.findOne(owner, 'b1');
+            const renamed = await service.update(tenantId, 'b1', { name: 'Release 2' });
+            const uploaded = await service.setBackgroundImage(tenantId, 'b1', {
+                imageBase64: pixel,
+            });
+            const cleared = await service.clearBackground(tenantId, 'b1');
+
+            for (const shape of [listed, opened, renamed, uploaded, cleared]) {
+                expect(shape).not.toHaveProperty('background_image_key');
+            }
+            // The URL still goes out — it is what the page renders.
+            expect(uploaded).toHaveProperty('background_image_url', 'https://cdn/new.jpg');
         });
     });
 });

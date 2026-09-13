@@ -288,11 +288,21 @@ enum PostingRuleEventType {
   investor_profit_accrual
   investor_profit_payout
   /// LC margin paid to the bank, and every cost booked against a shipment.
+  /// Carries a second `legKey: 'payment'` voucher when an accrued charge is
+  /// later paid — the accrual and its settlement both belong to one ImportCost.
   import_cost
+  /// The bank accepting the documents: the debt moves off the supplier's
+  /// payable and onto LC Acceptance Payable, which is what `import_settlement`
+  /// then clears. Without it that settlement debited an account nothing had
+  /// ever credited.
+  import_acceptance
   /// Goods in transit becoming inventory at landed cost.
   import_receipt
   /// Settling a usance LC, where the rate paid differs from the rate booked.
   import_settlement
+  /// A cancelled shipment's capitalised charges leaving Goods in Transit for
+  /// expense — the goods never arrive, so they can never become inventory.
+  import_write_off
   /// A BillingEvent projected into the platform's own books — a subscription
   /// fee charged, a tenant payment received, an add-on fee, a refund. Posted by
   /// PlatformAccountingService through `postMultiLeg`, never by a PostingRule:
@@ -441,6 +451,7 @@ model User {
   projectMemberships                ProjectMember[]             @relation("ProjectMemberUser")
   assignedProjectTasks              ProjectTask[]               @relation("ProjectTaskAssignee")
   createdProjectTasks               ProjectTask[]               @relation("ProjectTaskCreator")
+  createdProjectUserStories         ProjectUserStory[]          @relation("ProjectUserStoryCreator")
   projectTimeEntries                ProjectTimeEntry[]          @relation("ProjectTimeEntryUser")
   projectTimers                     ProjectTimer[]              @relation("ProjectTimerUser")
   projectRemainingLogs              ProjectTaskRemainingLog[]   @relation("RemainingLogUser")
@@ -912,6 +923,7 @@ model Tenant {
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
   projectMilestones          ProjectMilestone[]
+  projectUserStories         ProjectUserStory[]
   projectTaskStatuses        ProjectTaskStatus[]
   projectTasks               ProjectTask[]
   projectTaskRemainingLogs   ProjectTaskRemainingLog[]
@@ -2225,6 +2237,16 @@ model ImportShipment {
   /// The rate actually paid at settlement. The difference against
   /// `fx_rate_at_open` is realised FX gain or loss.
   fx_rate_at_settle Decimal? @db.Decimal(12, 6)
+
+  /// When the bank accepted the documents and the debt moved from the supplier
+  /// to the bank. Set by `accept`, which posts Dr Purchase Payable / Cr LC
+  /// Acceptance Payable — the step that gives `settle` something to clear. Null
+  /// means the supplier is still the creditor.
+  accepted_at         DateTime?
+  /// `accepted_at` + `tenor_days`. Stored rather than derived so "what matures
+  /// this week" is a query rather than a scan, which is the whole point of
+  /// recording a tenor.
+  acceptance_due_date DateTime?
   /// Supplier invoice value in `currency`. Decimal(16,2) rather than (12,2):
   /// a container of electronics quoted in a weak currency overflows twelve
   /// digits, and this column is the one that holds a foreign figure.
@@ -2264,6 +2286,8 @@ model ImportShipment {
   @@index([tenant_id, lc_number])
   @@index([tenant_id, lc_expiry_date])
   @@index([tenant_id, created_at])
+  /// Drives "which acceptances mature this week" without scanning the table.
+  @@index([tenant_id, acceptance_due_date])
 }
 
 model ImportShipmentItem {
@@ -2325,8 +2349,14 @@ model ImportCost {
 
   paid_at              DateTime?
   paid_from_account_id String?
-  /// The voucher this charge posted through, once it has.
+  /// The voucher this charge posted through, once it has. A charge recorded
+  /// before payment posts here too — against Accrued Import Charges — so the
+  /// ledger never waits on the cash.
   voucher_id           String?
+  /// The second voucher, written when an accrued charge is later paid: Dr
+  /// Accrued Import Charges / Cr wherever the money left. Separate from
+  /// `voucher_id` because both exist at once and neither replaces the other.
+  payment_voucher_id   String?
 
   created_by String?
   created_at DateTime @default(now())
@@ -2351,7 +2381,13 @@ model ImportDocument {
   /// BILL_OF_ENTRY | RELEASE_ORDER | OTHER
   doc_type    String
   file_name   String
+  /// Cloudinary's public_id, kept so deleting the row can delete the file.
+  /// Without it a removed document is billed forever — the leak logged against
+  /// the older `uploadFile` path in TODO.md.
   storage_key String
+  /// Where to fetch it. Null only for a row written before the upload endpoint
+  /// existed, when the API took a bare storage key and nothing served it.
+  file_url    String?
   mime_type   String?
   file_size   Int?
 
@@ -6488,6 +6524,17 @@ enum SprintStatus {
   COMPLETED
 }
 
+/// Where a story sits in the backlog, independent of the board columns its
+/// tasks move through. A story is a requirement rather than a unit of work, so
+/// it is groomed (BACKLOG -> READY) before anybody starts it, and the tasks
+/// under it can be half-done while the story itself is still not accepted.
+enum ProjectUserStoryStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  DONE
+}
+
 /// Why a task's remaining hours changed. Burning down through logged work and
 /// burning up through re-estimation are opposite events; a bare value cannot
 /// tell them apart, and that distinction is the whole scope-creep signal.
@@ -6539,6 +6586,7 @@ model Project {
 
   members        ProjectMember[]
   milestones     ProjectMilestone[]
+  userStories    ProjectUserStory[]
   tasks          ProjectTask[]
   timeEntries    ProjectTimeEntry[]
   comments       ProjectComment[]
@@ -6617,6 +6665,68 @@ model ProjectMilestone {
   @@map("project_milestones")
 }
 
+/// A user story: the requirement in the words of whoever wants it, with the
+/// tasks that deliver it hanging off it.
+///
+/// Deliberately a second axis rather than a reuse of `ProjectTask.parent_task_id`.
+/// A subtask is a smaller piece of the same work and shares its parent's board
+/// column, assignee and hours; a story is a *requirement*, which several tasks
+/// across several columns deliver and which is finished only when the thing it
+/// describes actually works. Folding the two together would mean a story that
+/// sits in a board column and burns hours of its own, which is exactly the
+/// double-counting `progress()` and the burndown are built to avoid — every
+/// hour in this module belongs to a task, and a story never has any.
+///
+/// It sits beside `ProjectMilestone` rather than replacing it: a milestone is a
+/// date the project is measured against, a story is a piece of scope. A task may
+/// carry one, both, or neither.
+model ProjectUserStory {
+  id         String @id @default(uuid())
+  tenant_id  String
+  project_id String
+  /// Per-project counter, rendered as `US-3`. A story is the thing people name
+  /// out loud in a standup, and "the bKash one" does not survive a backlog of
+  /// forty. Allocated the same way `Project.code` is — count + 1, retried on the
+  /// unique violation — because a sequence table for this would be the only one
+  /// in the schema.
+  reference  Int
+  title      String
+
+  /// The classic template, kept as three columns rather than one blob so the
+  /// card can render "As a … I want … so that …" in any of the app's languages
+  /// and so a story missing its *why* is visibly missing it. All optional: a
+  /// one-line story is still a story, and refusing to save one would just push
+  /// people back to writing tasks.
+  as_a    String?
+  i_want  String?
+  so_that String?
+
+  /// What "done" means for this story, in the author's own words. Free text
+  /// rather than a checklist: a task's `ProjectTaskChecklistItem` already covers
+  /// tick-off work, and acceptance criteria are read as a whole.
+  acceptance_criteria String?
+
+  status       ProjectUserStoryStatus @default(BACKLOG)
+  priority     ProjectPriority        @default(MEDIUM)
+  /// Relative size, not hours. Hours live on the tasks and roll up from them;
+  /// a story that carried both would invite the two to disagree.
+  story_points Int?
+  sort_order   Int                    @default(0)
+  created_by   String?
+  created_at   DateTime               @default(now())
+  updated_at   DateTime               @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  creator User?   @relation("ProjectUserStoryCreator", fields: [created_by], references: [id])
+
+  tasks ProjectTask[]
+
+  @@unique([project_id, reference])
+  @@index([tenant_id, project_id, sort_order])
+  @@map("project_user_stories")
+}
+
 /// Tenant-managed board columns. Ordering here is the ordering on the board.
 /// Board columns. A Trello list belongs to one board, so as of Phase 3L these
 /// belong to one project.
@@ -6664,6 +6774,10 @@ model ProjectTask {
   tenant_id            String
   project_id           String
   milestone_id         String?
+  /// The story this task delivers a piece of. Independent of `parent_task_id`:
+  /// a task can be a subtask of another task *and* belong to a story, and a
+  /// subtask inherits nothing here — it is set, or it is not.
+  user_story_id        String?
   sprint_id            String?
   parent_task_id       String?
   title                String
@@ -6698,6 +6812,7 @@ model ProjectTask {
   tenant           Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project          Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
   milestone        ProjectMilestone? @relation(fields: [milestone_id], references: [id])
+  userStory        ProjectUserStory? @relation(fields: [user_story_id], references: [id])
   sprint           Sprint?           @relation(fields: [sprint_id], references: [id])
   parentTask       ProjectTask?      @relation("ProjectTaskSubtask", fields: [parent_task_id], references: [id])
   subtasks         ProjectTask[]     @relation("ProjectTaskSubtask")
@@ -6719,6 +6834,7 @@ model ProjectTask {
 
   @@index([tenant_id, project_id, deleted_at])
   @@index([tenant_id, sprint_id])
+  @@index([tenant_id, user_story_id])
   @@index([tenant_id, assignee_id])
   @@index([tenant_id, assignee_employee_id])
   @@index([project_id, status_id, sort_order])
@@ -6813,6 +6929,22 @@ model Board {
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
+
+  /// How the board's canvas is painted. A property of the board, not of the
+  /// browser reading it: everyone on a board sees the same background, which is
+  /// the whole point — a team recognises a board by its colour.
+  ///
+  /// One background, so the two are mutually exclusive: setting a colour clears
+  /// the image and vice versa. A key from BOARD_BACKGROUND_COLORS in
+  /// shared-types rather than a hex string — the page maps it to a Tailwind
+  /// class, and a free-text colour would be both unrenderable and a way to put
+  /// unreadable text on a board for everyone else.
+  background_color     String?
+  /// The CDN URL the board renders, and the Cloudinary public_id behind it.
+  /// Both, because a URL cannot be turned back into a public_id: without the
+  /// key, replacing a background strands the old file and it is billed forever.
+  background_image_url String?
+  background_image_key String?
 
   tenant  Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   creator User?  @relation("BoardCreator", fields: [created_by], references: [id])

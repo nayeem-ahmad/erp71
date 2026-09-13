@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: 'Reopen',
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'User stories',
+        add: 'New story',
+        edit: 'Edit story',
+        empty: 'No user stories yet. Write one to say what this project is being asked for.',
+        reference: 'US-{number}',
+        asA: 'As a',
+        iWant: 'I want',
+        soThat: 'So that',
+        asAPlaceholder: 'shopkeeper',
+        iWantPlaceholder: 'to take a bKash payment at the till',
+        soThatPlaceholder: 'I do not have to count change',
+        narrative: 'As a {asA}, I want {iWant} so that {soThat}.',
+        acceptance: 'Acceptance criteria',
+        acceptancePlaceholder: 'What has to be true before this story is done.',
+        points: 'Points',
+        pointsHint: 'Relative size, not hours — hours stay on the tasks.',
+        pointsShort: '{points} pts',
+        statuses: {
+            BACKLOG: 'Backlog',
+            READY: 'Ready',
+            IN_PROGRESS: 'In progress',
+            DONE: 'Done',
+        },
+        taskProgress: '{done}/{total} tasks',
+        noTasks: 'No tasks under this story yet.',
+        addTask: 'Add task',
+        taskPlaceholder: 'What has to be built',
+        none: 'No story',
+        field: 'User story',
+        created: 'Story created',
+        updated: 'Story saved',
+        deleted: 'Story deleted',
+        deleteStory: 'Delete story',
+        deletePrompt: 'Delete {title}?\n\nThe tasks under it are kept — they simply lose the grouping.',
+        saveFailed: 'Could not save the story',
+        deleteFailed: 'Could not delete the story',
+        loadFailed: 'Could not load the user stories',
+        titleRequired: 'Give the story a title.',
+    },
+
     task: {
         title: 'Task',
         newTask: 'New Task',
@@ -406,6 +452,13 @@ export const projectsMessages = {
         timerUpdateFailed: 'Could not update the timer.',
         timerDiscarded: 'Timer discarded. Nothing was logged.',
         timerStartedAt: 'Started at',
+        // The tracker floats over every page now, so it has a name, and the
+        // chrome that moves and folds it needs labels of its own.
+        tracker: 'Time tracker',
+        trackerMove: 'Move the time tracker',
+        trackerCollapse: 'Collapse the time tracker',
+        trackerExpand: 'Expand the time tracker',
+        trackerClose: 'Hide the time tracker',
         timerAlreadyRunning: 'A timer is already running on "{task}". Stop it first.',
         timerOverlapped: 'Those hours overlap time you already logged on "{task}".',
         overlapTitle: 'These hours overlap',
@@ -639,6 +692,33 @@ export const projectsMessages = {
         allBoards: 'All boards',
         withCards: 'With cards',
         emptyOnly: 'Empty boards',
+
+        // The board's own background — a colour or an uploaded picture. Unlike
+        // `board.view` above, which is this browser's preference, this is stored
+        // on the board: everyone who opens it sees the same thing.
+        background: {
+            title: 'Background',
+            hint: 'Everyone who opens this board sees it.',
+            colors: 'Colours',
+            image: 'Picture',
+            uploadImage: 'Upload a picture',
+            replaceImage: 'Replace the picture',
+            currentImage: 'Current board background',
+            fileHint: 'JPEG, PNG or WebP, up to 3.5 MB.',
+            remove: 'Remove background',
+            saved: 'Background updated',
+            tooLarge: 'That picture is too large. Use one under 3.5 MB.',
+            notAnImage: 'Use a JPEG, PNG or WebP picture.',
+            uploadFailed: 'The picture could not be read.',
+            colorNames: {
+                GRAY: 'Grey',
+                BLUE: 'Blue',
+                EMERALD: 'Green',
+                AMBER: 'Amber',
+                RED: 'Red',
+                PURPLE: 'Purple',
+            },
+        },
     },
 
 } as const;
