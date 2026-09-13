@@ -187,8 +187,31 @@ frontend-only.
 
 ### Facts stop being form controls
 
-Sprint, milestone, start date, created-by become a key/value list that edits in
-place on click, instead of four more controls competing with the five above.
+**Corrected 2026-09-14, before starting step 4.** This section was written
+against the mockup rather than the code, and most of what it promised to convert
+does not exist on the card. There is no sprint row, no milestone row and no
+created-by row in the sidebar — so there are no "four more controls" to demote.
+The same mistake as the "five selects" (there were six); the lesson is the same,
+so it is recorded rather than quietly rewritten.
+
+What is actually true:
+
+- `TASK_INCLUDE` already returns `milestone {id, name}` and `sprint {id, name,
+  status}` on every task read, and the frontend `Task` interface does not declare
+  either — so the data arrives on the wire and is thrown away. Surfacing them is
+  *new* display, not a conversion.
+- `UpdateTaskDto` accepts `milestoneId` and `sprintId`, both with the
+  `@ValidateIf(value !== '')` guard, so both are editable without backend work.
+- **But only sprint has a list endpoint.** `api.getSprints(projectId)` exists;
+  there is no `getProjectMilestones`. A milestone picker therefore needs an
+  endpoint first, which is out of scope here.
+- The genuinely read-only facts are logged and remaining hours, drawn today by
+  the `Metric` pair.
+
+So step 4 is: **show sprint and milestone as read-only facts** beside logged and
+remaining, make **sprint** editable through a `ChipPopover` (the list endpoint
+exists), and leave milestone as a fact until it has one. Start and due stay in
+`DatesSection` for the reason Decision 2 already gives.
 
 ---
 
@@ -288,7 +311,7 @@ so it can be reverted on evidence rather than argued about.
 | 1 | Extract `TaskCardBody`, no behaviour change | Prove 98 tests green before anything moves. |
 | 2 | The route + `taskDetail()` + expand control + `useTaskCard` | Independently shippable, no visual change — but **not small**: see below. |
 | 3 | Chip row + `ChipPopover` | The payoff. Biggest diff; do it on a settled body. |
-| 4 | Facts as key/value | Same sidebar, follows naturally from 3. |
+| 4 | Sprint + milestone as facts; sprint editable | Surfaces two fields the API already sends. Milestone stays read-only — no list endpoint yet. |
 | 5 | Read-first reorder | One move once 3 and 4 have settled the column. |
 | 6 | Checklist drag | Independent of everything above. |
 | 7 | Quick-add autocomplete | Different component entirely; can go any time. |

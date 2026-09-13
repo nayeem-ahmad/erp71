@@ -182,7 +182,12 @@ export default function ChipPopover({
                     setOpen((was) => !was);
                 }}
                 onKeyDown={open ? onKeyDown : undefined}
-                className={`inline-flex min-h-touch items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 md:min-h-0 ${toneClass}`}
+                // No `min-h-touch` here, deliberately. A 44px floor on the
+                // trigger put all four chips on separate rows at 360px and cost
+                // more sidebar height than the selects this replaced. The floor
+                // belongs on the popover's option rows, which are what a finger
+                // actually lands on to make a change — those keep theirs below.
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${toneClass}`}
             >
                 {display}
                 <ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
