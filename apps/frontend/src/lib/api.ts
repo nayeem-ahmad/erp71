@@ -4661,6 +4661,37 @@ export const api = {
     deleteProjectMilestone: (milestoneId: string) =>
         fetchWithAuth(`/projects/milestones/${milestoneId}`, { method: 'DELETE' }),
 
+    /**
+     * User stories. `projectId` is optional on the list — omitted returns every
+     * story the caller can reach — but every screen that has a project passes
+     * one, because a backlog is read one project at a time.
+     */
+    getProjectStories: (params: { projectId?: string; status?: string; search?: string } = {}) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value) query.set(key, String(value));
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/project-stories${suffix ? `?${suffix}` : ''}`);
+    },
+    /** One story with the tasks filed under it. */
+    getProjectStory: (storyId: string) => fetchWithAuth(`/project-stories/${storyId}`),
+    createProjectStory: (data: Record<string, unknown>) =>
+        fetchWithAuth('/project-stories', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectStory: (storyId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-stories/${storyId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The tasks under it are detached, never deleted with it. */
+    deleteProjectStory: (storyId: string) =>
+        fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
+
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),
     createProjectType: (data: { name: string; sortOrder?: number }) =>

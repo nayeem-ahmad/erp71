@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: 'Reopen',
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'User stories',
+        add: 'New story',
+        edit: 'Edit story',
+        empty: 'No user stories yet. Write one to say what this project is being asked for.',
+        reference: 'US-{number}',
+        asA: 'As a',
+        iWant: 'I want',
+        soThat: 'So that',
+        asAPlaceholder: 'shopkeeper',
+        iWantPlaceholder: 'to take a bKash payment at the till',
+        soThatPlaceholder: 'I do not have to count change',
+        narrative: 'As a {asA}, I want {iWant} so that {soThat}.',
+        acceptance: 'Acceptance criteria',
+        acceptancePlaceholder: 'What has to be true before this story is done.',
+        points: 'Points',
+        pointsHint: 'Relative size, not hours — hours stay on the tasks.',
+        pointsShort: '{points} pts',
+        statuses: {
+            BACKLOG: 'Backlog',
+            READY: 'Ready',
+            IN_PROGRESS: 'In progress',
+            DONE: 'Done',
+        },
+        taskProgress: '{done}/{total} tasks',
+        noTasks: 'No tasks under this story yet.',
+        addTask: 'Add task',
+        taskPlaceholder: 'What has to be built',
+        none: 'No story',
+        field: 'User story',
+        created: 'Story created',
+        updated: 'Story saved',
+        deleted: 'Story deleted',
+        deleteStory: 'Delete story',
+        deletePrompt: 'Delete {title}?\n\nThe tasks under it are kept — they simply lose the grouping.',
+        saveFailed: 'Could not save the story',
+        deleteFailed: 'Could not delete the story',
+        loadFailed: 'Could not load the user stories',
+        titleRequired: 'Give the story a title.',
+    },
+
     task: {
         title: 'Task',
         newTask: 'New Task',

@@ -134,6 +134,52 @@ export const projectsMessages = {
         reopen: "إعادة فتحه",
     },
 
+
+    /**
+     * User stories. The requirement in the words of whoever wants it, with the
+     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     */
+    stories: {
+        title: 'قصص المستخدم',
+        add: 'قصة جديدة',
+        edit: 'تعديل القصة',
+        empty: 'لا توجد قصص مستخدم بعد. اكتب واحدة لتوضيح ما هو المطلوب من هذا المشروع.',
+        reference: 'US-{number}',
+        asA: 'بصفتي',
+        iWant: 'أريد',
+        soThat: 'حتى',
+        asAPlaceholder: 'صاحب متجر',
+        iWantPlaceholder: 'أن أستلم دفعة بِكاش عند الصندوق',
+        soThatPlaceholder: 'لا أضطر إلى عدّ الفكة',
+        narrative: 'بصفتي {asA}، أريد {iWant} حتى {soThat}.',
+        acceptance: 'معايير القبول',
+        acceptancePlaceholder: 'ما الذي يجب أن يتحقق قبل اعتبار هذه القصة منتهية.',
+        points: 'النقاط',
+        pointsHint: 'حجم نسبي لا ساعات — الساعات تبقى على المهام.',
+        pointsShort: '{points} نقطة',
+        statuses: {
+            BACKLOG: 'قائمة الانتظار',
+            READY: 'جاهزة',
+            IN_PROGRESS: 'قيد التنفيذ',
+            DONE: 'منتهية',
+        },
+        taskProgress: '{done}/{total} مهمة',
+        noTasks: 'لا توجد مهام تحت هذه القصة بعد.',
+        addTask: 'إضافة مهمة',
+        taskPlaceholder: 'ما الذي يجب بناؤه',
+        none: 'بلا قصة',
+        field: 'قصة المستخدم',
+        created: 'تم إنشاء القصة',
+        updated: 'تم حفظ القصة',
+        deleted: 'تم حذف القصة',
+        deleteStory: 'حذف القصة',
+        deletePrompt: 'حذف {title}؟\n\nتبقى المهام التابعة لها — تفقد التجميع فقط.',
+        saveFailed: 'تعذّر حفظ القصة',
+        deleteFailed: 'تعذّر حذف القصة',
+        loadFailed: 'تعذّر تحميل قصص المستخدم',
+        titleRequired: 'أعطِ القصة عنوانًا.',
+    },
+
     task: {
         title: "المهمة",
         newTask: "مهمة جديدة",
