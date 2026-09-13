@@ -391,14 +391,36 @@ export function TaskCardBody({
             </aside>
 
             <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                {/* First, not seventh. Logging an afternoon is the
-                    most frequent write in the module and it used to
-                    sit below the description, the checklist and the
-                    attachments, inside a scroller. */}
+                {/* Lifted out of the work row below and put first, so the clock is
+                    reachable without scrolling. It stays in the body rather than
+                    moving to the header: the modal and the page have two different
+                    headers, and a button in both would be two copies to keep in
+                    step. */}
+                <div className="flex items-center justify-end">
+                    <TimerButton taskId={taskId} onChanged={refresh} />
+                </div>
+
+                <DescriptionSection
+                    description={task.description ?? ''}
+                    taskId={taskId}
+                    onSaved={apply}
+                />
+
+                <ChecklistSection
+                    taskId={taskId}
+                    items={task.checklistItems ?? []}
+                    onChanged={refresh}
+                />
+
+                {/* Below the work it describes now, not above it. 4F put this first
+                    on the measured grounds that logging an afternoon is the module's
+                    most frequent write; asked what someone opens a card *to do*, the
+                    answer was to read and understand it. So the reading leads and the
+                    form follows — still above the collapsed tail, still never
+                    seventh. Revert on evidence, not on argument. */}
                 <section className="rounded-md border border-gray-200 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-medium">{m.time.log}</h3>
-                        <TimerButton taskId={taskId} onChanged={refresh} />
                     </div>
                     <form onSubmit={saveWork} className="mt-2 space-y-2">
                         {/* One row on a desktop, stacked on a phone.
@@ -466,18 +488,6 @@ export function TaskCardBody({
                     </form>
                     <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
                 </section>
-
-                <DescriptionSection
-                    description={task.description ?? ''}
-                    taskId={taskId}
-                    onSaved={apply}
-                />
-
-                <ChecklistSection
-                    taskId={taskId}
-                    items={task.checklistItems ?? []}
-                    onChanged={refresh}
-                />
 
                 {/* Everything below here is the record rather than
                     the work: read on demand, and fetched on demand
