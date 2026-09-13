@@ -637,6 +637,30 @@ export const projectsMessages = {
         allBoards: "كل اللوحات",
         withCards: "التي بها بطاقات",
         emptyOnly: "اللوحات الفارغة",
+
+        background: {
+            title: "الخلفية",
+            hint: "يراها كل من يفتح هذه اللوحة.",
+            colors: "الألوان",
+            image: "صورة",
+            uploadImage: "رفع صورة",
+            replaceImage: "استبدال الصورة",
+            currentImage: "خلفية اللوحة الحالية",
+            fileHint: "JPEG أو PNG أو WebP، حتى 3.5 ميغابايت.",
+            remove: "إزالة الخلفية",
+            saved: "تم تحديث الخلفية",
+            tooLarge: "الصورة كبيرة جدًا. استخدم صورة أقل من 3.5 ميغابايت.",
+            notAnImage: "استخدم صورة JPEG أو PNG أو WebP.",
+            uploadFailed: "تعذّرت قراءة الصورة.",
+            colorNames: {
+                GRAY: "رمادي",
+                BLUE: "أزرق",
+                EMERALD: "أخضر",
+                AMBER: "كهرماني",
+                RED: "أحمر",
+                PURPLE: "بنفسجي",
+            },
+        },
     },
 
 } as const;

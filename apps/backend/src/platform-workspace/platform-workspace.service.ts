@@ -40,6 +40,12 @@ export interface PlatformWorkspaceSummary {
  * what lets the workspace work with no stores — and a platform admin already has
  * unrestricted reach over every workspace on the platform, so the membership
  * grants no access they did not have.
+ *
+ * The same trick now carries a second module: the platform's own accounting
+ * lives in this tenant's chart of accounts and vouchers, for the same reason
+ * (see PlatformAccountingService). The workspace is therefore no longer "the
+ * projects tenant" — it is the platform's own workspace, and each module that
+ * uses it decides for itself whether it is switched on.
  */
 @Injectable()
 export class PlatformWorkspaceService {
@@ -73,6 +79,19 @@ export class PlatformWorkspaceService {
             );
         }
 
+        return this.provisionFor(userId);
+    }
+
+    /**
+     * The workspace, provisioned and with this admin a member of it, with no
+     * feature check of its own.
+     *
+     * The workspace is no longer only the project module's: platform accounting
+     * keeps the platform's books against this same tenant, and the two switch on
+     * and off independently. So the gate belongs to each module — `resolveForAdmin`
+     * above keeps the projects one — and what they share is this.
+     */
+    async provisionFor(userId: string): Promise<PlatformWorkspaceSummary> {
         const existing = await this.find();
         const workspace = existing ?? (await this.provision(userId));
 

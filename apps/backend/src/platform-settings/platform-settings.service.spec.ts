@@ -27,7 +27,7 @@ describe('PlatformSettingsService', () => {
     });
 
     describe('getPlatformFeatures', () => {
-        it('returns assist features off, and manufacturing and platform projects on, by default', async () => {
+        it('returns assist features off, and manufacturing and the platform-team modules on, by default', async () => {
             const features = await service.getPlatformFeatures();
 
             expect(features).toEqual({
@@ -40,6 +40,7 @@ describe('PlatformSettingsService', () => {
                 externalImport: false,
                 projects: false,
                 platformProjects: true,
+                platformAccounting: true,
             });
         });
 
@@ -62,6 +63,7 @@ describe('PlatformSettingsService', () => {
                 externalImport: false,
                 projects: false,
                 platformProjects: true,
+                platformAccounting: true,
             });
         });
 

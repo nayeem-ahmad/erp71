@@ -637,6 +637,30 @@ export const projectsMessages = {
         allBoards: "Tous les tableaux",
         withCards: "Avec des cartes",
         emptyOnly: "Tableaux vides",
+
+        background: {
+            title: "Arrière-plan",
+            hint: "Tous ceux qui ouvrent ce tableau le voient.",
+            colors: "Couleurs",
+            image: "Image",
+            uploadImage: "Téléverser une image",
+            replaceImage: "Remplacer l'image",
+            currentImage: "Arrière-plan actuel du tableau",
+            fileHint: "JPEG, PNG ou WebP, jusqu'à 3,5 Mo.",
+            remove: "Retirer l'arrière-plan",
+            saved: "Arrière-plan mis à jour",
+            tooLarge: "Cette image est trop lourde. Utilisez-en une de moins de 3,5 Mo.",
+            notAnImage: "Utilisez une image JPEG, PNG ou WebP.",
+            uploadFailed: "L'image n'a pas pu être lue.",
+            colorNames: {
+                GRAY: "Gris",
+                BLUE: "Bleu",
+                EMERALD: "Vert",
+                AMBER: "Ambre",
+                RED: "Rouge",
+                PURPLE: "Violet",
+            },
+        },
     },
 
 } as const;

@@ -2,6 +2,7 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    BoardBackgroundColor,
     DashboardPreference,
     PasswordPolicy,
     PlatformFeatureKey,
@@ -140,33 +141,103 @@ function readRetryAfter(body: unknown): number | undefined {
     return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
+/**
+ * How a renewal attempt settled.
+ *
+ * Only `rejected` means the session is over. The distinction is the whole point
+ * of this type: every outcome used to collapse into `false`, so a rate limit, a
+ * 502 or a dropped connection ended the session exactly as a revoked token did
+ * — and took the still-valid refresh token with it, so the recovery was to type
+ * a password rather than to try again a second later.
+ */
+export type RenewalOutcome = 'renewed' | 'rejected' | 'unavailable';
+
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
-let renewalInFlight: Promise<boolean> | null = null;
+let renewalInFlight: Promise<RenewalOutcome> | null = null;
 
-async function performRenewal(): Promise<boolean> {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
+/**
+ * How long to leave `/auth/refresh` alone after an attempt that got no verdict.
+ *
+ * Without a pause here, one tab whose access token has lapsed asks again on
+ * *every* request it makes: the stored expiry stays in the past, so
+ * `renewIfNearExpiry` keeps firing and nothing records that the last answer was
+ * "not now". That tab alone can drain a shared address's refresh budget in
+ * seconds — and the neighbours it locks out are then signed out too, which is
+ * how a single stale tab in a shop empties the whole floor.
+ */
+const RENEWAL_BACKOFF_MS = 5_000;
 
+/** Ceiling on a server-suggested wait, so a large `Retry-After` cannot park the tab. */
+const MAX_RENEWAL_BACKOFF_MS = 60_000;
+
+/** When the next renewal may be attempted. Epoch ms; 0 means "now". */
+let renewalBlockedUntil = 0;
+
+/** Test-only: forget an in-progress renewal backoff between cases. */
+export function resetSessionRenewalForTests(): void {
+    renewalBlockedUntil = 0;
+    renewalInFlight = null;
+}
+
+/** How long to wait after a refusal that carried no verdict on the token. */
+async function renewalBackoffFrom(response: Response): Promise<number> {
     try {
-        const response = await fetch(`${API_BASE}/auth/refresh`, {
+        const seconds = readRetryAfter(await response.json());
+        if (seconds) return Math.min(seconds * 1000, MAX_RENEWAL_BACKOFF_MS);
+    } catch {
+        // No body, or not JSON. The fixed backoff below is the answer either way.
+    }
+    return RENEWAL_BACKOFF_MS;
+}
+
+async function performRenewal(): Promise<RenewalOutcome> {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return 'rejected';
+
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: refreshToken }),
         });
-        if (!response.ok) return false;
-
-        const body = await response.json();
-        const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
-        if (!tokens?.access_token) return false;
-
-        updateCredentials(tokens);
-        return true;
     } catch {
-        // Offline, or the API is unreachable. Indistinguishable from a dead
-        // refresh token from here, and the caller has already had a 401 from a
-        // server that was answering a moment ago, so it is treated the same.
-        return false;
+        // Offline, DNS, a connection dropped mid-flight — the request never
+        // reached a verdict, so it says nothing about whether the session is
+        // still good. Holding on to the credentials means the attempt after the
+        // network comes back renews, instead of asking for a password.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
     }
+
+    // The one answer that ends a session, and the only one: `refreshSession`
+    // throws `UnauthorizedException` for every way a token can be no good —
+    // unknown, revoked, expired, replayed — and nothing else on this route
+    // judges the token at all. A 403 here is the CSRF middleware refusing the
+    // Origin; a 404 is a route missing mid-deploy. Reading either as "your
+    // session ended" would empty every shop on the platform over a
+    // misconfiguration, which is the failure this whole triage exists to stop.
+    if (response.status === 401) return 'rejected';
+
+    if (!response.ok) {
+        // A 429, a 5xx, or one of the above. The token was never judged, only
+        // unheard.
+        const backoff = await renewalBackoffFrom(response);
+        renewalBlockedUntil = Date.now() + backoff;
+        return 'unavailable';
+    }
+
+    const body = await response.json().catch(() => null);
+    const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
+    if (!tokens?.access_token) {
+        // A 200 with nothing in it is a server fault, not a verdict on the token.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
+    }
+
+    renewalBlockedUntil = 0;
+    updateCredentials(tokens);
+    return 'renewed';
 }
 
 /**
@@ -235,16 +306,37 @@ function resolveTenantHeader(): string | null {
  * exchange — firing six of them would look exactly like a replay and get the
  * session revoked.
  *
- * Resolves `false` rather than throwing, so the caller decides what a failed
- * renewal means.
+ * Resolves rather than throwing, so the caller decides what each outcome means.
+ * While a backoff is running it answers `unavailable` without a round trip: the
+ * point of the pause is that nothing is sent, not that the answer is ignored.
  */
-export function renewSession(): Promise<boolean> {
+export function renewSession(): Promise<RenewalOutcome> {
+    if (Date.now() < renewalBlockedUntil) return Promise.resolve('unavailable');
+
     if (!renewalInFlight) {
         renewalInFlight = performRenewal().finally(() => {
             renewalInFlight = null;
         });
     }
     return renewalInFlight;
+}
+
+/**
+ * What a caller gets instead of being signed out when the renewal never reached
+ * a verdict. `503` rather than the `401` that prompted it: the session has not
+ * been judged dead, the server merely could not be asked.
+ */
+const RENEWAL_UNAVAILABLE_MESSAGE =
+    'Could not renew your sign-in — the server is unreachable or busy. Please try again in a moment.';
+
+function renewalUnavailableError(): ApiError {
+    const waitMs = renewalBlockedUntil - Date.now();
+    return new ApiError(
+        RENEWAL_UNAVAILABLE_MESSAGE,
+        503,
+        'SESSION_RENEWAL_UNAVAILABLE',
+        waitMs > 0 ? Math.ceil(waitMs / 1000) : undefined,
+    );
 }
 
 /**
@@ -286,10 +378,12 @@ export async function fetchBlobWithAuth(
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return fetchBlobWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return fetchBlobWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
@@ -369,10 +463,12 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return requestWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return requestWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
@@ -416,6 +512,20 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     // Backend wraps all responses in { data: T } — unwrap transparently
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
+
+/**
+ * What the HR screen knows about an employee's login. Everything here is
+ * derivable from the employee row, which is why there is no endpoint to read it
+ * — it comes back from whichever call last changed it.
+ */
+export type EmployeeLoginState = {
+    employee_id: string;
+    has_login: boolean;
+    portal_access: boolean;
+    /** The mobile number they type into the sign-in form. */
+    sign_in_identifier: string | null;
+    must_change_password: boolean;
+};
 
 export interface Paginated<T = any> {
     items: T[];
@@ -2950,6 +3060,110 @@ export const api = {
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/tenants/ledger${suffix}`);
     },
+    // ── The platform's own books (Admin › Accounting) ────────────────────────
+    // Separate from the `/accounting/*` calls below, which are a shop's ledger
+    // and send a workspace header. These send none: the admin console has no
+    // workspace, and the server resolves the platform's own books itself.
+    getPlatformAccountingOverview: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/overview${suffix}`);
+    },
+    syncPlatformAccounting: (data?: { from?: string; to?: string }) => fetchWithAuth('/platform/accounting/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data ?? {}),
+    }),
+    getPlatformExpenses: (params?: {
+        categoryId?: string;
+        from?: string;
+        to?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.categoryId) query.set('categoryId', params.categoryId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.search) query.set('search', params.search);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/expenses${suffix}`);
+    },
+    createPlatformExpense: (data: {
+        categoryId: string;
+        amount: number;
+        expenseDate: string;
+        paidFrom?: string;
+        vendor?: string;
+        description?: string;
+        reference?: string;
+    }) => fetchWithAuth('/platform/accounting/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    updatePlatformExpense: (id: string, data: Record<string, unknown>) => fetchWithAuth(`/platform/accounting/expenses/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    deletePlatformExpense: (id: string) => fetchWithAuth(`/platform/accounting/expenses/${id}`, { method: 'DELETE' }),
+    getPlatformExpenseCategories: () => fetchWithAuth('/platform/accounting/expense-categories'),
+    createPlatformExpenseCategory: (data: { name: string; accountName: string; description?: string }) =>
+        fetchWithAuth('/platform/accounting/expense-categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    updatePlatformExpenseCategory: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/platform/accounting/expense-categories/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    deletePlatformExpenseCategory: (id: string) =>
+        fetchWithAuth(`/platform/accounting/expense-categories/${id}`, { method: 'DELETE' }),
+    getPlatformAccountingAccounts: (params?: { type?: string; search?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.type) query.set('type', params.type);
+        if (params?.search) query.set('search', params.search);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/accounts${suffix}`);
+    },
+    getPlatformAccountingVouchers: (params?: { from?: string; to?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/vouchers${suffix}`);
+    },
+    getPlatformAccountingLedger: (accountId: string, params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/ledger/${accountId}${suffix}`);
+    },
+    getPlatformAccountingReport: (
+        report: 'profit-loss' | 'balance-sheet' | 'trial-balance',
+        // `from`/`to` for the P&L, which covers a period; `asOfDate` for the
+        // balance sheet and trial balance, which are a snapshot.
+        params?: { from?: string; to?: string; asOfDate?: string },
+    ) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/platform/accounting/reports/${report}${suffix}`);
+    },
     getAdminTenantReminders: (params?: { tenantId?: string }) => {
         const query = new URLSearchParams();
         if (params?.tenantId) query.set('tenantId', params.tenantId);
@@ -3184,6 +3398,30 @@ export const api = {
         }),
     sendAdminRefereeInvite: (id: string) =>
         fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
+    /**
+     * Businesses an admin can credit to a partner. Already-credited tenants come
+     * back too, carrying `attached_to` — the picker shows who holds them rather
+     * than pretending they do not exist.
+     */
+    getAdminAttachableTenants: (params?: { search?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/referrals/attachable-tenants${suffix}`);
+    },
+    /** Credits an existing business to a partner. Omit the rates to use the partner's current terms. */
+    attachAdminRefereeTenant: (id: string, data: {
+        tenant_id: string;
+        discount_pct?: number;
+        commission_pct?: number;
+    }) => fetchWithAuth(`/admin/referrals/referees/${id}/signups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    /** Undoes an attribution. Refused once the commission has left PENDING. */
+    detachAdminReferralSignup: (signupId: string) =>
+        fetchWithAuth(`/admin/referrals/signups/${signupId}`, { method: 'DELETE' }),
     /** Paged: returns `{ items, total, limit, offset, has_more }`, not a bare array. */
     getAdminReferralCommissions: (params?: {
         referee_id?: string;
@@ -3488,6 +3726,15 @@ export const api = {
         fetchWithAuth(`/employees/${id}/portal-access`, { method: 'POST' }),
     revokeEmployeePortalAccess: (id: string) =>
         fetchWithAuth(`/employees/${id}/portal-access/revoke`, { method: 'PATCH' }),
+
+    // Employee login. `password` comes back on create and reset only — it is
+    // stored as a hash, so the response is the one place it can ever be read.
+    createEmployeeLogin: (id: string): Promise<EmployeeLoginState & { password: string }> =>
+        fetchWithAuth(`/employees/${id}/login`, { method: 'POST' }),
+    resetEmployeeLoginPassword: (id: string): Promise<EmployeeLoginState & { password: string }> =>
+        fetchWithAuth(`/employees/${id}/login/reset-password`, { method: 'POST' }),
+    revokeEmployeeLogin: (id: string): Promise<EmployeeLoginState> =>
+        fetchWithAuth(`/employees/${id}/login`, { method: 'DELETE' }),
 
     // Holidays & work schedules (HRIS Phase 2)
     getHolidays: (year?: number) =>
@@ -4482,13 +4729,39 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    updateBoard: (id: string, data: { name?: string; description?: string }) =>
+    updateBoard: (
+        id: string,
+        data: {
+            name?: string;
+            description?: string;
+            /** A key from BOARD_BACKGROUND_COLORS, or null for the plain board. */
+            backgroundColor?: BoardBackgroundColor | null;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`, { method: 'DELETE' }),
+    /**
+     * Uploads the picture and hangs it on the board in one call — unlike the
+     * storefront's upload-then-PATCH, because a board background has no form to
+     * save and an upload that landed nowhere would be a file nobody asked for.
+     * Returns the updated board.
+     */
+    setBoardBackgroundImage: (
+        id: string,
+        data: { imageBase64: string; mimeType?: string; fileName?: string },
+    ) =>
+        fetchWithAuth(`/projects/boards/${id}/background/image`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Back to the plain board, whichever kind of background it was wearing. */
+    clearBoardBackground: (id: string) =>
+        fetchWithAuth(`/projects/boards/${id}/background`, { method: 'DELETE' }),
     addBoardTasks: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/projects/boards/${id}/tasks`, {
             method: 'POST',

@@ -21,11 +21,15 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import BoardSwatch from '@/components/projects/BoardSwatch';
 
 interface BoardSummary {
     id: string;
     name: string;
     description?: string | null;
+    /** A palette key; see `board-background.ts`. Null on a plain board. */
+    background_color?: string | null;
+    background_image_url?: string | null;
     card_count: number;
 }
 
@@ -137,12 +141,18 @@ export default function BoardsPage() {
                 header: m.name,
                 accessorKey: 'name',
                 cell: ({ row }: { row: { original: BoardSummary } }) => (
-                    <Link
-                        href={routes.projects.boardDetail(row.original.id)}
-                        className="font-medium text-blue-600 hover:underline"
-                    >
-                        {row.original.name}
-                    </Link>
+                    // The swatch is the point of setting a background: a board
+                    // is recognised by its colour, and a list that shows only
+                    // names is where that recognition would have to be re-learnt.
+                    <span className="flex items-center gap-2">
+                        <BoardSwatch board={row.original} />
+                        <Link
+                            href={routes.projects.boardDetail(row.original.id)}
+                            className="font-medium text-blue-600 hover:underline"
+                        >
+                            {row.original.name}
+                        </Link>
+                    </span>
                 ),
             },
             {

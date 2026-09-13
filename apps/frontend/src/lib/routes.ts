@@ -277,6 +277,15 @@ export const routes = {
         tenantPayments: '/admin/tenants/payments',
         tenantLedger: '/admin/tenants/ledger',
         users: '/admin/users',
+        // The platform's own books. Deliberately `/admin/accounting`, not a
+        // second entrance to `/accounting` — that one is a shop's ledger and
+        // needs a workspace, a plan and a store; this one needs none of them.
+        accounting: {
+            root: '/admin/accounting',
+            expenses: '/admin/accounting/expenses',
+            ledger: '/admin/accounting/ledger',
+            reports: '/admin/accounting/reports',
+        },
         referrals: '/admin/referrals',
         urlShortener: '/admin/url-shortener',
         socialMedia: '/admin/social-media',

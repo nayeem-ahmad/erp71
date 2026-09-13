@@ -299,6 +299,14 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.tenant-management.tenants': { id: 'admin.tenant-management.tenants', kind: 'link', icon: 'Building2', labelKey: 'sidebar.items.tenants', href: '/admin/tenants' },
   'admin.tenant-management.ledger': { id: 'admin.tenant-management.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.tenantLedger', href: '/admin/tenants/ledger' },
   'admin.tenant-management.reminders': { id: 'admin.tenant-management.reminders', kind: 'link', icon: 'BellRing', labelKey: 'sidebar.items.tenantReminders', href: '/admin/tenants/reminders' },
+  // The platform's own books, in the admin console. Hidden unless the
+  // `platformAccounting` switch is on — like `projects` under platform-admin,
+  // this is the operator's own tooling rather than anything a shop is sold.
+  'admin.platform-accounting': { id: 'admin.platform-accounting', kind: 'subgroup', icon: 'Calculator', labelKey: 'sidebar.sections.platformAccounting' },
+  'admin.platform-accounting.overview': { id: 'admin.platform-accounting.overview', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.platformAccountingOverview', href: '/admin/accounting', exact: true },
+  'admin.platform-accounting.expenses': { id: 'admin.platform-accounting.expenses', kind: 'link', icon: 'Receipt', labelKey: 'sidebar.items.platformAccountingExpenses', href: '/admin/accounting/expenses' },
+  'admin.platform-accounting.ledger': { id: 'admin.platform-accounting.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.platformAccountingLedger', href: '/admin/accounting/ledger' },
+  'admin.platform-accounting.reports': { id: 'admin.platform-accounting.reports', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.platformAccountingReports', href: '/admin/accounting/reports' },
   'admin.inbox': { id: 'admin.inbox', kind: 'subgroup', icon: 'Inbox', labelKey: 'sidebar.sections.adminInbox' },
   'admin.growth': { id: 'admin.growth', kind: 'subgroup', icon: 'Megaphone', labelKey: 'sidebar.sections.adminGrowth' },
   'admin.plans-billing': { id: 'admin.plans-billing', kind: 'subgroup', icon: 'BadgePercent', labelKey: 'sidebar.sections.adminPlansBilling' },
@@ -573,28 +581,36 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
   layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
 
-  layoutNode('admin.inbox', 'admin', 2),
+  // Directly under Tenant Management: the books are read alongside the tenant
+  // ledger they are projected from, not filed away under Platform.
+  layoutNode('admin.platform-accounting', 'admin', 2),
+  layoutNode('admin.platform-accounting.overview', 'admin.platform-accounting', 0),
+  layoutNode('admin.platform-accounting.expenses', 'admin.platform-accounting', 1),
+  layoutNode('admin.platform-accounting.ledger', 'admin.platform-accounting', 2),
+  layoutNode('admin.platform-accounting.reports', 'admin.platform-accounting', 3),
+
+  layoutNode('admin.inbox', 'admin', 3),
   layoutNode('admin.support', 'admin.inbox', 0),
   layoutNode('admin.feedback', 'admin.inbox', 1),
 
-  layoutNode('admin.growth', 'admin', 3),
+  layoutNode('admin.growth', 'admin', 4),
   layoutNode('admin.referrals', 'admin.growth', 0),
   layoutNode('admin.blog', 'admin.growth', 1),
   layoutNode('admin.social-media', 'admin.growth', 2),
   layoutNode('admin.url-shortener', 'admin.growth', 3),
 
-  layoutNode('admin.plans-billing', 'admin', 4),
+  layoutNode('admin.plans-billing', 'admin', 5),
   layoutNode('admin.platform-settings.plans', 'admin.plans-billing', 0),
   layoutNode('admin.platform-settings.addons', 'admin.plans-billing', 1),
   layoutNode('admin.platform-settings.payments', 'admin.plans-billing', 2),
 
-  layoutNode('admin.channels', 'admin', 5),
+  layoutNode('admin.channels', 'admin', 6),
   layoutNode('admin.platform-settings.sms', 'admin.channels', 0),
   layoutNode('admin.platform-settings.email', 'admin.channels', 1),
   layoutNode('admin.platform-settings.whatsapp', 'admin.channels', 2),
   layoutNode('admin.platform-settings.buffer', 'admin.channels', 3),
 
-  layoutNode('admin.platform', 'admin', 6),
+  layoutNode('admin.platform', 'admin', 7),
   layoutNode('admin.system-health', 'admin.platform', 0),
   layoutNode('admin.audit-logs', 'admin.platform', 1),
   layoutNode('admin.status', 'admin.platform', 2),
