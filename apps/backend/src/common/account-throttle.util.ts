@@ -1,5 +1,6 @@
 import { ExecutionContext, SetMetadata, applyDecorators } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import * as crypto from 'crypto';
 import { Throttle, type ThrottlerOptions } from '@nestjs/throttler';
 import {
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -29,6 +30,12 @@ import {
  *    accounts, raised to a number a shared NAT can live inside.
  *
  * Both dimensions must pass, so neither replaces the other.
+ *
+ * `/auth/refresh` is on the same footing and matters most of all, because a
+ * refusal there is not shown to anybody: the frontend cannot tell a rate-limited
+ * renewal from a revoked one, so a shared-NAT 429 used to end the session and
+ * drop the user at `/login`. It is reported as "it keeps signing me out", never
+ * as a 429. Its key is the refresh token itself — see {@link accountFromBody}.
  */
 export const ACCOUNT_THROTTLER = 'account';
 
@@ -60,6 +67,26 @@ export function ThrottleAccount(options: { ttl: number; limit: number }) {
         SetMetadata(ACCOUNT_THROTTLED, true),
         Throttle({ [ACCOUNT_THROTTLER]: options }),
     );
+}
+
+/**
+ * How many hex characters of a hashed key to keep.
+ *
+ * 128 bits — far past any collision worth worrying about, and it keeps the
+ * in-memory bucket store's keys short when every signed-in tab has one.
+ */
+const HASHED_KEY_LENGTH = 32;
+
+/**
+ * Hash a value that is itself a credential before it becomes a bucket key.
+ *
+ * A refresh token names its account perfectly, which is exactly what a bucket
+ * key wants — but keys are held in memory for the window's duration and reach
+ * logs and error paths, and a bearer credential should not sit in either. The
+ * hash keys just as precisely and is worthless if it leaks.
+ */
+function hashCredential(value: string): string {
+    return crypto.createHash('sha256').update(value).digest('hex').slice(0, HASHED_KEY_LENGTH);
 }
 
 /** A trimmed string, or `null` for anything that cannot be an identifier. */
@@ -97,6 +124,16 @@ export function accountFromBody(body: unknown): string | null {
     // `/auth/2fa/verify` names the account outright — no resolution needed.
     const userId = readIdentifier(posted.userId);
     if (userId) return `user:${userId.toLowerCase()}`;
+
+    // `/auth/refresh` posts no identifier at all — the token *is* the claim, so
+    // it is what the bucket keys on (hashed; see `hashCredential`).
+    //
+    // Rotation means a healthy client gets a fresh bucket on each exchange,
+    // which is the point: what needs bounding is not the once-an-hour renewal
+    // but a client stuck re-posting one token it can no longer trade in, and
+    // that is precisely the case rotation does *not* reset.
+    const refreshToken = readIdentifier(posted.refresh_token);
+    if (refreshToken) return `refresh:${hashCredential(refreshToken)}`;
 
     const identifier = readIdentifier(posted.identifier) ?? readIdentifier(posted.email);
     if (!identifier) return null;
