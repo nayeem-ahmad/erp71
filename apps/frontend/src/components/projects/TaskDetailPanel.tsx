@@ -79,12 +79,22 @@ interface Task {
     // is two columns and anything that reads one has to read the other.
     assigneeEmployee?: { id: string; name?: string | null } | null;
     userStory?: { id: string; reference: number; title: string } | null;
+    /** Both come from `TASK_INCLUDE` and were previously discarded here. */
+    sprint?: { id: string; name: string; status?: string } | null;
+    milestone?: { id: string; name: string } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
     /** From `TASK_INCLUDE`; lets the collapsed feed say how much it holds. */
     _count?: { comments?: number; subtasks?: number };
+}
+
+/** A sprint the task can be moved into. Tenant-wide — see the fetch below. */
+interface SprintOption {
+    id: string;
+    name: string;
+    status?: string;
 }
 
 /** A row of the project's backlog — the options for the story picker. */
@@ -194,17 +204,20 @@ export function TaskCardBody({
     allLabels,
     members,
     stories,
+    sprints,
     localeInfo,
     apply,
     refresh,
     markChanged,
     changeStatus,
     changePriority,
+    changeSprint,
     saveWork,
     deleteEntry,
     onLabelsWanted,
     onMembersWanted,
     onStoriesWanted,
+    onSprintsWanted,
 }: {
     task: Task;
     taskId: string;
@@ -218,17 +231,20 @@ export function TaskCardBody({
     allLabels: ProjectLabel[];
     members: ProjectMemberRow[];
     stories: StoryOption[];
+    sprints: SprintOption[];
     localeInfo: ReturnType<typeof useI18n>['localeInfo'];
     apply: (updated: unknown) => Promise<boolean>;
     refresh: () => Promise<void>;
     markChanged: () => void;
     changeStatus: (statusId: string) => Promise<void>;
     changePriority: (priority: string) => Promise<void>;
+    changeSprint: (sprintId: string) => Promise<void>;
     saveWork: (event: React.FormEvent) => Promise<void>;
     deleteEntry: (entryId: string) => Promise<void>;
     onLabelsWanted: () => void;
     onMembersWanted: () => void;
     onStoriesWanted: () => void;
+    onSprintsWanted: () => void;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -307,6 +323,31 @@ export function TaskCardBody({
                             disabled={busy}
                             onPick={changePriority}
                         />
+
+                        {/* Sprint was already on every task read and shown
+                            nowhere. Clearing it returns the task to the
+                            backlog — the module's own words for it. */}
+                        <ChipPopover
+                            label={m.fields.sprint}
+                            value={task.sprint?.id ?? ''}
+                            display={task.sprint?.name ?? m.sprint.backlog}
+                            tone={task.sprint ? 'default' : 'muted'}
+                            options={sprints.map((sprint) => ({
+                                value: sprint.id,
+                                label: sprint.name,
+                                subtitle:
+                                    sprint.status === 'ACTIVE'
+                                        ? m.sprint.active
+                                        : sprint.status === 'COMPLETED'
+                                          ? m.sprint.completed
+                                          : m.sprint.planned,
+                            }))}
+                            disabled={busy}
+                            onOpen={onSprintsWanted}
+                            onPick={changeSprint}
+                            emptyLabel={m.sprint.backlog}
+                            filterable
+                        />
                     </div>
 
                     <EstimateField task={task} taskId={taskId} onSaved={apply} />
@@ -326,6 +367,14 @@ export function TaskCardBody({
                             highlight
                         />
                     </div>
+
+                    {/* Read-only, unlike the sprint chip above: milestones have
+                        create/update/delete endpoints and no list, so there is
+                        nothing to populate a picker from. Shown because the task
+                        read already carries it and hiding it served nobody. */}
+                    {task.milestone && (
+                        <Fact label={m.task.milestone} value={task.milestone.name} />
+                    )}
                 </section>
 
                 <DatesSection task={task} taskId={taskId} onSaved={apply} />
@@ -688,6 +737,32 @@ export function useTaskCard(
     }, [projectId, storiesWanted]);
 
     /**
+     * Every sprint in the tenant, fetched when the picker is first opened.
+     *
+     * **No `projectId`, on purpose.** `Sprint` has no `project_id` — sprints are
+     * tenant-level time-boxes that span projects — and `GET /sprints?projectId=`
+     * filters by *participation*, i.e. sprints that already hold a task from
+     * that project. Passing it would hide exactly the newly-planned sprint
+     * somebody opens this picker to move the task into.
+     */
+    const [sprints, setSprints] = useState<SprintOption[]>([]);
+    const [sprintsWanted, setSprintsWanted] = useState(false);
+    useEffect(() => {
+        if (!sprintsWanted) return;
+        let live = true;
+        api.getSprints()
+            .then((rows: unknown) => {
+                if (live) setSprints((Array.isArray(rows) ? rows : []) as SprintOption[]);
+            })
+            .catch(() => {
+                if (live) setSprints([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [sprintsWanted]);
+
+    /**
      * The surface behind the modal is reloaded once, when the card is put down.
      * `onChanged` used to fire on every field save, which on the board meant
      * re-fetching every column because somebody fixed a typo in a title.
@@ -818,6 +893,19 @@ export function useTaskCard(
         }
     };
 
+    const changeSprint = async (sprintId: string) => {
+        setBusy(true);
+        try {
+            // '' returns the task to the backlog, which is what the domain calls
+            // clearing a sprint. The DTO's ValidateIf lets the empty string past.
+            await apply(await api.updateProjectTask(taskId, { sprintId }));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const changeStatus = async (statusId: string) => {
         setBusy(true);
         try {
@@ -850,12 +938,13 @@ export function useTaskCard(
     return {
         task, statuses, history, busy, timeForm, setTimeForm,
         hours, canSaveWork, hoursLeftAfter,
-        allLabels, members, stories, localeInfo,
+        allLabels, members, stories, sprints, localeInfo,
         apply, refresh, markChanged, close,
-        changeStatus, changePriority, saveWork, deleteEntry,
+        changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
         onMembersWanted: () => setMembersWanted(true),
         onStoriesWanted: () => setStoriesWanted(true),
+        onSprintsWanted: () => setSprintsWanted(true),
     };
 }
 
@@ -895,6 +984,9 @@ export default function TaskDetailPanel({
         onLabelsWanted,
         onMembersWanted,
         onStoriesWanted,
+        onSprintsWanted,
+        sprints,
+        changeSprint,
     } = card;
     return (
         <ModalShell onBackdropClick={close} size="2xl">
@@ -949,6 +1041,9 @@ export default function TaskDetailPanel({
                         onLabelsWanted={onLabelsWanted}
                         onMembersWanted={onMembersWanted}
                         onStoriesWanted={onStoriesWanted}
+                        onSprintsWanted={onSprintsWanted}
+                        sprints={sprints}
+                        changeSprint={changeSprint}
                     />
                 )}
             </div>
@@ -2193,6 +2288,20 @@ function ChecklistSection({
                 </Button>
             </form>
         </section>
+    );
+}
+
+/**
+ * A labelled fact that is not editable here. Deliberately a row rather than a
+ * `Metric` tile: a tile reads as a figure worth comparing, and a milestone name
+ * is neither a figure nor comparable.
+ */
+function Fact({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="text-xs text-gray-500">{label}</span>
+            <span className="min-w-0 truncate font-medium">{value}</span>
+        </div>
     );
 }
 

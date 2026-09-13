@@ -92,6 +92,9 @@ export default function TaskDetailPage() {
                     onLabelsWanted={card.onLabelsWanted}
                     onMembersWanted={card.onMembersWanted}
                     onStoriesWanted={card.onStoriesWanted}
+                    onSprintsWanted={card.onSprintsWanted}
+                    sprints={card.sprints}
+                    changeSprint={card.changeSprint}
                 />
             )}
         </PageShell>

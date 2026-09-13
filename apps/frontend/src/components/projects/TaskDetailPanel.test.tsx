@@ -26,6 +26,7 @@ const addTaskAttachment = jest.fn();
 const deleteTaskAttachment = jest.fn();
 const getProject = jest.fn();
 const getProjectStories = jest.fn();
+const getSprints = jest.fn();
 const logProjectTime = jest.fn();
 
 jest.mock('@/lib/api', () => ({
@@ -54,6 +55,7 @@ jest.mock('@/lib/api', () => ({
         deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
         getProject: (...args: unknown[]) => getProject(...args),
         getProjectStories: (...args: unknown[]) => getProjectStories(...args),
+        getSprints: (...args: unknown[]) => getSprints(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
         deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
@@ -100,6 +102,7 @@ beforeEach(() => {
         deleteTaskAttachment,
         getProject,
         getProjectStories,
+        getSprints,
         logProjectTime,
     ]) {
         mock.mockReset();
@@ -112,6 +115,7 @@ beforeEach(() => {
     getTaskWatchers.mockResolvedValue([]);
     getProjectColumns.mockResolvedValue([]);
     getProjectStories.mockResolvedValue([]);
+    getSprints.mockResolvedValue([]);
     getTaskAttachments.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
@@ -1349,6 +1353,118 @@ describe('TaskDetailPanel board columns', () => {
         await waitFor(() => expect(getProjectColumns).toHaveBeenCalledWith('project-1'));
         const { api } = jest.requireMock('@/lib/api');
         expect(api.getProjectTaskStatuses).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel sprint', () => {
+    const sprints = [
+        { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        { id: 'sp2', name: 'Sprint 8', status: 'PLANNED' },
+    ];
+
+    const chip = async () => screen.findByRole('button', { name: 'Sprint' });
+
+    it('reads Backlog when the task is in no sprint', async () => {
+        panel();
+        expect(await chip()).toHaveTextContent('Backlog');
+    });
+
+    it('names the sprint the task is in, before any list is fetched', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        });
+        panel();
+
+        expect(await chip()).toHaveTextContent('Sprint 7');
+        // The chip is correct from the task alone; the list is only needed to
+        // offer a different sprint.
+        expect(getSprints).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The subtle one. `Sprint` has no `project_id` — sprints are tenant-level
+     * time-boxes — and `GET /sprints?projectId=` filters by *participation*,
+     * i.e. sprints that already hold a task from that project. Passing the
+     * project would hide exactly the newly-planned sprint somebody opens this
+     * picker to move the task into.
+     */
+    it('asks for every sprint in the tenant, not the project’s', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+
+        await waitFor(() => expect(getSprints).toHaveBeenCalled());
+        expect(getSprints).toHaveBeenCalledWith();
+    });
+
+    it('offers the sprints with their state as the subtitle', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 7/ })).toHaveTextContent('Active');
+        expect(screen.getByRole('option', { name: /Sprint 8/ })).toHaveTextContent('Planned');
+    });
+
+    it('moves the task into a sprint', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: /Sprint 8/ }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { sprintId: 'sp2' }),
+        );
+    });
+
+    // '' is how the DTO expresses "no sprint" — and returning a task to the
+    // backlog is the module's own name for that.
+    it('returns the task to the backlog with an empty string', async () => {
+        getSprints.mockResolvedValue(sprints);
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        });
+        panel();
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: 'Backlog' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { sprintId: '' }),
+        );
+    });
+});
+
+describe('TaskDetailPanel milestone', () => {
+    // Read-only on purpose: milestones have create/update/delete endpoints and
+    // no list, so there is nothing to populate a picker from.
+    it('shows the milestone the task is under', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            milestone: { id: 'ms1', name: 'Payments live' },
+        });
+        panel();
+
+        expect(await screen.findByText('Payments live')).toBeInTheDocument();
+    });
+
+    it('says nothing at all when the task has no milestone', async () => {
+        panel();
+        await screen.findByText('Pull the cable');
+
+        expect(screen.queryByText('Milestone')).not.toBeInTheDocument();
+    });
+
+    it('is not offered as something to change', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            milestone: { id: 'ms1', name: 'Payments live' },
+        });
+        panel();
+        await screen.findByText('Payments live');
+
+        expect(screen.queryByRole('button', { name: 'Milestone' })).not.toBeInTheDocument();
     });
 });
 
