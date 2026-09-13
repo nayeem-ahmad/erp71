@@ -3,6 +3,8 @@
 **Status:** design, awaiting approval. No code written.
 **Written:** 2026-09-14
 **Predecessor:** `docs/projects/project-management-phase-4.md` (shipped 2026-09-12)
+**Baseline:** `dev` as of the 2026-09-14 merge of 35 upstream commits, which
+added the user-story axis, the floating time tracker and board backgrounds.
 **Mockup:** https://claude.ai/code/artifact/ffa6b3e8-d0ea-41f5-8326-db7303be2013
 
 The ask: *"Want to improve the UI/UX of task entry/edit. Take inspiration from
@@ -102,9 +104,15 @@ the fetch is in flight.
 
 This is the largest felt change and the reason to do the work.
 
-Status, assignee, due date, priority and labels are today five stacked controls
-in the sidebar — four `<select>`s and a toggle grid. None can be typed into. A
-20-person roster is a 20-option dropdown.
+Status, assignee, **user story**, due date, priority and labels are today six
+stacked controls in the sidebar — five `<select>`s and a toggle grid. None can
+be typed into. A 20-person roster is a 20-option dropdown, and a groomed backlog
+is a dropdown of every story in the project.
+
+`UserStoryField` landed upstream on 2026-09-13 (`ProjectUserStory`, filed beside
+`milestone_id` rather than reusing `parent_task_id`). It is the sixth field and
+the newest argument for this change: the sidebar grew again, in the same idiom,
+and will keep growing.
 
 They become **one wrapping row of chips directly under the title**, each opening
 a popover on click:
@@ -113,6 +121,7 @@ a popover on click:
 |---|---|---|
 | Status | the project's columns, type-to-filter | on select (4D) |
 | Assignee | project roster, type-to-filter, avatar + name | on select |
+| Story | project backlog, type-to-filter, `US-3 · title` | on select |
 | Due | date input + `Today` / `Tomorrow` / `Next week` | on select |
 | Priority | the four values | on select |
 | Labels | catalogue as toggles, `onFirstOpen` fetch | on toggle |
@@ -148,6 +157,16 @@ understand the work."** So:
   below them — still above the collapsed tail, still never seventh.
 - The timer button moves into the header action row, where it is reachable
   without scrolling at all.
+
+**Open question the merge of 2026-09-14 raised.** A floating `TimeTracker` panel
+now mounts from `(app)/layout.tsx` and follows a running clock across every
+page, while `TimerButton` remains on the card — so a card with a running timer
+shows the clock twice. The house rule in `docs/ui-design-guidelines.md` §2.8
+permits the panel (it duplicates an inline entry point rather than replacing
+one), but the card's own button is now the *start* affordance more than the
+*stop* one. Proposal: the card keeps Start and drops its Stop to the panel,
+which is where a running clock already lives. **Flagged rather than decided —
+it belongs to whoever owns the tracker.**
 
 Net effect versus 4F: logging costs one short scroll on a long card and zero on
 a short one; reading costs nothing. The regression risk is real and named here
@@ -187,13 +206,14 @@ so it can be reverted on evidence rather than argued about.
 
 ## Costs, honestly
 
-- **`TaskDetailPanel.tsx` is 1,889 lines under a 1,478-line, 104-test suite.**
+- **`TaskDetailPanel.tsx` is 1,997 lines under a 1,478-line, 104-test suite.**
   The extraction is the risky part, not the chips. The suite mounts the default
   export with a mocked `api` and its `describe` blocks are per-section, so the
   tests survive **if and only if** accessible names are preserved — every
   section keeps its current label and every control its current `aria-label`.
   Do the extraction as its own commit with no behaviour change, prove the 104
-  tests green, then land the chips.
+  tests green, then land the chips. Note that `UserStoryField` arrived with no
+  test of its own, so the story chip needs one written rather than adapted.
 - **Nine i18n catalogues.** `catalog.test.ts` collects full key paths from `en`
   and asserts deep equality for every locale, so a missing key fails the build
   rather than degrading. New strings: the expand control, the due-date presets,
