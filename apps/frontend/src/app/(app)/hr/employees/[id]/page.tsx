@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { User, Phone, Mail, Calendar, Briefcase, LinkIcon, Unlink, Save } from 'lucide-react';
-import { api } from '@/lib/api';
+import { User, Phone, Mail, Calendar, Briefcase, KeyRound, LinkIcon, Unlink, Save } from 'lucide-react';
+import { api, type EmployeeLoginState } from '@/lib/api';
+import { displayEmail } from '@erp71/shared-types';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, StatusBadge, statusToneFor } from '@/components/ui';
+import { PageShell, Alert, Button, Input, StatusBadge, statusToneFor } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
+import LoginCredentialsModal, { type LoginCredentials } from './LoginCredentialsModal';
 
 interface Department { id: string; name: string; }
 interface Designation { id: string; name: string; }
@@ -33,7 +35,14 @@ interface Employee {
     updated_at: string;
     department?: Department | null;
     designation?: Designation | null;
-    user?: { id: string; email: string; name?: string | null } | null;
+    user?: {
+        id: string;
+        email: string;
+        name?: string | null;
+        /** What they sign in with. Null for an account created before mobile sign-in. */
+        mobile?: string | null;
+        must_change_password?: boolean;
+    } | null;
 }
 
 export default function EmployeeDetailPage() {
@@ -52,6 +61,10 @@ export default function EmployeeDetailPage() {
     const [, setTenantUsers] = useState<any[]>([]);
     const [linkUserId, setLinkUserId] = useState('');
     const [linkLoading, setLinkLoading] = useState(false);
+    const [loginLoading, setLoginLoading] = useState(false);
+    const [showLinkExisting, setShowLinkExisting] = useState(false);
+    const [credentials, setCredentials] = useState<(LoginCredentials & { mode: 'created' | 'reset' }) | null>(null);
+    const [loginState, setLoginState] = useState<EmployeeLoginState | null>(null);
 
     const [form, setForm] = useState({
         name: '', phone: '', email: '', nid: '',
@@ -100,17 +113,39 @@ export default function EmployeeDetailPage() {
         }
     }
 
+    // `loginState` is whatever the last login call reported; before any of them
+    // has run, the employee row is the only source. Reading the two in that order
+    // means the panel updates in place after a create, reset or revoke rather
+    // than showing stale values until the page is loaded again — in particular
+    // `hasLogin`, without which the panel would still offer to create the login
+    // that was just created.
+    const hasLogin = loginState?.has_login ?? !!employee?.user;
+    const signInIdentifier = loginState?.sign_in_identifier ?? employee?.user?.mobile ?? null;
+    const mustChangePassword = loginState?.must_change_password ?? employee?.user?.must_change_password ?? false;
+    const portalAccess = loginState?.portal_access ?? employee?.portal_access ?? false;
+
     const handleTogglePortalAccess = async () => {
         if (!employee) return;
         setPortalLoading(true);
         setError('');
         try {
-            const updated = employee.portal_access
-                ? await api.revokeEmployeePortalAccess(id)
+            // Turning access off goes through the login revoke, because that is
+            // the one that also ends the session — without it the employee keeps
+            // a working token until it expires, and `EmployeeGuard` would refuse
+            // them while the rest of the API still accepted it. Safe for an
+            // employee linked to a staff account too: the server only signs out
+            // an account whose access *was* the portal, so revoking an owner's
+            // payslip screen does not sign them out of the ERP.
+            const updated = portalAccess
+                ? await api.revokeEmployeeLogin(id)
                 : await api.grantEmployeePortalAccess(id);
             // The endpoint returns only the access fields, so merge rather than
             // replace — replacing would blank the rest of the profile on screen.
             setEmployee((prev) => (prev ? { ...prev, portal_access: updated.portal_access } : prev));
+            // `portalAccess` prefers `loginState` when one is present, so this
+            // has to move that too or the badge keeps reporting whatever the
+            // last login call said.
+            setLoginState((prev) => (prev ? { ...prev, portal_access: updated.portal_access } : prev));
             setSuccess(updated.portal_access
                 ? t.employeePortal.access.enabled
                 : t.employeePortal.access.disabled);
@@ -170,6 +205,51 @@ export default function EmployeeDetailPage() {
             setError(err.message || t.employees.detail.linkFailed);
         } finally {
             setLinkLoading(false);
+        }
+    };
+
+    /**
+     * Provision a login for an employee who has no ERP account.
+     *
+     * The response carries the generated password and is the only time it can be
+     * read, so it goes straight into the modal and is never put in component
+     * state that outlives it — `credentials` is cleared on dismiss.
+     */
+    const handleCreateLogin = async () => {
+        setLoginLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+            const result = await api.createEmployeeLogin(id);
+            setLoginState(result);
+            setCredentials({
+                mode: 'created',
+                sign_in_identifier: result.sign_in_identifier,
+                password: result.password,
+            });
+        } catch (err: any) {
+            setError(err?.message || t.employeePortal.login.createFailed);
+        } finally {
+            setLoginLoading(false);
+        }
+    };
+
+    const handleResetLoginPassword = async () => {
+        setLoginLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+            const result = await api.resetEmployeeLoginPassword(id);
+            setLoginState(result);
+            setCredentials({
+                mode: 'reset',
+                sign_in_identifier: result.sign_in_identifier,
+                password: result.password,
+            });
+        } catch (err: any) {
+            setError(err?.message || t.employeePortal.login.resetFailed);
+        } finally {
+            setLoginLoading(false);
         }
     };
 
@@ -342,75 +422,129 @@ export default function EmployeeDetailPage() {
                     </div>
                 </form>
 
-                {/* System access / User link */}
+                {/*
+                  * System access.
+                  *
+                  * Three states, and the order matters: an employee with no
+                  * account at all gets one button, because minting a login is
+                  * the answer for nearly everyone. Linking an existing user is
+                  * the exception — someone who already works here in another
+                  * capacity — so it is behind a disclosure rather than sitting
+                  * next to the common case as an equal choice.
+                  */}
                 <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm space-y-4">
                     <h2 className="text-sm font-semibold text-gray-900">{t.employees.detail.systemAccess}</h2>
 
-                    {employee.user ? (
-                        <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
-                            <div>
-                                <p className="text-sm font-semibold text-emerald-800">{employee.user.email}</p>
-                                {employee.user.name && <p className="text-xs text-emerald-600 mt-0.5">{employee.user.name}</p>}
+                    {hasLogin ? (
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0 space-y-0.5">
+                                    <p className="text-sm font-semibold text-gray-900">
+                                        {signInIdentifier ?? displayEmail(employee.user?.email) ?? employee.phone}
+                                    </p>
+                                    <p className="text-xs text-gray-500">{t.employeePortal.login.signsInWith}</p>
+                                </div>
+                                <StatusBadge tone={portalAccess ? 'success' : 'neutral'}>
+                                    {portalAccess ? t.employeePortal.access.on : t.employeePortal.access.off}
+                                </StatusBadge>
                             </div>
-                            <button
-                                onClick={handleUnlinkUser}
-                                disabled={linkLoading}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 border border-red-200 transition-all disabled:opacity-50"
-                            >
-                                <Unlink className="w-4 h-4" />
-                                Unlink
-                            </button>
+
+                            {mustChangePassword && (
+                                <Alert tone="info">{t.employeePortal.login.pendingPasswordChange}</Alert>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    type="button"
+                                    variant={portalAccess ? 'danger' : 'primary'}
+                                    loading={portalLoading || loginLoading}
+                                    onClick={handleTogglePortalAccess}
+                                >
+                                    {portalAccess
+                                        ? t.employeePortal.access.revoke
+                                        : t.employeePortal.access.grant}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    loading={loginLoading}
+                                    onClick={handleResetLoginPassword}
+                                    icon={<KeyRound className="w-4 h-4" />}
+                                >
+                                    {t.employeePortal.login.resetPassword}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    loading={linkLoading}
+                                    onClick={handleUnlinkUser}
+                                    icon={<Unlink className="w-4 h-4" />}
+                                >
+                                    {t.employees.detail.unlink}
+                                </Button>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            <p className="text-sm text-gray-500">{t.employees.detail.linkDescription}</p>
-                            <div className="flex gap-3">
-                                <input
-                                    type="text"
-                                    value={linkUserId}
-                                    onChange={(e) => setLinkUserId(e.target.value)}
-                                    placeholder={t.employees.detail.pasteUserId}
-                                    className="flex-1 bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-mono text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                />
-                                <button
-                                    onClick={handleLinkUser}
-                                    disabled={!linkUserId || linkLoading}
-                                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
-                                >
-                                    <LinkIcon className="w-4 h-4" />
-                                    Link
-                                </button>
-                            </div>
-                            <p className="text-xs text-gray-400">{t.employees.detail.linkTip}</p>
-                        </div>
-                    )}
-
-                    {/*
-                      * Self-service portal access. Shown only once a login is
-                      * linked: the server refuses the grant without one, so
-                      * offering the toggle first would be a button that always
-                      * fails.
-                      */}
-                    {employee.user && (
-                        <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-                            <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900">{t.employeePortal.access.label}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    {employee.portal_access ? t.employeePortal.access.on : t.employeePortal.access.off}
-                                </p>
-                            </div>
+                            <p className="text-sm text-gray-500">{t.employeePortal.login.noneDescription}</p>
                             <Button
                                 type="button"
-                                variant={employee.portal_access ? 'secondary' : 'primary'}
-                                loading={portalLoading}
-                                onClick={handleTogglePortalAccess}
+                                variant="primary"
+                                loading={loginLoading}
+                                onClick={handleCreateLogin}
+                                icon={<KeyRound className="w-4 h-4" />}
                             >
-                                {employee.portal_access ? t.employeePortal.access.revoke : t.employeePortal.access.grant}
+                                {t.employeePortal.login.create}
                             </Button>
+
+                            <div className="border-t border-gray-100 pt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLinkExisting((open) => !open)}
+                                    className="text-xs font-medium text-blue-600 hover:underline"
+                                >
+                                    {t.employeePortal.login.linkExisting}
+                                </button>
+
+                                {showLinkExisting && (
+                                    <div className="mt-3 space-y-2">
+                                        <p className="text-sm text-gray-500">{t.employees.detail.linkDescription}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Input
+                                                type="text"
+                                                value={linkUserId}
+                                                onChange={(e) => setLinkUserId(e.target.value)}
+                                                placeholder={t.employees.detail.pasteUserId}
+                                                className="flex-1 font-mono"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                disabled={!linkUserId}
+                                                loading={linkLoading}
+                                                onClick={handleLinkUser}
+                                                icon={<LinkIcon className="w-4 h-4" />}
+                                            >
+                                                {t.employees.detail.link}
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-gray-400">{t.employees.detail.linkTip}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {credentials && (
+                <LoginCredentialsModal
+                    credentials={credentials}
+                    mode={credentials.mode}
+                    employeeName={employee.name}
+                    onClose={() => setCredentials(null)}
+                />
+            )}
         </PageShell>
     );
 }

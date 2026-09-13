@@ -25,6 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 storefront_token_version: true,
                 applicant_token_version: true,
                 is_platform_admin: true,
+                must_change_password: true,
             },
         });
 
@@ -51,6 +52,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             userId: user.id,
             email: user.email,
             isPlatformAdmin: user.is_platform_admin,
+            // An admin-set password the holder has not replaced yet. `JwtAuthGuard`
+            // reduces such a session to the handful of endpoints that let them
+            // replace it; read here because the row is already loaded.
+            mustChangePassword: user.must_change_password,
             scope,
             // Storefront tokens are bound to the tenant they were issued for, so
             // a session at one shop cannot read a profile at another.

@@ -6,10 +6,20 @@ import { EmployeeRecordsModule } from '../employee-records/employee-records.modu
 import { EmployeePortalController, EmployeePortalAdminController } from './employee-portal.controller';
 import { EmployeePortalService } from './employee-portal.service';
 import { EmployeeGuard } from './employee.guard';
+import { EmployeeLoginService } from './employee-login.service';
+import { PasswordPolicyModule } from '../password-policy/password-policy.module';
 
 @Module({
-    imports: [DatabaseModule, AttendanceModule, ExpenseClaimsModule, EmployeeRecordsModule],
+    imports: [
+        DatabaseModule,
+        AttendanceModule,
+        ExpenseClaimsModule,
+        EmployeeRecordsModule,
+        // A generated password has to satisfy whatever rule the workspace set,
+        // or `create` mints a credential its own `assertValid` would refuse.
+        PasswordPolicyModule,
+    ],
     controllers: [EmployeePortalController, EmployeePortalAdminController],
-    providers: [EmployeePortalService, EmployeeGuard],
+    providers: [EmployeePortalService, EmployeeLoginService, EmployeeGuard],
 })
 export class EmployeePortalModule {}

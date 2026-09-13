@@ -45,6 +45,22 @@ export interface HourLogEntry {
     user?: { id: string; name?: string | null; email: string } | null;
 }
 
+/** The one clock a person may have running, as the server reports it. */
+export interface RunningTimer {
+    id: string;
+    started_at: string;
+    /**
+     * The Dhaka wall clock `started_at` reads as, `HH:mm`. The server derives
+     * it so the field that edits it never has to do timezone arithmetic.
+     */
+    start_time?: string | null;
+    elapsed_seconds: number;
+    note?: string | null;
+    tags?: HourLogTag[];
+    task?: { id: string; title: string } | null;
+    project?: { id: string; code: string; name: string } | null;
+}
+
 /**
  * One line on screen. Usually one entry; more when the same task was logged
  * several times in a day with the same note, which is the ordinary shape of a

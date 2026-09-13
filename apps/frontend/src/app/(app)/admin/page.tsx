@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, Users, ArrowRight, Settings, Activity, ScrollText } from 'lucide-react';
+import { Building2, Users, ArrowRight, Settings, Activity, ScrollText, Calculator } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell } from '@/components/ui';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
@@ -37,6 +37,7 @@ export default function PlatformAdminPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <QuickLink href="/admin/tenants" icon={Building2} title={m.quickLinks.tenants.title} description={m.quickLinks.tenants.description} />
                     <QuickLink href="/admin/users" icon={Users} title={m.quickLinks.users.title} description={m.quickLinks.users.description} />
+                    <QuickLink href="/admin/accounting" icon={Calculator} title={t.admin.accounting.title} description={t.admin.accounting.description} />
                     <QuickLink href="/admin/platform-settings" icon={Settings} title={m.quickLinks.platformSettings.title} description={m.quickLinks.platformSettings.description} />
                     <QuickLink href="/admin/system-health" icon={Activity} title={t.admin.systemHealth.quickLink.title} description={t.admin.systemHealth.quickLink.description} />
                     <QuickLink href="/admin/audit-logs" icon={ScrollText} title={t.admin.auditLogs.title} description={t.admin.auditLogs.description} />

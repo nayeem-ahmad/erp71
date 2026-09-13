@@ -1,4 +1,4 @@
-import { toPublicQuotation } from './public-quotation.dto';
+import { toPublicLetterhead, toPublicQuotation } from './public-quotation.dto';
 
 /**
  * This DTO is the boundary between a tenant's internal record and a page any
@@ -76,6 +76,10 @@ describe('toPublicQuotation', () => {
                 'delivery_lead_time_days',
                 'country_of_origin',
                 'beneficiary_bank',
+                // The seller's letterhead: a design plus only the {{tokens}}
+                // that design prints. `toPublicLetterhead` is what keeps the
+                // second half honest — see its own tests below.
+                'letterhead',
             ].sort(),
         );
     });
@@ -225,6 +229,67 @@ describe('toPublicQuotation', () => {
             expect(Object.keys(toPublicQuotation(proforma())).sort()).toEqual(
                 Object.keys(toPublicQuotation(proforma(), bank())).sort(),
             );
+        });
+    });
+
+    describe('toPublicLetterhead', () => {
+        const values = {
+            company_name: 'Rahim Electricals',
+            store_name: 'Gulshan Branch',
+            address: '12 Motijheel C/A, Dhaka 1000',
+            vat_reg_no: '000000000-0101',
+            tin: '123456789012',
+        };
+
+        it('sends only the values the design actually prints', () => {
+            const design = { lines: [{ text: '{{address}}' }, { text: 'Tel: 01711-000000' }] };
+
+            // The VAT number and the TIN are held by this tenant and are not on
+            // this letterhead, so they do not travel to a page anyone with the
+            // link can open. That is the whole point of the filter.
+            expect(toPublicLetterhead(design, values).context).toEqual({
+                company_name: 'Rahim Electricals',
+                address: '12 Motijheel C/A, Dhaka 1000',
+            });
+        });
+
+        it('finds tokens wherever the design puts them', () => {
+            // Not only in `lines`: a caption, a name override or a per-paper
+            // override is just as much a place a token gets typed.
+            const design = {
+                company: { nameOverride: '{{store_name}}' },
+                footer: { images: [{ caption: 'VAT {{vat_reg_no}}' }] },
+                perPaper: { A5: { lines: [{ text: 'TIN {{ tin }}' }] } },
+            };
+
+            expect(toPublicLetterhead(design, values).context).toEqual({
+                company_name: 'Rahim Electricals',
+                store_name: 'Gulshan Branch',
+                vat_reg_no: '000000000-0101',
+                tin: '123456789012',
+            });
+        });
+
+        it('keeps the company name even when no token asks for it', () => {
+            // The renderer prints it as the letterhead's company line, not only
+            // through {{company_name}}.
+            expect(toPublicLetterhead({ lines: [] }, values).context).toEqual({
+                company_name: 'Rahim Electricals',
+            });
+        });
+
+        it('omits a token slot the tenant has not filled', () => {
+            const design = { lines: [{ text: '{{address}}' }] };
+            expect(toPublicLetterhead(design, { company_name: 'Rahim Electricals' }).context).toEqual({
+                company_name: 'Rahim Electricals',
+            });
+        });
+
+        it('survives a missing config', () => {
+            expect(toPublicLetterhead(null, values)).toEqual({
+                config: {},
+                context: { company_name: 'Rahim Electricals' },
+            });
         });
     });
 });

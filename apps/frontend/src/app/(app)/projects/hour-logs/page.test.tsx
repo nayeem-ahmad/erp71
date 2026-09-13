@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 import HourLogsPage from './page';
 
 const getProjectTimeEntries = jest.fn();
@@ -87,6 +88,15 @@ const listOf = (items: unknown[]) => ({
 
 beforeEach(() => {
     const { api } = jest.requireMock('@/lib/api');
+    // The running clock is module state shared by the page and the floating
+    // tracker, so it outlives a render the way component state does not.
+    useProjectTimerStore.setState({
+        timer: null,
+        loaded: false,
+        busy: false,
+        open: false,
+        revision: 0,
+    });
     toastError.mockReset();
     toastInfo.mockReset();
     toastSuccess.mockReset();
@@ -417,87 +427,6 @@ describe('Hour logs page', () => {
     });
 
     describe('the running clock', () => {
-        it('starts a timer on the task the bar is pointed at', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            render(<HourLogsPage />);
-            await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
-
-            fireEvent.change(screen.getByLabelText('Project to log against'), { target: { value: 'p1' } });
-            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Task to log against'), { target: { value: 't1' } });
-            fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-
-            await waitFor(() =>
-                expect(api.startProjectTimer).toHaveBeenCalledWith(
-                    expect.objectContaining({ taskId: 't1' }),
-                ),
-            );
-        });
-
-        it('shows the running task and a stop button instead of start', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            api.getProjectTimer.mockResolvedValue({
-                id: 'timer-1',
-                started_at: '2026-08-03T08:00:00.000Z',
-                elapsed_seconds: 3849,
-                note: 'Ran the conduit',
-                tags: [],
-                task: { id: 't1', title: 'Wire the meter' },
-                project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
-            });
-            render(<HourLogsPage />);
-
-            expect(await screen.findByRole('button', { name: /Stop/ })).toBeInTheDocument();
-            expect(screen.queryByRole('button', { name: /^Start$/ })).not.toBeInTheDocument();
-            expect(screen.getByRole('timer')).toHaveTextContent('1:04:09');
-        });
-
-        it('logs the sitting even when the clock barely ran', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            api.getProjectTimer.mockResolvedValue({
-                id: 'timer-1',
-                started_at: '2026-08-03T08:00:00.000Z',
-                start_time: '14:00',
-                elapsed_seconds: 10,
-                tags: [],
-                task: { id: 't1', title: 'Wire the meter' },
-                project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
-            });
-            api.stopProjectTimer.mockResolvedValue({ entry: { id: 'e9' }, overlap: null });
-            render(<HourLogsPage />);
-
-            fireEvent.click(await screen.findByRole('button', { name: /Stop/ }));
-
-            // A stop that swallows the sitting is the bug this replaced: the
-            // discard button beside it is the way to throw one away.
-            await waitFor(() => expect(api.stopProjectTimer).toHaveBeenCalled());
-            expect(toastSuccess).toHaveBeenCalled();
-            expect(toastInfo).not.toHaveBeenCalled();
-        });
-
-        it('corrects a running clock’s start to the time the work actually began', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            api.getProjectTimer.mockResolvedValue({
-                id: 'timer-1',
-                started_at: '2026-08-03T08:00:00.000Z',
-                start_time: '14:00',
-                elapsed_seconds: 600,
-                tags: [],
-                task: { id: 't1', title: 'Wire the meter' },
-                project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
-            });
-            render(<HourLogsPage />);
-
-            const field = await screen.findByLabelText('Started at');
-            expect(field).toHaveValue('14:00');
-
-            fireEvent.change(field, { target: { value: '09:00' } });
-
-            await waitFor(() =>
-                expect(api.updateProjectTimer).toHaveBeenCalledWith({ startTime: '09:00' }),
-            );
-        });
-
         it('restarts a row rather than opening a form — the ▷ of the screen it borrows from', async () => {
             const { api } = jest.requireMock('@/lib/api');
             render(<HourLogsPage />);
@@ -536,60 +465,13 @@ describe('Hour logs page', () => {
         });
     });
 
-    describe('overlapping hours', () => {
-        it('asks before keeping two entries over the same minutes', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            api.logProjectTime
-                .mockRejectedValueOnce(new Error('Those hours overlap time you already logged.'))
-                .mockResolvedValueOnce({});
-            render(<HourLogsPage />);
-            await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
-
-            // Manual mode: a span plus a task is all a log needs.
-            fireEvent.click(screen.getByRole('button', { name: 'Enter hours by hand' }));
-            fireEvent.change(screen.getByLabelText('Project to log against'), { target: { value: 'p1' } });
-            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Task to log against'), { target: { value: 't1' } });
-            fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '13:45' } });
-            fireEvent.change(screen.getByLabelText('End time'), { target: { value: '18:08' } });
-            fireEvent.click(screen.getByRole('button', { name: /Log hours/ }));
-
-            expect(await screen.findByText(/Keep both entries anyway/)).toBeInTheDocument();
-            expect(api.logProjectTime).toHaveBeenCalledTimes(1);
-            expect(api.logProjectTime.mock.calls[0][0]).not.toHaveProperty('allowOverlap');
-
-            fireEvent.click(screen.getByRole('button', { name: 'Keep both' }));
-
-            await waitFor(() => expect(api.logProjectTime).toHaveBeenCalledTimes(2));
-            expect(api.logProjectTime.mock.calls[1][0]).toMatchObject({ allowOverlap: true });
-        });
-
-        it('reports any other failure rather than offering to keep both', async () => {
-            const { api } = jest.requireMock('@/lib/api');
-            api.logProjectTime.mockRejectedValue(new Error('Task not found'));
-            render(<HourLogsPage />);
-            await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
-
-            fireEvent.click(screen.getByRole('button', { name: 'Enter hours by hand' }));
-            fireEvent.change(screen.getByLabelText('Project to log against'), { target: { value: 'p1' } });
-            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Task to log against'), { target: { value: 't1' } });
-            fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '2' } });
-            fireEvent.click(screen.getByRole('button', { name: /Log hours/ }));
-
-            await waitFor(() => expect(toastError).toHaveBeenCalledWith('Task not found'));
-            expect(screen.queryByText(/Keep both entries anyway/)).not.toBeInTheDocument();
-        });
-    });
-
     describe('tags', () => {
         it('offers a tag filter only once the workspace has tags', async () => {
             const { api } = jest.requireMock('@/lib/api');
             render(<HourLogsPage />);
             await waitFor(() => expect(api.getProjectTimeTags).toHaveBeenCalled());
-            // The capture bar's tag picker is always there; the filter select
-            // is what waits for a vocabulary to exist.
-            expect(screen.getByLabelText('Tags')).toBeInTheDocument();
+            // The filter select is what waits for a vocabulary to exist; the
+            // tracker's own tag picker is always there, and is its test's.
             expect(screen.queryByRole('combobox', { name: 'Tags' })).not.toBeInTheDocument();
         });
 

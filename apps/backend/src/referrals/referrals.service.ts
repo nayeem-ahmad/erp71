@@ -4,9 +4,12 @@ import { EmailService } from '../email/email.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
+import { AuditService } from '../audit/audit.service';
 import {
+    AttachTenantDto,
     CreatePayoutRequestDto,
     CreateRefereeDto,
+    ListAttachableTenantsQueryDto,
     ListCommissionsQueryDto,
     ListPayoutRequestsQueryDto,
     ListRefereesQueryDto,
@@ -22,6 +25,13 @@ import { buildActivity, activityWindowStart } from './referral-activity';
 /** Matches the cap in ListCommissionsQueryDto; kept here so the service has a default of its own. */
 const DEFAULT_COMMISSION_PAGE_SIZE = 50;
 
+/**
+ * How many businesses the attach picker returns. It is a search box, not a
+ * browsable list — a platform with thousands of tenants must not ship all of
+ * them to a modal, and an admin attributing a specific business knows its name.
+ */
+const ATTACHABLE_TENANT_PAGE_SIZE = 20;
+
 @Injectable()
 export class ReferralsService {
     private readonly logger = new Logger(ReferralsService.name);
@@ -32,6 +42,7 @@ export class ReferralsService {
         private readonly email: EmailService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly accounting: AccountingService,
+        private readonly audit: AuditService,
     ) {}
 
     // ── Referees ──────────────────────────────────────────────────────────────
@@ -580,6 +591,9 @@ export class ReferralsService {
                 // The portal's printable one-pager states the discount the referred
                 // business gets, so it has to come from the same row the code does.
                 signup_discount: true,
+                // Prefills the admin attach form, and is the partner's own rate, so
+                // the portal showing it back to them is not a disclosure.
+                commission_rate: true,
                 deleted_at: true,
             },
         });
@@ -627,7 +641,11 @@ export class ReferralsService {
         const totalPaid = this.round2(payments.reduce((sum, p) => sum + Number(p.amount), 0));
 
         return {
-            referee: { ...referee, signup_discount: Number(referee.signup_discount) },
+            referee: {
+                ...referee,
+                signup_discount: Number(referee.signup_discount),
+                commission_rate: Number(referee.commission_rate),
+            },
             summary: {
                 ...this.conversionStats(clicks, commissions.length),
                 total_referrals: commissions.length,
@@ -656,6 +674,234 @@ export class ReferralsService {
                 commissions: (p.commissions ?? []).map(this.mapSignup),
             })),
         };
+    }
+
+
+    // ── Manual attribution ────────────────────────────────────────────────────
+
+    /**
+     * Businesses an admin can credit to a partner, newest first.
+     *
+     * Tenants that are already credited come back too, carrying the partner who
+     * holds them. Filtering them out would make a business somebody else is
+     * already earning on look exactly like a business that does not exist, and
+     * "already credited to X" is usually the answer the admin came for.
+     */
+    async listAttachableTenants(query: ListAttachableTenantsQueryDto = {}) {
+        const search = query.search?.trim();
+
+        const tenants = await this.db.tenant.findMany({
+            where: {
+                deleted_at: null,
+                // The platform's own workspace is not a customer, so nobody can be
+                // paid for referring it — the same exclusion the admin tenant list makes.
+                platform_workspace_key: null,
+                ...(search
+                    ? {
+                        OR: [
+                            { name: { contains: search, mode: 'insensitive' as const } },
+                            { owner: { email: { contains: search, mode: 'insensitive' as const } } },
+                            { owner: { name: { contains: search, mode: 'insensitive' as const } } },
+                        ],
+                    }
+                    : {}),
+            },
+            orderBy: { created_at: 'desc' },
+            take: ATTACHABLE_TENANT_PAGE_SIZE,
+            select: {
+                id: true,
+                name: true,
+                created_at: true,
+                owner: { select: { name: true, email: true } },
+                subscription: {
+                    select: {
+                        status: true,
+                        billing_cycle: true,
+                        plan: { select: { code: true, name: true } },
+                    },
+                },
+                referralSignup: {
+                    select: {
+                        id: true,
+                        status: true,
+                        referee: { select: { id: true, name: true, referral_code: true } },
+                    },
+                },
+            },
+        });
+
+        return tenants.map((tenant) => ({
+            id: tenant.id,
+            name: tenant.name,
+            created_at: tenant.created_at,
+            owner_name: tenant.owner?.name ?? null,
+            owner_email: tenant.owner?.email ?? null,
+            plan_code: tenant.subscription?.plan?.code ?? null,
+            plan_name: tenant.subscription?.plan?.name ?? null,
+            subscription_status: tenant.subscription?.status ?? null,
+            billing_cycle: tenant.subscription?.billing_cycle ?? null,
+            // Null is the only state an attach is allowed from; anything else is
+            // rendered as "already credited" rather than offered as a choice.
+            attached_to: tenant.referralSignup
+                ? {
+                    signup_id: tenant.referralSignup.id,
+                    status: tenant.referralSignup.status,
+                    referee_id: tenant.referralSignup.referee.id,
+                    referee_name: tenant.referralSignup.referee.name,
+                    referral_code: tenant.referralSignup.referee.referral_code,
+                }
+                : null,
+        }));
+    }
+
+    /**
+     * Credit an existing business to a partner after the fact.
+     *
+     * The referral code is typed at signup and nowhere else, so a business a
+     * partner genuinely brought in but that left the box empty — or typed it
+     * wrong, or signed up over the phone — is invisible to the ledger forever.
+     * This is the way back.
+     *
+     * It writes exactly the row the signup path writes, PENDING and nothing else:
+     * no money is credited here, and `billing.earnReferralCommission` still turns
+     * it into a commission on the tenant's next activation, on the same terms as
+     * every other referral. That is the whole reason this is an attachment rather
+     * than an "add a commission" form — an admin cannot mint a balance with it.
+     */
+    async attachTenant(refereeId: string, dto: AttachTenantDto, adminUserId: string) {
+        const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
+        if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) {
+            throw new BadRequestException('Cannot attach a business to an archived referee');
+        }
+
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: dto.tenant_id, deleted_at: null, platform_workspace_key: null },
+            select: {
+                id: true,
+                name: true,
+                created_at: true,
+                referralSignup: {
+                    select: { id: true, referee: { select: { id: true, name: true } } },
+                },
+                users: { select: { user: { select: { id: true, email: true } } } },
+            },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        if (tenant.referralSignup) {
+            const holder = tenant.referralSignup.referee;
+            throw new ConflictException(
+                holder.id === refereeId
+                    ? `${tenant.name} is already attached to this referee`
+                    : `${tenant.name} is already attached to ${holder.name}. Detach that first.`,
+            );
+        }
+
+        // The same rule the signup path enforces, for the same reason: a partner
+        // must not earn commission on their own subscription. Checked by account
+        // link and by email, because a referee who has never logged in has no
+        // user_id to match on.
+        const refereeEmail = referee.email.toLowerCase();
+        const isSelfReferral = tenant.users.some((member) =>
+            (referee.user_id !== null && member.user.id === referee.user_id) ||
+            member.user.email.toLowerCase() === refereeEmail,
+        );
+        if (isSelfReferral) {
+            throw new BadRequestException(
+                'This referee is a member of that workspace — a partner cannot be credited for their own subscription',
+            );
+        }
+
+        let signup;
+        try {
+            signup = await this.db.referralSignup.create({
+                data: {
+                    referee_id: refereeId,
+                    tenant_id: tenant.id,
+                    discount_pct: dto.discount_pct ?? referee.signup_discount,
+                    commission_pct: dto.commission_pct ?? referee.commission_rate,
+                    status: 'PENDING',
+                    // The business signed up when it signed up. Stamping "now" would
+                    // put a signup into this month's activity chart that happened last
+                    // year, and date a commission from the paperwork rather than the sale.
+                    signed_up_at: tenant.created_at,
+                },
+                include: { tenant: { select: { id: true, name: true } } },
+            });
+        } catch (err: any) {
+            // tenant_id is unique, so a second admin attaching the same business
+            // between the check above and this write loses the race rather than
+            // producing a 500.
+            if (err?.code === 'P2002') {
+                throw new ConflictException(`${tenant.name} was attached to a referee moments ago`);
+            }
+            throw err;
+        }
+
+        this.audit.log(
+            'REFERRAL_SIGNUP_ATTACHED',
+            'ReferralSignup',
+            { userId: adminUserId, tenantId: tenant.id },
+            signup.id,
+            {
+                referee_id: refereeId,
+                referral_code: referee.referral_code,
+                discount_pct: Number(signup.discount_pct),
+                commission_pct: Number(signup.commission_pct),
+            },
+        ).catch(() => {});
+
+        this.logger.log(
+            `Admin ${adminUserId} attached tenant ${tenant.id} to referee ${refereeId}`,
+        );
+
+        return this.mapSignup(signup);
+    }
+
+    /**
+     * Undo an attribution — a mis-typed code at signup as much as a mis-aimed
+     * attach.
+     *
+     * PENDING only. Once a commission is EARNED, PAID or REVERSED it is ledger
+     * history: deleting the row would move a partner's balance with nothing left
+     * to say why, and the honest correction for money already recorded is a
+     * reversal, which is the refund path's job and not an admin's.
+     */
+    async detachTenant(signupId: string, adminUserId: string) {
+        const signup = await this.db.referralSignup.findUnique({
+            where: { id: signupId },
+            select: {
+                id: true,
+                status: true,
+                referee_id: true,
+                tenant_id: true,
+                tenant: { select: { name: true } },
+            },
+        });
+        if (!signup) throw new NotFoundException('Referral attachment not found');
+
+        if (signup.status !== 'PENDING') {
+            throw new ConflictException(
+                `This referral has already been ${signup.status.toLowerCase()} — a commission that has left PENDING cannot be detached`,
+            );
+        }
+
+        await this.db.referralSignup.delete({ where: { id: signupId } });
+
+        this.audit.log(
+            'REFERRAL_SIGNUP_DETACHED',
+            'ReferralSignup',
+            { userId: adminUserId, tenantId: signup.tenant_id },
+            signup.id,
+            { referee_id: signup.referee_id },
+        ).catch(() => {});
+
+        this.logger.log(
+            `Admin ${adminUserId} detached tenant ${signup.tenant_id} from referee ${signup.referee_id}`,
+        );
+
+        return { id: signupId, detached: true };
     }
 
 

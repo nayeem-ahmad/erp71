@@ -208,6 +208,18 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
                     },
+                    // An import charge recorded before it is paid — the C&F
+                    // agent's bill that routinely arrives weeks after the
+                    // goods. Without it an accrued capitalised charge reaches
+                    // the landed cost but never the ledger, and the receipt
+                    // then credits Goods in Transit for a debit that was never
+                    // made, leaving that account in credit.
+                    {
+                        name: 'Accrued Import Charges',
+                        code: '210103',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
             {
@@ -374,6 +386,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
+                    // Freight, duty and C&F already spent on a shipment that
+                    // was then cancelled. The goods never arrive, so the
+                    // charges can never reach inventory — they are a loss, and
+                    // leaving them in Goods in Transit would overstate an
+                    // asset against cargo that does not exist.
+                    {
+                        name: 'Import Charges Written Off',
+                        code: '510104',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
             {
@@ -404,7 +427,7 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
     },
 ];
 
-type AccountingBootstrapClient = PrismaClient | Prisma.TransactionClient;
+export type AccountingBootstrapClient = PrismaClient | Prisma.TransactionClient;
 
 export interface DefaultPostingRuleDefinition {
     event_type: PostingRuleEventType;
@@ -672,11 +695,25 @@ async function resolveTemplateAccountCode(
     );
 }
 
-export async function bootstrapDefaultAccountingForTenant(
+/**
+ * Upsert a chart-of-accounts template onto one tenant: groups, then subgroups,
+ * then accounts, each keeping whatever code it already holds.
+ *
+ * Split out of `bootstrapDefaultAccountingForTenant` so the platform's own books
+ * can be seeded from a different template (see `platform-accounting.ts`) without
+ * a second copy of the code-resolution rules — which are the part with the
+ * tenant-specific edge cases, and the part nobody wants to get subtly wrong
+ * twice. Posting rules stay with the tenant bootstrap: the platform posts
+ * through `postMultiLeg` with fixed accounts and has no rules to provision.
+ *
+ * Idempotent, which is what lets it run on every admin visit.
+ */
+export async function applyAccountingTemplate(
     db: AccountingBootstrapClient,
     tenantId: string,
+    template: DefaultAccountingGroupDefinition[],
 ) {
-    for (const groupDefinition of DEFAULT_ACCOUNTING_TEMPLATE) {
+    for (const groupDefinition of template) {
         const group = await upsertTemplateGroup(
             db,
             tenantId,
@@ -733,6 +770,13 @@ export async function bootstrapDefaultAccountingForTenant(
             }
         }
     }
+}
+
+export async function bootstrapDefaultAccountingForTenant(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+) {
+    await applyAccountingTemplate(db, tenantId, DEFAULT_ACCOUNTING_TEMPLATE);
 
     const accounts = await db.account.findMany({
         where: { tenant_id: tenantId },

@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
 import { EmployeePortalController, EmployeePortalAdminController } from './employee-portal.controller';
 import { EmployeePortalService } from './employee-portal.service';
+import { EmployeeLoginService } from './employee-login.service';
 import { EmployeeGuard } from './employee.guard';
 import { EmployeesController } from '../employees/employees.controller';
 import { EmployeesService } from '../employees/employees.service';
@@ -52,6 +53,12 @@ describe('EmployeePortal — security', () => {
         setPortalAccess: jest.fn().mockResolvedValue({}),
     } as any;
 
+    const loginService = {
+        create: jest.fn().mockResolvedValue({ has_login: true, password: 'generated' }),
+        reset: jest.fn().mockResolvedValue({ has_login: true, password: 'generated' }),
+        revoke: jest.fn().mockResolvedValue({ has_login: true, portal_access: false }),
+    } as any;
+
     const employeesService = {
         findAll: jest.fn().mockResolvedValue({ items: [], total: 0 }),
         findOne: jest.fn().mockResolvedValue({}),
@@ -92,6 +99,7 @@ describe('EmployeePortal — security', () => {
             controllers: [EmployeePortalController, EmployeePortalAdminController, EmployeesController],
             providers: [
                 { provide: EmployeePortalService, useValue: portalService },
+                { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: DatabaseService, useValue: db },
                 Reflector,
@@ -224,6 +232,31 @@ describe('EmployeePortal — security', () => {
                 .post('/employees/emp-1/portal-access')
                 .expect(200);
             expect(portalService.setPortalAccess).toHaveBeenCalledWith('tenant-1', 'emp-1', true);
+        });
+    });
+
+    describe('creating a login is a staff action', () => {
+        it.each([
+            ['post', '/employees/emp-1/login'],
+            ['post', '/employees/emp-1/login/reset-password'],
+            ['delete', '/employees/emp-1/login'],
+        ])('refuses %s %s from an employee-context token', async (method, path) => {
+            // The employee who would be granted the login is the same person
+            // asking. Nothing but MANAGE_HR separates the two here.
+            await (request(app.getHttpServer()) as any)[method](path).expect(403);
+            expect(loginService.create).not.toHaveBeenCalled();
+            expect(loginService.reset).not.toHaveBeenCalled();
+            expect(loginService.revoke).not.toHaveBeenCalled();
+        });
+
+        it('allows a staff member holding MANAGE_HR', async () => {
+            db.userStorePermission.findMany.mockResolvedValue([
+                { permission: StorePermission.MANAGE_HR },
+            ]);
+            await request(app.getHttpServer()).post('/employees/emp-1/login').expect(201);
+            expect(loginService.create).toHaveBeenCalledWith(
+                'tenant-1', 'emp-1', expect.objectContaining({ userId: 'user-1' }),
+            );
         });
     });
 

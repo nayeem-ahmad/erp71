@@ -14,7 +14,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { ReferralsService } from './referrals.service';
 import {
+    AttachTenantDto,
     CreateRefereeDto,
+    ListAttachableTenantsQueryDto,
     ListCommissionsQueryDto,
     ListPayoutRequestsQueryDto,
     ListRefereesQueryDto,
@@ -77,6 +79,27 @@ export class ReferralsController {
     @Post('referees/:id/send-invite')
     sendInvite(@Param('id') id: string) {
         return this.referrals.sendRefereeLoginInvite(id);
+    }
+
+    // ── Manual attribution ────────────────────────────────────────────────────
+
+    @Get('attachable-tenants')
+    listAttachableTenants(@Query() query: ListAttachableTenantsQueryDto) {
+        return this.referrals.listAttachableTenants(query);
+    }
+
+    @Post('referees/:id/signups')
+    attachTenant(
+        @Param('id') id: string,
+        @Body() dto: AttachTenantDto,
+        @Request() req: any,
+    ) {
+        return this.referrals.attachTenant(id, dto, req.user.userId);
+    }
+
+    @Delete('signups/:signupId')
+    detachTenant(@Param('signupId') signupId: string, @Request() req: any) {
+        return this.referrals.detachTenant(signupId, req.user.userId);
     }
 
     // ── Payout requests ───────────────────────────────────────────────────────

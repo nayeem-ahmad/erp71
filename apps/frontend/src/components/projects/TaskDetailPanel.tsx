@@ -75,12 +75,20 @@ interface Task {
     // Phase 2 made an employee without a login assignable, so "who holds this"
     // is two columns and anything that reads one has to read the other.
     assigneeEmployee?: { id: string; name?: string | null } | null;
+    userStory?: { id: string; reference: number; title: string } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
     /** From `TASK_INCLUDE`; lets the collapsed feed say how much it holds. */
     _count?: { comments?: number; subtasks?: number };
+}
+
+/** A row of the project's backlog — the options for the story picker. */
+interface StoryOption {
+    id: string;
+    reference: number;
+    title: string;
 }
 
 /** A row of the project roster, which is where the assignee options come from. */
@@ -253,6 +261,28 @@ export default function TaskDetailPanel({
             live = false;
         };
     }, [projectId, membersWanted]);
+
+    /**
+     * The project's user stories, fetched when the picker is first touched. Same
+     * deal as the roster above: the card knows which story it is under from the
+     * task itself, so the field reads correctly before this has ever run.
+     */
+    const [stories, setStories] = useState<StoryOption[]>([]);
+    const [storiesWanted, setStoriesWanted] = useState(false);
+    useEffect(() => {
+        if (!projectId || !storiesWanted) return;
+        let live = true;
+        api.getProjectStories({ projectId })
+            .then((rows: unknown) => {
+                if (live) setStories((Array.isArray(rows) ? rows : []) as StoryOption[]);
+            })
+            .catch(() => {
+                if (live) setStories([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectId, storiesWanted]);
 
     /**
      * The surface behind the modal is reloaded once, when the card is put down.
@@ -447,6 +477,14 @@ export default function TaskDetailPanel({
                                     members={members}
                                     onSaved={apply}
                                     onWanted={() => setMembersWanted(true)}
+                                />
+
+                                <UserStoryField
+                                    task={task}
+                                    taskId={taskId}
+                                    stories={stories}
+                                    onSaved={apply}
+                                    onWanted={() => setStoriesWanted(true)}
                                 />
 
                                 <EstimateField task={task} taskId={taskId} onSaved={apply} />
@@ -770,6 +808,76 @@ function AssigneeField({
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>
                         {option.label}
+                    </option>
+                ))}
+            </Select>
+        </Field>
+    );
+}
+
+/**
+ * Which user story this task delivers a piece of.
+ *
+ * Only the task's own project's stories are offered, because that is all the API
+ * accepts — a story belongs to one project, and a card filed under another
+ * project's story would be counted into a backlog nobody looking at this board
+ * can see.
+ */
+function UserStoryField({
+    task,
+    taskId,
+    stories,
+    onSaved,
+    onWanted,
+}: {
+    task: Task;
+    taskId: string;
+    stories: StoryOption[];
+    onSaved: (updated: unknown) => Promise<unknown>;
+    /** Fires when the picker is first touched, so the backlog loads then. */
+    onWanted: () => void;
+}) {
+    const { t, fmt } = useI18n();
+    const m = t.projects;
+    const [saving, setSaving] = useState(false);
+
+    // Whichever story holds the card is listed even before the backlog has
+    // loaded — without it the select would fall back to its first option and the
+    // card would read as filed under a story it is not.
+    const options = useMemo(() => {
+        const rows = [...stories];
+        if (task.userStory && !rows.some((row) => row.id === task.userStory?.id)) {
+            rows.unshift(task.userStory);
+        }
+        return rows;
+    }, [stories, task.userStory]);
+
+    const change = async (value: string) => {
+        setSaving(true);
+        try {
+            // '' rather than undefined, for the reason the assignee gives above.
+            await onSaved(await api.updateProjectTask(taskId, { userStoryId: value }));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Field label={m.stories.field} htmlFor="task-user-story">
+            <Select
+                id="task-user-story"
+                value={task.userStory?.id ?? ''}
+                disabled={saving}
+                onFocus={onWanted}
+                onPointerDown={onWanted}
+                onChange={(e) => change(e.target.value)}
+            >
+                <option value="">{m.stories.none}</option>
+                {options.map((story) => (
+                    <option key={story.id} value={story.id}>
+                        {fmt(m.stories.reference, { number: story.reference })} · {story.title}
                     </option>
                 ))}
             </Select>

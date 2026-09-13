@@ -885,6 +885,10 @@ export class AuthService {
             // Lets the security page hide "change password" for a Google-only
             // account, which has no current password to confirm.
             has_password: !!user.passwordHash,
+            // True while an admin-set password has not been replaced. The app
+            // shell reads it to show the "set your password" gate; the rule
+            // itself is enforced in `JwtAuthGuard`, not here.
+            must_change_password: (user as any).must_change_password === true,
             google_connected: !!(user as any).google_id,
             // Same idea for mobile sign-in: an account with a Firebase identity
             // can get back in with an SMS code even with no password set.
@@ -994,6 +998,11 @@ export class AuthService {
                 token_version: { increment: 1 },
                 storefront_token_version: { increment: 1 },
                 applicant_token_version: { increment: 1 },
+                // Whatever brought them here, the password is now one they chose,
+                // so the hold `JwtAuthGuard` puts on an admin-set password lifts.
+                // Unconditional because clearing a flag that is already false
+                // costs nothing and forgetting to clear it locks somebody out.
+                must_change_password: false,
             },
         });
         await this.refreshTokens.revokeAllForUser(userId);

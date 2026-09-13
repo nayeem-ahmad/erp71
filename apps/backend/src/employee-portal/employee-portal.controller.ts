@@ -10,6 +10,8 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { UseInterceptors } from '@nestjs/common';
 import { EmployeeGuard } from './employee.guard';
 import { EmployeePortalService } from './employee-portal.service';
+import { EmployeeLoginService } from './employee-login.service';
+import { extractRequestMeta } from '../audit/audit-route.util';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadedFile } from '@nestjs/common';
 import { ApplyForLeaveDto, ClockDto, PortalPeriodQueryDto } from './employee-portal.dto';
@@ -184,7 +186,10 @@ export class EmployeePortalController {
 @RequireStorePermission(StorePermission.MANAGE_HR)
 @UseInterceptors(TenantInterceptor)
 export class EmployeePortalAdminController {
-    constructor(private readonly service: EmployeePortalService) {}
+    constructor(
+        private readonly service: EmployeePortalService,
+        private readonly logins: EmployeeLoginService,
+    ) {}
 
     @Post(':id/portal-access')
     @HttpCode(HttpStatus.OK)
@@ -195,5 +200,39 @@ export class EmployeePortalAdminController {
     @Patch(':id/portal-access/revoke')
     revoke(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.setPortalAccess(tenant.tenantId, id, false);
+    }
+
+    /**
+     * Create a login for an employee who has no ERP account at all.
+     *
+     * The response carries the generated password, and it is the only time it
+     * can be read — see `EmployeeLoginService.create`. Nothing here takes a
+     * request body, so the audit interceptor has nothing to redact.
+     */
+    @Post(':id/login')
+    @HttpCode(HttpStatus.CREATED)
+    createLogin(@Tenant() tenant: TenantContext, @Param('id') id: string, @Request() req: any) {
+        return this.logins.create(tenant.tenantId, id, {
+            userId: req.user?.userId,
+            ...extractRequestMeta(req),
+        });
+    }
+
+    @Post(':id/login/reset-password')
+    @HttpCode(HttpStatus.OK)
+    resetLoginPassword(@Tenant() tenant: TenantContext, @Param('id') id: string, @Request() req: any) {
+        return this.logins.reset(tenant.tenantId, id, {
+            userId: req.user?.userId,
+            ...extractRequestMeta(req),
+        });
+    }
+
+    @Delete(':id/login')
+    @HttpCode(HttpStatus.OK)
+    revokeLogin(@Tenant() tenant: TenantContext, @Param('id') id: string, @Request() req: any) {
+        return this.logins.revoke(tenant.tenantId, id, {
+            userId: req.user?.userId,
+            ...extractRequestMeta(req),
+        });
     }
 }

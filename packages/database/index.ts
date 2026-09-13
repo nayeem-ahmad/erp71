@@ -1,5 +1,16 @@
 export * from '@prisma/client';
-export { bootstrapDefaultAccountingForTenant, ensureInterBranchAccounts, DEFAULT_ACCOUNTING_TEMPLATE, DEFAULT_POSTING_RULES } from './prisma/bootstrap-accounting.js';
+export { applyAccountingTemplate, bootstrapDefaultAccountingForTenant, ensureInterBranchAccounts, DEFAULT_ACCOUNTING_TEMPLATE, DEFAULT_POSTING_RULES } from './prisma/bootstrap-accounting.js';
+export type { AccountingBootstrapClient, DefaultAccountingGroupDefinition } from './prisma/bootstrap-accounting.js';
+export {
+    bootstrapPlatformAccounting,
+    seedPlatformExpenseCategories,
+    DEFAULT_PLATFORM_EXPENSE_CATEGORIES,
+    PLATFORM_ACCOUNT,
+    PLATFORM_ACCOUNTING_TEMPLATE,
+    PLATFORM_PAYMENT_ACCOUNTS,
+    PLATFORM_PAYMENT_METHODS,
+} from './prisma/platform-accounting.js';
+export type { PlatformAccountName, PlatformExpenseCategoryDefinition } from './prisma/platform-accounting.js';
 export * from './prisma/account-code.js';
 export { seedDemoAccount, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD } from './prisma/seed-demo.js';
 export { seedBusinessTypeTemplate } from './prisma/templates/seed-template.js';

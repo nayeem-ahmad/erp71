@@ -6,12 +6,14 @@ import { Menu, Zap, X } from 'lucide-react';
 import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import AiChatWidget from '@/components/AiChatWidget';
+import TimeTracker from '@/components/projects/TimeTracker';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
@@ -328,6 +330,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // operator's staff have somewhere to run their own work.
     const canAccessPlatformProjects =
         inPlatformAdminMode && Boolean(accountPlatformFeatures.platformProjects);
+    // The platform's own books. Same shape as the line above and for the same
+    // reason: a platform-scoped switch, not a shop entitlement, so it is read
+    // off the account's platform features rather than the active tenant's plan.
+    const canAccessPlatformAccounting =
+        inPlatformAdminMode && Boolean(accountPlatformFeatures.platformAccounting);
     const perms = activeTenant?.permissions ?? [];
     // Off by default platform-wide; a tenant override switches it on for one
     // workspace without exposing it to everyone else. Gated on the permission as
@@ -348,6 +355,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         && hasAccountingEntitlement;
     const canAccessInventoryReports = Boolean(hasInventoryReportEntitlement);
     const canAccessAccountingAdvanced = Boolean(hasAccountingAdvancedEntitlement);
+    // The floating time tracker follows the user across every page, so it is
+    // mounted by the shell rather than by the hour log. Same two gates every
+    // /project-time route carries — without the permission, every call behind
+    // the panel is a 403.
+    const canTrackTime =
+        canAccessProjects
+        && !inPlatformAdminMode
+        && !inRefereeMode
+        && (owner || hasPermission(perms, 'LOG_PROJECT_TIME'));
     const canAccessVoice = platformFeatures.voice && hasPlanEntitlement(planFeatures, 'premiumVoice');
     // Same two gates as every other AI feature: the platform kill switch and the
     // plan entitlement. Tool-level permissions are enforced server-side.
@@ -502,6 +518,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!canAccessProjects && pathname.startsWith(routes.projects.root)) {
             router.replace(routes.home);
         }
+        // The books switched off, or the viewer is not a platform admin. Either
+        // way every /platform/accounting call 403s, so the page would render its
+        // shell around an error — send them back to the console instead.
+        if (!canAccessPlatformAccounting && pathname.startsWith(routes.admin.accounting.root)) {
+            router.replace(routes.admin.root);
+        }
         if (!platformFeatures.help && pathname.startsWith(routes.help)) {
             router.replace(routes.home);
         }
@@ -511,7 +533,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -531,6 +553,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
 
+    // Somebody still on a password an admin chose for them — today that means an
+    // employee whose login HR just created. `JwtAuthGuard` refuses every endpoint
+    // but the four the gate needs, so rendering the shell here would paint a
+    // sidebar over a screenful of 403s. Returned in place of it, before any of
+    // the chrome below, so no page can mount behind the gate.
+    if (hasResolvedUser && user?.must_change_password) {
+        return (
+            <TenantLocaleProvider tenant={tenantLocaleConfig}>
+                <SetPasswordGate />
+            </TenantLocaleProvider>
+        );
+    }
+
     return (
         <BrandingProvider>
         <NavLayoutProvider
@@ -548,6 +583,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessPremiumCrm={hasPremiumCrm}
                 canAccessManufacturing={canAccessManufacturing}
                 canAccessProjects={canAccessProjects}
+                canAccessPlatformAccounting={canAccessPlatformAccounting}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
@@ -726,6 +762,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </main>
             </div>
 
+            {canTrackTime && canRenderChildren ? <TimeTracker /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
         </div>

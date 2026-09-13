@@ -43,9 +43,22 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // These do not go through autoPostFromRules at all. They are listed so the
     // registry stays a complete census of what posts, and so the guard below
     // proves no rule ever shadows them.
-    { eventType: 'import_cost', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts addCost', expectation: 'multi-leg' },
+    { eventType: 'import_cost', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts addCost / payCost', expectation: 'multi-leg' },
+    { eventType: 'import_acceptance', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts accept', expectation: 'multi-leg' },
     { eventType: 'import_receipt', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts receive', expectation: 'multi-leg' },
     { eventType: 'import_settlement', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts settle', expectation: 'multi-leg' },
+    { eventType: 'import_write_off', conditionKey: 'none', conditionValue: null, emittedBy: 'imports.service.ts cancel', expectation: 'multi-leg' },
+
+    // ── the platform's own books ─────────────────────────────────────────────
+    // Neither goes through autoPostFromRules either, and neither is posted into
+    // a tenant's ledger: both land in the internal platform workspace, whose
+    // accounts are fixed by the platform chart of accounts rather than chosen by
+    // a rule. Listed for the same two reasons as the imports above — the census
+    // stays complete, and the guard proves no rule can shadow them. In
+    // particular, a condition_key:'none' fallback here would let a tenant's own
+    // posting rules capture the platform's entries.
+    { eventType: 'platform_billing', conditionKey: 'none', conditionValue: null, emittedBy: 'platform-accounting.service.ts syncBillingEvents', expectation: 'multi-leg' },
+    { eventType: 'platform_expense', conditionKey: 'none', conditionValue: null, emittedBy: 'platform-accounting.service.ts postExpenseVoucher', expectation: 'multi-leg' },
 
     // ── sales ────────────────────────────────────────────────────────────────
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales.service.ts:325', expectation: 'rule' },

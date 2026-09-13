@@ -50,12 +50,12 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     {
         model: 'ImportShipment',
         postsVia: 'import_receipt',
-        note: 'Receipt emits an ordinary Purchase at landed cost and posts Dr Inventory / Cr Goods in Transit + Purchase Payable. A usance LC posts again via import_settlement, which recognises the realised FX difference.',
+        note: 'Receipt emits an ordinary Purchase at landed cost and posts Dr Inventory / Cr Goods in Transit + Purchase Payable. Acceptance (import_acceptance) then moves that payable from the supplier to the bank, and import_settlement clears the bank and recognises the realised FX difference. Cancelling before receipt writes any capitalised charges off via import_write_off.',
     },
     {
         model: 'ImportCost',
         postsVia: 'import_cost',
-        note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account is accrued, not posted — it still allocates into the landed cost at receipt.',
+        note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account credits Accrued Import Charges instead of cash, so it reaches the ledger when recorded; paying it later posts a second voucher (legKey "payment") clearing that accrual.',
     },
     { model: 'SalaryPayment', postsVia: 'salary_payment' },
     { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_SALE row mirrors the Sale, which posts' },
@@ -173,19 +173,33 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
         exempt: 'A line on an ImportShipment. unit_price_fc is the supplier\'s foreign-currency price and landed_unit_cost is what the receipt stamped on the inventory movement — both are inputs to, or records of, the parent\'s posting rather than money of their own.',
     },
 
-    // ── Exempt: platform billing / SaaS revenue (not the tenant GL) ──────────
-    { model: 'BillingEvent', exempt: 'Platform SaaS billing, not a tenant ledger entry.' },
+    // ── Platform billing / SaaS revenue (the platform's own GL, not a tenant's) ──
+    // These reach a ledger, just not the one this contract was written for. The
+    // platform keeps its own books in the internal platform workspace — see
+    // PlatformAccountingService — so a tenant-GL exemption is still the right
+    // answer for every entry below, but "exempt" would now read as "posts
+    // nowhere", which for the two money-moving ones is no longer true.
+    {
+        model: 'BillingEvent',
+        postsVia: 'platform_billing',
+        note: 'Projected into the PLATFORM books, not the tenant GL: fees debit Subscription Receivable against revenue, payments credit it back. Nothing here touches a tenant ledger.',
+    },
     { model: 'SubscriptionPlan', exempt: 'Platform plan catalog.' },
     { model: 'TenantSubscription', exempt: 'Platform subscription record.' },
     { model: 'AddonModule', exempt: 'Platform add-on catalog.' },
     { model: 'SmsPackage', exempt: 'Platform SMS-credit catalog.' },
     { model: 'Referee', exempt: 'Referral-program config (rates).' },
-    { model: 'RefereePayment', exempt: 'Referral payout at the platform level, not the tenant GL.' },
+    { model: 'RefereePayment', exempt: 'Referral payout at the platform level, not the tenant GL. Recorded in the platform books as an ordinary PlatformExpense under Referral Commission, rather than posting itself.' },
     // A request is an intent, not a movement: raising one changes no commission and
     // moves no cash. The payout it asks for becomes real as a RefereePayment, which
     // is the row that would post if referral payouts posted at all.
     { model: 'RefereePayoutRequest', exempt: 'Partner-raised payout intent; the RefereePayment it settles is the money event.' },
     { model: 'ReferralSignup', exempt: 'Referral analytics/attribution.' },
+    {
+        model: 'PlatformExpense',
+        postsVia: 'platform_expense',
+        note: 'The platform\'s own spend — servers, gateways, salaries. Posts Dr <the category\'s expense account> / Cr <what it was paid from> into the PLATFORM books, not a tenant GL.',
+    },
     { model: 'CrmCampaign', exempt: 'Attributed-revenue analytics, not a ledger entry.' },
 
     // ── Exempt: project management (Phase 1 carries no costing) ──────────────
