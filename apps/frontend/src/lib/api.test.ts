@@ -82,7 +82,7 @@ jest.mock('./session-expiry', () => ({
 }));
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
 import { handleExpiredSession } from './session-expiry';
 import { resetWorkspaceBootstrapForTests } from './session-store';
 
@@ -92,6 +92,10 @@ import { resetWorkspaceBootstrapForTests } from './session-store';
 
 beforeEach(() => {
     jest.clearAllMocks();
+    // A renewal backoff is module state that outlives a test, and one case
+    // deliberately starts one — clear it so the next case is not silently
+    // running inside another's pause.
+    resetSessionRenewalForTests();
     localStorageMock._setAll({
         access_token: 'test-token',
         tenant_id: 'tenant-abc',
@@ -3436,14 +3440,96 @@ describe('silent renewal on 401', () => {
         expect(handleExpiredSession).toHaveBeenCalledTimes(1);
     });
 
-    it('ends the session when the renewal request itself cannot be made', async () => {
+    it('keeps the session when the renewal request never reached the server', async () => {
         mockFetch
             .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
             .mockReturnValueOnce(Promise.reject(new Error('offline')));
 
-        await expect(fetchWithAuth('/sales')).rejects.toThrow();
+        // A dropped connection is not a verdict on the refresh token. Signing
+        // the user out here is what turned a lost packet on a 4G handset into
+        // "type your password again".
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({
+            status: 503,
+            code: 'SESSION_RENEWAL_UNAVAILABLE',
+        });
 
-        expect(handleExpiredSession).toHaveBeenCalled();
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('keeps the session when the renewal is rate-limited rather than refused', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(errorJson(429, 'Too Many Requests', {
+                error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests.', retry_after: 12 },
+            }));
+
+        // The whole reported failure in one case: a shared office address spends
+        // its refresh budget, and everyone behind it is thrown out mid-shift.
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({
+            status: 503,
+            code: 'SESSION_RENEWAL_UNAVAILABLE',
+            retryAfter: 12,
+        });
+
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('keeps the session when the API answers a renewal with a 500', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(errorJson(500, 'Internal Server Error'));
+
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({ status: 503 });
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('stops asking after a renewal that got no verdict, instead of once per request', async () => {
+        mockFetch.mockImplementation((url: string) =>
+            String(url).endsWith('/auth/refresh')
+                ? errorJson(429, 'Too Many Requests', { error: { retry_after: 30 } })
+                : errorJson(401, 'Unauthorized'));
+
+        // Every request in a tab whose token has lapsed used to fire its own
+        // renewal, which is how one stale tab drained a whole address's budget.
+        for (const endpoint of ['/a', '/b', '/c', '/d']) {
+            await expect(fetchWithAuth(endpoint)).rejects.toMatchObject({ status: 503 });
+        }
+
+        expect(refreshCalls()).toHaveLength(1);
+        expect(handleExpiredSession).not.toHaveBeenCalled();
+    });
+
+    it('resumes renewing once the backoff has passed', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(errorJson(429, 'Too Many Requests', { error: { retry_after: 1 } }));
+
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({ status: 503 });
+
+        const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2_000);
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: 'recovered' }));
+
+        await expect(fetchWithAuth('/sales')).resolves.toBe('recovered');
+        clock.mockRestore();
+    });
+
+    it('keeps the session when a renewal is refused by something other than the token', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(errorJson(403, 'Forbidden', {
+                error: { code: 'FORBIDDEN', message: 'CSRF check failed: untrusted Origin' },
+            }));
+
+        // Only `refreshSession` itself judges the token, and it answers 401 for
+        // every verdict. A 403 on this route is the CSRF middleware refusing an
+        // Origin — reading it as a dead session would sign out every shop on the
+        // platform the moment a domain was misconfigured.
+        await expect(fetchWithAuth('/sales')).rejects.toMatchObject({ status: 503 });
+
+        expect(handleExpiredSession).not.toHaveBeenCalled();
     });
 
     it('renews once for a page that fires several requests at the same moment', async () => {

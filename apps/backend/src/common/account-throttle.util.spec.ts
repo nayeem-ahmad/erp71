@@ -35,6 +35,14 @@ class ProbeController {
     open() {
         return { ok: true };
     }
+
+    /** `/auth/refresh`'s shape: no identifier in the body, only the token. */
+    @Throttle({ default: { ttl: 60_000, limit: 100 } })
+    @ThrottleAccount({ ttl: 60_000, limit: 2 })
+    @Post('refresh')
+    refresh() {
+        return { ok: true };
+    }
 }
 
 @Module({
@@ -116,6 +124,27 @@ describe('account-keyed sign-in throttling', () => {
         await post('open', caller, { identifier: 'c@shop.test' }).expect(429);
     });
 
+    // The reported failure, one screen further in: a refusal on `/auth/refresh`
+    // is never shown to anyone — the frontend cannot tell it from a revoked
+    // session — so a shared-address 429 read as "you have been signed out".
+    it('gives each session its own renewal budget behind a shared address', async () => {
+        const office = '203.0.113.20';
+
+        await post('refresh', office, { refresh_token: 'token-for-karim' }).expect(201);
+        await post('refresh', office, { refresh_token: 'token-for-karim' }).expect(201);
+        await post('refresh', office, { refresh_token: 'token-for-karim' }).expect(429);
+
+        // A colleague on the same office line keeps working. Before the split
+        // this is the request that signed them out mid-shift.
+        await post('refresh', office, { refresh_token: 'token-for-rina' }).expect(201);
+    });
+
+    it('holds one session to its budget however many addresses it renews from', async () => {
+        await post('refresh', '203.0.113.21', { refresh_token: 'one-token' }).expect(201);
+        await post('refresh', '198.51.100.21', { refresh_token: 'one-token' }).expect(201);
+        await post('refresh', '192.0.2.21', { refresh_token: 'one-token' }).expect(429);
+    });
+
     it('answers a throttled caller with something they can act on', async () => {
         const caller = '203.0.113.16';
         const attempt = () => post('login', caller, { identifier: 'karim@shop.test', password: 'x' });
@@ -175,6 +204,20 @@ describe('accountFromBody', () => {
         expect(accountFromBody({ identifier: '0171' })).toBe('mobile:0171');
     });
 
+    it('keys a renewal on the refresh token, and never stores it in the clear', () => {
+        const key = accountFromBody({ refresh_token: 'sup3r-s3cret-refresh-token' });
+
+        expect(key).toMatch(/^refresh:[0-9a-f]{32}$/);
+        expect(key).not.toContain('sup3r-s3cret-refresh-token');
+        // Same token, same bucket; a different one gets its own.
+        expect(accountFromBody({ refresh_token: 'sup3r-s3cret-refresh-token' })).toBe(key);
+        expect(accountFromBody({ refresh_token: 'another-token' })).not.toBe(key);
+    });
+
+    it('prefers the account a 2FA body names outright over anything beside it', () => {
+        expect(accountFromBody({ userId: 'usr_123', refresh_token: 'tok' })).toBe('user:usr_123');
+    });
+
     it('names no account for a body that cannot be a sign-in', () => {
         expect(accountFromBody(null)).toBeNull();
         expect(accountFromBody('identifier=owner@shop.test')).toBeNull();
@@ -185,5 +228,8 @@ describe('accountFromBody', () => {
         expect(accountFromBody({ identifier: ['a@shop.test'] })).toBeNull();
         expect(accountFromBody({ identifier: 12345 })).toBeNull();
         expect(accountFromBody({ identifier: `${'a'.repeat(320)}@shop.test` })).toBeNull();
+        // A refresh token cannot be either of these, so neither buys a bucket.
+        expect(accountFromBody({ refresh_token: '' })).toBeNull();
+        expect(accountFromBody({ refresh_token: 42 })).toBeNull();
     });
 });

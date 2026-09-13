@@ -141,33 +141,103 @@ function readRetryAfter(body: unknown): number | undefined {
     return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
+/**
+ * How a renewal attempt settled.
+ *
+ * Only `rejected` means the session is over. The distinction is the whole point
+ * of this type: every outcome used to collapse into `false`, so a rate limit, a
+ * 502 or a dropped connection ended the session exactly as a revoked token did
+ * — and took the still-valid refresh token with it, so the recovery was to type
+ * a password rather than to try again a second later.
+ */
+export type RenewalOutcome = 'renewed' | 'rejected' | 'unavailable';
+
 /** The tab's single outstanding renewal, if one is running. See `renewSession`. */
-let renewalInFlight: Promise<boolean> | null = null;
+let renewalInFlight: Promise<RenewalOutcome> | null = null;
 
-async function performRenewal(): Promise<boolean> {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
+/**
+ * How long to leave `/auth/refresh` alone after an attempt that got no verdict.
+ *
+ * Without a pause here, one tab whose access token has lapsed asks again on
+ * *every* request it makes: the stored expiry stays in the past, so
+ * `renewIfNearExpiry` keeps firing and nothing records that the last answer was
+ * "not now". That tab alone can drain a shared address's refresh budget in
+ * seconds — and the neighbours it locks out are then signed out too, which is
+ * how a single stale tab in a shop empties the whole floor.
+ */
+const RENEWAL_BACKOFF_MS = 5_000;
 
+/** Ceiling on a server-suggested wait, so a large `Retry-After` cannot park the tab. */
+const MAX_RENEWAL_BACKOFF_MS = 60_000;
+
+/** When the next renewal may be attempted. Epoch ms; 0 means "now". */
+let renewalBlockedUntil = 0;
+
+/** Test-only: forget an in-progress renewal backoff between cases. */
+export function resetSessionRenewalForTests(): void {
+    renewalBlockedUntil = 0;
+    renewalInFlight = null;
+}
+
+/** How long to wait after a refusal that carried no verdict on the token. */
+async function renewalBackoffFrom(response: Response): Promise<number> {
     try {
-        const response = await fetch(`${API_BASE}/auth/refresh`, {
+        const seconds = readRetryAfter(await response.json());
+        if (seconds) return Math.min(seconds * 1000, MAX_RENEWAL_BACKOFF_MS);
+    } catch {
+        // No body, or not JSON. The fixed backoff below is the answer either way.
+    }
+    return RENEWAL_BACKOFF_MS;
+}
+
+async function performRenewal(): Promise<RenewalOutcome> {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return 'rejected';
+
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: refreshToken }),
         });
-        if (!response.ok) return false;
-
-        const body = await response.json();
-        const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
-        if (!tokens?.access_token) return false;
-
-        updateCredentials(tokens);
-        return true;
     } catch {
-        // Offline, or the API is unreachable. Indistinguishable from a dead
-        // refresh token from here, and the caller has already had a 401 from a
-        // server that was answering a moment ago, so it is treated the same.
-        return false;
+        // Offline, DNS, a connection dropped mid-flight — the request never
+        // reached a verdict, so it says nothing about whether the session is
+        // still good. Holding on to the credentials means the attempt after the
+        // network comes back renews, instead of asking for a password.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
     }
+
+    // The one answer that ends a session, and the only one: `refreshSession`
+    // throws `UnauthorizedException` for every way a token can be no good —
+    // unknown, revoked, expired, replayed — and nothing else on this route
+    // judges the token at all. A 403 here is the CSRF middleware refusing the
+    // Origin; a 404 is a route missing mid-deploy. Reading either as "your
+    // session ended" would empty every shop on the platform over a
+    // misconfiguration, which is the failure this whole triage exists to stop.
+    if (response.status === 401) return 'rejected';
+
+    if (!response.ok) {
+        // A 429, a 5xx, or one of the above. The token was never judged, only
+        // unheard.
+        const backoff = await renewalBackoffFrom(response);
+        renewalBlockedUntil = Date.now() + backoff;
+        return 'unavailable';
+    }
+
+    const body = await response.json().catch(() => null);
+    const tokens = body && typeof body === 'object' && 'data' in body ? body.data : body;
+    if (!tokens?.access_token) {
+        // A 200 with nothing in it is a server fault, not a verdict on the token.
+        renewalBlockedUntil = Date.now() + RENEWAL_BACKOFF_MS;
+        return 'unavailable';
+    }
+
+    renewalBlockedUntil = 0;
+    updateCredentials(tokens);
+    return 'renewed';
 }
 
 /**
@@ -236,16 +306,37 @@ function resolveTenantHeader(): string | null {
  * exchange — firing six of them would look exactly like a replay and get the
  * session revoked.
  *
- * Resolves `false` rather than throwing, so the caller decides what a failed
- * renewal means.
+ * Resolves rather than throwing, so the caller decides what each outcome means.
+ * While a backoff is running it answers `unavailable` without a round trip: the
+ * point of the pause is that nothing is sent, not that the answer is ignored.
  */
-export function renewSession(): Promise<boolean> {
+export function renewSession(): Promise<RenewalOutcome> {
+    if (Date.now() < renewalBlockedUntil) return Promise.resolve('unavailable');
+
     if (!renewalInFlight) {
         renewalInFlight = performRenewal().finally(() => {
             renewalInFlight = null;
         });
     }
     return renewalInFlight;
+}
+
+/**
+ * What a caller gets instead of being signed out when the renewal never reached
+ * a verdict. `503` rather than the `401` that prompted it: the session has not
+ * been judged dead, the server merely could not be asked.
+ */
+const RENEWAL_UNAVAILABLE_MESSAGE =
+    'Could not renew your sign-in — the server is unreachable or busy. Please try again in a moment.';
+
+function renewalUnavailableError(): ApiError {
+    const waitMs = renewalBlockedUntil - Date.now();
+    return new ApiError(
+        RENEWAL_UNAVAILABLE_MESSAGE,
+        503,
+        'SESSION_RENEWAL_UNAVAILABLE',
+        waitMs > 0 ? Math.ceil(waitMs / 1000) : undefined,
+    );
 }
 
 /**
@@ -287,10 +378,12 @@ export async function fetchBlobWithAuth(
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return fetchBlobWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return fetchBlobWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
@@ -370,10 +463,12 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     if (!response.ok) {
         if (response.status === 401) {
             // Only authenticated endpoints reach here, so a 401 is always an
-            // expired or revoked token. Try to renew once; only a failed
-            // renewal is genuinely the end of the session.
-            if (!isRetry && (await renewSession())) {
-                return requestWithAuth(endpoint, options, true);
+            // expired or revoked token. Try to renew once; only a renewal the
+            // server actually *refused* is the end of the session.
+            if (!isRetry) {
+                const outcome = await renewSession();
+                if (outcome === 'renewed') return requestWithAuth(endpoint, options, true);
+                if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
