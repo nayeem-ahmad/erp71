@@ -5,9 +5,10 @@ import { SalesQuotationsService } from './sales-quotations.service';
 import { DatabaseModule } from '../database/database.module';
 import { SalesOrdersModule } from '../sales-orders/sales-orders.module';
 import { ShortLinksModule } from '../short-links/short-links.module';
+import { PrintTemplatesModule } from '../print-templates/print-templates.module';
 
 @Module({
-    imports: [DatabaseModule, SalesOrdersModule, ShortLinksModule],
+    imports: [DatabaseModule, SalesOrdersModule, ShortLinksModule, PrintTemplatesModule],
     controllers: [SalesQuotationsController, PublicQuotationsController],
     providers: [SalesQuotationsService],
 })
