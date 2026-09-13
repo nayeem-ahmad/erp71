@@ -325,20 +325,22 @@ export class CreateImportDocumentDto {
     @IsIn(IMPORT_DOC_TYPES)
     docType: string;
 
+    /**
+     * A `data:` URL or a bare base64 string. This used to be a `storageKey`
+     * that no endpoint produced, which is why nothing ever uploaded a file: the
+     * table and the API both existed and there was no way to fill either.
+     */
     @IsString()
-    fileName: string;
+    fileBase64: string;
 
+    @IsOptional()
     @IsString()
-    storageKey: string;
+    @Length(1, 200)
+    fileName?: string;
 
     @IsOptional()
     @IsString()
     mimeType?: string;
-
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    fileSize?: number;
 }
 
 export class ListShipmentsQueryDto extends PaginationDto {

@@ -2379,7 +2379,13 @@ model ImportDocument {
   /// BILL_OF_ENTRY | RELEASE_ORDER | OTHER
   doc_type    String
   file_name   String
+  /// Cloudinary's public_id, kept so deleting the row can delete the file.
+  /// Without it a removed document is billed forever — the leak logged against
+  /// the older `uploadFile` path in TODO.md.
   storage_key String
+  /// Where to fetch it. Null only for a row written before the upload endpoint
+  /// existed, when the API took a bare storage key and nothing served it.
+  file_url    String?
   mime_type   String?
   file_size   Int?
 

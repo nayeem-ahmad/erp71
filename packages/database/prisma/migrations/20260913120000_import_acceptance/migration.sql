@@ -16,3 +16,7 @@ ALTER TABLE "ImportCost" ADD COLUMN "payment_voucher_id" TEXT;
 -- PostingRule, like the three import_* values already in this enum.
 ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'import_acceptance';
 ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'import_write_off';
+
+-- Import documents had a table and no upload path: the API took a storage key
+-- nothing produced, and nothing served the file back.
+ALTER TABLE "ImportDocument" ADD COLUMN "file_url" TEXT;

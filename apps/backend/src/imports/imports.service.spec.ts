@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
 import { ImportsService } from './imports.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { postMultiLeg } from '../accounting/posting.utils';
@@ -18,6 +19,7 @@ describe('ImportsService', () => {
     let service: ImportsService;
     let db: any;
     let tx: any;
+    let assets: any;
 
     /** The tenant's seeded chart, keyed by the names the service looks up. */
     const ACCOUNTS: Record<string, string> = {
@@ -136,8 +138,22 @@ describe('ImportsService', () => {
             importDocument: { create: jest.fn(), findFirst: jest.fn(), delete: jest.fn() },
         };
 
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest.fn().mockResolvedValue({
+                url: 'https://cdn.example/imports/bl.pdf',
+                publicId: 'retail/tenant-1/imports/bl',
+                bytes: 2048,
+            }),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
-            providers: [ImportsService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                ImportsService,
+                { provide: DatabaseService, useValue: db },
+                { provide: AssetsService, useValue: assets },
+            ],
         }).compile();
 
         service = module.get(ImportsService);
@@ -1149,22 +1165,67 @@ describe('ImportsService', () => {
     });
 
     describe('documents', () => {
-        it('files a document against the shipment and its uploader', async () => {
+        const pdf = `data:application/pdf;base64,${Buffer.from('%PDF-1.4 fake').toString('base64')}`;
+
+        beforeEach(() => {
             db.importShipment.findFirst.mockResolvedValue(shipment());
             db.importDocument.create.mockResolvedValue({ id: 'doc-1' });
+        });
 
+        it('uploads the file and keeps the key that can delete it again', async () => {
             await service.addDocument('tenant-1', 'user-1', 'ship-1', {
                 docType: 'BL',
-                fileName: 'bl.pdf',
-                storageKey: 'imports/ship-1/bl.pdf',
+                fileBase64: pdf,
+                fileName: 'Bill of Lading.pdf',
             } as any);
 
+            // 'raw', or Cloudinary's image pipeline mangles the PDF.
+            expect(assets.uploadBuffer).toHaveBeenCalledWith(
+                expect.any(Buffer),
+                'tenant-1/imports',
+                'Bill-of-Lading',
+                'raw',
+            );
             expect(db.importDocument.create.mock.calls[0][0].data).toMatchObject({
                 tenant_id: 'tenant-1',
                 shipment_id: 'ship-1',
                 doc_type: 'BL',
                 uploaded_by: 'user-1',
+                // Without this the row cannot delete its own file, and the
+                // file is billed forever.
+                storage_key: 'retail/tenant-1/imports/bl',
+                file_url: 'https://cdn.example/imports/bl.pdf',
+                file_name: 'Bill-of-Lading.pdf',
             });
+        });
+
+        it('refuses a file type a browser cannot render back', async () => {
+            await expect(
+                service.addDocument('tenant-1', 'user-1', 'ship-1', {
+                    docType: 'BL',
+                    fileBase64: 'data:application/zip;base64,UEsDBA==',
+                } as any),
+            ).rejects.toThrow(/Unsupported file type/);
+        });
+
+        it('says so plainly when storage is not configured', async () => {
+            assets.isEnabled.mockReturnValue(false);
+            await expect(
+                service.addDocument('tenant-1', 'user-1', 'ship-1', { docType: 'BL', fileBase64: pdf } as any),
+            ).rejects.toThrow(/not configured/);
+        });
+
+        it('deletes the file after the row, not before', async () => {
+            db.importDocument.findFirst.mockResolvedValue({
+                id: 'doc-1',
+                storage_key: 'retail/tenant-1/imports/bl',
+                mime_type: 'application/pdf',
+            });
+
+            await service.removeDocument('tenant-1', 'ship-1', 'doc-1');
+
+            expect(db.importDocument.delete).toHaveBeenCalled();
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/tenant-1/imports/bl', 'raw');
         });
 
         it('404s on a document belonging to another shipment', async () => {

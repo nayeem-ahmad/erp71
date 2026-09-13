@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
@@ -31,6 +36,8 @@ import {
     UpdateImportShipmentDto,
 } from './imports.dto';
 import { paginatedFindMany } from '../common/list-pagination.util';
+import { AssetsService } from '../assets/assets.service';
+import { parseAttachmentUpload, resourceTypeFor } from '../common/file-upload.util';
 
 const num = (value: unknown) => Number(value ?? 0);
 
@@ -48,7 +55,10 @@ const num = (value: unknown) => Number(value ?? 0);
  */
 @Injectable()
 export class ImportsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly assets: AssetsService,
+    ) {}
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -741,18 +751,57 @@ export class ImportsService {
 
     // ── Documents ────────────────────────────────────────────────────────────
 
+    /**
+     * Stores a BL, Bill of Entry or LC copy against the shipment.
+     *
+     * Built on `uploadBuffer` and a `storage_key` rather than the older
+     * `uploadFile`, which returns a URL that cannot be turned back into a
+     * Cloudinary `public_id` — without the key, deleting a row strands the file
+     * and it is billed forever. Same reasoning, and the same helpers, as
+     * project task attachments.
+     *
+     * The table and the API existed from the start; nothing ever put a file in
+     * one, because the DTO asked for a storage key that no endpoint produced.
+     */
     async addDocument(tenantId: string, userId: string, shipmentId: string, dto: CreateImportDocumentDto) {
         await this.getShipmentOrThrow(tenantId, shipmentId);
+
+        const { buffer, mimeType } = parseAttachmentUpload(dto.fileBase64, dto.mimeType);
+
+        if (!this.assets.isEnabled()) {
+            // Not a transient failure — it will not fix itself on retry, and
+            // the operator is the one who has to act.
+            throw new ServiceUnavailableException(
+                'File storage is not configured, so the document could not be kept.',
+            );
+        }
+
+        const stem = (dto.fileName ?? dto.docType).replace(/\.[^.]+$/, '').slice(0, 100);
+        const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'document';
+        const extension = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] ?? 'jpg');
+
+        let stored: { url: string; publicId: string; bytes: number };
+        try {
+            stored = await this.assets.uploadBuffer(
+                buffer,
+                `${tenantId}/imports`,
+                safeStem,
+                resourceTypeFor(mimeType),
+            );
+        } catch {
+            throw new ServiceUnavailableException('The document could not be uploaded.');
+        }
 
         return this.db.importDocument.create({
             data: {
                 tenant_id: tenantId,
                 shipment_id: shipmentId,
                 doc_type: dto.docType,
-                file_name: dto.fileName,
-                storage_key: dto.storageKey,
-                mime_type: dto.mimeType ?? null,
-                file_size: dto.fileSize ?? null,
+                file_name: `${safeStem}.${extension}`,
+                storage_key: stored.publicId,
+                file_url: stored.url,
+                mime_type: mimeType,
+                file_size: stored.bytes ?? buffer.byteLength,
                 uploaded_by: userId,
             },
         });
@@ -765,6 +814,13 @@ export class ImportsService {
         if (!document) throw new NotFoundException('Document not found');
 
         await this.db.importDocument.delete({ where: { id: documentId } });
+
+        // After the row, not before: a failed delete here strands a few bytes,
+        // while the reverse leaves a row pointing at nothing — a broken link is
+        // worse than orphaned storage.
+        if (document.storage_key && this.assets.isEnabled()) {
+            await this.assets.deleteFile(document.storage_key, resourceTypeFor(document.mime_type ?? ''));
+        }
         return { deleted: true };
     }
 
