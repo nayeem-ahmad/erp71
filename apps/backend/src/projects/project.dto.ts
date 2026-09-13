@@ -65,6 +65,13 @@ export enum SprintStatusDto {
     COMPLETED = 'COMPLETED',
 }
 
+export enum UserStoryStatusDto {
+    BACKLOG = 'BACKLOG',
+    READY = 'READY',
+    IN_PROGRESS = 'IN_PROGRESS',
+    DONE = 'DONE',
+}
+
 export class ListProjectsDto {
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;
@@ -196,6 +203,78 @@ export class UpdateMilestoneDto extends CreateMilestoneDto {
     isCompleted?: boolean;
 }
 
+export class ListUserStoriesDto {
+    /**
+     * Optional: omitted lists every story the viewer can reach, which is what a
+     * cross-project picker wants. Given, it is checked for visibility like any
+     * other project route.
+     */
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    @IsOptional() @IsEnum(UserStoryStatusDto)
+    status?: UserStoryStatusDto;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    search?: string;
+}
+
+/**
+ * Everything a story carries except the project it is in. Split out because
+ * `UpdateUserStoryDto` must not be able to name a project at all — moving a
+ * story between projects would leave its tasks behind in the old one.
+ */
+class UserStoryFieldsDto {
+    @IsString() @MinLength(1) @MaxLength(300)
+    title!: string;
+
+    /**
+     * "As a … I want … so that …" — three columns rather than one blob so the
+     * card can compose the sentence in the reader's own language. `''` clears
+     * one: the service stores `trim() || null`, and PATCH reads undefined as
+     * "leave alone", so only the empty string can say "there is no why".
+     */
+    @IsOptional() @IsString() @MaxLength(200)
+    asA?: string;
+
+    @IsOptional() @IsString() @MaxLength(500)
+    iWant?: string;
+
+    @IsOptional() @IsString() @MaxLength(500)
+    soThat?: string;
+
+    @IsOptional() @IsString() @MaxLength(5000)
+    acceptanceCriteria?: string;
+
+    @IsOptional() @IsEnum(UserStoryStatusDto)
+    status?: UserStoryStatusDto;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    /**
+     * Relative size, never hours — those stay on the tasks. `null` clears it,
+     * the spelling `UpdateProjectDto.budgetAmount` already uses for a number:
+     * `''` would come through `@Type(() => Number)` as a genuine zero, which is
+     * a story estimated at nothing rather than a story nobody has sized.
+     */
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(999)
+    storyPoints?: number | null;
+
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+    sortOrder?: number;
+}
+
+export class CreateUserStoryDto extends UserStoryFieldsDto {
+    @IsUUID()
+    projectId!: string;
+}
+
+export class UpdateUserStoryDto extends UserStoryFieldsDto {
+    @IsOptional() @IsString() @MinLength(1) @MaxLength(300)
+    declare title: string;
+}
+
 export class ListTasksDto {
     @IsOptional() @IsUUID()
     projectId?: string;
@@ -208,6 +287,17 @@ export class ListTasksDto {
 
     @IsOptional() @IsUUID()
     milestoneId?: string;
+
+    @IsOptional() @IsUUID()
+    userStoryId?: string;
+
+    /**
+     * `true` returns only tasks under no story — what is left over once the
+     * backlog has been groomed. A separate flag rather than an empty
+     * `userStoryId`, for the reason `unassigned` below gives.
+     */
+    @IsOptional() @IsString()
+    noUserStory?: string;
 
     @IsOptional() @IsString()
     search?: string;
@@ -291,6 +381,10 @@ export class CreateTaskDto {
     @IsOptional() @IsUUID()
     milestoneId?: string;
 
+    /** The story this task delivers part of. Must be in the same project. */
+    @IsOptional() @IsUUID()
+    userStoryId?: string;
+
     @IsOptional() @IsUUID()
     sprintId?: string;
 
@@ -349,6 +443,10 @@ export class UpdateTaskDto {
 
     @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     milestoneId?: string;
+
+    /** `''` takes the task out of its story, for the PATCH reason above. */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
+    userStoryId?: string;
 
     @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     sprintId?: string;

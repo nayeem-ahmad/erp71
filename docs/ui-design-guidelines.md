@@ -153,9 +153,15 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 **Rule: no feature is reachable *only* via a floating button.**
 
 - **FeedbackWidget: remove the floating dock.** Move Feedback into the header (icon button next to the notification bell) and/or the sidebar footer. `FloatingAssistDock` goes away.
-- Allowed fixed-position elements, exhaustively: toasts (`z-70`), the mobile sidebar drawer + backdrop, ModalShell overlays, and header-anchored dropdowns.
+- Allowed fixed-position elements, exhaustively: toasts (`z-70`), the mobile sidebar drawer + backdrop, ModalShell overlays, header-anchored dropdowns, and `FloatingPanel` (`z-20`).
+- **`FloatingPanel`** is the one sanctioned floating *surface*, and the time tracker is its only current use. What earns it the exception: a running clock has to stay visible on whatever page you navigate to, which no header, sidebar or page toolbar can do. What it must obey — every one of these, or it is a FAB with extra steps:
+  - it never replaces an inline entry point (the hour log's own header still opens it, and a task card still starts a timer);
+  - it is **movable** and remembers where it was left (`useFloatingPanel` + `lib/floating-panel-position.ts`, one localStorage key per panel), so it can be put wherever it is least in the way;
+  - it can always be collapsed to its header, and dismissed outright unless dismissing it would hide something that is still happening;
+  - it docks to the bottom of the screen below `md` rather than free-floating, and caps its body at `60vh` there (`70vh` above it);
+  - it sits **below** the modal layer, the mobile drawer and its backdrop, so it can never cover a dialog.
 - **POS cart FAB (mobile):** replace with a persistent bottom summary bar (item count + total + "View cart"), which is both always visible and not content-covering. If a FAB is ever truly needed, it must duplicate — never replace — an inline entry point.
-- Anything fixed must respect safe-area utilities and never overlap the last table row or form footer (add bottom padding to the scroll container equal to any fixed bar).
+- Anything fixed must respect safe-area utilities and never overlap the last table row or form footer (add bottom padding to the scroll container equal to any fixed bar). A `FloatingPanel` is the one thing that may cover content, because the person holding it decides where it sits — that is what being movable, collapsible and dismissible buys it, and it is the only reason the exception is granted.
 
 ### 2.9 Density & scroll minimization
 

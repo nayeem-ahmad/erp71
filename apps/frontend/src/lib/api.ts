@@ -2379,13 +2379,26 @@ export const api = {
         method: 'DELETE',
     }),
     // ── Imports (LC) ────────────────────────────────────────────────────────
-    getImportShipments: (params?: { status?: string; supplierId?: string; openOnly?: boolean }) => {
+    /** One server-paginated page, for `useServerList`. */
+    getImportShipments: (params?: {
+        page?: number;
+        limit?: number;
+        status?: string;
+        supplierId?: string;
+        openOnly?: boolean;
+        search?: string;
+        etaFrom?: string;
+        etaTo?: string;
+        sortBy?: string;
+        sortDir?: 'asc' | 'desc';
+    }): Promise<Paginated<any>> => {
         const query = new URLSearchParams();
-        if (params?.status) query.set('status', params.status);
-        if (params?.supplierId) query.set('supplierId', params.supplierId);
-        if (params?.openOnly) query.set('openOnly', 'true');
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value === undefined || value === null || value === '') continue;
+            query.set(key, String(value));
+        }
         const suffix = query.toString();
-        return fetchWithAuth(`/imports${suffix ? `?${suffix}` : ''}`);
+        return fetchPaginated(`/imports${suffix ? `?${suffix}` : ''}`);
     },
     getImportShipment: (id: string) => fetchWithAuth(`/imports/${id}`),
     createImportShipment: (data: any) =>
@@ -2403,23 +2416,39 @@ export const api = {
         fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteImportCost: (id: string, costId: string) =>
         fetchWithAuth(`/imports/${id}/costs/${costId}`, { method: 'DELETE' }),
+    /**
+     * Settles a charge recorded before the money left — the C&F agent's bill
+     * that arrives weeks after the goods. Works after receipt, where editing a
+     * cost does not: the landed cost is already fixed, only the cash leg is not.
+     */
+    payImportCost: (id: string, costId: string, data: { paidFromAccountId: string; paidAt?: string }) =>
+        fetchWithAuth(`/imports/${id}/costs/${costId}/pay`, { method: 'POST', body: JSON.stringify(data) }),
 
     /** Emits an ordinary Purchase at landed cost and moves the stock. */
     receiveImportShipment: (id: string, data: any = {}) =>
         fetchWithAuth(`/imports/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+    /** Moves the debt from the supplier to the bank. See ImportsService.accept. */
+    acceptImportShipment: (id: string, data: { acceptedAt?: string } = {}) =>
+        fetchWithAuth(`/imports/${id}/accept`, { method: 'POST', body: JSON.stringify(data) }),
     settleImportShipment: (id: string, data: any) =>
         fetchWithAuth(`/imports/${id}/settle`, { method: 'POST', body: JSON.stringify(data) }),
+    /** Writes any capitalised charges off to expense — the goods never arrive. */
+    cancelImportShipment: (id: string, data: { reason?: string; cancelledAt?: string } = {}) =>
+        fetchWithAuth(`/imports/${id}/cancel`, { method: 'POST', body: JSON.stringify(data) }),
 
-    addImportDocument: (id: string, data: any) =>
-        fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+    addImportDocument: (
+        id: string,
+        data: { docType: string; fileBase64: string; fileName?: string; mimeType?: string },
+    ) => fetchWithAuth(`/imports/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
     deleteImportDocument: (id: string, documentId: string) =>
         fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
 
     getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
-    getImportDutyReport: (params?: { from?: string; to?: string }) => {
+    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.includeUnpaid) query.set('includeUnpaid', 'true');
         const suffix = query.toString();
         return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
     },
@@ -4631,6 +4660,37 @@ export const api = {
         }),
     deleteProjectMilestone: (milestoneId: string) =>
         fetchWithAuth(`/projects/milestones/${milestoneId}`, { method: 'DELETE' }),
+
+    /**
+     * User stories. `projectId` is optional on the list — omitted returns every
+     * story the caller can reach — but every screen that has a project passes
+     * one, because a backlog is read one project at a time.
+     */
+    getProjectStories: (params: { projectId?: string; status?: string; search?: string } = {}) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value) query.set(key, String(value));
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/project-stories${suffix ? `?${suffix}` : ''}`);
+    },
+    /** One story with the tasks filed under it. */
+    getProjectStory: (storyId: string) => fetchWithAuth(`/project-stories/${storyId}`),
+    createProjectStory: (data: Record<string, unknown>) =>
+        fetchWithAuth('/project-stories', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectStory: (storyId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-stories/${storyId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The tasks under it are detached, never deleted with it. */
+    deleteProjectStory: (storyId: string) =>
+        fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
 
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),
