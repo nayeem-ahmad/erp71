@@ -6896,6 +6896,22 @@ model Board {
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
 
+  /// How the board's canvas is painted. A property of the board, not of the
+  /// browser reading it: everyone on a board sees the same background, which is
+  /// the whole point — a team recognises a board by its colour.
+  ///
+  /// One background, so the two are mutually exclusive: setting a colour clears
+  /// the image and vice versa. A key from BOARD_BACKGROUND_COLORS in
+  /// shared-types rather than a hex string — the page maps it to a Tailwind
+  /// class, and a free-text colour would be both unrenderable and a way to put
+  /// unreadable text on a board for everyone else.
+  background_color     String?
+  /// The CDN URL the board renders, and the Cloudinary public_id behind it.
+  /// Both, because a URL cannot be turned back into a public_id: without the
+  /// key, replacing a background strands the old file and it is billed forever.
+  background_image_url String?
+  background_image_key String?
+
   tenant  Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   creator User?  @relation("BoardCreator", fields: [created_by], references: [id])
 

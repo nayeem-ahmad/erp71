@@ -685,6 +685,33 @@ export const projectsMessages = {
         allBoards: 'All boards',
         withCards: 'With cards',
         emptyOnly: 'Empty boards',
+
+        // The board's own background — a colour or an uploaded picture. Unlike
+        // `board.view` above, which is this browser's preference, this is stored
+        // on the board: everyone who opens it sees the same thing.
+        background: {
+            title: 'Background',
+            hint: 'Everyone who opens this board sees it.',
+            colors: 'Colours',
+            image: 'Picture',
+            uploadImage: 'Upload a picture',
+            replaceImage: 'Replace the picture',
+            currentImage: 'Current board background',
+            fileHint: 'JPEG, PNG or WebP, up to 3.5 MB.',
+            remove: 'Remove background',
+            saved: 'Background updated',
+            tooLarge: 'That picture is too large. Use one under 3.5 MB.',
+            notAnImage: 'Use a JPEG, PNG or WebP picture.',
+            uploadFailed: 'The picture could not be read.',
+            colorNames: {
+                GRAY: 'Grey',
+                BLUE: 'Blue',
+                EMERALD: 'Green',
+                AMBER: 'Amber',
+                RED: 'Red',
+                PURPLE: 'Purple',
+            },
+        },
     },
 
 } as const;

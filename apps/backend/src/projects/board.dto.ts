@@ -2,6 +2,7 @@ import {
     ArrayNotEmpty,
     IsArray,
     IsEnum,
+    IsIn,
     IsInt,
     IsOptional,
     IsString,
@@ -10,6 +11,7 @@ import {
     Min,
     MinLength,
 } from 'class-validator';
+import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 
 const CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
 export type BoardColumnCategory = (typeof CATEGORIES)[number];
@@ -37,6 +39,36 @@ export class UpdateBoardDto {
     @IsString()
     @MaxLength(500)
     description?: string;
+
+    /**
+     * A palette key, or `null` to go back to the plain board — `@IsOptional`
+     * waves both `null` and an absent key past the check, and the service tells
+     * the two apart, so "clear the colour" and "leave it alone" stay distinct.
+     *
+     * Validated against the shared list rather than accepting any colour
+     * string: the page renders it as a Tailwind class, so a free-text value
+     * would be both unrenderable and a way to leave the board unreadable for
+     * everyone else in the workspace.
+     */
+    @IsOptional()
+    @IsIn(BOARD_BACKGROUND_COLORS)
+    backgroundColor?: BoardBackgroundColor | null;
+}
+
+/** An uploaded board background, as `FileReader.readAsDataURL` produces it. */
+export class SetBoardBackgroundImageDto {
+    /** A `data:` URL or a bare base64 string. */
+    @IsString()
+    imageBase64!: string;
+
+    @IsOptional()
+    @IsString()
+    mimeType?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    fileName?: string;
 }
 
 export class AddBoardTasksDto {

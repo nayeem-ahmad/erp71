@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
+import { parseImageUpload } from '../common/image-upload.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
@@ -7,6 +14,7 @@ import {
     CreateBoardCardDto,
     CreateBoardDto,
     MoveBoardCardDto,
+    SetBoardBackgroundImageDto,
     UpdateBoardDto,
 } from './board.dto';
 
@@ -23,6 +31,28 @@ const CARD_TASK_INCLUDE = {
     _count: { select: { subtasks: true, comments: true } },
 } as const;
 
+/**
+ * Where an uploaded background lands. Per tenant, so one workspace's picture can
+ * never be served as another's board.
+ */
+export function boardBackgroundFolder(tenantId: string): string {
+    return `${tenantId}/project-boards`;
+}
+
+/**
+ * A board on its way to the browser.
+ *
+ * `background_image_key` is the Cloudinary `public_id` and is the server's
+ * business only — it is how this service deletes a replaced picture, and the
+ * browser has no use for it. Stripped here rather than by a `select` so the
+ * mutation responses keep the rest of the row exactly as they always returned
+ * it, and so one function is the single place that decides this.
+ */
+function withoutStorageKey<T extends { background_image_key?: string | null }>(board: T) {
+    const { background_image_key: _key, ...rest } = board;
+    return rest;
+}
+
 @Injectable()
 export class BoardsService {
     constructor(
@@ -30,6 +60,7 @@ export class BoardsService {
         private readonly columns: BoardColumnsService,
         private readonly tasks: ProjectTasksService,
         private readonly access: ProjectAccessService,
+        private readonly assets: AssetsService,
     ) {}
 
     private async assertBoard(tenantId: string, boardId: string) {
@@ -63,6 +94,8 @@ export class BoardsService {
             name: board.name,
             description: board.description,
             created_at: board.created_at,
+            background_color: board.background_color,
+            background_image_url: board.background_image_url,
             card_count: board._count.cards,
         }));
     }
@@ -81,14 +114,108 @@ export class BoardsService {
     }
 
     async update(tenantId: string, boardId: string, dto: UpdateBoardDto) {
-        await this.assertBoard(tenantId, boardId);
-        return this.db.board.update({
+        const board = await this.assertBoard(tenantId, boardId);
+
+        // A board wears one background. Picking a colour therefore retires the
+        // image rather than sitting behind it — and the file goes with it, or
+        // the tenant is billed for a picture nothing can ever show again.
+        const replacingImage =
+            dto.backgroundColor !== undefined && Boolean((board as any).background_image_key);
+
+        const updated = await this.db.board.update({
             where: { id: boardId },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name } : {}),
                 ...(dto.description !== undefined ? { description: dto.description } : {}),
+                ...(dto.backgroundColor !== undefined
+                    ? {
+                          background_color: dto.backgroundColor,
+                          background_image_url: null,
+                          background_image_key: null,
+                      }
+                    : {}),
             },
         });
+
+        // After the row, for the same reason an attachment is deleted in this
+        // order: a failed delete here leaves a stray file, while the reverse
+        // leaves a board pointing at an image that is already gone.
+        if (replacingImage) {
+            await this.assets.deleteFile((board as any).background_image_key, 'image');
+        }
+        return withoutStorageKey(updated);
+    }
+
+    /**
+     * Upload an image and hang it behind the board.
+     *
+     * The upload and the row move together here rather than the storefront's
+     * two-step (upload returns a URL, a later PATCH stores it): a board
+     * background has no form to save, so an upload that did not land anywhere
+     * would be a file nobody asked for. Keeping the `public_id` is what lets
+     * the next background replace this one without stranding it.
+     */
+    async setBackgroundImage(tenantId: string, boardId: string, dto: SetBoardBackgroundImageDto) {
+        const board = await this.assertBoard(tenantId, boardId);
+        const { buffer } = parseImageUpload(dto.imageBase64, dto.mimeType);
+
+        if (!this.assets.isEnabled()) {
+            // Distinguishable from a transient failure: this will not fix
+            // itself on retry, and the operator needs to know why.
+            throw new ServiceUnavailableException(
+                'File storage is not configured, so the background could not be saved.',
+            );
+        }
+
+        const stem = (dto.fileName ?? 'background').replace(/\.[^.]+$/, '').slice(0, 100);
+        const safeStem =
+            stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'background';
+
+        let stored: { url: string; publicId: string };
+        try {
+            stored = await this.assets.uploadBuffer(
+                buffer,
+                boardBackgroundFolder(tenantId),
+                safeStem,
+                'image',
+            );
+        } catch {
+            throw new ServiceUnavailableException('The background could not be uploaded.');
+        }
+
+        const updated = await this.db.board.update({
+            where: { id: boardId },
+            data: {
+                background_image_url: stored.url,
+                background_image_key: stored.publicId,
+                // The colour goes: one background, and leaving it set would
+                // decide the board's look again the moment the image is cleared.
+                background_color: null,
+            },
+        });
+
+        const previousKey = (board as any).background_image_key;
+        if (previousKey && previousKey !== stored.publicId) {
+            await this.assets.deleteFile(previousKey, 'image');
+        }
+        return withoutStorageKey(updated);
+    }
+
+    /** Back to the plain board: both columns cleared, and the file with them. */
+    async clearBackground(tenantId: string, boardId: string) {
+        const board = await this.assertBoard(tenantId, boardId);
+        const updated = await this.db.board.update({
+            where: { id: boardId },
+            data: {
+                background_color: null,
+                background_image_url: null,
+                background_image_key: null,
+            },
+        });
+        if ((board as any).background_image_key) {
+            await this.assets.deleteFile((board as any).background_image_key, 'image');
+        }
+        return withoutStorageKey(updated);
     }
 
     async remove(tenantId: string, boardId: string) {
@@ -155,6 +282,8 @@ export class BoardsService {
             id: board.id,
             name: board.name,
             description: board.description,
+            background_color: (board as any).background_color ?? null,
+            background_image_url: (board as any).background_image_url ?? null,
             columns: (boardColumns as any[]).map((column) => ({
                 id: column.id,
                 name: column.name,

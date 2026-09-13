@@ -683,6 +683,30 @@ export const projectsMessages = {
         allBoards: "Alle Boards",
         withCards: "Mit Karten",
         emptyOnly: "Leere Boards",
+
+        background: {
+            title: "Hintergrund",
+            hint: "Alle, die dieses Board öffnen, sehen ihn.",
+            colors: "Farben",
+            image: "Bild",
+            uploadImage: "Bild hochladen",
+            replaceImage: "Bild ersetzen",
+            currentImage: "Aktueller Board-Hintergrund",
+            fileHint: "JPEG, PNG oder WebP, bis 3,5 MB.",
+            remove: "Hintergrund entfernen",
+            saved: "Hintergrund aktualisiert",
+            tooLarge: "Das Bild ist zu groß. Verwende eines unter 3,5 MB.",
+            notAnImage: "Verwende ein JPEG-, PNG- oder WebP-Bild.",
+            uploadFailed: "Das Bild konnte nicht gelesen werden.",
+            colorNames: {
+                GRAY: "Grau",
+                BLUE: "Blau",
+                EMERALD: "Grün",
+                AMBER: "Bernstein",
+                RED: "Rot",
+                PURPLE: "Violett",
+            },
+        },
     },
 
 } as const;

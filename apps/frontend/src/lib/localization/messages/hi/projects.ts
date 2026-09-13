@@ -683,6 +683,30 @@ export const projectsMessages = {
         allBoards: "सभी बोर्ड",
         withCards: "कार्ड वाले",
         emptyOnly: "खाली बोर्ड",
+
+        background: {
+            title: "पृष्ठभूमि",
+            hint: "यह बोर्ड खोलने वाले सभी लोग इसे देखते हैं।",
+            colors: "रंग",
+            image: "छवि",
+            uploadImage: "छवि अपलोड करें",
+            replaceImage: "छवि बदलें",
+            currentImage: "वर्तमान बोर्ड पृष्ठभूमि",
+            fileHint: "JPEG, PNG या WebP, अधिकतम 3.5 MB।",
+            remove: "पृष्ठभूमि हटाएँ",
+            saved: "पृष्ठभूमि अपडेट हुई",
+            tooLarge: "यह छवि बहुत बड़ी है। 3.5 MB से छोटी छवि चुनें।",
+            notAnImage: "JPEG, PNG या WebP छवि चुनें।",
+            uploadFailed: "छवि पढ़ी नहीं जा सकी।",
+            colorNames: {
+                GRAY: "स्लेटी",
+                BLUE: "नीला",
+                EMERALD: "हरा",
+                AMBER: "अंबर",
+                RED: "लाल",
+                PURPLE: "बैंगनी",
+            },
+        },
     },
 
 } as const;

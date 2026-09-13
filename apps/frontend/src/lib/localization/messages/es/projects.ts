@@ -683,6 +683,30 @@ export const projectsMessages = {
         allBoards: "Todos los tableros",
         withCards: "Con tarjetas",
         emptyOnly: "Tableros vacíos",
+
+        background: {
+            title: "Fondo",
+            hint: "Lo ve todo el que abre este tablero.",
+            colors: "Colores",
+            image: "Imagen",
+            uploadImage: "Subir una imagen",
+            replaceImage: "Reemplazar la imagen",
+            currentImage: "Fondo actual del tablero",
+            fileHint: "JPEG, PNG o WebP, hasta 3,5 MB.",
+            remove: "Quitar el fondo",
+            saved: "Fondo actualizado",
+            tooLarge: "Esa imagen es demasiado grande. Usa una de menos de 3,5 MB.",
+            notAnImage: "Usa una imagen JPEG, PNG o WebP.",
+            uploadFailed: "No se pudo leer la imagen.",
+            colorNames: {
+                GRAY: "Gris",
+                BLUE: "Azul",
+                EMERALD: "Verde",
+                AMBER: "Ámbar",
+                RED: "Rojo",
+                PURPLE: "Morado",
+            },
+        },
     },
 
 } as const;

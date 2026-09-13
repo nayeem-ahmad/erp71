@@ -2,6 +2,7 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    BoardBackgroundColor,
     DashboardPreference,
     PasswordPolicy,
     PlatformFeatureKey,
@@ -4664,13 +4665,39 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    updateBoard: (id: string, data: { name?: string; description?: string }) =>
+    updateBoard: (
+        id: string,
+        data: {
+            name?: string;
+            description?: string;
+            /** A key from BOARD_BACKGROUND_COLORS, or null for the plain board. */
+            backgroundColor?: BoardBackgroundColor | null;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoard: (id: string) => fetchWithAuth(`/projects/boards/${id}`, { method: 'DELETE' }),
+    /**
+     * Uploads the picture and hangs it on the board in one call — unlike the
+     * storefront's upload-then-PATCH, because a board background has no form to
+     * save and an upload that landed nowhere would be a file nobody asked for.
+     * Returns the updated board.
+     */
+    setBoardBackgroundImage: (
+        id: string,
+        data: { imageBase64: string; mimeType?: string; fileName?: string },
+    ) =>
+        fetchWithAuth(`/projects/boards/${id}/background/image`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Back to the plain board, whichever kind of background it was wearing. */
+    clearBoardBackground: (id: string) =>
+        fetchWithAuth(`/projects/boards/${id}/background`, { method: 'DELETE' }),
     addBoardTasks: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/projects/boards/${id}/tasks`, {
             method: 'POST',
