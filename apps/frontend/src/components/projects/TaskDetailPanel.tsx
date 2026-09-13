@@ -165,6 +165,361 @@ const EMPTY_TIME_FORM = () => ({ hours: '', workDate: today(), note: '', remaini
 const isTask = (value: unknown): value is Task =>
     typeof value === 'object' && value !== null && typeof (value as Task).id === 'string';
 
+/**
+ * The card's content, with no shell around it.
+ *
+ * Split out so the same body can be a modal (the default, and how every list
+ * and board still opens a card) and a page at `/projects/tasks/<id>` that can
+ * be linked to. Nothing about the sections changed in the split — this is the
+ * grid that used to sit inline inside `ModalShell`, moved out whole.
+ *
+ * The prop list is wide because the split is deliberately behaviour-preserving:
+ * every piece of state and every handler still lives in one owner above, so
+ * there is no second copy of "how a card saves" to keep in step. Narrowing it
+ * is a later refactor, not part of making the body reusable.
+ */
+function TaskCardBody({
+    task,
+    taskId,
+    statuses,
+    history,
+    busy,
+    timeForm,
+    setTimeForm,
+    hours,
+    canSaveWork,
+    allLabels,
+    members,
+    stories,
+    localeInfo,
+    apply,
+    refresh,
+    markChanged,
+    changeStatus,
+    saveWork,
+    deleteEntry,
+    onLabelsWanted,
+    onMembersWanted,
+    onStoriesWanted,
+}: {
+    task: Task;
+    taskId: string;
+    statuses: { id: string; name: string; category: string }[];
+    history: RemainingLog[];
+    busy: boolean;
+    timeForm: ReturnType<typeof EMPTY_TIME_FORM>;
+    setTimeForm: React.Dispatch<React.SetStateAction<ReturnType<typeof EMPTY_TIME_FORM>>>;
+    hours: number;
+    canSaveWork: boolean;
+    allLabels: ProjectLabel[];
+    members: ProjectMemberRow[];
+    stories: StoryOption[];
+    localeInfo: ReturnType<typeof useI18n>['localeInfo'];
+    apply: (updated: unknown) => Promise<boolean>;
+    refresh: () => Promise<void>;
+    markChanged: () => void;
+    changeStatus: (statusId: string) => Promise<void>;
+    saveWork: (event: React.FormEvent) => Promise<void>;
+    deleteEntry: (entryId: string) => Promise<void>;
+    onLabelsWanted: () => void;
+    onMembersWanted: () => void;
+    onStoriesWanted: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+
+    return (
+        /* Trello's card, in two columns: the work itself in the wide
+           one, everything that merely describes it beside it. Placed
+           explicitly rather than by source order so the sidebar sits
+           under the title on a phone — where status and assignee are
+           the first things reached for — and on the right on desktop. */
+        <div className="grid gap-4 md:grid-cols-3">
+            <aside className="space-y-3 md:col-start-3 md:row-start-1">
+                <section className="space-y-3 rounded-md border border-gray-200 p-3">
+                    <h3 className="text-sm font-medium">{m.task.details}</h3>
+
+                    <Field label={m.fields.status} htmlFor="task-status">
+                        <Select
+                            id="task-status"
+                            value={task.status?.id ?? ''}
+                            onChange={(e) => changeStatus(e.target.value)}
+                            disabled={busy}
+                        >
+                            {statuses.map((status) => (
+                                <option key={status.id} value={status.id}>
+                                    {status.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+
+                    <AssigneeField
+                        task={task}
+                        taskId={taskId}
+                        members={members}
+                        onSaved={apply}
+                        onWanted={onMembersWanted}
+                    />
+
+                    <UserStoryField
+                        task={task}
+                        taskId={taskId}
+                        stories={stories}
+                        onSaved={apply}
+                        onWanted={onStoriesWanted}
+                    />
+
+                    <EstimateField task={task} taskId={taskId} onSaved={apply} />
+
+                    {/* Read-only, unlike the estimate above them:
+                        logged is the sum of the time entries and
+                        remaining is set by the form in the main
+                        column, which records why it moved. */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <Metric
+                            label={m.task.logged}
+                            value={`${num(task.logged_hours)}h`}
+                        />
+                        <Metric
+                            label={m.task.remaining}
+                            value={`${num(task.remaining_hours)}h`}
+                            highlight
+                        />
+                    </div>
+                </section>
+
+                <DatesSection task={task} taskId={taskId} onSaved={apply} />
+
+                <LabelsSection
+                    taskId={taskId}
+                    all={allLabels}
+                    selected={labelsOf(task)}
+                    onSaved={apply}
+                    onWanted={onLabelsWanted}
+                />
+
+                <CoverSection task={task} taskId={taskId} onSaved={apply} />
+            </aside>
+
+            <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
+                {/* First, not seventh. Logging an afternoon is the
+                    most frequent write in the module and it used to
+                    sit below the description, the checklist and the
+                    attachments, inside a scroller. */}
+                <section className="rounded-md border border-gray-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-medium">{m.time.log}</h3>
+                        <TimerButton taskId={taskId} onChanged={refresh} />
+                    </div>
+                    <form onSubmit={saveWork} className="mt-2 space-y-2">
+                        {/* One row on a desktop, stacked on a phone.
+                            Four fields that are one act do not need
+                            four rows of a modal. */}
+                        <div className="grid gap-2 md:grid-cols-[5rem_9rem_7rem_1fr_auto] md:items-end">
+                            <Field label={m.time.hours} htmlFor="task-log-hours">
+                                <Input
+                                    id="task-log-hours"
+                                    type="number"
+                                    min="0.25"
+                                    step="0.25"
+                                    value={timeForm.hours}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, hours: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label={m.time.workDate} htmlFor="task-log-date">
+                                <Input
+                                    id="task-log-date"
+                                    type="date"
+                                    value={timeForm.workDate}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, workDate: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field
+                                label={m.time.remainingAfter}
+                                htmlFor="task-log-remaining"
+                            >
+                                <Input
+                                    id="task-log-remaining"
+                                    type="number"
+                                    min="0"
+                                    step="0.25"
+                                    placeholder={String(
+                                        Math.max(num(task.remaining_hours) - hours, 0),
+                                    )}
+                                    value={timeForm.remaining}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, remaining: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label={m.time.note} htmlFor="task-log-note">
+                                <Input
+                                    id="task-log-note"
+                                    placeholder={m.remaining.notePlaceholder}
+                                    value={timeForm.note}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, note: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Button
+                                type="submit"
+                                disabled={busy || !canSaveWork}
+                                className="min-h-touch"
+                            >
+                                {t.common.save}
+                            </Button>
+                        </div>
+                    </form>
+                    <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
+                </section>
+
+                <DescriptionSection
+                    description={task.description ?? ''}
+                    taskId={taskId}
+                    onSaved={apply}
+                />
+
+                <ChecklistSection
+                    taskId={taskId}
+                    items={task.checklistItems ?? []}
+                    onChanged={refresh}
+                />
+
+                {/* Everything below here is the record rather than
+                    the work: read on demand, and fetched on demand
+                    with it. Six of the ten requests opening a card
+                    used to make were for these. */}
+                <CollapsibleSection title={m.attachments.title}>
+                    <AttachmentsSection taskId={taskId} />
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.tabs.time}
+                    count={(task.timeEntries ?? []).length}
+                >
+                    {(task.timeEntries ?? []).length === 0 ? (
+                        <p className="text-sm text-gray-500">{m.time.empty}</p>
+                    ) : (
+                        <ul className="divide-y divide-gray-200 text-sm">
+                            {(task.timeEntries ?? []).map((entry) => (
+                                <li key={entry.id} className="flex items-center gap-2 py-1.5">
+                                    <span className="w-24 shrink-0 text-gray-500">
+                                        {formatDate(entry.work_date)}
+                                    </span>
+                                    <span className="w-14 shrink-0">{num(entry.hours)}h</span>
+                                    <span className="flex-1 truncate text-gray-600">
+                                        {entry.note ?? ''}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        aria-label={t.common.delete}
+                                        className="min-h-touch px-2 text-red-600"
+                                        disabled={busy}
+                                        onClick={() => deleteEntry(entry.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.remaining.history}
+                    count={history.length}
+                >
+                    {history.length === 0 ? (
+                        <p className="text-sm text-gray-500">{m.remaining.empty}</p>
+                    ) : (
+                        <>
+                            {/* The shape first, the rows under it. The
+                                list answers "what happened"; the line
+                                answers "is this converging", which is
+                                what someone opening a card wants to
+                                know — and it doubles as the chart's
+                                table view, so no figure is reachable
+                                only by hovering a dot. */}
+                            <RemainingHoursChart
+                                history={history}
+                                estimate={
+                                    task.estimate_hours == null
+                                        ? null
+                                        : num(task.estimate_hours)
+                                }
+                                dateLocale={localeInfo.dateLocale}
+                                labels={{
+                                    title: m.remaining.chart,
+                                    remaining: m.overview.remaining,
+                                    estimate: m.overview.estimated,
+                                    now: m.remaining.chartNow,
+                                    upNote: m.remaining.chartUpNote,
+                                }}
+                            />
+                            <ul className="mt-3 divide-y divide-gray-200 text-sm">
+                            {history.map((row) => {
+                                const delta = Number(row.delta);
+                                const up = delta > 0;
+                                return (
+                                    <li key={row.id} className="flex items-start gap-2 py-2">
+                                        <span
+                                            className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
+                                            aria-hidden
+                                        >
+                                            {up ? (
+                                                <ArrowUp className="h-4 w-4" />
+                                            ) : (
+                                                <ArrowDown className="h-4 w-4" />
+                                            )}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="flex flex-wrap items-center gap-1.5">
+                                                <StatusBadge tone={up ? 'warning' : 'success'}>
+                                                    {m.remaining.sources[
+                                                        row.source as keyof typeof m.remaining.sources
+                                                    ] ?? row.source}
+                                                </StatusBadge>
+                                                <span className="text-gray-600">
+                                                    {num(row.previous_hours)}h → {num(row.new_hours)}h
+                                                </span>
+                                            </p>
+                                            {row.note && (
+                                                <p className="mt-0.5 text-xs text-gray-500">
+                                                    {row.note}
+                                                </p>
+                                            )}
+                                            <p className="mt-0.5 text-xs text-gray-400">
+                                                {formatDateTime(row.changed_at)}
+                                                {row.user
+                                                    ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                            </ul>
+                        </>
+                    )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.activity.title}
+                    count={task._count?.comments}
+                >
+                    <ActivitySection taskId={taskId} onChanged={markChanged} />
+                </CollapsibleSection>
+            </div>
+        </div>
+    );
+}
+
 export default function TaskDetailPanel({
     taskId,
     onClose,
@@ -446,294 +801,30 @@ export default function TaskDetailPanel({
                 {!task ? (
                     <p className="text-sm text-gray-500">{t.common.loading}</p>
                 ) : (
-                    /* Trello's card, in two columns: the work itself in the wide
-                       one, everything that merely describes it beside it. Placed
-                       explicitly rather than by source order so the sidebar sits
-                       under the title on a phone — where status and assignee are
-                       the first things reached for — and on the right on desktop. */
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <aside className="space-y-3 md:col-start-3 md:row-start-1">
-                            <section className="space-y-3 rounded-md border border-gray-200 p-3">
-                                <h3 className="text-sm font-medium">{m.task.details}</h3>
-
-                                <Field label={m.fields.status} htmlFor="task-status">
-                                    <Select
-                                        id="task-status"
-                                        value={task.status?.id ?? ''}
-                                        onChange={(e) => changeStatus(e.target.value)}
-                                        disabled={busy}
-                                    >
-                                        {statuses.map((status) => (
-                                            <option key={status.id} value={status.id}>
-                                                {status.name}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                </Field>
-
-                                <AssigneeField
-                                    task={task}
-                                    taskId={taskId}
-                                    members={members}
-                                    onSaved={apply}
-                                    onWanted={() => setMembersWanted(true)}
-                                />
-
-                                <UserStoryField
-                                    task={task}
-                                    taskId={taskId}
-                                    stories={stories}
-                                    onSaved={apply}
-                                    onWanted={() => setStoriesWanted(true)}
-                                />
-
-                                <EstimateField task={task} taskId={taskId} onSaved={apply} />
-
-                                {/* Read-only, unlike the estimate above them:
-                                    logged is the sum of the time entries and
-                                    remaining is set by the form in the main
-                                    column, which records why it moved. */}
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Metric
-                                        label={m.task.logged}
-                                        value={`${num(task.logged_hours)}h`}
-                                    />
-                                    <Metric
-                                        label={m.task.remaining}
-                                        value={`${num(task.remaining_hours)}h`}
-                                        highlight
-                                    />
-                                </div>
-                            </section>
-
-                            <DatesSection task={task} taskId={taskId} onSaved={apply} />
-
-                            <LabelsSection
-                                taskId={taskId}
-                                all={allLabels}
-                                selected={labelsOf(task)}
-                                onSaved={apply}
-                                onWanted={() => setLabelsWanted(true)}
-                            />
-
-                            <CoverSection task={task} taskId={taskId} onSaved={apply} />
-                        </aside>
-
-                        <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                            {/* First, not seventh. Logging an afternoon is the
-                                most frequent write in the module and it used to
-                                sit below the description, the checklist and the
-                                attachments, inside a scroller. */}
-                            <section className="rounded-md border border-gray-200 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <h3 className="text-sm font-medium">{m.time.log}</h3>
-                                    <TimerButton taskId={taskId} onChanged={refresh} />
-                                </div>
-                                <form onSubmit={saveWork} className="mt-2 space-y-2">
-                                    {/* One row on a desktop, stacked on a phone.
-                                        Four fields that are one act do not need
-                                        four rows of a modal. */}
-                                    <div className="grid gap-2 md:grid-cols-[5rem_9rem_7rem_1fr_auto] md:items-end">
-                                        <Field label={m.time.hours} htmlFor="task-log-hours">
-                                            <Input
-                                                id="task-log-hours"
-                                                type="number"
-                                                min="0.25"
-                                                step="0.25"
-                                                value={timeForm.hours}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, hours: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field label={m.time.workDate} htmlFor="task-log-date">
-                                            <Input
-                                                id="task-log-date"
-                                                type="date"
-                                                value={timeForm.workDate}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, workDate: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field
-                                            label={m.time.remainingAfter}
-                                            htmlFor="task-log-remaining"
-                                        >
-                                            <Input
-                                                id="task-log-remaining"
-                                                type="number"
-                                                min="0"
-                                                step="0.25"
-                                                placeholder={String(
-                                                    Math.max(num(task.remaining_hours) - hours, 0),
-                                                )}
-                                                value={timeForm.remaining}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, remaining: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field label={m.time.note} htmlFor="task-log-note">
-                                            <Input
-                                                id="task-log-note"
-                                                placeholder={m.remaining.notePlaceholder}
-                                                value={timeForm.note}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, note: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Button
-                                            type="submit"
-                                            disabled={busy || !canSaveWork}
-                                            className="min-h-touch"
-                                        >
-                                            {t.common.save}
-                                        </Button>
-                                    </div>
-                                </form>
-                                <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
-                            </section>
-
-                            <DescriptionSection
-                                description={task.description ?? ''}
-                                taskId={taskId}
-                                onSaved={apply}
-                            />
-
-                            <ChecklistSection
-                                taskId={taskId}
-                                items={task.checklistItems ?? []}
-                                onChanged={refresh}
-                            />
-
-                            {/* Everything below here is the record rather than
-                                the work: read on demand, and fetched on demand
-                                with it. Six of the ten requests opening a card
-                                used to make were for these. */}
-                            <CollapsibleSection title={m.attachments.title}>
-                                <AttachmentsSection taskId={taskId} />
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.tabs.time}
-                                count={(task.timeEntries ?? []).length}
-                            >
-                                {(task.timeEntries ?? []).length === 0 ? (
-                                    <p className="text-sm text-gray-500">{m.time.empty}</p>
-                                ) : (
-                                    <ul className="divide-y divide-gray-200 text-sm">
-                                        {(task.timeEntries ?? []).map((entry) => (
-                                            <li key={entry.id} className="flex items-center gap-2 py-1.5">
-                                                <span className="w-24 shrink-0 text-gray-500">
-                                                    {formatDate(entry.work_date)}
-                                                </span>
-                                                <span className="w-14 shrink-0">{num(entry.hours)}h</span>
-                                                <span className="flex-1 truncate text-gray-600">
-                                                    {entry.note ?? ''}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    aria-label={t.common.delete}
-                                                    className="min-h-touch px-2 text-red-600"
-                                                    disabled={busy}
-                                                    onClick={() => deleteEntry(entry.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.remaining.history}
-                                count={history.length}
-                            >
-                                {history.length === 0 ? (
-                                    <p className="text-sm text-gray-500">{m.remaining.empty}</p>
-                                ) : (
-                                    <>
-                                        {/* The shape first, the rows under it. The
-                                            list answers "what happened"; the line
-                                            answers "is this converging", which is
-                                            what someone opening a card wants to
-                                            know — and it doubles as the chart's
-                                            table view, so no figure is reachable
-                                            only by hovering a dot. */}
-                                        <RemainingHoursChart
-                                            history={history}
-                                            estimate={
-                                                task.estimate_hours == null
-                                                    ? null
-                                                    : num(task.estimate_hours)
-                                            }
-                                            dateLocale={localeInfo.dateLocale}
-                                            labels={{
-                                                title: m.remaining.chart,
-                                                remaining: m.overview.remaining,
-                                                estimate: m.overview.estimated,
-                                                now: m.remaining.chartNow,
-                                                upNote: m.remaining.chartUpNote,
-                                            }}
-                                        />
-                                        <ul className="mt-3 divide-y divide-gray-200 text-sm">
-                                        {history.map((row) => {
-                                            const delta = Number(row.delta);
-                                            const up = delta > 0;
-                                            return (
-                                                <li key={row.id} className="flex items-start gap-2 py-2">
-                                                    <span
-                                                        className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
-                                                        aria-hidden
-                                                    >
-                                                        {up ? (
-                                                            <ArrowUp className="h-4 w-4" />
-                                                        ) : (
-                                                            <ArrowDown className="h-4 w-4" />
-                                                        )}
-                                                    </span>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="flex flex-wrap items-center gap-1.5">
-                                                            <StatusBadge tone={up ? 'warning' : 'success'}>
-                                                                {m.remaining.sources[
-                                                                    row.source as keyof typeof m.remaining.sources
-                                                                ] ?? row.source}
-                                                            </StatusBadge>
-                                                            <span className="text-gray-600">
-                                                                {num(row.previous_hours)}h → {num(row.new_hours)}h
-                                                            </span>
-                                                        </p>
-                                                        {row.note && (
-                                                            <p className="mt-0.5 text-xs text-gray-500">
-                                                                {row.note}
-                                                            </p>
-                                                        )}
-                                                        <p className="mt-0.5 text-xs text-gray-400">
-                                                            {formatDateTime(row.changed_at)}
-                                                            {row.user
-                                                                ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
-                                                                : ''}
-                                                        </p>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                        </ul>
-                                    </>
-                                )}
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.activity.title}
-                                count={task._count?.comments}
-                            >
-                                <ActivitySection taskId={taskId} onChanged={markChanged} />
-                            </CollapsibleSection>
-                        </div>
-                    </div>
+                    <TaskCardBody
+                        task={task}
+                        taskId={taskId}
+                        statuses={statuses}
+                        history={history}
+                        busy={busy}
+                        timeForm={timeForm}
+                        setTimeForm={setTimeForm}
+                        hours={hours}
+                        canSaveWork={canSaveWork}
+                        allLabels={allLabels}
+                        members={members}
+                        stories={stories}
+                        localeInfo={localeInfo}
+                        apply={apply}
+                        refresh={refresh}
+                        markChanged={markChanged}
+                        changeStatus={changeStatus}
+                        saveWork={saveWork}
+                        deleteEntry={deleteEntry}
+                        onLabelsWanted={() => setLabelsWanted(true)}
+                        onMembersWanted={() => setMembersWanted(true)}
+                        onStoriesWanted={() => setStoriesWanted(true)}
+                    />
                 )}
             </div>
 

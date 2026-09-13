@@ -206,13 +206,17 @@ so it can be reverted on evidence rather than argued about.
 
 ## Costs, honestly
 
-- **`TaskDetailPanel.tsx` is 1,997 lines under a 1,478-line, 104-test suite.**
+- **`TaskDetailPanel.tsx` is 1,997 lines under a 1,478-line, 98-test suite.**
   The extraction is the risky part, not the chips. The suite mounts the default
   export with a mocked `api` and its `describe` blocks are per-section, so the
   tests survive **if and only if** accessible names are preserved — every
   section keeps its current label and every control its current `aria-label`.
-  Do the extraction as its own commit with no behaviour change, prove the 104
-  tests green, then land the chips. Note that `UserStoryField` arrived with no
+  Do the extraction as its own commit with no behaviour change, prove the 98
+  tests green, then land the chips. (98 is the runner's figure. An earlier draft
+  of this document said 104, counted with `grep -c 'it(\|test('`, which also
+  matches `edit()` and similar identifiers — a reminder to take the count from
+  the runner, since a wrong gate makes a correct extraction look like it lost
+  six tests.) Note that `UserStoryField` arrived with no
   test of its own, so the story chip needs one written rather than adapted.
 - **Nine i18n catalogues.** `catalog.test.ts` collects full key paths from `en`
   and asserts deep equality for every locale, so a missing key fails the build
@@ -230,7 +234,7 @@ so it can be reverted on evidence rather than argued about.
 
 | Order | Item | Why here |
 |---|---|---|
-| 1 | Extract `TaskCardBody`, no behaviour change | Prove 104 tests green before anything moves. |
+| 1 | Extract `TaskCardBody`, no behaviour change | Prove 98 tests green before anything moves. |
 | 2 | The route + `taskDetail()` + expand control | Small, independently shippable, no visual risk. |
 | 3 | Chip row + `ChipPopover` | The payoff. Biggest diff; do it on a settled body. |
 | 4 | Facts as key/value | Same sidebar, follows naturally from 3. |
