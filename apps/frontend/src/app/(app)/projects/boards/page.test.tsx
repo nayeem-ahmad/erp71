@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
 import BoardsPage from './page';
 import { api } from '@/lib/api';
+import { BOARD_BACKGROUND_CLASS } from '@/components/projects/board-background';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -124,6 +125,23 @@ describe('BoardsPage', () => {
         expect(
             (screen.getByPlaceholderText(/search board name or description/i) as HTMLInputElement).value,
         ).toBe('queue');
+    });
+
+    it('marks each board with the background it wears, so a colour is recognisable off the list', async () => {
+        (api.getBoards as jest.Mock).mockResolvedValue([
+            { id: 'b1', name: 'Release 4', card_count: 1, background_color: 'BLUE' },
+            { id: 'b2', name: 'Support queue', card_count: 0, background_image_url: 'https://cdn/x.jpg' },
+            { id: 'b3', name: 'Plain', card_count: 0 },
+        ]);
+
+        render(<BoardsPage />);
+        await screen.findByText('Release 4');
+
+        const [blue, picture, plain] = screen.getAllByTestId('board-swatch');
+        expect(blue.className).toContain(BOARD_BACKGROUND_CLASS.BLUE);
+        expect(picture).toHaveStyle({ backgroundImage: 'url("https://cdn/x.jpg")' });
+        // A plain board still gets a swatch, or the names stop lining up.
+        expect(plain.className).toContain('bg-gray-200');
     });
 
     it('includes a trimmed description when one is given', async () => {

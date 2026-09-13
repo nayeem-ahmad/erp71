@@ -9,6 +9,7 @@ import {
     FolderKanban,
     GitBranch,
     GripVertical,
+    Image as ImageIcon,
     MessageSquare,
     Plus,
     Trash2,
@@ -20,7 +21,13 @@ import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
 import BoardViewMenu from '@/components/projects/BoardViewMenu';
+import BoardBackgroundModal from '@/components/projects/BoardBackgroundModal';
 import { useBoardView } from '@/components/projects/use-board-view';
+import {
+    boardCanvasClass,
+    boardCanvasStyle,
+    boardColumnLiftClass,
+} from '@/components/projects/board-background';
 import {
     columnWidthClass,
     density,
@@ -69,6 +76,9 @@ interface BoardSummary {
     id: string;
     name: string;
     description?: string | null;
+    /** A palette key; see `board-background.ts`. Null on a plain board. */
+    background_color?: string | null;
+    background_image_url?: string | null;
 }
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
@@ -114,10 +124,17 @@ export default function BoardPage() {
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
     const [adding, setAdding] = useState(false);
+    const [pickingBackground, setPickingBackground] = useState(false);
     const [projects, setProjects] = useState<ComposerProject[]>([]);
     // Which project a composed card belongs to. Held here rather than per
     // column so picking it once covers the whole board.
     const [composerProject, setComposerProject] = useState('');
+
+    /**
+     * Shadow under each column, but only on a painted board: gray-50 on white
+     * reads fine on its own, and the same column on a photograph does not.
+     */
+    const lift = boardColumnLiftClass(board);
 
     const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
     const visibleUnsorted = useMemo(
@@ -136,10 +153,18 @@ export default function BoardPage() {
                 id: string;
                 name: string;
                 description?: string | null;
+                background_color?: string | null;
+                background_image_url?: string | null;
                 columns?: BoardColumn[];
                 unsorted?: BoardTask[];
             };
-            setBoard({ id: res.id, name: res.name, description: res.description ?? null });
+            setBoard({
+                id: res.id,
+                name: res.name,
+                description: res.description ?? null,
+                background_color: res.background_color ?? null,
+                background_image_url: res.background_image_url ?? null,
+            });
             setColumns(res.columns ?? []);
             setUnsorted(res.unsorted ?? []);
             setLoadError(false);
@@ -363,6 +388,14 @@ export default function BoardPage() {
                             {m.addTasks}
                         </Button>
                         <BoardViewMenu {...boardView} />
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setPickingBackground(true)}
+                        >
+                            <ImageIcon className="h-4 w-4" />
+                            {m.background.title}
+                        </Button>
                         <Link href={routes.projects.boardColumns(boardId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.boardSettings}
@@ -382,12 +415,18 @@ export default function BoardPage() {
             />
 
             {/* Columns scroll inside their own container so the page body never
-                scrolls sideways on a phone. */}
-            <div className="overflow-x-auto pb-2">
+                scrolls sideways on a phone. The board's background is painted
+                on that same container rather than on the page: it belongs
+                behind the columns, not behind the header and filter bar, which
+                are chrome for reading the board rather than part of it. */}
+            <div
+                className={`overflow-x-auto pb-2 ${boardCanvasClass(board)}`}
+                style={boardCanvasStyle(board)}
+            >
                 <div className="flex min-w-max gap-3">
                     {unsorted.length > 0 && (
                         <div
-                            className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${motionClass(view, 'column')}`}
+                            className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${lift} ${motionClass(view, 'column')}`}
                         >
                             <div aria-hidden className="h-1 w-full bg-amber-400" />
                             <div className="border-b border-amber-300 bg-white/60 px-3 py-2">
@@ -443,7 +482,7 @@ export default function BoardPage() {
                             <div
                                 key={column.id}
                                 {...{ [COLUMN_ATTR]: column.id }}
-                                className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${motionClass(view, 'column')}`}
+                                className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${lift} ${motionClass(view, 'column')}`}
                                 style={{ animationDelay: staggerDelay(view, columnIndex) }}
                             >
                                 {/* The column's stage, as a rule across its head.
@@ -583,6 +622,28 @@ export default function BoardPage() {
                     boardId={boardId}
                     onClose={() => setAdding(false)}
                     onAdded={() => loadBoard()}
+                />
+            )}
+
+            {pickingBackground && (
+                <BoardBackgroundModal
+                    boardId={boardId}
+                    background={board}
+                    onClose={() => setPickingBackground(false)}
+                    // Repainted from what the API returned rather than by
+                    // reloading: the cards have not changed, and pulling the
+                    // whole board back would blink every column for a colour.
+                    onChanged={(next) =>
+                        setBoard((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      background_color: next.background_color ?? null,
+                                      background_image_url: next.background_image_url ?? null,
+                                  }
+                                : prev,
+                        )
+                    }
                 />
             )}
         </PageShell>

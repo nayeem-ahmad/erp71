@@ -637,6 +637,30 @@ export const projectsMessages = {
         allBoards: 'সব বোর্ড',
         withCards: 'কার্ড আছে এমন',
         emptyOnly: 'খালি বোর্ড',
+
+        background: {
+            title: 'ব্যাকগ্রাউন্ড',
+            hint: 'যারা এই বোর্ড খুলবেন সবাই এটি দেখবেন।',
+            colors: 'রং',
+            image: 'ছবি',
+            uploadImage: 'ছবি আপলোড করুন',
+            replaceImage: 'ছবি বদলান',
+            currentImage: 'বর্তমান বোর্ড ব্যাকগ্রাউন্ড',
+            fileHint: 'JPEG, PNG বা WebP, সর্বোচ্চ ৩.৫ MB।',
+            remove: 'ব্যাকগ্রাউন্ড সরান',
+            saved: 'ব্যাকগ্রাউন্ড হালনাগাদ হয়েছে',
+            tooLarge: 'ছবিটি অনেক বড়। ৩.৫ MB-এর কম ছবি ব্যবহার করুন।',
+            notAnImage: 'JPEG, PNG বা WebP ছবি ব্যবহার করুন।',
+            uploadFailed: 'ছবিটি পড়া যায়নি।',
+            colorNames: {
+                GRAY: 'ধূসর',
+                BLUE: 'নীল',
+                EMERALD: 'সবুজ',
+                AMBER: 'অ্যাম্বার',
+                RED: 'লাল',
+                PURPLE: 'বেগুনি',
+            },
+        },
     },
 
 } as const;

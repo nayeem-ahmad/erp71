@@ -637,6 +637,30 @@ export const projectsMessages = {
         allBoards: 'Semua papan',
         withCards: 'Ada kad',
         emptyOnly: 'Papan kosong',
+
+        background: {
+            title: 'Latar belakang',
+            hint: 'Semua yang membuka papan ini melihatnya.',
+            colors: 'Warna',
+            image: 'Gambar',
+            uploadImage: 'Muat naik gambar',
+            replaceImage: 'Ganti gambar',
+            currentImage: 'Latar belakang papan semasa',
+            fileHint: 'JPEG, PNG atau WebP, sehingga 3.5 MB.',
+            remove: 'Buang latar belakang',
+            saved: 'Latar belakang dikemas kini',
+            tooLarge: 'Gambar itu terlalu besar. Gunakan yang bawah 3.5 MB.',
+            notAnImage: 'Gunakan gambar JPEG, PNG atau WebP.',
+            uploadFailed: 'Gambar itu tidak dapat dibaca.',
+            colorNames: {
+                GRAY: 'Kelabu',
+                BLUE: 'Biru',
+                EMERALD: 'Hijau',
+                AMBER: 'Ambar',
+                RED: 'Merah',
+                PURPLE: 'Ungu',
+            },
+        },
     },
 
 } as const;

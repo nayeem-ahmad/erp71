@@ -24,6 +24,7 @@ import {
     CreateBoardColumnDto,
     CreateBoardDto,
     MoveBoardCardDto,
+    SetBoardBackgroundImageDto,
     SetBoardColumnStatusesDto,
     UpdateBoardColumnDto,
     UpdateBoardDto,
@@ -66,6 +67,33 @@ export class BoardsController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.boards.remove(tenant.tenantId, id);
+    }
+
+    /**
+     * The uploaded half of the background. A colour goes through `PATCH :id`
+     * with the rest of the board's fields; an image cannot, because the payload
+     * is megabytes of base64 and storing it has to be able to fail on its own —
+     * a rename must not be refused because a CDN is down.
+     *
+     * MANAGE_PROJECTS, the same as renaming the board: the background is the
+     * board's, seen by everyone who opens it, so it is not a view preference
+     * that any reader may set.
+     */
+    @Put(':id/background/image')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    setBackgroundImage(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: SetBoardBackgroundImageDto,
+    ) {
+        return this.boards.setBackgroundImage(tenant.tenantId, id, dto);
+    }
+
+    /** Back to the plain board, whichever kind of background it had. */
+    @Delete(':id/background')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    clearBackground(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.boards.clearBackground(tenant.tenantId, id);
     }
 
     @Post(':id/tasks')

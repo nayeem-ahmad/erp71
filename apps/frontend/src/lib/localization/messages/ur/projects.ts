@@ -637,6 +637,30 @@ export const projectsMessages = {
         allBoards: "تمام بورڈز",
         withCards: "کارڈ والے",
         emptyOnly: "خالی بورڈز",
+
+        background: {
+            title: "پس منظر",
+            hint: "یہ بورڈ کھولنے والا ہر شخص اسے دیکھتا ہے۔",
+            colors: "رنگ",
+            image: "تصویر",
+            uploadImage: "تصویر اپ لوڈ کریں",
+            replaceImage: "تصویر بدلیں",
+            currentImage: "موجودہ بورڈ پس منظر",
+            fileHint: "JPEG، PNG یا WebP، زیادہ سے زیادہ 3.5 MB۔",
+            remove: "پس منظر ہٹائیں",
+            saved: "پس منظر اپ ڈیٹ ہو گیا",
+            tooLarge: "یہ تصویر بہت بڑی ہے۔ 3.5 MB سے چھوٹی تصویر استعمال کریں۔",
+            notAnImage: "JPEG، PNG یا WebP تصویر استعمال کریں۔",
+            uploadFailed: "تصویر پڑھی نہیں جا سکی۔",
+            colorNames: {
+                GRAY: "سرمئی",
+                BLUE: "نیلا",
+                EMERALD: "سبز",
+                AMBER: "عنبری",
+                RED: "سرخ",
+                PURPLE: "جامنی",
+            },
+        },
     },
 
 } as const;
