@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
     BarChart3,
@@ -9,6 +9,7 @@ import {
     ChevronRight,
     Download,
     Rows3,
+    Timer,
     Upload,
 } from 'lucide-react';
 import {
@@ -34,13 +35,11 @@ import {
     type ExportColumnSpec,
 } from '@/components/data-table/export-utils';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
-import HourLogCaptureBar, {
-    type ManualLogInput,
-    type RunningTimer,
-} from '@/components/projects/HourLogCaptureBar';
 import HourLogDayList, { type DayTotal } from '@/components/projects/HourLogDayList';
 import HourLogList from '@/components/projects/HourLogList';
 import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/components/projects/hour-log-day';
+import { useProjectTimerActions } from '@/components/projects/use-project-timer';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
@@ -262,13 +261,15 @@ export default function HourLogsPage() {
         null,
     );
 
-    // The capture bar's own project/task pair, separate from the filter above
-    // the list: narrowing what you are reading should not change what you are
-    // about to log against, and vice versa.
-    const [captureProjectId, setCaptureProjectId] = useState('');
-    const [captureTasks, setCaptureTasks] = useState<{ id: string; title: string }[]>([]);
-    const [timer, setTimer] = useState<RunningTimer | null>(null);
-    const [timerBusy, setTimerBusy] = useState(false);
+    // The running clock lives in the floating tracker the app shell mounts, not
+    // on this page: it outlives every navigation away from here. What this page
+    // needs from it is which timer is running, so a row's ▷ can refuse to start
+    // a second one, and a nudge when it writes hours this list is showing.
+    const timer = useProjectTimerStore((state) => state.timer);
+    const timerLoaded = useProjectTimerStore((state) => state.loaded);
+    const setTrackerOpen = useProjectTimerStore((state) => state.setOpen);
+    const timerRevision = useProjectTimerStore((state) => state.revision);
+    const { start: startTimer, load: loadTimer } = useProjectTimerActions();
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<HourLogEntry | null>(null);
@@ -396,34 +397,25 @@ export default function HourLogsPage() {
         loadSummary();
     }, [loadSummary]);
 
-    const loadTimer = useCallback(() => {
-        api.getProjectTimer()
-            .then((data: unknown) => setTimer((data as RunningTimer) ?? null))
-            .catch(() => setTimer(null));
-    }, []);
-
+    // The ▷ on a row refuses to start a second clock, so this page needs to know
+    // whether one is running even before the tracker asks — on a cold load of
+    // this URL they ask together, and after that whichever arrived first has
+    // already answered for both.
     useEffect(() => {
+        if (timerLoaded) return;
         loadTimer();
-    }, [loadTimer]);
+    }, [timerLoaded, loadTimer]);
 
-    // The tasks the capture bar can start against.
+    /**
+     * The tracker opens with this page and closes with it: logging hours is
+     * what this screen is for, so it should not take a press to get the thing
+     * that logs them. A clock left running keeps it on screen anyway, wherever
+     * the next page is.
+     */
     useEffect(() => {
-        if (!captureProjectId) {
-            setCaptureTasks([]);
-            return;
-        }
-        let cancelled = false;
-        api.getProjectTasks({ projectId: captureProjectId, limit: 200 })
-            .then((res) => {
-                if (!cancelled) setCaptureTasks((res?.items ?? []) as { id: string; title: string }[]);
-            })
-            .catch(() => {
-                if (!cancelled) setCaptureTasks([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [captureProjectId]);
+        setTrackerOpen(true);
+        return () => setTrackerOpen(false);
+    }, [setTrackerOpen]);
 
     const refresh = useCallback(async () => {
         await reload();
@@ -491,54 +483,18 @@ export default function HourLogsPage() {
     // ── The running clock ──────────────────────────────────────────────────
 
     /**
-     * Every timer call goes through here: one busy flag so a double press
-     * cannot double-write, one place that reports a failure, and a refetch
-     * afterwards either way — a start that failed and a start that succeeded
-     * both leave the bar needing to know what the server thinks is running.
+     * The tracker writes hours this list is showing — a stop, or a hand-typed
+     * entry — from outside this component, so the list is told to refetch by a
+     * counter rather than by a callback. Guarded on the revision itself: this
+     * effect also re-runs whenever `refresh` is rebuilt for a changed filter,
+     * and that is not a write.
      */
-    const runTimerAction = async (
-        action: () => Promise<unknown>,
-        fallback: string,
-    ): Promise<void> => {
-        setTimerBusy(true);
-        try {
-            await action();
-        } catch (error) {
-            toast.error(errorText(error, fallback));
-        } finally {
-            setTimerBusy(false);
-            loadTimer();
-        }
-    };
-
-    const startTimer = (input: { taskId: string; note?: string; tagIds: string[] }) =>
-        runTimerAction(async () => {
-            await api.startProjectTimer(input);
-            toast.success(hl.timerStarted);
-        }, hl.timerStartFailed);
-
-    const stopTimer = () =>
-        runTimerAction(async () => {
-            const result = (await api.stopProjectTimer()) as
-                | { overlap?: { taskTitle?: string | null } | null }
-                | null;
-            // A stop always writes the entry, however briefly the clock ran —
-            // the discard button beside it is the way to throw one away.
-            toast.success(m.time.logged);
-            if (result?.overlap) {
-                toast.info(hl.timerOverlapped.replace('{task}', result.overlap.taskTitle ?? '—'));
-            }
-            await refresh();
-        }, hl.timerStopFailed);
-
-    const discardTimer = () =>
-        runTimerAction(async () => {
-            await api.discardProjectTimer();
-            toast.info(hl.timerDiscarded);
-        }, hl.timerStopFailed);
-
-    const patchTimer = (patch: { note?: string; tagIds?: string[]; startTime?: string }) =>
-        runTimerAction(() => api.updateProjectTimer(patch), hl.timerUpdateFailed);
+    const seenRevision = useRef(timerRevision);
+    useEffect(() => {
+        if (timerRevision === seenRevision.current) return;
+        seenRevision.current = timerRevision;
+        void refresh();
+    }, [timerRevision, refresh]);
 
     /**
      * Clockify's ▷ restarts the row. So does this: yesterday's afternoon is one
@@ -582,25 +538,6 @@ export default function HourLogsPage() {
             }
             toast.error(errorText(error, fallback));
         }
-    };
-
-    const logManual = async (input: ManualLogInput) => {
-        setTimerBusy(true);
-        await saveGuardingOverlap(async (allowOverlap) => {
-            await api.logProjectTime({
-                taskId: input.taskId,
-                workDate: input.workDate,
-                hours: input.hours,
-                startTime: input.startTime,
-                endTime: input.endTime,
-                note: input.note,
-                tagIds: input.tagIds,
-                ...(allowOverlap ? { allowOverlap: true } : {}),
-            });
-            toast.success(m.time.logged);
-            await refresh();
-        }, hl.logFailed);
-        setTimerBusy(false);
     };
 
     /** The inline edits: one field, one PATCH, no modal. */
@@ -744,6 +681,16 @@ export default function HourLogsPage() {
                 )}
                 actions={
                     <>
+                        {/* The tracker opens with the page; this is how it is
+                            brought back after being sent away. */}
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setTrackerOpen(true)}
+                        >
+                            <Timer className="h-4 w-4" />
+                            {hl.tracker}
+                        </Button>
                         <Button
                             variant="secondary"
                             className="min-h-touch"
@@ -768,49 +715,6 @@ export default function HourLogsPage() {
                         </Link>
                     </>
                 }
-            />
-
-            <HourLogCaptureBar
-                labels={{
-                    placeholder: hl.capturePlaceholder,
-                    // Deliberately not the same names the filters below carry:
-                    // two controls called "Project" on one screen, one choosing
-                    // what you are reading and one choosing what you are about
-                    // to log against, is ambiguous to anyone reading the labels
-                    // aloud and to anyone reading them at all.
-                    project: hl.captureProject,
-                    task: hl.captureTask,
-                    selectProject: m.task.selectProject,
-                    selectTask: hl.selectTask,
-                    selectProjectFirst: hl.selectProjectFirst,
-                    noTasks: hl.noTasks,
-                    tags: hl.tags,
-                    noTags: hl.noTags,
-                    start: hl.start,
-                    stop: hl.stop,
-                    discard: hl.discardTimer,
-                    log: hl.logHours,
-                    hours: m.time.hours,
-                    date: m.time.workDate,
-                    startTime: hl.startTime,
-                    endTime: hl.endTime,
-                    timerMode: hl.timerMode,
-                    manualMode: hl.manualMode,
-                    running: hl.running,
-                    startedAt: hl.timerStartedAt,
-                }}
-                projects={projects}
-                tasks={captureTasks}
-                tags={tags}
-                timer={timer}
-                busy={timerBusy}
-                projectId={captureProjectId}
-                onProjectChange={setCaptureProjectId}
-                onStart={startTimer}
-                onStop={stopTimer}
-                onDiscard={discardTimer}
-                onUpdateTimer={patchTimer}
-                onLogManual={logManual}
             />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

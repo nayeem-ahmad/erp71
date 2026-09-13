@@ -13,6 +13,7 @@ import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import AiChatWidget from '@/components/AiChatWidget';
+import TimeTracker from '@/components/projects/TimeTracker';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
@@ -354,6 +355,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         && hasAccountingEntitlement;
     const canAccessInventoryReports = Boolean(hasInventoryReportEntitlement);
     const canAccessAccountingAdvanced = Boolean(hasAccountingAdvancedEntitlement);
+    // The floating time tracker follows the user across every page, so it is
+    // mounted by the shell rather than by the hour log. Same two gates every
+    // /project-time route carries — without the permission, every call behind
+    // the panel is a 403.
+    const canTrackTime =
+        canAccessProjects
+        && !inPlatformAdminMode
+        && !inRefereeMode
+        && (owner || hasPermission(perms, 'LOG_PROJECT_TIME'));
     const canAccessVoice = platformFeatures.voice && hasPlanEntitlement(planFeatures, 'premiumVoice');
     // Same two gates as every other AI feature: the platform kill switch and the
     // plan entitlement. Tool-level permissions are enforced server-side.
@@ -752,6 +762,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </main>
             </div>
 
+            {canTrackTime && canRenderChildren ? <TimeTracker /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
         </div>

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
 import { ImportsService } from './imports.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { postMultiLeg } from '../accounting/posting.utils';
@@ -18,6 +19,7 @@ describe('ImportsService', () => {
     let service: ImportsService;
     let db: any;
     let tx: any;
+    let assets: any;
 
     /** The tenant's seeded chart, keyed by the names the service looks up. */
     const ACCOUNTS: Record<string, string> = {
@@ -31,6 +33,8 @@ describe('ImportsService', () => {
         'FX Loss': 'acc-fx-loss',
         Purchases: 'acc-purchases',
         'Purchase Payable': 'acc-payable',
+        'Accrued Import Charges': 'acc-accrued',
+        'Import Charges Written Off': 'acc-written-off',
     };
 
     /**
@@ -48,6 +52,10 @@ describe('ImportsService', () => {
         currency: 'USD',
         fx_rate_at_open: '120.000000',
         fx_rate_at_settle: null,
+        accepted_at: null,
+        acceptance_due_date: null,
+        tenor_days: null,
+        notes: null,
         invoice_value_fc: '4000.00',
         supplier: { id: 'sup-1', name: 'Shenzhen Trading Co' },
         items: [
@@ -89,9 +97,21 @@ describe('ImportsService', () => {
                 update: jest.fn().mockResolvedValue({ next_number: 2 }),
             },
             product: { findMany: jest.fn() },
-            importShipment: { create: jest.fn(), update: jest.fn() },
+            importShipment: {
+                create: jest.fn(),
+                update: jest.fn(),
+                // Every claim-then-act path guards with updateMany, so the
+                // default has to be "this caller won the race".
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+                findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'ship-1', status: 'CLOSED' }),
+            },
             importShipmentItem: { deleteMany: jest.fn(), update: jest.fn() },
-            importCost: { create: jest.fn(), update: jest.fn() },
+            importCost: {
+                create: jest.fn(),
+                update: jest.fn(),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+                findUniqueOrThrow: jest.fn(),
+            },
             purchase: { create: jest.fn().mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-IMP-2526-00001' }) },
             purchaseItem: { create: jest.fn() },
             supplier: { findFirst: jest.fn().mockResolvedValue({ due_balance: '0' }), update: jest.fn() },
@@ -102,13 +122,38 @@ describe('ImportsService', () => {
             $transaction: jest.fn(async (cb: any) => cb(tx)),
             store: { findFirst: jest.fn() },
             supplier: { findFirst: jest.fn() },
-            importShipment: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn(), delete: jest.fn() },
-            importCost: { findMany: jest.fn(), update: jest.fn(), delete: jest.fn() },
+            importShipment: {
+                findFirst: jest.fn(),
+                findMany: jest.fn(),
+                count: jest.fn().mockResolvedValue(0),
+                update: jest.fn(),
+                delete: jest.fn(),
+            },
+            importCost: {
+                findMany: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
+                update: jest.fn(),
+                delete: jest.fn(),
+            },
             importDocument: { create: jest.fn(), findFirst: jest.fn(), delete: jest.fn() },
         };
 
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest.fn().mockResolvedValue({
+                url: 'https://cdn.example/imports/bl.pdf',
+                publicId: 'retail/tenant-1/imports/bl',
+                bytes: 2048,
+            }),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
-            providers: [ImportsService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                ImportsService,
+                { provide: DatabaseService, useValue: db },
+                { provide: AssetsService, useValue: assets },
+            ],
         }).compile();
 
         service = module.get(ImportsService);
@@ -301,16 +346,22 @@ describe('ImportsService', () => {
             expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs[0].accountId).toBe('acc-ait');
         });
 
-        it('records an accrued charge without posting it', async () => {
+        it('accrues a charge against a liability rather than not posting it', async () => {
             // A C&F bill that has arrived but not been paid still has to reach
-            // the landed cost; there is simply nowhere honest to credit it yet.
+            // the landed cost — and the ledger. This used to post nothing on the
+            // grounds that there was nowhere honest to credit it; the honest
+            // credit is an accrual, and without one the receipt went on to
+            // credit Goods in Transit for a debit that was never made.
             await service.addCost('tenant-1', 'user-1', 'ship-1', {
                 costType: 'CF_AGENT',
                 amount: 5000,
             } as any);
 
             expect(tx.importCost.create).toHaveBeenCalled();
-            expect(postMultiLeg).not.toHaveBeenCalled();
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toEqual([
+                expect.objectContaining({ accountId: 'acc-transit', debit: 5000 }),
+                expect.objectContaining({ accountId: 'acc-accrued', credit: 5000 }),
+            ]);
         });
 
         it('translates a foreign-currency charge into BDT', async () => {
@@ -515,18 +566,92 @@ describe('ImportsService', () => {
         });
     });
 
-    describe('settle', () => {
-        const settled = (overrides: Record<string, unknown> = {}) =>
+    describe('accept', () => {
+        const received = (overrides: Record<string, unknown> = {}) =>
             shipment({ purchase_id: 'purchase-1', status: 'RECEIVED', ...overrides });
 
         beforeEach(() => {
+            db.importShipment.findFirst.mockResolvedValue(received());
+            tx.supplier.findFirst.mockResolvedValue({ due_balance: '480000' });
+        });
+
+        it('moves the debt from the supplier to the bank', async () => {
+            const result = await service.accept('tenant-1', 'user-1', 'ship-1', {});
+
+            expect(result.booked_bdt).toBe(480000);
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0]).toMatchObject({
+                eventType: 'import_acceptance',
+            });
+            // The whole point: Purchase Payable is cleared and LC Acceptance
+            // Payable is CREDITED, so the account `settle` debits has a balance.
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toEqual([
+                expect.objectContaining({
+                    accountId: 'acc-payable',
+                    debit: 480000,
+                    partyType: 'SUPPLIER',
+                    partyId: 'sup-1',
+                }),
+                expect.objectContaining({ accountId: 'acc-lc-payable', credit: 480000 }),
+            ]);
+        });
+
+        it('brings the supplier due balance down, because the bank has paid them', async () => {
+            await service.accept('tenant-1', 'user-1', 'ship-1', {});
+
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        supplier_id: 'sup-1',
+                        type: 'PAYMENT',
+                        reference_type: 'IMPORT_SHIPMENT',
+                    }),
+                }),
+            );
+            expect(tx.supplier.update.mock.calls[0][0].data.due_balance.toString()).toBe('0');
+        });
+
+        it('dates the maturity from the tenor', async () => {
+            db.importShipment.findFirst.mockResolvedValue(received({ tenor_days: 90 }));
+
+            await service.accept('tenant-1', 'user-1', 'ship-1', { acceptedAt: '2026-01-01T00:00:00.000Z' });
+
+            const written = tx.importShipment.updateMany.mock.calls[0][0].data;
+            expect(written.acceptance_due_date.toISOString()).toBe('2026-04-01T00:00:00.000Z');
+        });
+
+        it('refuses before receipt, which is where the payable comes from', async () => {
+            db.importShipment.findFirst.mockResolvedValue(shipment({ purchase_id: null }));
+            await expect(service.accept('tenant-1', 'user-1', 'ship-1', {})).rejects.toThrow(/Receive the shipment/);
+        });
+
+        it('refuses a second acceptance', async () => {
+            db.importShipment.findFirst.mockResolvedValue(received({ accepted_at: new Date() }));
+            await expect(service.accept('tenant-1', 'user-1', 'ship-1', {})).rejects.toThrow(/already been accepted/);
+        });
+
+        it('refuses when another request claimed the row first', async () => {
+            tx.importShipment.updateMany.mockResolvedValue({ count: 0 });
+            await expect(service.accept('tenant-1', 'user-1', 'ship-1', {})).rejects.toThrow(/already been accepted/);
+        });
+    });
+
+    describe('settle', () => {
+        const settled = (overrides: Record<string, unknown> = {}) =>
+            shipment({
+                purchase_id: 'purchase-1',
+                status: 'RECEIVED',
+                accepted_at: new Date('2026-01-01'),
+                ...overrides,
+            });
+
+        beforeEach(() => {
             db.importShipment.findFirst.mockResolvedValue(settled());
-            tx.importShipment.update.mockResolvedValue({ id: 'ship-1', status: 'CLOSED' });
+            tx.importShipment.findUniqueOrThrow.mockResolvedValue({ id: 'ship-1', status: 'CLOSED' });
         });
 
         it('books an FX gain when the taka strengthened', async () => {
             // Booked at 120, settled at 118: 4,000 USD costs 8,000 BDT less.
-            const result = await service.settle('tenant-1', 'ship-1', {
+            const result = await service.settle('tenant-1', 'user-1', 'ship-1', {
                 fxRateAtSettle: 118,
                 paidFromAccountId: 'acc-bank',
             } as any);
@@ -541,7 +666,7 @@ describe('ImportsService', () => {
         });
 
         it('books an FX loss when it weakened', async () => {
-            const result = await service.settle('tenant-1', 'ship-1', {
+            const result = await service.settle('tenant-1', 'user-1', 'ship-1', {
                 fxRateAtSettle: 123,
                 paidFromAccountId: 'acc-bank',
             } as any);
@@ -554,7 +679,7 @@ describe('ImportsService', () => {
         });
 
         it('writes no FX leg when the rate did not move', async () => {
-            await service.settle('tenant-1', 'ship-1', {
+            await service.settle('tenant-1', 'user-1', 'ship-1', {
                 fxRateAtSettle: 120,
                 paidFromAccountId: 'acc-bank',
             } as any);
@@ -562,21 +687,57 @@ describe('ImportsService', () => {
             expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toHaveLength(2);
         });
 
+        it('accepts first when nobody did, so the debit it makes has a credit behind it', async () => {
+            db.importShipment.findFirst.mockResolvedValue(settled({ accepted_at: null }));
+            tx.supplier.findFirst.mockResolvedValue({ due_balance: '480000' });
+
+            const result = await service.settle('tenant-1', 'user-1', 'ship-1', {
+                fxRateAtSettle: 120,
+                paidFromAccountId: 'acc-bank',
+            } as any);
+
+            const events = (postMultiLeg as jest.Mock).mock.calls.map((call) => call[0].eventType);
+            expect(events).toEqual(['import_acceptance', 'import_settlement']);
+            expect(result.acceptance_voucher_number).toBe('JV-00001');
+            // And the supplier is squared off, not left owing an invoice the
+            // bank has already paid.
+            expect(tx.supplier.update.mock.calls[0][0].data.due_balance.toString()).toBe('0');
+        });
+
+        it('does not accept twice when acceptance was already recorded', async () => {
+            await service.settle('tenant-1', 'user-1', 'ship-1', {
+                fxRateAtSettle: 120,
+                paidFromAccountId: 'acc-bank',
+            } as any);
+
+            expect((postMultiLeg as jest.Mock).mock.calls.map((call) => call[0].eventType)).toEqual([
+                'import_settlement',
+            ]);
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+        });
+
         it('refuses settling before receipt', async () => {
             db.importShipment.findFirst.mockResolvedValue(shipment({ purchase_id: null }));
             await expect(
-                service.settle('tenant-1', 'ship-1', { fxRateAtSettle: 120, paidFromAccountId: 'acc-bank' } as any),
+                service.settle('tenant-1', 'user-1', 'ship-1', { fxRateAtSettle: 120, paidFromAccountId: 'acc-bank' } as any),
             ).rejects.toThrow(/Receive the shipment/);
         });
 
         it('refuses settling twice', async () => {
             db.importShipment.findFirst.mockResolvedValue(settled({ fx_rate_at_settle: '118.000000' }));
             await expect(
-                service.settle('tenant-1', 'ship-1', { fxRateAtSettle: 120, paidFromAccountId: 'acc-bank' } as any),
+                service.settle('tenant-1', 'user-1', 'ship-1', { fxRateAtSettle: 120, paidFromAccountId: 'acc-bank' } as any),
             ).rejects.toThrow(/already been settled/);
         });
-    });
 
+        it('refuses when another request claimed the row first', async () => {
+            tx.importShipment.updateMany.mockResolvedValue({ count: 0 });
+            await expect(
+                service.settle('tenant-1', 'user-1', 'ship-1', { fxRateAtSettle: 120, paidFromAccountId: 'acc-bank' } as any),
+            ).rejects.toThrow(/already been settled/);
+            expect(postMultiLeg).not.toHaveBeenCalled();
+        });
+    });
     describe('remove', () => {
         it('refuses deleting a received shipment', async () => {
             db.importShipment.findFirst.mockResolvedValue(shipment({ purchase_id: 'purchase-1' }));
@@ -600,4 +761,477 @@ describe('ImportsService', () => {
             await expect(service.remove('tenant-1', 'ship-1')).rejects.toThrow(NotFoundException);
         });
     });
+
+    describe('payCost — the C&F bill that arrives after the goods', () => {
+        const accrued = {
+            id: 'cost-1',
+            cost_type: 'CF_AGENT',
+            description: 'Clearing agent',
+            amount_bdt: '50000.00',
+            is_capitalized: true,
+            voucher_id: 'voucher-accrual',
+            paid_from_account_id: null,
+            paid_at: null,
+        };
+
+        beforeEach(() => {
+            db.importShipment.findFirst.mockResolvedValue(
+                shipment({ purchase_id: 'purchase-1', status: 'RECEIVED', costs: [accrued] }),
+            );
+            tx.importCost.update.mockResolvedValue({ ...accrued, payment_voucher_id: 'voucher-1' });
+        });
+
+        it('clears the accrual against the account the money left', async () => {
+            await service.payCost('tenant-1', 'ship-1', 'cost-1', { paidFromAccountId: 'acc-bank' });
+
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0]).toMatchObject({
+                eventType: 'import_cost',
+                // Without this the voucher collides with the accrual's own
+                // idempotency key and is silently dropped as a replay.
+                legKey: 'payment',
+            });
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toEqual([
+                expect.objectContaining({ accountId: 'acc-accrued', debit: 50000 }),
+                expect.objectContaining({ accountId: 'acc-bank', credit: 50000 }),
+            ]);
+        });
+
+        it('works after receipt, which is the whole reason it exists', async () => {
+            await expect(
+                service.payCost('tenant-1', 'ship-1', 'cost-1', { paidFromAccountId: 'acc-bank' }),
+            ).resolves.toBeDefined();
+        });
+
+        it('refuses paying a charge that was already paid', async () => {
+            db.importShipment.findFirst.mockResolvedValue(
+                shipment({ costs: [{ ...accrued, paid_from_account_id: 'acc-bank' }] }),
+            );
+            await expect(
+                service.payCost('tenant-1', 'ship-1', 'cost-1', { paidFromAccountId: 'acc-bank' }),
+            ).rejects.toThrow(/already been paid/);
+        });
+
+        it('refuses when another request claimed the row first', async () => {
+            tx.importCost.updateMany.mockResolvedValue({ count: 0 });
+            await expect(
+                service.payCost('tenant-1', 'ship-1', 'cost-1', { paidFromAccountId: 'acc-bank' }),
+            ).rejects.toThrow(/already been paid/);
+            expect(postMultiLeg).not.toHaveBeenCalled();
+        });
+
+        it('404s on a cost that is not on this shipment', async () => {
+            await expect(
+                service.payCost('tenant-1', 'ship-1', 'nope', { paidFromAccountId: 'acc-bank' }),
+            ).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('addCost — an accrued charge still reaches the ledger', () => {
+        beforeEach(() => {
+            db.importShipment.findFirst.mockResolvedValue(shipment());
+            tx.importCost.create.mockResolvedValue({ id: 'cost-1' });
+            tx.importCost.update.mockResolvedValue({ id: 'cost-1' });
+        });
+
+        it('credits Accrued Import Charges when no account is named', async () => {
+            await service.addCost('tenant-1', 'user-1', 'ship-1', {
+                costType: 'CF_AGENT',
+                amount: 50000,
+            } as any);
+
+            // Previously this posted nothing at all, so the receipt went on to
+            // credit Goods in Transit for a debit that had never been made.
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toEqual([
+                expect.objectContaining({ accountId: 'acc-transit', debit: 50000 }),
+                expect.objectContaining({ accountId: 'acc-accrued', credit: 50000 }),
+            ]);
+            expect(tx.importCost.create.mock.calls[0][0].data.paid_at).toBeNull();
+        });
+
+        it('posts nothing for a zero charge', async () => {
+            await service.addCost('tenant-1', 'user-1', 'ship-1', { costType: 'OTHER', amount: 0 } as any);
+            expect(postMultiLeg).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('updateCost', () => {
+        const unposted = {
+            id: 'cost-1',
+            cost_type: 'FREIGHT',
+            description: null,
+            currency: 'BDT',
+            amount: '1000.00',
+            fx_rate: null,
+            amount_bdt: '1000.00',
+            allocation_basis: 'WEIGHT',
+            is_capitalized: true,
+            voucher_id: null,
+        };
+
+        it('refuses the payment fields instead of dropping them', async () => {
+            db.importShipment.findFirst.mockResolvedValue(shipment({ costs: [unposted] }));
+
+            // The DTO inherits these from the create shape, and the service used
+            // to accept them and write neither — so a user who thought they had
+            // recorded a payment had changed nothing.
+            await expect(
+                service.updateCost('tenant-1', 'ship-1', 'cost-1', {
+                    paidFromAccountId: 'acc-bank',
+                } as any),
+            ).rejects.toThrow(/Use the pay action/);
+        });
+
+        it('refuses editing a charge that has posted', async () => {
+            db.importShipment.findFirst.mockResolvedValue(
+                shipment({ costs: [{ ...unposted, voucher_id: 'voucher-1' }] }),
+            );
+            await expect(
+                service.updateCost('tenant-1', 'ship-1', 'cost-1', { amount: 2000 } as any),
+            ).rejects.toThrow(/already been posted/);
+        });
+
+        it('rewrites an unposted charge and re-derives its BDT amount', async () => {
+            db.importShipment.findFirst.mockResolvedValue(shipment({ costs: [unposted] }));
+            db.importCost.update.mockResolvedValue({ id: 'cost-1' });
+
+            await service.updateCost('tenant-1', 'ship-1', 'cost-1', {
+                amount: 200,
+                currency: 'USD',
+                fxRate: 120,
+            } as any);
+
+            expect(db.importCost.update.mock.calls[0][0].data.amount_bdt.toString()).toBe('24000');
+        });
+    });
+
+    describe('cancel', () => {
+        it('writes capitalised charges off Goods in Transit', async () => {
+            db.importShipment.findFirst.mockResolvedValue(
+                shipment({
+                    costs: [
+                        { amount_bdt: '30000.00', is_capitalized: true, voucher_id: 'v1' },
+                        // Rebatable VAT stays claimable, so it is not written off.
+                        { amount_bdt: '9000.00', is_capitalized: false, voucher_id: 'v2' },
+                        // Never posted, so there is nothing in transit to reverse.
+                        { amount_bdt: '5000.00', is_capitalized: true, voucher_id: null },
+                    ],
+                }),
+            );
+
+            const result = await service.cancel('tenant-1', 'ship-1', { reason: 'Supplier defaulted' });
+
+            expect(result.written_off_bdt).toBe(30000);
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0]).toMatchObject({ eventType: 'import_write_off' });
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0].legs).toEqual([
+                expect.objectContaining({ accountId: 'acc-written-off', debit: 30000 }),
+                expect.objectContaining({ accountId: 'acc-transit', credit: 30000 }),
+            ]);
+        });
+
+        it('posts nothing when no capitalised charge ever reached transit', async () => {
+            db.importShipment.findFirst.mockResolvedValue(shipment({ costs: [] }));
+
+            const result = await service.cancel('tenant-1', 'ship-1', {});
+
+            expect(result.written_off_bdt).toBe(0);
+            expect(postMultiLeg).not.toHaveBeenCalled();
+        });
+
+        it('refuses cancelling a received shipment', async () => {
+            db.importShipment.findFirst.mockResolvedValue(shipment({ status: 'RECEIVED' }));
+            await expect(service.cancel('tenant-1', 'ship-1', {})).rejects.toThrow(/purchase return/);
+        });
+
+        it('is reached through the status endpoint, so the ledger entry is not skipped', async () => {
+            db.importShipment.findFirst.mockResolvedValue(
+                shipment({ costs: [{ amount_bdt: '30000.00', is_capitalized: true, voucher_id: 'v1' }] }),
+            );
+
+            await service.updateStatus('tenant-1', 'ship-1', 'CANCELLED');
+
+            expect((postMultiLeg as jest.Mock).mock.calls[0][0]).toMatchObject({ eventType: 'import_write_off' });
+        });
+    });
+
+    describe('findAll', () => {
+        const row = {
+            id: 'ship-1',
+            currency: 'USD',
+            fx_rate_at_open: '120.000000',
+            invoice_value_fc: '4000.00',
+            _count: { items: 2 },
+        };
+
+        beforeEach(() => {
+            db.importShipment.findMany.mockResolvedValue([row]);
+            db.importShipment.count.mockResolvedValue(1);
+        });
+
+        it('returns a page rather than the whole history', async () => {
+            const result = await service.findAll('tenant-1', { page: 2, limit: 10 } as any);
+
+            expect(db.importShipment.findMany.mock.calls[0][0]).toMatchObject({ skip: 10, take: 10 });
+            expect(result).toMatchObject({ total: 1, page: 2, limit: 10 });
+        });
+
+        it('searches reference, LC, BL, BE and supplier name in the database', async () => {
+            await service.findAll('tenant-1', { search: 'IMP-25' } as any);
+
+            const or = db.importShipment.findMany.mock.calls[0][0].where.OR;
+            expect(or.map((clause: any) => Object.keys(clause)[0])).toEqual([
+                'reference_number',
+                'lc_number',
+                'bl_number',
+                'be_number',
+                'supplier',
+            ]);
+        });
+
+        it('falls back to created_at for a column outside the allowlist', async () => {
+            // The direction the caller asked for is still honoured — only the
+            // column they invented is replaced, because `orderBy` reaches Prisma
+            // directly and an arbitrary name there is an error surface.
+            await service.findAll('tenant-1', { sortBy: 'fx_rate_at_open; DROP TABLE', sortDir: 'asc' } as any);
+            expect(db.importShipment.findMany.mock.calls[0][0].orderBy).toEqual({ created_at: 'asc' });
+        });
+
+        it('aggregates costs in SQL instead of shipping every row', async () => {
+            db.importCost.groupBy.mockResolvedValue([{ shipment_id: 'ship-1', _sum: { amount_bdt: '75000.00' } }]);
+
+            const result = await service.findAll('tenant-1', {} as any);
+
+            expect(result.items[0]).toMatchObject({
+                costs_to_date_bdt: 75000,
+                item_count: 2,
+                invoice_value_bdt: 480000,
+            });
+        });
+    });
+
+    describe('lcRegister', () => {
+        const register = (overrides: Record<string, unknown> = {}) => ({
+            id: 'ship-1',
+            reference_number: 'IMP-2526-00001',
+            lc_number: 'LC-991',
+            lc_type: 'USANCE',
+            bank_name: 'City Bank',
+            supplier: { name: 'Shenzhen Trading Co' },
+            status: 'SHIPPED',
+            currency: 'USD',
+            invoice_value_fc: '4000.00',
+            fx_rate_at_open: '120.000000',
+            lc_date: null,
+            lc_expiry_date: null,
+            latest_shipment_date: null,
+            accepted_at: null,
+            acceptance_due_date: null,
+            costs: [],
+            ...overrides,
+        });
+
+        it('values a BDT-denominated LC at its face value, not zero', async () => {
+            // A local back-to-back LC carries no fx rate, and multiplying by
+            // `num(null)` reported every one of them as worth nothing.
+            db.importShipment.findMany.mockResolvedValue([
+                register({ currency: 'BDT', fx_rate_at_open: null, invoice_value_fc: '480000.00' }),
+            ]);
+
+            const [row] = await service.lcRegister('tenant-1');
+
+            expect(row.invoice_value_bdt).toBe(480000);
+        });
+
+        it('translates a foreign LC at its opening rate', async () => {
+            db.importShipment.findMany.mockResolvedValue([register()]);
+            const [row] = await service.lcRegister('tenant-1');
+            expect(row.invoice_value_bdt).toBe(480000);
+        });
+
+        it('counts days to expiry down through zero rather than clamping', async () => {
+            const elevenDaysAgo = new Date(Date.now() - 11 * 24 * 60 * 60 * 1000);
+            db.importShipment.findMany.mockResolvedValue([register({ lc_expiry_date: elevenDaysAgo })]);
+
+            const [row] = await service.lcRegister('tenant-1');
+
+            expect(row.days_to_expiry).toBeLessThan(0);
+            expect(row.is_expired).toBe(true);
+        });
+
+        it('splits recoverable charges out of the running total', async () => {
+            db.importShipment.findMany.mockResolvedValue([
+                register({
+                    costs: [
+                        { amount_bdt: '30000.00', is_capitalized: true },
+                        { amount_bdt: '9000.00', is_capitalized: false },
+                    ],
+                }),
+            ]);
+
+            const [row] = await service.lcRegister('tenant-1');
+
+            expect(row.costs_to_date_bdt).toBe(39000);
+            expect(row.recoverable_to_date_bdt).toBe(9000);
+        });
+
+        it('narrows to LCs expiring inside the window when asked', async () => {
+            db.importShipment.findMany.mockResolvedValue([]);
+            await service.lcRegister('tenant-1', 30);
+            expect(db.importShipment.findMany.mock.calls[0][0].where.lc_expiry_date).toBeDefined();
+        });
+    });
+
+    describe('dutyReport', () => {
+        const line = (overrides: Record<string, unknown> = {}) => ({
+            cost_type: 'CUSTOMS_DUTY',
+            amount_bdt: '120000.00',
+            is_capitalized: true,
+            paid_at: new Date('2026-02-10'),
+            shipment: { reference_number: 'IMP-2526-00001', be_number: 'BE-771', be_date: null },
+            ...overrides,
+        });
+
+        it('totals by type and separates what comes back', async () => {
+            db.importCost.findMany.mockResolvedValue([
+                line(),
+                line({ cost_type: 'VAT', amount_bdt: '75000.00', is_capitalized: false }),
+                line({ cost_type: 'AIT', amount_bdt: '20000.00', is_capitalized: false }),
+            ]);
+
+            const report = await service.dutyReport('tenant-1', {});
+
+            expect(report.total_bdt).toBe(215000);
+            expect(report.recoverable_bdt).toBe(95000);
+            expect(report.totals_by_type).toEqual([
+                { cost_type: 'CUSTOMS_DUTY', amount_bdt: 120000 },
+                { cost_type: 'VAT', amount_bdt: 75000 },
+                { cost_type: 'AIT', amount_bdt: 20000 },
+            ]);
+        });
+
+        it('reports what was paid in the period, not what was typed in', async () => {
+            db.importCost.findMany.mockResolvedValue([]);
+
+            await service.dutyReport('tenant-1', { from: '2026-01-01', to: '2026-03-31' });
+
+            expect(db.importCost.findMany.mock.calls[0][0].where.paid_at).toEqual({
+                gte: new Date('2026-01-01'),
+                lte: new Date('2026-03-31'),
+            });
+        });
+
+        it('excludes unpaid assessments by default', async () => {
+            db.importCost.findMany.mockResolvedValue([]);
+            await service.dutyReport('tenant-1', {});
+            expect(db.importCost.findMany.mock.calls[0][0].where.paid_at).toEqual({ not: null });
+        });
+
+        it('includes them, dated on entry, when asked', async () => {
+            db.importCost.findMany.mockResolvedValue([line({ paid_at: null })]);
+
+            const report = await service.dutyReport('tenant-1', {
+                from: '2026-01-01',
+                to: '2026-03-31',
+                includeUnpaid: true,
+            });
+
+            expect(db.importCost.findMany.mock.calls[0][0].where.OR).toHaveLength(2);
+            expect(report.unpaid_bdt).toBe(120000);
+            expect(report.lines[0].is_paid).toBe(false);
+        });
+    });
+
+    describe('bankLimitUtilisation', () => {
+        it('adds a BDT LC at face value beside a translated foreign one', async () => {
+            db.importShipment.findMany.mockResolvedValue([
+                { bank_name: 'City Bank', currency: 'USD', invoice_value_fc: '4000.00', fx_rate_at_open: '120.000000', status: 'SHIPPED' },
+                { bank_name: 'City Bank', currency: 'BDT', invoice_value_fc: '20000.00', fx_rate_at_open: null, status: 'LC_ISSUED' },
+                { bank_name: 'Brac Bank', currency: 'USD', invoice_value_fc: '1000.00', fx_rate_at_open: '120.000000', status: 'SHIPPED' },
+            ]);
+
+            const rows = await service.bankLimitUtilisation('tenant-1');
+
+            // Heaviest exposure first: that is the row that refuses the next LC.
+            expect(rows).toEqual([
+                { bank_name: 'City Bank', open_lcs: 2, outstanding_bdt: 500000 },
+                { bank_name: 'Brac Bank', open_lcs: 1, outstanding_bdt: 120000 },
+            ]);
+        });
+
+        it('ignores drafts, which the bank has never seen', async () => {
+            db.importShipment.findMany.mockResolvedValue([]);
+            await service.bankLimitUtilisation('tenant-1');
+            expect(db.importShipment.findMany.mock.calls[0][0].where.status.notIn).toContain('DRAFT');
+        });
+    });
+
+    describe('documents', () => {
+        const pdf = `data:application/pdf;base64,${Buffer.from('%PDF-1.4 fake').toString('base64')}`;
+
+        beforeEach(() => {
+            db.importShipment.findFirst.mockResolvedValue(shipment());
+            db.importDocument.create.mockResolvedValue({ id: 'doc-1' });
+        });
+
+        it('uploads the file and keeps the key that can delete it again', async () => {
+            await service.addDocument('tenant-1', 'user-1', 'ship-1', {
+                docType: 'BL',
+                fileBase64: pdf,
+                fileName: 'Bill of Lading.pdf',
+            } as any);
+
+            // 'raw', or Cloudinary's image pipeline mangles the PDF.
+            expect(assets.uploadBuffer).toHaveBeenCalledWith(
+                expect.any(Buffer),
+                'tenant-1/imports',
+                'Bill-of-Lading',
+                'raw',
+            );
+            expect(db.importDocument.create.mock.calls[0][0].data).toMatchObject({
+                tenant_id: 'tenant-1',
+                shipment_id: 'ship-1',
+                doc_type: 'BL',
+                uploaded_by: 'user-1',
+                // Without this the row cannot delete its own file, and the
+                // file is billed forever.
+                storage_key: 'retail/tenant-1/imports/bl',
+                file_url: 'https://cdn.example/imports/bl.pdf',
+                file_name: 'Bill-of-Lading.pdf',
+            });
+        });
+
+        it('refuses a file type a browser cannot render back', async () => {
+            await expect(
+                service.addDocument('tenant-1', 'user-1', 'ship-1', {
+                    docType: 'BL',
+                    fileBase64: 'data:application/zip;base64,UEsDBA==',
+                } as any),
+            ).rejects.toThrow(/Unsupported file type/);
+        });
+
+        it('says so plainly when storage is not configured', async () => {
+            assets.isEnabled.mockReturnValue(false);
+            await expect(
+                service.addDocument('tenant-1', 'user-1', 'ship-1', { docType: 'BL', fileBase64: pdf } as any),
+            ).rejects.toThrow(/not configured/);
+        });
+
+        it('deletes the file after the row, not before', async () => {
+            db.importDocument.findFirst.mockResolvedValue({
+                id: 'doc-1',
+                storage_key: 'retail/tenant-1/imports/bl',
+                mime_type: 'application/pdf',
+            });
+
+            await service.removeDocument('tenant-1', 'ship-1', 'doc-1');
+
+            expect(db.importDocument.delete).toHaveBeenCalled();
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/tenant-1/imports/bl', 'raw');
+        });
+
+        it('404s on a document belonging to another shipment', async () => {
+            db.importDocument.findFirst.mockResolvedValue(null);
+            await expect(service.removeDocument('tenant-1', 'ship-1', 'doc-9')).rejects.toThrow(NotFoundException);
+        });
+    });
 });
+

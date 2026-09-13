@@ -11,10 +11,12 @@ import {
     Input,
     RichTextEditor,
     Field,
+    Select,
     StatusBadge,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import ProjectStoriesCard, { type UserStory } from '@/components/projects/ProjectStoriesCard';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import { api } from '@/lib/api';
@@ -72,6 +74,7 @@ interface Task {
     estimate_hours?: string | null;
     logged_hours?: number;
     status?: { id: string; name: string; category: string };
+    userStory?: { id: string; reference: number; title: string } | null;
     sprint?: { id: string; name: string; status: string } | null;
     assignee?: { id: string; name?: string | null; email: string } | null;
     assigneeEmployee?: { id: string; name: string } | null;
@@ -89,8 +92,11 @@ function assigneeLabel(task: Task): string {
 export default function ProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const projectId = params.id;
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects;
+
+    /** `US-3`, in the reader's own language — the abbreviation is translated. */
+    const storyRef = (reference: number) => fmt(m.stories.reference, { number: reference });
 
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -98,8 +104,15 @@ export default function ProjectDetailPage() {
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [hasIdeal, setHasIdeal] = useState(false);
     const [creating, setCreating] = useState(false);
-    const [newTask, setNewTask] = useState({ title: '', description: '', estimateHours: '' });
+    const [newTask, setNewTask] = useState({
+        title: '',
+        description: '',
+        estimateHours: '',
+        userStoryId: '',
+    });
     const [saving, setSaving] = useState(false);
+    /** Null until the backlog has been read, so the card can say "loading". */
+    const [stories, setStories] = useState<UserStory[] | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -117,6 +130,25 @@ export default function ProjectDetailPage() {
     useEffect(() => {
         load();
     }, [load]);
+
+    /**
+     * The backlog is read here rather than inside the card, because two things
+     * on this page need it — the card, and the story picker in the new-task
+     * dialog — and fetching it twice would be a second request for the same
+     * rows.
+     */
+    const loadStories = useCallback(async () => {
+        try {
+            const rows = await api.getProjectStories({ projectId });
+            setStories((Array.isArray(rows) ? rows : []) as UserStory[]);
+        } catch {
+            setStories([]);
+        }
+    }, [projectId]);
+
+    useEffect(() => {
+        loadStories();
+    }, [loadStories]);
 
     // Loads on its own, after the page: a project whose burndown cannot be read
     // still opens, it simply has no chart.
@@ -147,10 +179,11 @@ export default function ProjectDetailPage() {
                 title: newTask.title.trim(),
                 description: newTask.description.trim() || undefined,
                 estimateHours: newTask.estimateHours ? Number(newTask.estimateHours) : undefined,
+                userStoryId: newTask.userStoryId || undefined,
             });
             toast.success(m.task.created);
             setCreating(false);
-            setNewTask({ title: '', description: '', estimateHours: '' });
+            setNewTask({ title: '', description: '', estimateHours: '', userStoryId: '' });
             await load();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Could not create the task');
@@ -232,6 +265,17 @@ export default function ProjectDetailPage() {
 
             <section className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-3 md:col-span-2">
+                    {/* Above the task table rather than beside it: the stories
+                        are what the tasks are *for*, and the table below is the
+                        same work seen flat. */}
+                    <ProjectStoriesCard
+                        projectId={projectId}
+                        stories={stories}
+                        onStoriesChanged={loadStories}
+                        onTasksChanged={load}
+                        onOpenTask={setOpenTaskId}
+                    />
+
                     <div className="rounded-md border border-gray-200 bg-white">
                         <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium">
                             {m.tabs.tasks}
@@ -245,6 +289,9 @@ export default function ProjectDetailPage() {
                                         <tr className="border-b border-gray-200 text-start text-xs text-gray-500">
                                             <th className="px-3 py-2 font-medium">{m.task.title}</th>
                                             <th className="px-3 py-2 font-medium">{m.fields.status}</th>
+                                            <th className="hidden px-3 py-2 font-medium md:table-cell">
+                                                {m.stories.field}
+                                            </th>
                                             <th className="hidden px-3 py-2 font-medium md:table-cell">
                                                 {m.fields.sprint}
                                             </th>
@@ -282,6 +329,14 @@ export default function ProjectDetailPage() {
                                                     ) : (
                                                         '—'
                                                     )}
+                                                </td>
+                                                <td
+                                                    className="hidden max-w-[10rem] truncate px-3 py-2 text-gray-600 md:table-cell"
+                                                    title={task.userStory?.title}
+                                                >
+                                                    {task.userStory
+                                                        ? `${storyRef(task.userStory.reference)} · ${task.userStory.title}`
+                                                        : '—'}
                                                 </td>
                                                 {/* No sprint IS the backlog — which is why the standalone
                                                     backlog page was redundant with this list. */}
@@ -398,6 +453,26 @@ export default function ProjectDetailPage() {
                                     }
                                 />
                             </Field>
+                            {/* Only where there is a backlog to file against: an
+                                empty select beside every new task would be a
+                                field nobody can use. */}
+                            {(stories?.length ?? 0) > 0 && (
+                                <Field label={m.stories.field}>
+                                    <Select
+                                        value={newTask.userStoryId}
+                                        onChange={(e) =>
+                                            setNewTask((p) => ({ ...p, userStoryId: e.target.value }))
+                                        }
+                                    >
+                                        <option value="">{m.stories.none}</option>
+                                        {(stories ?? []).map((story) => (
+                                            <option key={story.id} value={story.id}>
+                                                {storyRef(story.reference)} · {story.title}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            )}
                         </div>
                         <ModalFooter>
                             <Button type="button" variant="secondary" onClick={() => setCreating(false)}>

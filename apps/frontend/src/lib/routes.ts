@@ -82,6 +82,7 @@ export const routes = {
             root: '/purchases/imports',
             shipmentNew: '/purchases/imports/new',
             shipmentDetail: (id: string) => `/purchases/imports/${id}` as const,
+            shipmentEdit: (id: string) => `/purchases/imports/${id}/edit` as const,
             lcRegister: '/purchases/imports/lc-register',
             dutyReport: '/purchases/imports/duty-report',
         },

@@ -18,10 +18,13 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportsService } from './imports.service';
 import {
+    AcceptShipmentDto,
+    CancelShipmentDto,
     CreateImportCostDto,
     CreateImportDocumentDto,
     CreateImportShipmentDto,
     ListShipmentsQueryDto,
+    PayImportCostDto,
     ReceiveShipmentDto,
     SettleShipmentDto,
     UpdateImportCostDto,
@@ -78,11 +81,7 @@ export class ImportsController {
 
     @Get()
     findAll(@Tenant() tenant: TenantContext, @Query() query: ListShipmentsQueryDto) {
-        return this.imports.findAll(tenant.tenantId, {
-            status: query.status,
-            supplierId: query.supplierId,
-            openOnly: query.openOnly === 'true',
-        });
+        return this.imports.findAll(tenant.tenantId, query);
     }
 
     @Get(':id')
@@ -108,6 +107,16 @@ export class ImportsController {
         @Body() dto: UpdateShipmentStatusDto,
     ) {
         return this.imports.updateStatus(tenant.tenantId, id, dto.status);
+    }
+
+    @Post(':id/cancel')
+    @RequireStorePermission(StorePermission.MANAGE_IMPORTS)
+    cancel(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CancelShipmentDto,
+    ) {
+        return this.imports.cancel(tenant.tenantId, id, dto);
     }
 
     @Delete(':id')
@@ -154,6 +163,22 @@ export class ImportsController {
         return this.imports.removeCost(tenant.tenantId, id, costId);
     }
 
+    /**
+     * Pays a charge recorded before the money left — typically the C&F agent's
+     * bill, which arrives weeks after the goods. Deliberately reachable after
+     * receipt, where every other cost route is not: see `ImportsService.payCost`.
+     */
+    @Post(':id/costs/:costId/pay')
+    @RequireStorePermission(StorePermission.MANAGE_IMPORT_COSTS)
+    payCost(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('costId') costId: string,
+        @Body() dto: PayImportCostDto,
+    ) {
+        return this.imports.payCost(tenant.tenantId, id, costId, dto);
+    }
+
     // ── Receipt and settlement ───────────────────────────────────────────────
 
     @Post(':id/receive')
@@ -166,6 +191,16 @@ export class ImportsController {
         return this.imports.receive(tenant.tenantId, tenant.userId, id, dto);
     }
 
+    @Post(':id/accept')
+    @RequireStorePermission(StorePermission.MANAGE_IMPORT_COSTS)
+    accept(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: AcceptShipmentDto,
+    ) {
+        return this.imports.accept(tenant.tenantId, tenant.userId, id, dto);
+    }
+
     @Post(':id/settle')
     @RequireStorePermission(StorePermission.MANAGE_IMPORT_COSTS)
     settle(
@@ -173,7 +208,7 @@ export class ImportsController {
         @Param('id') id: string,
         @Body() dto: SettleShipmentDto,
     ) {
-        return this.imports.settle(tenant.tenantId, id, dto);
+        return this.imports.settle(tenant.tenantId, tenant.userId, id, dto);
     }
 
     // ── Documents ────────────────────────────────────────────────────────────

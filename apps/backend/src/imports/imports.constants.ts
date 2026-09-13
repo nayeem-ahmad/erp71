@@ -206,6 +206,14 @@ export const ImportAccount = {
     BANK_CHARGES: 'LC & Bank Charges',
     FX_GAIN: 'FX Gain',
     FX_LOSS: 'FX Loss',
+    /** A charge recorded before it is paid. See `addCost`. */
+    ACCRUED_CHARGES: 'Accrued Import Charges',
+    /** Where a cancelled shipment's capitalised charges land. See `cancel`. */
+    CHARGES_WRITTEN_OFF: 'Import Charges Written Off',
+    /** The supplier's side of the invoice, cleared when the bank accepts. */
+    PURCHASE_PAYABLE: 'Purchase Payable',
+    /** The inventory account a receipt debits. */
+    PURCHASES: 'Purchases',
 } as const;
 
 /** Where a non-capitalised charge goes when the caller does not name an account. */
@@ -216,3 +224,32 @@ export const RECEIVABLE_ACCOUNT_BY_COST_TYPE: Partial<Record<ImportCostType, str
     LC_COMMISSION: ImportAccount.BANK_CHARGES,
     BANK_CHARGE: ImportAccount.BANK_CHARGES,
 };
+
+/**
+ * Columns `GET /imports` will order by.
+ *
+ * An allowlist rather than a passthrough: `orderBy` reaches Prisma directly, and
+ * an arbitrary column name there is both an error surface and a way to sort by
+ * something the caller was never shown. Mirrors `SALE_SORTABLE`.
+ */
+export const SHIPMENT_SORTABLE = [
+    'reference_number',
+    'lc_number',
+    'status',
+    'currency',
+    'invoice_value_fc',
+    'lc_expiry_date',
+    'eta',
+    'created_at',
+] as const;
+
+export type ShipmentSortable = (typeof SHIPMENT_SORTABLE)[number];
+
+/**
+ * How many days ahead the LC expiry sweep warns.
+ *
+ * Two tiers rather than one: a fortnight is long enough to amend or extend an
+ * LC with the bank, and three days is the last moment anyone can act. A single
+ * tier either nags for a fortnight or arrives too late to matter.
+ */
+export const LC_EXPIRY_WARNING_DAYS = [14, 3] as const;
