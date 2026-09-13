@@ -452,6 +452,13 @@ export const projectsMessages = {
         timerUpdateFailed: 'Could not update the timer.',
         timerDiscarded: 'Timer discarded. Nothing was logged.',
         timerStartedAt: 'Started at',
+        // The tracker floats over every page now, so it has a name, and the
+        // chrome that moves and folds it needs labels of its own.
+        tracker: 'Time tracker',
+        trackerMove: 'Move the time tracker',
+        trackerCollapse: 'Collapse the time tracker',
+        trackerExpand: 'Expand the time tracker',
+        trackerClose: 'Hide the time tracker',
         timerAlreadyRunning: 'A timer is already running on "{task}". Stop it first.',
         timerOverlapped: 'Those hours overlap time you already logged on "{task}".',
         overlapTitle: 'These hours overlap',

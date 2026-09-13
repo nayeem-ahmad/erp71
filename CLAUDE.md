@@ -82,7 +82,7 @@ Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed U
 - No arbitrary hex Tailwind classes (`bg-[#f3f4f6]`); no `rounded-2xl`/`rounded-3xl`, no `font-black uppercase tracking-widest` in app code
 - Compact density: `text-sm`/`text-xs` body, `p-3 md:p-4` page padding, `space-y-4` sections
 - Notifications go through the global `Toaster` store only — no page-local toasts; validation errors are inline per field, never `alert()`
-- No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions
+- No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions. `FloatingPanel` (the time tracker) is the one sanctioned floating surface: movable, position remembered, collapsible, and never the only way to reach a feature — see §2.8 of the UI spec
 - Mobile: ≥44px touch targets (`min-h-touch`), `hideOnMobile` on secondary columns of wide tables, no horizontal body scroll at 360px
 - Money always via `formatBDT()` — never a literal `$`. Sole exception: a document genuinely denominated in a foreign currency (proforma invoices, import shipments) uses `formatCurrency(value, { currency })` — see `docs/ui-design-guidelines.md`
 
