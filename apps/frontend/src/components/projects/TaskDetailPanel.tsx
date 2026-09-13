@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -30,6 +30,8 @@ import {
 } from '@/components/projects/task-activity';
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
+import { movedFar } from '@/components/projects/board-drag';
+import { reorderByDrag } from '@/components/projects/checklist-reorder';
 import ChipPopover from '@/components/projects/ChipPopover';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
@@ -158,6 +160,9 @@ function assigneeOptionsFor(members: ProjectMemberRow[], task: Task): AssigneeOp
  * heavy enough to be worth keeping out of the bundle until a card is opened.
  */
 const Markdown = lazy(() => import('@/components/ui/Markdown'));
+
+/** Marks a checklist row so a drag can tell which one the pointer is over. */
+const CHECKLIST_ITEM_ATTR = 'data-checklist-item';
 
 const TITLE_MAX = 300;
 const DESCRIPTION_MAX = 5000;
@@ -2121,6 +2126,9 @@ function ChecklistSection({
 }) {
     const { t } = useI18n();
     const m = t.projects.checklist;
+    /** The board card already says this; a second "Drag to move" in nine
+        catalogues would be the same sentence twice. */
+    const dragLabel = t.projects.board.card.drag;
 
     const [newText, setNewText] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -2169,6 +2177,63 @@ function ChecklistSection({
         return run(() => api.reorderTaskChecklist(taskId, next.map((item) => item.id)));
     };
 
+    /**
+     * Dragging an item to a new place in the list.
+     *
+     * Pointer events rather than HTML5 `draggable`, for the reason
+     * `board-drag.ts` documents: `dragstart` never fires from touch on iOS
+     * Safari or Android Chrome, so a phone could see the handle and not move
+     * anything. This is the board's *approach*, not its code — those helpers are
+     * two-axis and keyed to columns and cards, and a checklist is one axis.
+     *
+     * The arrow buttons stay. A drag handle alone is unusable by keyboard, and
+     * `moveBy` is already the tested path.
+     */
+    const [dragging, setDragging] = useState<string | null>(null);
+    const [over, setOver] = useState<string | null>(null);
+    const origin = useRef<{ x: number; y: number } | null>(null);
+    const started = useRef(false);
+
+    const endDrag = () => {
+        setDragging(null);
+        setOver(null);
+        origin.current = null;
+        started.current = false;
+    };
+
+    const onHandleDown = (item: ChecklistItem) => (event: React.PointerEvent) => {
+        // Left button or touch only: a right-click is a context menu, not a drag.
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        origin.current = { x: event.clientX, y: event.clientY };
+        setDragging(item.id);
+    };
+
+    const onHandleMove = (event: React.PointerEvent) => {
+        if (!dragging || !origin.current) return;
+        // Below the threshold this is a click on the handle, not a drag —
+        // the same 6px the board uses.
+        if (!started.current) {
+            if (!movedFar(origin.current, { x: event.clientX, y: event.clientY })) return;
+            started.current = true;
+        }
+        // `elementFromPoint`, not the event target: the handle has pointer
+        // capture, so every move reports the handle no matter what is under it.
+        const under = document.elementFromPoint(event.clientX, event.clientY);
+        const row = under?.closest(`[${CHECKLIST_ITEM_ATTR}]`);
+        const id = row?.getAttribute(CHECKLIST_ITEM_ATTR) ?? null;
+        setOver(id && id !== dragging ? id : null);
+    };
+
+    const onHandleUp = () => {
+        // Read before `endDrag` clears them.
+        const next = reorderByDrag(items.map((item) => item.id), dragging, over);
+        endDrag();
+        if (!next) return;
+        // The whole order, exactly as moveBy sends it.
+        return run(() => api.reorderTaskChecklist(taskId, next));
+    };
+
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <div className="flex items-center justify-between gap-2">
@@ -2205,7 +2270,31 @@ function ChecklistSection({
             ) : (
                 <ul className="mt-2 space-y-0.5">
                     {items.map((item, index) => (
-                        <li key={item.id} className="flex items-center gap-2">
+                        <li
+                            key={item.id}
+                            {...{ [CHECKLIST_ITEM_ATTR]: item.id }}
+                            className={`flex items-center gap-2 rounded ${
+                                dragging === item.id ? 'opacity-40' : ''
+                            } ${over === item.id ? 'ring-2 ring-blue-400' : ''}`}
+                        >
+                            {/* Not a button: it drags, it does not activate.
+                                The arrows beside it are the keyboard path. */}
+                            <span
+                                // Decorative, and honestly so: `aria-hidden`
+                                // rather than an `aria-label`, because a drag
+                                // is not something a screen-reader user can
+                                // perform here. The arrow buttons beside it are
+                                // the accessible path, and they stay.
+                                aria-hidden
+                                title={dragLabel}
+                                onPointerDown={onHandleDown(item)}
+                                onPointerMove={onHandleMove}
+                                onPointerUp={onHandleUp}
+                                onPointerCancel={endDrag}
+                                className="cursor-grab touch-none px-0.5 text-gray-300 hover:text-gray-500"
+                            >
+                                <GripVertical className="h-4 w-4" />
+                            </span>
                             <Checkbox
                                 checked={item.is_done}
                                 disabled={saving}
