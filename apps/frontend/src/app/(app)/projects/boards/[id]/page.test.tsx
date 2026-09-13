@@ -12,6 +12,7 @@ import {
     DEFAULT_BOARD_VIEW,
     type BoardView,
 } from '@/components/projects/board-view';
+import { BOARD_BACKGROUND_CLASS } from '@/components/projects/board-background';
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'b1' }),
@@ -34,6 +35,9 @@ jest.mock('@/lib/api', () => {
             getProjectLabels: jest.fn(),
             getProjects: jest.fn(),
             createBoardCard: jest.fn(),
+            updateBoard: jest.fn(),
+            setBoardBackgroundImage: jest.fn(),
+            clearBoardBackground: jest.fn(),
         },
     };
 });
@@ -65,6 +69,7 @@ describe('BoardPage', () => {
         });
         (api.moveBoardCard as jest.Mock).mockReset().mockResolvedValue({});
         (api.removeBoardTask as jest.Mock).mockReset().mockResolvedValue({});
+        (api.updateBoard as jest.Mock).mockReset().mockResolvedValue({});
         (api.getProjectLabels as jest.Mock).mockReset().mockResolvedValue([]);
         (api.getProjects as jest.Mock).mockReset().mockResolvedValue({
             items: [
@@ -419,6 +424,85 @@ describe('BoardPage', () => {
                 .querySelector(`[${COLUMN_ATTR}="c1"]`)
                 ?.querySelector('[style*="width"]') as HTMLElement;
             expect(meter).toHaveStyle({ width: '25%' });
+        });
+    });
+
+    /**
+     * The other half of the appearance story, and deliberately the opposite
+     * kind of setting: the appearance panel above is this browser's preference,
+     * while the background is stored on the board and everyone sees it.
+     */
+    describe('background', () => {
+        /** The scrolling container the columns live in — what gets painted. */
+        const canvas = () => document.querySelector(`[${COLUMN_ATTR}="c1"]`)?.closest('.overflow-x-auto') as HTMLElement;
+
+        it('leaves a board with no background on the page surface', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            expect(canvas().className).not.toContain('bg-gradient-to-br');
+            // No inline style at all, rather than an empty one: the canvas has
+            // nothing to say about its background on a plain board.
+            expect(canvas().getAttribute('style')).toBeNull();
+        });
+
+        it('paints the colour the board is stored with', async () => {
+            (api.getBoard as jest.Mock).mockResolvedValue({
+                id: 'b1',
+                name: 'Release 4',
+                background_color: 'BLUE',
+                columns: [
+                    { id: 'c1', name: 'To Do', category: 'TODO', wip_limit: null, tasks: [task('k1', 'Fix login', { id: 'p1', code: 'ALP' })] },
+                ],
+                unsorted: [],
+            });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            expect(canvas().className).toContain(BOARD_BACKGROUND_CLASS.BLUE);
+            // Columns lose their edges on anything painted without this.
+            expect(document.querySelector(`[${COLUMN_ATTR}="c1"]`)?.className).toContain('shadow-md');
+        });
+
+        it('hangs an uploaded picture behind the columns', async () => {
+            (api.getBoard as jest.Mock).mockResolvedValue({
+                id: 'b1',
+                name: 'Release 4',
+                background_image_url: 'https://cdn/office.jpg',
+                columns: [
+                    { id: 'c1', name: 'To Do', category: 'TODO', wip_limit: null, tasks: [task('k1', 'Fix login', { id: 'p1', code: 'ALP' })] },
+                ],
+                unsorted: [],
+            });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            expect(canvas()).toHaveStyle({ backgroundImage: 'url("https://cdn/office.jpg")' });
+            expect(canvas().className).toContain('bg-cover');
+        });
+
+        it('repaints from the API answer rather than re-fetching the whole board', async () => {
+            (api.updateBoard as jest.Mock).mockResolvedValue({
+                background_color: 'PURPLE',
+                background_image_url: null,
+            });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Background' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Purple' }));
+
+            await waitFor(() =>
+                expect(canvas().className).toContain(BOARD_BACKGROUND_CLASS.PURPLE),
+            );
+            // Blinking every column for a colour change would be a worse board
+            // than no colour at all — and the cards have not changed.
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
         });
     });
 });
