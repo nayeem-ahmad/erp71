@@ -320,6 +320,23 @@ export const projectsMessages = {
         pick: "Couleur de couverture {color}",
     },
 
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: "Commentaires",
+            time: "Journal des heures",
+            remaining: "Historique des heures restantes",
+            attachments: "Pièces jointes",
+        },
+        record: "Journal de la tâche",
+        addChecklistItem: "Ajouter un élément",
+        logTime: "Saisir du temps",
+        spark: {
+            title: "Restant",
+            hover: "survolez pour le détail",
+        },
+    },
+
     checklist: {
         title: "Liste de contrôle",
         add: "Ajouter un élément",
