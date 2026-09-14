@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "Geben Sie der Aufgabe einen Titel.",
         noProjects: "Legen Sie zuerst ein Projekt an — jede Aufgabe gehört zu einem.",
         createFailed: "Die Aufgabe konnte nicht erstellt werden",
+        openFull: "Ganze Seite öffnen",
     },
 
     description: {
@@ -343,6 +344,7 @@ export const projectsMessages = {
         setPriority: "Priorität setzen",
         addDescription: "+ Beschreibung hinzufügen",
         saveAndAdd: "Speichern und weitere",
+        suggestions: "Vorschläge",
     },
 
     timer: {

@@ -746,6 +746,7 @@ export default function TasksPage() {
                 }}
                 labels={{
                     placeholder: m.quickAdd.placeholder,
+                    suggestions: m.quickAdd.suggestions,
                     hint: m.quickAdd.hint,
                     project: m.fields.project,
                     selectProject: m.task.selectProject,

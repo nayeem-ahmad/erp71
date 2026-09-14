@@ -3,7 +3,37 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
+import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { parseQuickAdd, type QuickAddVocabulary } from './task-quick-add';
+
+/** The sigils the grammar understands, and what each one offers. */
+const SIGILS = ['@', '#', '!', '~', '>'] as const;
+type Sigil = (typeof SIGILS)[number];
+
+const PRIORITY_VALUES = ['low', 'medium', 'high', 'urgent'];
+const DUE_VALUES = ['today', 'tomorrow', '3d', 'friday'];
+
+/**
+ * The word the caret sits in, if it starts with a sigil.
+ *
+ * Suggestions follow the caret rather than the end of the line, so going back
+ * to fix `@raf` in the middle of a title still offers the roster.
+ */
+export function tokenAtCaret(
+    value: string,
+    caret: number,
+): { sigil: Sigil; query: string; from: number; to: number } | null {
+    const before = value.slice(0, caret);
+    const start = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\n')) + 1;
+    const word = before.slice(start);
+    if (!word) return null;
+    const sigil = word[0] as Sigil;
+    if (!SIGILS.includes(sigil)) return null;
+    // A space closes a token, so `@rafi more words` stops suggesting.
+    const rest = value.slice(caret);
+    const end = caret + (rest.search(/\s/) === -1 ? rest.length : rest.search(/\s/));
+    return { sigil, query: word.slice(1), from: start, to: end };
+}
 
 export interface QuickAddProject {
     id: string;
@@ -13,6 +43,8 @@ export interface QuickAddProject {
 
 export interface QuickAddLabels {
     placeholder: string;
+    /** Names the suggestion list — never the same string as `placeholder`. */
+    suggestions: string;
     hint: string;
     project: string;
     selectProject: string;
@@ -57,6 +89,59 @@ export default function TaskQuickAdd({
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    /**
+     * What the caret is in the middle of typing, and which suggestion is
+     * highlighted. The grammar has always worked; it was only ever discoverable
+     * from a hint line listing the five sigils, so nobody learned the
+     * vocabulary — which names exist, which labels, what `>3d` means.
+     *
+     * `parseQuickAdd` is untouched. This only shows what it would resolve; an
+     * unmatched token still stays in the title, which is the rule that makes
+     * the grammar safe to type into.
+     */
+    const [token, setToken] = useState<ReturnType<typeof tokenAtCaret>>(null);
+    const [active, setActive] = useState(0);
+
+    const suggestions = useMemo(() => {
+        if (!token) return [];
+        const needle = token.query.toLowerCase();
+        const match = (name: string) => name.toLowerCase().includes(needle);
+        if (token.sigil === '@') {
+            return vocabulary.assignees.filter((person) => match(person.name)).slice(0, 8)
+                .map((person) => ({ insert: person.name.split(/\s+/)[0], label: person.name }));
+        }
+        if (token.sigil === '#') {
+            return vocabulary.labels.filter((label) => match(label.name)).slice(0, 8)
+                .map((label) => ({ insert: label.name.replace(/\s+/g, ''), label: label.name }));
+        }
+        if (token.sigil === '!') {
+            return PRIORITY_VALUES.filter(match).map((p) => ({ insert: p, label: p }));
+        }
+        if (token.sigil === '>') {
+            return DUE_VALUES.filter(match).map((d) => ({ insert: d, label: d }));
+        }
+        return [];
+    }, [token, vocabulary]);
+
+    useEffect(() => setActive(0), [token?.sigil, token?.query]);
+
+    /** Replaces the token under the caret with the picked value. */
+    const accept = (insert: string) => {
+        if (!token) return;
+        const next = `${value.slice(0, token.from)}${token.sigil}${insert} ${value.slice(token.to)}`;
+        setValue(next);
+        setToken(null);
+        const caret = token.from + insert.length + 2;
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(caret, caret);
+        });
+    };
+
+    const readToken = (element: HTMLInputElement) =>
+        setToken(tokenAtCaret(element.value, element.selectionStart ?? element.value.length));
 
     /**
      * Refocusing after a save has to wait for the render that re-enables the
@@ -114,17 +199,41 @@ export default function TaskQuickAdd({
                     value={value}
                     disabled={saving || projects.length === 0}
                     className="flex-1"
-                    onChange={(event) => setValue(event.target.value)}
+                    onChange={(event) => {
+                        setValue(event.target.value);
+                        readToken(event.currentTarget);
+                    }}
+                    onClick={(event) => readToken(event.currentTarget)}
+                    onBlur={() => setToken(null)}
                     onKeyDown={(event) => {
+                        const open = suggestions.length > 0;
+                        if (open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                            event.preventDefault();
+                            const step = event.key === 'ArrowDown' ? 1 : -1;
+                            setActive((i) => (i + step + suggestions.length) % suggestions.length);
+                            return;
+                        }
                         if (event.key === 'Enter') {
                             event.preventDefault();
-                            void submit();
+                            // Enter completes the token being typed; only once
+                            // there is nothing to complete does it save.
+                            if (open) accept(suggestions[active].insert);
+                            else void submit();
+                            return;
+                        }
+                        if (event.key === 'Tab' && open) {
+                            event.preventDefault();
+                            accept(suggestions[active].insert);
+                            return;
                         }
                         if (event.key === 'Escape') {
                             // Kept off the document: a page-level handler would
                             // read it as something else entirely.
                             event.stopPropagation();
-                            setValue('');
+                            // Dismisses the suggestions first; a second Escape
+                            // clears the line, which is the old behaviour.
+                            if (open) setToken(null);
+                            else setValue('');
                         }
                     }}
                 />
@@ -149,6 +258,46 @@ export default function TaskQuickAdd({
                     </Button>
                 </div>
             </div>
+
+            {suggestions.length > 0 && (
+                <AnchoredDropdown
+                    anchorRef={inputRef}
+                    panelRef={panelRef}
+                    matchAnchorWidth={false}
+                    maxHeight={240}
+                    className="min-w-56 border-gray-200 p-1"
+                    role="listbox"
+                    // Its own name, not the input's. Sharing `placeholder`
+                    // made the field and its suggestion list indistinguishable
+                    // to assistive tech — and to `getByLabelText`, which is how
+                    // the tasks page's tests caught it.
+                    aria-label={labels.suggestions}
+                >
+                    {suggestions.map((suggestion, index) => (
+                        <button
+                            key={suggestion.label}
+                            type="button"
+                            role="option"
+                            aria-selected={index === active}
+                            // Mouse down, not click: the input's blur would
+                            // close the panel before a click ever landed.
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                accept(suggestion.insert);
+                            }}
+                            onMouseEnter={() => setActive(index)}
+                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-sm ${
+                                index === active ? 'bg-blue-50' : ''
+                            }`}
+                        >
+                            <span className="font-mono text-xs text-gray-400">
+                                {token?.sigil}
+                            </span>
+                            {suggestion.label}
+                        </button>
+                    ))}
+                </AnchoredDropdown>
+            )}
 
             <p className="mt-1.5 text-xs text-gray-500">
                 {projects.length === 0 ? labels.noProjects : labels.hint}

@@ -25,6 +25,8 @@ const getTaskAttachments = jest.fn();
 const addTaskAttachment = jest.fn();
 const deleteTaskAttachment = jest.fn();
 const getProject = jest.fn();
+const getProjectStories = jest.fn();
+const getSprints = jest.fn();
 const logProjectTime = jest.fn();
 
 jest.mock('@/lib/api', () => ({
@@ -52,6 +54,8 @@ jest.mock('@/lib/api', () => ({
         addTaskAttachment: (...args: unknown[]) => addTaskAttachment(...args),
         deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
         getProject: (...args: unknown[]) => getProject(...args),
+        getProjectStories: (...args: unknown[]) => getProjectStories(...args),
+        getSprints: (...args: unknown[]) => getSprints(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
         deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
@@ -97,6 +101,8 @@ beforeEach(() => {
         addTaskAttachment,
         deleteTaskAttachment,
         getProject,
+        getProjectStories,
+        getSprints,
         logProjectTime,
     ]) {
         mock.mockReset();
@@ -108,6 +114,8 @@ beforeEach(() => {
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
     getProjectColumns.mockResolvedValue([]);
+    getProjectStories.mockResolvedValue([]);
+    getSprints.mockResolvedValue([]);
     getTaskAttachments.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
@@ -800,25 +808,34 @@ describe('TaskDetailPanel assignee', () => {
             ],
         });
 
+    /** The chip, closed. It reads the holder from the task alone. */
+    const chip = async () => screen.findByRole('button', { name: 'Assignee' });
+
     /**
-     * The roster is fetched when the picker is first touched rather than on
-     * mount, so every case here focuses the select and then waits for an option
-     * — the select itself is on screen before either.
+     * The roster is fetched when the picker is first *opened* rather than on
+     * mount, so every case here clicks the chip and then waits for an option.
+     * The panel is portalled to document.body, so options are queried from
+     * `screen` rather than from inside the chip.
      */
     const picker = async () => {
-        fireEvent.focus(await screen.findByLabelText('Assignee'));
+        fireEvent.click(await chip());
         await screen.findByRole('option', { name: 'Karim' });
-        return screen.getByLabelText('Assignee');
+    };
+
+    /** Picking is a click on a row now, not a change event on a select. */
+    const pick = async (name: string | RegExp) => {
+        await picker();
+        fireEvent.click(screen.getByRole('option', { name }));
     };
 
     it('offers the project roster, including the employees with no login', async () => {
         roster();
         panel();
 
-        const select = within(await picker());
-        expect(select.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
-        expect(select.getByRole('option', { name: 'Rahim Uddin' })).toBeInTheDocument();
-        expect(select.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument();
+        await picker();
+        expect(screen.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Rahim Uddin' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument();
     });
 
     it('shows who holds the card before the roster has loaded at all', async () => {
@@ -826,7 +843,7 @@ describe('TaskDetailPanel assignee', () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Assignee' })).toHaveTextContent('Karim'));
         // Nothing fetched: the field is correct from the task itself, and only
         // needs the list to offer somebody else.
         expect(getProject).not.toHaveBeenCalled();
@@ -838,7 +855,7 @@ describe('TaskDetailPanel assignee', () => {
         roster();
         panel();
 
-        fireEvent.change(await picker(), { target: { value: 'user:user-2' } });
+        await pick('Karim');
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -852,7 +869,7 @@ describe('TaskDetailPanel assignee', () => {
         roster();
         panel();
 
-        fireEvent.change(await picker(), { target: { value: 'employee:emp-1' } });
+        await pick('Rahim Uddin');
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -869,7 +886,8 @@ describe('TaskDetailPanel assignee', () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        fireEvent.change(await screen.findByLabelText('Assignee'), { target: { value: '' } });
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: 'Unassigned' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -879,22 +897,23 @@ describe('TaskDetailPanel assignee', () => {
         );
     });
 
-    // Otherwise the select falls back to its first option and the card reads as
-    // assigned to somebody it is not.
+    // Otherwise the chip would name nobody and the card would read as
+    // unassigned when it is not.
     it('still lists the holder after they have left the project', async () => {
         getProject.mockResolvedValue({ id: 'project-1', members: [] });
         getProjectTask.mockResolvedValue({ ...withChecklist([]), assignee: karim });
         panel();
 
-        await waitFor(() => expect(screen.getByLabelText('Assignee')).toHaveValue('user:user-2'));
-        expect(screen.getByRole('option', { name: 'Karim' })).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Assignee' })).toHaveTextContent('Karim'));
+        fireEvent.click(screen.getByRole('button', { name: 'Assignee' }));
+        expect(await screen.findByRole('option', { name: 'Karim' })).toBeInTheDocument();
     });
 
     it('opens with the picker usable when the roster cannot be read', async () => {
         getProject.mockRejectedValue(new Error('nope'));
         panel();
 
-        expect(await screen.findByLabelText('Assignee')).toBeInTheDocument();
+        expect(await chip()).toBeInTheDocument();
         expect(screen.getByText('Pull the cable')).toBeInTheDocument();
     });
 });
@@ -1208,7 +1227,8 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
         );
         panel();
 
-        fireEvent.change(await screen.findByLabelText('Status'), { target: { value: 's2' } });
+        fireEvent.click(await screen.findByRole('button', { name: 'Status' }));
+        fireEvent.click(await screen.findByRole('option', { name: 'Done' }));
 
         await waitFor(() => expect(remainingHistory()).toHaveBeenCalledTimes(2));
         expect(getProjectTask).toHaveBeenCalledTimes(1);
@@ -1325,10 +1345,126 @@ describe('TaskDetailPanel board columns', () => {
         getProjectColumns.mockResolvedValue([{ id: 's1', name: 'Site visit', category: 'TODO' }]);
         panel();
 
-        expect(await screen.findByText('Site visit')).toBeInTheDocument();
+        // The status chip names only what the card is set to, so the offered
+        // columns are observable with the popover open — unlike the select this
+        // replaced, which rendered every option into the DOM permanently.
+        fireEvent.click(await screen.findByRole('button', { name: 'Status' }));
+        expect(await screen.findByRole('option', { name: 'Site visit' })).toBeInTheDocument();
         await waitFor(() => expect(getProjectColumns).toHaveBeenCalledWith('project-1'));
         const { api } = jest.requireMock('@/lib/api');
         expect(api.getProjectTaskStatuses).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel sprint', () => {
+    const sprints = [
+        { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        { id: 'sp2', name: 'Sprint 8', status: 'PLANNED' },
+    ];
+
+    const chip = async () => screen.findByRole('button', { name: 'Sprint' });
+
+    it('reads Backlog when the task is in no sprint', async () => {
+        panel();
+        expect(await chip()).toHaveTextContent('Backlog');
+    });
+
+    it('names the sprint the task is in, before any list is fetched', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        });
+        panel();
+
+        expect(await chip()).toHaveTextContent('Sprint 7');
+        // The chip is correct from the task alone; the list is only needed to
+        // offer a different sprint.
+        expect(getSprints).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The subtle one. `Sprint` has no `project_id` — sprints are tenant-level
+     * time-boxes — and `GET /sprints?projectId=` filters by *participation*,
+     * i.e. sprints that already hold a task from that project. Passing the
+     * project would hide exactly the newly-planned sprint somebody opens this
+     * picker to move the task into.
+     */
+    it('asks for every sprint in the tenant, not the project’s', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+
+        await waitFor(() => expect(getSprints).toHaveBeenCalled());
+        expect(getSprints).toHaveBeenCalledWith();
+    });
+
+    it('offers the sprints with their state as the subtitle', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 7/ })).toHaveTextContent('Active');
+        expect(screen.getByRole('option', { name: /Sprint 8/ })).toHaveTextContent('Planned');
+    });
+
+    it('moves the task into a sprint', async () => {
+        getSprints.mockResolvedValue(sprints);
+        panel();
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: /Sprint 8/ }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { sprintId: 'sp2' }),
+        );
+    });
+
+    // '' is how the DTO expresses "no sprint" — and returning a task to the
+    // backlog is the module's own name for that.
+    it('returns the task to the backlog with an empty string', async () => {
+        getSprints.mockResolvedValue(sprints);
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp1', name: 'Sprint 7', status: 'ACTIVE' },
+        });
+        panel();
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: 'Backlog' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { sprintId: '' }),
+        );
+    });
+});
+
+describe('TaskDetailPanel milestone', () => {
+    // Read-only on purpose: milestones have create/update/delete endpoints and
+    // no list, so there is nothing to populate a picker from.
+    it('shows the milestone the task is under', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            milestone: { id: 'ms1', name: 'Payments live' },
+        });
+        panel();
+
+        expect(await screen.findByText('Payments live')).toBeInTheDocument();
+    });
+
+    it('says nothing at all when the task has no milestone', async () => {
+        panel();
+        await screen.findByText('Pull the cable');
+
+        expect(screen.queryByText('Milestone')).not.toBeInTheDocument();
+    });
+
+    it('is not offered as something to change', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            milestone: { id: 'ms1', name: 'Payments live' },
+        });
+        panel();
+        await screen.findByText('Payments live');
+
+        expect(screen.queryByRole('button', { name: 'Milestone' })).not.toBeInTheDocument();
     });
 });
 

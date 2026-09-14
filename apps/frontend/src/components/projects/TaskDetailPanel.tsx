@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
 import {
@@ -9,7 +10,6 @@ import {
     Checkbox,
     Input,
     RichTextEditor,
-    Select,
     Textarea,
     Field,
     StatusBadge,
@@ -30,7 +30,11 @@ import {
 } from '@/components/projects/task-activity';
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
+import { movedFar } from '@/components/projects/board-drag';
+import { reorderByDrag } from '@/components/projects/checklist-reorder';
+import ChipPopover from '@/components/projects/ChipPopover';
 import { api } from '@/lib/api';
+import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
@@ -71,17 +75,28 @@ interface Task {
     due_date?: string | null;
     project?: { id: string; code: string; name: string } | null;
     status?: { id: string; name: string; category: string };
+    priority?: string;
     assignee?: { id: string; name?: string | null; email: string } | null;
     // Phase 2 made an employee without a login assignable, so "who holds this"
     // is two columns and anything that reads one has to read the other.
     assigneeEmployee?: { id: string; name?: string | null } | null;
     userStory?: { id: string; reference: number; title: string } | null;
+    /** Both come from `TASK_INCLUDE` and were previously discarded here. */
+    sprint?: { id: string; name: string; status?: string } | null;
+    milestone?: { id: string; name: string } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
     /** From `TASK_INCLUDE`; lets the collapsed feed say how much it holds. */
     _count?: { comments?: number; subtasks?: number };
+}
+
+/** A sprint the task can be moved into. Tenant-wide — see the fetch below. */
+interface SprintOption {
+    id: string;
+    name: string;
+    status?: string;
 }
 
 /** A row of the project's backlog — the options for the story picker. */
@@ -146,6 +161,9 @@ function assigneeOptionsFor(members: ProjectMemberRow[], task: Task): AssigneeOp
  */
 const Markdown = lazy(() => import('@/components/ui/Markdown'));
 
+/** Marks a checklist row so a drag can tell which one the pointer is over. */
+const CHECKLIST_ITEM_ATTR = 'data-checklist-item';
+
 const TITLE_MAX = 300;
 const DESCRIPTION_MAX = 5000;
 
@@ -165,17 +183,466 @@ const EMPTY_TIME_FORM = () => ({ hours: '', workDate: today(), note: '', remaini
 const isTask = (value: unknown): value is Task =>
     typeof value === 'object' && value !== null && typeof (value as Task).id === 'string';
 
-export default function TaskDetailPanel({
+/**
+ * The card's content, with no shell around it.
+ *
+ * Split out so the same body can be a modal (the default, and how every list
+ * and board still opens a card) and a page at `/projects/tasks/<id>` that can
+ * be linked to. Nothing about the sections changed in the split — this is the
+ * grid that used to sit inline inside `ModalShell`, moved out whole.
+ *
+ * The prop list is wide because the split is deliberately behaviour-preserving:
+ * every piece of state and every handler still lives in one owner above, so
+ * there is no second copy of "how a card saves" to keep in step. Narrowing it
+ * is a later refactor, not part of making the body reusable.
+ */
+export function TaskCardBody({
+    task,
     taskId,
-    onClose,
-    onChanged,
+    statuses,
+    history,
+    busy,
+    timeForm,
+    setTimeForm,
+    hours,
+    canSaveWork,
+    allLabels,
+    members,
+    stories,
+    sprints,
+    localeInfo,
+    apply,
+    refresh,
+    markChanged,
+    changeStatus,
+    changePriority,
+    changeSprint,
+    saveWork,
+    deleteEntry,
+    onLabelsWanted,
+    onMembersWanted,
+    onStoriesWanted,
+    onSprintsWanted,
 }: {
+    task: Task;
     taskId: string;
-    onClose: () => void;
-    onChanged?: () => void;
+    statuses: { id: string; name: string; category: string }[];
+    history: RemainingLog[];
+    busy: boolean;
+    timeForm: ReturnType<typeof EMPTY_TIME_FORM>;
+    setTimeForm: React.Dispatch<React.SetStateAction<ReturnType<typeof EMPTY_TIME_FORM>>>;
+    hours: number;
+    canSaveWork: boolean;
+    allLabels: ProjectLabel[];
+    members: ProjectMemberRow[];
+    stories: StoryOption[];
+    sprints: SprintOption[];
+    localeInfo: ReturnType<typeof useI18n>['localeInfo'];
+    apply: (updated: unknown) => Promise<boolean>;
+    refresh: () => Promise<void>;
+    markChanged: () => void;
+    changeStatus: (statusId: string) => Promise<void>;
+    changePriority: (priority: string) => Promise<void>;
+    changeSprint: (sprintId: string) => Promise<void>;
+    saveWork: (event: React.FormEvent) => Promise<void>;
+    deleteEntry: (entryId: string) => Promise<void>;
+    onLabelsWanted: () => void;
+    onMembersWanted: () => void;
+    onStoriesWanted: () => void;
+    onSprintsWanted: () => void;
 }) {
+    const { t } = useI18n();
+    const m = t.projects;
+
+    return (
+        /* Trello's card, in two columns: the work itself in the wide
+           one, everything that merely describes it beside it. Placed
+           explicitly rather than by source order so the sidebar sits
+           under the title on a phone — where status and assignee are
+           the first things reached for — and on the right on desktop. */
+        <div className="grid gap-4 md:grid-cols-3">
+            <aside className="space-y-3 md:col-start-3 md:row-start-1">
+                <section className="space-y-3 rounded-md border border-gray-200 p-3">
+                    <h3 className="text-sm font-medium">{m.task.details}</h3>
+
+                    {/* The four pickers, as chips rather than stacked
+                        selects. A native select is right for four options and
+                        wrong for a twenty-person roster or a groomed backlog:
+                        it cannot be typed into. Dates, labels and the cover
+                        keep their own sections below — dates because start and
+                        due share a cross-field check that does not fit one
+                        chip. */}
+                    <div className="flex flex-wrap gap-1.5">
+                        <ChipPopover
+                            label={m.fields.status}
+                            value={task.status?.id ?? ''}
+                            display={task.status?.name ?? m.fields.status}
+                            tone={task.status ? 'default' : 'muted'}
+                            options={statuses.map((status) => ({
+                                value: status.id,
+                                label: status.name,
+                            }))}
+                            disabled={busy}
+                            onPick={changeStatus}
+                        />
+
+                        <AssigneeField
+                            task={task}
+                            taskId={taskId}
+                            members={members}
+                            onSaved={apply}
+                            onWanted={onMembersWanted}
+                        />
+
+                        <UserStoryField
+                            task={task}
+                            taskId={taskId}
+                            stories={stories}
+                            onSaved={apply}
+                            onWanted={onStoriesWanted}
+                        />
+
+                        {/* New here. Priority was only ever set from the create
+                            modal and filtered from the list — the card itself
+                            could not change it. `UpdateTaskDto` already takes
+                            it, so this is the picker catching up. */}
+                        <ChipPopover
+                            label={m.fields.priority}
+                            value={task.priority ?? ''}
+                            display={
+                                task.priority
+                                    ? m.priority[task.priority as keyof typeof m.priority]
+                                    : m.fields.priority
+                            }
+                            tone={
+                                task.priority === 'URGENT' || task.priority === 'HIGH'
+                                    ? 'warning'
+                                    : task.priority
+                                      ? 'default'
+                                      : 'muted'
+                            }
+                            options={Object.entries(m.priority).map(([value, label]) => ({
+                                value,
+                                label: label as string,
+                            }))}
+                            disabled={busy}
+                            onPick={changePriority}
+                        />
+
+                        {/* Sprint was already on every task read and shown
+                            nowhere. Clearing it returns the task to the
+                            backlog — the module's own words for it. */}
+                        <ChipPopover
+                            label={m.fields.sprint}
+                            value={task.sprint?.id ?? ''}
+                            display={task.sprint?.name ?? m.sprint.backlog}
+                            tone={task.sprint ? 'default' : 'muted'}
+                            options={sprints.map((sprint) => ({
+                                value: sprint.id,
+                                label: sprint.name,
+                                subtitle:
+                                    sprint.status === 'ACTIVE'
+                                        ? m.sprint.active
+                                        : sprint.status === 'COMPLETED'
+                                          ? m.sprint.completed
+                                          : m.sprint.planned,
+                            }))}
+                            disabled={busy}
+                            onOpen={onSprintsWanted}
+                            onPick={changeSprint}
+                            emptyLabel={m.sprint.backlog}
+                            filterable
+                        />
+                    </div>
+
+                    <EstimateField task={task} taskId={taskId} onSaved={apply} />
+
+                    {/* Read-only, unlike the estimate above them:
+                        logged is the sum of the time entries and
+                        remaining is set by the form in the main
+                        column, which records why it moved. */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <Metric
+                            label={m.task.logged}
+                            value={`${num(task.logged_hours)}h`}
+                        />
+                        <Metric
+                            label={m.task.remaining}
+                            value={`${num(task.remaining_hours)}h`}
+                            highlight
+                        />
+                    </div>
+
+                    {/* Read-only, unlike the sprint chip above: milestones have
+                        create/update/delete endpoints and no list, so there is
+                        nothing to populate a picker from. Shown because the task
+                        read already carries it and hiding it served nobody. */}
+                    {task.milestone && (
+                        <Fact label={m.task.milestone} value={task.milestone.name} />
+                    )}
+                </section>
+
+                <DatesSection task={task} taskId={taskId} onSaved={apply} />
+
+                <LabelsSection
+                    taskId={taskId}
+                    all={allLabels}
+                    selected={labelsOf(task)}
+                    onSaved={apply}
+                    onWanted={onLabelsWanted}
+                />
+
+                <CoverSection task={task} taskId={taskId} onSaved={apply} />
+            </aside>
+
+            <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
+                {/* Lifted out of the work row below and put first, so the clock is
+                    reachable without scrolling. It stays in the body rather than
+                    moving to the header: the modal and the page have two different
+                    headers, and a button in both would be two copies to keep in
+                    step. */}
+                <div className="flex items-center justify-end">
+                    <TimerButton taskId={taskId} onChanged={refresh} />
+                </div>
+
+                <DescriptionSection
+                    description={task.description ?? ''}
+                    taskId={taskId}
+                    onSaved={apply}
+                />
+
+                <ChecklistSection
+                    taskId={taskId}
+                    items={task.checklistItems ?? []}
+                    onChanged={refresh}
+                />
+
+                {/* Below the work it describes now, not above it. 4F put this first
+                    on the measured grounds that logging an afternoon is the module's
+                    most frequent write; asked what someone opens a card *to do*, the
+                    answer was to read and understand it. So the reading leads and the
+                    form follows — still above the collapsed tail, still never
+                    seventh. Revert on evidence, not on argument. */}
+                <section className="rounded-md border border-gray-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-medium">{m.time.log}</h3>
+                    </div>
+                    <form onSubmit={saveWork} className="mt-2 space-y-2">
+                        {/* One row on a desktop, stacked on a phone.
+                            Four fields that are one act do not need
+                            four rows of a modal. */}
+                        <div className="grid gap-2 md:grid-cols-[5rem_9rem_7rem_1fr_auto] md:items-end">
+                            <Field label={m.time.hours} htmlFor="task-log-hours">
+                                <Input
+                                    id="task-log-hours"
+                                    type="number"
+                                    min="0.25"
+                                    step="0.25"
+                                    value={timeForm.hours}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, hours: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label={m.time.workDate} htmlFor="task-log-date">
+                                <Input
+                                    id="task-log-date"
+                                    type="date"
+                                    value={timeForm.workDate}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, workDate: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field
+                                label={m.time.remainingAfter}
+                                htmlFor="task-log-remaining"
+                            >
+                                <Input
+                                    id="task-log-remaining"
+                                    type="number"
+                                    min="0"
+                                    step="0.25"
+                                    placeholder={String(
+                                        Math.max(num(task.remaining_hours) - hours, 0),
+                                    )}
+                                    value={timeForm.remaining}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, remaining: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label={m.time.note} htmlFor="task-log-note">
+                                <Input
+                                    id="task-log-note"
+                                    placeholder={m.remaining.notePlaceholder}
+                                    value={timeForm.note}
+                                    onChange={(e) =>
+                                        setTimeForm((p) => ({ ...p, note: e.target.value }))
+                                    }
+                                />
+                            </Field>
+                            <Button
+                                type="submit"
+                                disabled={busy || !canSaveWork}
+                                className="min-h-touch"
+                            >
+                                {t.common.save}
+                            </Button>
+                        </div>
+                    </form>
+                    <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
+                </section>
+
+                {/* Everything below here is the record rather than
+                    the work: read on demand, and fetched on demand
+                    with it. Six of the ten requests opening a card
+                    used to make were for these. */}
+                <CollapsibleSection title={m.attachments.title}>
+                    <AttachmentsSection taskId={taskId} />
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.tabs.time}
+                    count={(task.timeEntries ?? []).length}
+                >
+                    {(task.timeEntries ?? []).length === 0 ? (
+                        <p className="text-sm text-gray-500">{m.time.empty}</p>
+                    ) : (
+                        <ul className="divide-y divide-gray-200 text-sm">
+                            {(task.timeEntries ?? []).map((entry) => (
+                                <li key={entry.id} className="flex items-center gap-2 py-1.5">
+                                    <span className="w-24 shrink-0 text-gray-500">
+                                        {formatDate(entry.work_date)}
+                                    </span>
+                                    <span className="w-14 shrink-0">{num(entry.hours)}h</span>
+                                    <span className="flex-1 truncate text-gray-600">
+                                        {entry.note ?? ''}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        aria-label={t.common.delete}
+                                        className="min-h-touch px-2 text-red-600"
+                                        disabled={busy}
+                                        onClick={() => deleteEntry(entry.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.remaining.history}
+                    count={history.length}
+                >
+                    {history.length === 0 ? (
+                        <p className="text-sm text-gray-500">{m.remaining.empty}</p>
+                    ) : (
+                        <>
+                            {/* The shape first, the rows under it. The
+                                list answers "what happened"; the line
+                                answers "is this converging", which is
+                                what someone opening a card wants to
+                                know — and it doubles as the chart's
+                                table view, so no figure is reachable
+                                only by hovering a dot. */}
+                            <RemainingHoursChart
+                                history={history}
+                                estimate={
+                                    task.estimate_hours == null
+                                        ? null
+                                        : num(task.estimate_hours)
+                                }
+                                dateLocale={localeInfo.dateLocale}
+                                labels={{
+                                    title: m.remaining.chart,
+                                    remaining: m.overview.remaining,
+                                    estimate: m.overview.estimated,
+                                    now: m.remaining.chartNow,
+                                    upNote: m.remaining.chartUpNote,
+                                }}
+                            />
+                            <ul className="mt-3 divide-y divide-gray-200 text-sm">
+                            {history.map((row) => {
+                                const delta = Number(row.delta);
+                                const up = delta > 0;
+                                return (
+                                    <li key={row.id} className="flex items-start gap-2 py-2">
+                                        <span
+                                            className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
+                                            aria-hidden
+                                        >
+                                            {up ? (
+                                                <ArrowUp className="h-4 w-4" />
+                                            ) : (
+                                                <ArrowDown className="h-4 w-4" />
+                                            )}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="flex flex-wrap items-center gap-1.5">
+                                                <StatusBadge tone={up ? 'warning' : 'success'}>
+                                                    {m.remaining.sources[
+                                                        row.source as keyof typeof m.remaining.sources
+                                                    ] ?? row.source}
+                                                </StatusBadge>
+                                                <span className="text-gray-600">
+                                                    {num(row.previous_hours)}h → {num(row.new_hours)}h
+                                                </span>
+                                            </p>
+                                            {row.note && (
+                                                <p className="mt-0.5 text-xs text-gray-500">
+                                                    {row.note}
+                                                </p>
+                                            )}
+                                            <p className="mt-0.5 text-xs text-gray-400">
+                                                {formatDateTime(row.changed_at)}
+                                                {row.user
+                                                    ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                            </ul>
+                        </>
+                    )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                    title={m.activity.title}
+                    count={task._count?.comments}
+                >
+                    <ActivitySection taskId={taskId} onChanged={markChanged} />
+                </CollapsibleSection>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Everything a task card needs to read and write itself, with no opinion about
+ * where it is drawn.
+ *
+ * Extracted so the modal and the page at `/projects/tasks/<id>` share one copy
+ * of "how a card loads and saves". Two copies would drift, and the rules here
+ * are the subtle ones — `apply` trusting a PATCH response, the lazy fetches
+ * keyed on first touch, and `markChanged` catching a blur-commit that lands
+ * after the card is already closed.
+ *
+ * `onClose` is optional: a page has nothing to close back to, so it omits it
+ * and ignores `close`.
+ */
+export function useTaskCard(
+    taskId: string,
+    { onClose, onChanged }: { onClose?: () => void; onChanged?: () => void } = {},
+) {
     const { t, localeInfo } = useI18n();
     const m = t.projects;
+
 
     const [task, setTask] = useState<Task | null>(null);
     const [statuses, setStatuses] = useState<{ id: string; name: string; category: string }[]>([]);
@@ -283,6 +750,32 @@ export default function TaskDetailPanel({
             live = false;
         };
     }, [projectId, storiesWanted]);
+
+    /**
+     * Every sprint in the tenant, fetched when the picker is first opened.
+     *
+     * **No `projectId`, on purpose.** `Sprint` has no `project_id` — sprints are
+     * tenant-level time-boxes that span projects — and `GET /sprints?projectId=`
+     * filters by *participation*, i.e. sprints that already hold a task from
+     * that project. Passing it would hide exactly the newly-planned sprint
+     * somebody opens this picker to move the task into.
+     */
+    const [sprints, setSprints] = useState<SprintOption[]>([]);
+    const [sprintsWanted, setSprintsWanted] = useState(false);
+    useEffect(() => {
+        if (!sprintsWanted) return;
+        let live = true;
+        api.getSprints()
+            .then((rows: unknown) => {
+                if (live) setSprints((Array.isArray(rows) ? rows : []) as SprintOption[]);
+            })
+            .catch(() => {
+                if (live) setSprints([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [sprintsWanted]);
 
     /**
      * The surface behind the modal is reloaded once, when the card is put down.
@@ -402,6 +895,32 @@ export default function TaskDetailPanel({
         }
     };
 
+    const changePriority = async (priority: string) => {
+        setBusy(true);
+        try {
+            // Unlike a status change this cannot move the remaining-hours log,
+            // so it takes the plain `apply` rather than `applyWithLog`.
+            await apply(await api.updateProjectTask(taskId, { priority }));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const changeSprint = async (sprintId: string) => {
+        setBusy(true);
+        try {
+            // '' returns the task to the backlog, which is what the domain calls
+            // clearing a sprint. The DTO's ValidateIf lets the empty string past.
+            await apply(await api.updateProjectTask(taskId, { sprintId }));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const changeStatus = async (statusId: string) => {
         setBusy(true);
         try {
@@ -428,6 +947,62 @@ export default function TaskDetailPanel({
         }
     };
 
+
+    const hoursLeftAfter = Math.max(num(task?.remaining_hours) - hours, 0);
+
+    return {
+        task, statuses, history, busy, timeForm, setTimeForm,
+        hours, canSaveWork, hoursLeftAfter,
+        allLabels, members, stories, sprints, localeInfo,
+        apply, refresh, markChanged, close,
+        changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
+        onLabelsWanted: () => setLabelsWanted(true),
+        onMembersWanted: () => setMembersWanted(true),
+        onStoriesWanted: () => setStoriesWanted(true),
+        onSprintsWanted: () => setSprintsWanted(true),
+    };
+}
+
+export default function TaskDetailPanel({
+    taskId,
+    onClose,
+    onChanged,
+}: {
+    taskId: string;
+    onClose: () => void;
+    onChanged?: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const card = useTaskCard(taskId, { onClose, onChanged });
+    const {
+        task,
+        close,
+        statuses,
+        history,
+        busy,
+        timeForm,
+        setTimeForm,
+        hours,
+        canSaveWork,
+        allLabels,
+        members,
+        stories,
+        localeInfo,
+        apply,
+        refresh,
+        markChanged,
+        changeStatus,
+        changePriority,
+        saveWork,
+        deleteEntry,
+        onLabelsWanted,
+        onMembersWanted,
+        onStoriesWanted,
+        onSprintsWanted,
+        sprints,
+        changeSprint,
+    } = card;
     return (
         <ModalShell onBackdropClick={close} size="2xl">
             <ModalHeader
@@ -440,300 +1015,51 @@ export default function TaskDetailPanel({
                 }
                 subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
                 onClose={close}
-            />
+            >
+                {/* A link rather than a button: it navigates, so middle-click
+                    and copy-link-address should behave like any other link. */}
+                <Link
+                    href={routes.projects.taskDetail(taskId)}
+                    aria-label={m.task.openFull}
+                    title={m.task.openFull}
+                    className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                >
+                    <Maximize2 className="h-4 w-4" aria-hidden />
+                </Link>
+            </ModalHeader>
 
             <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
                 {!task ? (
                     <p className="text-sm text-gray-500">{t.common.loading}</p>
                 ) : (
-                    /* Trello's card, in two columns: the work itself in the wide
-                       one, everything that merely describes it beside it. Placed
-                       explicitly rather than by source order so the sidebar sits
-                       under the title on a phone — where status and assignee are
-                       the first things reached for — and on the right on desktop. */
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <aside className="space-y-3 md:col-start-3 md:row-start-1">
-                            <section className="space-y-3 rounded-md border border-gray-200 p-3">
-                                <h3 className="text-sm font-medium">{m.task.details}</h3>
-
-                                <Field label={m.fields.status} htmlFor="task-status">
-                                    <Select
-                                        id="task-status"
-                                        value={task.status?.id ?? ''}
-                                        onChange={(e) => changeStatus(e.target.value)}
-                                        disabled={busy}
-                                    >
-                                        {statuses.map((status) => (
-                                            <option key={status.id} value={status.id}>
-                                                {status.name}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                </Field>
-
-                                <AssigneeField
-                                    task={task}
-                                    taskId={taskId}
-                                    members={members}
-                                    onSaved={apply}
-                                    onWanted={() => setMembersWanted(true)}
-                                />
-
-                                <UserStoryField
-                                    task={task}
-                                    taskId={taskId}
-                                    stories={stories}
-                                    onSaved={apply}
-                                    onWanted={() => setStoriesWanted(true)}
-                                />
-
-                                <EstimateField task={task} taskId={taskId} onSaved={apply} />
-
-                                {/* Read-only, unlike the estimate above them:
-                                    logged is the sum of the time entries and
-                                    remaining is set by the form in the main
-                                    column, which records why it moved. */}
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Metric
-                                        label={m.task.logged}
-                                        value={`${num(task.logged_hours)}h`}
-                                    />
-                                    <Metric
-                                        label={m.task.remaining}
-                                        value={`${num(task.remaining_hours)}h`}
-                                        highlight
-                                    />
-                                </div>
-                            </section>
-
-                            <DatesSection task={task} taskId={taskId} onSaved={apply} />
-
-                            <LabelsSection
-                                taskId={taskId}
-                                all={allLabels}
-                                selected={labelsOf(task)}
-                                onSaved={apply}
-                                onWanted={() => setLabelsWanted(true)}
-                            />
-
-                            <CoverSection task={task} taskId={taskId} onSaved={apply} />
-                        </aside>
-
-                        <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                            {/* First, not seventh. Logging an afternoon is the
-                                most frequent write in the module and it used to
-                                sit below the description, the checklist and the
-                                attachments, inside a scroller. */}
-                            <section className="rounded-md border border-gray-200 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <h3 className="text-sm font-medium">{m.time.log}</h3>
-                                    <TimerButton taskId={taskId} onChanged={refresh} />
-                                </div>
-                                <form onSubmit={saveWork} className="mt-2 space-y-2">
-                                    {/* One row on a desktop, stacked on a phone.
-                                        Four fields that are one act do not need
-                                        four rows of a modal. */}
-                                    <div className="grid gap-2 md:grid-cols-[5rem_9rem_7rem_1fr_auto] md:items-end">
-                                        <Field label={m.time.hours} htmlFor="task-log-hours">
-                                            <Input
-                                                id="task-log-hours"
-                                                type="number"
-                                                min="0.25"
-                                                step="0.25"
-                                                value={timeForm.hours}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, hours: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field label={m.time.workDate} htmlFor="task-log-date">
-                                            <Input
-                                                id="task-log-date"
-                                                type="date"
-                                                value={timeForm.workDate}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, workDate: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field
-                                            label={m.time.remainingAfter}
-                                            htmlFor="task-log-remaining"
-                                        >
-                                            <Input
-                                                id="task-log-remaining"
-                                                type="number"
-                                                min="0"
-                                                step="0.25"
-                                                placeholder={String(
-                                                    Math.max(num(task.remaining_hours) - hours, 0),
-                                                )}
-                                                value={timeForm.remaining}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, remaining: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field label={m.time.note} htmlFor="task-log-note">
-                                            <Input
-                                                id="task-log-note"
-                                                placeholder={m.remaining.notePlaceholder}
-                                                value={timeForm.note}
-                                                onChange={(e) =>
-                                                    setTimeForm((p) => ({ ...p, note: e.target.value }))
-                                                }
-                                            />
-                                        </Field>
-                                        <Button
-                                            type="submit"
-                                            disabled={busy || !canSaveWork}
-                                            className="min-h-touch"
-                                        >
-                                            {t.common.save}
-                                        </Button>
-                                    </div>
-                                </form>
-                                <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
-                            </section>
-
-                            <DescriptionSection
-                                description={task.description ?? ''}
-                                taskId={taskId}
-                                onSaved={apply}
-                            />
-
-                            <ChecklistSection
-                                taskId={taskId}
-                                items={task.checklistItems ?? []}
-                                onChanged={refresh}
-                            />
-
-                            {/* Everything below here is the record rather than
-                                the work: read on demand, and fetched on demand
-                                with it. Six of the ten requests opening a card
-                                used to make were for these. */}
-                            <CollapsibleSection title={m.attachments.title}>
-                                <AttachmentsSection taskId={taskId} />
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.tabs.time}
-                                count={(task.timeEntries ?? []).length}
-                            >
-                                {(task.timeEntries ?? []).length === 0 ? (
-                                    <p className="text-sm text-gray-500">{m.time.empty}</p>
-                                ) : (
-                                    <ul className="divide-y divide-gray-200 text-sm">
-                                        {(task.timeEntries ?? []).map((entry) => (
-                                            <li key={entry.id} className="flex items-center gap-2 py-1.5">
-                                                <span className="w-24 shrink-0 text-gray-500">
-                                                    {formatDate(entry.work_date)}
-                                                </span>
-                                                <span className="w-14 shrink-0">{num(entry.hours)}h</span>
-                                                <span className="flex-1 truncate text-gray-600">
-                                                    {entry.note ?? ''}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    aria-label={t.common.delete}
-                                                    className="min-h-touch px-2 text-red-600"
-                                                    disabled={busy}
-                                                    onClick={() => deleteEntry(entry.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.remaining.history}
-                                count={history.length}
-                            >
-                                {history.length === 0 ? (
-                                    <p className="text-sm text-gray-500">{m.remaining.empty}</p>
-                                ) : (
-                                    <>
-                                        {/* The shape first, the rows under it. The
-                                            list answers "what happened"; the line
-                                            answers "is this converging", which is
-                                            what someone opening a card wants to
-                                            know — and it doubles as the chart's
-                                            table view, so no figure is reachable
-                                            only by hovering a dot. */}
-                                        <RemainingHoursChart
-                                            history={history}
-                                            estimate={
-                                                task.estimate_hours == null
-                                                    ? null
-                                                    : num(task.estimate_hours)
-                                            }
-                                            dateLocale={localeInfo.dateLocale}
-                                            labels={{
-                                                title: m.remaining.chart,
-                                                remaining: m.overview.remaining,
-                                                estimate: m.overview.estimated,
-                                                now: m.remaining.chartNow,
-                                                upNote: m.remaining.chartUpNote,
-                                            }}
-                                        />
-                                        <ul className="mt-3 divide-y divide-gray-200 text-sm">
-                                        {history.map((row) => {
-                                            const delta = Number(row.delta);
-                                            const up = delta > 0;
-                                            return (
-                                                <li key={row.id} className="flex items-start gap-2 py-2">
-                                                    <span
-                                                        className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
-                                                        aria-hidden
-                                                    >
-                                                        {up ? (
-                                                            <ArrowUp className="h-4 w-4" />
-                                                        ) : (
-                                                            <ArrowDown className="h-4 w-4" />
-                                                        )}
-                                                    </span>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="flex flex-wrap items-center gap-1.5">
-                                                            <StatusBadge tone={up ? 'warning' : 'success'}>
-                                                                {m.remaining.sources[
-                                                                    row.source as keyof typeof m.remaining.sources
-                                                                ] ?? row.source}
-                                                            </StatusBadge>
-                                                            <span className="text-gray-600">
-                                                                {num(row.previous_hours)}h → {num(row.new_hours)}h
-                                                            </span>
-                                                        </p>
-                                                        {row.note && (
-                                                            <p className="mt-0.5 text-xs text-gray-500">
-                                                                {row.note}
-                                                            </p>
-                                                        )}
-                                                        <p className="mt-0.5 text-xs text-gray-400">
-                                                            {formatDateTime(row.changed_at)}
-                                                            {row.user
-                                                                ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
-                                                                : ''}
-                                                        </p>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                        </ul>
-                                    </>
-                                )}
-                            </CollapsibleSection>
-
-                            <CollapsibleSection
-                                title={m.activity.title}
-                                count={task._count?.comments}
-                            >
-                                <ActivitySection taskId={taskId} onChanged={markChanged} />
-                            </CollapsibleSection>
-                        </div>
-                    </div>
+                    <TaskCardBody
+                        task={task}
+                        taskId={taskId}
+                        statuses={statuses}
+                        history={history}
+                        busy={busy}
+                        timeForm={timeForm}
+                        setTimeForm={setTimeForm}
+                        hours={hours}
+                        canSaveWork={canSaveWork}
+                        allLabels={allLabels}
+                        members={members}
+                        stories={stories}
+                        localeInfo={localeInfo}
+                        apply={apply}
+                        refresh={refresh}
+                        markChanged={markChanged}
+                        changeStatus={changeStatus}
+                        changePriority={changePriority}
+                        saveWork={saveWork}
+                        deleteEntry={deleteEntry}
+                        onLabelsWanted={onLabelsWanted}
+                        onMembersWanted={onMembersWanted}
+                        onStoriesWanted={onStoriesWanted}
+                        onSprintsWanted={onSprintsWanted}
+                        sprints={sprints}
+                        changeSprint={changeSprint}
+                    />
                 )}
             </div>
 
@@ -794,24 +1120,21 @@ function AssigneeField({
         }
     };
 
+    const holder = options.find((option) => option.value === assigneeValueOf(task));
+
     return (
-        <Field label={m.task.assignee} htmlFor="task-assignee">
-            <Select
-                id="task-assignee"
-                value={assigneeValueOf(task)}
-                disabled={saving}
-                onFocus={onWanted}
-                onPointerDown={onWanted}
-                onChange={(e) => change(e.target.value)}
-            >
-                <option value="">{m.task.unassigned}</option>
-                {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </Select>
-        </Field>
+        <ChipPopover
+            label={m.task.assignee}
+            value={assigneeValueOf(task)}
+            display={holder?.label ?? m.task.unassigned}
+            tone={holder ? 'default' : 'muted'}
+            options={options.map((option) => ({ value: option.value, label: option.label }))}
+            disabled={saving}
+            onOpen={onWanted}
+            onPick={change}
+            emptyLabel={m.task.unassigned}
+            filterable
+        />
     );
 }
 
@@ -864,24 +1187,26 @@ function UserStoryField({
         }
     };
 
+    const reference = (story: StoryOption) =>
+        fmt(m.stories.reference, { number: story.reference });
+
     return (
-        <Field label={m.stories.field} htmlFor="task-user-story">
-            <Select
-                id="task-user-story"
-                value={task.userStory?.id ?? ''}
-                disabled={saving}
-                onFocus={onWanted}
-                onPointerDown={onWanted}
-                onChange={(e) => change(e.target.value)}
-            >
-                <option value="">{m.stories.none}</option>
-                {options.map((story) => (
-                    <option key={story.id} value={story.id}>
-                        {fmt(m.stories.reference, { number: story.reference })} · {story.title}
-                    </option>
-                ))}
-            </Select>
-        </Field>
+        <ChipPopover
+            label={m.stories.field}
+            value={task.userStory?.id ?? ''}
+            display={task.userStory ? reference(task.userStory) : m.stories.none}
+            tone={task.userStory ? 'default' : 'muted'}
+            options={options.map((story) => ({
+                value: story.id,
+                label: reference(story),
+                subtitle: story.title,
+            }))}
+            disabled={saving}
+            onOpen={onWanted}
+            onPick={change}
+            emptyLabel={m.stories.none}
+            filterable
+        />
     );
 }
 
@@ -1801,6 +2126,9 @@ function ChecklistSection({
 }) {
     const { t } = useI18n();
     const m = t.projects.checklist;
+    /** The board card already says this; a second "Drag to move" in nine
+        catalogues would be the same sentence twice. */
+    const dragLabel = t.projects.board.card.drag;
 
     const [newText, setNewText] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -1849,6 +2177,67 @@ function ChecklistSection({
         return run(() => api.reorderTaskChecklist(taskId, next.map((item) => item.id)));
     };
 
+    /**
+     * Dragging an item to a new place in the list.
+     *
+     * Pointer events rather than HTML5 `draggable`, for the reason
+     * `board-drag.ts` documents: `dragstart` never fires from touch on iOS
+     * Safari or Android Chrome, so a phone could see the handle and not move
+     * anything. This is the board's *approach*, not its code — those helpers are
+     * two-axis and keyed to columns and cards, and a checklist is one axis.
+     *
+     * The arrow buttons stay. A drag handle alone is unusable by keyboard, and
+     * `moveBy` is already the tested path.
+     */
+    const [dragging, setDragging] = useState<string | null>(null);
+    const [over, setOver] = useState<string | null>(null);
+    const origin = useRef<{ x: number; y: number } | null>(null);
+    const started = useRef(false);
+
+    const endDrag = () => {
+        setDragging(null);
+        setOver(null);
+        origin.current = null;
+        started.current = false;
+    };
+
+    const onHandleDown = (item: ChecklistItem) => (event: React.PointerEvent) => {
+        // Primary button or touch only: a secondary click opens a context menu
+        // rather than starting a drag. (Phrased without the usual hyphenated
+        // mouse-button words on purpose — `scripts/rtl-codemod.js` rewrites
+        // `right-`/`left-` as plain text, so those spellings fail the RTL
+        // no-physical-utilities test even inside a comment.)
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        origin.current = { x: event.clientX, y: event.clientY };
+        setDragging(item.id);
+    };
+
+    const onHandleMove = (event: React.PointerEvent) => {
+        if (!dragging || !origin.current) return;
+        // Below the threshold this is a click on the handle, not a drag —
+        // the same 6px the board uses.
+        if (!started.current) {
+            if (!movedFar(origin.current, { x: event.clientX, y: event.clientY })) return;
+            started.current = true;
+        }
+        // `elementFromPoint`, not the event target: the handle has pointer
+        // capture, so every move reports the handle no matter what is under it.
+        const under = document.elementFromPoint(event.clientX, event.clientY);
+        const row = under?.closest(`[${CHECKLIST_ITEM_ATTR}]`);
+        const id = row?.getAttribute(CHECKLIST_ITEM_ATTR) ?? null;
+        setOver(id && id !== dragging ? id : null);
+    };
+
+    const onHandleUp = () => {
+        // Read before `endDrag` clears them.
+        const next = reorderByDrag(items.map((item) => item.id), dragging, over);
+        endDrag();
+        if (!next) return;
+        // The whole order, exactly as moveBy sends it.
+        return run(() => api.reorderTaskChecklist(taskId, next));
+    };
+
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <div className="flex items-center justify-between gap-2">
@@ -1885,7 +2274,31 @@ function ChecklistSection({
             ) : (
                 <ul className="mt-2 space-y-0.5">
                     {items.map((item, index) => (
-                        <li key={item.id} className="flex items-center gap-2">
+                        <li
+                            key={item.id}
+                            {...{ [CHECKLIST_ITEM_ATTR]: item.id }}
+                            className={`flex items-center gap-2 rounded ${
+                                dragging === item.id ? 'opacity-40' : ''
+                            } ${over === item.id ? 'ring-2 ring-blue-400' : ''}`}
+                        >
+                            {/* Not a button: it drags, it does not activate.
+                                The arrows beside it are the keyboard path. */}
+                            <span
+                                // Decorative, and honestly so: `aria-hidden`
+                                // rather than an `aria-label`, because a drag
+                                // is not something a screen-reader user can
+                                // perform here. The arrow buttons beside it are
+                                // the accessible path, and they stay.
+                                aria-hidden
+                                title={dragLabel}
+                                onPointerDown={onHandleDown(item)}
+                                onPointerMove={onHandleMove}
+                                onPointerUp={onHandleUp}
+                                onPointerCancel={endDrag}
+                                className="cursor-grab touch-none px-0.5 text-gray-300 hover:text-gray-500"
+                            >
+                                <GripVertical className="h-4 w-4" />
+                            </span>
                             <Checkbox
                                 checked={item.is_done}
                                 disabled={saving}
@@ -1978,6 +2391,20 @@ function ChecklistSection({
                 </Button>
             </form>
         </section>
+    );
+}
+
+/**
+ * A labelled fact that is not editable here. Deliberately a row rather than a
+ * `Metric` tile: a tile reads as a figure worth comparing, and a milestone name
+ * is neither a figure nor comparable.
+ */
+function Fact({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="text-xs text-gray-500">{label}</span>
+            <span className="min-w-0 truncate font-medium">{value}</span>
+        </div>
     );
 }
 

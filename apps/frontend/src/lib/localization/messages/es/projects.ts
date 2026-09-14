@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "Ponga un título a la tarea.",
         noProjects: "Cree primero un proyecto: toda tarea pertenece a uno.",
         createFailed: "No se pudo crear la tarea",
+        openFull: "Abrir página completa",
     },
 
     description: {
@@ -343,6 +344,7 @@ export const projectsMessages = {
         setPriority: "Definir prioridad",
         addDescription: "+ Añadir descripción",
         saveAndAdd: "Guardar y añadir otra",
+        suggestions: "Sugerencias",
     },
 
     timer: {
