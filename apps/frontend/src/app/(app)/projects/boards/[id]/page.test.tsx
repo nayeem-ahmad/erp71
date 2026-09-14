@@ -432,9 +432,42 @@ describe('BoardPage', () => {
      * kind of setting: the appearance panel above is this browser's preference,
      * while the background is stored on the board and everyone sees it.
      */
+    describe('header layout', () => {
+        it('keeps the filters in the header beside the buttons, not on a row of their own', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            // The filter bar cost a whole row of board height before this; what
+            // makes that back is the selects sharing the header's action row,
+            // so it is the shared ancestor that is worth asserting rather than
+            // the selects merely existing somewhere on the page.
+            const assignee = screen.getByLabelText('Assignee');
+            const settings = screen.getByRole('link', { name: 'Board settings' });
+            const header = assignee.closest('div.flex.flex-wrap.items-center.justify-end');
+
+            expect(header).not.toBeNull();
+            expect(header).toContainElement(settings);
+        });
+
+        it('names every filter for a screen reader without a visible label', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            // The visible label text is what was traded away for the height, so
+            // the accessible name has to come from somewhere else.
+            for (const name of ['Assignee', 'Priority', 'Due']) {
+                expect(screen.getByLabelText(name).tagName).toBe('SELECT');
+            }
+        });
+    });
+
     describe('background', () => {
-        /** The scrolling container the columns live in — what gets painted. */
-        const canvas = () => document.querySelector(`[${COLUMN_ATTR}="c1"]`)?.closest('.overflow-x-auto') as HTMLElement;
+        /**
+         * The painted surface. It wraps the header *and* the columns, so it can
+         * no longer be found by walking up from a column to the scroller — the
+         * scroller is now an undecorated child of it.
+         */
+        const canvas = () => screen.getByTestId('board-canvas');
 
         it('leaves a board with no background on the page surface', async () => {
             render(<BoardPage />);
