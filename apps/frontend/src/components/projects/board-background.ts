@@ -106,3 +106,24 @@ export function boardCanvasStyle(board: BoardBackground | null | undefined): CSS
 export function boardColumnLiftClass(board: BoardBackground | null | undefined): string {
     return boardBackgroundKind(board) === 'default' ? '' : 'shadow-md';
 }
+
+/**
+ * The plate the header sits on once the background runs behind it.
+ *
+ * The background used to stop below the header, so the title, subtitle and
+ * breadcrumb could rely on the page's own white surface. Now that it runs to
+ * the top of the page they sit on tenant data, and `PageHeader` paints them
+ * `gray-950`/`gray-500` — unreadable on a photograph, and no better on the
+ * palette, whose gradients run 500→700 and are dark by design.
+ *
+ * A translucent white plate rather than light-on-dark text, which is the
+ * cheaper of the two by a distance: every existing gray token keeps its
+ * meaning, and `PageHeader`, `PageBreadcrumb` and the filter `Select`s stay
+ * untouched — none of them has to learn what background it is standing on.
+ * `backdrop-blur-sm` keeps a busy photograph from reading through the plate as
+ * texture behind the title.
+ */
+export function boardHeaderPlateClass(board: BoardBackground | null | undefined): string {
+    if (boardBackgroundKind(board) === 'default') return '';
+    return 'rounded-lg bg-white/85 p-3 shadow-sm backdrop-blur-sm';
+}
