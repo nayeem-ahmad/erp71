@@ -51,9 +51,18 @@ interface AnchoredDropdownProps {
  * Entry screens hang their pickers over the line-items table, and an in-flow
  * `absolute` panel is at the mercy of everything above it: the table wrapper is
  * `overflow-hidden rounded bg-white`, which in WebKit gets its own compositing
- * layer and paints straight over a `z-50` sibling — the product list came out
+ * layer and paints straight over a low-`z` sibling — the product list came out
  * sliced off at the table's top edge. Out in a portal the panel has no siblings
  * to lose to and no ancestor overflow to be clipped by, in any browser.
+ *
+ * **The panel sits on `z-dropdown` (65), above `modal` (60).** A portal escapes
+ * ancestor clipping but not the stacking order, and these panels are opened
+ * from controls *inside* modals — the task card's chips, the purchase entry
+ * modals' product search. At `z-50` the panel painted under the modal layer:
+ * mounted, visible, and unclickable, because every option row lost the hit test
+ * to the modal sitting over it. That reads as "the dropdown does not respond",
+ * which is exactly how it was reported. It stays below `toast` (70), which has
+ * to clear an open picker.
  */
 export default function AnchoredDropdown({
     anchorRef,
@@ -115,7 +124,7 @@ export default function AnchoredDropdown({
             role={role}
             aria-label={ariaLabel}
             style={style}
-            className={`z-50 overflow-y-auto rounded border bg-white shadow-lg ${className}`}
+            className={`z-dropdown overflow-y-auto rounded border bg-white shadow-lg ${className}`}
         >
             {children}
         </div>,
