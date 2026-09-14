@@ -39,7 +39,17 @@ export default function PageHeader({
                 </div>
 
                 {(hasBreadcrumbs || hasActions) ? (
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0 min-w-0">
+                    /* `flex-shrink-0` used to sit here beside `min-w-0`, which
+                       cancel each other out: a column that may not shrink lays
+                       out at its natural content width whatever its minimum,
+                       so on a narrow screen it overflowed the row instead of
+                       wrapping — 898px wide inside a 360px viewport, clipping
+                       whatever sat furthest right. Harmless while `actions`
+                       held two or three buttons, which is why it survived; it
+                       bites the moment a page puts a real row of controls
+                       there. Shrinking is what lets the nested `flex-wrap`
+                       below find a boundary to break against. */
+                    <div className="flex min-w-0 flex-col items-end gap-2">
                         {hasBreadcrumbs ? <PageBreadcrumb items={breadcrumbs!} /> : null}
                         {hasActions ? (
                             <div className="flex flex-wrap items-center justify-end gap-2">

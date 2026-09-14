@@ -4,6 +4,7 @@ import {
     boardCanvasClass,
     boardCanvasStyle,
     boardColumnLiftClass,
+    boardHeaderPlateClass,
     BOARD_BACKGROUND_CLASS,
     BOARD_BACKGROUND_COLORS,
     isBoardBackgroundColor,
@@ -109,6 +110,30 @@ describe('boardColumnLiftClass', () => {
     it('lifts the columns off anything painted, or they lose their edges', () => {
         expect(boardColumnLiftClass({ background_color: 'AMBER' })).toBe('shadow-md');
         expect(boardColumnLiftClass({ background_image_url: 'https://cdn/x.jpg' })).toBe('shadow-md');
+    });
+});
+
+describe('boardHeaderPlateClass', () => {
+    it('gives a plain board no plate — the page surface is already white', () => {
+        expect(boardHeaderPlateClass(null)).toBe('');
+        expect(boardHeaderPlateClass({})).toBe('');
+    });
+
+    it('plates the header on a colour, whose gradients are dark by design', () => {
+        // gray-950 title text on a 500→700 gradient is the case this exists for.
+        expect(boardHeaderPlateClass({ background_color: 'BLUE' })).toContain('bg-white/85');
+    });
+
+    it('plates the header on a picture', () => {
+        expect(boardHeaderPlateClass({ background_image_url: 'https://cdn/x.jpg' })).toContain(
+            'bg-white/85',
+        );
+    });
+
+    it('uses no arbitrary-value class, which the UI rules forbid', () => {
+        for (const board of [{ background_color: 'RED' }, { background_image_url: 'https://cdn/x.jpg' }]) {
+            expect(boardHeaderPlateClass(board)).not.toMatch(/\[[^\]]+\]/);
+        }
     });
 });
 
