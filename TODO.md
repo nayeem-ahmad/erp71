@@ -1303,6 +1303,14 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Board cards were carrying a band of white around the title — the same unconditional `min-h-touch` bug as the task panel, one file later.** Reported with a screenshot of a card whose title sat in obvious empty space. The card's grip and delete buttons each carried an ungated `min-h-touch`/`min-w-touch`; as flex siblings of the title block in an `items-start` row they floored that row at **44px** on every viewport, desktop included. Eleven such classes across the board page — header buttons, filter selects, the card's two controls — all now gated `max-md:` the way `Button`, `Input` and `Select` already gate theirs.
+
+  **Measured before editing, which corrected the diagnosis.** The first guess was that the 44px floor drove every card's height; it does not. On a **long** title the row is text-driven (title 77px inside a 99px block), so the floor costs nothing there. On a **short** title it is the whole story: a 19px title in a 44px row. The gating helps both, for different reasons — long cards **149 → 130px**, short cards **66 → 43px** (−35%). The long-card gain is partly a side effect worth naming: dropping `min-w-touch` from the delete button returned ~28px of width to the title block, so the same text wraps in three lines instead of four (title 77 → 58px).
+
+  **Mobile floor verified, not assumed:** at 360px the grip and delete buttons still measure 44×44. Density from spacing, never from shrinking the touch target.
+
+  **Verified:** board suites 46/46, full frontend **337 suites / 3,944 green**, `tsc` 0 errors, lint clean. Looked at both a long-title and a short-title card in a browser — done 2026-09-14
+
 - [x] **Six follow-ups on the task card, three of them gaps between the approved mockup and what actually shipped.** Caught by putting the mockup and a screenshot of the live card side by side — worth noting as a method, because the suite was fully green while three of the ten agreed items were not delivered.
 
   **The three gaps.** (1) **The sidebar pickers never became one-per-line** — the chip row was still `flex flex-wrap`, so five chips packed two or three to a line and the reader matched chips to meanings by guesswork; "Medium" reads as a priority or a size depending on what you expected. They are `FieldRow`s now: caption left, control right. (2) **`EstimateField` rendered twice** — I added the `compact` variant into the three-across row and never deleted the standalone one above it, so the card showed an empty full-width "Estimate (h)" input with an "Estimate (h)" tile directly beneath. (3) **The description had no resting container** — a bare button with `border-transparent`, so an empty one offered nothing to click and a filled one ran into the checklist.
