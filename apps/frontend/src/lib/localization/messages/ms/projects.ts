@@ -320,6 +320,23 @@ export const projectsMessages = {
         pick: 'Warna kulit {color}',
     },
 
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: 'Komen',
+            time: 'Log Jam',
+            remaining: 'Sejarah Baki Jam',
+            attachments: 'Lampiran',
+        },
+        record: 'Rekod tugasan',
+        addChecklistItem: 'Tambah item',
+        logTime: 'Log masa',
+        spark: {
+            title: 'Baki',
+            hover: 'tuding untuk perincian',
+        },
+    },
+
     checklist: {
         title: 'Senarai semak',
         add: 'Tambah item',
