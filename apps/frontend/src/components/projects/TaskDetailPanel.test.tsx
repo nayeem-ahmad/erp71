@@ -132,6 +132,14 @@ const panel = () => render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} />);
 const openSection = async (name: RegExp) =>
     fireEvent.click(await screen.findByRole('button', { name }));
 
+/**
+ * The record sections are a tab strip at the foot of the card now, not four
+ * stacked collapsibles — so they are reached by role `tab`, and only the
+ * selected one is mounted. Comments is the tab a card opens on.
+ */
+const openTab = async (name: RegExp) =>
+    fireEvent.click(await screen.findByRole('tab', { name }));
+
 describe('TaskDetailPanel checklist', () => {
     it('renders the items the task already carries', async () => {
         panel();
@@ -176,6 +184,7 @@ describe('TaskDetailPanel checklist', () => {
         panel();
         await screen.findByText('Pull the cable');
 
+        fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
         const field = screen.getByPlaceholderText('What needs doing?');
         fireEvent.change(field, { target: { value: '  Test the circuit  ' } });
         fireEvent.click(screen.getByRole('button', { name: 'Add an item' }));
@@ -191,6 +200,7 @@ describe('TaskDetailPanel checklist', () => {
         panel();
         await screen.findByText('Pull the cable');
 
+        fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
         const field = screen.getByPlaceholderText('What needs doing?');
         fireEvent.change(field, { target: { value: '   ' } });
         fireEvent.click(screen.getByRole('button', { name: 'Add an item' }));
@@ -343,7 +353,12 @@ describe('TaskDetailPanel labels', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Client waiting' }));
 
         await waitFor(() =>
-            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: ['l1', 'l2'] }),
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                labelIds: ['l1', 'l2'],
+                // The cover follows the FIRST label, which the addition did not
+                // change — it is still Blocked.
+                coverColor: blocked.color,
+            }),
         );
     });
 
@@ -358,7 +373,11 @@ describe('TaskDetailPanel labels', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
 
         await waitFor(() =>
-            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: ['l2'] }),
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                labelIds: ['l2'],
+                // Removing the first label hands the cover to what is now first.
+                coverColor: waiting.color,
+            }),
         );
     });
 
@@ -369,7 +388,9 @@ describe('TaskDetailPanel labels', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
 
-        await waitFor(() => expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [] }));
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [], coverColor: '' }),
+        );
     });
 
     it('hides the section entirely when the workspace has no labels', async () => {
@@ -396,19 +417,11 @@ describe('TaskDetailPanel dates', () => {
         });
         panel();
 
-        expect(await screen.findByLabelText('Start date')).toHaveValue('2026-08-01');
-        expect(screen.getByLabelText('Due date')).toHaveValue('2026-08-10');
-    });
-
-    it('saves a start date', async () => {
-        panel();
-        fireEvent.change(await screen.findByLabelText('Start date'), {
-            target: { value: '2026-08-05' },
-        });
-
-        await waitFor(() =>
-            expect(updateProjectTask).toHaveBeenCalledWith('t1', { startDate: '2026-08-05' }),
-        );
+        // Start date came off the card: the first hour logged already says when
+        // work began, and two sources for one fact is how they drift. The
+        // column is untouched — only the input is gone.
+        expect(await screen.findByLabelText('Due date')).toHaveValue('2026-08-10');
+        expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument();
     });
 
     // PATCH reads undefined as "leave alone", so only '' can mean "no date" —
@@ -425,17 +438,6 @@ describe('TaskDetailPanel dates', () => {
         await waitFor(() => expect(updateProjectTask).toHaveBeenCalledWith('t1', { dueDate: '' }));
     });
 
-    it('warns when the start is after the due date', async () => {
-        getProjectTask.mockResolvedValue({
-            ...withChecklist([]),
-            start_date: '2026-08-20T00:00:00.000Z',
-            due_date: '2026-08-10T00:00:00.000Z',
-        });
-        panel();
-
-        expect(await screen.findByText('The start is after the due date.')).toBeInTheDocument();
-    });
-
     it('says nothing when the dates are in order', async () => {
         getProjectTask.mockResolvedValue({
             ...withChecklist([]),
@@ -444,7 +446,7 @@ describe('TaskDetailPanel dates', () => {
         });
         panel();
 
-        await screen.findByLabelText('Start date');
+        await screen.findByLabelText('Due date');
         expect(screen.queryByText('The start is after the due date.')).not.toBeInTheDocument();
     });
 
@@ -453,7 +455,7 @@ describe('TaskDetailPanel dates', () => {
         updateProjectTask.mockRejectedValue(new Error('Nope'));
         panel();
 
-        fireEvent.change(await screen.findByLabelText('Start date'), {
+        fireEvent.change(await screen.findByLabelText('Due date'), {
             target: { value: '2026-08-05' },
         });
 
@@ -481,7 +483,7 @@ describe('TaskDetailPanel activity', () => {
             },
         ]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         expect(await screen.findByText('Comment c1')).toBeInTheDocument();
         expect(screen.getByText(/moved it from To do to Doing/)).toBeInTheDocument();
@@ -489,7 +491,7 @@ describe('TaskDetailPanel activity', () => {
 
     it('posts a comment and clears the box', async () => {
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
         const box = await screen.findByLabelText('Add a comment…');
         fireEvent.change(box, { target: { value: '  Looks done  ' } });
         fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
@@ -500,7 +502,7 @@ describe('TaskDetailPanel activity', () => {
 
     it('will not post an empty comment', async () => {
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
         await screen.findByLabelText('Add a comment…');
         expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
     });
@@ -511,7 +513,7 @@ describe('TaskDetailPanel activity', () => {
             comment('theirs', '2026-08-03T09:00:00Z', 'user-2'),
         ]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         await screen.findByText('Comment mine');
         // One Edit and one Delete — for the one comment that is yours.
@@ -526,7 +528,7 @@ describe('TaskDetailPanel activity', () => {
     it('edits your own comment', async () => {
         getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
         fireEvent.change(screen.getByLabelText('Edit comment'), { target: { value: 'Revised' } });
@@ -538,7 +540,7 @@ describe('TaskDetailPanel activity', () => {
     it('does not save an edit that changed nothing', async () => {
         getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
         fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
@@ -548,7 +550,7 @@ describe('TaskDetailPanel activity', () => {
 
     it('watches a task you are not watching', async () => {
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: /Watch/ }));
 
@@ -558,7 +560,7 @@ describe('TaskDetailPanel activity', () => {
     it('unwatches one you are', async () => {
         getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: /Watching/ }));
 
@@ -568,7 +570,7 @@ describe('TaskDetailPanel activity', () => {
     it('shows you are already watching when you are', async () => {
         getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         expect(await screen.findByRole('button', { name: /Watching/ })).toHaveAttribute(
             'aria-pressed',
@@ -581,7 +583,7 @@ describe('TaskDetailPanel activity', () => {
     it('says the feed failed rather than showing it as empty', async () => {
         getTaskActivity.mockRejectedValue(new Error('nope'));
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         expect(await screen.findByText('Could not load the activity.')).toBeInTheDocument();
         expect(screen.queryByText('Nothing has happened here yet.')).not.toBeInTheDocument();
@@ -589,7 +591,7 @@ describe('TaskDetailPanel activity', () => {
 
     it('says so when there is genuinely nothing yet', async () => {
         panel();
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
         expect(await screen.findByText('Nothing has happened here yet.')).toBeInTheDocument();
     });
 });
@@ -1196,7 +1198,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
         panel();
         await screen.findByLabelText('Estimate (h)');
 
-        await openSection(/^Activity/);
+        await openTab(/^Comments/);
 
         await waitFor(() => expect(getTaskComments).toHaveBeenCalledWith('t1'));
         expect(getTaskActivity).toHaveBeenCalledTimes(1);
@@ -1469,40 +1471,53 @@ describe('TaskDetailPanel milestone', () => {
 });
 
 describe('TaskDetailPanel cover', () => {
-    it('marks the colour the card is wearing', async () => {
+    /**
+     * The standalone cover picker is gone. Colour and labels were two controls
+     * saying the same thing in two idioms — a label already carries a colour,
+     * and the cover was a seventh chosen with no relation to them, so a card
+     * could wear a red "Bug" chip above a purple stripe. The cover now follows
+     * the task's first label and is written in the same PATCH.
+     */
+    beforeEach(() => {
+        getProjectLabels.mockResolvedValue([blocked, waiting]);
+    });
+
+    it('offers no cover control of its own any more', async () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
         panel();
+        // The card's own "loaded" anchor: this fixture carries no checklist
+        // items, so there is no item text to wait on.
+        await screen.findByLabelText('Estimate (h)');
 
-        expect(await screen.findByLabelText('Cover colour Blue')).toHaveAttribute(
-            'aria-pressed',
-            'true',
-        );
-        expect(screen.getByLabelText('Cover colour Red')).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.queryByRole('button', { name: 'No cover' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Cover colour Blue')).not.toBeInTheDocument();
     });
 
-    it('sets a cover', async () => {
+    it('takes the cover from the first label when one is added', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [] });
         panel();
-        fireEvent.click(await screen.findByLabelText('Cover colour Red'));
+        await openSection(/^Labels/);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
 
         await waitFor(() =>
-            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: 'RED' }),
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                labelIds: ['l1'],
+                coverColor: blocked.color,
+            }),
         );
     });
 
-    it('clears it with an empty string, the PATCH-clearing convention', async () => {
-        getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
+    it('clears the cover with the last label, the PATCH-clearing convention', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
         panel();
+        await openSection(/^Labels/);
 
-        fireEvent.click(await screen.findByRole('button', { name: 'No cover' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
 
         await waitFor(() =>
-            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: '' }),
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [], coverColor: '' }),
         );
-    });
-
-    it('cannot clear a cover that is not set', async () => {
-        panel();
-        expect(await screen.findByRole('button', { name: 'No cover' })).toBeDisabled();
     });
 });
 
@@ -1524,7 +1539,7 @@ describe('TaskDetailPanel attachments', () => {
             },
         ]);
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
 
         const link = await screen.findByRole('link', { name: 'plan.png' });
         expect(link).toHaveAttribute('href', 'https://cdn/plan.png');
@@ -1532,7 +1547,7 @@ describe('TaskDetailPanel attachments', () => {
 
     it('uploads a file', async () => {
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
         const input = await screen.findByLabelText('Attach a file');
 
         fireEvent.change(input, { target: { files: [file('plan.png', 'image/png')] } });
@@ -1549,7 +1564,7 @@ describe('TaskDetailPanel attachments', () => {
     it('refuses an oversized file without uploading it', async () => {
         const { toast } = jest.requireMock('@/lib/toast');
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
         const input = await screen.findByLabelText('Attach a file');
 
         fireEvent.change(input, {
@@ -1563,7 +1578,7 @@ describe('TaskDetailPanel attachments', () => {
     it('refuses a type that is not allowed', async () => {
         const { toast } = jest.requireMock('@/lib/toast');
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
         const input = await screen.findByLabelText('Attach a file');
 
         fireEvent.change(input, {
@@ -1578,7 +1593,7 @@ describe('TaskDetailPanel attachments', () => {
 
     it('accepts a PDF', async () => {
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
         const input = await screen.findByLabelText('Attach a file');
 
         fireEvent.change(input, { target: { files: [file('spec.pdf', 'application/pdf')] } });
@@ -1596,7 +1611,7 @@ describe('TaskDetailPanel attachments', () => {
             },
         ]);
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
 
         fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
 
@@ -1606,7 +1621,7 @@ describe('TaskDetailPanel attachments', () => {
     it('says the list failed rather than showing it as empty', async () => {
         getTaskAttachments.mockRejectedValue(new Error('nope'));
         panel();
-        await openSection(/^Attachments/);
+        await openTab(/^Attachments/);
 
         expect(await screen.findByText('Could not load the attachments.')).toBeInTheDocument();
         expect(screen.queryByText('Nothing attached yet.')).not.toBeInTheDocument();
