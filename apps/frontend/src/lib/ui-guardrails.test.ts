@@ -126,4 +126,52 @@ describe('UI guardrails', () => {
             );
         });
     });
+
+    /**
+     * `AnchoredDropdown` portals its panel into `document.body`, which escapes
+     * ancestor clipping but not the stacking order — and every one of its
+     * callers can be opened from inside a modal (the task card's chips, the
+     * purchase entry modals' product search).
+     *
+     * At `z-50` the panel painted *under* `ModalShell`'s `z-modal` (60): it
+     * mounted, it was visible, and every option row lost the hit test to the
+     * modal sitting over it, so clicks landed on the modal instead. Reported as
+     * "the drop-downs are not responding to click. I cannot change."
+     *
+     * This is a test rather than a convention because nothing else can catch
+     * it. jsdom computes no stacking contexts, so all 13 `ChipPopover` tests
+     * passed throughout — the panel is in the DOM either way, and only a real
+     * browser's hit test tells the two apart.
+     */
+    describe('portalled dropdowns outrank the modal layer', () => {
+        const ladder = (() => {
+            const config = readFileSync(join(SRC, '..', 'tailwind.config.js'), 'utf8');
+            const block = /zIndex:\s*\{([^}]*)\}/.exec(config);
+            const rungs: Record<string, number> = {};
+            for (const [, name, value] of (block?.[1] ?? '').matchAll(
+                /(\w+):\s*'(\d+)'/g,
+            )) {
+                rungs[name] = Number(value);
+            }
+            return rungs;
+        })();
+
+        it('gives the dropdown panel a rung above modal and below toast', () => {
+            expect(ladder.modal).toBeGreaterThan(0);
+            expect(ladder.dropdown).toBeGreaterThan(ladder.modal);
+            expect(ladder.toast).toBeGreaterThan(ladder.dropdown);
+        });
+
+        it('uses that rung on the panel rather than a bare z-* utility', () => {
+            const source = readFileSync(
+                join(SRC, 'components', 'document-entry', 'AnchoredDropdown.tsx'),
+                'utf8',
+            );
+            const panelClass = /className=\{`([^`]*)`\}/.exec(source)?.[1] ?? '';
+            expect(panelClass).toContain('z-dropdown');
+            // A bare `z-50` here is the bug this guards: below the modal rung,
+            // and invisible to every test that does not run a browser.
+            expect(panelClass).not.toMatch(/\bz-\d+\b/);
+        });
+    });
 });
