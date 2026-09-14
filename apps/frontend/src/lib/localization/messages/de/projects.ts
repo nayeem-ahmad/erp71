@@ -344,6 +344,7 @@ export const projectsMessages = {
         setPriority: "Priorität setzen",
         addDescription: "+ Beschreibung hinzufügen",
         saveAndAdd: "Speichern und weitere",
+        suggestions: "Vorschläge",
     },
 
     timer: {

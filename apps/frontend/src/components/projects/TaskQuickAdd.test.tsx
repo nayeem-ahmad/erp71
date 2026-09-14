@@ -6,6 +6,9 @@ import TaskQuickAdd from './TaskQuickAdd';
 
 const LABELS = {
     placeholder: 'Add a task — title, then Enter',
+    // Deliberately not the placeholder: when the panel shared that string, a
+    // `getByLabelText(/add a task/i)` matched both the input and the listbox.
+    suggestions: 'Suggestions',
     hint: 'Add detail inline: @person  #label  !high  ~3h  >friday',
     project: 'Project',
     selectProject: 'Select a project',
