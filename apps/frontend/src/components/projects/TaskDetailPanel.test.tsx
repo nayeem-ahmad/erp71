@@ -471,22 +471,36 @@ describe('TaskDetailPanel activity', () => {
         user: { id: userId, name: 'Karim', email: 'k@x.com' },
     });
 
-    it('shows comments and activity in one timeline', async () => {
+    const statusMove = {
+        id: 'a1',
+        type: 'STATUS_CHANGED',
+        data: { from: 'To do', to: 'Doing' },
+        created_at: '2026-08-03T11:00:00Z',
+        actor: { id: 'user-2', name: 'Rahim', email: 'r@x.com' },
+    };
+
+    it('keeps the activity log out of the comments tab', async () => {
+        // They were one timeline until 2026-09-14, which buried a two-line
+        // reply between six status moves. One fetch still, two tabs.
         getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
-        getTaskActivity.mockResolvedValue([
-            {
-                id: 'a1',
-                type: 'STATUS_CHANGED',
-                data: { from: 'To do', to: 'Doing' },
-                created_at: '2026-08-03T11:00:00Z',
-                actor: { id: 'user-2', name: 'Rahim', email: 'r@x.com' },
-            },
-        ]);
+        getTaskActivity.mockResolvedValue([statusMove]);
         panel();
         await openTab(/^Comments/);
 
         expect(await screen.findByText('Comment c1')).toBeInTheDocument();
-        expect(screen.getByText(/moved it from To do to Doing/)).toBeInTheDocument();
+        expect(screen.queryByText(/moved it from To do to Doing/)).not.toBeInTheDocument();
+    });
+
+    it('keeps comments out of the activity tab, and offers no box to write one', async () => {
+        getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
+        getTaskActivity.mockResolvedValue([statusMove]);
+        panel();
+        await openTab(/^Activity/);
+
+        expect(await screen.findByText(/moved it from To do to Doing/)).toBeInTheDocument();
+        expect(screen.queryByText('Comment c1')).not.toBeInTheDocument();
+        // Nothing to write on a log of what the system saw.
+        expect(screen.queryByLabelText('Add a comment…')).not.toBeInTheDocument();
     });
 
     it('posts a comment and clears the box', async () => {

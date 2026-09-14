@@ -105,7 +105,11 @@ export function Tabs<K extends string>({
                         // shown, and the first click commits it to showing one
                         // for as long as it stays open.
                         onClick={() => onChange(selected ? null : tab.key)}
-                        className={`min-h-touch whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
+                        // `max-md:` rather than always: 44px is the mobile
+                        // touch floor, and applying it on desktop too made a
+                        // strip of tabs as tall as a toolbar. Matches how
+                        // Button, Input and Select already gate it.
+                        className={`max-md:min-h-touch whitespace-nowrap border-b-2 px-3 py-1.5 text-sm transition-colors ${
                             selected
                                 ? 'border-blue-600 font-semibold text-blue-600'
                                 : 'border-transparent font-medium text-gray-500 hover:text-gray-700'

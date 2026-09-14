@@ -45,6 +45,14 @@ export default {
             },
             zIndex: {
                 modal: '60',
+                // Portalled dropdown panels (`AnchoredDropdown`). Above `modal`
+                // because these panels are opened *from* controls inside
+                // modals: at `z-50` the panel painted under the modal layer and
+                // every option row lost the hit test to it, so the chips in the
+                // task card looked dead — visible list, clicks landing on the
+                // modal behind it. Below `toast`, which must stay on top of
+                // everything including an open picker.
+                dropdown: '65',
                 toast: '70',
             },
             keyframes: {
