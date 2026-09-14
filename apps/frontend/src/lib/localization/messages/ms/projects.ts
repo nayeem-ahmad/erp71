@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: 'Berikan tugasan ini tajuk.',
         noProjects: 'Cipta projek dahulu — setiap tugasan milik sebuah projek.',
         createFailed: 'Tugasan tidak dapat dicipta',
+        openFull: 'Buka halaman penuh',
     },
 
     description: {
@@ -343,6 +344,7 @@ export const projectsMessages = {
         setPriority: 'Tetapkan keutamaan',
         addDescription: '+ Tambah penerangan',
         saveAndAdd: 'Simpan dan tambah lagi',
+        suggestions: 'Cadangan',
     },
 
     timer: {
