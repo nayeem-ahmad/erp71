@@ -356,7 +356,7 @@ export default function BoardPage() {
                     <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 md:p-4">
                         <p className="text-sm text-red-700">{t.common.error}</p>
                         <Link href={routes.projects.boards}>
-                            <Button variant="secondary" className="min-h-touch">
+                            <Button variant="secondary" className="max-md:min-h-touch">
                                 {t.common.back}
                             </Button>
                         </Link>
@@ -411,21 +411,21 @@ export default function BoardPage() {
                                     shown={shown}
                                     total={total}
                                 />
-                                <Button className="min-h-touch" onClick={() => setAdding(true)}>
+                                <Button className="max-md:min-h-touch" onClick={() => setAdding(true)}>
                                     <Plus className="h-4 w-4" />
                                     {m.addTasks}
                                 </Button>
                                 <BoardViewMenu {...boardView} />
                                 <Button
                                     variant="secondary"
-                                    className="min-h-touch"
+                                    className="max-md:min-h-touch"
                                     onClick={() => setPickingBackground(true)}
                                 >
                                     <ImageIcon className="h-4 w-4" />
                                     {m.background.title}
                                 </Button>
                                 <Link href={routes.projects.boardColumns(boardId)}>
-                                    <Button variant="secondary" className="min-h-touch">
+                                    <Button variant="secondary" className="max-md:min-h-touch">
                                         {m.boardSettings}
                                     </Button>
                                 </Link>
@@ -730,7 +730,7 @@ function BoardFilterBar({
         <div className="flex max-w-full flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:max-w-[9rem]">
             <Select
                 aria-label={f.assignee}
-                className="min-h-touch"
+                className="max-md:min-h-touch"
                 value={filters.assignee}
                 onChange={(e) => onChange({ ...filters, assignee: e.target.value })}
             >
@@ -745,7 +745,7 @@ function BoardFilterBar({
 
             <Select
                 aria-label={f.priority}
-                className="min-h-touch"
+                className="max-md:min-h-touch"
                 value={filters.priority}
                 onChange={(e) => onChange({ ...filters, priority: e.target.value })}
             >
@@ -762,7 +762,7 @@ function BoardFilterBar({
             {labels.length > 0 && (
                 <Select
                     aria-label={f.label}
-                    className="min-h-touch"
+                    className="max-md:min-h-touch"
                     value={filters.label}
                     onChange={(e) => onChange({ ...filters, label: e.target.value })}
                 >
@@ -778,7 +778,7 @@ function BoardFilterBar({
 
             <Select
                 aria-label={f.due}
-                className="min-h-touch"
+                className="max-md:min-h-touch"
                 value={filters.due}
                 onChange={(e) =>
                     onChange({ ...filters, due: e.target.value as BoardFilters['due'] })
@@ -801,7 +801,7 @@ function BoardFilterBar({
                     <Button
                         type="button"
                         variant="ghost"
-                        className="min-h-touch"
+                        className="max-md:min-h-touch"
                         onClick={() => onChange(NO_FILTERS)}
                     >
                         <X className="me-1 h-4 w-4" />
@@ -919,7 +919,7 @@ function TaskCard({
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
-                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                    className="-ms-1 max-md:min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
@@ -953,7 +953,7 @@ function TaskCard({
                         e.stopPropagation();
                         onRemove();
                     }}
-                    className="min-h-touch min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                    className="max-md:min-h-touch max-md:min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>
