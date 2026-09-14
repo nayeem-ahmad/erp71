@@ -2202,7 +2202,11 @@ function ChecklistSection({
     };
 
     const onHandleDown = (item: ChecklistItem) => (event: React.PointerEvent) => {
-        // Left button or touch only: a right-click is a context menu, not a drag.
+        // Primary button or touch only: a secondary click opens a context menu
+        // rather than starting a drag. (Phrased without the usual hyphenated
+        // mouse-button words on purpose — `scripts/rtl-codemod.js` rewrites
+        // `right-`/`left-` as plain text, so those spellings fail the RTL
+        // no-physical-utilities test even inside a comment.)
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         origin.current = { x: event.clientX, y: event.clientY };
