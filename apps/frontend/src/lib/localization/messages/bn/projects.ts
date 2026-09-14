@@ -320,6 +320,23 @@ export const projectsMessages = {
         pick: 'কভারের রং {color}',
     },
 
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: 'মন্তব্য',
+            time: 'ঘণ্টার লগ',
+            remaining: 'অবশিষ্ট ঘণ্টার ইতিহাস',
+            attachments: 'সংযুক্তি',
+        },
+        record: 'টাস্ক রেকর্ড',
+        addChecklistItem: 'আইটেম যোগ করুন',
+        logTime: 'সময় লগ করুন',
+        spark: {
+            title: 'অবশিষ্ট',
+            hover: 'বিস্তারিত দেখতে হোভার করুন',
+        },
+    },
+
     checklist: {
         title: 'চেকলিস্ট',
         add: 'আইটেম যোগ',

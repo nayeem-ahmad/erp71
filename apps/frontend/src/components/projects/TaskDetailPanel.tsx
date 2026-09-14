@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -15,10 +15,8 @@ import {
     StatusBadge,
 } from '@/components/ui';
 import {
-    coverClass,
     labelClass,
     labelsOf,
-    LABEL_COLORS,
     type ProjectLabel,
     type ProjectLabelColor,
 } from '@/components/projects/board-tasks';
@@ -29,6 +27,11 @@ import {
     type FeedEntry,
 } from '@/components/projects/task-activity';
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
+import RemainingSparkline from '@/components/projects/RemainingSparkline';
+import { Tabs, TabPanel } from '@/components/ui/compact/Tabs';
+
+/** The four records a card carries, as the bottom tab strip names them. */
+type RecordTab = 'comments' | 'time' | 'remaining' | 'attachments';
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
@@ -254,14 +257,48 @@ export function TaskCardBody({
     const { t } = useI18n();
     const m = t.projects;
 
+    /* No tab selected until one is asked for, which is the whole reason the
+       collapsibles these replaced existed.
+
+       Defaulting to Comments would have read better — it is the tab someone
+       usually wants — but `ActivitySection` fetches on mount, so making it the
+       default put the comment feed, the activity log and the watcher list back
+       into the cost of opening a card: three requests became six, undoing the
+       reduction 4F measured and recorded. A tab strip that starts closed keeps
+       that reduction and still costs one click, the same click the collapsible
+       header cost. */
+    const [recordTab, setRecordTab] = useState<RecordTab | null>(null);
+
+    /* Log time opens on a heading and a "+", not on its four fields: a card is
+       opened to read far more often than to log, and an empty timesheet under
+       the description made every read scroll past it. The checklist does the
+       same, but owns its own flag — its add form lives inside
+       `ChecklistSection` rather than out here. */
+    const [loggingTime, setLoggingTime] = useState(false);
+
     return (
         /* Trello's card, in two columns: the work itself in the wide
            one, everything that merely describes it beside it. Placed
            explicitly rather than by source order so the sidebar sits
            under the title on a phone — where status and assignee are
            the first things reached for — and on the right on desktop. */
-        <div className="grid gap-4 md:grid-cols-3">
-            <aside className="space-y-3 md:col-start-3 md:row-start-1">
+        /* `grid-cols-1` is not decoration. Without a base column count only
+           `md:grid-cols-3` is declared, so below `md` the grid falls back to a
+           single *implicit* track, and an implicit track is `auto` — it sizes
+           to its widest content rather than to the grid. Measured on a phone:
+           one 574px track inside a 302px grid, clipping the chips, the third
+           figure and the date input off the right edge with no scroll to reach
+           them. `grid-cols-1` emits `repeat(1, minmax(0, 1fr))`, which is the
+           constraint that was missing. `min-w-0` on the child cannot fix this:
+           the child was already free to shrink; the track was not. */
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {/* `min-w-0` is load-bearing: a grid item defaults to
+                `min-width: auto`, which refuses to shrink below its content's
+                intrinsic width. Without it this column lays out at its widest
+                child — measured at 574px inside a 302px grid on a phone — and
+                clips the chips, the third figure and the date input off the
+                right edge, with no scroll to reach them. */}
+            <aside className="min-w-0 space-y-3 md:col-start-3 md:row-start-1">
                 <section className="space-y-3 rounded-md border border-gray-200 p-3">
                     <h3 className="text-sm font-medium">{m.task.details}</h3>
 
@@ -357,11 +394,16 @@ export function TaskCardBody({
 
                     <EstimateField task={task} taskId={taskId} onSaved={apply} />
 
-                    {/* Read-only, unlike the estimate above them:
-                        logged is the sum of the time entries and
-                        remaining is set by the form in the main
-                        column, which records why it moved. */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Three across rather than an input above a pair of tiles:
+                        estimate, logged and remaining are one thought — what
+                        the job was going to cost, what it has cost, what is
+                        left — and reading them needs them on one line. The
+                        estimate is still the only editable one of the three;
+                        logged is the sum of the time entries and remaining is
+                        set by the form in the main column, which records why
+                        it moved. */}
+                    <div className="grid grid-cols-3 gap-2">
+                        <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
                         <Metric
                             label={m.task.logged}
                             value={`${num(task.logged_hours)}h`}
@@ -372,6 +414,21 @@ export function TaskCardBody({
                             highlight
                         />
                     </div>
+
+                    {/* The shape of those three figures over time, at a glance.
+                        The full chart is a tab away and answers the same
+                        question in more detail; this is here because "is this
+                        converging" is worth answering without a click, and the
+                        history it draws is already loaded for the tab. */}
+                    <RemainingSparkline
+                        history={history}
+                        dateLocale={localeInfo.dateLocale}
+                        labels={{
+                            title: m.card.spark.title,
+                            remaining: m.overview.remaining,
+                            hover: m.card.spark.hover,
+                        }}
+                    />
 
                     {/* Read-only, unlike the sprint chip above: milestones have
                         create/update/delete endpoints and no list, so there is
@@ -384,15 +441,20 @@ export function TaskCardBody({
 
                 <DatesSection task={task} taskId={taskId} onSaved={apply} />
 
+                {/* One control, not two. Colour and labels were separate
+                    sections saying the same thing in two idioms — a label
+                    already carries a colour, and the cover was a seventh
+                    colour chosen independently of them. The cover now follows
+                    the task's first label, so the board draws what the card
+                    says rather than something set elsewhere. */}
                 <LabelsSection
+                    task={task}
                     taskId={taskId}
                     all={allLabels}
                     selected={labelsOf(task)}
                     onSaved={apply}
                     onWanted={onLabelsWanted}
                 />
-
-                <CoverSection task={task} taskId={taskId} onSaved={apply} />
             </aside>
 
             <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
@@ -426,8 +488,21 @@ export function TaskCardBody({
                 <section className="rounded-md border border-gray-200 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-medium">{m.time.log}</h3>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="min-h-touch"
+                            aria-expanded={loggingTime}
+                            onClick={() => setLoggingTime((open) => !open)}
+                        >
+                            <Plus className="h-4 w-4" />
+                            {m.card.logTime}
+                        </Button>
                     </div>
-                    <form onSubmit={saveWork} className="mt-2 space-y-2">
+                    <form
+                        onSubmit={saveWork}
+                        className={`mt-2 space-y-2 ${loggingTime ? '' : 'hidden'}`}
+                    >
                         {/* One row on a desktop, stacked on a phone.
                             Four fields that are one act do not need
                             four rows of a modal. */}
@@ -494,18 +569,40 @@ export function TaskCardBody({
                     <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
                 </section>
 
-                {/* Everything below here is the record rather than
-                    the work: read on demand, and fetched on demand
-                    with it. Six of the ten requests opening a card
-                    used to make were for these. */}
-                <CollapsibleSection title={m.attachments.title}>
-                    <AttachmentsSection taskId={taskId} />
-                </CollapsibleSection>
+                {/* Everything below here is the record rather than the work,
+                    and it is four tabs rather than four stacked collapsibles:
+                    they answer different questions about the same task and
+                    only one is ever wanted at a time, so stacking them made
+                    the card a scroll to reach the last of them.
 
-                <CollapsibleSection
-                    title={m.tabs.time}
-                    count={(task.timeEntries ?? []).length}
-                >
+                    The lazy-fetch guarantee the collapsibles existed for is
+                    kept, not traded away — `TabPanel` unmounts what is not
+                    selected, so a card opening on Comments still fetches only
+                    the comment feed. Six of the ten requests opening a card
+                    used to make were for these. */}
+                <section className="pt-1">
+                    <Tabs<RecordTab>
+                        tabs={[
+                            { key: 'comments', label: m.card.tabs.comments, count: task._count?.comments },
+                            { key: 'time', label: m.card.tabs.time, count: (task.timeEntries ?? []).length },
+                            { key: 'remaining', label: m.card.tabs.remaining, count: history.length },
+                            { key: 'attachments', label: m.card.tabs.attachments },
+                        ]}
+                        value={recordTab}
+                        onChange={setRecordTab}
+                        idPrefix="task-record"
+                        label={m.card.record}
+                    />
+
+                    <TabPanel tabKey="comments" value={recordTab} idPrefix="task-record">
+                        <ActivitySection taskId={taskId} onChanged={markChanged} />
+                    </TabPanel>
+
+                    <TabPanel tabKey="attachments" value={recordTab} idPrefix="task-record">
+                        <AttachmentsSection taskId={taskId} />
+                    </TabPanel>
+
+                    <TabPanel tabKey="time" value={recordTab} idPrefix="task-record">
                     {(task.timeEntries ?? []).length === 0 ? (
                         <p className="text-sm text-gray-500">{m.time.empty}</p>
                     ) : (
@@ -532,12 +629,9 @@ export function TaskCardBody({
                             ))}
                         </ul>
                     )}
-                </CollapsibleSection>
+                    </TabPanel>
 
-                <CollapsibleSection
-                    title={m.remaining.history}
-                    count={history.length}
-                >
+                    <TabPanel tabKey="remaining" value={recordTab} idPrefix="task-record">
                     {history.length === 0 ? (
                         <p className="text-sm text-gray-500">{m.remaining.empty}</p>
                     ) : (
@@ -610,14 +704,8 @@ export function TaskCardBody({
                             </ul>
                         </>
                     )}
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                    title={m.activity.title}
-                    count={task._count?.comments}
-                >
-                    <ActivitySection taskId={taskId} onChanged={markChanged} />
-                </CollapsibleSection>
+                    </TabPanel>
+                </section>
             </div>
         </div>
     );
@@ -1223,10 +1311,13 @@ function EstimateField({
     task,
     taskId,
     onSaved,
+    compact = false,
 }: {
     task: Task;
     taskId: string;
     onSaved: (updated: unknown) => Promise<unknown>;
+    /** Render as one of the three figures rather than as a labelled form field. */
+    compact?: boolean;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -1254,6 +1345,40 @@ function EstimateField({
             setSaving(false);
         }
     };
+
+    // `compact` puts it in the three-across row beside Logged and Remaining,
+    // where it has to read as one of three figures rather than as a form field
+    // — same control, same id, borrowing `Metric`'s frame so the row is even.
+    if (compact) {
+        return (
+            <div className="rounded-md border border-gray-200 px-1.5 py-1 text-center">
+                <label htmlFor="task-estimate" className="block text-xs text-gray-500">
+                    {m.task.estimate}
+                </label>
+                <input
+                    id="task-estimate"
+                    type="number"
+                    min="0"
+                    step="0.25"
+                    value={value}
+                    disabled={saving}
+                    onChange={(e) => setValue(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            commit();
+                        }
+                        if (event.key === 'Escape') {
+                            event.stopPropagation();
+                            setValue(current);
+                        }
+                    }}
+                    className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium tabular-nums text-gray-900 focus:outline-none focus:ring-0"
+                />
+            </div>
+        );
+    }
 
     return (
         <Field label={m.task.estimate} htmlFor="task-estimate">
@@ -1542,66 +1667,6 @@ function DescriptionSection({
                         setEditing(false);
                     }}
                 />
-            </div>
-        </section>
-    );
-}
-
-/**
- * A strip of colour across the top of the card. Purely visual — nothing reads
- * it but the board.
- */
-function CoverSection({
-    task,
-    taskId,
-    onSaved,
-}: {
-    task: Task;
-    taskId: string;
-    onSaved: (updated: unknown) => Promise<unknown>;
-}) {
-    const { t } = useI18n();
-    const m = t.projects;
-    const [saving, setSaving] = useState(false);
-
-    const pick = async (color: ProjectLabelColor | '') => {
-        setSaving(true);
-        try {
-            // '' clears it, the same PATCH convention the dates use.
-            await onSaved(await api.updateProjectTask(taskId, { coverColor: color }));
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : m.task.updated);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <h3 className="mb-2 text-sm font-medium">{m.cover.title}</h3>
-            <div className="flex flex-wrap items-center gap-1.5">
-                {LABEL_COLORS.map((color) => (
-                    <button
-                        key={color}
-                        type="button"
-                        disabled={saving}
-                        aria-pressed={task.cover_color === color}
-                        aria-label={m.cover.pick.replace('{color}', m.labels.colors[color])}
-                        onClick={() => pick(color)}
-                        className={`h-7 w-10 rounded disabled:opacity-60 ${coverClass(color)} ${
-                            task.cover_color === color ? 'ring-2 ring-blue-600 ring-offset-1' : ''
-                        }`}
-                    />
-                ))}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-touch"
-                    disabled={saving || !task.cover_color}
-                    onClick={() => pick('')}
-                >
-                    {m.cover.none}
-                </Button>
             </div>
         </section>
     );
@@ -2010,22 +2075,16 @@ function DatesSection({
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
-            {/* Stacked, not side by side: this card lives in the sidebar now,
-                where two date inputs in a row are narrower than the dates they
-                have to show.
+            {/* Due only. The start date came off the card deliberately: it was
+                a second date to keep in step with the first hour logged, which
+                already says when work began, and two sources for one fact is
+                how they drift. The column is untouched — `start_date` is still
+                written by whatever sets it and still read by the Gantt; this
+                card just stopped asking someone to type it.
 
                 `Field` only ties its label to the control when given htmlFor —
                 without the matching id these inputs have no accessible name. */}
             <div className="grid gap-2">
-                <Field label={m.dates.start} htmlFor="task-start-date">
-                    <Input
-                        id="task-start-date"
-                        type="date"
-                        value={start}
-                        disabled={saving}
-                        onChange={(e) => save('startDate', e.target.value)}
-                    />
-                </Field>
                 <Field
                     label={m.dates.due}
                     htmlFor="task-due-date"
@@ -2049,12 +2108,14 @@ function DatesSection({
  * chip you tap is the chip you will see on the card.
  */
 function LabelsSection({
+    task,
     taskId,
     all,
     selected,
     onSaved,
     onWanted,
 }: {
+    task: Task;
     taskId: string;
     all: ProjectLabel[];
     selected: ProjectLabel[];
@@ -2068,16 +2129,42 @@ function LabelsSection({
 
     const selectedIds = new Set(selected.map((label) => label.id));
 
+    /**
+     * The cover follows the first label, and is written in the same PATCH.
+     *
+     * This is what merging the two controls actually means: the cover was a
+     * colour chosen with no relation to the labels beside it, so a card could
+     * carry a red "Bug" chip and a purple stripe. Deriving it removes the
+     * second, independent choice rather than hiding it — and the board still
+     * reads `cover_color`, so nothing downstream changes.
+     *
+     * A task with no labels has no cover, which is `''` — the same clear
+     * convention the dates and the old cover picker used.
+     */
+    const coverFor = (ids: string[]): ProjectLabelColor | '' => {
+        const first = ids[0];
+        if (!first) return '';
+        const pool = all.length > 0 ? all : selected;
+        return pool.find((label) => label.id === first)?.color ?? '';
+    };
+
     const toggle = async (labelId: string) => {
         const next = new Set(selectedIds);
         if (next.has(labelId)) next.delete(labelId);
         else next.add(labelId);
+        const labelIds = [...next];
 
         setSaving(true);
         try {
             // The whole set every time — the endpoint replaces rather than
-            // patches, so there is no add/remove pair to keep in step.
-            await onSaved(await api.updateProjectTask(taskId, { labelIds: [...next] }));
+            // patches, so there is no add/remove pair to keep in step. The
+            // cover rides along so the two cannot disagree.
+            await onSaved(
+                await api.updateProjectTask(taskId, {
+                    labelIds,
+                    coverColor: coverFor(labelIds),
+                }),
+            );
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
@@ -2095,6 +2182,7 @@ function LabelsSection({
                 )}
                 {(all.length > 0 ? all : selected).map((label) => {
                     const on = selectedIds.has(label.id);
+                    const isCover = task.cover_color != null && on && selected[0]?.id === label.id;
                     return (
                         <button
                             key={label.id}
@@ -2107,6 +2195,10 @@ function LabelsSection({
                             }`}
                         >
                             {label.name}
+                            {/* The one that is also the card's cover. Marked so
+                                the rule is visible rather than something the
+                                board reveals later. */}
+                            {isCover && <span className="ms-1 opacity-70">●</span>}
                         </button>
                     );
                 })}
@@ -2129,6 +2221,8 @@ function ChecklistSection({
     /** The board card already says this; a second "Drag to move" in nine
         catalogues would be the same sentence twice. */
     const dragLabel = t.projects.board.card.drag;
+    /** The add form is behind the "+" in this section's header. */
+    const [adding, setAdding] = useState(false);
 
     const [newText, setNewText] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -2241,16 +2335,28 @@ function ChecklistSection({
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">{m.title}</h3>
-                {items.length > 0 && (
-                    <span className="text-xs text-gray-500">
-                        {done === items.length
-                            ? m.allDone
-                            : m.progress
-                                  .replace('{done}', String(done))
-                                  .replace('{total}', String(items.length))}
-                    </span>
-                )}
+                <h3 className="text-sm font-medium">
+                    {m.title}
+                    {items.length > 0 && (
+                        <span className="ms-2 text-xs font-normal text-gray-500">
+                            {done === items.length
+                                ? m.allDone
+                                : m.progress
+                                      .replace('{done}', String(done))
+                                      .replace('{total}', String(items.length))}
+                        </span>
+                    )}
+                </h3>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-touch"
+                    aria-expanded={adding}
+                    onClick={() => setAdding((open) => !open)}
+                >
+                    <Plus className="h-4 w-4" />
+                    {t.projects.card.addChecklistItem}
+                </Button>
             </div>
 
             {items.length > 0 && (
@@ -2374,22 +2480,29 @@ function ChecklistSection({
                 </ul>
             )}
 
-            <form onSubmit={add} className="mt-2 flex gap-2">
-                <Input
-                    value={newText}
-                    placeholder={m.placeholder}
-                    className="flex-1"
-                    onChange={(e) => setNewText(e.target.value)}
-                />
-                <Button
-                    type="submit"
-                    variant="secondary"
-                    className="min-h-touch"
-                    disabled={saving || newText.trim() === ''}
-                >
-                    {m.add}
-                </Button>
-            </form>
+            {/* Behind the "+" in the header rather than always open: a card is
+                read far more often than it is added to, and a permanently
+                open input under the last item made every read scroll past a
+                field nobody was filling. */}
+            {adding && (
+                <form onSubmit={add} className="mt-2 flex gap-2">
+                    <Input
+                        value={newText}
+                        placeholder={m.placeholder}
+                        className="flex-1"
+                        autoFocus
+                        onChange={(e) => setNewText(e.target.value)}
+                    />
+                    <Button
+                        type="submit"
+                        variant="secondary"
+                        className="min-h-touch"
+                        disabled={saving || newText.trim() === ''}
+                    >
+                        {m.add}
+                    </Button>
+                </form>
+            )}
         </section>
     );
 }
