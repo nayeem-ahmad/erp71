@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
@@ -30,8 +30,28 @@ import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
 import RemainingSparkline from '@/components/projects/RemainingSparkline';
 import { Tabs, TabPanel } from '@/components/ui/compact/Tabs';
 
-/** The four records a card carries, as the bottom tab strip names them. */
-type RecordTab = 'comments' | 'time' | 'remaining' | 'attachments';
+/** The five records a card carries, as the bottom tab strip names them. */
+type RecordTab = 'comments' | 'activity' | 'time' | 'remaining' | 'attachments';
+
+/**
+ * One sidebar field: its name on the left, its control on the right.
+ *
+ * The five pickers used to wrap as one group, which packed two or three onto a
+ * line and left the reader matching chips to meanings by guesswork — "Medium"
+ * reads as a priority or a size depending on what you expected to find. A
+ * caption column costs one line each and makes the column scannable.
+ *
+ * `min-w-0` on the control side so a long assignee name or story title
+ * ellipsises inside its chip instead of pushing the caption out of the row.
+ */
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-2">
+            <span className="shrink-0 text-xs text-gray-500">{label}</span>
+            <div className="flex min-w-0 justify-end">{children}</div>
+        </div>
+    );
+}
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
@@ -302,14 +322,21 @@ export function TaskCardBody({
                 <section className="space-y-3 rounded-md border border-gray-200 p-3">
                     <h3 className="text-sm font-medium">{m.task.details}</h3>
 
-                    {/* The four pickers, as chips rather than stacked
-                        selects. A native select is right for four options and
-                        wrong for a twenty-person roster or a groomed backlog:
-                        it cannot be typed into. Dates, labels and the cover
-                        keep their own sections below — dates because start and
-                        due share a cross-field check that does not fit one
-                        chip. */}
-                    <div className="flex flex-wrap gap-1.5">
+                    {/* One field per row: a caption on the left, its chip on
+                        the right. They used to wrap as one group, which packed
+                        two or three onto a line and left the reader matching
+                        chips to meanings by colour and guesswork — "Medium"
+                        could be a priority or a size. A caption column costs
+                        one line each and makes the sidebar scannable.
+
+                        Still chips rather than native selects: a select is
+                        right for four options and wrong for a twenty-person
+                        roster or a groomed backlog, because it cannot be typed
+                        into. Dates and labels keep their own sections below —
+                        dates because start and due share a cross-field check
+                        that does not fit one chip. */}
+                    <div className="flex flex-col gap-1">
+                        <FieldRow label={m.fields.status}>
                         <ChipPopover
                             label={m.fields.status}
                             value={task.status?.id ?? ''}
@@ -322,7 +349,9 @@ export function TaskCardBody({
                             disabled={busy}
                             onPick={changeStatus}
                         />
+                        </FieldRow>
 
+                        <FieldRow label={m.fields.assignee}>
                         <AssigneeField
                             task={task}
                             taskId={taskId}
@@ -330,7 +359,9 @@ export function TaskCardBody({
                             onSaved={apply}
                             onWanted={onMembersWanted}
                         />
+                        </FieldRow>
 
+                        <FieldRow label={m.stories.field}>
                         <UserStoryField
                             task={task}
                             taskId={taskId}
@@ -338,11 +369,13 @@ export function TaskCardBody({
                             onSaved={apply}
                             onWanted={onStoriesWanted}
                         />
+                        </FieldRow>
 
                         {/* New here. Priority was only ever set from the create
                             modal and filtered from the list — the card itself
                             could not change it. `UpdateTaskDto` already takes
                             it, so this is the picker catching up. */}
+                        <FieldRow label={m.fields.priority}>
                         <ChipPopover
                             label={m.fields.priority}
                             value={task.priority ?? ''}
@@ -365,10 +398,12 @@ export function TaskCardBody({
                             disabled={busy}
                             onPick={changePriority}
                         />
+                        </FieldRow>
 
                         {/* Sprint was already on every task read and shown
                             nowhere. Clearing it returns the task to the
                             backlog — the module's own words for it. */}
+                        <FieldRow label={m.fields.sprint}>
                         <ChipPopover
                             label={m.fields.sprint}
                             value={task.sprint?.id ?? ''}
@@ -390,9 +425,8 @@ export function TaskCardBody({
                             emptyLabel={m.sprint.backlog}
                             filterable
                         />
+                        </FieldRow>
                     </div>
-
-                    <EstimateField task={task} taskId={taskId} onSaved={apply} />
 
                     {/* Three across rather than an input above a pair of tiles:
                         estimate, logged and remaining are one thought — what
@@ -491,7 +525,7 @@ export function TaskCardBody({
                         <Button
                             type="button"
                             variant="secondary"
-                            className="min-h-touch"
+                            className="max-md:min-h-touch"
                             aria-expanded={loggingTime}
                             onClick={() => setLoggingTime((open) => !open)}
                         >
@@ -560,7 +594,7 @@ export function TaskCardBody({
                             <Button
                                 type="submit"
                                 disabled={busy || !canSaveWork}
-                                className="min-h-touch"
+                                className="max-md:min-h-touch"
                             >
                                 {t.common.save}
                             </Button>
@@ -584,6 +618,7 @@ export function TaskCardBody({
                     <Tabs<RecordTab>
                         tabs={[
                             { key: 'comments', label: m.card.tabs.comments, count: task._count?.comments },
+                            { key: 'activity', label: m.card.tabs.activity },
                             { key: 'time', label: m.card.tabs.time, count: (task.timeEntries ?? []).length },
                             { key: 'remaining', label: m.card.tabs.remaining, count: history.length },
                             { key: 'attachments', label: m.card.tabs.attachments },
@@ -595,7 +630,11 @@ export function TaskCardBody({
                     />
 
                     <TabPanel tabKey="comments" value={recordTab} idPrefix="task-record">
-                        <ActivitySection taskId={taskId} onChanged={markChanged} />
+                        <ActivitySection taskId={taskId} onChanged={markChanged} show="comments" />
+                    </TabPanel>
+
+                    <TabPanel tabKey="activity" value={recordTab} idPrefix="task-record">
+                        <ActivitySection taskId={taskId} onChanged={markChanged} show="activity" />
                     </TabPanel>
 
                     <TabPanel tabKey="attachments" value={recordTab} idPrefix="task-record">
@@ -619,7 +658,7 @@ export function TaskCardBody({
                                     <button
                                         type="button"
                                         aria-label={t.common.delete}
-                                        className="min-h-touch px-2 text-red-600"
+                                        className="max-md:min-h-touch px-2 text-red-600"
                                         disabled={busy}
                                         onClick={() => deleteEntry(entry.id)}
                                     >
@@ -1469,7 +1508,7 @@ function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => P
         <Button
             type="button"
             variant={mine ? 'secondary' : 'ghost'}
-            className="min-h-touch"
+            className="max-md:min-h-touch"
             disabled={busy || elsewhere}
             title={elsewhere ? m.timer.elsewhere : undefined}
             onClick={() =>
@@ -1625,7 +1664,13 @@ function DescriptionSection({
                     type="button"
                     onClick={() => setEditing(true)}
                     aria-label={m.title}
-                    className="mt-2 w-full rounded-md border border-transparent px-2 py-1.5 text-start hover:border-gray-300 hover:bg-gray-50"
+                    // A resting container, not a bare hover target. The
+                    // description is the first thing read and it used to sit
+                    // as loose text with no edge, so an empty one showed
+                    // nothing to click and a filled one ran into the checklist
+                    // below it. `min-h` keeps the shape whether or not there
+                    // is anything in it.
+                    className="mt-2 min-h-[6rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
                 >
                     {description === '' ? (
                         <span className="text-sm text-gray-500">{m.add}</span>
@@ -1764,7 +1809,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
             <h3 className="text-sm font-medium">{m.title}</h3>
             <p className="mt-0.5 text-xs text-gray-500">{m.hint}</p>
 
-            <label className="mt-2 inline-flex min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+            <label className="mt-2 inline-flex max-md:min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
                 <Paperclip className="h-4 w-4" />
                 {m.add}
                 <input
@@ -1803,7 +1848,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                             <button
                                 type="button"
                                 aria-label={`${m.deleteFile} ${item.file_name}`}
-                                className="min-h-touch px-2 text-red-600 disabled:opacity-40"
+                                className="max-md:min-h-touch px-2 text-red-600 disabled:opacity-40"
                                 disabled={busy}
                                 onClick={() => remove(item.id)}
                             >
@@ -1826,9 +1871,22 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
 function ActivitySection({
     taskId,
     onChanged,
+    show = 'all',
 }: {
     taskId: string;
     onChanged?: () => void;
+    /**
+     * Which half of the feed to draw. Comments and the activity log answer
+     * different questions — "what did someone say" and "what happened to this
+     * task" — and interleaving them buried a two-line reply between six status
+     * moves. They are two tabs now, but one fetch: `load()` already pulls both
+     * and `mergeFeed` already tags each entry with its `kind`, so the split is
+     * a filter rather than a second request.
+     *
+     * The comment box belongs to `comments` only; there is nothing to write on
+     * an activity log.
+     */
+    show?: 'all' | 'comments' | 'activity';
 }) {
     const { t } = useI18n();
     const m = t.projects.activity;
@@ -1841,6 +1899,17 @@ function ActivitySection({
     const [editBody, setEditBody] = useState('');
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+
+    /* One fetch, two tabs: `mergeFeed` already tags every entry with its kind,
+       so each tab is a filter over the same feed rather than a second request.
+
+       The two vocabularies do not match and must be mapped rather than
+       compared: the tab is `comments` (it holds many) while the entry kind is
+       `comment` (it is one). Comparing them directly type-checks — both are
+       string-literal unions, they simply never overlap on that member — and
+       silently empties the tab. */
+    const wantedKind = show === 'comments' ? 'comment' : 'activity';
+    const shown = show === 'all' ? feed : feed.filter((entry) => entry.kind === wantedKind);
 
     const load = useCallback(async () => {
         try {
@@ -1911,7 +1980,7 @@ function ActivitySection({
                 <Button
                     type="button"
                     variant={watching ? 'secondary' : 'ghost'}
-                    className="min-h-touch"
+                    className="max-md:min-h-touch"
                     disabled={saving}
                     aria-pressed={watching}
                     onClick={() =>
@@ -1928,30 +1997,34 @@ function ActivitySection({
             </div>
             <p className="mt-0.5 text-xs text-gray-500">{m.watchHint}</p>
 
-            <form onSubmit={submit} className="mt-2 space-y-2">
-                <Textarea
-                    rows={2}
-                    value={draft}
-                    aria-label={m.commentPlaceholder}
-                    placeholder={m.commentPlaceholder}
-                    onChange={(e) => setDraft(e.target.value)}
-                />
-                <Button
-                    type="submit"
-                    className="min-h-touch"
-                    disabled={saving || draft.trim() === ''}
-                >
-                    {m.comment}
-                </Button>
-            </form>
+            {/* Nothing to write on an activity log — it records what the
+                system saw, not what anyone wants to say about it. */}
+            {show !== 'activity' && (
+                <form onSubmit={submit} className="mt-2 space-y-2">
+                    <Textarea
+                        rows={2}
+                        value={draft}
+                        aria-label={m.commentPlaceholder}
+                        placeholder={m.commentPlaceholder}
+                        onChange={(e) => setDraft(e.target.value)}
+                    />
+                    <Button
+                        type="submit"
+                        className="max-md:min-h-touch"
+                        disabled={saving || draft.trim() === ''}
+                    >
+                        {m.comment}
+                    </Button>
+                </form>
+            )}
 
             {failed ? (
                 <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
-            ) : feed.length === 0 ? (
+            ) : shown.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
             ) : (
                 <ul className="mt-3 space-y-2">
-                    {feed.map((entry) => (
+                    {shown.map((entry) => (
                         <li key={`${entry.kind}-${entry.id}`} className="text-sm">
                             {entry.kind === 'comment' ? (
                                 <div className="rounded-md bg-gray-50 p-2">
@@ -1971,7 +2044,7 @@ function ActivitySection({
                                             <div className="flex gap-2">
                                                 <Button
                                                     type="button"
-                                                    className="min-h-touch"
+                                                    className="max-md:min-h-touch"
                                                     disabled={saving}
                                                     onClick={() => commitEdit(entry)}
                                                 >
@@ -1980,7 +2053,7 @@ function ActivitySection({
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
-                                                    className="min-h-touch"
+                                                    className="max-md:min-h-touch"
                                                     onClick={() => setEditingId(null)}
                                                 >
                                                     {t.common.cancel}
@@ -1997,7 +2070,7 @@ function ActivitySection({
                                         <div className="mt-1 flex gap-2 text-xs">
                                             <button
                                                 type="button"
-                                                className="min-h-touch text-blue-600"
+                                                className="max-md:min-h-touch text-blue-600"
                                                 onClick={() => {
                                                     setEditingId(entry.id);
                                                     setEditBody(entry.body);
@@ -2007,7 +2080,7 @@ function ActivitySection({
                                             </button>
                                             <button
                                                 type="button"
-                                                className="min-h-touch text-red-600"
+                                                className="max-md:min-h-touch text-red-600"
                                                 disabled={saving}
                                                 onClick={() =>
                                                     run(() => api.deleteTaskComment(entry.id))
@@ -2190,7 +2263,7 @@ function LabelsSection({
                             disabled={saving}
                             aria-pressed={on}
                             onClick={() => toggle(label.id)}
-                            className={`min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
+                            className={`max-md:min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
                                 on ? 'ring-2 ring-blue-600' : 'opacity-50'
                             }`}
                         >
@@ -2350,7 +2423,7 @@ function ChecklistSection({
                 <Button
                     type="button"
                     variant="secondary"
-                    className="min-h-touch"
+                    className="max-md:min-h-touch"
                     aria-expanded={adding}
                     onClick={() => setAdding((open) => !open)}
                 >
@@ -2436,7 +2509,7 @@ function ChecklistSection({
                             ) : (
                                 <button
                                     type="button"
-                                    className={`min-h-touch flex-1 text-start text-sm ${
+                                    className={`max-md:min-h-touch flex-1 text-start text-sm ${
                                         item.is_done ? 'text-gray-400 line-through' : ''
                                     }`}
                                     onClick={() => {
@@ -2496,7 +2569,7 @@ function ChecklistSection({
                     <Button
                         type="submit"
                         variant="secondary"
-                        className="min-h-touch"
+                        className="max-md:min-h-touch"
                         disabled={saving || newText.trim() === ''}
                     >
                         {m.add}

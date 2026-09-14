@@ -324,6 +324,7 @@ export const projectsMessages = {
     card: {
         tabs: {
             comments: "Kommentare",
+            activity: "Aktivität",
             time: "Stundenprotokoll",
             remaining: "Verlauf der Reststunden",
             attachments: "Anhänge",

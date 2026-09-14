@@ -324,6 +324,7 @@ export const projectsMessages = {
     card: {
         tabs: {
             comments: 'Komen',
+            activity: 'Aktiviti',
             time: 'Log Jam',
             remaining: 'Sejarah Baki Jam',
             attachments: 'Lampiran',
