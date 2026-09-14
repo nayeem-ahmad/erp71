@@ -92,7 +92,31 @@ describe('Integration Tests (e2e)', () => {
         // Clean database before tests
         // Note: In a real scenario, use a TDB or separate schema
         await db.$executeRawUnsafe('TRUNCATE TABLE posting_events, posting_rules, voucher_details, vouchers, voucher_sequences, accounts, account_subgroups, account_groups, "SaleItem", "Sale", "ProductStock", "Product", "Store", "User", "Tenant" CASCADE');
-    });
+    },
+        // 120s, not the 20s this file's jest.setTimeout sets for its tests.
+        //
+        // This hook compiles the whole backend before it can assert anything:
+        // `import('../src/app.module')` pulls in every module in the graph and
+        // ts-jest transforms each one. CI makes that worse than it looks. The
+        // job's previous step runs the `src/` unit suites with `--coverage`, so
+        // the ts-jest cache it leaves behind holds *instrumented* output, which
+        // does not match what this step — running without coverage — asks for.
+        // Measured on that exact sequence: 3s with a matching warm cache, 24s
+        // with the coverage-warmed one, 40s from cold. A 20s budget never
+        // covered the 24s case; it only ever passed by finishing just under the
+        // line on a fast runner, and b384e87 failed twice on identical backend
+        // bytes that had passed on 285c028 a runner earlier.
+        //
+        // The two sibling suites that import AppModule (inventory-operations,
+        // sales-returns-orders) already allow 30s, and they are not exposed to
+        // this anyway: jest orders suites largest-first and this is the biggest
+        // file in test/, so it pays the whole transform bill and they inherit a
+        // warm cache from it.
+        //
+        // Scoped to the hook on purpose: the tests themselves are HTTP calls
+        // against a local Postgres and have no business taking 20s, so the file
+        // keeps that budget for them and a genuinely hung test still fails fast.
+        120_000);
 
     afterAll(async () => {
         await db.$disconnect();
