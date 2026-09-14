@@ -43,6 +43,8 @@ export interface QuickAddProject {
 
 export interface QuickAddLabels {
     placeholder: string;
+    /** Names the suggestion list — never the same string as `placeholder`. */
+    suggestions: string;
     hint: string;
     project: string;
     selectProject: string;
@@ -265,7 +267,11 @@ export default function TaskQuickAdd({
                     maxHeight={240}
                     className="min-w-56 border-gray-200 p-1"
                     role="listbox"
-                    aria-label={labels.placeholder}
+                    // Its own name, not the input's. Sharing `placeholder`
+                    // made the field and its suggestion list indistinguishable
+                    // to assistive tech — and to `getByLabelText`, which is how
+                    // the tasks page's tests caught it.
+                    aria-label={labels.suggestions}
                 >
                     {suggestions.map((suggestion, index) => (
                         <button
