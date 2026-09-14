@@ -344,6 +344,7 @@ export const projectsMessages = {
         setPriority: 'Tetapkan keutamaan',
         addDescription: '+ Tambah penerangan',
         saveAndAdd: 'Simpan dan tambah lagi',
+        suggestions: 'Cadangan',
     },
 
     timer: {

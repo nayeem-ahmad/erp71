@@ -344,6 +344,7 @@ export const projectsMessages = {
         setPriority: 'অগ্রাধিকার দিন',
         addDescription: '+ বিবরণ যোগ করুন',
         saveAndAdd: 'সংরক্ষণ করে আরেকটি',
+        suggestions: 'পরামর্শ',
     },
 
     timer: {
