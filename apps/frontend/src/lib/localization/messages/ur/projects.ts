@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "ٹاسک کو ایک عنوان دیں۔",
         noProjects: "پہلے ایک پروجیکٹ بنائیں — ہر ٹاسک کسی نہ کسی پروجیکٹ سے تعلق رکھتا ہے۔",
         createFailed: "ٹاسک نہیں بن سکا",
+        openFull: "مکمل صفحہ کھولیں",
     },
 
     description: {

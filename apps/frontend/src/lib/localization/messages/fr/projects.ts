@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "Donnez un titre à la tâche.",
         noProjects: "Créez d'abord un projet — chaque tâche appartient à l'un d'eux.",
         createFailed: "Impossible de créer la tâche",
+        openFull: "Ouvrir la page entière",
     },
 
     description: {

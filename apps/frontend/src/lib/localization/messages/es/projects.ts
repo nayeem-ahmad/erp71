@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "Ponga un título a la tarea.",
         noProjects: "Cree primero un proyecto: toda tarea pertenece a uno.",
         createFailed: "No se pudo crear la tarea",
+        openFull: "Abrir página completa",
     },
 
     description: {

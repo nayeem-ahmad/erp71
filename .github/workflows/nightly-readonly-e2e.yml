@@ -47,6 +47,14 @@ jobs:
 
       - run: npm install
 
+      # e2e/global-setup.ts imports CURRENT_TERMS_VERSION from @erp71/shared-types,
+      # which is TypeScript source reached at runtime through dist/index.js. npm
+      # install does not build workspace packages, so without this Playwright dies
+      # resolving that import before a single test body runs, and the nightly reports
+      # "could not run" instead of a real result.
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
@@ -115,6 +123,11 @@ jobs:
           cache: 'npm'
 
       - run: npm install
+
+      # Same as the read-only job: global-setup.ts needs @erp71/shared-types built
+      # to dist/index.js, and npm install does not build workspace packages.
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit

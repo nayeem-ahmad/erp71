@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: 'টাস্কের একটি শিরোনাম দিন।',
         noProjects: 'আগে একটি প্রকল্প তৈরি করুন — প্রতিটি টাস্ক কোনো না কোনো প্রকল্পের।',
         createFailed: 'টাস্ক তৈরি করা যায়নি',
+        openFull: 'পূর্ণ পৃষ্ঠা খুলুন',
     },
 
     description: {

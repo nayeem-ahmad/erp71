@@ -191,6 +191,9 @@ export const routes = {
         columns: (id: string) => `/projects/${id}/columns` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
         tasks: '/projects/tasks',
+        // A card is normally a modal opened from a list or a board. This is the
+        // same card as a page, so a link to one task can be pasted somewhere.
+        taskDetail: (id: string) => `/projects/tasks/${id}` as const,
         sprints: '/projects/sprints',
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',

@@ -209,6 +209,7 @@ export const projectsMessages = {
         titleRequired: "أعطِ المهمة عنوانًا.",
         noProjects: "أنشئ مشروعًا أولًا — كل مهمة تنتمي إلى مشروع.",
         createFailed: "تعذّر إنشاء المهمة",
+        openFull: "فتح الصفحة الكاملة",
     },
 
     description: {
