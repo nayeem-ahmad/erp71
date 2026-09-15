@@ -251,6 +251,22 @@ export const inventoryExtrasMessages = {
         "upload": "Subir",
         "print": "Imprimir"
     },
+    "warehousesPage": {
+        "title": "Almacenes",
+        "subtitle": "Ubicaciones de stock por sucursal, con valores predeterminados y estado",
+        "newWarehouse": "Nuevo almacén",
+        "editWarehouse": "Editar almacén",
+        "branch": "Sucursal",
+        "code": "Código",
+        "status": "Estado",
+        "emptyMessage": "Aún no hay almacenes",
+        "searchPlaceholder": "Buscar almacenes...",
+        "selectBranch": "Seleccionar una sucursal",
+        "nameRequired": "El nombre es obligatorio",
+        "branchRequired": "La sucursal es obligatoria",
+        "codeHint": "Déjalo vacío para generarlo automáticamente",
+        "manageWarehouses": "Gestionar almacenes"
+    },
     "inventorySettings": {
         "title": "Ajustes de inventario",
         "subtitle": "Configure los almacenes por defecto, los umbrales de aviso y el catálogo de motivos de ajuste",

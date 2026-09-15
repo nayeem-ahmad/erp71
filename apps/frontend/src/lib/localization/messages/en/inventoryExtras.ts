@@ -251,6 +251,22 @@ export const inventoryExtrasMessages = {
         "upload": "Upload",
         "print": "Print"
     },
+    "warehousesPage": {
+        "title": "Warehouses",
+        "subtitle": "Stock locations per branch, with defaults and status",
+        "newWarehouse": "New Warehouse",
+        "editWarehouse": "Edit Warehouse",
+        "branch": "Branch",
+        "code": "Code",
+        "status": "Status",
+        "emptyMessage": "No warehouses yet",
+        "searchPlaceholder": "Search warehouses...",
+        "selectBranch": "Select a branch",
+        "nameRequired": "Name is required",
+        "branchRequired": "Branch is required",
+        "codeHint": "Leave blank to generate one automatically",
+        "manageWarehouses": "Manage warehouses"
+    },
     "inventorySettings": {
         "title": "Inventory Settings",
         "subtitle": "Configure warehouse defaults, alert thresholds, and adjustment reason catalogs",

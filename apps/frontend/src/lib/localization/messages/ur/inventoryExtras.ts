@@ -251,6 +251,22 @@ export const inventoryExtrasMessages = {
         "upload": "اپ لوڈ کریں",
         "print": "چھاپیں"
     },
+    "warehousesPage": {
+        "title": "گودام",
+        "subtitle": "برانچ کے مطابق اسٹاک مقامات، ڈیفالٹ اور اسٹیٹس کے ساتھ",
+        "newWarehouse": "نیا گودام",
+        "editWarehouse": "گودام میں ترمیم",
+        "branch": "برانچ",
+        "code": "کوڈ",
+        "status": "اسٹیٹس",
+        "emptyMessage": "ابھی کوئی گودام نہیں",
+        "searchPlaceholder": "گودام تلاش کریں...",
+        "selectBranch": "برانچ منتخب کریں",
+        "nameRequired": "نام ضروری ہے",
+        "branchRequired": "برانچ ضروری ہے",
+        "codeHint": "خودکار بنانے کے لیے خالی چھوڑ دیں",
+        "manageWarehouses": "گودام کا انتظام"
+    },
     "inventorySettings": {
         "title": "انوینٹری کی ترتیبات",
         "subtitle": "گودام کے طے شدہ، انتباہ کی حدیں اور درستی کی وجوہات کی فہرست ترتیب دیں",

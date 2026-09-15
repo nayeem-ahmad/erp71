@@ -14,6 +14,7 @@ import {
     Settings,
     Tag,
     TrendingUp,
+    Warehouse,
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import InventoryDashboard from '@/components/dashboard/InventoryDashboard';
@@ -48,6 +49,7 @@ const INVENTORY_HUB_SECTIONS: HubSectionConfig[] = [
         links: [
             { href: routes.inventory.brands, key: 'brands', icon: Tag, accent: 'bg-slate-50 text-slate-700 border-slate-100' },
             { href: routes.inventory.categories, key: 'categories', icon: FolderTree, accent: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+            { href: routes.inventory.warehouses, key: 'warehouses', icon: Warehouse, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
             { href: routes.inventory.settings, key: 'inventorySettings', icon: Settings, accent: 'bg-gray-50 text-gray-700 border-gray-100' },
         ],
     },
