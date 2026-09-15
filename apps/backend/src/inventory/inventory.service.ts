@@ -9,7 +9,7 @@ import {
     UpdateInventorySettingsDto,
     UpdateWarehouseDto,
 } from './inventory.dto';
-import { assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
@@ -68,7 +68,23 @@ export class InventoryService {
     }
 
     async updateWarehouse(tenantId: string, id: string, dto: UpdateWarehouseDto) {
-        const warehouse = await assertWarehouseBelongsToTenant(this.db as any, tenantId, id);
+        // Deliberately not assertWarehouseBelongsToTenant: that guard exists for
+        // stock movements and rejects inactive warehouses, which made Activate a
+        // one-way door — a deactivated warehouse could never be brought back, or
+        // even renamed. This screen's whole job is editing that flag, so it needs
+        // tenant scoping without the is_active check.
+        const warehouse = await this.db.warehouse.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+        if (!warehouse) {
+            throw new BadRequestException('Warehouse not found for this tenant.');
+        }
+
+        // A store whose default is inactive has no usable fallback, so the
+        // default has to be handed to another warehouse first.
+        if (dto.isActive === false && warehouse.is_default) {
+            throw new BadRequestException('Make another warehouse the default before deactivating this one.');
+        }
 
         if (dto.code && dto.code !== warehouse.code) {
             const duplicate = await this.db.warehouse.findFirst({
@@ -168,6 +184,7 @@ export class InventoryService {
                 ...(dto.defaultLeadTimeDays !== undefined ? { default_lead_time_days: dto.defaultLeadTimeDays } : {}),
                 ...(dto.discrepancyApprovalThreshold !== undefined ? { discrepancy_approval_threshold: dto.discrepancyApprovalThreshold } : {}),
                 ...(dto.costingMethod !== undefined ? { costing_method: dto.costingMethod } : {}),
+                ...(dto.allowNegativeStock !== undefined ? { allow_negative_stock: dto.allowNegativeStock } : {}),
             },
             include: this.settingsInclude(),
         });

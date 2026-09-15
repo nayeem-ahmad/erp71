@@ -80,26 +80,11 @@ describe('InventorySettingsPage', () => {
         });
     });
 
-    it('shows warehouse list', async () => {
-        render(<InventorySettingsPage />);
-        await waitFor(() => {
-            expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('Secondary').length).toBeGreaterThan(0);
-        });
-    });
-
     it('shows inventory reasons', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
             expect(screen.getAllByText('Shrinkage').length).toBeGreaterThan(0);
             expect(screen.getAllByText('Damaged').length).toBeGreaterThan(0);
-        });
-    });
-
-    it('shows Warehouses section heading', async () => {
-        render(<InventorySettingsPage />);
-        await waitFor(() => {
-            expect(screen.getAllByText(/warehouses/i).length).toBeGreaterThan(0);
         });
     });
 
@@ -136,30 +121,59 @@ describe('InventorySettingsPage', () => {
         });
     });
 
-    it('shows Add Warehouse button', async () => {
+    // Warehouses moved to their own page at /inventory/warehouses; this page keeps
+    // only the link to it, so the CRUD coverage lives in that page's test.
+    it('links to the warehouses page', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /add warehouse/i })).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: /manage warehouses/i })).toHaveAttribute(
+                'href',
+                '/inventory/warehouses',
+            );
         });
     });
 
-    it('calls createInventoryWarehouse when Add Warehouse clicked with form', async () => {
+    it('leaves selling without stock off when the tenant has not opted in', async () => {
+        render(<InventorySettingsPage />);
+
+        const toggle = await screen.findByRole('checkbox', { name: /allow selling without stock/i });
+        expect(toggle).not.toBeChecked();
+        expect(screen.getByText(/a sale is refused when a line asks for more/i)).toBeInTheDocument();
+    });
+
+    it('reflects the saved opt-in and sends it back on save', async () => {
+        const api = getApi();
+        api.getInventorySettings.mockResolvedValue({ ...mockSettings, allow_negative_stock: true });
+
+        render(<InventorySettingsPage />);
+
+        const toggle = await screen.findByRole('checkbox', { name: /allow selling without stock/i });
+        expect(toggle).toBeChecked();
+        // The help text under the control is what tells the shop what it just
+        // switched on, so it has to follow the checkbox rather than the server.
+        expect(screen.getByText(/the stock balance goes negative/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateInventorySettings).toHaveBeenCalledWith(
+                expect.objectContaining({ allowNegativeStock: true }),
+            );
+        });
+    });
+
+    it('sends the opt-in once it is ticked', async () => {
         const api = getApi();
         render(<InventorySettingsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /add warehouse/i }));
 
-        const nameInput = screen.getByPlaceholderText(/warehouse name/i);
-        fireEvent.change(nameInput, { target: { value: 'New WH' } });
-        fireEvent.click(screen.getByRole('button', { name: /add warehouse/i }));
-        await waitFor(() => {
-            expect(api.createInventoryWarehouse).toHaveBeenCalled();
-        });
-    });
+        const toggle = await screen.findByRole('checkbox', { name: /allow selling without stock/i });
+        fireEvent.click(toggle);
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
-    it('shows toggle buttons for warehouses', async () => {
-        render(<InventorySettingsPage />);
         await waitFor(() => {
-            expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+            expect(api.updateInventorySettings).toHaveBeenCalledWith(
+                expect.objectContaining({ allowNegativeStock: true }),
+            );
         });
     });
 });

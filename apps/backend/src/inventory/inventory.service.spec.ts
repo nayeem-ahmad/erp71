@@ -238,19 +238,107 @@ describe('InventoryService', () => {
             is_active: true,
         };
 
+        /**
+         * `findFirst` serves two distinct purposes here: the tenant-scoped guard
+         * that resolves the row being edited, then the duplicate-code check. The
+         * helper below queues them in that order so neither test has to care
+         * about the other's call.
+         */
+        const mockLookups = (warehouse: any, duplicate: any = null) => {
+            db.warehouse.findFirst
+                .mockResolvedValueOnce(warehouse)
+                .mockResolvedValueOnce(duplicate);
+        };
+
         beforeEach(() => {
-            mockAssertWarehouse.mockResolvedValue(existingWarehouse as any);
+            // The movement guard rejects inactive warehouses, which is what made
+            // Activate a one-way door. Mocked as a rejection so that if this code
+            // path ever calls it again, these tests fail loudly rather than pass.
+            mockAssertWarehouse.mockRejectedValue(new BadRequestException('Warehouse is inactive.'));
+        });
+
+        // Settings is the one screen whose job is to flip is_active, so it must
+        // not use the movement guard — that one refuses inactive warehouses, so
+        // Deactivate worked once and Activate could never undo it.
+        it('should reactivate an inactive warehouse', async () => {
+            const inactive = { ...existingWarehouse, is_active: false, is_default: false };
+            mockLookups(inactive);
+            db.warehouse.update.mockResolvedValue({ ...inactive, is_active: true });
+
+            const result = await service.updateWarehouse(tenantId, warehouseId, { isActive: true } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_active: true }) }),
+            );
+            expect(result.is_active).toBe(true);
+        });
+
+        it('should rename an inactive warehouse', async () => {
+            const inactive = { ...existingWarehouse, is_active: false, is_default: false };
+            mockLookups(inactive);
+            db.warehouse.update.mockResolvedValue({ ...inactive, name: 'Renamed' });
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Renamed' } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Renamed' }) }),
+            );
+        });
+
+        // Deactivating the default would leave the store pointing at a dead
+        // warehouse, so the default has to be handed over first.
+        it('should refuse to deactivate the default warehouse', async () => {
+            mockLookups({ ...existingWarehouse, is_default: true });
+
+            const promise = service.updateWarehouse(tenantId, warehouseId, { isActive: false } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Make another warehouse the default before deactivating this one.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
+        });
+
+        it('should deactivate a non-default warehouse', async () => {
+            mockLookups({ ...existingWarehouse, is_default: false });
+            db.warehouse.update.mockResolvedValue({ ...existingWarehouse, is_active: false });
+
+            await service.updateWarehouse(tenantId, warehouseId, { isActive: false } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_active: false }) }),
+            );
+        });
+
+        it('should scope the lookup to the tenant', async () => {
+            mockLookups(existingWarehouse);
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Renamed' } as any);
+
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(1, {
+                where: { id: warehouseId, tenant_id: tenantId },
+            });
+        });
+
+        it('should throw when the warehouse belongs to another tenant', async () => {
+            mockLookups(null);
+
+            const promise = service.updateWarehouse(tenantId, 'bad-wh', {} as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Warehouse not found for this tenant.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
         });
 
         it('should update a warehouse without changing code', async () => {
             const dto = { name: 'Renamed WH' };
             const updated = { ...existingWarehouse, name: 'Renamed WH' };
+            mockLookups(existingWarehouse);
             db.warehouse.update.mockResolvedValue(updated);
 
             const result = await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(mockAssertWarehouse).toHaveBeenCalledWith(db, tenantId, warehouseId);
-            expect(db.warehouse.findFirst).not.toHaveBeenCalled();
+            // One call only: the guard. No code change, so no duplicate check.
+            expect(db.warehouse.findFirst).toHaveBeenCalledTimes(1);
             expect(db.warehouse.update).toHaveBeenCalledWith(
                 expect.objectContaining({ where: { id: warehouseId } }),
             );
@@ -259,20 +347,20 @@ describe('InventoryService', () => {
 
         it('should update code when new code is unique', async () => {
             const dto = { code: 'NEW-CODE' };
-            db.warehouse.findFirst.mockResolvedValue(null); // no duplicate
+            mockLookups(existingWarehouse, null); // no duplicate
             const updated = { ...existingWarehouse, code: 'NEW-CODE' };
             db.warehouse.update.mockResolvedValue(updated);
 
             await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(db.warehouse.findFirst).toHaveBeenCalledWith({
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(2, {
                 where: { tenant_id: tenantId, code: 'NEW-CODE', NOT: { id: warehouseId } },
             });
         });
 
         it('should throw BadRequestException when new code already exists', async () => {
             const dto = { code: 'TAKEN-CODE' };
-            db.warehouse.findFirst.mockResolvedValue({ id: 'other-wh', code: 'TAKEN-CODE' });
+            mockLookups(existingWarehouse, { id: 'other-wh', code: 'TAKEN-CODE' });
 
             const promise = service.updateWarehouse(tenantId, warehouseId, dto as any);
 
@@ -283,15 +371,17 @@ describe('InventoryService', () => {
 
         it('should skip duplicate check when code is unchanged', async () => {
             const dto = { code: 'OLD-CODE', name: 'Updated Name' }; // same as existingWarehouse.code
+            mockLookups(existingWarehouse);
             db.warehouse.update.mockResolvedValue({ ...existingWarehouse, ...dto });
 
             await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(db.warehouse.findFirst).not.toHaveBeenCalled();
+            expect(db.warehouse.findFirst).toHaveBeenCalledTimes(1);
         });
 
         it('should unset other defaults when isDefault is true', async () => {
             const dto = { isDefault: true };
+            mockLookups(existingWarehouse);
             db.warehouse.updateMany = jest.fn().mockResolvedValue({ count: 1 });
             db.warehouse.update.mockResolvedValue({ ...existingWarehouse, is_default: true });
 
@@ -303,12 +393,13 @@ describe('InventoryService', () => {
             });
         });
 
-        it('should throw when assertWarehouseBelongsToTenant throws', async () => {
-            mockAssertWarehouse.mockRejectedValue(new BadRequestException('Warehouse not found for this tenant.'));
+        it('should not consult the movement guard', async () => {
+            mockLookups(existingWarehouse);
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
 
-            const promise = service.updateWarehouse(tenantId, 'bad-wh', {} as any);
+            await service.updateWarehouse(tenantId, warehouseId, { isActive: true } as any);
 
-            await expect(promise).rejects.toThrow(BadRequestException);
+            expect(mockAssertWarehouse).not.toHaveBeenCalled();
         });
     });
 

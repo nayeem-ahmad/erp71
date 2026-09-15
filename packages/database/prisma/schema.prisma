@@ -1681,6 +1681,14 @@ model InventorySettings {
   default_safety_stock                      Int      @default(0)
   default_lead_time_days                    Int      @default(0)
   discrepancy_approval_threshold            Int      @default(25)
+  /// Whether a sale may be posted for stock the tenant does not have on hand.
+  /// Off by default: a shortfall is normally a counting error, and refusing the
+  /// entry is what catches it. On, the balance is allowed to go negative — the
+  /// shop that sells goods the morning before their purchase bill is entered
+  /// still records the sale, and the negative reads as "owed to stock" until
+  /// the receipt catches up. Covers selling only; see
+  /// NEGATIVE_STOCK_MOVEMENT_TYPES in inventory.utils.ts.
+  allow_negative_stock                      Boolean  @default(false)
   created_at                                DateTime @default(now())
   updated_at                                DateTime @updatedAt
 
