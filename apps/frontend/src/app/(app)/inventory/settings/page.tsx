@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Coins, Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
+import { Coins, PackageMinus, Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { Checkbox } from '@/components/ui';
 
 const WAREHOUSE_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -50,6 +51,7 @@ export default function InventorySettingsPage() {
                 defaultLeadTimeDays: settingsData.default_lead_time_days ?? 0,
                 discrepancyApprovalThreshold: settingsData.discrepancy_approval_threshold ?? 25,
                 costingMethod: settingsData.costing_method ?? 'WEIGHTED_AVERAGE',
+                allowNegativeStock: settingsData.allow_negative_stock ?? false,
             });
             setWarehouseForm((current: any) => ({ ...current, storeId: warehouseData[0]?.store_id || '' }));
         } catch (error) {
@@ -281,6 +283,30 @@ export default function InventorySettingsPage() {
                         </p>
                     </div>
                     <p className="text-xs text-gray-500">{t.inventorySettings.costingMethodNote}</p>
+                </section>
+
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <PackageMinus className="w-5 h-5 text-blue-600" />
+                        <h2 className="font-bold text-lg">{t.inventorySettings.stockPolicy}</h2>
+                    </div>
+                    <label htmlFor="allow-negative-stock" className="flex items-start gap-3 cursor-pointer">
+                        <Checkbox
+                            id="allow-negative-stock"
+                            className="mt-0.5"
+                            checked={!!form.allowNegativeStock}
+                            onChange={(e) => setForm((current: any) => ({ ...current, allowNegativeStock: e.target.checked }))}
+                        />
+                        <span>
+                            <span className="block text-sm font-medium text-gray-900">{t.inventorySettings.allowNegativeStock}</span>
+                            <span className="block text-xs text-gray-500 mt-0.5">
+                                {form.allowNegativeStock
+                                    ? t.inventorySettings.allowNegativeStockOnHelp
+                                    : t.inventorySettings.allowNegativeStockOffHelp}
+                            </span>
+                        </span>
+                    </label>
+                    <p className="text-xs text-gray-500">{t.inventorySettings.allowNegativeStockNote}</p>
                 </section>
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
