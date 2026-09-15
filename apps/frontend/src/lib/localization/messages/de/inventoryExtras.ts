@@ -242,6 +242,22 @@ export const inventoryExtrasMessages = {
         "upload": "Hochladen",
         "print": "Drucken"
     },
+    "warehousesPage": {
+        "title": "Lager",
+        "subtitle": "Lagerorte pro Filiale, mit Standardwerten und Status",
+        "newWarehouse": "Neues Lager",
+        "editWarehouse": "Lager bearbeiten",
+        "branch": "Filiale",
+        "code": "Code",
+        "status": "Status",
+        "emptyMessage": "Noch keine Lager",
+        "searchPlaceholder": "Lager suchen...",
+        "selectBranch": "Filiale auswählen",
+        "nameRequired": "Name ist erforderlich",
+        "branchRequired": "Filiale ist erforderlich",
+        "codeHint": "Leer lassen, um automatisch zu generieren",
+        "manageWarehouses": "Lager verwalten"
+    },
     "inventorySettings": {
         "title": "Bestandseinstellungen",
         "subtitle": "Lager-Standardwerte, Warnschwellen und Katalog der Korrekturgründe festlegen",

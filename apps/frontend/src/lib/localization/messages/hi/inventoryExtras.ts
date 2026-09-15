@@ -242,6 +242,22 @@ export const inventoryExtrasMessages = {
         "upload": "अपलोड करें",
         "print": "प्रिंट"
     },
+    "warehousesPage": {
+        "title": "गोदाम",
+        "subtitle": "शाखा अनुसार स्टॉक स्थान, डिफ़ॉल्ट और स्थिति के साथ",
+        "newWarehouse": "नया गोदाम",
+        "editWarehouse": "गोदाम संपादित करें",
+        "branch": "शाखा",
+        "code": "कोड",
+        "status": "स्थिति",
+        "emptyMessage": "अभी कोई गोदाम नहीं",
+        "searchPlaceholder": "गोदाम खोजें...",
+        "selectBranch": "शाखा चुनें",
+        "nameRequired": "नाम आवश्यक है",
+        "branchRequired": "शाखा आवश्यक है",
+        "codeHint": "स्वतः बनाने के लिए खाली छोड़ें",
+        "manageWarehouses": "गोदाम प्रबंधित करें"
+    },
     "inventorySettings": {
         "title": "इन्वेंट्री सेटिंग्स",
         "subtitle": "गोदाम डिफ़ॉल्ट, अलर्ट सीमाएँ और समायोजन कारण सूचियाँ कॉन्फ़िगर करें",

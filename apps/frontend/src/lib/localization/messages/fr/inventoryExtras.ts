@@ -242,6 +242,22 @@ export const inventoryExtrasMessages = {
         "upload": "Téléverser",
         "print": "Imprimer"
     },
+    "warehousesPage": {
+        "title": "Entrepôts",
+        "subtitle": "Emplacements de stock par succursale, avec valeurs par défaut et statut",
+        "newWarehouse": "Nouvel entrepôt",
+        "editWarehouse": "Modifier l'entrepôt",
+        "branch": "Succursale",
+        "code": "Code",
+        "status": "Statut",
+        "emptyMessage": "Aucun entrepôt pour le moment",
+        "searchPlaceholder": "Rechercher des entrepôts...",
+        "selectBranch": "Sélectionner une succursale",
+        "nameRequired": "Le nom est requis",
+        "branchRequired": "La succursale est requise",
+        "codeHint": "Laisser vide pour générer automatiquement",
+        "manageWarehouses": "Gérer les entrepôts"
+    },
     "inventorySettings": {
         "title": "Paramètres de stock",
         "subtitle": "Configurez les entrepôts par défaut, les seuils d'alerte et le catalogue des motifs d'ajustement",

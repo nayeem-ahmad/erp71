@@ -242,6 +242,22 @@ export const inventoryExtrasMessages = {
         "upload": "رفع",
         "print": "طباعة"
     },
+    "warehousesPage": {
+        "title": "المستودعات",
+        "subtitle": "مواقع المخزون لكل فرع، مع الافتراضيات والحالة",
+        "newWarehouse": "مستودع جديد",
+        "editWarehouse": "تعديل المستودع",
+        "branch": "الفرع",
+        "code": "الرمز",
+        "status": "الحالة",
+        "emptyMessage": "لا توجد مستودعات بعد",
+        "searchPlaceholder": "ابحث في المستودعات...",
+        "selectBranch": "اختر فرعًا",
+        "nameRequired": "الاسم مطلوب",
+        "branchRequired": "الفرع مطلوب",
+        "codeHint": "اتركه فارغًا لإنشائه تلقائيًا",
+        "manageWarehouses": "إدارة المستودعات"
+    },
     "inventorySettings": {
         "title": "إعدادات المخزون",
         "subtitle": "اضبط افتراضيات المستودعات وحدود التنبيه وقوائم أسباب التسوية",
