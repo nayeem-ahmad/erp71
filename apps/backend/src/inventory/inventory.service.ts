@@ -168,6 +168,7 @@ export class InventoryService {
                 ...(dto.defaultLeadTimeDays !== undefined ? { default_lead_time_days: dto.defaultLeadTimeDays } : {}),
                 ...(dto.discrepancyApprovalThreshold !== undefined ? { discrepancy_approval_threshold: dto.discrepancyApprovalThreshold } : {}),
                 ...(dto.costingMethod !== undefined ? { costing_method: dto.costingMethod } : {}),
+                ...(dto.allowNegativeStock !== undefined ? { allow_negative_stock: dto.allowNegativeStock } : {}),
             },
             include: this.settingsInclude(),
         });
