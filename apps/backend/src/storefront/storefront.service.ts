@@ -325,7 +325,16 @@ export class StorefrontService {
 
         const productMap = new Map(products.map((p) => [p.id, p]));
 
-        // Validate stock for all items
+        // Validate stock for all items — unless the shop sells without stock,
+        // in which case an order beyond what is on hand is a backorder it has
+        // chosen to take. The stock itself still only moves on delivery, so the
+        // setting changes what may be *ordered* here, nothing else.
+        //
+        // Resolved lazily and at most once, so an order that fits on the shelf
+        // — every order, for the tenants who have not opted in — costs this
+        // public endpoint no extra query at all.
+        let allowNegativeStock: boolean | null = null;
+
         for (const item of dto.items) {
             const product = productMap.get(item.productId);
             if (!product) {
@@ -333,9 +342,13 @@ export class StorefrontService {
             }
             const totalStock = product.stocks.reduce((sum, s) => sum + s.quantity, 0);
             if (totalStock < item.quantity) {
-                throw new BadRequestException(
-                    `Insufficient stock for product "${product.name}" (available: ${totalStock})`,
-                );
+                allowNegativeStock ??= await this.allowsNegativeStock(tenant.id);
+
+                if (!allowNegativeStock) {
+                    throw new BadRequestException(
+                        `Insufficient stock for product "${product.name}" (available: ${totalStock})`,
+                    );
+                }
             }
         }
 
@@ -1113,6 +1126,20 @@ export class StorefrontService {
         });
 
         return this.priceListsService.resolvePriceListForCustomer(tenantId, customer?.customer_group_id);
+    }
+
+    /**
+     * Whether this shop has opted into selling stock it does not have on hand.
+     * The same InventorySettings flag `applyInventoryMovement` reads, so the
+     * storefront and the counter agree on what the tenant chose.
+     */
+    private async allowsNegativeStock(tenantId: string) {
+        const settings = await this.db.inventorySettings.findUnique({
+            where: { tenant_id: tenantId },
+            select: { allow_negative_stock: true },
+        });
+
+        return settings?.allow_negative_stock === true;
     }
 
     private async findEnabledTenant(slug: string) {
