@@ -107,6 +107,9 @@ describe('StorefrontService', () => {
                 upsert: jest.fn(),
                 count: jest.fn(),
             },
+            inventorySettings: {
+                findUnique: jest.fn(),
+            },
             loyaltyTransaction: {
                 findUnique: jest.fn(),
                 findFirst: jest.fn(),
@@ -600,6 +603,25 @@ describe('StorefrontService', () => {
             const promise = service.placeOrder(slug, dto as any);
             await expect(promise).rejects.toThrow(BadRequestException);
             await expect(promise).rejects.toThrow('Insufficient stock');
+        });
+
+        it('takes the order anyway when the shop allows selling without stock', async () => {
+            // The shop's own setting: an order beyond what is on hand is a
+            // backorder it has chosen to accept. Stock still only moves on
+            // delivery, so nothing here goes negative yet.
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.product.findMany.mockResolvedValue([
+                {
+                    id: 'prod-1',
+                    name: 'Phone',
+                    price: 500,
+                    stocks: [{ quantity: 1 }], // only 1, need 2
+                },
+            ]);
+            db.inventorySettings.findUnique.mockResolvedValue({ allow_negative_stock: true });
+            db.storefrontOrder.create.mockResolvedValue(mockCreatedOrder);
+
+            expect(await service.placeOrder(slug, dto as any)).toEqual(mockCreatedOrder);
         });
 
         it('creates order successfully without user', async () => {

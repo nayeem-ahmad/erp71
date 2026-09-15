@@ -263,6 +263,54 @@ export async function assertWarehouseBelongsToTenant(tx: DbLike, tenantId: strin
     return warehouse;
 }
 
+/**
+ * Movement types the tenant's `allow_negative_stock` setting covers.
+ *
+ * Selling is the one place a shortfall is a business decision rather than a
+ * counting error: the goods leave the shop whether or not the purchase that
+ * brought them in has been entered, and refusing the entry loses the sale
+ * instead of finding the mistake. A transfer, a shrinkage write-off, a stock
+ * take or a material issue that finds no stock *is* a mistake worth refusing,
+ * so those stay strict however the tenant sets the flag.
+ *
+ * The SALES_RETURN_* reversals are in the set because they are the undo of a
+ * restock rather than a movement of their own: a tenant that sold into a
+ * negative balance and then needed to correct the return behind it would
+ * otherwise find the correction refused with no way forward.
+ */
+const NEGATIVE_STOCK_MOVEMENT_TYPES = new Set([
+    'SALE',
+    'SALE_EDIT',
+    'SALES_ORDER_DELIVERY',
+    'SALES_RETURN_REVERSAL',
+    'SALES_RETURN_DELETE',
+]);
+
+/**
+ * Whether this tenant has opted into selling stock it does not have on hand.
+ *
+ * Read lazily — only once a decrement has actually come up short — so the
+ * common case where there is enough stock never pays for the lookup. A tenant
+ * with no InventorySettings row yet answers false, which is the same default
+ * the column carries.
+ */
+export async function tenantAllowsNegativeStock(
+    tx: DbLike,
+    tenantId: string,
+    movementType: string,
+): Promise<boolean> {
+    if (!NEGATIVE_STOCK_MOVEMENT_TYPES.has(movementType)) {
+        return false;
+    }
+
+    const settings = await tx.inventorySettings.findUnique({
+        where: { tenant_id: tenantId },
+        select: { allow_negative_stock: true },
+    });
+
+    return settings?.allow_negative_stock === true;
+}
+
 export async function applyInventoryMovement(
     tx: DbLike,
     params: {
@@ -290,14 +338,20 @@ export async function applyInventoryMovement(
          */
         occurredAt?: Date;
         /**
-         * Lets a decrement take the balance below zero instead of refusing.
+         * Forces a decrement to take the balance below zero instead of
+         * refusing, regardless of what the tenant configured.
          *
          * Only for replaying history that already happened elsewhere: a
          * migrated sale is a fact, and the purchase that stocked its product
          * may predate the imported window entirely. Refusing the movement there
          * drops the whole document, which is how an import came to leave 943
-         * sales out of the ledger while their payments still landed. Live entry
-         * must never pass this — a shortfall there is a real error.
+         * sales out of the ledger while their payments still landed.
+         *
+         * Live entry must not pass this. A tenant that wants to sell into a
+         * negative balance opts in through InventorySettings instead, which
+         * this function consults on its own (see
+         * `tenantAllowsNegativeStock`) — so a shortfall on a sale is still
+         * reported as an error for every tenant that has not asked for it.
          */
         allowNegative?: boolean;
     },
@@ -343,24 +397,40 @@ export async function applyInventoryMovement(
         balanceAfter = stock.quantity;
     } else {
         const decrementBy = Math.abs(quantityDelta);
-        const updateResult = await tx.productStock.updateMany({
+
+        // The guard is the `gte`, so dropping it is what permits a negative
+        // balance. Applied as part of the update rather than as a read-then-write
+        // so two concurrent sales of the last unit cannot both pass the check.
+        const decrement = (guarded: boolean) => tx.productStock.updateMany({
             where: {
                 tenant_id: tenantId,
                 product_id: productId,
                 warehouse_id: warehouseId,
-                // The guard is the `gte` here, so dropping it is what permits a
-                // negative balance for a replay.
-                ...(allowNegative ? {} : { quantity: { gte: decrementBy } }),
+                ...(guarded ? { quantity: { gte: decrementBy } } : {}),
             },
             data: {
                 quantity: { decrement: decrementBy },
             },
         });
 
-        if (updateResult.count === 0) {
-            if (!allowNegative) {
+        let negativeAllowed = allowNegative === true;
+        let updateResult = await decrement(!negativeAllowed);
+
+        if (updateResult.count === 0 && !negativeAllowed) {
+            // Short — or there is no stock row at all. Either way, whether that
+            // is an error is the tenant's call, and this is the first point the
+            // answer is needed: a tenant with enough stock never reaches here,
+            // so the settings lookup costs the common case nothing.
+            negativeAllowed = await tenantAllowsNegativeStock(tx, tenantId, movementType);
+
+            if (!negativeAllowed) {
                 throw new BadRequestException(`Insufficient stock for product ${productId}`);
             }
+
+            updateResult = await decrement(false);
+        }
+
+        if (updateResult.count === 0) {
             // No stock row exists yet — the product has never been received
             // here. Create it already negative so the ledger still balances
             // against the movement written below.

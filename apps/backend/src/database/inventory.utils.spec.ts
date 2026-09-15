@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 import {
+    applyInventoryMovement,
     resolveEntryWarehouses,
     reversalWarehouseResolver,
     usableWarehouseIds,
@@ -157,5 +158,126 @@ describe('usableWarehouseIds', () => {
 
         expect(await usableWarehouseIds(tx, TENANT, STORE, [null, undefined])).toEqual(new Set());
         expect(tx.warehouse.findMany).not.toHaveBeenCalled();
+    });
+});
+
+const WAREHOUSE = 'wh-main';
+const PRODUCT = 'product-1';
+
+/**
+ * The slice of the client `applyInventoryMovement` touches, with a single
+ * ProductStock row standing in for the warehouse balance.
+ *
+ * `updateMany` honours the `gte` guard the same way Postgres would — matching
+ * nothing when the row is short — because that guard *is* what the negative
+ * stock setting switches off, and a mock that always matched would pass the
+ * tests either way.
+ */
+function makeStockTx(options: { quantity: number | null; allowNegativeStock?: boolean }) {
+    const row = options.quantity === null
+        ? null
+        : { tenant_id: TENANT, product_id: PRODUCT, warehouse_id: WAREHOUSE, quantity: options.quantity };
+
+    const stock = { current: row };
+
+    return {
+        product: { findUnique: jest.fn(async () => ({ type: 'SIMPLE' })) },
+        productStock: {
+            updateMany: jest.fn(async ({ where, data }: any) => {
+                const minimum = where.quantity?.gte;
+                if (!stock.current || (minimum !== undefined && stock.current.quantity < minimum)) {
+                    return { count: 0 };
+                }
+                stock.current.quantity -= data.quantity.decrement;
+                return { count: 1 };
+            }),
+            create: jest.fn(async ({ data }: any) => {
+                stock.current = { ...data };
+                return stock.current;
+            }),
+            findUnique: jest.fn(async () => stock.current),
+        },
+        productCost: {
+            findUnique: jest.fn(async () => null),
+            upsert: jest.fn(async () => ({})),
+        },
+        inventoryMovement: { create: jest.fn(async () => ({})) },
+        inventorySettings: {
+            findUnique: jest.fn(async () => ({ allow_negative_stock: options.allowNegativeStock ?? false })),
+        },
+        /** Test handle, not part of the client: the row as the mock holds it now. */
+        stock,
+    };
+}
+
+/** One stock issue of `quantity`, of whichever kind the caller names. */
+function issueMovement(quantity: number, movementType = 'SALE') {
+    return {
+        tenantId: TENANT,
+        productId: PRODUCT,
+        warehouseId: WAREHOUSE,
+        quantityDelta: -quantity,
+        movementType,
+        referenceType: movementType,
+        referenceId: 'document-1',
+    };
+}
+
+describe('applyInventoryMovement negative stock policy', () => {
+    it('refuses a short sale for a tenant that has not opted in', async () => {
+        const tx = makeStockTx({ quantity: 2 });
+
+        await expect(applyInventoryMovement(tx, issueMovement(5))).rejects.toThrow(BadRequestException);
+        expect(tx.stock.current?.quantity).toBe(2);
+        expect(tx.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('posts a short sale into a negative balance once the tenant opts in', async () => {
+        const tx = makeStockTx({ quantity: 2, allowNegativeStock: true });
+
+        const balanceAfter = await applyInventoryMovement(tx, issueMovement(5));
+
+        expect(balanceAfter).toBe(-3);
+        expect(tx.stock.current?.quantity).toBe(-3);
+        expect(tx.inventoryMovement.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens a negative row when the product was never stocked here', async () => {
+        const tx = makeStockTx({ quantity: null, allowNegativeStock: true });
+
+        expect(await applyInventoryMovement(tx, issueMovement(4))).toBe(-4);
+        expect(tx.productStock.create).toHaveBeenCalledTimes(1);
+        expect(tx.productStock.create.mock.calls[0][0].data.quantity).toBe(-4);
+    });
+
+    it('never reads the setting when there is enough stock', async () => {
+        // The lookup is the cost of the opt-in, so it must only be paid by the
+        // sales that actually come up short.
+        const tx = makeStockTx({ quantity: 10, allowNegativeStock: true });
+
+        expect(await applyInventoryMovement(tx, issueMovement(4))).toBe(6);
+        expect(tx.inventorySettings.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('keeps non-selling movements strict however the tenant sets it', async () => {
+        // A transfer or a write-off that finds no stock is a counting error, and
+        // the opt-in is not a licence to lose it.
+        for (const movementType of ['TRANSFER_OUT', 'SHRINKAGE', 'MANUFACTURING_CONSUMPTION', 'PURCHASE_RETURN']) {
+            const tx = makeStockTx({ quantity: 1, allowNegativeStock: true });
+
+            await expect(
+                applyInventoryMovement(tx, issueMovement(5, movementType)),
+            ).rejects.toThrow(BadRequestException);
+            expect(tx.stock.current?.quantity).toBe(1);
+        }
+    });
+
+    it('still forces a replay through regardless of the setting', async () => {
+        // An import replays history that already happened; its shortfall is not
+        // the tenant's to opt into.
+        const tx = makeStockTx({ quantity: 1 });
+
+        expect(await applyInventoryMovement(tx, { ...issueMovement(3), allowNegative: true })).toBe(-2);
+        expect(tx.inventorySettings.findUnique).not.toHaveBeenCalled();
     });
 });

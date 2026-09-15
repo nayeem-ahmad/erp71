@@ -55,6 +55,15 @@ export class UpdateInventorySettingsDto {
     @IsOptional()
     @IsIn(COSTING_METHODS as unknown as string[])
     costingMethod?: string;
+
+    /**
+     * Whether a sale may be posted for more than the quantity on hand, taking
+     * the stock balance negative instead of being refused. Selling only —
+     * transfers, stock takes, shrinkage and manufacturing stay strict.
+     */
+    @IsOptional()
+    @IsBoolean()
+    allowNegativeStock?: boolean;
 }
 
 export class CreateInventoryReasonDto {
