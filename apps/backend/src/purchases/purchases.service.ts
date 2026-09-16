@@ -11,6 +11,9 @@ import { allocateLandedCost } from '../database/landed-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolveInlineSupplier } from '../suppliers/resolve-inline-supplier.util';
+import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.util';
+import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
+import { purchasePaymentStatus } from './purchase-status';
 
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
@@ -49,6 +52,18 @@ export class PurchasesService {
         const freightAmount = dto.freightAmount ?? 0;
         const totalAmount = subtotal + taxAmount + freightAmount - discountAmount;
 
+        // A zero row is a payment method the user left blank on the entry form,
+        // not a tender: dropping it here keeps it out of the ledger note and out
+        // of the "which method paid this?" lookup below.
+        const payments = (dto.payments ?? []).filter((payment) => payment.amount > 0.005);
+        const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+        if (paidAmount - totalAmount > 0.005) {
+            throw new BadRequestException(
+                `Payment (${paidAmount.toFixed(2)}) exceeds the purchase total (${totalAmount.toFixed(2)}).`,
+            );
+        }
+
         return this.db.$transaction(async (tx) => {
             const warehouses = await resolveEntryWarehouses(
                 tx,
@@ -86,6 +101,11 @@ export class PurchasesService {
                     discount_amount: discountAmount,
                     freight_amount: freightAmount,
                     total_amount: totalAmount,
+                    // Settled at the counter, so the bill is born part- or
+                    // fully-paid instead of waiting for a separate supplier
+                    // payment to catch up with it.
+                    paid_amount: paidAmount,
+                    payment_status: purchasePaymentStatus(paidAmount, totalAmount),
                     notes: dto.notes,
                     created_by: userId,
                     warehouse_id: warehouses.entryWarehouseId,
@@ -149,7 +169,7 @@ export class PurchasesService {
                     where: { id: supplierId, tenant_id: tenantId },
                     select: { due_balance: true },
                 });
-                const balanceAfter = Number(supplier!.due_balance) + totalAmount;
+                let balanceAfter = Number(supplier!.due_balance) + totalAmount;
 
                 await tx.supplierCreditTransaction.create({
                     data: {
@@ -164,18 +184,61 @@ export class PurchasesService {
                     },
                 });
 
+                // The bill goes on the account in full first, then what was
+                // handed over comes straight back off it. Booking the net
+                // instead would be shorter and wrong: the supplier's statement
+                // has to show the bill and its payment as two lines, because
+                // that is what the supplier's own books show, and a single net
+                // line cannot be reconciled against them.
+                if (paidAmount > 0.005) {
+                    balanceAfter -= paidAmount;
+
+                    const payment = await tx.supplierCreditTransaction.create({
+                        data: {
+                            tenant_id: tenantId,
+                            supplier_id: supplierId,
+                            type: 'PAYMENT',
+                            amount: paidAmount,
+                            balance_after: balanceAfter,
+                            // Stamped with the bill it settled so `cancel` can
+                            // find its own payment and take it back, and so the
+                            // ledger says which purchase the cash was for.
+                            reference_type: 'PURCHASE',
+                            reference_id: purchase.id,
+                            payment_number: await nextSupplierPaymentNumber(tenantId, tx, 'PAYMENT'),
+                            notes: `Paid on purchase ${purchase.purchase_number} (${payments.map((p) => p.paymentMethod).join(', ')})`,
+                            created_by: userId,
+                        },
+                    });
+
+                    // `Purchase.paid_amount` is derived from allocations
+                    // everywhere else (see SuppliersService.removeAllocation),
+                    // so an entry payment has to leave one behind too — without
+                    // it the bill would report itself paid while the payment
+                    // still looked unapplied on the supplier-payments screen.
+                    await tx.supplierPaymentAllocation.create({
+                        data: {
+                            tenant_id: tenantId,
+                            transaction_id: payment.id,
+                            purchase_id: purchase.id,
+                            amount: paidAmount,
+                        },
+                    });
+                }
+
                 await tx.supplier.update({
                     where: { id: supplierId },
                     data: { due_balance: balanceAfter },
                 });
             }
 
-            // Always 'credit', and that is correct rather than a shortcut: this
-            // service never writes Purchase.paid_amount (CreatePurchaseDto has no
-            // paidAmount field) and books the full total as supplier credit, so a
-            // purchase is always a payable. Recording a cash buy is a two-step flow:
-            // purchase, then supplier payment. There are deliberately no
-            // purchase/cash or purchase/bank rules — they would be unreachable.
+            // Still always 'credit', and still not a shortcut: the bill raises
+            // the payable in full, exactly as the supplier's invoice does, and
+            // anything paid at the counter is a second, separate event that
+            // takes the payable back down (the leg below). Keeping the two
+            // apart is what lets a part-payment work at all, and it is why
+            // purchase/cash and purchase/bank rules still do not exist — they
+            // would describe a netting this model does not do.
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -192,6 +255,49 @@ export class PurchasesService {
                 partyType: 'SUPPLIER',
                 partyId: supplierId,
             });
+
+            // The cash that actually left the till. Posted through the
+            // supplier_payment rule (Dr Purchase Payable / Cr Cash in Hand)
+            // rather than a purchase/<mode> rule, because that rule already
+            // exists on every tenant and is the only thing that ever debits
+            // Purchase Payable — a bill paid at the counter must not be the one
+            // kind of payment that leaves the liability standing.
+            //
+            // `legKey: 'paid'` keeps it off the bill's own idempotency key, so
+            // the two vouchers cannot overwrite each other and the purchase
+            // stays the primary posting event for status reads.
+            //
+            // The mode account is the CREDIT leg here (money going out), the
+            // mirror of the sale's paid leg, so a tenant-configured
+            // PaymentMethod account overrides that side.
+            //
+            // One voucher for the whole tender, keyed on the first method, the
+            // same simplification the sale screen makes: split a bill across
+            // cash and bKash and the cash account carries both. Splitting the
+            // leg per method is a change to the rules engine, not to this
+            // caller, so it is not smuggled in here.
+            if (paidAmount > 0.005) {
+                const primaryPaymentMethod = payments[0].paymentMethod;
+
+                await autoPostFromRules({
+                    tx,
+                    tenantId,
+                    eventType: 'supplier_payment',
+                    conditionKey: 'payment_direction',
+                    conditionValue: 'pay',
+                    sourceModule: 'purchases',
+                    sourceType: 'purchase',
+                    sourceId: purchase.id,
+                    legKey: 'paid',
+                    amount: paidAmount,
+                    description: `Auto-posted paid portion — purchase ${purchase.purchase_number}`,
+                    referenceNumber: purchase.purchase_number,
+                    storeId: dto.storeId,
+                    partyType: 'SUPPLIER',
+                    partyId: supplierId,
+                    overrideCreditAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+                });
+            }
 
             const purchaseWithItems = await tx.purchase.findFirst({
                 where: { id: purchase.id, tenant_id: tenantId },
@@ -277,7 +383,15 @@ export class PurchasesService {
                 include: {
                     items: { select: { id: true, jobCosts: { select: { id: true } } } },
                     returns: { select: { id: true } },
-                    paymentAllocations: { select: { id: true } },
+                    paymentAllocations: {
+                        select: {
+                            id: true,
+                            amount: true,
+                            transaction: {
+                                select: { id: true, type: true, amount: true, payment_number: true, reference_type: true, reference_id: true },
+                            },
+                        },
+                    },
                     importShipment: { select: { id: true } },
                 },
             });
@@ -297,7 +411,25 @@ export class PurchasesService {
             if (purchase.returns.length > 0) {
                 throw new BadRequestException('This purchase has returns against it — reverse them first.');
             }
-            if (purchase.paymentAllocations.length > 0) {
+            // A bill settled at the counter carries a payment this very entry
+            // wrote — stamped `reference_type: 'PURCHASE'` against this id — so
+            // cancelling takes that back with it rather than sending the user
+            // off to unpick it by hand. Without this, every cash purchase would
+            // be uncancellable the moment it was recorded.
+            //
+            // Only while it is still intact, though: one allocation, to this
+            // bill, for the payment's whole amount. Anything else — a second
+            // payment allocated here, or this one part-moved onto another bill
+            // from the supplier-payments screen — was a separate decision about
+            // where that money went, and this method has no business guessing
+            // at it.
+            const entryAllocation = purchase.paymentAllocations.find((allocation) =>
+                allocation.transaction.type === 'PAYMENT'
+                && allocation.transaction.reference_type === 'PURCHASE'
+                && allocation.transaction.reference_id === id
+                && Math.abs(Number(allocation.amount) - Number(allocation.transaction.amount)) <= 0.005);
+
+            if (purchase.paymentAllocations.some((allocation) => allocation.id !== entryAllocation?.id)) {
                 throw new BadRequestException('This purchase has supplier payments allocated against it — unallocate or reverse them first.');
             }
             if (purchase.importShipment) {
@@ -368,37 +500,90 @@ export class PurchasesService {
                     select: { due_balance: true },
                 });
                 const currentDue = Number(supplier?.due_balance ?? 0);
+                let runningDue = currentDue;
+
                 const reversal = Number(purchase.total_amount);
                 if (reversal > 0.005) {
-                    const balanceAfter = currentDue - reversal;
+                    runningDue -= reversal;
                     await tx.supplierCreditTransaction.create({
                         data: {
                             tenant_id: tenantId,
                             supplier_id: purchase.supplier_id,
                             type: 'ADJUSTMENT',
                             amount: -reversal,
-                            balance_after: balanceAfter,
+                            balance_after: runningDue,
                             reference_type: 'PURCHASE',
                             reference_id: id,
                             notes: `Purchase ${purchase.purchase_number} cancelled: ${note}`,
                             created_by: userId,
                         },
                     });
+                }
+
+                // And the cash back into the till. Same reasoning as the
+                // reversal above — a second line rather than deleting the
+                // PAYMENT row, so the statement still shows that money moved
+                // and then came back. The two ADJUSTMENTs together undo exactly
+                // what `create` did to this supplier's balance: +total, −paid.
+                if (entryAllocation) {
+                    const refund = Number(entryAllocation.amount);
+                    runningDue += refund;
+                    await tx.supplierCreditTransaction.create({
+                        data: {
+                            tenant_id: tenantId,
+                            supplier_id: purchase.supplier_id,
+                            type: 'ADJUSTMENT',
+                            amount: refund,
+                            balance_after: runningDue,
+                            reference_type: 'PURCHASE',
+                            reference_id: id,
+                            notes: `Payment ${entryAllocation.transaction.payment_number} on cancelled purchase ${purchase.purchase_number} reversed: ${note}`,
+                            created_by: userId,
+                        },
+                    });
+                }
+
+                if (Math.abs(runningDue - currentDue) > 0.005) {
                     await tx.supplier.update({
                         where: { id: purchase.supplier_id },
-                        data: { due_balance: balanceAfter },
+                        data: { due_balance: runningDue },
                     });
                 }
             }
 
-            // `create` posts exactly one leg, always under the 'credit'
-            // condition — see the note there.
+            // The allocation is what `paid_amount` is read back from, so it goes
+            // when the payment does; the PAYMENT row itself stays as history,
+            // answered by the reversing ADJUSTMENT above.
+            if (entryAllocation) {
+                await tx.supplierPaymentAllocation.delete({ where: { id: entryAllocation.id } });
+            }
+
+            // `create` posts the bill under the 'credit' condition, plus — when
+            // it was settled at the counter — a 'paid' leg under
+            // supplier_payment, both keyed on this purchase's id.
             await voidAutoPostedVoucher(tx, tenantId, 'purchase', id);
+
+            // The paid leg only comes out when the payment behind it did. A
+            // supplier-less cash bill has no ledger row to reverse, so
+            // `paid_amount` is the only record that it was paid; where the
+            // payment survived this cancel (its allocation had been moved
+            // elsewhere, so `entryAllocation` is undefined) the cash really did
+            // leave the till and its voucher has to stand — as an advance to
+            // the supplier, which is what the reversed payable now shows.
+            const reversesPayment = Boolean(entryAllocation)
+                || (!purchase.supplier_id && Number(purchase.paid_amount) > 0.005);
+            if (reversesPayment) {
+                await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', id, 'paid');
+            }
 
             return tx.purchase.update({
                 where: { id },
                 data: {
                     status: 'CANCELLED',
+                    // Only when the money came back. A payment left standing
+                    // (see above) is still allocated to this bill, and
+                    // `paid_amount` has to keep agreeing with its allocation.
+                    ...(reversesPayment ? { paid_amount: 0, payment_status: 'UNPAID' } : {}),
                     cancelled_at: new Date(),
                     cancelled_by: userId,
                     cancellation_note: note,
