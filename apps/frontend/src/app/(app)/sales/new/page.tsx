@@ -26,6 +26,7 @@ import {
 } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
+import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 import { getWorkspaceItem } from '@/lib/session-store';
@@ -233,7 +234,7 @@ function NewSalePageContent() {
             unitPrice: item.price,
             discount: item.discount || 0,
         })),
-        payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+        payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
         discountAmount: totals.discount > 0 ? totals.discount : undefined,
         // Rounded because a flat discount derives its percentage from the
@@ -358,6 +359,12 @@ function NewSalePageContent() {
             paymentMethod: p.method,
             amount: p.amount,
             accountId: p.accountId,
+            // The cheque / transfer details typed against this tender, if any.
+            bankName: p.bankName,
+            bankBranch: p.bankBranch,
+            bankAccountNumber: p.bankAccountNumber,
+            referenceNo: p.referenceNo,
+            instrumentDate: p.instrumentDate,
         })),
         ...(isDraft ? { isDraft: true } : {}),
     });

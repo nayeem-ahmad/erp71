@@ -17,6 +17,12 @@ interface PaymentSectionProps {
  * inside the customer's credit limit. The method list, the canonical
  * classification sent to the backend and the generic fallback all live in
  * `@/components/document-entry/PaymentSection`, which purchase entry uses too.
+ *
+ * Sale entry is the screen that takes cheques, so it is the one that turns the
+ * instrument panel on: a shop handed a cheque needs to record the bank, the
+ * account, the number and the date on it. `PaymentRecord` has columns for all
+ * of them; the purchase side has nowhere to put them yet, which is why the
+ * shared component keeps the panel opt-in rather than always-on.
  */
 export default function PaymentSection({ payments, total, customer, onPaymentChange, readOnly = false }: PaymentSectionProps) {
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -31,6 +37,7 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
             total={total}
             onPaymentChange={onPaymentChange}
             readOnly={readOnly}
+            captureInstrument
             blockedReason={keepDueCheck.allowed ? undefined : keepDueCheck.reason}
             hint={
                 balance > 0.01 && customer && availableCredit != null ? (
