@@ -309,6 +309,13 @@ async function main() {
         { type: 'SHRINKAGE', code: 'DAMAGE', label: 'Damage' },
         { type: 'SHRINKAGE', code: 'EXPIRATION', label: 'Expiration' },
         { type: 'SHRINKAGE', code: 'UNKNOWN', label: 'Unknown Loss' },
+        // FOUND is the mirror of SHRINKAGE: stock the shelf holds and the book
+        // does not. Its own catalogue on purpose — "Theft" cannot explain a
+        // surplus, and offering it would invite a nonsense audit trail.
+        { type: 'FOUND', code: 'MISCOUNT', label: 'Miscount' },
+        { type: 'FOUND', code: 'UNRECORDED_RETURN', label: 'Unrecorded Customer Return' },
+        { type: 'FOUND', code: 'UNRECORDED_RECEIPT', label: 'Unrecorded Supplier Receipt' },
+        { type: 'FOUND', code: 'UNKNOWN', label: 'Unknown Surplus' },
         { type: 'DISCREPANCY', code: 'COUNT_ERROR', label: 'Count Error' },
         { type: 'DISCREPANCY', code: 'RECONCILIATION', label: 'Reconciliation Adjustment' },
     ];

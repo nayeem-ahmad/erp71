@@ -1691,6 +1691,16 @@ model InventoryMovement {
   @@index([tenant_id, movement_type])
 }
 
+/// The reason catalogue behind every manual stock adjustment.
+///
+/// `type` scopes a reason to the workflow that may pick it, and the three are
+/// deliberately disjoint:
+///   SHRINKAGE   — stock written off (Theft, Damage, Expiration, ...)
+///   FOUND       — stock found over the book (Miscount, unrecorded return, ...)
+///   DISCREPANCY — a stock-take variance, either way
+/// "Theft" can never explain a surplus, so a FOUND entry must not be able to
+/// reach for it: the entry screens filter on `type`, and the services re-check
+/// it server-side.
 model InventoryReason {
   id            String   @id @default(uuid())
   tenant_id     String
@@ -1830,11 +1840,29 @@ model WarehouseTransferItem {
   @@unique([transfer_id, product_id])
 }
 
+/// A stock count that did not match the book, recorded outside a stock take.
+///
+/// Both directions live here. `direction = LOSS` is shrinkage proper — damage,
+/// theft, expiry — and takes stock out. `direction = FOUND` is the mirror: the
+/// shelf holds more than the book says, and the surplus is put in. They share a
+/// table because they are the same document with the sign flipped, and keeping
+/// them together is what lets one screen answer "the count is off by three"
+/// without the counter first having to decide which module to open.
+///
+/// They do NOT share anything a reader could accidentally sum: the reference
+/// series differ (SHR- vs FND-), the reason catalogue differs (a surplus is
+/// never "Theft"), and every report scopes to one direction. A sum across both
+/// would net a loss against a gain and report neither.
+///
+/// `notes` stays nullable for the rows written before a note was required; the
+/// API rejects a new entry without one.
 model InventoryShrinkage {
   id               String   @id @default(uuid())
   tenant_id        String
   warehouse_id     String
   reason_id        String
+  /// LOSS (stock written off) or FOUND (surplus put back in).
+  direction        String   @default("LOSS")
   reference_number String
   notes            String?
   created_at       DateTime @default(now())
@@ -1848,6 +1876,7 @@ model InventoryShrinkage {
   @@unique([tenant_id, reference_number])
   @@index([tenant_id, warehouse_id, created_at])
   @@index([tenant_id, reason_id])
+  @@index([tenant_id, direction, created_at])
 }
 
 model InventoryShrinkageItem {
