@@ -6,6 +6,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ArrowRightLeft, Plus, Truck } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -206,11 +207,11 @@ export default function InventoryTransfersPage() {
                 <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-5 gap-3 items-end">
                     <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryTransfers.allSources}</option>
-                        {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                        {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                     </select>
                     <select value={destinationWarehouseId} onChange={(e) => setDestinationWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryTransfers.allDestinations}</option>
-                        {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                        {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                     </select>
                     <select value={productId} onChange={(e) => setProductId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryTransfers.allProducts}</option>
@@ -230,14 +231,14 @@ export default function InventoryTransfersPage() {
                             <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.sourceWarehouse}</label>
                             <select required value={form.sourceWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, sourceWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                 <option value="">{t.inventoryTransfers.selectSource}</option>
-                                {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                                {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.destinationWarehouse}</label>
                             <select required value={form.destinationWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, destinationWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                 <option value="">{t.inventoryTransfers.selectDestination}</option>
-                                {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                                {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                             </select>
                         </div>
                         <div>

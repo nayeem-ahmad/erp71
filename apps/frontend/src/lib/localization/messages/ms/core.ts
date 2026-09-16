@@ -1012,6 +1012,7 @@ export const coreMessages = {
                 created: "Kedai ditambah.",
                 createError: "Tidak dapat menambah kedai.",
                 nameRequired: "Nama kedai diperlukan.",
+                nameDuplicate: "Kedai dengan nama ini sudah wujud",
                 locked: "Pelan anda merangkumi satu kedai sahaja. Naik taraf untuk menambah lagi.",
                 create: "Cipta",
             },

@@ -1011,6 +1011,7 @@ export const coreMessages = {
             created: 'Store added.',
             createError: 'Could not add the store.',
             nameRequired: 'Store name is required.',
+            nameDuplicate: 'A store with this name already exists',
             locked: 'Your plan covers a single store. Upgrade to add more.',
             create: 'Create',
         },

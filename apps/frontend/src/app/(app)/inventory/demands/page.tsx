@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import {
@@ -415,7 +416,7 @@ export default function ProductDemandsPage() {
                 <Select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} aria-label={copy.columns.warehouse}>
                     <option value="">{copy.filters.allWarehouses}</option>
                     {warehouses.map((warehouse: any) => (
-                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
                     ))}
                 </Select>
                 <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
@@ -456,7 +457,7 @@ export default function ProductDemandsPage() {
                                 >
                                     <option value="">{copy.form.selectWarehouse}</option>
                                     {warehouses.map((warehouse: any) => (
-                                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
                                     ))}
                                 </Select>
                             </Field>

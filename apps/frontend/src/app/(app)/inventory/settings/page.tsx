@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Coins, PackageMinus, Plus, Save, Settings2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -159,7 +160,7 @@ export default function InventorySettingsPage() {
                                 <select value={form[key]} onChange={(e) => setForm((current: any) => ({ ...current, [key]: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                     <option value="">{t.inventorySettings.selectWarehouse}</option>
                                     {warehouses.map((warehouse) => (
-                                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
                                     ))}
                                 </select>
                             </div>

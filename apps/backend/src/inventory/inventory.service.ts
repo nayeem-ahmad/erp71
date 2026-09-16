@@ -31,6 +31,11 @@ export class InventoryService {
         return this.db.warehouse.findMany({
             where: { tenant_id: tenantId },
             orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+            // The branch, so a picker can say which one a warehouse belongs to.
+            // Names are only unique *within* a branch, and this list is
+            // tenant-wide, so two branches legitimately naming a location
+            // "Godown" would otherwise render as two identical options.
+            include: { store: { select: { id: true, name: true } } },
         });
     }
 
@@ -377,14 +382,35 @@ export class InventoryService {
         }
     }
 
+    /**
+     * A code for a warehouse whose creator did not type one.
+     *
+     * The suffix is chosen by looking at what is actually taken, not by counting.
+     * Counting only holds while nothing is ever deleted: with `MAIN`, `MAIN-2`
+     * and `MAIN-3` on file, removing `MAIN-2` leaves a count of 2 and the next
+     * code generated is `MAIN-3` — already taken, so the create failed on a code
+     * the user never typed and could not see.
+     */
     private async generateWarehouseCode(tenantId: string, name: string) {
         const prefix = name
             .toUpperCase()
             .replace(/[^A-Z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 10) || 'WAREHOUSE';
-        const count = await this.db.warehouse.count({ where: { tenant_id: tenantId, code: { startsWith: prefix } } });
-        return count === 0 ? prefix : `${prefix}-${count + 1}`;
+
+        const rows = await this.db.warehouse.findMany({
+            where: { tenant_id: tenantId, code: { startsWith: prefix } },
+            select: { code: true },
+        });
+        const taken = new Set(rows.map((row) => row.code));
+        if (!taken.has(prefix)) return prefix;
+
+        // Terminates: `taken` is finite, so one of the first `taken.size + 1`
+        // candidates is necessarily free.
+        for (let suffix = 2; ; suffix++) {
+            const candidate = `${prefix}-${suffix}`;
+            if (!taken.has(candidate)) return candidate;
+        }
     }
 }
 

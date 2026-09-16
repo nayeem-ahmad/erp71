@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Warehouse } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import { formatBDT } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -116,13 +117,21 @@ export default function StockOnHandPage() {
     const columns: ColumnDef<StockOnHandRow, any>[] = useMemo(() => {
         const strings = t.inventoryReports.stockOnHand;
 
+        // The report's own columns carry no branch, so borrow it from the filter
+        // list — the same warehouses, loaded from /inventory/warehouses — which
+        // is what lets two branches' identically named locations be told apart.
+        const labelled = warehouseColumns.map((warehouse) => ({
+            ...warehouse,
+            store: warehouses.find((row) => row.id === warehouse.id)?.store ?? null,
+        }));
+
         // One quantity column per warehouse, in the order the backend returned
         // them (default warehouse first, then alphabetical). Beyond the first
         // two they collapse on mobile so the table still fits at 360px.
-        const perWarehouse = warehouseColumns.map((warehouse, index) =>
+        const perWarehouse = labelled.map((warehouse, index) =>
             columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
                 id: `warehouse:${warehouse.id}`,
-                header: warehouse.name,
+                header: warehouseLabel(warehouse, labelled),
                 size: 110,
                 meta: { hideOnMobile: index > 1 },
             }),
@@ -173,7 +182,7 @@ export default function StockOnHandPage() {
                 size: 130,
             }),
         ];
-    }, [t, warehouseColumns]);
+    }, [t, warehouseColumns, warehouses]);
 
     const strings = t.inventoryReports.stockOnHand;
 
@@ -229,7 +238,7 @@ export default function StockOnHandPage() {
                     className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
                 >
                     <option value="">{strings.allWarehouses}</option>
-                    {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                    {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                 </select>
                 <select
                     value={groupId}

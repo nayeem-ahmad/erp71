@@ -1345,6 +1345,12 @@ model Store {
   externalSyncConnections  ExternalSyncConnection[]
   projects                 Project[]
   productDemands           ProductDemand[]
+
+  // A tenant cannot hold two branches of the same name: the branch switcher and
+  // every store picker show the name alone, so a repeat leaves "which branch am
+  // I looking at?" with no answer. Case folding is the service's job — Postgres
+  // compares these bytewise.
+  @@unique([tenant_id, name])
 }
 
 model PosCounter {

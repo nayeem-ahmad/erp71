@@ -90,6 +90,7 @@ describe('InventoryService', () => {
             expect(db.warehouse.findMany).toHaveBeenCalledWith({
                 where: { tenant_id: tenantId },
                 orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+                include: { store: { select: { id: true, name: true } } },
             });
             expect(result).toEqual(warehouses);
         });
@@ -143,13 +144,16 @@ describe('InventoryService', () => {
             const dto = { name: 'East Warehouse', storeId: 'store-1', isDefault: false };
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(0); // no existing with prefix
+            db.warehouse.findMany.mockResolvedValue([]); // nothing taken with that prefix
             db.warehouse.create.mockResolvedValue({ id: 'wh-2' });
 
             await service.createWarehouse(tenantId, dto as any);
 
             // Generated code should be based on the name uppercased with non-alphanum replaced
-            expect(db.warehouse.count).toHaveBeenCalled();
+            expect(db.warehouse.findMany).toHaveBeenCalledWith({
+                where: { tenant_id: tenantId, code: { startsWith: 'EAST-WAREH' } },
+                select: { code: true },
+            });
             // "EAST WAREHOUSE" -> "EAST-WAREHOUSE" -> uppercase -> slice(0,10) -> "EAST-WAREH"
             expect(db.warehouse.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -158,11 +162,11 @@ describe('InventoryService', () => {
             );
         });
 
-        it('should append count suffix when generated code prefix conflicts', async () => {
+        it('should append a suffix when the generated code prefix is taken', async () => {
             const dto = { name: 'East', storeId: 'store-1', isDefault: false };
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(2); // 2 already exist with prefix
+            db.warehouse.findMany.mockResolvedValue([{ code: 'EAST' }, { code: 'EAST-2' }]);
             db.warehouse.create.mockResolvedValue({ id: 'wh-3' });
 
             await service.createWarehouse(tenantId, dto as any);
@@ -170,6 +174,46 @@ describe('InventoryService', () => {
             expect(db.warehouse.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({ code: 'EAST-3' }),
+                }),
+            );
+        });
+
+        // The bug a count could not survive: with EAST, EAST-2 and EAST-3 on file,
+        // deleting EAST-2 left a count of 2 and the next code generated was EAST-3,
+        // which already existed — so the create failed on a code the user never
+        // typed and could not see. Probing what is actually taken fills the gap.
+        it('should reuse a suffix freed by a deleted warehouse', async () => {
+            const dto = { name: 'East', storeId: 'store-1', isDefault: false };
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([{ code: 'EAST' }, { code: 'EAST-3' }]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-3b' });
+
+            await service.createWarehouse(tenantId, dto as any);
+
+            expect(db.warehouse.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'EAST-2' }),
+                }),
+            );
+        });
+
+        // `startsWith` also matches longer unrelated codes, so the candidate walk
+        // has to step over them rather than stop at the first gap in the numbering.
+        it('should skip past unrelated codes sharing the prefix', async () => {
+            const dto = { name: 'East', storeId: 'store-1', isDefault: false };
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([
+                { code: 'EAST' }, { code: 'EAST-2' }, { code: 'EAST-3' }, { code: 'EASTERN' },
+            ]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-3c' });
+
+            await service.createWarehouse(tenantId, dto as any);
+
+            expect(db.warehouse.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'EAST-4' }),
                 }),
             );
         });
@@ -249,7 +293,7 @@ describe('InventoryService', () => {
         it('should store the name trimmed', async () => {
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(0);
+            db.warehouse.findMany.mockResolvedValue([]);
             db.warehouse.create.mockResolvedValue({ id: 'wh-trim' });
 
             await service.createWarehouse(tenantId, { name: '  Cold Store  ', storeId: 'store-1' } as any);
@@ -276,7 +320,7 @@ describe('InventoryService', () => {
         it('should match an existing name case-insensitively and within the branch', async () => {
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(0);
+            db.warehouse.findMany.mockResolvedValue([]);
             db.warehouse.create.mockResolvedValue({ id: 'wh-6' });
 
             await service.createWarehouse(tenantId, { name: 'Main Godown', storeId: 'store-1' } as any);
@@ -295,7 +339,7 @@ describe('InventoryService', () => {
         it('should turn a unique-index violation on the name into the same message', async () => {
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(0);
+            db.warehouse.findMany.mockResolvedValue([]);
             db.warehouse.create.mockRejectedValue(
                 Object.assign(new Error('Unique constraint failed'), {
                     code: 'P2002',
@@ -923,7 +967,7 @@ describe('InventoryService', () => {
         it('creates a new warehouse when no duplicate exists', async () => {
             db.store.findFirst.mockResolvedValueOnce(store);
             db.warehouse.findFirst.mockResolvedValueOnce(null); // findDuplicate: no existing by name
-            db.warehouse.count.mockResolvedValueOnce(0); // generateWarehouseCode: no prefix conflicts
+            db.warehouse.findMany.mockResolvedValueOnce([]); // generateWarehouseCode: prefix free
             db.warehouse.create.mockResolvedValue({ id: 'wh-new' });
 
             const result = await service.importWarehouses(tenantId, [{ name: 'North WH' }], 'skip');
@@ -990,7 +1034,7 @@ describe('InventoryService', () => {
             db.warehouse.findFirst
                 .mockResolvedValueOnce(null) // findDuplicate row 1: no duplicate
                 .mockRejectedValueOnce(new Error('DB connection lost')); // findDuplicate row 2: DB error
-            db.warehouse.count.mockResolvedValueOnce(0); // generateWarehouseCode for row 1
+            db.warehouse.findMany.mockResolvedValueOnce([]); // generateWarehouseCode for row 1
             db.warehouse.create.mockResolvedValue({ id: 'wh-new' });
 
             const result = await service.importWarehouses(
