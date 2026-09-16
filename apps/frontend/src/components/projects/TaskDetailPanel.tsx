@@ -231,6 +231,7 @@ export function TaskCardBody({
     canSaveWork,
     allLabels,
     members,
+    membersFailed,
     stories,
     sprints,
     localeInfo,
@@ -258,6 +259,8 @@ export function TaskCardBody({
     canSaveWork: boolean;
     allLabels: ProjectLabel[];
     members: ProjectMemberRow[];
+    /** The roster read failed, rather than coming back with nobody on it. */
+    membersFailed: boolean;
     stories: StoryOption[];
     sprints: SprintOption[];
     localeInfo: ReturnType<typeof useI18n>['localeInfo'];
@@ -355,7 +358,9 @@ export function TaskCardBody({
                         <AssigneeField
                             task={task}
                             taskId={taskId}
+                            projectId={task.project?.id}
                             members={members}
+                            membersFailed={membersFailed}
                             onSaved={apply}
                             onWanted={onMembersWanted}
                         />
@@ -840,16 +845,28 @@ export function useTaskCard(
      * before this runs — it only needs the list to offer somebody else.
      */
     const [membersWanted, setMembersWanted] = useState(false);
+    /**
+     * The read failed, as opposed to returning a project nobody is on. These
+     * were one state until people reported the picker as broken: a private
+     * project 404s for a non-member, a missing `VIEW_PROJECTS` 403s, and a
+     * member holding two stores with neither selected 400s — all three drew the
+     * same empty list as a project with no team.
+     */
+    const [membersFailed, setMembersFailed] = useState(false);
     useEffect(() => {
         if (!projectId || !membersWanted) return;
         let live = true;
         api.getProject(projectId)
             .then((result: unknown) => {
                 const rows = (result as { members?: ProjectMemberRow[] } | null)?.members;
-                if (live) setMembers(Array.isArray(rows) ? rows : []);
+                if (!live) return;
+                setMembers(Array.isArray(rows) ? rows : []);
+                setMembersFailed(false);
             })
             .catch(() => {
-                if (live) setMembers([]);
+                if (!live) return;
+                setMembers([]);
+                setMembersFailed(true);
             });
         return () => {
             live = false;
@@ -1080,7 +1097,7 @@ export function useTaskCard(
     return {
         task, statuses, history, busy, timeForm, setTimeForm,
         hours, canSaveWork, hoursLeftAfter,
-        allLabels, members, stories, sprints, localeInfo,
+        allLabels, members, membersFailed, stories, sprints, localeInfo,
         apply, refresh, markChanged, close,
         changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
@@ -1114,6 +1131,7 @@ export default function TaskDetailPanel({
         canSaveWork,
         allLabels,
         members,
+        membersFailed,
         stories,
         localeInfo,
         apply,
@@ -1171,6 +1189,7 @@ export default function TaskDetailPanel({
                         canSaveWork={canSaveWork}
                         allLabels={allLabels}
                         members={members}
+                        membersFailed={membersFailed}
                         stories={stories}
                         localeInfo={localeInfo}
                         apply={apply}
@@ -1211,13 +1230,18 @@ export default function TaskDetailPanel({
 function AssigneeField({
     task,
     taskId,
+    projectId,
     members,
+    membersFailed,
     onSaved,
     onWanted,
 }: {
     task: Task;
     taskId: string;
+    /** For the link out to the team, where an empty roster is filled in. */
+    projectId?: string;
     members: ProjectMemberRow[];
+    membersFailed: boolean;
     onSaved: (updated: unknown) => Promise<unknown>;
     /** Fires when the picker is first touched, so the roster loads then. */
     onWanted: () => void;
@@ -1227,6 +1251,27 @@ function AssigneeField({
     const [saving, setSaving] = useState(false);
 
     const options = useMemo(() => assigneeOptionsFor(members, task), [members, task]);
+
+    /**
+     * Why the list is short, when it is. Three states used to look identical —
+     * the roster still loading, a project nobody is on, and a read that failed —
+     * and the picker said nothing about any of them.
+     */
+    const note = membersFailed ? (
+        m.task.assigneeLoadFailed
+    ) : members.length > 0 ? null : projectId ? (
+        <>
+            {m.task.assigneeNoTeam}{' '}
+            <Link
+                href={routes.projects.detail(projectId)}
+                className="font-medium text-blue-600 hover:underline"
+            >
+                {m.task.assigneeAddTeam}
+            </Link>
+        </>
+    ) : (
+        m.task.assigneeNoTeam
+    );
 
     const change = async (value: string) => {
         setSaving(true);
@@ -1260,6 +1305,7 @@ function AssigneeField({
             onOpen={onWanted}
             onPick={change}
             emptyLabel={m.task.unassigned}
+            note={note}
             filterable
         />
     );

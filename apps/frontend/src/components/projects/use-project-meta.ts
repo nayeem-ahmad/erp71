@@ -18,6 +18,17 @@ export interface ProjectAssignee {
 export interface ProjectMeta {
     columns: ProjectColumn[];
     assignees: ProjectAssignee[];
+    /**
+     * The project read failed, so `assignees` is empty because nothing arrived
+     * rather than because nobody is on the team.
+     *
+     * These were the same value until people started reporting "I cannot change
+     * the assignee": a 404 on a private project, a 403 on a missing
+     * `VIEW_PROJECTS`, and a 400 from a member holding two stores with neither
+     * selected all landed as a silently empty picker, indistinguishable from an
+     * empty roster and from each other.
+     */
+    failed: boolean;
 }
 
 interface MemberRow {
@@ -25,7 +36,7 @@ interface MemberRow {
     employee?: { id: string; name: string } | null;
 }
 
-const EMPTY: ProjectMeta = { columns: [], assignees: [] };
+const EMPTY: ProjectMeta = { columns: [], assignees: [], failed: false };
 
 function assigneesFrom(members: MemberRow[]): ProjectAssignee[] {
     const out: ProjectAssignee[] = [];
@@ -63,20 +74,29 @@ export function useProjectMeta() {
 
     const load = useCallback(async (projectId: string): Promise<ProjectMeta> => {
         if (!projectId) return EMPTY;
+        // A failed read is cached so `peek` can say so, but never *kept*: the
+        // next open retries it. Otherwise one dropped request leaves the picker
+        // empty for the life of the page, and reopening it — the obvious thing
+        // to try — would do nothing.
         const cached = cache.current.get(projectId);
-        if (cached) return cached;
+        if (cached && !cached.failed) return cached;
         const pending = inFlight.current.get(projectId);
         if (pending) return pending;
 
         const request = (async () => {
+            let failed = false;
             const [columns, project] = await Promise.all([
                 api.getProjectColumns(projectId).catch(() => []),
-                api.getProject(projectId).catch(() => null),
+                api.getProject(projectId).catch(() => {
+                    failed = true;
+                    return null;
+                }),
             ]);
             const members = (project as { members?: MemberRow[] } | null)?.members;
             const meta: ProjectMeta = {
                 columns: Array.isArray(columns) ? (columns as ProjectColumn[]) : [],
                 assignees: assigneesFrom(Array.isArray(members) ? members : []),
+                failed,
             };
             cache.current.set(projectId, meta);
             inFlight.current.delete(projectId);

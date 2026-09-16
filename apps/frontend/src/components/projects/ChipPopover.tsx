@@ -55,6 +55,7 @@ export default function ChipPopover({
     tone = 'default',
     filterable,
     emptyLabel,
+    note,
 }: {
     /** Names the field, for the trigger's accessible name. */
     label: string;
@@ -78,6 +79,17 @@ export default function ChipPopover({
     filterable?: boolean;
     /** The "none" row — omitted entirely when the field cannot be cleared. */
     emptyLabel?: string;
+    /**
+     * Shown under the rows when `options` is empty — *not* when a filter has
+     * narrowed them away.
+     *
+     * A picker whose list is empty and says nothing is read as broken. The task
+     * Assignee chip was exactly that: a project with no team, and a project
+     * whose roster could not be read, both drew a panel holding only
+     * "Unassigned", and people reported it as "I cannot change the assignee".
+     * The caller says which of the two it is.
+     */
+    note?: ReactNode;
 }) {
     const { t } = useI18n();
 
@@ -246,6 +258,15 @@ export default function ChipPopover({
                                 </button>
                             );
                         })
+                    )}
+
+                    {/* Under the rows rather than instead of them: the "none"
+                        row is still a valid pick while the note explains why it
+                        is the only one. */}
+                    {note && options.length === 0 && (
+                        <p className="border-t border-gray-100 px-2 py-1.5 text-xs text-gray-500">
+                            {note}
+                        </p>
                     )}
                 </AnchoredDropdown>
             )}
