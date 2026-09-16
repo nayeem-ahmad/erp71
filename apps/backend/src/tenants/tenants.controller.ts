@@ -7,6 +7,7 @@ import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { UpdatePasswordPolicyDto } from './password-policy.dto';
+import { UpdateTaxSettingsDto } from './tax-settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -66,10 +67,7 @@ export class TenantsController {
     }
 
     @Patch('tax-settings')
-    async updateTaxSettings(
-        @Tenant() tenant: TenantContext,
-        @Body() dto: { default_vat_rate?: number | null; vat_registration_no?: string | null; business_tin?: string | null },
-    ) {
+    async updateTaxSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateTaxSettingsDto) {
         return this.tenantsService.updateTaxSettings(tenant.tenantId, dto);
     }
 

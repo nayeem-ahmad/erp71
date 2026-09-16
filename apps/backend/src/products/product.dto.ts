@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_cm'] as const;
 
@@ -84,6 +84,29 @@ export class CreateProductDto {
     @IsIn(COMPOUND_UNIT_TYPES)
     unitType?: string;
 
+    /**
+     * মূসকের হার — the VAT rate this commodity is supplied at, when it differs
+     * from the workspace default. An explicit `0` means zero-rated or exempt
+     * and is NOT the same as leaving it unset, which inherits the default.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    vatRate?: number | null;
+
+    /**
+     * সম্পূরক শুল্কের হার — supplementary duty, charged on Third Schedule goods
+     * only and levied on the value of the supply *before* VAT. There is no
+     * workspace default to inherit: SD attaches to a commodity, never to a
+     * business.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    sdRate?: number | null;
+
     @IsOptional()
     @IsBoolean()
     isFeatured?: boolean;
@@ -160,6 +183,29 @@ export class UpdateProductDto {
     @IsString()
     @IsIn(COMPOUND_UNIT_TYPES)
     unitType?: string;
+
+    /**
+     * মূসকের হার — the VAT rate this commodity is supplied at, when it differs
+     * from the workspace default. An explicit `0` means zero-rated or exempt
+     * and is NOT the same as leaving it unset, which inherits the default.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    vatRate?: number | null;
+
+    /**
+     * সম্পূরক শুল্কের হার — supplementary duty, charged on Third Schedule goods
+     * only and levied on the value of the supply *before* VAT. There is no
+     * workspace default to inherit: SD attaches to a commodity, never to a
+     * business.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    sdRate?: number | null;
 
     @IsOptional()
     @IsBoolean()

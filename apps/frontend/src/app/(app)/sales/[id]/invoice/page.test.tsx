@@ -33,6 +33,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     Download: () => <span data-testid="icon-download" />,
+    FileCheck: () => <span data-testid="icon-file-check" />,
     Printer: () => <span data-testid="icon-printer" />,
     ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
@@ -140,10 +141,53 @@ describe('InvoicePage', () => {
         });
     });
 
+    // The label no longer claims to be a Mushak 6.3: that is a gazetted form
+    // with its own prescribed layout, now rendered at /sales/[id]/mushak. This
+    // page is the shop's own commercial invoice and links across to it.
     it('shows VAT Invoice label when there is VAT', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByText('VAT Invoice (Mushak 6.3)')).toBeInTheDocument();
+            expect(screen.getByText('VAT Invoice')).toBeInTheDocument();
+        });
+        expect(screen.queryByText(/Mushak 6\.3\)/)).not.toBeInTheDocument();
+    });
+
+    it('links to the Mushak 6.3 tax invoice for the same sale', async () => {
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByRole('link', { name: /Mushak 6\.3/ })).toHaveAttribute(
+                'href',
+                '/sales/test-sale-1/mushak',
+            );
+        });
+    });
+
+    it('prefers the VAT stored with the sale over the catalogue rate', async () => {
+        // The point of the snapshot: an invoice the customer already holds must
+        // not change when the product's rate is edited afterwards.
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: {
+                ...mockInvoiceData.sale,
+                total_amount: '1150',
+                amount_paid: '1150',
+                items: [
+                    {
+                        id: 'item-1',
+                        quantity: 1,
+                        price_at_sale: '1150',
+                        vat_rate: '15.00',
+                        // Since raised, the catalogue moved to 5%. The invoice
+                        // must still show the 150 that was charged.
+                        product: { name: 'Premium Widget', sku: 'PW-001', vat_rate: 5 },
+                    },
+                ],
+            },
+        });
+
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText(/15% \/ .*150/)).toBeInTheDocument();
         });
     });
 
@@ -157,7 +201,7 @@ describe('InvoicePage', () => {
     it('shows NBR compliance footer when VAT is present', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByText('NBR VAT Compliance (Mushak 6.3)')).toBeInTheDocument();
+            expect(screen.getByText('NBR VAT Compliance')).toBeInTheDocument();
             expect(screen.getByText(/Supplier BIN: BIN-12345678/)).toBeInTheDocument();
         });
     });

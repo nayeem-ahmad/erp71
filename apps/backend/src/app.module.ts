@@ -54,6 +54,7 @@ import { StockTakesModule } from './stock-takes/stock-takes.module';
 import { ProductDemandsModule } from './product-demands/product-demands.module';
 import { InventoryReportsModule } from './inventory-reports/inventory-reports.module';
 import { SalesReportsModule } from './sales-reports/sales-reports.module';
+import { MushakModule } from './mushak/mushak.module';
 import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
@@ -193,6 +194,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         ProductDemandsModule,
         InventoryReportsModule,
         SalesReportsModule,
+        MushakModule,
         PurchaseReportsModule,
         BillingModule,
         AdminTenantsModule,

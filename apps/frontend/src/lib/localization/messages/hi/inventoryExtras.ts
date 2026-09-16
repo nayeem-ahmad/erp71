@@ -498,6 +498,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "पुनःऑर्डर स्तर",
         "safetyStock": "सुरक्षा स्टॉक",
         "leadTimeDays": "लीड टाइम दिन",
+        "vatRate": "वैट दर (%)",
+        "vatRateHint": "खाली छोड़ने पर कार्यक्षेत्र की डिफ़ॉल्ट दर लगेगी। 0 का अर्थ शून्य-दर या छूट प्राप्त।",
+        "sdRate": "अनुपूरक शुल्क (%)",
+        "sdRateHint": "केवल तृतीय अनुसूची की वस्तुएँ। खाली का अर्थ कोई नहीं।",
         "quantityUnit": "मात्रा इकाई",
         "brand": "ब्रांड",
         "noBrand": "कोई ब्रांड नहीं",
@@ -514,7 +518,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "जैसे 365"
+            "warrantyDays": "जैसे 365",
+            "vatRate": "जैसे 15",
+            "sdRate": "जैसे 25"
         }
     }
 } as const;

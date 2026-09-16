@@ -498,6 +498,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "دوبارہ آرڈر کی سطح",
         "safetyStock": "حفاظتی اسٹاک",
         "leadTimeDays": "رسد کے دن",
+        "vatRate": "ویٹ کی شرح (%)",
+        "vatRateHint": "خالی چھوڑنے پر ورک اسپیس کی ڈیفالٹ شرح لاگو ہوگی۔ 0 کا مطلب زیرو ریٹڈ یا مستثنیٰ۔",
+        "sdRate": "اضافی ڈیوٹی (%)",
+        "sdRateHint": "صرف تھرڈ شیڈول اشیاء۔ خالی کا مطلب کوئی نہیں۔",
         "quantityUnit": "مقدار کا یونٹ",
         "brand": "برانڈ",
         "noBrand": "کوئی برانڈ نہیں",
@@ -514,7 +518,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "مثلاً 365"
+            "warrantyDays": "مثلاً 365",
+            "vatRate": "مثلاً 15",
+            "sdRate": "مثلاً 25"
         }
     }
 } as const;

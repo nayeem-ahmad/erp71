@@ -346,6 +346,7 @@ export const coreMessages = {
                 salesQuotations: "Sebutharga Jualan",
                 warrantyClaims: "Tuntutan Waranti",
                 cashierSessions: "Sesi Juruwang",
+                mushakBooks: "Buku VAT NBR (Mushak)",
                 loyaltyPoints: "Mata Kesetiaan",
                 jobsBom: "Kerja & BOM",
                 purchases: "Pembelian",

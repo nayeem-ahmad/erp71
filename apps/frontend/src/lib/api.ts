@@ -2654,6 +2654,32 @@ export const api = {
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
+
+    // ── NBR Mushak 6.x ──────────────────────────────────────────────────
+    // Routes are named after the forms because that is how they are asked
+    // for: "print the 6.3", "pull the 6.2 for this month".
+    getMushakForms: () => fetchWithAuth('/mushak/forms'),
+    /** মূসক-৬.৩ · কর চালানপত্র — the tax invoice for one sale. */
+    getMushakTaxInvoice: (saleId: string) => fetchWithAuth(`/mushak/6.3/${saleId}`),
+    /** মূসক-৬.৭ · ক্রেডিট নোট — the credit note for one sales return. */
+    getMushakCreditNote: (returnId: string) => fetchWithAuth(`/mushak/6.7/${returnId}`),
+    /** মূসক-৬.২ · বিক্রয় হিসাব পুস্তক — the sales book for a tax period. */
+    getMushakSalesBook: (params: { from?: string; to?: string; storeId?: string; taxableOnly?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        if (params.taxableOnly) query.set('taxableOnly', 'true');
+        return fetchWithAuth(`/mushak/6.2?${query.toString()}`);
+    },
+    /** মূসক-৬.১০ · supplies over two lakh taka to unregistered buyers. */
+    getMushakLargeSupplyStatement: (params: { from?: string; to?: string; storeId?: string }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        return fetchWithAuth(`/mushak/6.10?${query.toString()}`);
+    },
     getDiscountCodes: () => fetchAllPages('/discount-codes'),
     createDiscountCode: (data: any) => fetchWithAuth('/discount-codes', {
         method: 'POST',

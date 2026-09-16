@@ -220,6 +220,36 @@ export const settingsExtrasMessages = {
         },
         saveButton: "Enregistrer les paramètres fiscaux",
         saving: "Enregistrement…",
+        mushak: {
+            title: "Documents Mushak (NBR 6.x)",
+            body: "Activez ceci si vous êtes assujetti à la TVA et émettez des factures fiscales Mushak 6.3. Ces informations figurent dans le bloc émetteur de chaque document 6.x et sont exigées par la règle 40 des VAT & SD Rules 2016.",
+            enable: {
+                label: "Émettre des documents Mushak",
+                hint: "Désactivé, les ventes impriment une facture de magasin ordinaire au lieu d’une facture fiscale.",
+            },
+            issueAddress: {
+                label: "Adresse d’émission",
+                placeholder: "Établissement enregistré",
+                hint: "Votre adresse enregistrée, qui peut différer de la succursale ayant réalisé la vente.",
+            },
+            officerName: {
+                label: "Personne habilitée",
+                placeholder: "Nom complet",
+                hint: "Celui ou celle qui signe une facture fiscale pour l’entreprise.",
+            },
+            officerDesignation: {
+                label: "Fonction",
+                placeholder: "ex. Propriétaire",
+                hint: "Imprimée sous la signature.",
+            },
+            economicActivity: {
+                label: "Activité économique",
+                placeholder: "ex. Commerce de détail",
+                hint: "Telle qu’elle figure sur votre certificat d’immatriculation à la TVA.",
+            },
+            incomplete: "Encore nécessaire avant de pouvoir émettre un document Mushak valide :",
+            ready: "Les documents Mushak peuvent être émis.",
+        },
         checklist: {
             title: "Liste de contrôle de conformité TVA (NBR)",
             items: [
