@@ -162,6 +162,16 @@ ENV GIT_SHA=$GIT_SHA
 # formality. It is idempotent and degrades to a no-op on a fresh database that
 # has no User table yet. See prisma/sync-user-mobile-unique.ts.
 #
+# sync:warehouse-name-unique runs BEFORE db push for exactly the same reason.
+# db push creates the unique index on (Warehouse.tenant_id, store_id, name),
+# over a column that is already populated and was never constrained: a warehouse
+# could be saved with a blank name, or with a name another warehouse in the same
+# branch already had. Postgres refuses to build the index over those, db push
+# exits non-zero, and the backend never boots. Repairing the names first — blank
+# ones take the branch's name, repeats are suffixed with their code — makes the
+# index a formality. Idempotent, and a no-op on a fresh database with no
+# Warehouse table yet. See prisma/sync-warehouse-name-unique.ts.
+#
 # sync:tenant-role-templates creates the per-module role templates (Sales
 # Manager, Sales User, ... plus Tenant Admin) for tenants that predate them, and
 # gives existing members and pending invitations their TenantUserRole /
@@ -178,4 +188,4 @@ ENV GIT_SHA=$GIT_SHA
 # permission checks, sees it work. Must run AFTER sync:tenant-role-templates,
 # which is what creates the Tenant Admin role it grants onto. See
 # prisma/sync-cancel-entry-permission.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:warehouse-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

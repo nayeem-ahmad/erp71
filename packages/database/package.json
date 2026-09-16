@@ -18,6 +18,7 @@
     "sync:crm-activity-approval": "tsx prisma/sync-crm-activity-approval.ts",
     "sync:lead-identity": "tsx prisma/sync-lead-identity.ts",
     "sync:user-mobile-unique": "tsx prisma/sync-user-mobile-unique.ts",
+    "sync:warehouse-name-unique": "tsx prisma/sync-warehouse-name-unique.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:tenant-role-templates": "tsx prisma/sync-tenant-role-templates.ts",
     "sync:cancel-entry-permission": "tsx prisma/sync-cancel-entry-permission.ts",

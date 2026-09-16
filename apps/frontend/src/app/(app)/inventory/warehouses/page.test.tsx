@@ -172,6 +172,121 @@ describe('WarehousesPage', () => {
         expect(api.createInventoryWarehouse).not.toHaveBeenCalled();
     });
 
+    it('rejects a whitespace-only name inline rather than calling the API', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getByRole('button', { name: /new warehouse/i }));
+        fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: '   ' } });
+        fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/name is required/i)).toBeInTheDocument();
+        });
+        expect(api.createInventoryWarehouse).not.toHaveBeenCalled();
+    });
+
+    // A branch cannot hold two warehouses of the same name: the pickers on the
+    // entry screens show the name alone, so a repeat makes "which one holds the
+    // stock?" unanswerable.
+    it('rejects a name the chosen branch already uses', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getByRole('button', { name: /new warehouse/i }));
+        fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: 'Overflow Shed' } });
+        fireEvent.change(screen.getByLabelText(/branch|store/i), { target: { value: 'store-1' } });
+        fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/already exists in this branch/i)).toBeInTheDocument();
+        });
+        expect(api.createInventoryWarehouse).not.toHaveBeenCalled();
+    });
+
+    it('matches an existing name regardless of case or padding', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getByRole('button', { name: /new warehouse/i }));
+        fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: '  overflow shed  ' } });
+        fireEvent.change(screen.getByLabelText(/branch|store/i), { target: { value: 'store-1' } });
+        fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/already exists in this branch/i)).toBeInTheDocument();
+        });
+        expect(api.createInventoryWarehouse).not.toHaveBeenCalled();
+    });
+
+    // Uniqueness is per branch, not per tenant: two branches each calling a
+    // location "Godown" is normal, and the entry pickers are filtered to one.
+    it('allows a name another branch already uses', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getByRole('button', { name: /new warehouse/i }));
+        fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: 'Overflow Shed' } });
+        fireEvent.change(screen.getByLabelText(/branch|store/i), { target: { value: 'store-2' } });
+        fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+        await waitFor(() => {
+            expect(api.createInventoryWarehouse).toHaveBeenCalledWith(
+                expect.objectContaining({ name: 'Overflow Shed', storeId: 'store-2' }),
+            );
+        });
+    });
+
+    it('lets a warehouse keep its own name while editing', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getAllByTitle(/edit/i)[0]);
+        fireEvent.click(await screen.findByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateInventoryWarehouse).toHaveBeenCalledWith(
+                'wh-1',
+                expect.objectContaining({ name: 'Main Warehouse' }),
+            );
+        });
+    });
+
+    it('rejects a rename onto a sibling warehouse in the same branch', async () => {
+        const api = getApi();
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getAllByTitle(/edit/i)[0]);
+        fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: 'Overflow Shed' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/already exists in this branch/i)).toBeInTheDocument();
+        });
+        expect(api.updateInventoryWarehouse).not.toHaveBeenCalled();
+    });
+
+    it('clears the name error once the field is edited again', async () => {
+        render(<WarehousesPage />);
+        await waitFor(() => screen.getByText('Main Warehouse'));
+
+        fireEvent.click(screen.getByRole('button', { name: /new warehouse/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /^create$/i }));
+        await waitFor(() => screen.getByText(/name is required/i));
+
+        fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'C' } });
+
+        await waitFor(() => {
+            expect(screen.queryByText(/name is required/i)).not.toBeInTheDocument();
+        });
+    });
+
     it('renames an existing warehouse', async () => {
         const api = getApi();
         render(<WarehousesPage />);

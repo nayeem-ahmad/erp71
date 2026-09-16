@@ -254,6 +254,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "گودام تلاش کریں...",
         "selectBranch": "برانچ منتخب کریں",
         "nameRequired": "نام ضروری ہے",
+        "nameDuplicate": "اس برانچ میں اس نام کا گودام پہلے سے موجود ہے",
         "branchRequired": "برانچ ضروری ہے",
         "codeHint": "خودکار بنانے کے لیے خالی چھوڑ دیں",
         "manageWarehouses": "گودام کا انتظام"

@@ -254,6 +254,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "गोदाम खोजें...",
         "selectBranch": "शाखा चुनें",
         "nameRequired": "नाम आवश्यक है",
+        "nameDuplicate": "इस शाखा में इस नाम का गोदाम पहले से मौजूद है",
         "branchRequired": "शाखा आवश्यक है",
         "codeHint": "स्वतः बनाने के लिए खाली छोड़ें",
         "manageWarehouses": "गोदाम प्रबंधित करें"

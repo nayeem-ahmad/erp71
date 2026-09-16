@@ -254,6 +254,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "Buscar almacenes...",
         "selectBranch": "Seleccionar una sucursal",
         "nameRequired": "El nombre es obligatorio",
+        "nameDuplicate": "Ya existe un almacén con este nombre en esta sucursal",
         "branchRequired": "La sucursal es obligatoria",
         "codeHint": "Déjalo vacío para generarlo automáticamente",
         "manageWarehouses": "Gestionar almacenes"
