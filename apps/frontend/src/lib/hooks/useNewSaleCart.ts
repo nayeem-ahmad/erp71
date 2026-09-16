@@ -31,7 +31,29 @@ export interface LineItem {
     warehouseId?: string;
 }
 
-export interface Payment {
+/**
+ * What a non-cash payment actually arrived on. A cheque is the case that needs
+ * it: a shop handed one has to be able to say afterwards which bank it is drawn
+ * on, out of whose account, what number is written on it and what date it
+ * carries — post-dated cheques are an ordinary way to be paid here, so that
+ * date is routinely later than the sale's.
+ *
+ * A transfer, a card and a wallet fill the same fields; only the entry form's
+ * labels change. All empty on cash.
+ */
+export interface PaymentInstrument {
+    /** The bank a cheque is drawn on, or the card's issuer. */
+    bankName?: string;
+    bankBranch?: string;
+    /** The account or wallet number the money came out of, as written. */
+    bankAccountNumber?: string;
+    /** Cheque number, wallet transaction id, or card approval code. */
+    referenceNo?: string;
+    /** `YYYY-MM-DD` — the date on the instrument, not the sale's. */
+    instrumentDate?: string;
+}
+
+export interface Payment extends PaymentInstrument {
     // `method` is the canonical, accounting-classifiable string (e.g. "Cash",
     // "Mobile Wallet", "Card", "Bank") sent to the backend. `label` is the
     // friendly display name of the chosen defined method (e.g. "bKash").
