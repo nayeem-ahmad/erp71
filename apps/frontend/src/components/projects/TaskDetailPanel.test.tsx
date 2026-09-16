@@ -932,6 +932,56 @@ describe('TaskDetailPanel assignee', () => {
         expect(await chip()).toBeInTheDocument();
         expect(screen.getByText('Pull the cable')).toBeInTheDocument();
     });
+
+    /**
+     * The three ways this list comes up short used to look identical: a project
+     * with nobody on it, a read that failed, and a roster that simply has people
+     * in it. That is what "some users cannot change the assignee" turned out to
+     * be — the picker never said which.
+     */
+    describe('when there is nobody to offer', () => {
+        it('says the project has no team, and points at where to fix it', async () => {
+            getProject.mockResolvedValue({ id: 'project-1', members: [] });
+            panel();
+
+            fireEvent.click(await chip());
+            expect(
+                await screen.findByText("No one is on this project's team yet."),
+            ).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'Add team members' })).toHaveAttribute(
+                'href',
+                '/projects/project-1',
+            );
+        });
+
+        it('distinguishes a roster that failed to read from one that is empty', async () => {
+            getProject.mockRejectedValue(new Error('nope'));
+            panel();
+
+            fireEvent.click(await chip());
+            expect(
+                await screen.findByText("Could not read this project's team."),
+            ).toBeInTheDocument();
+            // Not "nobody is on this project" — that would send someone to a
+            // team page that already lists the person they were looking for.
+            expect(
+                screen.queryByText("No one is on this project's team yet."),
+            ).not.toBeInTheDocument();
+        });
+
+        it('says nothing at all once there is somebody to pick', async () => {
+            roster();
+            panel();
+
+            await picker();
+            expect(
+                screen.queryByText("No one is on this project's team yet."),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.queryByText("Could not read this project's team."),
+            ).not.toBeInTheDocument();
+        });
+    });
 });
 
 describe('TaskDetailPanel estimate', () => {

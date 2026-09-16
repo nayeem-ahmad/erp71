@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: 'Cipta projek dahulu — setiap tugasan milik sebuah projek.',
         createFailed: 'Tugasan tidak dapat dicipta',
         openFull: 'Buka halaman penuh',
+        assigneeNoTeam: 'Belum ada sesiapa dalam pasukan projek ini.',
+        assigneeAddTeam: 'Tambah ahli pasukan',
+        assigneeLoadFailed: 'Pasukan projek ini tidak dapat dibaca.',
     },
 
     description: {
