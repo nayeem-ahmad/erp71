@@ -3,6 +3,8 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import { SupportController } from './support.controller';
 import { SupportEventsService } from './support-events.service';
 
+const TENANT = { tenantId: 'ten-1', userId: 'usr-1', timezone: 'Asia/Dhaka' } as any;
+
 const thread = {
     id: 'thr-1',
     ticketNumber: 12,
@@ -13,8 +15,6 @@ const thread = {
     page: null,
     feedbackId: null,
 };
-
-const tenantContext = { tenantId: 'ten-1', userId: 'usr-1', timezone: 'Asia/Dhaka' } as any;
 
 /** Enough of an Express response to see what a stream writes. */
 function makeResponse() {
@@ -64,8 +64,90 @@ function makeController(opts?: { inboxEnabled?: boolean }) {
         createKnock: jest.fn(),
     };
     const events = new SupportEventsService();
-    return { controller: new SupportController(db, support, events), db, events };
+    return { controller: new SupportController(db, support, events), db, support, events };
 }
+
+/** The `where` the controller handed Prisma on the most recent call. */
+const whereOf = (db: any) => db.supportThread.findMany.mock.calls.at(-1)[0].where;
+
+describe('SupportController.listThreads', () => {
+    it('scopes to the caller’s tenant and adds nothing when no filter is passed', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT);
+
+        expect(whereOf(db)).toEqual({ tenantId: 'ten-1' });
+    });
+
+    it('searches the subject and the message bodies', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT, 'printer');
+
+        expect(whereOf(db)).toEqual({
+            tenantId: 'ten-1',
+            OR: [
+                { subject: { contains: 'printer', mode: 'insensitive' } },
+                { messages: { some: { body: { contains: 'printer', mode: 'insensitive' } } } },
+            ],
+        });
+    });
+
+    it('treats a whitespace-only term as no search at all', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT, '   ');
+
+        expect(whereOf(db)).toEqual({ tenantId: 'ten-1' });
+    });
+
+    it('filters by status, and ignores a status that is not one of ours', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT, undefined, 'resolved');
+        expect(whereOf(db)).toEqual({ tenantId: 'ten-1', status: 'resolved' });
+
+        await controller.listThreads(TENANT, undefined, 'deleted');
+        expect(whereOf(db)).toEqual({ tenantId: 'ten-1' });
+    });
+
+    it('filters by category, and folds "feedback" into the three feedback types', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT, undefined, undefined, 'bug');
+        expect(whereOf(db)).toEqual({ tenantId: 'ten-1', category: 'bug' });
+
+        await controller.listThreads(TENANT, undefined, undefined, 'feedback');
+        expect(whereOf(db)).toEqual({
+            tenantId: 'ten-1',
+            category: { in: ['bug', 'feature', 'general'] },
+        });
+    });
+
+    it('combines search, status and category', async () => {
+        const { controller, db } = makeController();
+
+        await controller.listThreads(TENANT, 'printer', 'open', 'support');
+
+        expect(whereOf(db)).toEqual({
+            tenantId: 'ten-1',
+            status: 'open',
+            category: 'support',
+            OR: [
+                { subject: { contains: 'printer', mode: 'insensitive' } },
+                { messages: { some: { body: { contains: 'printer', mode: 'insensitive' } } } },
+            ],
+        });
+    });
+
+    it('checks the inbox is switched on before reading anything', async () => {
+        const { controller, support, db } = makeController();
+        support.assertInboxEnabled.mockRejectedValue(new Error('Support is not available'));
+
+        await expect(controller.listThreads(TENANT)).rejects.toThrow('Support is not available');
+        expect(db.supportThread.findMany).not.toHaveBeenCalled();
+    });
+});
 
 describe('SupportController.stream', () => {
     afterEach(() => jest.useRealTimers());
@@ -75,7 +157,7 @@ describe('SupportController.stream', () => {
         const res = makeResponse();
         const req = new EventEmitter();
 
-        const done = controller.stream(tenantContext, req as any, res as any);
+        const done = controller.stream(TENANT, req as any, res as any);
         await Promise.resolve();
 
         expect(res.headers?.['Content-Type']).toBe('text/event-stream; charset=utf-8');
@@ -91,7 +173,7 @@ describe('SupportController.stream', () => {
         const res = makeResponse();
         const req = new EventEmitter();
 
-        const done = controller.stream(tenantContext, req as any, res as any);
+        const done = controller.stream(TENANT, req as any, res as any);
         await Promise.resolve();
 
         events.publish({
@@ -126,7 +208,7 @@ describe('SupportController.stream', () => {
         const res = makeResponse();
         const req = new EventEmitter();
 
-        const done = controller.stream(tenantContext, req as any, res as any);
+        const done = controller.stream(TENANT, req as any, res as any);
         await Promise.resolve();
 
         jest.advanceTimersByTime(26_000);
@@ -156,7 +238,7 @@ describe('SupportController.stream', () => {
         const res = makeResponse();
         const req = new EventEmitter();
 
-        const done = controller.stream(tenantContext, req as any, res as any);
+        const done = controller.stream(TENANT, req as any, res as any);
         await Promise.resolve();
 
         jest.advanceTimersByTime(10 * 60_000);
@@ -170,7 +252,7 @@ describe('SupportController.stream', () => {
         const res = makeResponse();
 
         await expect(
-            controller.stream(tenantContext, new EventEmitter() as any, res as any),
+            controller.stream(TENANT, new EventEmitter() as any, res as any),
         ).rejects.toBeInstanceOf(ServiceUnavailableException);
         expect(res.headers).toBeUndefined();
         expect(res.writes).toEqual([]);
@@ -183,7 +265,7 @@ describe('SupportController.sendMessage', () => {
         const seen: unknown[] = [];
         events.forTenant('ten-1').subscribe((event) => seen.push(event));
 
-        await controller.sendMessage(tenantContext, 'thr-1', { body: 'Still stuck' });
+        await controller.sendMessage(TENANT, 'thr-1', { body: 'Still stuck' });
 
         expect(seen).toEqual([
             expect.objectContaining({
@@ -200,7 +282,7 @@ describe('SupportController.getMessages', () => {
     it('gives the tenant the ticket number', async () => {
         const { controller } = makeController();
 
-        const result = await controller.getMessages(tenantContext, 'thr-1');
+        const result = await controller.getMessages(TENANT, 'thr-1');
 
         expect(result.thread).toMatchObject({ id: 'thr-1', ticketNumber: 12 });
     });

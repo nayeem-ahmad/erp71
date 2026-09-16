@@ -3720,7 +3720,13 @@ export const api = {
     mergeFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/merge`, { method: 'POST' }),
     rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
-    getSupportThreads: () => fetchWithAuth('/support/threads'),
+    getSupportThreads: (params?: { search?: string; status?: string; category?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.category) query.set('category', params.category);
+        return fetchWithAuth(`/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     createSupportThread: (data: {
         category?: 'support' | 'bug' | 'feature' | 'general';
         subject?: string;

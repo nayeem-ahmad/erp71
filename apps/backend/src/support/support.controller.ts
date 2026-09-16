@@ -4,6 +4,7 @@ import {
     Post,
     Body,
     Param,
+    Query,
     Req,
     Res,
     UseGuards,
@@ -18,7 +19,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
 import { SupportService } from './support.service';
-import { KNOCK_CATEGORIES } from './support.util';
+import { KNOCK_CATEGORIES, threadCategoryWhere } from './support.util';
 import { SupportEventsService, formatSseFrame, sseHeartbeat } from './support-events.service';
 
 /** How often an idle stream writes a comment frame, to outlive proxy read timeouts. */
@@ -68,11 +69,39 @@ export class SupportController {
         private readonly events: SupportEventsService,
     ) {}
 
+    /**
+     * The shop's own conversations. `search`, `status` and `category` narrow the
+     * list server-side rather than in the browser: a shop that has been writing
+     * in for a year has more threads than the list ever renders at once, and
+     * filtering the rendered page would only ever search what had already
+     * arrived. Search covers message bodies as well as the subject — a subject
+     * is derived from the first 80 characters of the first message, so the
+     * words someone remembers are often further in.
+     */
     @Get('threads')
-    async listThreads(@Tenant() tenant: TenantContext) {
+    async listThreads(
+        @Tenant() tenant: TenantContext,
+        @Query('search') search?: string,
+        @Query('status') status?: string,
+        @Query('category') category?: string,
+    ) {
         await this.support.assertInboxEnabled(tenant.tenantId);
+
+        const where: any = {
+            tenantId: tenant.tenantId,
+            ...threadCategoryWhere(category),
+        };
+        if (status && ['open', 'resolved'].includes(status)) where.status = status;
+        const term = search?.trim();
+        if (term) {
+            where.OR = [
+                { subject: { contains: term, mode: 'insensitive' } },
+                { messages: { some: { body: { contains: term, mode: 'insensitive' } } } },
+            ];
+        }
+
         const threads = await this.db.supportThread.findMany({
-            where: { tenantId: tenant.tenantId },
+            where,
             orderBy: { updatedAt: 'desc' },
             include: {
                 messages: {
