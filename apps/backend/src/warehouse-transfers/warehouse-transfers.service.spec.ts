@@ -20,9 +20,11 @@ describe('WarehouseTransfersService', () => {
     let tx: any;
 
     beforeEach(async () => {
-        // Call history has to start empty in every case: several of the approval
-        // tests assert that NOTHING moved, which a leaked call from the previous
-        // test would quietly satisfy in the wrong direction.
+        // The module-level mocks are shared across every test in the file, so
+        // their call lists have to be emptied between them: several approval
+        // cases assert that NOTHING moved or posted, and a leaked call from an
+        // earlier test would satisfy that in the wrong direction. Implementations
+        // are re-set below, after the clear.
         jest.clearAllMocks();
 
         tx = {
@@ -53,9 +55,11 @@ describe('WarehouseTransfersService', () => {
         }).compile();
 
         service = module.get(WarehouseTransfersService);
-        // Both warehouses resolve to the same branch by default, so the existing
-        // cases stay intra-branch; the cross-branch cases override per call.
-        (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1', store_id: 'store-1' });
+        // `Warehouse.store_id` is non-nullable, so a warehouse always names a
+        // branch — both of these sit in `store-1` unless a test says otherwise.
+        (assertWarehouseBelongsToTenant as jest.Mock).mockImplementation(
+            async (_tx: unknown, _tenantId: string, warehouseId: string) => ({ id: warehouseId, store_id: 'store-1' }),
+        );
         (applyInventoryMovement as jest.Mock).mockResolvedValue(5);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
@@ -65,10 +69,27 @@ describe('WarehouseTransfersService', () => {
         });
     });
 
+    /**
+     * What `tx.warehouseTransfer.create` actually returns: it is always called
+     * with `include: transferInclude()`, so the row carries its items (with the
+     * product priced) and both warehouse relations.
+     */
+    const createdTransfer = (overrides: Record<string, any> = {}) => ({
+        id: 'transfer-1',
+        transfer_number: 'TRF-00001',
+        source_store_id: 'store-1',
+        destination_store_id: 'store-1',
+        is_cross_branch: false,
+        sourceWarehouse: { id: 'wh-source', store_id: 'store-1' },
+        destinationWarehouse: { id: 'wh-dest', store_id: 'store-1' },
+        items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, quantity_received: 0, note: null, product: { price: 100 } }],
+        ...overrides,
+    });
+
     it('creates a sent transfer and records outbound inventory movements', async () => {
         tx.product.count.mockResolvedValue(1);
         tx.warehouseTransfer.count.mockResolvedValue(0);
-        tx.warehouseTransfer.create.mockResolvedValue({ id: 'transfer-1' });
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
         tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
 
         const result = await service.create('tenant-1', {
@@ -97,6 +118,148 @@ describe('WarehouseTransfersService', () => {
             }),
         );
         expect(result.id).toBe('transfer-1');
+    });
+
+    it('records the branch pair on create, and flags a transfer that leaves its branch', async () => {
+        (assertWarehouseBelongsToTenant as jest.Mock).mockImplementation(
+            async (_tx: unknown, _tenantId: string, warehouseId: string) => ({
+                id: warehouseId,
+                store_id: warehouseId === 'wh-source' ? 'store-dhaka' : 'store-ctg',
+            }),
+        );
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.count.mockResolvedValue(0);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer({
+            sourceWarehouse: { id: 'wh-source', store_id: 'store-dhaka' },
+            destinationWarehouse: { id: 'wh-dest', store_id: 'store-ctg' },
+        }));
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+        });
+
+        expect(tx.warehouseTransfer.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                source_store_id: 'store-dhaka',
+                destination_store_id: 'store-ctg',
+                is_cross_branch: true,
+            }),
+            include: expect.any(Object),
+        });
+    });
+
+    it('records a transfer inside one branch as intra-branch', async () => {
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.count.mockResolvedValue(0);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+        });
+
+        expect(tx.warehouseTransfer.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                source_store_id: 'store-1',
+                destination_store_id: 'store-1',
+                is_cross_branch: false,
+            }),
+            include: expect.any(Object),
+        });
+    });
+
+    it('posts a voucher when a transfer is saved straight to SENT, not only when a draft is sent', async () => {
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.count.mockResolvedValue(0);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        const result = await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'SENT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+        });
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(
+            expect.objectContaining({
+                tenantId: 'tenant-1',
+                sourceId: 'transfer-1',
+                conditionValue: 'intra_store',
+                amount: 300,
+                storeId: 'store-1',
+            }),
+        );
+        expect(result.voucher_number).toBe('FT-00001');
+        expect(result.posting_status).toBe('posted');
+    });
+
+    it('leaves a draft unposted', async () => {
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.count.mockResolvedValue(0);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        const result = await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+        });
+
+        expect(autoPostFromRules).not.toHaveBeenCalled();
+        expect(applyInventoryMovement).not.toHaveBeenCalled();
+        expect(result.posting_status).toBeNull();
+        expect(result.voucher_number).toBeNull();
+    });
+
+    it('posts a cross-branch send as inter-branch even when the stored flag says otherwise', async () => {
+        // A draft raised before `create` wrote these columns: nulls and a
+        // `false` flag on a transfer whose warehouses sit in different branches.
+        const legacyDraft = {
+            id: 'transfer-1',
+            transfer_number: 'TRF-00001',
+            status: 'DRAFT',
+            source_warehouse_id: 'wh-source',
+            source_store_id: null,
+            destination_store_id: null,
+            is_cross_branch: false,
+            sourceWarehouse: { id: 'wh-source', store_id: 'store-dhaka' },
+            destinationWarehouse: { id: 'wh-dest', store_id: 'store-ctg' },
+            items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 2, quantity_received: 0, note: null, product: { price: 50 } }],
+        };
+        tx.warehouseTransfer.findFirst
+            .mockResolvedValueOnce(legacyDraft)
+            .mockResolvedValueOnce({ ...legacyDraft, status: 'SENT' });
+
+        const result = await service.send('tenant-1', 'transfer-1');
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(
+            expect.objectContaining({
+                conditionValue: 'inter_store',
+                storeId: 'store-dhaka',
+                counterpartyStoreId: 'store-ctg',
+                amount: 100,
+            }),
+        );
+        // ...and the row is brought into line with what was posted.
+        expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+            where: { id: 'transfer-1' },
+            data: expect.objectContaining({
+                status: 'SENT',
+                source_store_id: 'store-dhaka',
+                destination_store_id: 'store-ctg',
+                is_cross_branch: true,
+            }),
+        });
+        expect(result.voucher_number).toBe('FT-00001');
     });
 
     it('rejects same-warehouse transfers', async () => {
@@ -183,7 +346,12 @@ describe('WarehouseTransfersService', () => {
         beforeEach(() => {
             tx.product.count.mockResolvedValue(1);
             tx.warehouseTransfer.count.mockResolvedValue(0);
-            tx.warehouseTransfer.create.mockResolvedValue({ id: 'transfer-1' });
+            // `items` because `create` passes `transferInclude()`, so the real
+            // row always carries its lines — and since dev's create-as-SENT
+            // posting landed, `postTransfer` reduces over them. An empty list
+            // is the honest fixture here: these cases assert the branch columns
+            // and the parked status, not an amount.
+            tx.warehouseTransfer.create.mockResolvedValue({ id: 'transfer-1', items: [] });
             tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
         });
 
@@ -222,6 +390,31 @@ describe('WarehouseTransfersService', () => {
             });
 
             expect(applyInventoryMovement).not.toHaveBeenCalled();
+        });
+
+        /**
+         * `create` posts to the ledger when it saves straight to SENT. A
+         * cross-branch transfer never reaches SENT there — it parks at
+         * PENDING_APPROVAL — so it must not post either, and this pins that.
+         *
+         * Worth its own case because the two halves were written apart: the
+         * create-time posting and this approval gate met for the first time in
+         * a merge, and nothing else fails if the status guard is later loosened.
+         * Posting before anyone approved would book a movement of stock that has
+         * not moved and that no one has authorised.
+         */
+        it('posts nothing either, while a cross-branch transfer awaits approval', async () => {
+            acrossBranches();
+
+            const result = await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(result.posting_status).toBeNull();
         });
 
         it('stamps the branches but requires no approval inside one branch', async () => {

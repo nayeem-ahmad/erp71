@@ -38,8 +38,14 @@ export class WarehouseTransfersService {
             // Cross-branch is derived from the two warehouses, never taken from the
             // request: a client-settable flag would let the caller opt out of the
             // approval step below, which is the whole control.
-            const isCrossBranch = sourceWarehouse.store_id !== destinationWarehouse.store_id;
-            const requiresApproval = isCrossBranch;
+            //
+            // Both the stored columns and the approval flag come from one
+            // `branchColumns` call: if they were derived separately a pair with
+            // an unknown branch could be stored `is_cross_branch: false` while
+            // still being held for approval, and the row would contradict the
+            // control that produced it.
+            const branch = branchColumns(sourceWarehouse, destinationWarehouse);
+            const requiresApproval = branch.is_cross_branch;
 
             // A cross-branch transfer asked for straight away still cannot move
             // stock — it parks at PENDING_APPROVAL instead of SENT. Refusing the
@@ -56,9 +62,7 @@ export class WarehouseTransfersService {
                     transfer_number: transferNumber,
                     source_warehouse_id: dto.sourceWarehouseId,
                     destination_warehouse_id: dto.destinationWarehouseId,
-                    source_store_id: sourceWarehouse.store_id,
-                    destination_store_id: destinationWarehouse.store_id,
-                    is_cross_branch: isCrossBranch,
+                    ...branch,
                     requires_approval: requiresApproval,
                     status,
                     notes: dto.notes,
@@ -74,6 +78,8 @@ export class WarehouseTransfersService {
                 include: this.transferInclude(),
             });
 
+            let posting: AutoPostOutcome = EMPTY_POSTING;
+
             if (status === 'SENT') {
                 for (const item of dto.items) {
                     await applyInventoryMovement(tx, {
@@ -87,12 +93,26 @@ export class WarehouseTransfersService {
                         note: item.note,
                     });
                 }
+
+                // Posted here as well as in `send`, because saving straight to
+                // SENT skips the draft entirely. Without this, whether a
+                // transfer reached the ledger depended on whether the user
+                // happened to save a draft first.
+                //
+                // Inside the transaction, so a locked fiscal period now refuses
+                // the whole create rather than moving stock and booking nothing.
+                // That is the same answer `send` has always given a draft, and
+                // it is the point: the alternative leaves stock somewhere the
+                // books do not know about.
+                posting = await this.postTransfer(tx, tenantId, transfer);
             }
 
-            return tx.warehouseTransfer.findFirst({
+            const created = await tx.warehouseTransfer.findFirst({
                 where: { id: transfer.id, tenant_id: tenantId },
                 include: this.transferInclude(),
             });
+
+            return { ...created, ...posting };
         });
     }
 
@@ -242,39 +262,30 @@ export class WarehouseTransfersService {
             });
         }
 
-        const totalTransferAmount = transfer.items.reduce(
-            (sum: number, item: any) => sum + (item.quantity_sent * Number(item.product?.price ?? 0)),
-            0,
-        );
-
-        const sourceStoreId = transfer.source_store_id ?? transfer.sourceWarehouse?.store_id;
-        const destinationStoreId = transfer.destination_store_id ?? transfer.destinationWarehouse?.store_id;
-
         // Posts nothing by design: there is no `fund_movement` rule for either
         // scope, because under periodic inventory moving your own stock between
         // your own warehouses is not an economic event. The call stays so the
         // scope is declared and `POSTING_CONTRACT` can keep asserting the skip —
         // see posting-contract.ts and bootstrap-accounting.ts.
-        const posting = await autoPostFromRules({
-            tx,
-            tenantId,
-            eventType: 'fund_movement',
-            conditionKey: 'transfer_scope',
-            conditionValue: transfer.is_cross_branch ? 'inter_store' : 'intra_store',
-            sourceModule: 'warehouse_transfers',
-            sourceType: 'transfer',
-            sourceId: transfer.id,
-            amount: totalTransferAmount,
-            description: `Auto-posted warehouse transfer ${transfer.transfer_number}`,
-            referenceNumber: transfer.transfer_number,
-            storeId: sourceStoreId,
-            attribution: transfer.is_cross_branch ? VoucherAttribution.INTER_BRANCH : VoucherAttribution.BRANCH,
-            counterpartyStoreId: transfer.is_cross_branch ? destinationStoreId : undefined,
-        });
+        //
+        // `postTransfer` is shared with `create`, so the three ways a transfer
+        // can reach SENT — saved straight to it, sent from a draft, or approved
+        // after being held — post identically. It derives the scope from the
+        // warehouses rather than reading `is_cross_branch`, which matters most
+        // here: an approval can land long after the row was written, and the
+        // warehouses are the only thing that can still answer which branches
+        // the stock actually moved between.
+        const posting = await this.postTransfer(tx, tenantId, transfer);
 
         await tx.warehouseTransfer.update({
             where: { id: transfer.id },
-            data: { status: 'SENT', sent_at: new Date() },
+            data: {
+                status: 'SENT',
+                sent_at: new Date(),
+                // Backfilled for drafts raised before `create` wrote these
+                // columns, so the stored row records what was actually posted.
+                ...branchColumns(transfer.sourceWarehouse, transfer.destinationWarehouse),
+            },
         });
 
         const sentTransfer = await tx.warehouseTransfer.findFirst({
@@ -282,13 +293,7 @@ export class WarehouseTransfersService {
             include: this.transferInclude(),
         });
 
-        return {
-            ...sentTransfer,
-            posting_status: posting.postingStatus,
-            voucher_id: posting.voucherId ?? null,
-            voucher_number: posting.voucherNumber ?? null,
-            voucher_type: posting.voucherType ?? null,
-        };
+        return { ...sentTransfer, ...posting };
     }
 
     /** The transfer an approve/reject may act on, or the reason it may not. */
@@ -381,6 +386,65 @@ export class WarehouseTransfersService {
         });
     }
 
+    /**
+     * Post one transfer to the ledger.
+     *
+     * **The scope is derived from the two warehouses' branches, never read from
+     * `is_cross_branch`.** That column defaulted to `false` and, until this
+     * method existed, nothing outside the demo-data generator ever wrote it — so
+     * every real inter-branch transfer chose the `intra_store` posting rule,
+     * attributed its voucher to a single branch, and named no counterparty. A
+     * tenant with an `inter_store` rule never saw it fire and inter-branch stock
+     * never reached the clearing account. Deriving it here also covers the
+     * drafts already on file, which a migration over the column alone would not:
+     * `create` and `send` both persist the same derivation, so the stored
+     * columns are a record of what was posted rather than the input to it.
+     *
+     * Runs through the same `branchColumns` the two callers persist, so what is
+     * posted and what is stored cannot disagree. The warehouse relation wins
+     * where it is loaded; the stored columns are the fallback for a row loaded
+     * without it.
+     */
+    private async postTransfer(tx: any, tenantId: string, transfer: any) {
+        const {
+            source_store_id: sourceStoreId,
+            destination_store_id: destinationStoreId,
+            is_cross_branch: isCrossBranch,
+        } = branchColumns(
+            transfer.sourceWarehouse ?? { store_id: transfer.source_store_id ?? undefined },
+            transfer.destinationWarehouse ?? { store_id: transfer.destination_store_id ?? undefined },
+        );
+
+        const totalTransferAmount = transfer.items.reduce(
+            (sum: number, item: any) => sum + (item.quantity_sent * Number(item.product?.price ?? 0)),
+            0,
+        );
+
+        const posting = await autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'fund_movement',
+            conditionKey: 'transfer_scope',
+            conditionValue: isCrossBranch ? 'inter_store' : 'intra_store',
+            sourceModule: 'warehouse_transfers',
+            sourceType: 'transfer',
+            sourceId: transfer.id,
+            amount: totalTransferAmount,
+            description: `Auto-posted warehouse transfer ${transfer.transfer_number}`,
+            referenceNumber: transfer.transfer_number,
+            storeId: sourceStoreId ?? undefined,
+            attribution: isCrossBranch ? VoucherAttribution.INTER_BRANCH : VoucherAttribution.BRANCH,
+            counterpartyStoreId: isCrossBranch ? destinationStoreId ?? undefined : undefined,
+        });
+
+        return {
+            posting_status: posting.postingStatus,
+            voucher_id: posting.voucherId ?? null,
+            voucher_number: posting.voucherNumber ?? null,
+            voucher_type: posting.voucherType ?? null,
+        };
+    }
+
     private transferInclude() {
         return {
             sourceWarehouse: true,
@@ -417,6 +481,38 @@ export class WarehouseTransfersService {
             throw new BadRequestException('One or more products were not found for this tenant.');
         }
     }
+}
+
+/** What `create` reports for a draft: saved, but nothing posted yet. */
+const EMPTY_POSTING = {
+    posting_status: null as string | null,
+    voucher_id: null as string | null,
+    voucher_number: null as string | null,
+    voucher_type: null as string | null,
+};
+
+type AutoPostOutcome = typeof EMPTY_POSTING;
+
+/**
+ * The branch pair a transfer runs between, as the columns that record it.
+ *
+ * `is_cross_branch` is what `send` reads back to pick the posting rule, and what
+ * the `[tenant_id, is_cross_branch]` index exists to filter on, so it is written
+ * from the warehouses rather than taken from the caller — a transfer's branches
+ * are whatever its warehouses' branches are, and nothing else can say.
+ */
+function branchColumns(
+    sourceWarehouse: { store_id?: string } | null | undefined,
+    destinationWarehouse: { store_id?: string } | null | undefined,
+) {
+    const sourceStoreId = sourceWarehouse?.store_id ?? null;
+    const destinationStoreId = destinationWarehouse?.store_id ?? null;
+
+    return {
+        source_store_id: sourceStoreId,
+        destination_store_id: destinationStoreId,
+        is_cross_branch: Boolean(sourceStoreId && destinationStoreId && sourceStoreId !== destinationStoreId),
+    };
 }
 
 function buildTransferDateRange(from: string | undefined, to: string | undefined, timezone: string | undefined) {
