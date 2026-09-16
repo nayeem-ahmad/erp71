@@ -6,6 +6,7 @@ import ReorderSuggestionsPage from './page';
 jest.mock('@/lib/api', () => ({
     api: {
         getReorderSuggestions: jest.fn(),
+        getStores: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getProductGroups: jest.fn(),
         getProductSubgroups: jest.fn(),
@@ -79,8 +80,12 @@ describe('ReorderSuggestionsPage', () => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
         api.getReorderSuggestions.mockResolvedValue(mockReorderRows);
+        api.getStores.mockResolvedValue([
+            { id: 'store-1', name: 'Dhaka Branch' },
+            { id: 'store-2', name: 'Chattogram Branch' },
+        ]);
         api.getInventoryWarehouses.mockResolvedValue([
-            { id: 'wh-1', name: 'Main Warehouse', is_active: true },
+            { id: 'wh-1', name: 'Main Warehouse', is_active: true, store_id: 'store-1' },
             { id: 'wh-2', name: 'Inactive WH', is_active: false },
         ]);
         api.getProductGroups.mockResolvedValue([

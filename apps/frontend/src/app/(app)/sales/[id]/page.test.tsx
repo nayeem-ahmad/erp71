@@ -61,6 +61,7 @@ jest.mock('@/lib/pos-receipt-printer', () => ({
 }));
 
 jest.mock('@/lib/sales-invoice-printer', () => ({
+    ...jest.requireActual('@/lib/sales-invoice-printer'),
     printSalesInvoice: jest.fn(),
     PAPER_SIZES: ['A4', 'A5'],
 }));
