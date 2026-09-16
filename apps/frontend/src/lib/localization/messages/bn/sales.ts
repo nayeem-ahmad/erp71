@@ -328,6 +328,15 @@ export const salesMessages = {
                 searchPlaceholder: "খুঁজুন by serial, customer, status...",
                 allStatuses: "সব স্ট্যাটাস",
             },
+            printPrompt: {
+                title: "বিক্রয় সংরক্ষিত হয়েছে",
+                saved: "বিক্রয় {number} সংরক্ষণ করা হয়েছে — {amount}।",
+                question: "এখনই ইনভয়েস প্রিন্ট করবেন?",
+                hint: "পরে বিক্রয় রেকর্ড থেকেও এটি প্রিন্ট করা যাবে।",
+                paperSize: "কাগজের আকার",
+                print: "ইনভয়েস প্রিন্ট করুন",
+                skip: "না, ধন্যবাদ",
+            },
             detail: {
                 edit: "সম্পাদনা",
                 posReceipt: "পিওএস রসিদ",

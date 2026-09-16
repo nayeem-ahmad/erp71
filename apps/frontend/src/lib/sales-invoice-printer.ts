@@ -2,7 +2,7 @@ import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
-export { PAPER_SIZES } from './print';
+export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
 
 export interface InvoiceItem {
