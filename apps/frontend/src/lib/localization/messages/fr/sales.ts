@@ -259,6 +259,7 @@ export const salesMessages = {
         list: {
             title: "Ventes",
             subtitle: "Toutes les opérations",
+            printInvoice: "Imprimer la facture",
         },
         hub: {
             moduleLabel: "Module Ventes",

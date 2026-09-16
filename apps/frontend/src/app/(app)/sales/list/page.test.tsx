@@ -162,6 +162,17 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
+    it('renders a print action per row, pointing at that sale invoice', async () => {
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'));
+        expect(hrefs).toEqual(expect.arrayContaining([
+            '/sales/sale-1/invoice',
+            '/sales/sale-2/invoice',
+        ]));
+    });
+
     it('renders a duplicate action pointing the entry form at the sale', async () => {
         render(<SalesListPage />);
         await waitFor(() => {

@@ -259,6 +259,7 @@ export const salesMessages = {
         list: {
             title: 'فروخت',
             subtitle: 'تمام لین دین',
+            printInvoice: 'انوائس چھاپیں',
         },
         hub: {
             moduleLabel: 'سیلز ماڈیول',

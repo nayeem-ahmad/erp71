@@ -259,6 +259,7 @@ export const salesMessages = {
         list: {
             title: 'المبيعات',
             subtitle: 'جميع المعاملات',
+            printInvoice: 'طباعة الفاتورة',
         },
         hub: {
             moduleLabel: 'وحدة المبيعات',
