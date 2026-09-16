@@ -1011,6 +1011,7 @@ export const coreMessages = {
             created: 'تمت إضافة المتجر.',
             createError: 'تعذّرت إضافة المتجر.',
             nameRequired: 'اسم المتجر مطلوب.',
+            nameDuplicate: 'يوجد بالفعل متجر بهذا الاسم',
             locked: 'خطتك تشمل متجرًا واحدًا فقط. قم بالترقية لإضافة المزيد.',
             create: 'إنشاء',
         },

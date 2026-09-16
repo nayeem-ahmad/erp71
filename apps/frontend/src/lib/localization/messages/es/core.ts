@@ -1011,6 +1011,7 @@ export const coreMessages = {
             created: "Tienda agregada.",
             createError: "No se pudo agregar la tienda.",
             nameRequired: "El nombre de la tienda es obligatorio.",
+            nameDuplicate: "Ya existe una tienda con este nombre",
             locked: "Tu plan incluye una sola tienda. Mejora tu plan para agregar más.",
             create: "Crear",
         },

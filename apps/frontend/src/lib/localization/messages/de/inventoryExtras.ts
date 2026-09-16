@@ -254,6 +254,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "Lager suchen...",
         "selectBranch": "Filiale auswählen",
         "nameRequired": "Name ist erforderlich",
+        "nameDuplicate": "In dieser Filiale gibt es bereits ein Lager mit diesem Namen",
         "branchRequired": "Filiale ist erforderlich",
         "codeHint": "Leer lassen, um automatisch zu generieren",
         "manageWarehouses": "Lager verwalten"

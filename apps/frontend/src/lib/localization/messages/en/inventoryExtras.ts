@@ -254,6 +254,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "Search warehouses...",
         "selectBranch": "Select a branch",
         "nameRequired": "Name is required",
+        "nameDuplicate": "A warehouse with this name already exists in this branch",
         "branchRequired": "Branch is required",
         "codeHint": "Leave blank to generate one automatically",
         "manageWarehouses": "Manage warehouses"

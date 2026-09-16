@@ -1011,6 +1011,7 @@ export const coreMessages = {
             created: "Boutique ajoutée.",
             createError: "Impossible d'ajouter la boutique.",
             nameRequired: "Le nom de la boutique est obligatoire.",
+            nameDuplicate: "Une boutique portant ce nom existe déjà",
             locked: "Votre forfait comprend une seule boutique. Passez à un forfait supérieur pour en ajouter.",
             create: "Créer",
         },
