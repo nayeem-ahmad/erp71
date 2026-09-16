@@ -80,8 +80,26 @@ describe('Login UI Authentication Mapping', () => {
 
     expect(api.login).toHaveBeenCalledWith({
         identifier: 'admin@bmad.com',
-        password: 'password123'
+        password: 'password123',
+        // The checkbox is unticked by default, and the flag now decides how long
+        // the session lasts rather than which storage it hides in.
+        remember_me: false,
     });
+  });
+
+  it('asks for a long-lived session when "Remember me" is ticked', async () => {
+    const { api } = require('../../lib/api');
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: 'admin@bmad.com' } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect(api.login).toHaveBeenCalledWith(
+        expect.objectContaining({ remember_me: true }),
+    );
   });
 
   it('submits a mobile number through the same identifier field', async () => {
@@ -97,7 +115,8 @@ describe('Login UI Authentication Mapping', () => {
 
     expect(api.login).toHaveBeenCalledWith({
         identifier: '01712345678',
-        password: 'password123'
+        password: 'password123',
+        remember_me: false,
     });
   });
 

@@ -10,6 +10,7 @@ import {
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
@@ -87,6 +88,10 @@ export class SalesService {
                     sales_order_id: source.salesOrderId,
                     warehouse_id: prep.warehouses.entryWarehouseId,
                     total_amount: prep.computedTotal,
+                    // Contained in `total_amount`, not added to it — see the
+                    // column comments on Sale.
+                    vat_amount: prep.tax.vat_amount,
+                    sd_amount: prep.tax.sd_amount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'COMPLETED',
@@ -270,6 +275,22 @@ export class SalesService {
             );
         }
 
+        // VAT and supplementary duty for the Mushak 6.3, worked out against
+        // `computedTotal` — the amount actually billed — so an invoice-level
+        // discount or a loyalty redemption reduces the declared value of the
+        // supply instead of leaving the business declaring tax it never
+        // collected. See `snapshotSaleTax` for why this is stored, not derived.
+        const tax = await snapshotSaleTax(
+            tx,
+            tenantId,
+            dto.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                priceAtSale: item.priceAtSale,
+            })),
+            computedTotal,
+        );
+
         return {
             warehouses,
             productById,
@@ -279,6 +300,7 @@ export class SalesService {
             loyaltyPreview,
             balanceDue,
             creditCustomerDueBalance,
+            tax,
         };
     }
 
@@ -304,12 +326,16 @@ export class SalesService {
             loyaltyPreview,
             balanceDue,
             creditCustomerDueBalance,
+            tax,
         } = prep;
 
         // 3. Process Items and update stock
-        for (const item of dto.items) {
+        for (const [index, item] of dto.items.entries()) {
             const product = productById.get(item.productId);
             const unitCostAtSale = costByProductId.get(item.productId) ?? null;
+            // Positional, not keyed by product: one sale may bill the same
+            // product on two lines at two prices, and each carries its own tax.
+            const lineTax = tax.lines[index];
 
             // Where this line actually draws from: its own warehouse if the
             // entry named one, otherwise the sale's.
@@ -323,6 +349,14 @@ export class SalesService {
                     quantity: item.quantity,
                     price_at_sale: item.priceAtSale,
                     unit_cost_at_sale: unitCostAtSale,
+                    // The rates in force right now and what they came to, kept
+                    // so a Mushak 6.3 reprints identically after the catalogue
+                    // moves on. `price_at_sale` is tax-inclusive, so these are
+                    // the amounts inside it.
+                    vat_rate: lineTax?.vat_rate ?? 0,
+                    sd_rate: lineTax?.sd_rate ?? 0,
+                    vat_amount: lineTax?.vat_amount ?? 0,
+                    sd_amount: lineTax?.sd_amount ?? 0,
                     // Only a genuine override is stored. Copying the resolved
                     // warehouse onto every line would make a later change of
                     // the sale's warehouse look like fifty deliberate overrides.
@@ -548,6 +582,21 @@ export class SalesService {
             // is still live until the draft is finalised.
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
 
+            // A draft is not a tax invoice — nothing is posted and no 6.3 may
+            // be issued against it — but the entry screen still shows a VAT
+            // line, so the same figures are parked with it. finalizeDraft()
+            // recomputes them against what is actually posted.
+            const draftTax = await snapshotSaleTax(
+                tx,
+                tenantId,
+                dto.items.map((item) => ({
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    priceAtSale: item.priceAtSale,
+                })),
+                dto.totalAmount,
+            );
+
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
@@ -561,6 +610,8 @@ export class SalesService {
                     // Held as chosen rather than resolved — see the check above.
                     warehouse_id: dto.warehouseId ?? null,
                     total_amount: dto.totalAmount,
+                    vat_amount: draftTax.vat_amount,
+                    sd_amount: draftTax.sd_amount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'DRAFT',
@@ -576,13 +627,18 @@ export class SalesService {
                 },
             });
 
-            for (const item of dto.items) {
+            for (const [index, item] of dto.items.entries()) {
+                const lineTax = draftTax.lines[index];
                 await tx.saleItem.create({
                     data: {
                         sale_id: sale.id,
                         product_id: item.productId,
                         quantity: item.quantity,
                         price_at_sale: item.priceAtSale,
+                        vat_rate: lineTax?.vat_rate ?? 0,
+                        sd_rate: lineTax?.sd_rate ?? 0,
+                        vat_amount: lineTax?.vat_amount ?? 0,
+                        sd_amount: lineTax?.sd_amount ?? 0,
                         warehouse_id: item.warehouseId ?? null,
                     },
                 });
@@ -691,6 +747,10 @@ export class SalesService {
                     customer_id: saleDto.customerId ?? null,
                     status: 'COMPLETED',
                     total_amount: prep.computedTotal,
+                    // Recomputed by prepareSale against what is actually being
+                    // posted, which may differ from what was parked.
+                    vat_amount: prep.tax.vat_amount,
+                    sd_amount: prep.tax.sd_amount,
                     amount_paid: amountPaid,
                     note: saleDto.note ?? null,
                     // The resolved id, not the parked one: a draft may have been
@@ -903,6 +963,11 @@ export class SalesService {
             // to another warehouse.
             let postedWarehouseId: string | undefined;
 
+            // Restated alongside the lines, for the same reason the lines are
+            // rewritten: an edited invoice declares the tax on what it now
+            // bills, not on what it used to.
+            let editedTax: SaleTaxSnapshot | undefined;
+
             // 1. If items are being replaced, reverse old stock and apply new
             if (dto.items) {
                 // The warehouse the sale is *moving to*, plus any line overrides
@@ -950,9 +1015,26 @@ export class SalesService {
                     productIds: dto.items.map((i) => i.productId),
                 });
 
+                // The total the edit settles on, which is what the tax has to
+                // be worked out against. An explicit `totalAmount` carries the
+                // entry form's adjustments; without one the lines are the total.
+                const editedTotal = dto.totalAmount
+                    ?? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0);
+                editedTax = await snapshotSaleTax(
+                    tx,
+                    tenantId,
+                    dto.items.map((item) => ({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        priceAtSale: item.priceAtSale,
+                    })),
+                    editedTotal,
+                );
+
                 // Create new items and decrement stock
-                for (const item of dto.items) {
+                for (const [index, item] of dto.items.entries()) {
                     const unitCostAtSale = editCostMap.get(item.productId) ?? null;
+                    const lineTax = editedTax.lines[index];
 
                     await tx.saleItem.create({
                         data: {
@@ -961,6 +1043,10 @@ export class SalesService {
                             quantity: item.quantity,
                             price_at_sale: item.priceAtSale,
                             unit_cost_at_sale: unitCostAtSale,
+                            vat_rate: lineTax?.vat_rate ?? 0,
+                            sd_rate: lineTax?.sd_rate ?? 0,
+                            vat_amount: lineTax?.vat_amount ?? 0,
+                            sd_amount: lineTax?.sd_amount ?? 0,
                             warehouse_id: item.warehouseId ?? null,
                         },
                     });
@@ -1046,8 +1132,18 @@ export class SalesService {
                     ...(dto.customerId !== undefined && { customer_id: dto.customerId || null }),
                     ...(dto.status && { status: dto.status }),
                     ...(dto.note !== undefined && { note: dto.note }),
+                    ...(dto.mushakDestination !== undefined && {
+                        mushak_destination: dto.mushakDestination.trim() || null,
+                    }),
+                    ...(dto.mushakVehicleNo !== undefined && {
+                        mushak_vehicle_no: dto.mushakVehicleNo.trim() || null,
+                    }),
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                     ...(totalAmount !== undefined && { total_amount: totalAmount }),
+                    ...(editedTax !== undefined && {
+                        vat_amount: editedTax.vat_amount,
+                        sd_amount: editedTax.sd_amount,
+                    }),
                     ...(amountPaid !== undefined && { amount_paid: amountPaid }),
                     ...(postedWarehouseId !== undefined && { warehouse_id: postedWarehouseId }),
                 },

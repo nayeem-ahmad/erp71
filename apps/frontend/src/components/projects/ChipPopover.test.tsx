@@ -149,4 +149,38 @@ describe('ChipPopover', () => {
 
         expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
+
+    /**
+     * A picker holding nothing but "Unassigned" and saying nothing about it is
+     * what "I cannot change the assignee" looked like in production — the roster
+     * was empty and the panel gave no hint that that was the problem.
+     */
+    describe('the note under an empty list', () => {
+        it('explains a list with no options in it', () => {
+            chip({ options: [], note: 'No one is on this team yet.' });
+            fireEvent.click(trigger());
+
+            expect(screen.getByText('No one is on this team yet.')).toBeInTheDocument();
+            // The "none" row is still pickable — the note explains why it is the
+            // only one, it does not replace it.
+            expect(screen.getByRole('option', { name: /Unassigned/ })).toBeInTheDocument();
+        });
+
+        it('stays out of the way when there is somebody to pick', () => {
+            chip({ note: 'No one is on this team yet.' });
+            fireEvent.click(trigger());
+
+            expect(screen.queryByText('No one is on this team yet.')).not.toBeInTheDocument();
+        });
+
+        it('does not claim the team is empty when a search narrowed it away', () => {
+            chip({ note: 'No one is on this team yet.' });
+            fireEvent.click(trigger());
+            fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'zzzz' } });
+
+            // Three people are on this project; the filter found none of them.
+            // Saying "nobody is on this team" there would be a lie.
+            expect(screen.queryByText('No one is on this team yet.')).not.toBeInTheDocument();
+        });
+    });
 });

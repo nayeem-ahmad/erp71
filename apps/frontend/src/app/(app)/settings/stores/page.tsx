@@ -23,6 +23,8 @@ export default function StoreSettingsPage() {
     const [newName, setNewName] = useState('');
     const [newAddress, setNewAddress] = useState('');
     const [nameError, setNameError] = useState('');
+    /** Inline error under one branch's own name field, keyed by branch id. */
+    const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
     const [creating, setCreating] = useState(false);
 
     // The API gate is `multiStore` on POST /stores; mirror it here so the button
@@ -40,15 +42,36 @@ export default function StoreSettingsPage() {
 
     const handleName = (id: string, name: string) => {
         setStores((rows) => rows.map((s) => (s.id === id ? { ...s, name } : s)));
+        setRowErrors((errors) => (errors[id] ? { ...errors, [id]: '' } : errors));
+    };
+
+    /**
+     * The name a branch may not take: blank, or one another branch already holds.
+     * The server enforces both; checking here too means the answer arrives as the
+     * user types rather than as a toast that does not say which row was wrong.
+     */
+    const nameProblem = (id: string, name: string) => {
+        if (!name) return copy.nameRequired;
+        const clash = stores.some((other) => (
+            other.id !== id && other.name.trim().toLowerCase() === name.toLowerCase()
+        ));
+        return clash ? copy.nameDuplicate : '';
     };
 
     const handleSave = async (store: StoreRow) => {
+        const name = store.name.trim();
+        const problem = nameProblem(store.id, name);
+        if (problem) {
+            setRowErrors((errors) => ({ ...errors, [store.id]: problem }));
+            return;
+        }
+
         setSavingId(store.id);
         try {
-            await api.updateStore(store.id, { name: store.name.trim() });
+            await api.updateStore(store.id, { name });
             toast.success(copy.saved);
-        } catch {
-            toast.error(copy.error);
+        } catch (err: any) {
+            toast.error(err?.message || copy.error);
         } finally {
             setSavingId(null);
         }
@@ -63,8 +86,10 @@ export default function StoreSettingsPage() {
 
     const handleCreate = async () => {
         const name = newName.trim();
-        if (!name) {
-            setNameError(copy.nameRequired);
+        // '' is not a branch id, so nothing in the list is excluded from the check.
+        const problem = nameProblem('', name);
+        if (problem) {
+            setNameError(problem);
             return;
         }
         setCreating(true);
@@ -109,7 +134,12 @@ export default function StoreSettingsPage() {
             <div className="mt-4 space-y-4">
                 {stores.map((store) => (
                     <div key={store.id} className="flex items-end gap-3">
-                        <Field label={copy.nameLabel} htmlFor={`store-${store.id}`} className="flex-1">
+                        <Field
+                            label={copy.nameLabel}
+                            htmlFor={`store-${store.id}`}
+                            className="flex-1"
+                            error={rowErrors[store.id] || undefined}
+                        >
                             <Input
                                 id={`store-${store.id}`}
                                 value={store.name}
@@ -118,7 +148,11 @@ export default function StoreSettingsPage() {
                         </Field>
                         <Button
                             onClick={() => handleSave(store)}
-                            disabled={savingId === store.id || !store.name.trim()}
+                            // Not disabled on a blank name: a button that does
+                            // nothing and says nothing leaves the user guessing.
+                            // Clicking it surfaces the inline message instead,
+                            // which is what the Add form already does.
+                            disabled={savingId === store.id}
                         >
                             {copy.save}
                         </Button>

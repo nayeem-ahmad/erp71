@@ -281,23 +281,57 @@ export class ProjectAccessService {
     }
 
     /**
-     * The member rows a private project needs to make sense of itself. Called
-     * when a project becomes private, so its manager and creator appear in the
-     * team list rather than having invisible access through the predicate.
+     * The member rows every project needs to make sense of itself: whoever runs
+     * it and whoever set it up.
+     *
+     * **This runs on every create, not only a private one.** It used to be
+     * private-only, where the roster doubles as the access list — but the roster
+     * is also the only thing the task Assignee picker offers, and `PUBLIC` is
+     * the schema default, so the ordinary project was one whose assignee list
+     * was empty for every single person on it. Nothing signalled that; the
+     * picker simply had no names in it. Seeding here means a task can be given
+     * to somebody from the moment the project exists.
+     *
+     * The manager is seeded `MANAGER` and the creator `MEMBER`, because on a
+     * public project they are routinely two different people and only one of
+     * them runs it. Where they are the same person the manager row wins — it is
+     * written first, and an existing row is never rewritten.
      *
      * Employees without a login are left alone — they cannot log in to be
-     * blocked in the first place.
+     * blocked in the first place, and no project field points at one.
      */
-    async seedPrivateMembers(tenantId: string, projectId: string, userIds: (string | null | undefined)[]) {
-        const unique = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
-        for (const userId of unique) {
-            await this.db.projectMember.upsert({
-                where: { project_id_user_id: { project_id: projectId, user_id: userId } } as never,
-                create: { tenant_id: tenantId, project_id: projectId, user_id: userId, role: 'MANAGER' as never },
-                // Never demotes or promotes an existing row: the point is that
-                // a row exists, not what it says.
-                update: {},
-            });
+    async seedCoreMembers(
+        tenantId: string,
+        projectId: string,
+        entries: { userId?: string | null; role?: 'MANAGER' | 'MEMBER' }[],
+    ) {
+        const seen = new Set<string>();
+        for (const entry of entries) {
+            const userId = entry.userId;
+            if (!userId || seen.has(userId)) continue;
+            seen.add(userId);
+            try {
+                await this.db.projectMember.upsert({
+                    where: { project_id_user_id: { project_id: projectId, user_id: userId } } as never,
+                    create: {
+                        tenant_id: tenantId,
+                        project_id: projectId,
+                        user_id: userId,
+                        role: (entry.role ?? 'MEMBER') as never,
+                    },
+                    // Never demotes or promotes an existing row: the point is
+                    // that a row exists, not what it says.
+                    update: {},
+                });
+            } catch (error: unknown) {
+                // A unique violation means the row is already there, which is
+                // the whole point of the upsert — swallowing it is not just
+                // tidiness. `ProjectsService.create` calls this inside a loop
+                // that retries on P2002 to resolve a project-code collision, so
+                // a P2002 escaping from here would make it create a *second*
+                // project.
+                if ((error as { code?: string })?.code !== 'P2002') throw error;
+            }
         }
     }
 }

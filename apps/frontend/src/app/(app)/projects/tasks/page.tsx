@@ -26,7 +26,7 @@ import TaskRowSelect, {
     assigneeOptions,
     statusOptions,
 } from '@/components/projects/TaskRowSelect';
-import { useProjectMeta } from '@/components/projects/use-project-meta';
+import { useProjectMeta, type ProjectMeta } from '@/components/projects/use-project-meta';
 import {
     assigneeColumns,
     assigneeKeyOf,
@@ -224,6 +224,24 @@ export default function TasksPage() {
     }, []);
 
     /**
+     * The roster is fetched when a project is **chosen**, not when the Assignee
+     * picker is focused.
+     *
+     * A native `<select>` paints its popup in the same gesture that used to
+     * start that fetch, and an already-open popup does not repaint when the
+     * options land — so the first open showed nobody and the second showed the
+     * team. Which of the two you got depended on your connection, which is what
+     * made this look like a per-user problem. `load` de-duplicates, so the
+     * `onFocus` below stays as a safety net for a project that never changed.
+     */
+    // `load` off the hook rather than the hook's object: the object is a fresh
+    // literal every render, so depending on it would refetch in a loop.
+    const { load: loadProjectMeta } = projectMeta;
+    useEffect(() => {
+        if (form.projectId) void loadProjectMeta(form.projectId);
+    }, [form.projectId, loadProjectMeta]);
+
+    /**
      * What the chosen assignee means for a member who reads only their own
      * records: nothing. The server already limits them to the rows they hold,
      * and the page's own `me` default would narrow that *further* — dropping the
@@ -234,6 +252,37 @@ export default function TasksPage() {
      * than once per correction.
      */
     const effectiveAssignee = ownRecordsOnly ? 'anyone' : assignee;
+
+    /**
+     * Why the Assignee list is short, when it is — the project has nobody on it,
+     * or the roster could not be read. Undefined while it is still loading and
+     * once there is somebody to pick, so the control is quiet in the normal
+     * case. The inline row picker is a bare `<select>` and takes the plain text;
+     * the modal's field can carry the link out to the team as well.
+     */
+    const assigneeNoteFor = (meta: ProjectMeta | undefined): string | undefined => {
+        if (!meta) return undefined;
+        if (meta.failed) return m.task.assigneeLoadFailed;
+        return meta.assignees.length === 0 ? m.task.assigneeNoTeam : undefined;
+    };
+
+    const assigneeHint = (() => {
+        const note = assigneeNoteFor(
+            form.projectId ? projectMeta.peek(form.projectId) : undefined,
+        );
+        if (note !== m.task.assigneeNoTeam) return note;
+        return (
+            <>
+                {note}{' '}
+                <Link
+                    href={routes.projects.detail(form.projectId)}
+                    className="font-medium text-blue-600 hover:underline"
+                >
+                    {m.task.assigneeAddTeam}
+                </Link>
+            </>
+        );
+    })();
 
     // Holding the fetch until the user id resolves keeps the default filter from
     // briefly showing everyone's tasks and then narrowing; holding it until the
@@ -506,6 +555,7 @@ export default function TasksPage() {
                             value={assigneeKeyOf(task)}
                             current={assigneeLabel(task)}
                             options={assigneeOptions(projectMeta.peek(project), m.task.unassigned)}
+                            note={assigneeNoteFor(projectMeta.peek(project))}
                             onOpen={() => void projectMeta.load(project)}
                             onChange={(key) => patchRow(task.id, assigneeColumns(key))}
                             disabled={busy}
@@ -839,7 +889,11 @@ export default function TasksPage() {
                                 thing always set next. It opens on the holder the
                                 task would get anyway rather than blank, so the
                                 default is visible instead of implied. */}
-                            <Field label={m.fields.assignee} htmlFor="new-task-assignee">
+                            <Field
+                                label={m.fields.assignee}
+                                htmlFor="new-task-assignee"
+                                hint={assigneeHint}
+                            >
                                 <Select
                                     id="new-task-assignee"
                                     value={form.assignee}

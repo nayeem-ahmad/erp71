@@ -13,6 +13,7 @@ import { useI18n } from '@/lib/i18n';
 type AiSettings = {
     api_key: string;
     default_model: string;
+    vision_model: string;
     web_search_enabled: string;
     web_search_engine: string;
     web_search_max_results: string;
@@ -22,6 +23,7 @@ type AiSettings = {
 const DEFAULTS: AiSettings = {
     api_key: '',
     default_model: 'anthropic/claude-haiku-4.5',
+    vision_model: '',
     web_search_enabled: 'false',
     web_search_engine: 'exa',
     web_search_max_results: '5',
@@ -44,6 +46,21 @@ const MODEL_OPTIONS = [
     { value: 'moonshotai/kimi-k3', label: 'Kimi K3 — long-context agentic, Sonnet-class pricing' },
     { value: 'qwen/qwen3.7-plus', label: 'Qwen3.7 Plus — very low cost, 1M context' },
     { value: 'openrouter/free', label: 'Free router — $0, but rate-limited and non-deterministic' },
+];
+
+/**
+ * Models offered for reading images — the business-card scanner. Deliberately
+ * its own list rather than MODEL_OPTIONS: image support is a separate axis from
+ * reasoning or price, several slugs good enough to be the default model cannot
+ * read a photo at all, and picking one of those does not degrade the scan, it
+ * fails it outright with a provider error.
+ */
+const VISION_MODEL_OPTIONS = [
+    { value: '', label: 'Same as default model' },
+    { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5 — fastest, lowest cost' },
+    { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6 — best on faint or crowded cards' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash — very low cost' },
+    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini — fast OpenAI model' },
 ];
 
 /** Sentinel for the "type a slug" branch — never a real OpenRouter model id. */
@@ -71,7 +88,9 @@ export default function PlatformAiSettingsPage() {
     // OpenRouter adds models faster than this list can be edited, so an admin can
     // always type a slug the dropdown has never heard of.
     const [customModel, setCustomModel] = useState(false);
+    const [customVisionModel, setCustomVisionModel] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
+    const [visionModelError, setVisionModelError] = useState<string | null>(null);
 
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
 
@@ -82,9 +101,14 @@ export default function PlatformAiSettingsPage() {
                 // must come back in the text field, not silently snap to Haiku.
                 const model = d.default_model ?? DEFAULTS.default_model;
                 setCustomModel(Boolean(model) && !MODEL_OPTIONS.some((o) => o.value === model));
+                // Blank is a real choice here ("same as default model"), so only a
+                // non-empty slug outside the list counts as a hand-typed one.
+                const vision = d.vision_model ?? DEFAULTS.vision_model;
+                setCustomVisionModel(Boolean(vision) && !VISION_MODEL_OPTIONS.some((o) => o.value === vision));
                 setSettings({
                     api_key: d.api_key === '••••••••' ? '' : (d.api_key ?? ''),
                     default_model: d.default_model ?? DEFAULTS.default_model,
+                    vision_model: vision,
                     web_search_enabled: d.web_search_enabled ?? DEFAULTS.web_search_enabled,
                     web_search_engine: d.web_search_engine ?? DEFAULTS.web_search_engine,
                     web_search_max_results: d.web_search_max_results ?? DEFAULTS.web_search_max_results,
@@ -105,10 +129,20 @@ export default function PlatformAiSettingsPage() {
         }
         setModelError(null);
 
+        // Blank is allowed — it means "same as default model" — but a slug that
+        // is present has to be well formed for the same reason.
+        const vision = settings.vision_model.trim();
+        if (vision && !MODEL_SLUG.test(vision)) {
+            setVisionModelError('Enter a model slug in the form provider/model, or choose “Same as default model”.');
+            return;
+        }
+        setVisionModelError(null);
+
         setSaving(true);
         try {
             const payload: Record<string, string | null> = {
                 default_model: model,
+                vision_model: vision,
                 web_search_enabled: settings.web_search_enabled,
                 web_search_engine: settings.web_search_engine,
                 web_search_max_results: settings.web_search_max_results,
@@ -234,8 +268,61 @@ export default function PlatformAiSettingsPage() {
                                 <p className="mt-1 text-xs text-gray-400">
                                     Copy the slug from <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">openrouter.ai/models</a>. The assistant
                                     needs a model that supports tool calling, or every question will come back
-                                    unanswered. Cost is read from each response, so an unlisted model still bills
-                                    accurately.
+                                    unanswered. If it cannot read images either, set the image model below. Cost is
+                                    read from each response, so an unlisted model still bills accurately.
+                                </p>
+                            ) : null}
+                        </Field>
+
+                        <Field
+                            label="Image model"
+                            hint="Used to read photographs — today the business card scanner. Most OpenRouter models cannot read images at all, so set this whenever the default model is a text-only one."
+                        >
+                            <select
+                                value={customVisionModel ? CUSTOM_MODEL : settings.vision_model}
+                                onChange={(e) => {
+                                    const next = e.target.value;
+                                    setVisionModelError(null);
+                                    if (next === CUSTOM_MODEL) {
+                                        setCustomVisionModel(true);
+                                        setSettings((s) => ({ ...s, vision_model: '' }));
+                                        return;
+                                    }
+                                    setCustomVisionModel(false);
+                                    setSettings((s) => ({ ...s, vision_model: next }));
+                                }}
+                                className={inputCls}
+                            >
+                                {VISION_MODEL_OPTIONS.map((o) => (
+                                    <option key={o.value || 'inherit'} value={o.value}>{o.label}</option>
+                                ))}
+                                <option value={CUSTOM_MODEL}>Other — enter a model slug…</option>
+                            </select>
+
+                            {customVisionModel ? (
+                                <input
+                                    type="text"
+                                    value={settings.vision_model}
+                                    onChange={(e) => {
+                                        setVisionModelError(null);
+                                        setSettings((s) => ({ ...s, vision_model: e.target.value }));
+                                    }}
+                                    placeholder="provider/model — e.g. google/gemini-2.5-flash"
+                                    spellCheck={false}
+                                    autoCapitalize="none"
+                                    aria-label="Custom image model slug"
+                                    aria-invalid={Boolean(visionModelError)}
+                                    className={`${inputCls} mt-2 font-mono`}
+                                />
+                            ) : null}
+
+                            {visionModelError ? <p className="mt-1 text-xs text-red-600">{visionModelError}</p> : null}
+
+                            {customVisionModel ? (
+                                <p className="mt-1 text-xs text-gray-400">
+                                    The model needs image input — check for an image icon beside it on{' '}
+                                    <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">openrouter.ai/models</a>.
+                                    A text-only model is refused for scans, which then fall back to Claude Haiku 4.5.
                                 </p>
                             ) : null}
                         </Field>

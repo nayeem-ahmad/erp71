@@ -6,6 +6,7 @@ import StockOnHandPage from './page';
 jest.mock('@/lib/api', () => ({
     api: {
         getStockOnHand: jest.fn(),
+        getStores: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getProductGroups: jest.fn(),
         getProductSubgroups: jest.fn(),
@@ -83,10 +84,14 @@ describe('StockOnHandPage', () => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
         api.getStockOnHand.mockResolvedValue(mockReport);
+        api.getStores.mockResolvedValue([
+            { id: 'store-1', name: 'Dhaka Branch' },
+            { id: 'store-2', name: 'Chattogram Branch' },
+        ]);
         api.getInventoryWarehouses.mockResolvedValue([
-            { id: 'wh-1', name: 'Dhaka Main', is_active: true },
-            { id: 'wh-2', name: 'Chattogram', is_active: true },
-            { id: 'wh-3', name: 'Closed Depot', is_active: false },
+            { id: 'wh-1', name: 'Dhaka Main', is_active: true, store_id: 'store-1' },
+            { id: 'wh-2', name: 'Chattogram', is_active: true, store_id: 'store-2' },
+            { id: 'wh-3', name: 'Closed Depot', is_active: false, store_id: 'store-2' },
         ]);
         api.getProductGroups.mockResolvedValue([{ id: 'g1', name: 'Grocery' }]);
         api.getProductSubgroups.mockResolvedValue([{ id: 's1', name: 'Rice', group_id: 'g1' }]);
@@ -180,6 +185,52 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
         await waitFor(() =>
             expect(screen.getByText(/weighted average purchase cost, net of purchase returns/i)).toBeInTheDocument(),
+        );
+    });
+
+    it('refetches scoped to the selected branch', async () => {
+        const { api } = require('@/lib/api');
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+
+        await waitFor(() =>
+            expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-2' })),
+        );
+    });
+
+    it('narrows the warehouse picker to the chosen branch', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByText('Dhaka Main')).toBeInTheDocument());
+
+        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+
+        // wh-1 belongs to store-1, so it leaves the picker; wh-2 is store-2's own.
+        await waitFor(() => expect(screen.queryByText('Dhaka Main')).not.toBeInTheDocument());
+        expect(screen.getByText('Chattogram')).toBeInTheDocument();
+    });
+
+    /**
+     * The two filters are AND-ed server-side, so a warehouse left selected from
+     * the previous branch would report nothing at all rather than that branch.
+     */
+    it('clears a warehouse from another branch when the branch changes', async () => {
+        const { api } = require('@/lib/api');
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText('All Warehouses'), { target: { value: 'wh-1' } });
+        await waitFor(() =>
+            expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ warehouseId: 'wh-1' })),
+        );
+
+        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+
+        await waitFor(() =>
+            expect(api.getStockOnHand).toHaveBeenLastCalledWith(
+                expect.objectContaining({ storeId: 'store-2', warehouseId: undefined }),
+            ),
         );
     });
 });

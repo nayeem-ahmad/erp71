@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import {
     BUSINESS_TYPE_VALUES,
     ENABLED_LOCALE_CODES,
@@ -99,6 +99,15 @@ export class LoginDto {
     @IsOptional()
     @IsIn(MOBILE_COUNTRY_CODES)
     mobile_country_code?: string;
+    /**
+     * The login form's "Remember me". Decides how long the session lasts — a
+     * month when set, a day when not. Absent means remembered: the flows that do
+     * not ask (signup, invitations, the demo) get the lifetime they always had.
+     */
+    @IsOptional()
+    @IsBoolean()
+    remember_me?: boolean;
+
 }
 
 /**
@@ -154,6 +163,15 @@ export class GoogleSignInDto {
     @IsOptional()
     @IsString()
     acceptedTermsVersion?: string;
+    /**
+     * The login form's "Remember me". Decides how long the session lasts — a
+     * month when set, a day when not. Absent means remembered: the flows that do
+     * not ask (signup, invitations, the demo) get the lifetime they always had.
+     */
+    @IsOptional()
+    @IsBoolean()
+    remember_me?: boolean;
+
 }
 
 /**
@@ -213,6 +231,15 @@ export class MobileSignInDto {
     @IsOptional()
     @IsString()
     acceptedTermsVersion?: string;
+    /**
+     * The login form's "Remember me". Decides how long the session lasts — a
+     * month when set, a day when not. Absent means remembered: the flows that do
+     * not ask (signup, invitations, the demo) get the lifetime they always had.
+     */
+    @IsOptional()
+    @IsBoolean()
+    remember_me?: boolean;
+
 }
 
 export class CreateStoreDto {

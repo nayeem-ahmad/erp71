@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ProductsService } from '../products/products.service';
@@ -28,6 +28,24 @@ const IMAGE_MIME_TYPES = [
     'image/heic',
     'image/heif',
 ];
+
+/**
+ * Where a vision call lands when the configured model turns out to have no
+ * image-capable endpoint. Has to stay a model OpenRouter serves with `image`
+ * among its input modalities — the entire point is that this one reads a photo
+ * when the configured one cannot.
+ */
+const VISION_FALLBACK_MODEL = DEFAULT_MODEL;
+
+/**
+ * OpenRouter's answer when the requested model has no endpoint that accepts an
+ * image part. Most of its catalogue is text-only, so this is what every
+ * business-card scan returns once `vision_model` (or the `default_model` it
+ * falls back to) is pointed at one of them. The rejection is a fixed property
+ * of the model rather than load, so it is matched and handled instead of
+ * retried.
+ */
+const NO_IMAGE_ENDPOINT_PATTERN = /no endpoints? found that support image input/i;
 
 /** Legacy Anthropic direct model IDs stored before OpenRouter migration */
 const MODEL_ALIASES: Record<string, string> = {
@@ -141,6 +159,8 @@ type ParsedVoiceSale = {
 
 @Injectable()
 export class AiService {
+    private readonly logger = new Logger(AiService.name);
+
     constructor(
         private readonly db: DatabaseService,
         private readonly platformSettings: PlatformSettingsService,
@@ -173,7 +193,10 @@ export class AiService {
      * knob because OCR-shaped extraction and the chatbot's tool routing have
      * nothing in common — a tenant may well want a cheap vision model here while
      * the assistant stays on something stronger. Blank falls back to the
-     * platform default, which must itself be vision-capable.
+     * platform default, which is where this gets dangerous: most of OpenRouter's
+     * catalogue cannot read images at all, so a default chosen on price alone
+     * silently breaks every scan. `postVisionChat` recovers from that rather
+     * than trusting whatever is configured here to be vision-capable.
      */
     async getVisionModel(): Promise<string> {
         const override = (await this.platformSettings.getRawValue('ai', 'vision_model'))?.trim();
@@ -454,8 +477,7 @@ Rules:
 - Strip labels ("Mob:", "E-mail:") and keep only the value.
 - If the image is not a business card, return {"raw_text": "<what you can read>"}.`;
 
-        const { message, usage } = await this.postChatWithRetry(await this.requireApiKey(), {
-            model,
+        const { message, usage, model: usedModel } = await this.postVisionChat(model, {
             max_tokens: 1024,
             messages: [
                 { role: 'system', content: systemPrompt },
@@ -469,10 +491,82 @@ Rules:
             ],
         });
 
-        await this.logUsage(tenantId, 'business_card_scan', model, usage);
+        // Bill the model that actually ran, not the one that was asked for — a
+        // scan recovered onto the fallback is priced at the fallback's rates.
+        await this.logUsage(tenantId, 'business_card_scan', usedModel, usage);
 
         const parsed = this.extractJson<Record<string, unknown>>(message.content ?? '');
         return this.normalizeBusinessCard(parsed);
+    }
+
+    /**
+     * A vision round-trip that survives a text-only model being configured.
+     *
+     * `vision_model`, and the `default_model` it falls back to, is a free-text
+     * OpenRouter slug an admin picks from a dropdown that says nothing about
+     * image support — and most of the catalogue has none. Choosing one of those
+     * turns every scan into OpenRouter's "No endpoints found that support image
+     * input", which tells a shopkeeper holding a phone at a card precisely
+     * nothing and looks like the scanner is broken.
+     *
+     * Encoding which slugs can see would go stale the week after it was written,
+     * so OpenRouter answers the question instead: on that one rejection the call
+     * is retried once against a model known to accept images, and the caller is
+     * told which model actually ran so it bills the right one. Only when the
+     * fallback itself is refused does this surface an error, and then as the
+     * configuration problem it is.
+     */
+    private async postVisionChat(
+        model: string,
+        payload: Record<string, unknown>,
+    ): Promise<{
+        message: { content: string | null; tool_calls?: ChatToolCall[] };
+        usage: OpenRouterUsage;
+        model: string;
+    }> {
+        const apiKey = await this.requireApiKey();
+
+        try {
+            const result = await this.postChatWithRetry(apiKey, { ...payload, model });
+            return { ...result, model };
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (!NO_IMAGE_ENDPOINT_PATTERN.test(message)) throw err;
+
+            if (model === VISION_FALLBACK_MODEL) {
+                // Nowhere left to fall back to: the one model this code is sure
+                // about was refused, so the account or the base URL is the
+                // problem, not the choice of model.
+                throw new InternalServerErrorException(
+                    `The AI service rejected the card image (model ${model}). Check the OpenRouter key and model settings under Admin → Platform Settings → AI.`,
+                );
+            }
+
+            this.logger.warn(
+                `Vision model "${model}" has no image-capable endpoint; retrying the scan on ${VISION_FALLBACK_MODEL}. Set a vision-capable model under Admin → Platform Settings → AI.`,
+            );
+
+            try {
+                const result = await this.postChatWithRetry(apiKey, {
+                    ...payload,
+                    model: VISION_FALLBACK_MODEL,
+                });
+                return { ...result, model: VISION_FALLBACK_MODEL };
+            } catch (fallbackErr: unknown) {
+                // The user-facing text names the configuration problem, which is
+                // the actionable half; the fallback's own reason only means
+                // something to whoever reads the server log, so it goes there
+                // rather than being dropped.
+                this.logger.error(
+                    `Vision fallback ${VISION_FALLBACK_MODEL} also failed: ${
+                        fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+                    }`,
+                );
+                throw new InternalServerErrorException(
+                    `The AI model configured for reading images (${model}) cannot read images, and the fallback was unavailable. Ask your administrator to set a vision-capable model under Admin → Platform Settings → AI.`,
+                );
+            }
+        }
     }
 
     /**
@@ -842,6 +936,10 @@ Rules:
                 return await this.requestToolCompletion(apiKey, payload);
             } catch (err: unknown) {
                 lastError = err instanceof Error ? err.message : String(err);
+                // A model without an image-capable endpoint will not grow one
+                // between attempts. Retrying only delays the error by the full
+                // backoff and bills two more rejected requests for it.
+                if (NO_IMAGE_ENDPOINT_PATTERN.test(lastError)) break;
                 if (attempt === CHAT_MAX_ATTEMPTS) break;
                 await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
             }

@@ -12,6 +12,17 @@ export type PaperSize = 'A4' | 'A5' | 'Letter' | 'Thermal80' | 'Thermal58';
 
 export const PAPER_SIZES: PaperSize[] = ['A4', 'A5', 'Letter', 'Thermal80', 'Thermal58'];
 
+/**
+ * Menu label for a paper size. The two thermal rolls are the only ones whose
+ * name does not say how wide they are, and picking the wrong roll is the one
+ * mistake that wastes a whole print.
+ */
+export function paperSizeLabel(size: PaperSize): string {
+    if (size === 'Thermal80') return '80mm Thermal';
+    if (size === 'Thermal58') return '58mm Thermal';
+    return size;
+}
+
 /** Document families a header template can be assigned to. */
 export type PrintDocType =
     | 'SALES_INVOICE'

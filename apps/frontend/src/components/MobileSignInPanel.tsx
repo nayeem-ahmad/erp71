@@ -55,6 +55,12 @@ export type MobileSignInPanelProps = {
     signUpFields?: () => MobileSignUpFields;
     /** Blocks the flow while another auth flow on the page is running. */
     disabled?: boolean;
+    /**
+     * The surrounding form's "Remember me". Sent with the app's own exchange so
+     * the session it mints lasts as long as the visitor asked for; a storefront
+     * passing its own `exchange` decides this for itself.
+     */
+    rememberMe?: boolean;
     /** 'signin' on the login page, 'signup' on the signup page. */
     intent?: 'signin' | 'signup';
     /**
@@ -86,6 +92,7 @@ export default function MobileSignInPanel({
     onError,
     signUpFields,
     disabled = false,
+    rememberMe = false,
     intent = 'signin',
     onAvailabilityChange,
 }: MobileSignInPanelProps) {
@@ -177,7 +184,7 @@ export default function MobileSignInPanel({
     const exchange = async (idToken: string, extra: MobileSignUpFields) => {
         const authRes = exchangeToken
             ? await exchangeToken({ idToken, ...extra })
-            : await api.mobileSignIn({ idToken, ...extra });
+            : await api.mobileSignIn({ idToken, ...extra, remember_me: rememberMe });
         if (authRes?.requires_signup) {
             // The number is verified but unknown here — collect an email and
             // send the same token back.

@@ -16,11 +16,12 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
-import { handleExpiredSession } from './session-expiry';
+import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
     getAccessToken,
     getRefreshToken,
     getWorkspaceItem,
+    hasStoredSession,
     isAccessTokenNearExpiry,
     updateCredentials,
 } from './session-store';
@@ -190,10 +191,54 @@ async function renewalBackoffFrom(response: Response): Promise<number> {
     return RENEWAL_BACKOFF_MS;
 }
 
+/**
+ * Name of the cross-tab lock every renewal queues behind.
+ *
+ * `renewalInFlight` only de-dupes within one tab. Every tab shares one refresh
+ * token and it is good for a single exchange, so two of them renewing at once is
+ * two uses of the same token — which is exactly what the backend's replay
+ * detection exists to catch, and it ends the session it fires on. The lock makes
+ * them take turns; the loser then finds the winner's token already in storage
+ * and skips its own exchange entirely.
+ */
+const RENEWAL_LOCK = 'erp71:session-renewal';
+
+/**
+ * Run `exchange` with the cross-tab renewal lock held.
+ *
+ * Falls back to running it directly where the Web Locks API is missing — Safari
+ * before 15.4, and any non-secure origin. That is what this did before the lock
+ * existed, so the fallback is no worse than the status quo and not worth
+ * refusing to renew over.
+ */
+async function withRenewalLock(exchange: () => Promise<RenewalOutcome>): Promise<RenewalOutcome> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (!locks?.request) return exchange();
+    return (await locks.request(RENEWAL_LOCK, exchange)) as RenewalOutcome;
+}
+
 async function performRenewal(): Promise<RenewalOutcome> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return 'rejected';
 
+    return withRenewalLock(async () => {
+        // Re-read inside the lock. Whoever held it before us may have renewed
+        // already, in which case the token we queued with is spent — presenting
+        // it is the replay — and theirs is in shared storage, which is what the
+        // caller's retry picks up.
+        const current = getRefreshToken();
+        if (!current) return 'rejected';
+        if (current !== refreshToken) return 'renewed';
+        // Likewise for a backoff the winner just started: the server refused
+        // *this* session moments ago, so asking again now learns nothing.
+        if (Date.now() < renewalBlockedUntil) return 'unavailable';
+
+        return exchangeRefreshToken(current);
+    });
+}
+
+/** The exchange itself. Only ever called with the renewal lock held. */
+async function exchangeRefreshToken(refreshToken: string): Promise<RenewalOutcome> {
     let response: Response;
     try {
         response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -348,12 +393,29 @@ async function renewIfNearExpiry(): Promise<void> {
     if (isAccessTokenNearExpiry()) await renewSession();
 }
 
+/**
+ * What an authenticated call does in a browser holding no session at all.
+ *
+ * Sending it anyway produces a 401, and every 401 out of these helpers is read
+ * as "your session ended" — which is how opening the app in a signed-out browser
+ * came to announce an expiry that never happened, and to run the teardown that
+ * goes with one over shared localStorage. Answering here keeps that story
+ * straight and saves the round trip.
+ */
+function signedOutError(): ApiError {
+    handleMissingSession();
+    return new ApiError('You are not signed in.', 401, 'NOT_AUTHENTICATED');
+}
+
 export async function fetchBlobWithAuth(
     endpoint: string,
     options: RequestInit = {},
     isRetry = false,
 ): Promise<{ blob: Blob; filename: string }> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -435,7 +497,10 @@ async function isInvalidTenant(response: Response): Promise<boolean> {
 }
 
 async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<any> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -1035,12 +1100,14 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; from?: string; to?: string }) => {
+    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.sourceWarehouseId) query.set('sourceWarehouseId', params.sourceWarehouseId);
         if (params?.destinationWarehouseId) query.set('destinationWarehouseId', params.destinationWarehouseId);
         if (params?.productId) query.set('productId', params.productId);
+        // Explicit undefined check: `false` is a real filter (intra-branch only).
+        if (params?.isCrossBranch !== undefined) query.set('isCrossBranch', String(params.isCrossBranch));
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
@@ -1053,6 +1120,14 @@ export const api = {
     }),
     sendWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/send`, {
         method: 'POST',
+    }),
+    approveWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/approve`, {
+        method: 'POST',
+    }),
+    rejectWarehouseTransfer: (id: string, data: { reason?: string }) => fetchWithAuth(`/warehouse-transfers/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
     }),
     receiveWarehouseTransfer: (id: string, data: any) => fetchWithAuth(`/warehouse-transfers/${id}/receive`, {
         method: 'POST',
@@ -1133,15 +1208,17 @@ export const api = {
     postStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}/post`, {
         method: 'POST',
     }),
-    getReorderSuggestions: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
+    getReorderSuggestions: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getStockOnHand: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
+    getStockOnHand: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
@@ -1149,8 +1226,9 @@ export const api = {
         if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
         return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getInventoryValuation: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
+    getInventoryValuation: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
@@ -1220,7 +1298,7 @@ export const api = {
         const query = buildReportQuery(params);
         return fetchWithAuth(`/sales-reports/customer-retention?${query}`);
     },
-    getStockAging: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; slowMovingAfterDays?: number }) => {
+    getStockAging: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; slowMovingAfterDays?: number }) => {
         const query = buildReportQuery(params ?? {});
         return fetchWithAuth(`/inventory-reports/stock-aging${query ? `?${query}` : ''}`);
     },
@@ -1240,8 +1318,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/consolidated${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getShrinkageSummary: (params?: { warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
+    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.reasonId) query.set('reasonId', params.reasonId);
         if (params?.productId) query.set('productId', params.productId);
@@ -2654,6 +2733,32 @@ export const api = {
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
+
+    // ── NBR Mushak 6.x ──────────────────────────────────────────────────
+    // Routes are named after the forms because that is how they are asked
+    // for: "print the 6.3", "pull the 6.2 for this month".
+    getMushakForms: () => fetchWithAuth('/mushak/forms'),
+    /** মূসক-৬.৩ · কর চালানপত্র — the tax invoice for one sale. */
+    getMushakTaxInvoice: (saleId: string) => fetchWithAuth(`/mushak/6.3/${saleId}`),
+    /** মূসক-৬.৭ · ক্রেডিট নোট — the credit note for one sales return. */
+    getMushakCreditNote: (returnId: string) => fetchWithAuth(`/mushak/6.7/${returnId}`),
+    /** মূসক-৬.২ · বিক্রয় হিসাব পুস্তক — the sales book for a tax period. */
+    getMushakSalesBook: (params: { from?: string; to?: string; storeId?: string; taxableOnly?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        if (params.taxableOnly) query.set('taxableOnly', 'true');
+        return fetchWithAuth(`/mushak/6.2?${query.toString()}`);
+    },
+    /** মূসক-৬.১০ · supplies over two lakh taka to unregistered buyers. */
+    getMushakLargeSupplyStatement: (params: { from?: string; to?: string; storeId?: string }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        return fetchWithAuth(`/mushak/6.10?${query.toString()}`);
+    },
     getDiscountCodes: () => fetchAllPages('/discount-codes'),
     createDiscountCode: (data: any) => fetchWithAuth('/discount-codes', {
         method: 'POST',
@@ -2746,9 +2851,9 @@ export const api = {
         }
         return body && 'data' in body ? body.data : body;
     }),
-    verify2FALogin: (userId: string, code: string) => fetch(`${API_BASE}/auth/2fa/verify`, {
+    verify2FALogin: (userId: string, code: string, rememberMe = false) => fetch(`${API_BASE}/auth/2fa/verify`, {
         method: 'POST',
-        body: JSON.stringify({ userId, code }),
+        body: JSON.stringify({ userId, code, remember_me: rememberMe }),
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
@@ -2769,7 +2874,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string }) =>
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/google`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -2790,7 +2895,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string }) =>
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/mobile`, {
             method: 'POST',
             body: JSON.stringify(data),

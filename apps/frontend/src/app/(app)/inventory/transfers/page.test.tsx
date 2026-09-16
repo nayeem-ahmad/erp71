@@ -35,6 +35,7 @@ jest.mock('@/lib/api', () => ({
         getWarehouseTransfers: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getProducts: jest.fn(),
+        getStores: jest.fn(),
         createWarehouseTransfer: jest.fn(),
     },
 }));
@@ -50,8 +51,11 @@ const sampleTransfers = [
         created_at: '2024-01-01T10:00:00Z',
         sent_at: '2024-01-01T11:00:00Z',
         received_at: null,
-        sourceWarehouse: { id: 'w1', name: 'Main Warehouse' },
-        destinationWarehouse: { id: 'w2', name: 'Branch Warehouse' },
+        is_cross_branch: true,
+        source_store_id: 's1',
+        destination_store_id: 's2',
+        sourceWarehouse: { id: 'w1', name: 'Main Warehouse', store_id: 's1' },
+        destinationWarehouse: { id: 'w2', name: 'Branch Warehouse', store_id: 's2' },
         items: [{ id: 'i1', product_id: 'p1', quantity_sent: 10, quantity_received: 0, product: { name: 'Widget A' } }],
         posting_status: 'POSTED',
         voucher_number: 'V-001',
@@ -72,9 +76,14 @@ const sampleTransfers = [
 ];
 
 const sampleWarehouses = [
-    { id: 'w1', name: 'Main Warehouse', is_active: true },
-    { id: 'w2', name: 'Branch Warehouse', is_active: true },
-    { id: 'w3', name: 'Inactive Warehouse', is_active: false },
+    { id: 'w1', name: 'Main Warehouse', is_active: true, store_id: 's1' },
+    { id: 'w2', name: 'Branch Warehouse', is_active: true, store_id: 's2' },
+    { id: 'w3', name: 'Inactive Warehouse', is_active: false, store_id: 's2' },
+];
+
+const sampleStores = [
+    { id: 's1', name: 'Dhaka Main' },
+    { id: 's2', name: 'Chattogram' },
 ];
 
 const sampleProducts = [
@@ -86,6 +95,7 @@ function setupDefaultMocks() {
     mockApi.getWarehouseTransfers.mockResolvedValue(sampleTransfers);
     mockApi.getInventoryWarehouses.mockResolvedValue(sampleWarehouses);
     mockApi.getProducts.mockResolvedValue(sampleProducts);
+    mockApi.getStores.mockResolvedValue(sampleStores);
 }
 
 beforeEach(() => {
@@ -376,5 +386,97 @@ describe('InventoryTransfersPage', () => {
         const notesInput = screen.getByPlaceholderText('Optional') as HTMLInputElement;
         fireEvent.change(notesInput, { target: { value: 'Test notes' } });
         expect(notesInput.value).toBe('Test notes');
+    });
+    describe('cross-branch transfers', () => {
+        it('groups the warehouse pickers by branch so a cross-branch pick is visible', async () => {
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            // One <optgroup> per branch, per picker (2 filters + 2 form fields).
+            expect(screen.getAllByRole('group', { name: 'Dhaka Main' }).length).toBe(4);
+            expect(screen.getAllByRole('group', { name: 'Chattogram' }).length).toBe(4);
+        });
+
+        it('offers a scope filter and asks the API for cross-branch transfers only', async () => {
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            const scope = screen.getByRole('option', { name: 'All Branches' }).closest('select')!;
+            await act(async () => {
+                fireEvent.change(scope, { target: { value: 'cross' } });
+            });
+
+            await waitFor(() => expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
+                expect.objectContaining({ isCrossBranch: true }),
+            ));
+        });
+
+        it('asks for intra-branch transfers with an explicit false, not an omitted filter', async () => {
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            const scope = screen.getByRole('option', { name: 'All Branches' }).closest('select')!;
+            await act(async () => {
+                fireEvent.change(scope, { target: { value: 'within' } });
+            });
+
+            await waitFor(() => expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
+                expect.objectContaining({ isCrossBranch: false }),
+            ));
+        });
+
+        it('warns that a cross-branch pick will wait for approval', async () => {
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
+
+            const source = screen.getByRole('option', { name: 'Select source' }).closest('select')!;
+            const destination = screen.getByRole('option', { name: 'Select destination' }).closest('select')!;
+            await act(async () => {
+                fireEvent.change(source, { target: { value: 'w1' } });
+                fireEvent.change(destination, { target: { value: 'w2' } });
+            });
+
+            expect(screen.getByText(/waits for approval/)).toBeInTheDocument();
+        });
+
+        it('shows no approval warning for two warehouses in the same branch', async () => {
+            mockApi.getInventoryWarehouses.mockResolvedValue([
+                { id: 'w1', name: 'Main Warehouse', is_active: true, store_id: 's1' },
+                { id: 'w4', name: 'Overflow Warehouse', is_active: true, store_id: 's1' },
+            ]);
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            const source = screen.getByRole('option', { name: 'Select source' }).closest('select')!;
+            const destination = screen.getByRole('option', { name: 'Select destination' }).closest('select')!;
+            await act(async () => {
+                fireEvent.change(source, { target: { value: 'w1' } });
+                fireEvent.change(destination, { target: { value: 'w4' } });
+            });
+
+            expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
+        });
+
+        it('leaves a single-branch shop ungrouped and without a scope filter', async () => {
+            mockApi.getInventoryWarehouses.mockResolvedValue([
+                { id: 'w1', name: 'Main Warehouse', is_active: true, store_id: 's1' },
+                { id: 'w4', name: 'Overflow Warehouse', is_active: true, store_id: 's1' },
+            ]);
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            expect(screen.queryAllByRole('group')).toHaveLength(0);
+            expect(screen.queryByRole('option', { name: 'All Branches' })).not.toBeInTheDocument();
+        });
+
+        it('offers the two approval statuses in the status filter', async () => {
+            render(<InventoryTransfersPage />);
+            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+
+            expect(screen.getByRole('option', { name: 'Pending Approval' })).toBeInTheDocument();
+            expect(screen.getByRole('option', { name: 'Rejected' })).toBeInTheDocument();
+        });
     });
 });

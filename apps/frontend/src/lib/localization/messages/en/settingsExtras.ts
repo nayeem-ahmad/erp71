@@ -220,6 +220,36 @@ export const settingsExtrasMessages = {
         },
         saveButton: 'Save Tax Settings',
         saving: 'Saving…',
+        mushak: {
+            title: "Mushak documents (NBR 6.x)",
+            body: "Turn this on if you are VAT-registered and issue Mushak 6.3 tax invoices. These details print in the issuer block of every 6.x document and are required by rule 40 of the VAT and SD Rules 2016.",
+            enable: {
+                label: "Issue Mushak documents",
+                hint: "Off means sales print a plain shop invoice instead of a tax invoice.",
+            },
+            issueAddress: {
+                label: "Address of issue",
+                placeholder: "Registered premises",
+                hint: "চালানপত্র ইস্যুর ঠিকানা — your registered address, which may differ from the branch that made the sale.",
+            },
+            officerName: {
+                label: "Authorised person",
+                placeholder: "Full name",
+                hint: "Whoever signs a tax invoice for the business.",
+            },
+            officerDesignation: {
+                label: "Designation",
+                placeholder: "e.g. Proprietor",
+                hint: "Printed beneath the signature.",
+            },
+            economicActivity: {
+                label: "Economic activity",
+                placeholder: "e.g. Retail trade",
+                hint: "As it appears on your VAT registration certificate.",
+            },
+            incomplete: "Still needed before a valid Mushak document can be issued:",
+            ready: "Mushak documents are ready to issue.",
+        },
         checklist: {
             title: 'NBR VAT Compliance Checklist',
             items: [

@@ -316,16 +316,15 @@ export class ProjectsService {
                 // rather than a permanently empty board.
                 await this.settings.seedProjectColumns(tenantId, project.id);
 
-                // A private project starts with its manager and its creator on
-                // the team, so the members panel is a truthful answer to "who
-                // can see this" from the first render rather than a blank list
-                // beside a project two people can already open.
-                if (project.visibility === 'PRIVATE') {
-                    await this.access.seedPrivateMembers(tenantId, project.id, [
-                        project.manager_id,
-                        userId,
-                    ]);
-                }
+                // Every project starts with its manager and its creator on the
+                // team — not only a private one, which is all this used to do.
+                // The roster is what the task Assignee picker offers, so a
+                // project seeded with nobody is a project whose tasks cannot be
+                // given to anybody, which is how it read in production.
+                await this.access.seedCoreMembers(tenantId, project.id, [
+                    { userId: project.manager_id, role: 'MANAGER' },
+                    { userId, role: 'MEMBER' },
+                ]);
                 return project;
             } catch (error: unknown) {
                 const code = (error as { code?: string })?.code;
@@ -371,10 +370,20 @@ export class ProjectsService {
         // the outgoing one, who may still be mid-handover, and the incoming one
         // if this same call reassigned it.
         if (updated.visibility === 'PRIVATE' && existing.visibility !== 'PRIVATE') {
-            await this.access.seedPrivateMembers(tenantId, id, [
-                updated.manager_id,
-                existing.manager_id,
-                viewer.userId,
+            await this.access.seedCoreMembers(tenantId, id, [
+                { userId: updated.manager_id, role: 'MANAGER' },
+                { userId: existing.manager_id, role: 'MANAGER' },
+                { userId: viewer.userId, role: 'MEMBER' },
+            ]);
+        }
+
+        // Handing the project to somebody puts them on its team, whatever its
+        // visibility. Without this, "change the manager" leaves a manager who
+        // cannot be given a task on their own project — the same empty-roster
+        // bug as create, reached by a different route.
+        if (dto.managerId !== undefined && updated.manager_id !== existing.manager_id) {
+            await this.access.seedCoreMembers(tenantId, id, [
+                { userId: updated.manager_id, role: 'MANAGER' },
             ]);
         }
         return updated;

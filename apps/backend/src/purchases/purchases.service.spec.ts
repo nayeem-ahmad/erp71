@@ -204,9 +204,11 @@ describe('PurchasesService', () => {
             items: [{ productId: 'prod-1', quantity: 1, unitCost: 5 }],
         });
 
-        expect(tx.supplier.create).toHaveBeenCalledWith({
-            data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Fresh Farms' }),
-        });
+        expect(tx.supplier.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Fresh Farms' }),
+            }),
+        );
         expect(tx.purchase.create).toHaveBeenCalledWith({
             data: expect.objectContaining({ supplier_id: 'sup-1' }),
         });
@@ -224,6 +226,34 @@ describe('PurchasesService', () => {
         expect(tx.supplier.update).toHaveBeenCalledWith({
             where: { id: 'sup-1' },
             data: { due_balance: 5 },
+        });
+    });
+
+    it('revives a soft-deleted supplier of that name instead of billing a tombstone', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+        // The name is still held by a supplier the shopkeeper deleted, so no
+        // new row can be inserted beside it and no list would show the bill's
+        // supplier if the purchase were simply pointed at it.
+        tx.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
+        tx.supplier.findFirst.mockResolvedValue({ due_balance: 0 });
+        tx.purchase.count.mockResolvedValue(2);
+        tx.purchase.create.mockResolvedValue({ id: 'purchase-2' });
+        tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-2', supplier_id: 'sup-deleted' });
+
+        await service.create('tenant-1', 'user-1', {
+            storeId: 'store-1',
+            newSupplier: { name: 'Fresh Farms', phone: '01700000000' },
+            items: [{ productId: 'prod-1', quantity: 1, unitCost: 5 }],
+        });
+
+        expect(tx.supplier.create).not.toHaveBeenCalled();
+        expect(tx.supplier.update).toHaveBeenCalledWith({
+            where: { id: 'sup-deleted' },
+            data: expect.objectContaining({ deleted_at: null, phone: '01700000000' }),
+        });
+        expect(tx.purchase.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({ supplier_id: 'sup-deleted' }),
         });
     });
 
