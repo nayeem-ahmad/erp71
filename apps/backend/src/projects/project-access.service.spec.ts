@@ -188,14 +188,14 @@ describe('ProjectAccessService', () => {
         });
     });
 
-    describe('seedPrivateMembers', () => {
+    describe('seedCoreMembers', () => {
         it('writes one row per distinct user and skips the blanks', async () => {
-            await service.seedPrivateMembers('tenant-1', 'project-1', [
-                'user-a',
-                'user-a',
-                null,
-                undefined,
-                'user-b',
+            await service.seedCoreMembers('tenant-1', 'project-1', [
+                { userId: 'user-a', role: 'MANAGER' },
+                { userId: 'user-a', role: 'MEMBER' },
+                { userId: null },
+                { userId: undefined },
+                { userId: 'user-b', role: 'MEMBER' },
             ]);
 
             expect(db.projectMember.upsert).toHaveBeenCalledTimes(2);
@@ -207,13 +207,65 @@ describe('ProjectAccessService', () => {
             );
         });
 
+        it('keeps the first role when the same person is listed twice', async () => {
+            // The manager who also created the project is listed under both
+            // roles; the manager entry is written first and must be the one
+            // that lands, rather than being overwritten by the MEMBER entry.
+            await service.seedCoreMembers('tenant-1', 'project-1', [
+                { userId: 'user-a', role: 'MANAGER' },
+                { userId: 'user-a', role: 'MEMBER' },
+            ]);
+
+            expect(db.projectMember.upsert).toHaveBeenCalledTimes(1);
+            const [call] = db.projectMember.upsert.mock.calls;
+            expect(call[0].create.role).toBe('MANAGER');
+        });
+
+        it('defaults an entry with no role to MEMBER', async () => {
+            await service.seedCoreMembers('tenant-1', 'project-1', [{ userId: 'user-a' }]);
+
+            const [call] = db.projectMember.upsert.mock.calls;
+            expect(call[0].create.role).toBe('MEMBER');
+        });
+
         it('never rewrites a row that already exists', async () => {
-            await service.seedPrivateMembers('tenant-1', 'project-1', ['user-a']);
+            await service.seedCoreMembers('tenant-1', 'project-1', [
+                { userId: 'user-a', role: 'MANAGER' },
+            ]);
 
             // The point is that a row exists, not what it says — someone
             // demoted to VIEWER must not be silently promoted back.
             const [call] = db.projectMember.upsert.mock.calls;
             expect(call[0].update).toEqual({});
+        });
+
+        /**
+         * `ProjectsService.create` calls this inside a loop that retries on
+         * P2002 to resolve a project-code collision. A unique violation from a
+         * member row escaping to that loop would make it create a **second
+         * project** — so it is swallowed here, where it means the row already
+         * exists, which is all the upsert was after.
+         */
+        it('treats a unique violation as the row already being there', async () => {
+            db.projectMember.upsert.mockRejectedValueOnce({ code: 'P2002' });
+
+            await expect(
+                service.seedCoreMembers('tenant-1', 'project-1', [
+                    { userId: 'user-a', role: 'MANAGER' },
+                    { userId: 'user-b', role: 'MEMBER' },
+                ]),
+            ).resolves.toBeUndefined();
+
+            // And the run carries on to the next person rather than stopping.
+            expect(db.projectMember.upsert).toHaveBeenCalledTimes(2);
+        });
+
+        it('still reports a failure that is not a unique violation', async () => {
+            db.projectMember.upsert.mockRejectedValueOnce({ code: 'P1001' });
+
+            await expect(
+                service.seedCoreMembers('tenant-1', 'project-1', [{ userId: 'user-a' }]),
+            ).rejects.toEqual({ code: 'P1001' });
         });
     });
     /**

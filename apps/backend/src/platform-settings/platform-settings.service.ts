@@ -50,6 +50,12 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // single-shot AI features; it can be pointed at a stronger model without
         // moving everything else. Blank falls back to `default_model`.
         chat_model: { isSecret: false },
+        // Model for image-reading calls — today the business-card scanner. Needed
+        // as its own key because most OpenRouter models cannot read images at
+        // all, so a `default_model` chosen on price alone breaks every scan.
+        // Blank falls back to `default_model`, and a scan that lands on a
+        // text-only model recovers onto a vision-capable one rather than failing.
+        vision_model: { isSecret: false },
         // Per-tenant per-day ceiling on chatbot model round-trips, independent of
         // the monthly credit allowance a single bad day could otherwise exhaust.
         chat_daily_turn_cap: { isSecret: false, default: '200' },

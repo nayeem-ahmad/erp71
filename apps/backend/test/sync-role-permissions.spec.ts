@@ -8,6 +8,7 @@ const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects
 const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
 const DEMAND_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'product-demands')!.permissions;
+const TRANSFER_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'goods-transfers')!.permissions;
 /** The subset of a group that MANAGER actually carries in the matrix. */
 const managerShare = (perms: StorePermission[]) =>
     perms.filter((perm) => ROLE_DEFAULT_PERMISSIONS[UserRole.MANAGER].includes(perm));
@@ -190,6 +191,24 @@ describe('syncRolePermissions', () => {
         expect(byRole(ROLE_IDS.manager)).toEqual([...DEMAND_PERMS].sort());
         expect(byRole(ROLE_IDS.cashier)).toEqual([StorePermission.CREATE_PRODUCT_DEMAND]);
         expect(byRole(ROLE_IDS.accountant)).toEqual([]);
+    });
+
+    it('carries goods transfers to the manager and the approve half to nobody coarse', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        const transfers = results.find((r) => r.key === 'goods-transfers')!;
+
+        // ROLE_DEFAULT_PERMISSIONS gives the coarse Manager the create half only —
+        // approving another branch's stock out is held by Owner (who bypasses the
+        // guard) and by the Inventory Manager template role, which this backfill
+        // deliberately does not touch.
+        expect(transfers.rolesTouched).toBe(1);
+        expect(
+            tables.tenantRolePermission
+                .filter((r) => (TRANSFER_PERMS as string[]).includes(r.permission))
+                .map((r) => r.permission),
+        ).toEqual([StorePermission.CREATE_GOODS_TRANSFER]);
     });
 
     it('writes nothing on a dry run but reports what it would do', async () => {

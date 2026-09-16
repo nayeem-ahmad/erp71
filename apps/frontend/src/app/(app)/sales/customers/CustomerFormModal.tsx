@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, UserCog, Cake } from 'lucide-react';
+import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, Receipt, UserCog, Cake } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -14,6 +14,8 @@ export interface CustomerFormValues {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    /** ক্রেতার বিআইএন — printed on a Mushak 6.3 and in the 6.2 sales book. */
+    bin?: string | null;
     profile_pic_url?: string | null;
     customer_type?: string | null;
     customer_group_id?: string | null;
@@ -33,7 +35,7 @@ interface CustomerFormModalProps {
 }
 
 const emptyForm = {
-    customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', profile_pic_url: '',
+    customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', bin: '', profile_pic_url: '',
     customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '',
     credit_limit: '', default_discount_pct: '', birthday: '',
 };
@@ -45,6 +47,7 @@ const toForm = (customer: CustomerFormValues): typeof emptyForm => ({
     phone: customer.phone ?? '',
     email: customer.email ?? '',
     address: customer.address ?? '',
+    bin: customer.bin ?? '',
     profile_pic_url: customer.profile_pic_url ?? '',
     customer_type: customer.customer_type ?? 'INDIVIDUAL',
     customer_group_id: customer.customer_group_id ?? '',
@@ -92,6 +95,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
         if (formData.phone.trim()) payload.phone = formData.phone.trim();
         if (formData.email) payload.email = formData.email;
         if (formData.address) payload.address = formData.address;
+        if (formData.bin.trim()) payload.bin = formData.bin.trim();
         if (formData.profile_pic_url) payload.profile_pic_url = formData.profile_pic_url;
         if (formData.customer_group_id) payload.customer_group_id = formData.customer_group_id;
         if (formData.territory_id) payload.territory_id = formData.territory_id;
@@ -111,6 +115,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
             phone: blankToNull(formData.phone),
             email: blankToNull(formData.email),
             address: blankToNull(formData.address),
+            bin: blankToNull(formData.bin),
             customer_group_id: formData.customer_group_id || null,
             territory_id: formData.territory_id || null,
             credit_limit: formData.credit_limit === '' ? null : parseFloat(formData.credit_limit),
@@ -240,6 +245,26 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
                                 <input type="date" value={formData.birthday} onChange={set('birthday')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                             <p className="text-xs text-gray-400">{t.customers.modal.birthdayHint}</p>
+                        </div>
+
+                        {/* A buyer's own registration number. Its absence is
+                            meaningful, not just missing: a supply over two lakh
+                            taka to a buyer with no BIN goes on the Mushak 6.10. */}
+                        <div className="col-span-2 space-y-2 md:col-span-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">
+                                {t.customers.modal.bin} <span className="text-gray-300">({t.common.optional})</span>
+                            </label>
+                            <div className="relative">
+                                <Receipt className="absolute start-3 top-3.5 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={formData.bin}
+                                    onChange={set('bin')}
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-mono font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                                    placeholder={t.customers.modal.placeholders.bin}
+                                />
+                            </div>
+                            <p className="text-xs text-gray-400">{t.customers.modal.binHint}</p>
                         </div>
 
                         <div className="col-span-2 space-y-2">

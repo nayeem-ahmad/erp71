@@ -275,4 +275,20 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsNumber()
     totalAmount?: number;
+
+    /**
+     * The two boxes a Mushak 6.3 needs that no other part of a sale records:
+     * সরবরাহের গন্তব্যস্থল (where the goods are going — not always the
+     * customer's billing address) and যানবাহনের প্রকৃতি ও নম্বর (how they
+     * travel). Captured on the tax-invoice screen rather than in the sales
+     * entry form, because a counter sale the customer carries out has neither.
+     * Send an empty string to clear one.
+     */
+    @IsOptional()
+    @IsString()
+    mushakDestination?: string;
+
+    @IsOptional()
+    @IsString()
+    mushakVehicleNo?: string;
 }

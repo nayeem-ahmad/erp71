@@ -20,6 +20,7 @@ export default function TaskRowSelect({
     label,
     current,
     options,
+    note,
     onOpen,
     onChange,
     disabled,
@@ -31,6 +32,13 @@ export default function TaskRowSelect({
     /** What to show before the options have loaded — the row's own value. */
     current: string;
     options: { value: string; label: string }[] | undefined;
+    /**
+     * An unpickable row explaining a list with nothing in it — a project with
+     * no team, or a roster that failed to read. Without it the two are
+     * indistinguishable from a picker that simply works. The caller decides
+     * when it applies, since only it knows which of its options are real.
+     */
+    note?: string;
     onOpen: () => void;
     onChange: (next: string) => Promise<void>;
     disabled?: boolean;
@@ -77,6 +85,12 @@ export default function TaskRowSelect({
                             {option.label}
                         </option>
                     ))}
+                    {/* Disabled, so it explains the list without joining it. */}
+                    {note && (
+                        <option value="__note__" disabled>
+                            {note}
+                        </option>
+                    )}
                 </>
             )}
         </Select>

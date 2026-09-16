@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "Die Umlagerung konnte nicht angelegt werden.",
         "emptyMessage": "Noch keine Lagerumlagerungen erfasst",
         "searchPlaceholder": "Umlagerungen durchsuchen...",
+        "unknownBranch": "Nicht zugeordnete Filiale",
+        "allScopes": "Alle Filialen",
+        "crossBranchOnly": "Zwischen Filialen",
+        "withinBranchOnly": "Innerhalb einer Filiale",
+        "withinBranch": "Gleiche Filiale",
+        "crossBranchNotice": "Diese Umlagerung geht über Filialgrenzen und wartet daher auf Genehmigung — bis zur Freigabe verlässt kein Bestand das Quelllager.",
         "columns": {
             "transferNumber": "Umlagerungsnr.",
             "source": "Quelle",
             "destination": "Ziel",
+            "branch": "Filiale",
             "outstanding": "Offen",
             "created": "Erstellt",
             "voucher": "Beleg"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Entwurf",
             "sent": "Gesendet",
             "partiallyReceived": "Teilweise erhalten",
-            "received": "Erhalten"
+            "received": "Erhalten",
+            "pendingApproval": "Genehmigung ausstehend",
+            "rejected": "Abgelehnt"
         }
     },
     "inventoryShrinkage": {
@@ -437,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Ware vereinnahmen",
         "transferSent": "Umlagerung an das Ziellager gesendet.",
         "sendFailed": "Die Umlagerung konnte nicht gesendet werden.",
+        "submitForApproval": "Zur Genehmigung einreichen",
+        "approveTransfer": "Genehmigen",
+        "rejectTransfer": "Ablehnen",
+        "transferApproved": "Umlagerung genehmigt — der Bestand hat das Quelllager verlassen.",
+        "approveFailed": "Die Umlagerung konnte nicht genehmigt werden.",
+        "transferRejected": "Umlagerung abgelehnt.",
+        "rejectFailed": "Die Umlagerung konnte nicht abgelehnt werden.",
+        "awaitingApprovalNotice": "Wartet auf Genehmigung. Der Bestand liegt weiterhin in der Quellfiliale und bewegt sich erst nach der Freigabe.",
+        "rejectedNotice": "Diese Umlagerung wurde abgelehnt, es wurde kein Bestand bewegt.",
+        "rejectionReasonLabel": "Grund der Ablehnung",
+        "rejectionReasonPlaceholder": "Nennen Sie dem Anforderer den Grund, damit er weiß, was zu ändern ist",
+        "confirmRejection": "Ablehnung bestätigen",
+        "scope": "Umfang",
+        "crossBranch": "Zwischen Filialen",
+        "withinBranch": "Innerhalb einer Filiale",
         "receiptRecorded": "Wareneingang zur Umlagerung erfasst.",
         "receiveFailed": "Die Umlagerung konnte nicht vereinnahmt werden.",
         "transferLines": "Umlagerungszeilen",
@@ -449,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Verlauf der Umlagerung",
         "timeline": {
             "created": "Erstellt",
+            "awaitingApproval": "Wartet auf Genehmigung",
+            "approved": "Genehmigt",
+            "rejected": "Abgelehnt",
             "sent": "Gesendet",
             "partiallyReceived": "Teilweise erhalten",
             "completed": "Abgeschlossen"
@@ -500,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Meldebestand",
         "safetyStock": "Sicherheitsbestand",
         "leadTimeDays": "Wiederbeschaffungszeit (Tage)",
+        "vatRate": "USt-Satz (%)",
+        "vatRateHint": "Leer übernimmt den Arbeitsbereichs-Standard. 0 bedeutet nullbesteuert oder befreit.",
+        "sdRate": "Zusatzabgabe (%)",
+        "sdRateHint": "Nur Waren des Third Schedule. Leer bedeutet keine.",
         "quantityUnit": "Mengeneinheit",
         "brand": "Marke",
         "noBrand": "Keine Marke",
@@ -516,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "z. B. 365"
+            "warrantyDays": "z. B. 365",
+            "vatRate": "z. B. 15",
+            "sdRate": "z. B. 25"
         }
     }
 } as const;

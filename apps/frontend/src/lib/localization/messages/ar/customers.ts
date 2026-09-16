@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "نسبة الخصم %",
             "birthday": "تاريخ الميلاد",
             "birthdayHint": "يُشغّل متابعة تلقائية بمناسبة عيد الميلاد في اليوم نفسه.",
+            "bin": "BIN (تسجيل المشتري الضريبي)",
+            "binHint": "رقم BIN المكوّن من 13 خانة للمشتري، إن كان مسجلًا ضريبيًا. يُطبع في مشك 6.3 وفي دفتر المبيعات 6.2.",
             "individual": "فرد",
             "organization": "مؤسسة",
             "adding": "جارٍ الإضافة...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "اسم المالك",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "123 الشارع الرئيسي..."
+                "address": "123 الشارع الرئيسي...",
+                "bin": "مثال: 000000000-0101"
             },
             editTitle: "تعديل الزبون",
             editSubtitle: "تحديث بيانات الزبون",
