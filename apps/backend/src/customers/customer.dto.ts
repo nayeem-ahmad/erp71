@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches } from 'class-validator';
 import { PaginationDto } from '../common/pagination.dto';
 
 export enum CustomerPaymentDirectionDto {
@@ -67,6 +67,16 @@ export class CreateCustomerDto {
     @IsOptional()
     @IsString()
     nid?: string;
+
+    /**
+     * ক্রেতার বিআইএন — the buyer's own VAT registration number. Printed in the
+     * buyer block of a Mushak 6.3 and in column 5 of the 6.2 sales book; its
+     * absence is what puts a supply over two lakh taka on the 6.10 statement.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    bin?: string;
 
     @IsOptional()
     @IsBoolean()
@@ -164,6 +174,16 @@ export class UpdateCustomerDto {
     @IsOptional()
     @IsString()
     nid?: string;
+
+    /**
+     * ক্রেতার বিআইএন — the buyer's own VAT registration number. Printed in the
+     * buyer block of a Mushak 6.3 and in column 5 of the 6.2 sales book; its
+     * absence is what puts a supply over two lakh taka on the 6.10 statement.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    bin?: string;
 
     @IsOptional()
     @IsBoolean()

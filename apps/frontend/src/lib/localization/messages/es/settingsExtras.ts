@@ -220,6 +220,36 @@ export const settingsExtrasMessages = {
         },
         saveButton: "Guardar ajustes de impuestos",
         saving: "Guardando…",
+        mushak: {
+            title: "Documentos Mushak (NBR 6.x)",
+            body: "Actívelo si está registrado a efectos de IVA y emite facturas fiscales Mushak 6.3. Estos datos se imprimen en el bloque del emisor de cada documento 6.x y los exige la regla 40 de las VAT & SD Rules 2016.",
+            enable: {
+                label: "Emitir documentos Mushak",
+                hint: "Desactivado, las ventas imprimen una factura de tienda normal en lugar de una factura fiscal.",
+            },
+            issueAddress: {
+                label: "Dirección de emisión",
+                placeholder: "Local registrado",
+                hint: "Su dirección registrada, que puede diferir de la sucursal que hizo la venta.",
+            },
+            officerName: {
+                label: "Persona autorizada",
+                placeholder: "Nombre completo",
+                hint: "Quien firma una factura fiscal en nombre del negocio.",
+            },
+            officerDesignation: {
+                label: "Cargo",
+                placeholder: "p. ej. Propietario",
+                hint: "Se imprime bajo la firma.",
+            },
+            economicActivity: {
+                label: "Actividad económica",
+                placeholder: "p. ej. Comercio minorista",
+                hint: "Tal como figura en su certificado de registro de IVA.",
+            },
+            incomplete: "Aún falta para poder emitir un documento Mushak válido:",
+            ready: "Los documentos Mushak están listos para emitirse.",
+        },
         checklist: {
             title: "Lista de comprobación de cumplimiento de IVA del NBR",
             items: [

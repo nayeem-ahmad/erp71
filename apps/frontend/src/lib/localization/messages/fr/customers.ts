@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "Remise %",
             "birthday": "Date d'anniversaire",
             "birthdayHint": "Déclenche automatiquement une relance d'anniversaire le jour même.",
+            "bin": "BIN (n° TVA de l’acheteur)",
+            "binHint": "Le BIN à 13 chiffres de l’acheteur, s’il est assujetti. Imprimé sur le Mushak 6.3 et dans le livre des ventes 6.2.",
             "individual": "Particulier",
             "organization": "Organisation",
             "adding": "Ajout en cours...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "Nom du propriétaire",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "123 rue Principale..."
+                "address": "123 rue Principale...",
+                "bin": "ex. 000000000-0101"
             },
             editTitle: "Modifier le client",
             editSubtitle: "Mettre à jour les informations du client",

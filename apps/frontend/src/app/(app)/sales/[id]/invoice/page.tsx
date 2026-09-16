@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Download, Printer } from 'lucide-react';
+import Link from 'next/link';
+import { Download, FileCheck, Printer } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -30,6 +31,11 @@ interface InvoiceData {
             id: string;
             quantity: number;
             price_at_sale: string;
+            /**
+             * The rate this line was posted at, snapshotted at the time; null
+             * on a row written before that column existed.
+             */
+            vat_rate: string | null;
             product: {
                 name: string;
                 sku: string | null;
@@ -92,15 +98,28 @@ export default function InvoicePage() {
     const businessName = tenant?.brand_business_name || tenant?.name || t.shared.business;
     const primaryColor = tenant?.brand_primary_color || '#1d4ed8';
 
-    // Calculate line totals and VAT
+    // The RATE comes from the snapshot taken when the sale was posted, so
+    // editing a product's VAT later cannot restate an invoice the customer
+    // already holds. The amounts are still derived from the line totals shown
+    // here rather than read off the stored columns, because those account for
+    // an invoice-level discount that this page has no row for — see the
+    // adjustment-breakdown item in TODO.md. For an undiscounted sale, which is
+    // almost all of them, the two are the same figure.
+    //
+    // The document that must foot exactly is the Mushak 6.3, and it does: it
+    // spreads the reduction over its lines before taxing them.
     const defaultVatRate = tenant?.default_vat_rate ?? 0;
     const lineItems = sale.items.map(item => {
         const unitPrice = parseFloat(item.price_at_sale);
         const qty = item.quantity;
-        const vatRate = item.product?.vat_rate ?? defaultVatRate;
         const lineTotal = unitPrice * qty;
+
+        const vatRate = item.vat_rate != null
+            ? parseFloat(item.vat_rate)
+            : (item.product?.vat_rate ?? defaultVatRate);
         const vatAmount = vatRate > 0 ? lineTotal * (vatRate / (100 + vatRate)) : 0;
         const baseAmount = lineTotal - vatAmount;
+
         return {
             ...item,
             unitPrice,
@@ -149,6 +168,18 @@ export default function InvoicePage() {
                         )}
                         actions={
                             <>
+                                {/* The statutory form, beside the shop's own
+                                    invoice. This page is the commercial
+                                    document and may look however the shop
+                                    likes; the 6.3 has a layout NBR prescribes,
+                                    which is why it is a separate screen. */}
+                                <Link
+                                    href={routes.sales.mushak(sale.id)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+                                >
+                                    <FileCheck className="h-4 w-4" />
+                                    {t.sales.mushak.viewMushakInvoice}
+                                </Link>
                                 <button
                                     onClick={handlePrint}
                                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"

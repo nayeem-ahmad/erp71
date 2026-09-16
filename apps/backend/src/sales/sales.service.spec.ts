@@ -194,6 +194,63 @@ describe('SalesService', () => {
   });
 
   describe('create() — Story 10.3: Atomic Sale Transaction', () => {
+    it('snapshots the VAT the invoice carried onto the sale and its lines', async () => {
+      // The Mushak 6.3 has to reprint identically years later, so what a line
+      // was taxed at is stored with it rather than re-read from the catalogue.
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1150 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1150,
+        amountPaid: 1150,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+      });
+
+      // Prices are tax-inclusive, so the 150 sits *inside* the 1150 and no
+      // total moves — which is why this needed no accounting change.
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 1150, vat_amount: 150, sd_amount: 0 }),
+        }),
+      );
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ vat_rate: 15, vat_amount: 150, sd_rate: 0, sd_amount: 0 }),
+      });
+    });
+
+    it('declares VAT on what was billed, not on the undiscounted lines', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1000,
+        amountPaid: 1000,
+        discountAmount: 150,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+      });
+
+      // 1000 billed at 15% inclusive is 130.43 of output VAT, not the 150 the
+      // list price would have carried. Declaring the larger figure would hand
+      // NBR tax the business never collected.
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 1000, vat_amount: 130.43 }),
+        }),
+      );
+    });
+
     it('should create a sale and atomically decrement stock', async () => {
       const sale = { id: 'sale-1', total_amount: 30 };
       tx.sale.create.mockResolvedValue(sale);
@@ -214,6 +271,13 @@ describe('SalesService', () => {
           quantity: 2,
           price_at_sale: 15,
           unit_cost_at_sale: null,
+          // Zero because this workspace configures no VAT rate. The line still
+          // carries the snapshot columns, which is what lets a Mushak 6.3
+          // reprint from what was stored instead of from today's catalogue.
+          vat_rate: 0,
+          sd_rate: 0,
+          vat_amount: 0,
+          sd_amount: 0,
           // Null, not 'wh-1': only a line that overrode the sale stores one.
           warehouse_id: null,
         },
@@ -391,7 +455,17 @@ describe('SalesService', () => {
         }),
       );
       expect(tx.saleItem.create).toHaveBeenCalledWith({
-        data: { sale_id: 'draft-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15, warehouse_id: null },
+        data: {
+          sale_id: 'draft-1',
+          product_id: 'prod-1',
+          quantity: 2,
+          price_at_sale: 15,
+          vat_rate: 0,
+          sd_rate: 0,
+          vat_amount: 0,
+          sd_amount: 0,
+          warehouse_id: null,
+        },
       });
       expect(applyInventoryMovement).not.toHaveBeenCalled();
       expect(autoPostFromRules).not.toHaveBeenCalled();

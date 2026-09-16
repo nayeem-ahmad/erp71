@@ -220,6 +220,36 @@ export const settingsExtrasMessages = {
             },
             saveButton: "Simpan Tetapan Cukai",
             saving: "Menyimpan…",
+            mushak: {
+                title: "Dokumen Mushak (NBR 6.x)",
+                body: "Hidupkan jika anda berdaftar VAT dan mengeluarkan invois cukai Mushak 6.3. Butiran ini dicetak pada blok pengeluar setiap dokumen 6.x dan diwajibkan oleh kaedah 40 Peraturan VAT & SD 2016.",
+                enable: {
+                    label: "Keluarkan dokumen Mushak",
+                    hint: "Jika dimatikan, jualan mencetak invois kedai biasa, bukan invois cukai.",
+                },
+                issueAddress: {
+                    label: "Alamat pengeluaran",
+                    placeholder: "Premis berdaftar",
+                    hint: "Alamat berdaftar anda, yang mungkin berbeza daripada cawangan yang membuat jualan.",
+                },
+                officerName: {
+                    label: "Orang yang diberi kuasa",
+                    placeholder: "Nama penuh",
+                    hint: "Sesiapa yang menandatangani invois cukai bagi pihak perniagaan.",
+                },
+                officerDesignation: {
+                    label: "Jawatan",
+                    placeholder: "cth. Pemilik",
+                    hint: "Dicetak di bawah tandatangan.",
+                },
+                economicActivity: {
+                    label: "Aktiviti ekonomi",
+                    placeholder: "cth. Perdagangan runcit",
+                    hint: "Seperti yang tertera pada sijil pendaftaran VAT anda.",
+                },
+                incomplete: "Masih diperlukan sebelum dokumen Mushak yang sah boleh dikeluarkan:",
+                ready: "Dokumen Mushak sedia untuk dikeluarkan.",
+            },
             checklist: {
                 title: "Senarai Semak Pematuhan NBR VAT",
                 items: [
