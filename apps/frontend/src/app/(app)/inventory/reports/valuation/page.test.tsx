@@ -6,6 +6,7 @@ import InventoryValuationPage from './page';
 jest.mock('@/lib/api', () => ({
     api: {
         getInventoryValuation: jest.fn(),
+        getStores: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getProductGroups: jest.fn(),
         getProductSubgroups: jest.fn(),
@@ -77,8 +78,12 @@ describe('InventoryValuationPage', () => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
         api.getInventoryValuation.mockResolvedValue(mockValuationData);
+        api.getStores.mockResolvedValue([
+            { id: 'store-1', name: 'Dhaka Branch' },
+            { id: 'store-2', name: 'Chattogram Branch' },
+        ]);
         api.getInventoryWarehouses.mockResolvedValue([
-            { id: 'wh-1', name: 'Main Warehouse', is_active: true },
+            { id: 'wh-1', name: 'Main Warehouse', is_active: true, store_id: 'store-1' },
         ]);
         api.getProductGroups.mockResolvedValue([
             { id: 'grp-1', name: 'Electronics' },
