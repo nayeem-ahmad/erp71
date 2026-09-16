@@ -346,6 +346,7 @@ export const coreMessages = {
             salesQuotations: "बिक्री कोटेशन",
             warrantyClaims: "वारंटी दावे",
             cashierSessions: "कैशियर सत्र",
+            mushakBooks: "एनबीआर वैट पुस्तकें (मूसक)",
             loyaltyPoints: "लॉयल्टी पॉइंट",
             jobsBom: "कार्य और BOM",
             purchases: "खरीद",

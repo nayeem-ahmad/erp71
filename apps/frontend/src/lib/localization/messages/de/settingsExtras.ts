@@ -220,6 +220,36 @@ export const settingsExtrasMessages = {
         },
         saveButton: "Steuereinstellungen speichern",
         saving: "Wird gespeichert…",
+        mushak: {
+            title: "Mushak-Dokumente (NBR 6.x)",
+            body: "Aktivieren Sie dies, wenn Sie USt-registriert sind und Mushak-6.3-Steuerrechnungen ausstellen. Diese Angaben erscheinen im Ausstellerblock jedes 6.x-Dokuments und sind nach Regel 40 der VAT- und SD-Rules 2016 vorgeschrieben.",
+            enable: {
+                label: "Mushak-Dokumente ausstellen",
+                hint: "Aus bedeutet, dass Verkäufe eine einfache Ladenrechnung statt einer Steuerrechnung drucken.",
+            },
+            issueAddress: {
+                label: "Ausstellungsadresse",
+                placeholder: "Registrierte Betriebsstätte",
+                hint: "Ihre registrierte Adresse, die von der verkaufenden Filiale abweichen kann.",
+            },
+            officerName: {
+                label: "Verantwortliche Person",
+                placeholder: "Vollständiger Name",
+                hint: "Wer eine Steuerrechnung für das Unternehmen unterzeichnet.",
+            },
+            officerDesignation: {
+                label: "Funktion",
+                placeholder: "z. B. Inhaber",
+                hint: "Wird unter der Unterschrift gedruckt.",
+            },
+            economicActivity: {
+                label: "Wirtschaftliche Tätigkeit",
+                placeholder: "z. B. Einzelhandel",
+                hint: "Wie auf Ihrer USt-Registrierungsbescheinigung angegeben.",
+            },
+            incomplete: "Noch erforderlich, bevor ein gültiges Mushak-Dokument ausgestellt werden kann:",
+            ready: "Mushak-Dokumente können ausgestellt werden.",
+        },
         checklist: {
             title: "Checkliste zur NBR-MwSt.-Konformität",
             items: [

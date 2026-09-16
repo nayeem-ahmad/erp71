@@ -346,6 +346,7 @@ export const coreMessages = {
             salesQuotations: 'عروض الأسعار',
             warrantyClaims: 'مطالبات الضمان',
             cashierSessions: 'جلسات الصندوق',
+            mushakBooks: 'دفاتر ضريبة القيمة المضافة (مشك)',
             loyaltyPoints: 'نقاط الولاء',
             jobsBom: 'الأوامر وقوائم المواد',
             purchases: 'المشتريات',

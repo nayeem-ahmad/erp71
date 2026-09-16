@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "Discount %",
             "birthday": "Birthday",
             "birthdayHint": "Powers an automatic birthday follow-up on the day.",
+            "bin": "BIN (buyer VAT reg.)",
+            "binHint": "The buyer's own 13-digit BIN, if they are VAT-registered. Printed on the Mushak 6.3 and in the 6.2 sales book.",
             "individual": "Individual",
             "organization": "Organization",
             "adding": "Adding...",
@@ -61,7 +63,8 @@ export const customersMessages = {
                 "ownerName": "Proprietor's name",
                 "phone": "+8801234567890",
                 "email": "john@example.com",
-                "address": "123 Main St..."
+                "address": "123 Main St...",
+                "bin": "e.g. 000000000-0101"
             }
         },
         "profile": {

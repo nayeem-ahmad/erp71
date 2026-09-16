@@ -346,6 +346,7 @@ export const coreMessages = {
             salesQuotations: "Devis de vente",
             warrantyClaims: "Demandes de garantie",
             cashierSessions: "Sessions de caisse",
+            mushakBooks: "Registres TVA NBR (Mushak)",
             loyaltyPoints: "Points de fidélité",
             jobsBom: "Ordres et nomenclatures",
             purchases: "Achats",
