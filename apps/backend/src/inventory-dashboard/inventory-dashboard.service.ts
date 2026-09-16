@@ -167,10 +167,16 @@ export class InventoryDashboardService {
         };
     }
 
+    /**
+     * Write-offs only. InventoryShrinkage also holds surpluses found over the
+     * book (`direction = FOUND`), and counting those here would let a warehouse
+     * that found ten cartons report ten cartons of shrinkage.
+     */
     private async getShrinkage(tenantId: string, window: DateWindow) {
         const rows = await this.db.inventoryShrinkage.findMany({
             where: {
                 tenant_id: tenantId,
+                direction: 'LOSS',
                 created_at: { gte: window.fromDate, lte: window.toDate },
             },
             select: { items: { select: { quantity: true, unit_cost: true } } },
