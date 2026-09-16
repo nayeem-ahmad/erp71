@@ -20,6 +20,7 @@ import SaleEntryLayout, {
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { toast } from '@/lib/toast';
+import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
@@ -134,6 +135,13 @@ function SaleDetailPageContent() {
             payments: (sale.payments || []).map((p: any) => ({
                 method: p.payment_method,
                 amount: parseFloat(p.amount),
+                bankName: p.bank_name ?? undefined,
+                bankBranch: p.bank_branch ?? undefined,
+                bankAccountNumber: p.bank_account_number ?? undefined,
+                referenceNo: p.reference_no ?? undefined,
+                // Date-only for the form's date box; the column is a DATE, so
+                // the first ten characters are the whole of it.
+                instrumentDate: p.instrument_date ? String(p.instrument_date).slice(0, 10) : undefined,
             })),
         });
 
@@ -191,6 +199,12 @@ function SaleDetailPageContent() {
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
                     amount: p.amount,
+                    accountId: p.accountId,
+                    bankName: p.bankName,
+                    bankBranch: p.bankBranch,
+                    bankAccountNumber: p.bankAccountNumber,
+                    referenceNo: p.referenceNo,
+                    instrumentDate: p.instrumentDate,
                 })),
             });
             await loadSale(sale.id);
@@ -262,7 +276,7 @@ function SaleDetailPageContent() {
                 quantity: i.quantity,
                 unitPrice: i.price,
             })),
-            payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+            payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
             subtotal: totals.subtotal,
             tax: 0,
             total: totals.total,
@@ -289,7 +303,7 @@ function SaleDetailPageContent() {
                     unitPrice: i.price,
                     discount: i.discount || 0,
                 })),
-                payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+                payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
                 subtotal: totals.subtotal,
                 rounding: totals.rounding || undefined,
                 total: totals.total,
