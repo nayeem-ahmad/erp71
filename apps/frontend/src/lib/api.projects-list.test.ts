@@ -23,7 +23,9 @@ describe('projects list api shape', () => {
             json: async () => TRANSFORMED,
             text: async () => JSON.stringify(TRANSFORMED),
         });
-        localStorage.setItem('token', 'diag-token');
+        // `access_token` is the key the api client actually reads; without a
+        // session it now answers 401 rather than calling an authenticated route.
+        localStorage.setItem('access_token', 'diag-token');
     });
 
     it.each([
