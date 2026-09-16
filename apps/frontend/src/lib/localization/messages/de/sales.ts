@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: "Nach Belegnr., Kunde, Status suchen...",
             allStatuses: "Alle Status",
         },
+        printPrompt: {
+            title: "Verkauf gespeichert",
+            saved: "Verkauf {number} wurde über {amount} gespeichert.",
+            question: "Rechnung jetzt drucken?",
+            hint: "Sie können sie auch später über den Verkaufsdatensatz drucken.",
+            paperSize: "Papierformat",
+            print: "Rechnung drucken",
+            skip: "Nein, danke",
+        },
         detail: {
             edit: "Bearbeiten",
             posReceipt: "POS-Beleg",

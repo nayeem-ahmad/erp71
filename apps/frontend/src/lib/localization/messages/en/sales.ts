@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: 'Search by serial, customer, status...',
             allStatuses: 'All statuses',
         },
+        printPrompt: {
+            title: 'Sale saved',
+            saved: 'Sale {number} was saved for {amount}.',
+            question: 'Print the invoice now?',
+            hint: 'You can also print it later from the sale record.',
+            paperSize: 'Paper size',
+            print: 'Print invoice',
+            skip: 'No, thanks',
+        },
         detail: {
             edit: 'Edit',
             posReceipt: 'POS Receipt',

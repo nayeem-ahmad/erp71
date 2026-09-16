@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: 'ابحث بالرقم التسلسلي أو الزبون أو الحالة...',
             allStatuses: 'كل الحالات',
         },
+        printPrompt: {
+            title: 'تم حفظ عملية البيع',
+            saved: 'تم حفظ عملية البيع {number} بمبلغ {amount}.',
+            question: 'هل تريد طباعة الفاتورة الآن؟',
+            hint: 'يمكنك طباعتها لاحقًا من سجل البيع.',
+            paperSize: 'حجم الورق',
+            print: 'طباعة الفاتورة',
+            skip: 'لا، شكرًا',
+        },
         detail: {
             edit: 'تحرير',
             posReceipt: 'إيصال نقطة البيع',
