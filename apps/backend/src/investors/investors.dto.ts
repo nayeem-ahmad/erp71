@@ -11,6 +11,7 @@ import {
     MaxLength,
     Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
 
 export const INVESTOR_STATUSES = ['ACTIVE', 'EXITED'] as const;
@@ -168,7 +169,10 @@ export class ProfitRunDto {
 }
 
 export class ListProfitRunsQueryDto extends PaginationDto {
+    // Same reason as `page`/`limit` on PaginationDto: a query string hands this over
+    // as text, so without the conversion `year=2026` fails @IsInt and 400s the list.
     @IsOptional()
+    @Type(() => Number)
     @IsInt()
     @Min(2000)
     @Max(2100)
