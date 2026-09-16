@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "بھیج دیا گیا",
         successDescription: "ہم اسی گفتگو میں جواب دیں گے۔",
         defaultError: "کچھ غلط ہو گیا۔ براہِ کرم دوبارہ کوشش کریں۔",
+        createdToast: "ٹکٹ #{number} بن گیا۔",
     },
     supportPage: {
         title: "سپورٹ",
@@ -86,6 +87,10 @@ export const componentsMessages = {
         resolved: "حل شدہ",
         replyPlaceholder: "پیغام لکھیں… (بھیجنے کے لیے Enter)",
         createTitle: "نئی گفتگو",
+        ticketLabel: "ٹکٹ #{number}",
+        resolvedNotice: "سپورٹ نے ٹکٹ #{number} کو حل شدہ قرار دیا۔",
+        reopenedNotice: "ٹکٹ #{number} دوبارہ کھولا گیا۔",
+        replyNotice: "ٹکٹ #{number} پر نیا جواب۔",
     },
     voiceNavWidget: {
         startAria: "صوتی نیویگیشن — صفحے کا نام بولیں",

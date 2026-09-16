@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: "Posteingang",
         subtitle: "Support und Feedback von Ladeninhabern · {total} Konversationen",
         loadFailed: "Die Konversationen konnten nicht geladen werden",
-        searchPlaceholder: "Nach Betreff suchen…",
+        searchPlaceholder: "Nach Ticketnummer oder Betreff suchen…",
         loading: "Konversationen werden geladen…",
         noThreads: "Keine Konversationen gefunden.",
         allStatuses: "Alle Status",
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: "Alle Benutzer",
         unknownUser: "Unbekannter Benutzer",
         startedBy: "Gestartet von {user}",
+        ticketLabel: "Ticket #{number}",
         types: {
             support: "Hilfe",
             bug: "Fehler",

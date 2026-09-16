@@ -4,12 +4,13 @@ import { PlatformSettingsModule } from '../platform-settings/platform-settings.m
 import { SupportController } from './support.controller';
 import { AdminSupportController } from './admin-support.controller';
 import { SupportService } from './support.service';
+import { SupportEventsService } from './support-events.service';
 
 @Module({
     imports: [DatabaseModule, PlatformSettingsModule],
     controllers: [SupportController, AdminSupportController],
-    providers: [SupportService],
-    exports: [SupportService],
+    providers: [SupportService, SupportEventsService],
+    exports: [SupportService, SupportEventsService],
 })
 export class SupportModule implements OnModuleInit {
     private readonly logger = new Logger(SupportModule.name);

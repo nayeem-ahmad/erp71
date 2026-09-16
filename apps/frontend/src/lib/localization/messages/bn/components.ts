@@ -75,6 +75,7 @@ export const componentsMessages = {
             successTitle: "পাঠানো হয়েছে",
             successDescription: "আমরা এই কথোপকথনে উত্তর দেব।",
             defaultError: "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।",
+            createdToast: "টিকিট #{number} তৈরি হয়েছে।",
         },
         supportPage: {
             title: "সাপোর্ট",
@@ -86,6 +87,10 @@ export const componentsMessages = {
             resolved: "সমাধান হয়েছে",
             replyPlaceholder: "বার্তা লিখুন… (পাঠাতে Enter)",
             createTitle: "নতুন কথোপকথন",
+            ticketLabel: "টিকিট #{number}",
+            resolvedNotice: "সাপোর্ট টিকিট #{number} সমাধান হয়েছে বলে চিহ্নিত করেছে।",
+            reopenedNotice: "টিকিট #{number} আবার খোলা হয়েছে।",
+            replyNotice: "টিকিট #{number}-এ নতুন উত্তর এসেছে।",
         },
         voiceNavWidget: {
             startAria: "ভয়েস নেভিগেশন — পেজের নাম বলুন",

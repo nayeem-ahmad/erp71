@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "Enviado",
         successDescription: "Le responderemos en esta conversación.",
         defaultError: "Algo salió mal. Inténtelo de nuevo.",
+        createdToast: "Ticket #{number} creado.",
     },
     supportPage: {
         title: "Soporte",
@@ -86,6 +87,10 @@ export const componentsMessages = {
         resolved: "Resuelto",
         replyPlaceholder: "Escriba un mensaje… (Intro para enviar)",
         createTitle: "Nueva conversación",
+        ticketLabel: "Ticket #{number}",
+        resolvedNotice: "Soporte marcó el ticket #{number} como resuelto.",
+        reopenedNotice: "El ticket #{number} se reabrió.",
+        replyNotice: "Nueva respuesta en el ticket #{number}.",
     },
     voiceNavWidget: {
         startAria: "Navegación por voz: diga el nombre de una página",

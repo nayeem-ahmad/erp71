@@ -1,20 +1,37 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, Plus, Send, CheckCircle, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatMessage } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import SupportComposer from '@/components/SupportComposer';
+import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
+import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
+
+/**
+ * How often the screen re-reads itself when the live stream is *not* carrying
+ * events — a browser that refused it, or a proxy that ate it. Matches the chat
+ * page's message poll, which is the cadence this screen is held to.
+ */
+const FALLBACK_POLL_MS = 5_000;
+
+/**
+ * And how often it re-reads while the stream *is* live. Not zero: an event
+ * dropped between the publisher and this tab would otherwise never be noticed,
+ * and one request a minute is a cheap floor under the whole mechanism.
+ */
+const SAFETY_POLL_MS = 60_000;
 
 type KnockCategory = 'support' | 'bug' | 'feature' | 'general';
 
 type Thread = {
     id: string;
+    ticketNumber: number;
     subject: string;
     status: string;
     category: KnockCategory;
@@ -34,6 +51,15 @@ type Message = {
     createdAt: string;
 };
 
+type ThreadInfo = {
+    id?: string;
+    ticketNumber?: number;
+    subject: string;
+    status: string;
+    category?: string;
+    page?: string | null;
+};
+
 function CategoryBadge({ category, label }: { category: string; label: string }) {
     const tone =
         category === 'bug'
@@ -50,6 +76,20 @@ function CategoryBadge({ category, label }: { category: string; label: string })
     );
 }
 
+/**
+ * The ticket's number, the one thing on this screen a shop owner reads out over
+ * the phone. `tabular-nums` so a column of them lines up.
+ */
+function TicketNumber({ value, className = '' }: { value: number | undefined; className?: string }) {
+    if (!value) return null;
+    return <span className={`shrink-0 font-semibold tabular-nums text-gray-500 ${className}`}>#{value}</span>;
+}
+
+/** Cheap identity of a payload, so a poll that changes nothing changes no state. */
+const threadsSignature = (list: Thread[]) =>
+    list.map((th) => `${th.id}:${th.status}:${th.updatedAt}:${th.messageCount}`).join('|');
+const messagesSignature = (list: Message[]) => list.map((msg) => `${msg.id}:${msg.body}`).join('|');
+
 export default function SupportPage() {
     const { t } = useI18n();
     const page = t.components.supportPage;
@@ -59,12 +99,7 @@ export default function SupportPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [threadInfo, setThreadInfo] = useState<{
-        subject: string;
-        status: string;
-        category?: string;
-        page?: string | null;
-    } | null>(null);
+    const [threadInfo, setThreadInfo] = useState<ThreadInfo | null>(null);
     const [replyBody, setReplyBody] = useState('');
     const [sending, setSending] = useState(false);
     const [loadingThreads, setLoadingThreads] = useState(true);
@@ -73,7 +108,11 @@ export default function SupportPage() {
     const [showNewForm, setShowNewForm] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /** Which thread is open, for the stream callback and the poll. */
+    const activeThreadIdRef = useRef<string | null>(null);
+    activeThreadIdRef.current = activeThreadId;
+    /** Last message we scrolled to, so a refetch that changes nothing does not re-scroll. */
+    const scrolledForRef = useRef<string | null>(null);
 
     const categoryLabel = (category: string) => {
         if (category === 'support') return types.support;
@@ -82,58 +121,104 @@ export default function SupportPage() {
         return types.general;
     };
 
-    const loadThreads = async () => {
+    /** `silent` is for the background refresh: no spinner, no error banner, no state churn. */
+    const loadThreads = useCallback(async (opts?: { silent?: boolean }) => {
+        const silent = opts?.silent ?? false;
         try {
-            const data = await api.getSupportThreads() as Thread[];
-            setThreads(data);
+            const next = await api.getSupportThreads() as Thread[];
+            setThreads((prev) => (threadsSignature(prev) === threadsSignature(next) ? prev : next));
         } catch (err: any) {
-            setError(err.message || 'Failed to load threads');
+            if (!silent) setError(err.message || 'Failed to load threads');
         } finally {
-            setLoadingThreads(false);
+            if (!silent) setLoadingThreads(false);
+        }
+    }, []);
+
+    const loadMessages = useCallback(async (threadId: string, opts?: { silent?: boolean }) => {
+        const silent = opts?.silent ?? false;
+        if (!silent) setLoadingMessages(true);
+        try {
+            const res: any = await api.getSupportMessages(threadId);
+            const next: Message[] = res.messages ?? [];
+            setMessages((prev) => (messagesSignature(prev) === messagesSignature(next) ? prev : next));
+            setThreadInfo((prev) => {
+                const incoming = res.thread ?? null;
+                return JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming;
+            });
+        } catch (err: any) {
+            if (!silent) setError(err.message || 'Failed to load messages');
+        } finally {
+            if (!silent) setLoadingMessages(false);
+        }
+    }, []);
+
+    /**
+     * A thread moved on the admin side. The event is only a nudge — what is on
+     * screen is re-read from the API — so a duplicate costs a request and a
+     * missed one is picked up by the poll below.
+     */
+    const handleStreamEvent = (event: SupportStreamEvent) => {
+        const isOpenThread = event.threadId === activeThreadIdRef.current;
+        if (isOpenThread) void loadMessages(event.threadId, { silent: true });
+        void loadThreads({ silent: true });
+
+        if (event.kind === 'status') {
+            const template = event.status === 'resolved' ? page.resolvedNotice : page.reopenedNotice;
+            toast.info(formatMessage(template, { number: event.ticketNumber }));
+            return;
+        }
+        // A reply into the open thread needs no announcement — it appears in the
+        // conversation, the way a chat message does. One into any other ticket
+        // would otherwise go unnoticed until the list is next looked at.
+        if (event.actor === 'admin' && !isOpenThread) {
+            toast.info(formatMessage(page.replyNotice, { number: event.ticketNumber }));
         }
     };
 
-    const loadMessages = async (threadId: string) => {
-        setLoadingMessages(true);
-        try {
-            const res: any = await api.getSupportMessages(threadId);
-            setMessages(res.messages ?? []);
-            setThreadInfo(res.thread ?? null);
-        } catch (err: any) {
-            setError(err.message || 'Failed to load messages');
-        } finally {
-            setLoadingMessages(false);
-        }
-    };
+    const { connected } = useSupportStream(handleStreamEvent);
 
     useEffect(() => {
         void loadThreads();
         const params = new URLSearchParams(window.location.search);
         const thread = params.get('thread');
         if (thread) setActiveThreadId(thread);
-    }, []);
+    }, [loadThreads]);
 
     useEffect(() => {
         if (!activeThreadId) return;
         void loadMessages(activeThreadId);
+    }, [activeThreadId, loadMessages]);
 
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => {
-            void loadMessages(activeThreadId);
-            void loadThreads();
-        }, 10000);
+    /**
+     * The safety net under the stream. Runs whether or not a thread is open —
+     * the list's statuses go stale too, and it used to stand still until
+     * something was selected.
+     */
+    useEffect(() => {
+        const timer = setInterval(() => {
+            void loadThreads({ silent: true });
+            const open = activeThreadIdRef.current;
+            if (open) void loadMessages(open, { silent: true });
+        }, connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS);
 
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
-    }, [activeThreadId]);
+        return () => clearInterval(timer);
+    }, [connected, loadThreads, loadMessages]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const lastId = messages[messages.length - 1]?.id ?? null;
+        if (!lastId || scrolledForRef.current === lastId) return;
+        // Jump straight to the bottom when a thread opens; animate only for new messages.
+        const behavior = scrolledForRef.current === null ? 'auto' : 'smooth';
+        scrolledForRef.current = lastId;
+        messagesEndRef.current?.scrollIntoView({ behavior });
     }, [messages]);
 
     const selectThread = (id: string) => {
+        if (id === activeThreadId) return;
         setActiveThreadId(id);
+        setMessages([]);
+        setThreadInfo(null);
+        scrolledForRef.current = null;
         setError('');
     };
 
@@ -197,7 +282,10 @@ export default function SupportPage() {
                                     className={`w-full text-start px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
+                                        <p className="flex min-w-0 items-baseline gap-1.5">
+                                            <TicketNumber value={thread.ticketNumber} className="text-[11px]" />
+                                            <span className="truncate text-sm font-bold text-gray-900">{thread.subject}</span>
+                                        </p>
                                         <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-success-light text-success-text' : 'bg-warning-light text-warning-text'}`}>
                                             {thread.status}
                                         </span>
@@ -226,6 +314,11 @@ export default function SupportPage() {
                             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
                                 <div className="min-w-0">
                                     <p className="font-semibold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                    {threadInfo?.ticketNumber && (
+                                        <p className="text-[11px] text-gray-500">
+                                            {formatMessage(page.ticketLabel, { number: threadInfo.ticketNumber })}
+                                        </p>
+                                    )}
                                     {threadInfo?.page && (
                                         <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
                                     )}
@@ -311,9 +404,9 @@ export default function SupportPage() {
                             feedbackEnabled={feedback}
                             capturePage
                             onCancel={() => setShowNewForm(false)}
-                            onCreated={(threadId) => {
+                            onCreated={(created) => {
                                 setShowNewForm(false);
-                                setActiveThreadId(threadId);
+                                selectThread(created.id);
                                 void loadThreads();
                             }}
                         />

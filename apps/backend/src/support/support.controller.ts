@@ -4,11 +4,14 @@ import {
     Post,
     Body,
     Param,
+    Req,
+    Res,
     UseGuards,
     UseInterceptors,
     NotFoundException,
     ForbiddenException,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -16,6 +19,17 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
 import { SupportService } from './support.service';
 import { KNOCK_CATEGORIES } from './support.util';
+import { SupportEventsService, formatSseFrame, sseHeartbeat } from './support-events.service';
+
+/** How often an idle stream writes a comment frame, to outlive proxy read timeouts. */
+const STREAM_HEARTBEAT_MS = 25_000;
+
+/**
+ * How long one connection lives before the client is made to reconnect. Keeps
+ * an open stream from outliving the session that opened it, and gives a
+ * long-lived tab a natural point to pick up a renewed token.
+ */
+const STREAM_MAX_MS = 10 * 60_000;
 
 class CreateThreadDto {
     @IsOptional()
@@ -51,6 +65,7 @@ export class SupportController {
     constructor(
         private readonly db: DatabaseService,
         private readonly support: SupportService,
+        private readonly events: SupportEventsService,
     ) {}
 
     @Get('threads')
@@ -71,6 +86,7 @@ export class SupportController {
 
         return threads.map((t) => ({
             id: t.id,
+            ticketNumber: t.ticketNumber,
             subject: t.subject,
             status: t.status,
             category: t.category,
@@ -81,6 +97,83 @@ export class SupportController {
             messageCount: t._count.messages,
             lastMessage: t.messages[0] ?? null,
         }));
+    }
+
+    /**
+     * Live thread changes for this workspace, as Server-Sent Events.
+     *
+     * Written to the raw response rather than through Nest's `@Sse()` because
+     * the app registers `TransformInterceptor` globally: it maps every emitted
+     * value into a `{ data }` envelope, which for an SSE observable would nest
+     * the payload one level deeper and lose the event name. A library-specific
+     * response is left alone by that interceptor, so the frames on the wire are
+     * exactly the ones written here.
+     *
+     * Each frame is only a nudge — the client re-reads the thread over the
+     * endpoints above — so a missed event costs nothing but a slower update,
+     * which is what the client's fallback poll is for.
+     */
+    @Get('stream')
+    async stream(
+        @Tenant() tenant: TenantContext,
+        @Req() req: Request,
+        @Res() res: Response,
+    ): Promise<void> {
+        // Throws before a byte is written when the feature is off, so the
+        // failure arrives as an ordinary JSON error rather than an empty stream.
+        await this.support.assertInboxEnabled(tenant.tenantId);
+
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            // `no-transform` asks intermediaries not to compress the stream —
+            // a buffering gzip in front of this would delay every event.
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            // nginx-specific, harmless elsewhere: never buffer this response.
+            'X-Accel-Buffering': 'no',
+        });
+        res.flushHeaders();
+        // Say hello immediately: the client treats the first frame as "connected"
+        // and drops to a slow safety-net poll only once it arrives.
+        res.write(formatSseFrame('ready', { at: new Date().toISOString() }));
+
+        const subscription = this.events.forTenant(tenant.tenantId).subscribe((event) => {
+            res.write(formatSseFrame(event.kind, event));
+        });
+
+        await new Promise<void>((resolve) => {
+            // Idempotent, and it has to be: ending the response emits `close`,
+            // which lands back here. Without the latch, the timeout below would
+            // end an already-finished response and take the process with it.
+            let closed = false;
+            const close = () => {
+                if (closed) return;
+                closed = true;
+                clearInterval(heartbeat);
+                clearTimeout(expiry);
+                subscription.unsubscribe();
+                res.end();
+                resolve();
+            };
+
+            const heartbeat = setInterval(() => res.write(sseHeartbeat()), STREAM_HEARTBEAT_MS);
+            // The guard runs once, at connect, so an open stream is a credential
+            // that never re-checks itself. Capping its life bounds that: the
+            // client reconnects with whatever token it holds *then*, and a
+            // session that has since ended stops being able to listen.
+            const expiry = setTimeout(close, STREAM_MAX_MS);
+
+            // `close` on the response covers the tab going away and the cap
+            // above; on the request, an abandoned socket.
+            res.on('close', close);
+            req.on('close', close);
+            req.on('error', close);
+
+            // A client that gave up before the listeners went on has already
+            // had its event; without this the subscription and the heartbeat
+            // would outlive it with nothing left to fire them.
+            if (res.writableEnded || req.destroyed) close();
+        });
     }
 
     @Post('threads')
@@ -111,6 +204,7 @@ export class SupportController {
         return {
             thread: {
                 id: thread.id,
+                ticketNumber: thread.ticketNumber,
                 subject: thread.subject,
                 status: thread.status,
                 category: thread.category,
@@ -151,6 +245,17 @@ export class SupportController {
         await this.db.supportThread.update({
             where: { id },
             data: { updatedAt: new Date() },
+        });
+
+        // The workspace's other open tabs — a second till, the owner's phone —
+        // are watching the stream for this.
+        this.events.publish({
+            kind: 'message',
+            tenantId: thread.tenantId,
+            threadId: thread.id,
+            ticketNumber: thread.ticketNumber,
+            status: thread.status,
+            actor: 'owner',
         });
 
         return { id: message.id };

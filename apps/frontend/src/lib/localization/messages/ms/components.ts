@@ -75,6 +75,7 @@ export const componentsMessages = {
             successTitle: 'Dihantar',
             successDescription: 'Kami akan membalas dalam perbualan ini.',
             defaultError: 'Sesuatu telah berlaku. Sila cuba lagi.',
+            createdToast: 'Tiket #{number} dicipta.',
         },
         supportPage: {
             title: 'Sokongan',
@@ -86,6 +87,10 @@ export const componentsMessages = {
             resolved: 'Selesai',
             replyPlaceholder: 'Taip mesej… (Enter untuk hantar)',
             createTitle: 'Perbualan baharu',
+            ticketLabel: 'Tiket #{number}',
+            resolvedNotice: 'Sokongan menandakan tiket #{number} sebagai selesai.',
+            reopenedNotice: 'Tiket #{number} dibuka semula.',
+            replyNotice: 'Balasan baharu pada tiket #{number}.',
         },
         voiceNavWidget: {
             startAria: 'Navigasi suara — sebut nama halaman',
