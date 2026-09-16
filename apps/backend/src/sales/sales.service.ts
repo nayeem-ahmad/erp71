@@ -10,6 +10,7 @@ import {
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { paymentRecordData } from './payment-record-data';
 import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
@@ -98,11 +99,7 @@ export class SalesService {
                     note: dto.note,
                     created_by: userId,
                     payments: dto.payments ? {
-                        create: dto.payments.map(p => ({
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                            account_id: p.accountId || null
-                        }))
+                        create: dto.payments.map(paymentRecordData)
                     } : undefined
                 },
             });
@@ -618,11 +615,7 @@ export class SalesService {
                     note: dto.note,
                     created_by: userId,
                     payments: dto.payments ? {
-                        create: dto.payments.map((p) => ({
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                            account_id: p.accountId || null,
-                        })),
+                        create: dto.payments.map(paymentRecordData),
                     } : undefined,
                 },
             });
@@ -686,6 +679,13 @@ export class SalesService {
                 paymentMethod: p.payment_method,
                 amount: Number(p.amount),
                 accountId: p.account_id ?? undefined,
+                // The cheque the draft was parked with is the cheque the sale
+                // is posted with; only an explicit `dto.payments` replaces it.
+                bankName: p.bank_name ?? undefined,
+                bankBranch: p.bank_branch ?? undefined,
+                bankAccountNumber: p.bank_account_number ?? undefined,
+                referenceNo: p.reference_no ?? undefined,
+                instrumentDate: p.instrument_date?.toISOString().slice(0, 10),
             }));
 
             if (items.length === 0) {
@@ -732,12 +732,7 @@ export class SalesService {
             await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
             for (const p of payments) {
                 await tx.paymentRecord.create({
-                    data: {
-                        sale_id: id,
-                        payment_method: p.paymentMethod,
-                        amount: p.amount,
-                        account_id: p.accountId || null,
-                    },
+                    data: { sale_id: id, ...paymentRecordData(p) },
                 });
             }
 
@@ -1075,11 +1070,7 @@ export class SalesService {
                 await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
                 for (const p of dto.payments) {
                     await tx.paymentRecord.create({
-                        data: {
-                            sale_id: id,
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                        },
+                        data: { sale_id: id, ...paymentRecordData(p) },
                     });
                 }
             }
