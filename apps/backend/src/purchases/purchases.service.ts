@@ -10,6 +10,7 @@ import { costBehaviourFor } from '../database/product-cost.utils';
 import { allocateLandedCost } from '../database/landed-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+import { resolveInlineSupplier } from '../suppliers/resolve-inline-supplier.util';
 
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
@@ -60,24 +61,7 @@ export class PurchasesService {
             let supplierId = dto.supplierId;
 
             if (dto.newSupplier) {
-                const existingSupplier = await tx.supplier.findUnique({
-                    where: { tenant_id_name: { tenant_id: tenantId, name: dto.newSupplier.name } },
-                });
-
-                if (existingSupplier) {
-                    supplierId = existingSupplier.id;
-                } else {
-                    const supplier = await tx.supplier.create({
-                        data: {
-                            tenant_id: tenantId,
-                            name: dto.newSupplier.name,
-                            phone: dto.newSupplier.phone,
-                            email: dto.newSupplier.email,
-                            address: dto.newSupplier.address,
-                        },
-                    });
-                    supplierId = supplier.id;
-                }
+                supplierId = await resolveInlineSupplier(tx, tenantId, dto.newSupplier);
             } else if (supplierId) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: supplierId, tenant_id: tenantId },
