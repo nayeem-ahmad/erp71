@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "Legen Sie zuerst ein Projekt an — jede Aufgabe gehört zu einem.",
         createFailed: "Die Aufgabe konnte nicht erstellt werden",
         openFull: "Ganze Seite öffnen",
+        assigneeNoTeam: "Diesem Projekt ist noch niemand zugeordnet.",
+        assigneeAddTeam: "Teammitglieder hinzufügen",
+        assigneeLoadFailed: "Das Team dieses Projekts konnte nicht geladen werden.",
     },
 
     description: {

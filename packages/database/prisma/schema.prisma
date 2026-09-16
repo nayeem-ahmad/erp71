@@ -505,6 +505,17 @@ model RefreshToken {
   id          String    @id @default(uuid())
   user_id     String
   token_hash  String    @unique
+  /// Every token minted from one sign-in shares this id, and rotation carries it
+  /// to the successor. A replay revokes the family rather than the account, so a
+  /// stale token in one browser cannot sign the same person out of their phone.
+  ///
+  /// Nullable only for tokens issued before the column existed: production
+  /// applies schema with `prisma db push`, and a NOT NULL column cannot be added
+  /// to a populated table without a default. `RefreshTokenService` reads a null
+  /// as "this row is its own family", so an old token revokes nothing but
+  /// itself. Every token minted since carries one, and the last of the old ones
+  /// expires within JWT_REFRESH_TTL_DAYS of the deploy.
+  family_id   String?
   /// Set when this token has been exchanged. Rotation means a token is usable
   /// once; `replaced_by` keeps the chain so a replay can be traced to a family.
   used_at     DateTime?
@@ -521,6 +532,7 @@ model RefreshToken {
 
   @@index([user_id])
   @@index([expires_at])
+  @@index([family_id])
 }
 
 model EmailVerificationToken {
@@ -676,22 +688,22 @@ model DemoDataBatch {
 }
 
 model Tenant {
-  id                        String    @id @default(uuid())
+  id                        String   @id @default(uuid())
   name                      String
   owner_id                  String
-  default_locale            String    @default("en")
+  default_locale            String   @default("en")
   /// IANA zone the workspace's calendar days are measured in, e.g. `Asia/Dhaka`.
   /// Every "today" window, date-range filter and report bucket resolves through
   /// this; see `common/tenant-time.util.ts`. An IANA name, never an offset —
   /// an offset cannot express DST.
-  timezone                  String    @default("Asia/Dhaka")
+  timezone                  String   @default("Asia/Dhaka")
   /// When false the workspace is English-only and the language switcher is hidden.
-  localization_enabled      Boolean   @default(false)
+  localization_enabled      Boolean  @default(false)
   /// Second language offered alongside English when localization_enabled is true.
   secondary_locale          String?
-  created_at                DateTime  @default(now())
-  storefront_slug           String?   @unique
-  storefront_enabled        Boolean   @default(false)
+  created_at                DateTime @default(now())
+  storefront_slug           String?  @unique
+  storefront_enabled        Boolean  @default(false)
   storefront_banner         String?
   storefront_hero_image     String?
   storefront_hero_headline  String?
@@ -703,24 +715,42 @@ model Tenant {
   /// Whether the store name is printed beside the logo in the storefront
   /// header. Only meaningful once a logo exists — with no logo the name is the
   /// only thing there is to show, so it is rendered regardless.
-  storefront_logo_show_name Boolean   @default(true)
+  storefront_logo_show_name Boolean  @default(true)
   brand_primary_color       String?
   brand_logo_url            String?
   brand_favicon_url         String?
   brand_business_name       String?
-  default_vat_rate          Decimal?  @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
+  default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
   vat_registration_no       String? // NBR VAT registration number
   business_tin              String? // Tax Identification Number
-  business_type             String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+
+  /// Whether this workspace issues NBR Mushak 6.x documents — the 6.3 tax
+  /// invoice in place of a plain invoice, the 6.2 sales book, the 6.7 credit
+  /// note. Off by default: a shop that is not VAT-registered must not hand a
+  /// customer something that looks like a tax invoice.
+  mushak_enabled             Boolean   @default(false)
+  /// চালানপত্র ইস্যুর ঠিকানা — the address a tax invoice is issued from, which
+  /// is the registered premises and not necessarily the branch that sold the
+  /// goods. Printed in the issuer block of every 6.x document.
+  mushak_issue_address       String?
+  /// প্রতিষ্ঠানের দায়িত্বপ্রাপ্ত ব্যক্তির নাম ও পদবি — who signs the document
+  /// for the business. Rule 40 wants both on the face of the invoice.
+  mushak_officer_name        String?
+  mushak_officer_designation String?
+  /// অর্থনৈতিক কার্যক্রম — the economic activity the BIN is registered for, as
+  /// it appears on the registration certificate. Free text: NBR's list is long,
+  /// changes, and a wrong constrained value is worse than the tenant's own words.
+  mushak_economic_activity   String?
+  business_type              String? // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
   /// Which dashboard this workspace lands on: AUTO | RETAIL | ACCOUNTING.
   /// AUTO defers to the plan's `accountingDashboard` entitlement. This is a
   /// preference, not a capability, which is why it is a column and not a key in
   /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
-  dashboard_preference      String    @default("AUTO")
+  dashboard_preference       String    @default("AUTO")
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
-  onboarding_dismissed_at   DateTime?
-  deleted_at                DateTime?
+  onboarding_dismissed_at    DateTime?
+  deleted_at                 DateTime?
 
   /// When this workspace was frozen for non-payment. Non-null means every
   /// state-changing request is rejected by `BillingSuspensionGuard` — the data
@@ -1492,6 +1522,12 @@ model Product {
   compare_at_price       Decimal?    @db.Decimal(12, 2) // original price for sale display
   is_featured            Boolean     @default(false)
   vat_rate               Decimal?    @db.Decimal(5, 2) // product-specific VAT rate; null = use tenant default
+  /// সম্পূরক শুল্কের হার — supplementary duty, levied on the value of the
+  /// supply *before* VAT and only on the goods listed in the Third Schedule
+  /// (tobacco, soft drinks, cosmetics and the like). Null means none, which is
+  /// the answer for almost everything a general retailer sells. No workspace
+  /// default to fall back to: SD is per-commodity, never per-business.
+  sd_rate                Decimal?    @db.Decimal(5, 2)
   warranty_enabled       Boolean     @default(false)
   warranty_duration_days Int?
   reorder_level          Int?
@@ -2271,7 +2307,7 @@ model ImportShipment {
   /// Supplier invoice value in `currency`. Decimal(16,2) rather than (12,2):
   /// a container of electronics quoted in a weak currency overflows twelve
   /// digits, and this column is the one that holds a foreign figure.
-  invoice_value_fc  Decimal  @default(0) @db.Decimal(16, 2)
+  invoice_value_fc    Decimal   @default(0) @db.Decimal(16, 2)
 
   // --- Shipment ---
   incoterm          String?
@@ -2457,6 +2493,26 @@ model Sale {
   /// more than one warehouse; this is what a line with no override uses.
   warehouse_id String?
 
+  /// Output VAT and supplementary duty carried by this invoice, summed from
+  /// the lines at the moment it was posted. `total_amount` is tax-INCLUSIVE —
+  /// the Bangladeshi retail convention this product has always followed — so
+  /// these are contained in it, not added to it, and
+  /// `total_amount - vat_amount - sd_amount` is the value of the supply.
+  ///
+  /// Stored rather than re-derived on demand because a Mushak 6.3 has to
+  /// reprint identically forever: re-reading today's product or workspace rate
+  /// would silently restate a tax invoice that NBR already holds a copy of.
+  vat_amount Decimal @default(0) @db.Decimal(12, 2)
+  sd_amount  Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Two boxes the Mushak 6.3 requires that nothing else in the system knows:
+  /// সরবরাহের গন্তব্যস্থল (where the goods are going, which is not always the
+  /// customer's billing address) and যানবাহনের প্রকৃতি ও নম্বর (how they are
+  /// travelling). Captured on the tax-invoice screen, null on a counter sale
+  /// the customer carries out themselves.
+  mushak_destination String?
+  mushak_vehicle_no  String?
+
   /// Set together by `SalesService.cancel`, alongside `status = 'CANCELLED'`.
   /// The note is mandatory at the API boundary: cancelling puts the goods back,
   /// unwinds loyalty, credit and lifetime spend and voids the vouchers, and the
@@ -2514,6 +2570,12 @@ model Customer {
   loyalty_points       Int          @default(0)
   due_balance          Decimal      @default(0) @db.Decimal(12, 2)
   credit_enabled       Boolean      @default(false)
+  /// ক্রেতার বিআইএন — the buyer's own VAT registration number, when they have
+  /// one. Column 5 of the Mushak 6.2 sales book and a required box on the 6.3;
+  /// null is also an answer there, and the one that puts a large supply on the
+  /// 6.10 statement of sales to unregistered buyers. Distinct from `nid`, which
+  /// is what an unregistered individual is identified by on that same form.
+  bin                  String?
   last_contacted_at    DateTime?
   /// Read-only rollup, as Lead.next_activity_id. `last_contacted_at` above is
   /// the customer-side last-touched column and is reused rather than paired
@@ -3604,9 +3666,26 @@ model SaleItem {
   quantity          Int
   price_at_sale     Decimal  @db.Decimal(12, 2)
   unit_cost_at_sale Decimal? @db.Decimal(12, 2)
+
+  /// The rates that were in force for this product when the sale was posted,
+  /// and the tax they worked out to. `price_at_sale` is tax-inclusive, so
+  /// these are the amounts *inside* `price_at_sale * quantity` — see
+  /// `splitTaxInclusive` in @erp71/shared-types for the arithmetic, which
+  /// levies SD on the value of the supply and VAT on value plus SD.
+  ///
+  /// Any invoice-level reduction (promo code, redeemed points, a typed
+  /// discount) is spread across the lines before these are worked out, so the
+  /// per-line amounts always add back up to the invoice's own totals.
+  ///
+  /// Null rates mean the line was written before this column existed; a tax
+  /// invoice for such a sale falls back to the catalogue rate and says so.
+  vat_rate     Decimal? @db.Decimal(5, 2)
+  sd_rate      Decimal? @db.Decimal(5, 2)
+  vat_amount   Decimal  @default(0) @db.Decimal(12, 2)
+  sd_amount    Decimal  @default(0) @db.Decimal(12, 2)
   /// Per-line warehouse override, for a sale picked from more than one place.
   /// Null means "wherever the sale says", i.e. `Sale.warehouse_id`.
-  warehouse_id      String?
+  warehouse_id String?
 
   // Relations
   sale      Sale              @relation(fields: [sale_id], references: [id], onDelete: Cascade)

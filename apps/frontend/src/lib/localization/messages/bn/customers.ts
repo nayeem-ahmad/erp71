@@ -44,6 +44,8 @@ export const customersMessages = {
                 discountPct: "ছাড় %",
                 birthday: "জন্মদিন",
                 birthdayHint: "নির্দিষ্ট দিনে স্বয়ংক্রিয় জন্মদিন ফলো-আপ তৈরি করে।",
+                bin: "বিআইএন (ক্রেতার মূসক নিবন্ধন)",
+                binHint: "ক্রেতা মূসক নিবন্ধিত হলে তাঁর ১৩-সংখ্যার বিআইএন। মূসক-৬.৩ ও ৬.২ হিসাব পুস্তকে ছাপা হয়।",
                 individual: "ব্যক্তি",
                 organization: "প্রতিষ্ঠান",
                 adding: "যোগ করা হচ্ছে...",
@@ -62,6 +64,7 @@ export const customersMessages = {
                     phone: "+8801234567890",
                     email: "rahim@example.com",
                     address: "১২৩ মেইন রোড...",
+                    bin: "যেমন: ০০০০০০০০০-০১০১",
                 },
             },
             profile: {

@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "Descuento %",
             "birthday": "Cumpleaños",
             "birthdayHint": "Genera automáticamente un seguimiento de cumpleaños ese día.",
+            "bin": "BIN (reg. de IVA del comprador)",
+            "binHint": "El BIN de 13 dígitos del comprador, si está registrado a efectos de IVA. Se imprime en el Mushak 6.3 y en el libro de ventas 6.2.",
             "individual": "Particular",
             "organization": "Organización",
             "adding": "Añadiendo...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "Nombre del propietario",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "Calle Mayor 123..."
+                "address": "Calle Mayor 123...",
+                "bin": "p. ej. 000000000-0101"
             },
             editTitle: "Editar cliente",
             editSubtitle: "Actualizar los datos del cliente",

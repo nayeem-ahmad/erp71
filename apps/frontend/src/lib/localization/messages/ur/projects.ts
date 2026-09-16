@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "پہلے ایک پروجیکٹ بنائیں — ہر ٹاسک کسی نہ کسی پروجیکٹ سے تعلق رکھتا ہے۔",
         createFailed: "ٹاسک نہیں بن سکا",
         openFull: "مکمل صفحہ کھولیں",
+        assigneeNoTeam: "اس پروجیکٹ کی ٹیم میں ابھی کوئی نہیں ہے۔",
+        assigneeAddTeam: "ٹیم کے ارکان شامل کریں",
+        assigneeLoadFailed: "اس پروجیکٹ کی ٹیم پڑھی نہیں جا سکی۔",
     },
 
     description: {

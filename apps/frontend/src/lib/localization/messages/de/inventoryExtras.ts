@@ -500,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Meldebestand",
         "safetyStock": "Sicherheitsbestand",
         "leadTimeDays": "Wiederbeschaffungszeit (Tage)",
+        "vatRate": "USt-Satz (%)",
+        "vatRateHint": "Leer übernimmt den Arbeitsbereichs-Standard. 0 bedeutet nullbesteuert oder befreit.",
+        "sdRate": "Zusatzabgabe (%)",
+        "sdRateHint": "Nur Waren des Third Schedule. Leer bedeutet keine.",
         "quantityUnit": "Mengeneinheit",
         "brand": "Marke",
         "noBrand": "Keine Marke",
@@ -516,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "z. B. 365"
+            "warrantyDays": "z. B. 365",
+            "vatRate": "z. B. 15",
+            "sdRate": "z. B. 25"
         }
     }
 } as const;

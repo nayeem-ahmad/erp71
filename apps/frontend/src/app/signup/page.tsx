@@ -438,7 +438,7 @@ function SignupPageContent() {
                 return;
             }
 
-            const { redirectTo } = await storeAuthResponse(authRes, true);
+            const { redirectTo } = await storeAuthResponse(authRes);
             clearReferralCode();
 
             if (authRes?.requires_workspace) {
@@ -474,7 +474,7 @@ function SignupPageContent() {
             return;
         }
 
-        const { redirectTo } = await storeAuthResponse(authRes, true);
+        const { redirectTo } = await storeAuthResponse(authRes);
         clearReferralCode();
 
         if (authRes?.requires_workspace) {

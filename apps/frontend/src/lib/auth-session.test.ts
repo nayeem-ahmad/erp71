@@ -62,7 +62,7 @@ describe('storeAuthResponse with a workspace named in the URL', () => {
     const credentials = { access_token: 'token', refresh_token: 'refresh' };
 
     it('enters the named workspace instead of the chooser', async () => {
-        const result = await storeAuthResponse(credentials, false, { workspaceSlug: 'karim' });
+        const result = await storeAuthResponse(credentials, { workspaceSlug: 'karim' });
 
         expect(result).toEqual({ redirectTo: '/dashboard' });
         expect(getWorkspaceItem('tenant_id')).toBe('tenant-karim');
@@ -71,21 +71,21 @@ describe('storeAuthResponse with a workspace named in the URL', () => {
     });
 
     it('resolves a workspace by its slugified name', async () => {
-        const result = await storeAuthResponse(credentials, false, { workspaceSlug: 'rahim-pharmacy' });
+        const result = await storeAuthResponse(credentials, { workspaceSlug: 'rahim-pharmacy' });
 
         expect(result).toEqual({ redirectTo: '/dashboard' });
         expect(getWorkspaceItem('tenant_id')).toBe('tenant-rahim');
     });
 
     it('still asks when the named workspace is not one of theirs', async () => {
-        const result = await storeAuthResponse(credentials, false, { workspaceSlug: 'someone-else' });
+        const result = await storeAuthResponse(credentials, { workspaceSlug: 'someone-else' });
 
         expect(result).toEqual({ redirectTo: '/select-account' });
         expect(getWorkspaceItem('tenant_id')).toBeNull();
     });
 
     it('still asks when no workspace was named', async () => {
-        const result = await storeAuthResponse(credentials, false);
+        const result = await storeAuthResponse(credentials);
 
         expect(result).toEqual({ redirectTo: '/select-account' });
         expect(getWorkspaceItem('tenant_id')).toBeNull();
@@ -96,7 +96,7 @@ describe('storeAuthResponse with a workspace named in the URL', () => {
 
         // `karim` is a real workspace — just not one this user belongs to. With a
         // single shop left there is nothing to choose, so they enter that one.
-        const result = await storeAuthResponse(credentials, false, { workspaceSlug: 'karim' });
+        const result = await storeAuthResponse(credentials, { workspaceSlug: 'karim' });
 
         expect(result).toEqual({ redirectTo: '/dashboard' });
         expect(getWorkspaceItem('tenant_id')).toBe('tenant-rahim');
@@ -105,7 +105,7 @@ describe('storeAuthResponse with a workspace named in the URL', () => {
     it('sends a platform admin who names a shop into that shop', async () => {
         api.getMe.mockResolvedValue({ id: 'user-1', is_platform_admin: true, tenants: [KARIM] });
 
-        const result = await storeAuthResponse(credentials, false, { workspaceSlug: 'karim' });
+        const result = await storeAuthResponse(credentials, { workspaceSlug: 'karim' });
 
         expect(result).toEqual({ redirectTo: '/dashboard' });
         expect(getWorkspaceItem('tenant_id')).toBe('tenant-karim');

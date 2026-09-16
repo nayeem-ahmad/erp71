@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "رعایت %",
             "birthday": "سالگرہ",
             "birthdayHint": "اُس دن خودکار سالگرہ فالو اپ چلاتا ہے۔",
+            "bin": "بی آئی این (خریدار کی ویٹ رجسٹریشن)",
+            "binHint": "خریدار کا 13 ہندسوں کا بی آئی این، اگر وہ ویٹ رجسٹرڈ ہو۔ مشک 6.3 اور 6.2 فروخت رجسٹر میں چھپتا ہے۔",
             "individual": "انفرادی",
             "organization": "ادارہ",
             "adding": "شامل کیا جا رہا ہے...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "مالک کا نام",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "123 مین اسٹریٹ..."
+                "address": "123 مین اسٹریٹ...",
+                "bin": "مثلاً 000000000-0101"
             },
             editTitle: "گاہک میں ترمیم کریں",
             editSubtitle: "گاہک کی تفصیلات اپ ڈیٹ کریں",

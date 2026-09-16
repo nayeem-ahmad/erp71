@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Package, FileText, Pencil, X, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Printer, Save, Package, FileCheck, FileText, Pencil, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
@@ -217,6 +218,18 @@ function ReturnDetailPageContent() {
                                     <Pencil className="w-4 h-4" />
                                     <span>{t.returns.detail.edit}</span>
                                 </button>
+                                {/* Only a return raised against a sale can carry
+                                    a Mushak 6.7: rule 40(1)(ঞ) requires the note
+                                    to name the চালানপত্র it reduces. */}
+                                {ret.sale_id ? (
+                                    <Link
+                                        href={routes.sales.returnMushak(ret.id)}
+                                        className="bg-white hover:bg-blue-50 text-gray-700 hover:text-blue-700 border border-gray-200 hover:border-blue-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 rtl:space-x-reverse transition-all"
+                                    >
+                                        <FileCheck className="w-4 h-4" />
+                                        <span>{t.sales.mushak.creditNoteTitle}</span>
+                                    </Link>
+                                ) : null}
                                 <button
                                     onClick={handlePrint}
                                     className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"

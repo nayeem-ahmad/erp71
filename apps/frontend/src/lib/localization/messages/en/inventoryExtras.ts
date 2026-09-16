@@ -500,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Reorder Level",
         "safetyStock": "Safety Stock",
         "leadTimeDays": "Lead Time Days",
+        "vatRate": "VAT Rate (%)",
+        "vatRateHint": "Blank uses the workspace default. 0 means zero-rated or exempt.",
+        "sdRate": "Supplementary Duty (%)",
+        "sdRateHint": "Third Schedule goods only. Blank means none.",
         "quantityUnit": "Quantity Unit",
         "brand": "Brand",
         "noBrand": "No Brand",
@@ -516,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": "WH-KB-1032",
             "price": "120.00",
             "initialStock": "50",
-            "warrantyDays": "e.g. 365"
+            "warrantyDays": "e.g. 365",
+            "vatRate": "e.g. 15",
+            "sdRate": "e.g. 25"
         }
     }
 } as const;
