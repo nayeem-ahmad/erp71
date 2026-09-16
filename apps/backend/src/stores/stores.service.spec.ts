@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { StoresService } from './stores.service';
 
 const OWNER_CTX = { tenantId: 't1', userId: 'u-owner', userRole: 'OWNER', timezone: 'Asia/Dhaka' } as any;
@@ -18,7 +18,11 @@ describe('StoresService.rename', () => {
     });
 
     it('renames a store that belongs to the tenant', async () => {
-        db.store.findFirst.mockResolvedValue({ id: 's1', tenant_id: 't1' });
+        // Two lookups now: the tenant-scoped guard, then the duplicate-name check
+        // the rename earns.
+        db.store.findFirst
+            .mockResolvedValueOnce({ id: 's1', tenant_id: 't1', name: 'Old Name' })
+            .mockResolvedValueOnce(null);
         db.store.update.mockResolvedValue({ id: 's1', name: 'Gulshan Branch' });
         const result = await service.rename('t1', 's1', '  Gulshan Branch  ');
         expect(db.store.findFirst).toHaveBeenCalledWith({ where: { id: 's1', tenant_id: 't1' } });
@@ -34,6 +38,94 @@ describe('StoresService.rename', () => {
         db.store.findFirst.mockResolvedValue(null);
         await expect(service.rename('t1', 'sX', 'Anything')).rejects.toBeInstanceOf(NotFoundException);
         expect(db.store.update).not.toHaveBeenCalled();
+    });
+
+    // This path had neither check until 2026-09-16: a branch could be renamed to
+    // blank or onto another branch's name, and the branch switcher shows the name
+    // and nothing else.
+    it.each([
+        ['an empty name', ''],
+        ['a whitespace-only name', '   '],
+    ])('refuses %s', async (_label, name) => {
+        db.store.findFirst.mockResolvedValue({ id: 's1', tenant_id: 't1', name: 'Gulshan' });
+
+        const promise = service.rename('t1', 's1', name);
+
+        await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promise).rejects.toThrow('Store name is required.');
+        expect(db.store.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a rename onto a name the tenant already holds', async () => {
+        db.store.findFirst
+            .mockResolvedValueOnce({ id: 's1', tenant_id: 't1', name: 'Gulshan' })
+            .mockResolvedValueOnce({ id: 's2' });
+
+        const promise = service.rename('t1', 's1', 'Banani');
+
+        await expect(promise).rejects.toBeInstanceOf(ConflictException);
+        await expect(promise).rejects.toThrow('A store with that name already exists.');
+        expect(db.store.update).not.toHaveBeenCalled();
+    });
+
+    it('excludes the branch being renamed and folds case when looking for a clash', async () => {
+        db.store.findFirst
+            .mockResolvedValueOnce({ id: 's1', tenant_id: 't1', name: 'Gulshan' })
+            .mockResolvedValueOnce(null);
+        db.store.update.mockResolvedValue({ id: 's1', name: 'Banani' });
+
+        await service.rename('t1', 's1', 'Banani');
+
+        expect(db.store.findFirst).toHaveBeenNthCalledWith(2, {
+            where: {
+                tenant_id: 't1',
+                name: { equals: 'Banani', mode: 'insensitive' },
+                NOT: { id: 's1' },
+            },
+            select: { id: true },
+        });
+    });
+
+    // Fixing the capitalisation of a name is not a collision with itself.
+    it('allows a rename that only changes case', async () => {
+        db.store.findFirst
+            .mockResolvedValueOnce({ id: 's1', tenant_id: 't1', name: 'gulshan' })
+            .mockResolvedValueOnce(null);
+        db.store.update.mockResolvedValue({ id: 's1', name: 'Gulshan' });
+
+        await service.rename('t1', 's1', 'Gulshan');
+
+        expect(db.store.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: { name: 'Gulshan' } }),
+        );
+    });
+
+    it('skips the clash lookup when the name is unchanged', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 's1', tenant_id: 't1', name: 'Gulshan' });
+        db.store.update.mockResolvedValue({ id: 's1', name: 'Gulshan' });
+
+        await service.rename('t1', 's1', '  Gulshan  ');
+
+        expect(db.store.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    // Two requests can pass the read-before-write check at once; the unique index
+    // is what stops the second, and its error must not reach the user raw.
+    it('turns a unique-index violation into the same message', async () => {
+        db.store.findFirst
+            .mockResolvedValueOnce({ id: 's1', tenant_id: 't1', name: 'Gulshan' })
+            .mockResolvedValueOnce(null);
+        db.store.update.mockRejectedValue(
+            Object.assign(new Error('Unique constraint failed'), {
+                code: 'P2002',
+                meta: { target: ['tenant_id', 'name'] },
+            }),
+        );
+
+        const promise = service.rename('t1', 's1', 'Banani');
+
+        await expect(promise).rejects.toBeInstanceOf(ConflictException);
+        await expect(promise).rejects.toThrow('A store with that name already exists.');
     });
 });
 

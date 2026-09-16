@@ -80,26 +80,11 @@ describe('InventorySettingsPage', () => {
         });
     });
 
-    it('shows warehouse list', async () => {
-        render(<InventorySettingsPage />);
-        await waitFor(() => {
-            expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('Secondary').length).toBeGreaterThan(0);
-        });
-    });
-
     it('shows inventory reasons', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
             expect(screen.getAllByText('Shrinkage').length).toBeGreaterThan(0);
             expect(screen.getAllByText('Damaged').length).toBeGreaterThan(0);
-        });
-    });
-
-    it('shows Warehouses section heading', async () => {
-        render(<InventorySettingsPage />);
-        await waitFor(() => {
-            expect(screen.getAllByText(/warehouses/i).length).toBeGreaterThan(0);
         });
     });
 
@@ -136,30 +121,15 @@ describe('InventorySettingsPage', () => {
         });
     });
 
-    it('shows Add Warehouse button', async () => {
+    // Warehouses moved to their own page at /inventory/warehouses; this page keeps
+    // only the link to it, so the CRUD coverage lives in that page's test.
+    it('links to the warehouses page', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /add warehouse/i })).toBeInTheDocument();
-        });
-    });
-
-    it('calls createInventoryWarehouse when Add Warehouse clicked with form', async () => {
-        const api = getApi();
-        render(<InventorySettingsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /add warehouse/i }));
-
-        const nameInput = screen.getByPlaceholderText(/warehouse name/i);
-        fireEvent.change(nameInput, { target: { value: 'New WH' } });
-        fireEvent.click(screen.getByRole('button', { name: /add warehouse/i }));
-        await waitFor(() => {
-            expect(api.createInventoryWarehouse).toHaveBeenCalled();
-        });
-    });
-
-    it('shows toggle buttons for warehouses', async () => {
-        render(<InventorySettingsPage />);
-        await waitFor(() => {
-            expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+            expect(screen.getByRole('link', { name: /manage warehouses/i })).toHaveAttribute(
+                'href',
+                '/inventory/warehouses',
+            );
         });
     });
 

@@ -149,6 +149,7 @@ export const routes = {
         labels: '/inventory/labels',
         ledger: '/inventory/ledger',
         categories: '/inventory/categories',
+        warehouses: '/inventory/warehouses',
         settings: '/inventory/settings',
         brands: '/inventory/brands',
         reports: {

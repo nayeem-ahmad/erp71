@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Plus } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -133,7 +134,7 @@ export default function InventoryShrinkagePage() {
                     <div className="grid md:grid-cols-3 gap-4">
                         <select required value={form.warehouseId} onChange={(e) => setForm((current: any) => ({ ...current, warehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="">{t.inventoryShrinkage.selectWarehouse}</option>
-                            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
                         </select>
                         <select required value={form.reasonId} onChange={(e) => setForm((current: any) => ({ ...current, reasonId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="">{t.inventoryShrinkage.selectReason}</option>
