@@ -238,6 +238,7 @@ export default function InventorySettingsPage() {
                     <div className="grid md:grid-cols-4 gap-4">
                         <select value={reasonForm.type} onChange={(e) => setReasonForm((current: any) => ({ ...current, type: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="SHRINKAGE">{t.inventorySettings.shrinkage}</option>
+                            <option value="FOUND">{t.inventorySettings.found}</option>
                             <option value="DISCREPANCY">{t.inventorySettings.discrepancy}</option>
                         </select>
                         <input value={reasonForm.code} onChange={(e) => setReasonForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonCode} />

@@ -18,7 +18,8 @@ import {
     UpdateSupplierDto,
 } from './supplier.dto';
 import { runImport, ImportResult } from '../common/import.util';
-import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
+import { nextSupplierPaymentNumber } from './supplier-payment-number.util';
+import { ACTIVE_PURCHASE, purchasePaymentStatus } from '../purchases/purchase-status';
 
 const SUPPLIER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -225,9 +226,7 @@ export class SuppliersService {
     }
 
     private paymentStatusFor(paidAmount: number, totalAmount: number): string {
-        if (paidAmount <= 0.005) return 'UNPAID';
-        if (paidAmount >= totalAmount - 0.005) return 'PAID';
-        return 'PARTIAL';
+        return purchasePaymentStatus(paidAmount, totalAmount);
     }
 
     /** Validates and applies a set of allocations against open bills for one supplier, inside an existing transaction. */
@@ -298,29 +297,6 @@ export class SuppliersService {
 
     private typeFromDirection(direction: SupplierPaymentDirectionDto): 'PAYMENT' | 'PAYOUT' {
         return direction === SupplierPaymentDirectionDto.PAY ? 'PAYMENT' : 'PAYOUT';
-    }
-
-    private async generatePaymentNumber(
-        tenantId: string,
-        tx: any,
-        txType: 'PAYMENT' | 'PAYOUT',
-    ): Promise<string> {
-        const prefix = txType === 'PAYOUT' ? 'SPO-' : 'SPY-';
-        const last = await tx.supplierCreditTransaction.findFirst({
-            where: {
-                tenant_id: tenantId,
-                type: txType,
-                payment_number: { startsWith: prefix },
-            },
-            orderBy: { payment_number: 'desc' },
-            select: { payment_number: true },
-        });
-
-        if (!last?.payment_number) return `${prefix}00001`;
-
-        const match = last.payment_number.match(new RegExp(`${prefix.replace('-', '\\-')}(\\d+)`));
-        const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-        return `${prefix}${String(nextNum).padStart(5, '0')}`;
     }
 
     private async findCreditPaymentOrThrow(tenantId: string, paymentId: string) {
@@ -722,7 +698,7 @@ export class SuppliersService {
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount);
 
         return this.db.$transaction(async (tx) => {
-            const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
+            const payment_number = await nextSupplierPaymentNumber(tenantId, tx, txType);
 
             const payment = await tx.supplierCreditTransaction.create({
                 data: {

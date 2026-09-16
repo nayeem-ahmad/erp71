@@ -527,10 +527,20 @@ export class InventoryReportsService {
         };
     }
 
+    /**
+     * One direction at a time, defaulting to the write-offs.
+     *
+     * InventoryShrinkage holds both sides of a count now, and an unscoped query
+     * would add stock found over the book into "total units lost" — the one
+     * number this report exists to state. FOUND runs the identical grouping
+     * over the surpluses instead.
+     */
     async getShrinkageSummary(tenantId: string, query: GetShrinkageSummaryDto) {
+        const direction = query.direction ?? 'LOSS';
         const rows = await this.db.inventoryShrinkage.findMany({
             where: {
                 tenant_id: tenantId,
+                direction,
                 ...this.warehouseScope(query),
                 ...(query.reasonId ? { reason_id: query.reasonId } : {}),
                 ...buildDateWindow(query.from, query.to),
@@ -608,6 +618,7 @@ export class InventoryReportsService {
 
         return {
             summary: {
+                direction,
                 totalQuantity,
                 totalValue,
                 costingMethod: 'CURRENT_SELLING_PRICE',

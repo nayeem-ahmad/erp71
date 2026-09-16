@@ -1180,8 +1180,12 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getInventoryShrinkage: (params?: CreatedRangeParams) =>
-        fetchWithAuth(withCreatedRange('/inventory-shrinkage', params)),
+    /** Omit `direction` for the whole adjustment log; 'LOSS' or 'FOUND' narrows it to one side. */
+    getInventoryShrinkage: (params?: CreatedRangeParams & { direction?: 'LOSS' | 'FOUND' }) => {
+        const endpoint = withCreatedRange('/inventory-shrinkage', params);
+        if (!params?.direction) return fetchWithAuth(endpoint);
+        return fetchWithAuth(`${endpoint}${endpoint.includes('?') ? '&' : '?'}direction=${params.direction}`);
+    },
     getInventoryShrinkageRecord: (id: string) => fetchWithAuth(`/inventory-shrinkage/${id}`),
     createInventoryShrinkage: (data: any) => fetchWithAuth('/inventory-shrinkage', {
         method: 'POST',
@@ -1318,8 +1322,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/consolidated${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
+    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string; direction?: 'LOSS' | 'FOUND' }) => {
         const query = new URLSearchParams();
+        if (params?.direction) query.set('direction', params.direction);
         if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.reasonId) query.set('reasonId', params.reasonId);
