@@ -34,22 +34,38 @@ export class SuppliersService {
     constructor(private db: DatabaseService) {}
 
     async create(tenantId: string, dto: CreateSupplierDto) {
+        // `@IsString()` accepts "" and "   ", either of which would reach the
+        // picker as a blank row nobody can pick out of a list.
+        const name = dto.name.trim();
+        if (!name) {
+            throw new BadRequestException('A name is required to create a supplier.');
+        }
+
         const existing = await this.db.supplier.findUnique({
-            where: { tenant_id_name: { tenant_id: tenantId, name: dto.name } },
+            where: { tenant_id_name: { tenant_id: tenantId, name } },
+            select: { id: true, deleted_at: true },
         });
 
-        if (existing) {
+        if (existing && !existing.deleted_at) {
             throw new BadRequestException('A supplier with this name already exists.');
         }
 
+        const details = { phone: dto.phone, email: dto.email, address: dto.address };
+
+        // `@@unique([tenant_id, name])` spans soft-deleted rows, so a deleted
+        // supplier goes on holding its name. Refusing here would reject the name
+        // on behalf of a supplier no list shows — the shopkeeper is told it is
+        // taken and can never find what took it. Bring that row back instead:
+        // its purchases, payable and ledger are still the same supplier's.
+        if (existing) {
+            return this.db.supplier.update({
+                where: { id: existing.id },
+                data: { deleted_at: null, name, ...details },
+            });
+        }
+
         return this.db.supplier.create({
-            data: {
-                tenant_id: tenantId,
-                name: dto.name,
-                phone: dto.phone,
-                email: dto.email,
-                address: dto.address,
-            },
+            data: { tenant_id: tenantId, name, ...details },
         });
     }
 
@@ -100,19 +116,31 @@ export class SuppliersService {
             throw new NotFoundException('Supplier not found');
         }
 
-        if (dto.name && dto.name !== supplier.name) {
+        const name = dto.name === undefined ? undefined : dto.name.trim();
+        if (name === '') {
+            throw new BadRequestException('A name is required to create a supplier.');
+        }
+
+        if (name && name !== supplier.name) {
             const duplicate = await this.db.supplier.findUnique({
-                where: { tenant_id_name: { tenant_id: tenantId, name: dto.name } },
+                where: { tenant_id_name: { tenant_id: tenantId, name } },
+                select: { id: true, deleted_at: true },
             });
-            if (duplicate) {
-                throw new BadRequestException('A supplier with this name already exists.');
+            // A deleted supplier still holds its name (see `create`). Two rows
+            // cannot share one, and merging this supplier's history into that
+            // one is not a rename, so say which it is: creating the name brings
+            // the deleted supplier back, which is what the shopkeeper wants.
+            if (duplicate && duplicate.id !== id) {
+                throw new BadRequestException(duplicate.deleted_at
+                    ? 'A deleted supplier still holds this name. Add a supplier with that name to bring it back.'
+                    : 'A supplier with this name already exists.');
             }
         }
 
         return this.db.supplier.update({
             where: { id },
             data: {
-                ...(dto.name !== undefined ? { name: dto.name } : {}),
+                ...(name !== undefined ? { name } : {}),
                 ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
                 ...(dto.email !== undefined ? { email: dto.email } : {}),
                 ...(dto.address !== undefined ? { address: dto.address } : {}),
@@ -153,12 +181,20 @@ export class SuppliersService {
             findDuplicate: async (row) => {
                 const existing = await this.db.supplier.findUnique({
                     where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
+                    select: { id: true, deleted_at: true },
                 });
-                return existing?.id ?? null;
+                // A deleted supplier is not a row to skip over or quietly update
+                // in place: either way the import reports a supplier the lists
+                // never show. `create` below revives it instead.
+                return existing && !existing.deleted_at ? existing.id : null;
             },
             create: async (row) => {
-                await this.db.supplier.create({
-                    data: { tenant_id: tenantId, name: row.name, phone: row.phone, email: row.email, address: row.address },
+                // Upsert rather than insert: the name may still be held by a
+                // deleted supplier, whom the file is asking for back.
+                await this.db.supplier.upsert({
+                    where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
+                    create: { tenant_id: tenantId, name: row.name, phone: row.phone, email: row.email, address: row.address },
+                    update: { deleted_at: null, phone: row.phone, email: row.email, address: row.address },
                 });
             },
             update: async (id, row) => {
