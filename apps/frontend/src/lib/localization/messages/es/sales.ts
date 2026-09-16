@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: "Buscar por n.º de serie, cliente, estado...",
             allStatuses: "Todos los estados",
         },
+        printPrompt: {
+            title: "Venta guardada",
+            saved: "La venta {number} se guardó por {amount}.",
+            question: "¿Imprimir la factura ahora?",
+            hint: "También puedes imprimirla más tarde desde el registro de la venta.",
+            paperSize: "Tamaño de papel",
+            print: "Imprimir factura",
+            skip: "No, gracias",
+        },
         detail: {
             edit: "Editar",
             posReceipt: "Recibo del POS",

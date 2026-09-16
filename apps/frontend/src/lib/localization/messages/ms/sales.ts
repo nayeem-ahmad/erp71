@@ -328,6 +328,15 @@ export const salesMessages = {
                 searchPlaceholder: "Cari by serial, customer, status...",
                 allStatuses: "Semua status",
             },
+            printPrompt: {
+                title: "Jualan disimpan",
+                saved: "Jualan {number} telah disimpan — {amount}.",
+                question: "Cetak invois sekarang?",
+                hint: "Anda juga boleh mencetaknya kemudian daripada rekod jualan.",
+                paperSize: "Saiz kertas",
+                print: "Cetak invois",
+                skip: "Tidak, terima kasih",
+            },
             detail: {
                 edit: "Edit",
                 posReceipt: "POS Receipt",

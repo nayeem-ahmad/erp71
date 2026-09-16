@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: 'سیریل، گاہک، حیثیت سے تلاش کریں...',
             allStatuses: 'تمام حیثیتیں',
         },
+        printPrompt: {
+            title: 'فروخت محفوظ ہو گئی',
+            saved: 'فروخت {number} بمبلغ {amount} محفوظ کر لی گئی۔',
+            question: 'کیا ابھی انوائس پرنٹ کریں؟',
+            hint: 'آپ اسے بعد میں فروخت کے ریکارڈ سے بھی پرنٹ کر سکتے ہیں۔',
+            paperSize: 'کاغذ کا سائز',
+            print: 'انوائس پرنٹ کریں',
+            skip: 'نہیں، شکریہ',
+        },
         detail: {
             edit: 'ترمیم',
             posReceipt: 'پی او ایس رسید',
