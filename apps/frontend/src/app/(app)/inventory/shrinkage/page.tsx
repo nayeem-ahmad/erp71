@@ -1,28 +1,63 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Plus } from 'lucide-react';
+import { AlertTriangle, PackagePlus, Plus } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { api } from '@/lib/api';
+import { routes } from '@/lib/routes';
+import { toast } from '@/lib/toast';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Alert, Button, Field, Input, Select, StatusBadge } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+
+/**
+ * LOSS writes stock off; FOUND puts a surplus back. They are the same document
+ * with the sign flipped, so they share this screen rather than splitting into
+ * two that would drift apart — but each has its own reason catalogue, because
+ * "Theft" can never explain why a shelf holds more than the book says.
+ */
+type Direction = 'LOSS' | 'FOUND';
+
+const REASON_TYPE: Record<Direction, string> = { LOSS: 'SHRINKAGE', FOUND: 'FOUND' };
 
 interface ShrinkageRecord {
     id: string;
     reference_number: string;
     created_at: string;
+    direction?: Direction | null;
     warehouse?: { name: string } | null;
     reason?: { label: string } | null;
     items: Array<{ id: string; quantity: number }>;
     posting_status?: string | null;
     voucher_number?: string | null;
 }
+
+interface LineItem {
+    productId: string;
+    quantity: string | number;
+}
+
+interface FormErrors {
+    warehouseId?: string;
+    reasonId?: string;
+    notes?: string;
+    items: Record<number, { productId?: string; quantity?: string }>;
+}
+
+const EMPTY_FORM = {
+    direction: 'LOSS' as Direction,
+    warehouseId: '',
+    reasonId: '',
+    notes: '',
+    items: [{ productId: '', quantity: 1 }] as LineItem[],
+};
 
 const columnHelper = createColumnHelper<ShrinkageRecord>();
 
@@ -33,23 +68,30 @@ export default function InventoryShrinkagePage() {
     const [reasons, setReasons] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [message, setMessage] = useState('');
+    const [saving, setSaving] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [form, setForm] = useState<any>({
-        warehouseId: '',
-        reasonId: '',
-        notes: '',
-        items: [{ productId: '', quantity: 1 }],
-    });
+    const [directionFilter, setDirectionFilter] = useState<'' | Direction>('');
+    const [form, setForm] = useState(EMPTY_FORM);
+    const [errors, setErrors] = useState<FormErrors>({ items: {} });
+
+    const direction = form.direction;
+    const isFound = direction === 'FOUND';
 
     useEffect(() => {
-        void Promise.all([loadRecords(), loadOptions()]);
-    }, [createdRange]);
+        void loadRecords();
+    }, [createdRange, directionFilter]);
+
+    useEffect(() => {
+        void loadOptions();
+    }, []);
 
     const loadRecords = async () => {
         setLoading(true);
         try {
-            const data = await api.getInventoryShrinkage(applyCreatedRangeQuery(createdRange));
+            const data = await api.getInventoryShrinkage({
+                ...applyCreatedRangeQuery(createdRange),
+                direction: directionFilter || undefined,
+            });
             setRecords(data);
         } catch (error) {
             console.error('Failed to load shrinkage records', error);
@@ -58,11 +100,13 @@ export default function InventoryShrinkagePage() {
         }
     };
 
+    // Both catalogues in one call: the direction toggle swaps between them
+    // without a round trip, and the picker is never briefly empty mid-switch.
     const loadOptions = async () => {
         try {
             const [warehouseData, reasonData, productData] = await Promise.all([
                 api.getInventoryWarehouses(),
-                api.getInventoryReasons({ type: 'SHRINKAGE' }),
+                api.getInventoryReasons(),
                 api.getProducts(),
             ]);
             setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
@@ -73,26 +117,87 @@ export default function InventoryShrinkagePage() {
         }
     };
 
+    const visibleReasons = useMemo(
+        () => reasons.filter((reason: any) => reason.type === REASON_TYPE[direction]),
+        [reasons, direction],
+    );
+
+    const setField = (patch: Partial<typeof EMPTY_FORM>) => setForm((current) => ({ ...current, ...patch }));
+
+    const setLine = (index: number, patch: Partial<LineItem>) =>
+        setForm((current) => ({
+            ...current,
+            items: current.items.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
+        }));
+
+    /**
+     * Every rule the server enforces, checked here too so the counter sees
+     * which field is wrong rather than one banner for the whole form. The
+     * server remains the authority — this only saves a round trip.
+     */
+    const validate = (): FormErrors | null => {
+        const next: FormErrors = { items: {} };
+        if (!form.warehouseId) next.warehouseId = t.inventoryShrinkage.warehouseRequired;
+        if (!form.reasonId) next.reasonId = t.inventoryShrinkage.reasonRequired;
+        if (!form.notes.trim()) next.notes = t.inventoryShrinkage.noteRequired;
+
+        form.items.forEach((line, index) => {
+            const lineErrors: { productId?: string; quantity?: string } = {};
+            if (!line.productId) lineErrors.productId = t.inventoryShrinkage.productRequired;
+            if (!Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1) {
+                lineErrors.quantity = t.inventoryShrinkage.quantityRequired;
+            }
+            if (Object.keys(lineErrors).length > 0) next.items[index] = lineErrors;
+        });
+
+        const hasError =
+            Boolean(next.warehouseId || next.reasonId || next.notes) || Object.keys(next.items).length > 0;
+        return hasError ? next : null;
+    };
+
     const handleCreate = async (event: React.FormEvent) => {
         event.preventDefault();
+        const invalid = validate();
+        setErrors(invalid ?? { items: {} });
+        if (invalid) return;
+
+        setSaving(true);
         try {
             await api.createInventoryShrinkage({
+                direction,
                 warehouseId: form.warehouseId,
                 reasonId: form.reasonId,
-                notes: form.notes || undefined,
-                items: form.items.map((item: any) => ({ productId: item.productId, quantity: Number(item.quantity) })),
+                notes: form.notes.trim(),
+                items: form.items.map((item) => ({ productId: item.productId, quantity: Number(item.quantity) })),
             });
-            setMessage(t.inventoryShrinkage.posted);
-            setForm({ warehouseId: '', reasonId: '', notes: '', items: [{ productId: '', quantity: 1 }] });
+            toast.success(isFound ? t.inventoryShrinkage.foundPosted : t.inventoryShrinkage.posted);
+            setForm({ ...EMPTY_FORM, direction, items: [{ productId: '', quantity: 1 }] });
             await loadRecords();
         } catch (error: any) {
-            setMessage(error.message || t.inventoryShrinkage.postFailed);
+            toast.error(
+                error.message || (isFound ? t.inventoryShrinkage.postFoundFailed : t.inventoryShrinkage.postFailed),
+            );
+        } finally {
+            setSaving(false);
         }
     };
 
     const columns: ColumnDef<ShrinkageRecord, any>[] = useMemo(
         () => [
             columnHelper.accessor('reference_number', { header: t.inventoryShrinkage.columns.reference, size: 150 }),
+            columnHelper.display({
+                id: 'direction',
+                header: t.inventoryShrinkage.columns.direction,
+                // Rows written before found-stock entry existed carry no
+                // direction of their own; every one of them is a write-off.
+                cell: ({ row }) =>
+                    row.original.direction === 'FOUND' ? (
+                        <StatusBadge tone="info">{t.inventoryShrinkage.directionFound}</StatusBadge>
+                    ) : (
+                        <StatusBadge tone="danger">{t.inventoryShrinkage.directionLoss}</StatusBadge>
+                    ),
+                size: 150,
+            }),
             columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: t.inventoryShrinkage.columns.warehouse, size: 180 }),
             columnHelper.accessor((row) => row.reason?.label || '-', { id: 'reason', header: t.inventoryShrinkage.columns.reason, size: 170 }),
             columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity, 0), { id: 'quantity', header: t.inventoryShrinkage.columns.totalQty, size: 110 }),
@@ -125,45 +230,181 @@ export default function InventoryShrinkagePage() {
                     )}
                 />
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-4 space-y-4" noValidate>
                     <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-danger" />
-                        <h2 className="font-bold text-lg">{t.inventoryShrinkage.newEntry}</h2>
+                        {isFound ? (
+                            <PackagePlus className="w-5 h-5 text-blue-600" />
+                        ) : (
+                            <AlertTriangle className="w-5 h-5 text-danger" />
+                        )}
+                        <h2 className="font-semibold text-sm text-gray-900">
+                            {isFound ? t.inventoryShrinkage.newFoundEntry : t.inventoryShrinkage.newEntry}
+                        </h2>
                     </div>
-                    {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <select required value={form.warehouseId} onChange={(e) => setForm((current: any) => ({ ...current, warehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                            <option value="">{t.inventoryShrinkage.selectWarehouse}</option>
-                            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
-                        </select>
-                        <select required value={form.reasonId} onChange={(e) => setForm((current: any) => ({ ...current, reasonId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                            <option value="">{t.inventoryShrinkage.selectReason}</option>
-                            {reasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
-                        </select>
-                        <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventoryShrinkage.notes} />
+
+                    {isFound && visibleReasons.length === 0 ? (
+                        <Alert tone="warning">
+                            {t.inventoryShrinkage.noFoundReasons}{' '}
+                            <Link href={routes.inventory.settings} className="font-medium text-blue-600 underline">
+                                {t.sidebar.modules.inventory}
+                            </Link>
+                        </Alert>
+                    ) : null}
+
+                    <div className="grid md:grid-cols-2 gap-3">
+                        <Field label={t.inventoryShrinkage.directionLabel} required htmlFor="shrinkage-direction">
+                            <Select
+                                id="shrinkage-direction"
+                                value={direction}
+                                // The reason catalogues are disjoint, so a reason
+                                // picked for one direction is never valid for the
+                                // other — clear it rather than post a mismatch.
+                                onChange={(event) =>
+                                    setField({ direction: event.target.value as Direction, reasonId: '' })
+                                }
+                            >
+                                <option value="LOSS">{t.inventoryShrinkage.directionLoss}</option>
+                                <option value="FOUND">{t.inventoryShrinkage.directionFound}</option>
+                            </Select>
+                        </Field>
+                        <Field
+                            label={t.inventoryShrinkage.columns.warehouse}
+                            required
+                            error={errors.warehouseId}
+                            htmlFor="shrinkage-warehouse"
+                        >
+                            <Select
+                                id="shrinkage-warehouse"
+                                error={Boolean(errors.warehouseId)}
+                                value={form.warehouseId}
+                                onChange={(event) => setField({ warehouseId: event.target.value })}
+                            >
+                                <option value="">{t.inventoryShrinkage.selectWarehouse}</option>
+                                {warehouses.map((warehouse) => (
+                                    <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field
+                            label={t.inventoryShrinkage.columns.reason}
+                            required
+                            error={errors.reasonId}
+                            htmlFor="shrinkage-reason"
+                        >
+                            <Select
+                                id="shrinkage-reason"
+                                error={Boolean(errors.reasonId)}
+                                value={form.reasonId}
+                                onChange={(event) => setField({ reasonId: event.target.value })}
+                            >
+                                <option value="">{t.inventoryShrinkage.selectReason}</option>
+                                {visibleReasons.map((reason) => (
+                                    <option key={reason.id} value={reason.id}>{reason.label}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field
+                            label={t.inventoryShrinkage.notes}
+                            required
+                            error={errors.notes}
+                            hint={t.inventoryShrinkage.noteHelp}
+                            htmlFor="shrinkage-notes"
+                        >
+                            <Input
+                                id="shrinkage-notes"
+                                error={Boolean(errors.notes)}
+                                value={form.notes}
+                                onChange={(event) => setField({ notes: event.target.value })}
+                                placeholder={t.inventoryShrinkage.notes}
+                            />
+                        </Field>
                     </div>
+
                     <div className="space-y-3">
-                        {form.items.map((item: any, index: number) => (
-                            <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
-                                <select required value={item.productId} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                    <option value="">{t.inventoryShrinkage.selectProduct}</option>
-                                    {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                                </select>
-                                <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                                <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">{t.inventoryShrinkage.remove}</button>
+                        {form.items.map((item, index) => (
+                            <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-start">
+                                <Field
+                                    label={t.inventoryShrinkage.selectProduct}
+                                    required
+                                    error={errors.items[index]?.productId}
+                                    htmlFor={`shrinkage-product-${index}`}
+                                >
+                                    <Select
+                                        id={`shrinkage-product-${index}`}
+                                        error={Boolean(errors.items[index]?.productId)}
+                                        value={item.productId}
+                                        onChange={(event) => setLine(index, { productId: event.target.value })}
+                                    >
+                                        <option value="">{t.inventoryShrinkage.selectProduct}</option>
+                                        {products.map((product) => (
+                                            <option key={product.id} value={product.id}>{product.name}</option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                                <Field
+                                    label={t.inventoryShrinkage.columns.totalQty}
+                                    required
+                                    error={errors.items[index]?.quantity}
+                                    htmlFor={`shrinkage-quantity-${index}`}
+                                >
+                                    <Input
+                                        id={`shrinkage-quantity-${index}`}
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        error={Boolean(errors.items[index]?.quantity)}
+                                        value={item.quantity}
+                                        onChange={(event) => setLine(index, { quantity: event.target.value })}
+                                    />
+                                </Field>
+                                <Button
+                                    variant="secondary"
+                                    className="md:mt-5"
+                                    onClick={() =>
+                                        setForm((current) => ({
+                                            ...current,
+                                            items: current.items.length === 1
+                                                ? current.items
+                                                : current.items.filter((_, lineIndex) => lineIndex !== index),
+                                        }))
+                                    }
+                                >
+                                    {t.inventoryShrinkage.remove}
+                                </Button>
                             </div>
                         ))}
                     </div>
+
                     <div className="flex items-center justify-between">
-                        <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <Plus className="w-4 h-4 me-2" /> {t.inventoryShrinkage.addLine}
-                        </button>
-                        <button type="submit" className="bg-danger hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-lg shadow-sm">{t.inventoryShrinkage.postShrinkage}</button>
+                        <Button
+                            variant="secondary"
+                            icon={<Plus className="w-4 h-4" />}
+                            onClick={() =>
+                                setForm((current) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))
+                            }
+                        >
+                            {t.inventoryShrinkage.addLine}
+                        </Button>
+                        <Button type="submit" variant={isFound ? 'primary' : 'danger'} loading={saving}>
+                            {isFound ? t.inventoryShrinkage.postFound : t.inventoryShrinkage.postShrinkage}
+                        </Button>
                     </div>
                 </form>
 
                 <div className="flex flex-wrap items-center gap-2">
                     <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
+                    <Select
+                        // Named apart from the form's own entry-type control:
+                        // two selects sharing an accessible name leave a screen
+                        // reader with no way to tell the filter from the field.
+                        aria-label={t.inventoryShrinkage.filterLabel}
+                        value={directionFilter}
+                        onChange={(event) => setDirectionFilter(event.target.value as '' | Direction)}
+                    >
+                        <option value="">{t.inventoryShrinkage.filterAll}</option>
+                        <option value="LOSS">{t.inventoryShrinkage.directionLoss}</option>
+                        <option value="FOUND">{t.inventoryShrinkage.directionFound}</option>
+                    </Select>
                 </div>
                 <DataTable<ShrinkageRecord>
                     tableId="inventory-shrinkage"

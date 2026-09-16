@@ -1,6 +1,7 @@
 import {
     ArrayMinSize,
     IsArray,
+    IsNotEmpty,
     IsNumber,
     IsOptional,
     IsString,
@@ -30,6 +31,27 @@ export class CreatePurchaseItemDto {
     @IsOptional()
     @IsString()
     warehouseId?: string;
+}
+
+/**
+ * One tender taken against the bill at entry time — the purchase-side twin of
+ * `CreatePaymentDto` on a sale. `paymentMethod` is the canonical, classifiable
+ * method string ('Cash', 'Bank', 'Mobile Wallet', 'Card', or a tenant-defined
+ * name); `accountId` is the GL account the tenant configured for it, resolved
+ * server-side from the method name so a stale client id cannot redirect cash.
+ */
+export class CreatePurchasePaymentDto {
+    @IsString()
+    @IsNotEmpty()
+    paymentMethod: string;
+
+    @IsNumber()
+    @Min(0)
+    amount: number;
+
+    @IsOptional()
+    @IsString()
+    accountId?: string;
 }
 
 export class CreatePurchaseDto {
@@ -73,4 +95,18 @@ export class CreatePurchaseDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * What was handed over at the counter. Omit it — or send an empty array —
+     * and the whole bill stays on the supplier's account, which is what every
+     * purchase did before cash entry existed.
+     *
+     * Their sum is the only source of truth for `Purchase.paid_amount`; there is
+     * deliberately no separate `amountPaid` field to disagree with it.
+     */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CreatePurchasePaymentDto)
+    payments?: CreatePurchasePaymentDto[];
 }

@@ -30,6 +30,10 @@ export default function ShrinkageReportPage() {
     const [groups, setGroups] = useState<any[]>([]);
     const [subgroups, setSubgroups] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    // The report answers one direction at a time. Netting a theft against a
+    // miscount would report neither, so there is no "both" option — LOSS is the
+    // default because this is the shrinkage report.
+    const [direction, setDirection] = useState<'LOSS' | 'FOUND'>('LOSS');
     const [storeId, setStoreId] = useState('');
     const [warehouseId, setWarehouseId] = useState('');
     const [reasonId, setReasonId] = useState('');
@@ -44,12 +48,13 @@ export default function ShrinkageReportPage() {
 
     useEffect(() => {
         void loadReport();
-    }, [storeId, warehouseId, reasonId, groupId, subgroupId, fromDate, toDate]);
+    }, [direction, storeId, warehouseId, reasonId, groupId, subgroupId, fromDate, toDate]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             const data = await api.getShrinkageSummary({
+                direction,
                 storeId: storeId || undefined,
                 warehouseId: warehouseId || undefined,
                 reasonId: reasonId || undefined,
@@ -66,12 +71,15 @@ export default function ShrinkageReportPage() {
         }
     };
 
+    // Both reason catalogues in one call: a SHRINKAGE reason can never appear on
+    // a FOUND row, so the picker is narrowed client-side as the direction flips
+    // rather than refetched.
     const loadFilters = async () => {
         try {
             const [storeData, warehouseData, reasonData, groupData, subgroupData] = await Promise.all([
                 api.getStores(),
                 api.getInventoryWarehouses(),
-                api.getInventoryReasons({ type: 'SHRINKAGE' }),
+                api.getInventoryReasons(),
                 api.getProductGroups(),
                 api.getProductSubgroups(),
             ]);
@@ -95,23 +103,41 @@ export default function ShrinkageReportPage() {
         [warehouses, storeId],
     );
 
+    const visibleReasons = useMemo(
+        () => reasons.filter((reason: any) => reason.type === (direction === 'FOUND' ? 'FOUND' : 'SHRINKAGE')),
+        [reasons, direction],
+    );
+
     const filteredSubgroups = useMemo(
         () => subgroups.filter((subgroup: any) => !groupId || subgroup.group_id === groupId),
         [subgroups, groupId],
     );
 
+    const isFound = direction === 'FOUND';
+
     const columns: ColumnDef<ShrinkageSummaryRow, any>[] = useMemo(
         () => [
             columnHelper.accessor('warehouseName', { header: t.inventoryReports.shrinkage.columns.warehouse, size: 220 }),
             columnHelper.accessor('reasonLabel', { header: t.inventoryReports.shrinkage.columns.reason, size: 220 }),
-            columnHelper.accessor('quantity', { header: t.inventoryReports.shrinkage.columns.quantityLost, size: 120 }),
+            columnHelper.accessor('quantity', {
+                header: isFound
+                    ? t.inventoryReports.shrinkage.columns.quantityFound
+                    : t.inventoryReports.shrinkage.columns.quantityLost,
+                size: 120,
+            }),
             columnHelper.accessor('value', {
                 header: t.inventoryReports.shrinkage.columns.estimatedValue,
-                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                // Red states a loss. A surplus is not one, and colouring it the
+                // same would read as money gone on a number that is money back.
+                cell: (info) => (
+                    <span className={`text-sm font-bold ${isFound ? 'text-gray-900' : 'text-danger'}`}>
+                        {formatBDT(Number(info.getValue()))}
+                    </span>
+                ),
                 size: 150,
             }),
         ],
-        [t],
+        [t, isFound],
     );
 
     return (
@@ -129,21 +155,39 @@ export default function ShrinkageReportPage() {
 
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.totalUnitsLost}</div>
+                        <div className="text-xs font-medium text-gray-500">
+                            {isFound ? t.inventoryReports.shrinkage.totalUnitsFound : t.inventoryReports.shrinkage.totalUnitsLost}
+                        </div>
                         <div className="mt-2 text-2xl font-bold text-gray-900">{report.summary?.totalQuantity ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.estimatedValueLost}</div>
-                        <div className="mt-2 text-2xl font-bold text-danger">{formatBDT(Number(report.summary?.totalValue ?? 0))}</div>
+                        <div className="text-xs font-medium text-gray-500">
+                            {isFound ? t.inventoryReports.shrinkage.estimatedValueFound : t.inventoryReports.shrinkage.estimatedValueLost}
+                        </div>
+                        <div className={`mt-2 text-2xl font-bold ${isFound ? 'text-gray-900' : 'text-danger'}`}>
+                            {formatBDT(Number(report.summary?.totalValue ?? 0))}
+                        </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.topDriver}</div>
-                        <div className="mt-2 text-lg font-bold text-gray-900">{report.summary?.topReasons?.[0]?.reasonLabel || t.inventoryReports.shrinkage.noShrinkageLogged}</div>
+                        <div className="mt-2 text-lg font-bold text-gray-900">{report.summary?.topReasons?.[0]?.reasonLabel || (isFound ? t.inventoryReports.shrinkage.noFoundLogged : t.inventoryReports.shrinkage.noShrinkageLogged)}</div>
                         <div className="text-sm text-gray-500">{report.summary?.topReasons?.[0]?.warehouseName || t.inventoryReports.shrinkage.allWarehousesLabel}</div>
                     </div>
                 </div>
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-4 gap-3 items-end">
+                    <select
+                        value={direction}
+                        // A reason belongs to one direction only, so a reason
+                        // left over from the other side would filter the report
+                        // down to nothing.
+                        onChange={(e) => { setDirection(e.target.value as 'LOSS' | 'FOUND'); setReasonId(''); }}
+                        aria-label={t.inventoryReports.shrinkage.direction}
+                        className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                    >
+                        <option value="LOSS">{t.inventoryReports.shrinkage.directionLoss}</option>
+                        <option value="FOUND">{t.inventoryReports.shrinkage.directionFound}</option>
+                    </select>
                     <select value={storeId} onChange={(e) => { setStoreId(e.target.value); setWarehouseId(''); }} aria-label={t.inventoryReports.reorder.allBranches} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryReports.reorder.allBranches}</option>
                         {stores.map((store: any) => <option key={store.id} value={store.id}>{store.name}</option>)}
@@ -154,7 +198,7 @@ export default function ShrinkageReportPage() {
                     </select>
                     <select value={reasonId} onChange={(e) => setReasonId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryReports.shrinkage.allReasons}</option>
-                        {reasons.map((reason: any) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
+                        {visibleReasons.map((reason: any) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
                     </select>
                     <select value={groupId} onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryReports.reorder.allGroups}</option>
@@ -174,7 +218,7 @@ export default function ShrinkageReportPage() {
                     data={report.rows || []}
                     title={t.inventoryReports.shrinkage.shrinkageSummary}
                     isLoading={loading}
-                    emptyMessage={t.inventoryReports.shrinkage.emptyFiltered}
+                    emptyMessage={isFound ? t.inventoryReports.shrinkage.emptyFoundMessage : t.inventoryReports.shrinkage.emptyFiltered}
                     emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryReports.shrinkage.searchPlaceholder}
                 />
