@@ -22,6 +22,28 @@ const AGING_BUCKETS = [
 export class InventoryReportsService {
     constructor(private db: DatabaseService) {}
 
+    /**
+     * The warehouse filter every report on this controller shares, as a `where`
+     * fragment over any row that carries a `warehouse_id` and a `warehouse`
+     * relation — ProductStock, InventoryMovement, InventoryShrinkage.
+     *
+     * A branch reaches stock only through its warehouses (`Warehouse.store_id`),
+     * so `storeId` resolves to the relation rather than to a column of its own.
+     * The two filters are AND-ed on purpose: asking for a warehouse *and* a
+     * branch it does not belong to is a contradiction, and reporting nothing is
+     * the honest answer to it.
+     *
+     * Returns `undefined` when neither is set, which is what Prisma wants for
+     * "no filter" in a nested `where`.
+     */
+    private warehouseScope(query: { warehouseId?: string; storeId?: string }) {
+        if (!query.warehouseId && !query.storeId) return undefined;
+        return {
+            ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+            ...(query.storeId ? { warehouse: { store_id: query.storeId } } : {}),
+        };
+    }
+
     async getReorderSuggestions(tenantId: string, query: GetReorderSuggestionsDto) {
         const settings = await this.db.inventorySettings.findUnique({
             where: { tenant_id: tenantId },
@@ -37,7 +59,7 @@ export class InventoryReportsService {
                 group: true,
                 subgroup: true,
                 stocks: {
-                    where: query.warehouseId ? { warehouse_id: query.warehouseId } : undefined,
+                    where: this.warehouseScope(query),
                     include: { warehouse: true },
                 },
             },
@@ -50,6 +72,10 @@ export class InventoryReportsService {
                     tenant_id: tenantId,
                     status: { in: ['SENT', 'PARTIALLY_RECEIVED'] },
                     ...(query.warehouseId ? { destination_warehouse_id: query.warehouseId } : {}),
+                    // Stock already on its way *into* the branch counts toward
+                    // it: it has left its source warehouse, so nothing else is
+                    // holding it, and ordering more would double up.
+                    ...(query.storeId ? { destinationWarehouse: { store_id: query.storeId } } : {}),
                 },
             },
             include: {
@@ -120,7 +146,7 @@ export class InventoryReportsService {
                 group: true,
                 subgroup: true,
                 stocks: {
-                    where: query.warehouseId ? { warehouse_id: query.warehouseId } : undefined,
+                    where: this.warehouseScope(query),
                     include: { warehouse: true },
                 },
             },
@@ -184,6 +210,7 @@ export class InventoryReportsService {
                 tenant_id: tenantId,
                 is_active: true,
                 ...(query.warehouseId ? { id: query.warehouseId } : {}),
+                ...(query.storeId ? { store_id: query.storeId } : {}),
             },
             select: { id: true, name: true, code: true, is_default: true },
             orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
@@ -238,7 +265,7 @@ export class InventoryReportsService {
         });
 
         const [averageCostByProduct, latestCostByProduct] = await Promise.all([
-            this.getWeightedAveragePurchaseCosts(tenantId, query.warehouseId),
+            this.getWeightedAveragePurchaseCosts(tenantId, query),
             this.getLatestRecordedCosts(tenantId),
         ]);
 
@@ -310,10 +337,22 @@ export class InventoryReportsService {
      * purchase returns. One grouped query for the whole catalogue — the
      * per-product version turns this report into a timeout on a real ledger.
      */
-    private async getWeightedAveragePurchaseCosts(tenantId: string, warehouseId?: string) {
+    private async getWeightedAveragePurchaseCosts(tenantId: string, query: GetStockOnHandDto) {
         // No ::uuid casts — Prisma maps `String @id @default(uuid())` to a text
         // column, so casting the parameter breaks the comparison outright.
-        const warehouseFilter = warehouseId ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty;
+        const warehouseFilter = query.warehouseId
+            ? Prisma.sql`AND warehouse_id = ${query.warehouseId}`
+            : Prisma.empty;
+
+        // Narrowed with the report it values: the quantities above already count
+        // only this branch's warehouses, so costing them against receipts into
+        // every *other* branch would value one branch's shelves at another's
+        // buying price. A subquery rather than the resolved column list, because
+        // that list holds only active warehouses — stock bought into one since
+        // closed still cost what it cost.
+        const storeFilter = query.storeId
+            ? Prisma.sql`AND warehouse_id IN (SELECT id FROM "Warehouse" WHERE tenant_id = ${tenantId} AND store_id = ${query.storeId})`
+            : Prisma.empty;
 
         const rows = await this.db.$queryRaw<{ product_id: string; cost_total: number; quantity_total: number }[]>`
             SELECT
@@ -325,6 +364,7 @@ export class InventoryReportsService {
               AND movement_type IN ('PURCHASE', 'PURCHASE_RECEIPT', 'PURCHASE_RETURN')
               AND unit_cost IS NOT NULL
               ${warehouseFilter}
+              ${storeFilter}
             GROUP BY product_id
         `;
 
@@ -388,7 +428,7 @@ export class InventoryReportsService {
                 price: true,
                 group: { select: { id: true, name: true } },
                 stocks: {
-                    where: query.warehouseId ? { warehouse_id: query.warehouseId } : undefined,
+                    where: this.warehouseScope(query),
                     select: { quantity: true },
                 },
             },
@@ -409,7 +449,7 @@ export class InventoryReportsService {
             where: {
                 tenant_id: tenantId,
                 movement_type: 'SALE',
-                ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+                ...this.warehouseScope(query),
                 product_id: { in: inStock.map((row) => row.product.id) },
             },
             _max: { created_at: true },
@@ -491,7 +531,7 @@ export class InventoryReportsService {
         const rows = await this.db.inventoryShrinkage.findMany({
             where: {
                 tenant_id: tenantId,
-                ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+                ...this.warehouseScope(query),
                 ...(query.reasonId ? { reason_id: query.reasonId } : {}),
                 ...buildDateWindow(query.from, query.to),
                 ...(query.productId || query.groupId || query.subgroupId

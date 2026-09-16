@@ -1133,15 +1133,17 @@ export const api = {
     postStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}/post`, {
         method: 'POST',
     }),
-    getReorderSuggestions: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
+    getReorderSuggestions: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getStockOnHand: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
+    getStockOnHand: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
@@ -1149,8 +1151,9 @@ export const api = {
         if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
         return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getInventoryValuation: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
+    getInventoryValuation: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
@@ -1220,7 +1223,7 @@ export const api = {
         const query = buildReportQuery(params);
         return fetchWithAuth(`/sales-reports/customer-retention?${query}`);
     },
-    getStockAging: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; slowMovingAfterDays?: number }) => {
+    getStockAging: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; slowMovingAfterDays?: number }) => {
         const query = buildReportQuery(params ?? {});
         return fetchWithAuth(`/inventory-reports/stock-aging${query ? `?${query}` : ''}`);
     },
@@ -1240,8 +1243,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/consolidated${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getShrinkageSummary: (params?: { warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
+    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.reasonId) query.set('reasonId', params.reasonId);
         if (params?.productId) query.set('productId', params.productId);

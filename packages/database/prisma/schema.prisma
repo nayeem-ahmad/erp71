@@ -1345,6 +1345,12 @@ model Store {
   externalSyncConnections  ExternalSyncConnection[]
   projects                 Project[]
   productDemands           ProductDemand[]
+
+  // A tenant cannot hold two branches of the same name: the branch switcher and
+  // every store picker show the name alone, so a repeat leaves "which branch am
+  // I looking at?" with no answer. Case folding is the service's job — Postgres
+  // compares these bytewise.
+  @@unique([tenant_id, name])
 }
 
 model PosCounter {
@@ -1404,6 +1410,13 @@ model Warehouse {
   purchaseReturnItems PurchaseReturnItem[] @relation("PurchaseReturnItemWarehouse")
 
   @@unique([tenant_id, code])
+  // A branch cannot hold two warehouses of the same name: the pickers on every
+  // entry screen show the name alone, so a repeat makes "which one holds the
+  // stock?" unanswerable. Scoped to the store rather than the tenant because
+  // two branches each naming a location "Godown" is normal, and the pickers
+  // are filtered to one branch. Case folding is the service's job — Postgres
+  // compares these bytewise.
+  @@unique([tenant_id, store_id, name])
   @@index([tenant_id, store_id])
 }
 

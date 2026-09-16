@@ -186,6 +186,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'inventory.setup': { id: 'inventory.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'inventory.hub.setup' },
   'inventory.setup.brands': { id: 'inventory.setup.brands', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.brands', href: '/inventory/brands' },
   'inventory.setup.categories': { id: 'inventory.setup.categories', kind: 'link', icon: 'FolderTree', labelKey: 'sidebar.items.categories', href: '/inventory/categories' },
+  'inventory.setup.warehouses': { id: 'inventory.setup.warehouses', kind: 'link', icon: 'Warehouse', labelKey: 'sidebar.items.warehouses', href: '/inventory/warehouses' },
   'inventory.setup.settings': { id: 'inventory.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.inventorySettings', href: '/inventory/settings' },
 
   // The module keeps no `href` of its own: its four screens are child links, and
@@ -471,7 +472,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.products', 'inventory.setup', 0),
   layoutNode('inventory.setup.categories', 'inventory.setup', 1),
   layoutNode('inventory.setup.brands', 'inventory.setup', 2),
-  layoutNode('inventory.setup.settings', 'inventory.setup', 3),
+  layoutNode('inventory.setup.warehouses', 'inventory.setup', 3),
+  layoutNode('inventory.setup.settings', 'inventory.setup', 4),
 
   layoutNode('crm', null, 7),
   layoutNode('crm.overview', 'crm', 0),
