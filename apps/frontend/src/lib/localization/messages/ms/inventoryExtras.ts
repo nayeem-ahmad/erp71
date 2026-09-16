@@ -263,6 +263,7 @@ export const inventoryExtrasMessages = {
             searchPlaceholder: "Cari gudang...",
             selectBranch: "Pilih cawangan",
             nameRequired: "Nama diperlukan",
+            nameDuplicate: "Gudang dengan nama ini sudah wujud di cawangan ini",
             branchRequired: "Cawangan diperlukan",
             codeHint: "Biarkan kosong untuk hasilkan secara automatik",
             manageWarehouses: "Urus gudang",

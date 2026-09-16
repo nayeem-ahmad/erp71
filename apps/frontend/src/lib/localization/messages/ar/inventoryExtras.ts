@@ -263,6 +263,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "ابحث في المستودعات...",
         "selectBranch": "اختر فرعًا",
         "nameRequired": "الاسم مطلوب",
+        "nameDuplicate": "يوجد بالفعل مستودع بهذا الاسم في هذا الفرع",
         "branchRequired": "الفرع مطلوب",
         "codeHint": "اتركه فارغًا لإنشائه تلقائيًا",
         "manageWarehouses": "إدارة المستودعات"

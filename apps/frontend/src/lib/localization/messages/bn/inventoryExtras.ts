@@ -263,6 +263,7 @@ export const inventoryExtrasMessages = {
             searchPlaceholder: "গুদাম খুঁজুন...",
             selectBranch: "শাখা নির্বাচন করুন",
             nameRequired: "নাম আবশ্যক",
+            nameDuplicate: "এই শাখায় এই নামের একটি গুদাম ইতিমধ্যেই আছে",
             branchRequired: "শাখা আবশ্যক",
             codeHint: "স্বয়ংক্রিয়ভাবে তৈরি করতে ফাঁকা রাখুন",
             manageWarehouses: "গুদাম ব্যবস্থাপনা",

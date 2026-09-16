@@ -263,6 +263,7 @@ export const inventoryExtrasMessages = {
         "searchPlaceholder": "Rechercher des entrepôts...",
         "selectBranch": "Sélectionner une succursale",
         "nameRequired": "Le nom est requis",
+        "nameDuplicate": "Un entrepôt portant ce nom existe déjà dans cette succursale",
         "branchRequired": "La succursale est requise",
         "codeHint": "Laisser vide pour générer automatiquement",
         "manageWarehouses": "Gérer les entrepôts"

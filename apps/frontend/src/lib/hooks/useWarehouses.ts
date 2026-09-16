@@ -12,6 +12,13 @@ export interface WarehouseOption {
     store_id: string;
     is_default: boolean;
     is_active: boolean;
+    /**
+     * The branch holding it. Sent by `GET /inventory/warehouses` so a
+     * tenant-wide picker can tell two branches' identically named locations
+     * apart — see `warehouseLabel`. Optional because a cached or older payload
+     * may not carry it.
+     */
+    store?: { id: string; name: string } | null;
 }
 
 /**

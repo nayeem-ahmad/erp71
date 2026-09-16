@@ -160,6 +160,15 @@ export default function InventoryTransfersPage() {
      * A single-branch shop is deliberately left ungrouped: an `<optgroup>` around
      * every warehouse in the only branch there is adds a label and no
      * information.
+     *
+     * This is why these pickers do NOT use `warehouseLabel()`, which every other
+     * warehouse `<select>` in the app does use. That helper appends "(Branch)" to
+     * a name another warehouse in the list shares — the same ambiguity grouping
+     * solves here, and solving it twice reads as noise: "Godown (Dhaka)" sitting
+     * inside an `<optgroup>` already labelled Dhaka. In the ungrouped case the
+     * helper is a no-op anyway, because names are unique per branch
+     * (`@@unique([tenant_id, store_id, name])`), so one branch cannot hold two
+     * warehouses that read alike.
      */
     const warehouseGroups = useMemo(() => {
         const groups = new Map<string, { label: string; warehouses: any[] }>();

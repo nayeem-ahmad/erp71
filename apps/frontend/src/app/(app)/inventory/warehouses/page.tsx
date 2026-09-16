@@ -96,8 +96,23 @@ export default function WarehousesPage() {
     };
 
     const handleSave = async () => {
+        const name = form.name.trim();
+        // The branch a warehouse belongs to is fixed once it exists, so an edit
+        // is always checked against the branch it is already in.
+        const storeId = editTarget ? editTarget.store_id : form.storeId;
         const nextErrors: { name?: string; storeId?: string } = {};
-        if (!form.name.trim()) nextErrors.name = s.nameRequired;
+
+        if (!name) nextErrors.name = s.nameRequired;
+        // A branch may not hold two warehouses of the same name — the pickers on
+        // the entry screens show the name alone. The server enforces this; doing
+        // it here too means the answer arrives as the user types rather than
+        // after a round trip that loses the form.
+        else if (warehouses.some((warehouse) => (
+            warehouse.id !== editTarget?.id
+            && warehouse.store_id === storeId
+            && warehouse.name.trim().toLowerCase() === name.toLowerCase()
+        ))) nextErrors.name = s.nameDuplicate;
+
         // The branch is fixed once a warehouse exists — moving stock between
         // branches is a transfer, not an edit — so only creation validates it.
         if (!editTarget && !form.storeId) nextErrors.storeId = s.branchRequired;
@@ -110,14 +125,14 @@ export default function WarehousesPage() {
         try {
             if (editTarget) {
                 await api.updateInventoryWarehouse(editTarget.id, {
-                    name: form.name.trim(),
+                    name,
                     code: form.code.trim() || undefined,
                 });
                 toast.success(settings.warehouseUpdated);
             } else {
                 await api.createInventoryWarehouse({
                     storeId: form.storeId,
-                    name: form.name.trim(),
+                    name,
                     code: form.code.trim() || undefined,
                 });
                 toast.success(settings.warehouseCreated);
@@ -276,7 +291,10 @@ export default function WarehousesPage() {
                                 id="warehouse-name"
                                 type="text"
                                 value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                onChange={(e) => {
+                                    setForm({ ...form, name: e.target.value });
+                                    if (errors.name) setErrors({ ...errors, name: undefined });
+                                }}
                                 className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
                             />
                         </Field>

@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
+import { warehouseLabel } from '@/lib/warehouse-label';
 
 interface WarehouseSelectProps {
     warehouses: WarehouseOption[];
@@ -45,8 +46,9 @@ export default function WarehouseSelect({
     if (readOnly) {
         return (
             <span className="text-gray-700 font-medium">
-                {selected?.name
-                    ?? (perLine && entryWarehouseName ? entryWarehouseName : '—')}
+                {selected
+                    ? warehouseLabel(selected, warehouses)
+                    : (perLine && entryWarehouseName ? entryWarehouseName : '—')}
             </span>
         );
     }
@@ -71,9 +73,12 @@ export default function WarehouseSelect({
                 // it did. Picking any real option replaces it.
                 !selected && <option value="">—</option>
             )}
+            {/* `useWarehouses` filters to the active branch, so this normally
+                prints the bare name; it only qualifies one when the caller
+                passes a list spanning branches. */}
             {warehouses.map((warehouse) => (
                 <option key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
+                    {warehouseLabel(warehouse, warehouses)}
                 </option>
             ))}
         </select>

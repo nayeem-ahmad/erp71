@@ -1011,6 +1011,7 @@ export const coreMessages = {
             created: "Geschäft hinzugefügt.",
             createError: "Das Geschäft konnte nicht hinzugefügt werden.",
             nameRequired: "Name des Geschäfts ist erforderlich.",
+            nameDuplicate: "Ein Geschäft mit diesem Namen existiert bereits",
             locked: "Ihr Tarif umfasst nur ein Geschäft. Führen Sie ein Upgrade durch, um weitere hinzuzufügen.",
             create: "Erstellen",
         },

@@ -41,13 +41,29 @@ export async function ensureDefaultWarehouse(tx: DbLike, tenantId: string, store
     const duplicateCount = await tx.warehouse.count({
         where: { tenant_id: tenantId, code: { startsWith: codeRoot } },
     });
+    const code = duplicateCount === 0 ? codeRoot : `${codeRoot}-${duplicateCount + 1}`;
+
+    // Only *active* warehouses were searched above, so the branch may still hold
+    // a deactivated one under the name this would take — and a branch may not
+    // hold two of a name. Falling back to the code, which is unique per tenant,
+    // keeps this from failing: posting stock must never be blocked by the name
+    // of a warehouse somebody closed.
+    const preferredName = `${store.name} Main Warehouse`;
+    const nameTaken = await tx.warehouse.findFirst({
+        where: {
+            tenant_id: tenantId,
+            store_id: store.id,
+            name: { equals: preferredName, mode: 'insensitive' },
+        },
+        select: { id: true },
+    });
 
     return tx.warehouse.create({
         data: {
             tenant_id: tenantId,
             store_id: store.id,
-            name: `${store.name} Main Warehouse`,
-            code: duplicateCount === 0 ? codeRoot : `${codeRoot}-${duplicateCount + 1}`,
+            name: nameTaken ? `${preferredName} (${code})` : preferredName,
+            code,
             is_default: true,
             is_active: true,
         },
