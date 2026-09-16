@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: "Rechercher par n° de série, client, statut...",
             allStatuses: "Tous les statuts",
         },
+        printPrompt: {
+            title: "Vente enregistrée",
+            saved: "La vente {number} a été enregistrée pour {amount}.",
+            question: "Imprimer la facture maintenant ?",
+            hint: "Vous pourrez aussi l'imprimer plus tard depuis la fiche de vente.",
+            paperSize: "Format de papier",
+            print: "Imprimer la facture",
+            skip: "Non, merci",
+        },
         detail: {
             edit: "Modifier",
             posReceipt: "Ticket POS",

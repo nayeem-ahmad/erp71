@@ -328,6 +328,15 @@ export const salesMessages = {
             searchPlaceholder: "क्रम, ग्राहक, स्थिति से खोजें...",
             allStatuses: "सभी स्थितियाँ",
         },
+        printPrompt: {
+            title: "बिक्री सहेजी गई",
+            saved: "बिक्री {number} सहेज दी गई — {amount}।",
+            question: "क्या अभी चालान प्रिंट करें?",
+            hint: "आप इसे बाद में बिक्री रिकॉर्ड से भी प्रिंट कर सकते हैं।",
+            paperSize: "कागज़ का आकार",
+            print: "चालान प्रिंट करें",
+            skip: "नहीं, धन्यवाद",
+        },
         detail: {
             edit: "संपादित करें",
             posReceipt: "POS रसीद",

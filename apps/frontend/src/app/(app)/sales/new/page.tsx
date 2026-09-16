@@ -14,9 +14,16 @@ import SaleEntryLayout, {
     EMPTY_ADJUSTMENTS,
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
+import PrintInvoicePrompt from '../components/PrintInvoicePrompt';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
-import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
+import {
+    printSalesInvoice,
+    PAPER_SIZES,
+    paperSizeLabel,
+    type InvoiceData,
+    type PaperSize,
+} from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
@@ -63,6 +70,12 @@ function NewSalePageContent() {
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
     const printMenuRef = useRef<HTMLDivElement>(null);
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
+    // Set once a sale is posted, which is also when the screen is wiped for the
+    // next customer — so the invoice is snapshotted here rather than re-read off
+    // an empty form when the operator answers.
+    const [printPrompt, setPrintPrompt] = useState<
+        { serialNumber: string; total: number; invoice: InvoiceData } | null
+    >(null);
 
     // Which warehouse the goods leave. `defaultWarehouseId` is what the server
     // would have resolved anyway, so the strip states it from the first render
@@ -202,41 +215,45 @@ function NewSalePageContent() {
 
     const printHeader = usePrintHeader('SALES_INVOICE');
 
+    /**
+     * What is on the screen right now, as an invoice. Printed straight from the
+     * toolbar before a sale is saved, and snapshotted on save so the prompt can
+     * still print it after the cart has been cleared.
+     */
+    const buildInvoiceData = (fallbackReference?: string): InvoiceData => ({
+        referenceNumber: refNumber || fallbackReference || '—',
+        date: formatDate(saleDate, locale),
+        companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
+        headerConfig: printHeader.headerConfig,
+        customerName: customer?.name,
+        customerPhone: customer?.phone,
+        items: items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            discount: item.discount || 0,
+        })),
+        payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+        subtotal: totals.subtotal,
+        discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        // Rounded because a flat discount derives its percentage from the
+        // subtotal, and "Discount (7.142857142857143%)" is not a line anyone
+        // wants on an invoice.
+        discountPercent: totals.discountPercent > 0
+            ? Math.round(totals.discountPercent * 100) / 100
+            : undefined,
+        vat: totals.vat > 0 ? totals.vat : undefined,
+        transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
+        laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
+        rounding: totals.rounding || undefined,
+        total: totals.total,
+        note: description || undefined,
+    });
+
     const handlePrint = (size?: PaperSize) => {
         const selectedSize = size ?? paperSize;
         setShowPaperMenu(false);
-        printSalesInvoice(
-            {
-                referenceNumber: refNumber || '—',
-                date: formatDate(saleDate, locale),
-                companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
-                headerConfig: printHeader.headerConfig,
-                customerName: customer?.name,
-                customerPhone: customer?.phone,
-                items: items.map((item) => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    unitPrice: item.price,
-                    discount: item.discount || 0,
-                })),
-                payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
-                subtotal: totals.subtotal,
-                discountAmount: totals.discount > 0 ? totals.discount : undefined,
-                // Rounded because a flat discount derives its percentage from
-                // the subtotal, and "Discount (7.142857142857143%)" is not a
-                // line anyone wants on an invoice.
-                discountPercent: totals.discountPercent > 0
-                    ? Math.round(totals.discountPercent * 100) / 100
-                    : undefined,
-                vat: totals.vat > 0 ? totals.vat : undefined,
-                transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
-                laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
-                rounding: totals.rounding || undefined,
-                total: totals.total,
-                note: description || undefined,
-            },
-            selectedSize,
-        );
+        printSalesInvoice(buildInvoiceData(), selectedSize);
     };
 
     const handleAddItem = (
@@ -359,6 +376,12 @@ function NewSalePageContent() {
         try {
             const response = await api.createNewSale(buildSaleData(false));
 
+            // Taken before the cart is cleared: the prompt below prints the sale
+            // that was just posted, not the blank screen it leaves behind. The
+            // sale number stands in as the invoice reference when the operator
+            // typed none, matching what the sale record prints later.
+            const invoice = buildInvoiceData(response.serial_number);
+
             // Clear cart and show success
             clearCart();
             setCustomerDraft(null);
@@ -366,6 +389,11 @@ function NewSalePageContent() {
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
+            setPrintPrompt({
+                serialNumber: response.serial_number,
+                total: totals.total,
+                invoice,
+            });
         } catch (error: any) {
             const errorMsg = error.message || 'Failed to create sale';
             console.error('Sale creation error:', error);
@@ -452,6 +480,7 @@ function NewSalePageContent() {
     }
 
     return (
+        <>
         <SaleEntryLayout
             title={isDuplicate
                 ? `${t.common.duplicate}: ${source!.number}`
@@ -534,7 +563,7 @@ function NewSalePageContent() {
                                         onClick={() => { setPaperSize(size); handlePrint(size); }}
                                         className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
                                     >
-                                        {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
+                                        {paperSizeLabel(size)}
                                     </button>
                                 ))}
                             </div>
@@ -550,6 +579,20 @@ function NewSalePageContent() {
                 </>
             }
         />
+        {printPrompt && (
+            <PrintInvoicePrompt
+                serialNumber={printPrompt.serialNumber}
+                total={formatBDT(printPrompt.total, { locale })}
+                paperSize={paperSize}
+                onPaperSizeChange={setPaperSize}
+                onPrint={() => {
+                    printSalesInvoice(printPrompt.invoice, paperSize);
+                    setPrintPrompt(null);
+                }}
+                onDismiss={() => setPrintPrompt(null)}
+            />
+        )}
+        </>
     );
 }
 
