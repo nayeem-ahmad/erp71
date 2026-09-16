@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "منتقلی بنانے میں ناکامی۔",
         "emptyMessage": "ابھی گوداموں کی کوئی منتقلی درج نہیں",
         "searchPlaceholder": "منتقلیاں تلاش کریں...",
+        "unknownBranch": "غیر متعین شاخ",
+        "allScopes": "تمام شاخیں",
+        "crossBranchOnly": "شاخوں کے درمیان",
+        "withinBranchOnly": "ایک شاخ کے اندر",
+        "withinBranch": "وہی شاخ",
+        "crossBranchNotice": "یہ منتقلی شاخوں کے درمیان ہے، اس لیے یہ منظوری کی منتظر رہے گی — منظوری ملنے تک ماخذ گودام سے کوئی اسٹاک نہیں جائے گا۔",
         "columns": {
             "transferNumber": "منتقلی نمبر",
             "source": "ماخذ",
             "destination": "منزل",
+            "branch": "شاخ",
             "outstanding": "باقی",
             "created": "بنایا گیا",
             "voucher": "واؤچر"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "مسودہ",
             "sent": "بھیجی گئی",
             "partiallyReceived": "جزوی وصول شدہ",
-            "received": "وصول شدہ"
+            "received": "وصول شدہ",
+            "pendingApproval": "منظوری کا منتظر",
+            "rejected": "مسترد"
         }
     },
     "inventoryShrinkage": {
@@ -242,6 +251,23 @@ export const inventoryExtrasMessages = {
         "upload": "اپ لوڈ کریں",
         "print": "چھاپیں"
     },
+    "warehousesPage": {
+        "title": "گودام",
+        "subtitle": "برانچ کے مطابق اسٹاک مقامات، ڈیفالٹ اور اسٹیٹس کے ساتھ",
+        "newWarehouse": "نیا گودام",
+        "editWarehouse": "گودام میں ترمیم",
+        "branch": "برانچ",
+        "code": "کوڈ",
+        "status": "اسٹیٹس",
+        "emptyMessage": "ابھی کوئی گودام نہیں",
+        "searchPlaceholder": "گودام تلاش کریں...",
+        "selectBranch": "برانچ منتخب کریں",
+        "nameRequired": "نام ضروری ہے",
+        "nameDuplicate": "اس برانچ میں اس نام کا گودام پہلے سے موجود ہے",
+        "branchRequired": "برانچ ضروری ہے",
+        "codeHint": "خودکار بنانے کے لیے خالی چھوڑ دیں",
+        "manageWarehouses": "گودام کا انتظام"
+    },
     "inventorySettings": {
         "title": "انوینٹری کی ترتیبات",
         "subtitle": "گودام کے طے شدہ، انتباہ کی حدیں اور درستی کی وجوہات کی فہرست ترتیب دیں",
@@ -279,6 +305,11 @@ export const inventoryExtrasMessages = {
         "costingWeightedAverageHelp": "ہر فروخت کی لاگت اُس چلتی اوسط پر لگتی ہے جس پر موجود اسٹاک درحقیقت خریدا گیا تھا۔",
         "costingLatestCostHelp": "ہر فروخت کی لاگت پروڈکٹ کی قیمت فہرست میں درج تازہ ترین لاگت قیمت پر لگتی ہے۔",
         "costingMethodNote": "صرف نئی فروخت پر لاگو۔ پہلے درج فروختیں اُسی لاگت کے ساتھ رہتی ہیں جس پر محفوظ ہوئیں۔",
+        "stockPolicy": "اسٹاک پالیسی",
+        "allowNegativeStock": "اسٹاک کے بغیر فروخت کی اجازت دیں",
+        "allowNegativeStockOnHelp": "فروخت، پی او ایس اور اسٹور فرنٹ آرڈر موجود مقدار سے زیادہ کے لیے بھی محفوظ ہو سکتے ہیں۔ خریداری درج ہونے تک اسٹاک بیلنس منفی رہے گا۔",
+        "allowNegativeStockOffHelp": "جب کوئی سطر موجود مقدار سے زیادہ مانگے تو فروخت مسترد کر دی جاتی ہے۔",
+        "allowNegativeStockNote": "صرف فروخت پر لاگو۔ منتقلی، اسٹاک ٹیک، شرنکیج اور مینوفیکچرنگ کے لیے ہمیشہ موجود اسٹاک ضروری ہے۔",
         "shrinkage": "کمی",
         "discrepancy": "اختلاف",
         "reasonCode": "وجہ کا کوڈ",
@@ -304,6 +335,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "دوبارہ آرڈر کی حد سے نیچے پروڈکٹس، تجویز کردہ خریداری مقدار کے ساتھ",
             "subtitlePrioritize": "آنے والی منتقلیوں کو شمار کرنے کے بعد ہدف اسٹاک سے نیچے رہ جانے والے پروڈکٹس کو ترجیح دیں",
             "allWarehouses": "تمام گودام",
+            "allBranches": "تمام برانچیں",
             "allGroups": "تمام گروپ",
             "allSubgroups": "تمام ذیلی گروپ",
             "uncategorized": "غیر درجہ بند",
@@ -327,6 +359,7 @@ export const inventoryExtrasMessages = {
             "title": "دستیاب اسٹاک",
             "subtitle": "فی گودام مقدار، وزنی اوسط خریداری لاگت پر مالیت",
             "allWarehouses": "تمام گودام",
+            "allBranches": "تمام برانچیں",
             "allGroups": "تمام گروپ",
             "allSubgroups": "تمام ذیلی گروپ",
             "allBrands": "تمام برانڈز",
@@ -413,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "اسٹاک وصول کریں",
         "transferSent": "منتقلی منزل گودام کو بھیج دی گئی۔",
         "sendFailed": "منتقلی بھیجنے میں ناکامی۔",
+        "submitForApproval": "منظوری کے لیے بھیجیں",
+        "approveTransfer": "منظور کریں",
+        "rejectTransfer": "مسترد کریں",
+        "transferApproved": "منتقلی منظور ہو گئی — اسٹاک ماخذ گودام سے نکل چکا ہے۔",
+        "approveFailed": "منتقلی منظور نہیں ہو سکی۔",
+        "transferRejected": "منتقلی مسترد کر دی گئی۔",
+        "rejectFailed": "منتقلی مسترد نہیں ہو سکی۔",
+        "awaitingApprovalNotice": "منظوری کا انتظار ہے۔ اسٹاک ابھی ماخذ شاخ میں ہی ہے اور منظوری تک نہیں ہٹے گا۔",
+        "rejectedNotice": "یہ منتقلی مسترد ہوئی، اس لیے کوئی اسٹاک نہیں ہٹا۔",
+        "rejectionReasonLabel": "مسترد کرنے کی وجہ",
+        "rejectionReasonPlaceholder": "درخواست کنندہ کو وجہ بتائیں تاکہ وہ جانیں کیا بدلنا ہے",
+        "confirmRejection": "مسترد کرنے کی تصدیق کریں",
+        "scope": "دائرہ",
+        "crossBranch": "شاخوں کے درمیان",
+        "withinBranch": "ایک شاخ کے اندر",
         "receiptRecorded": "منتقلی کی وصولی درج ہو گئی۔",
         "receiveFailed": "منتقلی وصول کرنے میں ناکامی۔",
         "transferLines": "منتقلی کی سطریں",
@@ -425,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "منتقلی کی ٹائم لائن",
         "timeline": {
             "created": "بنایا گیا",
+            "awaitingApproval": "منظوری کا انتظار",
+            "approved": "منظور شدہ",
+            "rejected": "مسترد",
             "sent": "بھیجا گیا",
             "partiallyReceived": "جزوی وصول شدہ",
             "completed": "مکمل"
@@ -476,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "دوبارہ آرڈر کی سطح",
         "safetyStock": "حفاظتی اسٹاک",
         "leadTimeDays": "رسد کے دن",
+        "vatRate": "ویٹ کی شرح (%)",
+        "vatRateHint": "خالی چھوڑنے پر ورک اسپیس کی ڈیفالٹ شرح لاگو ہوگی۔ 0 کا مطلب زیرو ریٹڈ یا مستثنیٰ۔",
+        "sdRate": "اضافی ڈیوٹی (%)",
+        "sdRateHint": "صرف تھرڈ شیڈول اشیاء۔ خالی کا مطلب کوئی نہیں۔",
         "quantityUnit": "مقدار کا یونٹ",
         "brand": "برانڈ",
         "noBrand": "کوئی برانڈ نہیں",
@@ -492,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "مثلاً 365"
+            "warrantyDays": "مثلاً 365",
+            "vatRate": "مثلاً 15",
+            "sdRate": "مثلاً 25"
         }
     }
 } as const;

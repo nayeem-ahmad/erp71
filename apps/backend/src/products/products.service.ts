@@ -67,6 +67,10 @@ export class ProductsService {
                     lead_time_days: dto.leadTimeDays ?? null,
                     image_url: dto.image_url,
                     unit_type: dto.unitType ?? 'none',
+                    // Null, not 0: an unset rate inherits the workspace
+                    // default, while an explicit 0 is a zero-rated supply.
+                    vat_rate: dto.vatRate ?? null,
+                    sd_rate: dto.sdRate ?? null,
                     brand_id: dto.brandId ?? null,
                     group_id: categoryIds.groupId,
                     subgroup_id: categoryIds.subgroupId,
@@ -339,6 +343,8 @@ export class ProductsService {
                 ...(dto.leadTimeDays !== undefined ? { lead_time_days: dto.leadTimeDays } : {}),
                 ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
                 ...(dto.unitType !== undefined ? { unit_type: dto.unitType } : {}),
+                ...(dto.vatRate !== undefined ? { vat_rate: dto.vatRate } : {}),
+                ...(dto.sdRate !== undefined ? { sd_rate: dto.sdRate } : {}),
                 ...(dto.brandId !== undefined ? { brand_id: dto.brandId || null } : {}),
                 ...(dto.groupId !== undefined ? { group_id: categoryIds.groupId } : {}),
                 ...(dto.subgroupId !== undefined ? { subgroup_id: categoryIds.subgroupId } : {}),

@@ -1,28 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Coins, Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Coins, PackageMinus, Plus, Save, Settings2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { warehouseLabel } from '@/lib/warehouse-label';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
-import { ImportDialog, type ImportField } from '@/components/import-dialog';
-
-const WAREHOUSE_IMPORT_FIELDS: ImportField[] = [
-    { key: 'name', label: 'Name', required: true },
-];
+import { Checkbox } from '@/components/ui';
 
 export default function InventorySettingsPage() {
     const { t } = useI18n();
+    // Still loaded, but only to populate the defaults dropdowns below — the
+    // warehouse list itself moved to /inventory/warehouses.
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState<any>({});
     const [message, setMessage] = useState('');
-    const [warehouseForm, setWarehouseForm] = useState<any>({ storeId: '', name: '', code: '', isDefault: false });
     const [reasonForm, setReasonForm] = useState<any>({ type: 'SHRINKAGE', code: '', label: '' });
-    const [importWarehouseOpen, setImportWarehouseOpen] = useState(false);
 
     useEffect(() => {
         void loadAll();
@@ -50,8 +49,8 @@ export default function InventorySettingsPage() {
                 defaultLeadTimeDays: settingsData.default_lead_time_days ?? 0,
                 discrepancyApprovalThreshold: settingsData.discrepancy_approval_threshold ?? 25,
                 costingMethod: settingsData.costing_method ?? 'WEIGHTED_AVERAGE',
+                allowNegativeStock: settingsData.allow_negative_stock ?? false,
             });
-            setWarehouseForm((current: any) => ({ ...current, storeId: warehouseData[0]?.store_id || '' }));
         } catch (error) {
             console.error('Failed to load inventory settings', error);
         } finally {
@@ -72,44 +71,6 @@ export default function InventorySettingsPage() {
             await loadAll();
         } catch (error: any) {
             setMessage(error.message || t.inventorySettings.saveFailed);
-        }
-    };
-
-    const handleCreateWarehouse = async () => {
-        try {
-            await api.createInventoryWarehouse({
-                storeId: warehouseForm.storeId,
-                name: warehouseForm.name,
-                code: warehouseForm.code || undefined,
-                isDefault: warehouseForm.isDefault,
-            });
-            setMessage(t.inventorySettings.warehouseCreated);
-            setWarehouseForm({ storeId: warehouseForm.storeId, name: '', code: '', isDefault: false });
-            await loadAll();
-        } catch (error: any) {
-            setMessage(error.message || t.inventorySettings.warehouseCreateFailed);
-        }
-    };
-
-    const handleToggleWarehouse = async (warehouse: any) => {
-        try {
-            await api.updateInventoryWarehouse(warehouse.id, {
-                isActive: !warehouse.is_active,
-            });
-            setMessage(t.inventorySettings.warehouseUpdated);
-            await loadAll();
-        } catch (error: any) {
-            setMessage(error.message || t.inventorySettings.warehouseUpdateFailed);
-        }
-    };
-
-    const handleSetDefaultWarehouse = async (warehouse: any) => {
-        try {
-            await api.updateInventoryWarehouse(warehouse.id, { isDefault: true });
-            setMessage(t.inventorySettings.warehouseDefaultUpdated);
-            await loadAll();
-        } catch (error: any) {
-            setMessage(error.message || t.inventorySettings.warehouseDefaultFailed);
         }
     };
 
@@ -176,9 +137,21 @@ export default function InventorySettingsPage() {
                 {message ? <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{message}</div> : null}
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Settings2 className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-bold text-lg">{t.inventorySettings.warehouseDefaults}</h2>
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Settings2 className="w-5 h-5 text-blue-600" />
+                            <h2 className="font-bold text-lg">{t.inventorySettings.warehouseDefaults}</h2>
+                        </div>
+                        {/* The warehouse list itself lives at /inventory/warehouses; this page
+                            only chooses among them, so anyone who came here to add or
+                            deactivate one needs a way onward. */}
+                        <Link
+                            href={routes.inventory.warehouses}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                        >
+                            {t.warehousesPage.manageWarehouses}
+                            <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
                         {Object.entries(warehouseDefaultLabels).map(([key, label]) => (
@@ -187,60 +160,13 @@ export default function InventorySettingsPage() {
                                 <select value={form[key]} onChange={(e) => setForm((current: any) => ({ ...current, [key]: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                     <option value="">{t.inventorySettings.selectWarehouse}</option>
                                     {warehouses.map((warehouse) => (
-                                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
                                     ))}
                                 </select>
                             </div>
                         ))}
                     </div>
                 </section>
-
-                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                            <Warehouse className="w-5 h-5 text-blue-600" />
-                            <h2 className="font-bold text-lg">{t.inventorySettings.warehouses}</h2>
-                        </div>
-                        <button
-                            onClick={() => setImportWarehouseOpen(true)}
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <Upload className="w-4 h-4 me-1.5" />
-                            Import
-                        </button>
-                    </div>
-                    <div className="grid md:grid-cols-4 gap-4">
-                        <input value={warehouseForm.storeId} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, storeId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.storeId} />
-                        <input value={warehouseForm.name} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, name: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.warehouseName} />
-                        <input value={warehouseForm.code} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.optionalCode} />
-                        <button onClick={() => void handleCreateWarehouse()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-sm">
-                            <Plus className="w-4 h-4 me-2" /> {t.inventorySettings.addWarehouse}
-                        </button>
-                    </div>
-                    <div className="grid gap-3">
-                        {warehouses.map((warehouse) => (
-                            <div key={warehouse.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 gap-4">
-                                <div>
-                                    <div className="text-sm font-bold text-gray-900">{warehouse.name}</div>
-                                    <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">{warehouse.code} • {warehouse.is_default ? t.inventorySettings.default : t.inventorySettings.secondary} • {warehouse.is_active ? t.inventorySettings.active : t.inventorySettings.inactive}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {!warehouse.is_default ? <button onClick={() => void handleSetDefaultWarehouse(warehouse)} className="bg-white border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-bold">{t.inventorySettings.makeDefault}</button> : null}
-                                    <button onClick={() => void handleToggleWarehouse(warehouse)} className="bg-white border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-bold">{warehouse.is_active ? t.inventorySettings.deactivate : t.inventorySettings.activate}</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-            <ImportDialog
-                open={importWarehouseOpen}
-                onClose={() => setImportWarehouseOpen(false)}
-                entityLabel="Warehouses"
-                fields={WAREHOUSE_IMPORT_FIELDS}
-                importFn={(rows, mode) => api.importWarehouses(rows, mode)}
-                onSuccess={() => void loadAll()}
-            />
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <h2 className="font-bold text-lg">{t.inventorySettings.alertRules}</h2>
@@ -281,6 +207,30 @@ export default function InventorySettingsPage() {
                         </p>
                     </div>
                     <p className="text-xs text-gray-500">{t.inventorySettings.costingMethodNote}</p>
+                </section>
+
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <PackageMinus className="w-5 h-5 text-blue-600" />
+                        <h2 className="font-bold text-lg">{t.inventorySettings.stockPolicy}</h2>
+                    </div>
+                    <label htmlFor="allow-negative-stock" className="flex items-start gap-3 cursor-pointer">
+                        <Checkbox
+                            id="allow-negative-stock"
+                            className="mt-0.5"
+                            checked={!!form.allowNegativeStock}
+                            onChange={(e) => setForm((current: any) => ({ ...current, allowNegativeStock: e.target.checked }))}
+                        />
+                        <span>
+                            <span className="block text-sm font-medium text-gray-900">{t.inventorySettings.allowNegativeStock}</span>
+                            <span className="block text-xs text-gray-500 mt-0.5">
+                                {form.allowNegativeStock
+                                    ? t.inventorySettings.allowNegativeStockOnHelp
+                                    : t.inventorySettings.allowNegativeStockOffHelp}
+                            </span>
+                        </span>
+                    </label>
+                    <p className="text-xs text-gray-500">{t.inventorySettings.allowNegativeStockNote}</p>
                 </section>
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">

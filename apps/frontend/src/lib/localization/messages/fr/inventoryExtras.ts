@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "Impossible de créer le transfert.",
         "emptyMessage": "Aucun transfert entre entrepôts enregistré pour le moment",
         "searchPlaceholder": "Rechercher des transferts...",
+        "unknownBranch": "Succursale non attribuée",
+        "allScopes": "Toutes les succursales",
+        "crossBranchOnly": "Entre succursales",
+        "withinBranchOnly": "Au sein d’une succursale",
+        "withinBranch": "Même succursale",
+        "crossBranchNotice": "Ce transfert franchit les succursales et attend donc une approbation : aucun stock ne quitte l’entrepôt source avant qu’une personne habilitée ne le libère.",
         "columns": {
             "transferNumber": "N° de transfert",
             "source": "Source",
             "destination": "Destination",
+            "branch": "Succursale",
             "outstanding": "En attente",
             "created": "Créé le",
             "voucher": "Écriture"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Brouillon",
             "sent": "Envoyé",
             "partiallyReceived": "Partiellement reçu",
-            "received": "Reçu"
+            "received": "Reçu",
+            "pendingApproval": "En attente d’approbation",
+            "rejected": "Refusé"
         }
     },
     "inventoryShrinkage": {
@@ -242,6 +251,23 @@ export const inventoryExtrasMessages = {
         "upload": "Téléverser",
         "print": "Imprimer"
     },
+    "warehousesPage": {
+        "title": "Entrepôts",
+        "subtitle": "Emplacements de stock par succursale, avec valeurs par défaut et statut",
+        "newWarehouse": "Nouvel entrepôt",
+        "editWarehouse": "Modifier l'entrepôt",
+        "branch": "Succursale",
+        "code": "Code",
+        "status": "Statut",
+        "emptyMessage": "Aucun entrepôt pour le moment",
+        "searchPlaceholder": "Rechercher des entrepôts...",
+        "selectBranch": "Sélectionner une succursale",
+        "nameRequired": "Le nom est requis",
+        "nameDuplicate": "Un entrepôt portant ce nom existe déjà dans cette succursale",
+        "branchRequired": "La succursale est requise",
+        "codeHint": "Laisser vide pour générer automatiquement",
+        "manageWarehouses": "Gérer les entrepôts"
+    },
     "inventorySettings": {
         "title": "Paramètres de stock",
         "subtitle": "Configurez les entrepôts par défaut, les seuils d'alerte et le catalogue des motifs d'ajustement",
@@ -279,6 +305,11 @@ export const inventoryExtrasMessages = {
         "costingWeightedAverageHelp": "Chaque vente est valorisée au coût moyen courant auquel le stock disponible a réellement été acheté.",
         "costingLatestCostHelp": "Chaque vente est valorisée au prix de revient le plus récent de la liste de prix du produit.",
         "costingMethodNote": "S'applique aux nouvelles ventes uniquement. Les ventes déjà enregistrées conservent le coût avec lequel elles ont été sauvegardées.",
+        "stockPolicy": "Politique de stock",
+        "allowNegativeStock": "Autoriser la vente sans stock",
+        "allowNegativeStockOnHelp": "Les ventes, la caisse et les commandes de la boutique peuvent être enregistrées au-delà de la quantité en stock. Le solde devient négatif jusqu'à l'enregistrement d'un achat.",
+        "allowNegativeStockOffHelp": "Une vente est refusée dès qu’une ligne demande plus que la quantité en stock.",
+        "allowNegativeStockNote": "S'applique aux ventes uniquement. Les transferts, inventaires, pertes et la production exigent toujours du stock disponible.",
         "shrinkage": "Démarque",
         "discrepancy": "Écart",
         "reasonCode": "Code du motif",
@@ -304,6 +335,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "Produits sous leur seuil de réapprovisionnement, avec les quantités d'achat suggérées",
             "subtitlePrioritize": "Priorisez les produits sous le stock cible une fois les transferts entrants pris en compte",
             "allWarehouses": "Tous les entrepôts",
+            "allBranches": "Toutes les agences",
             "allGroups": "Tous les groupes",
             "allSubgroups": "Tous les sous-groupes",
             "uncategorized": "Non classé",
@@ -327,6 +359,7 @@ export const inventoryExtrasMessages = {
             "title": "Stock disponible",
             "subtitle": "Quantité par entrepôt valorisée au coût d'achat moyen pondéré",
             "allWarehouses": "Tous les entrepôts",
+            "allBranches": "Toutes les agences",
             "allGroups": "Tous les groupes",
             "allSubgroups": "Tous les sous-groupes",
             "allBrands": "Toutes les marques",
@@ -413,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Réceptionner le stock",
         "transferSent": "Transfert envoyé à l'entrepôt de destination.",
         "sendFailed": "Impossible d'envoyer le transfert.",
+        "submitForApproval": "Soumettre à approbation",
+        "approveTransfer": "Approuver",
+        "rejectTransfer": "Refuser",
+        "transferApproved": "Transfert approuvé — le stock a quitté l’entrepôt source.",
+        "approveFailed": "Échec de l’approbation du transfert.",
+        "transferRejected": "Transfert refusé.",
+        "rejectFailed": "Échec du refus du transfert.",
+        "awaitingApprovalNotice": "En attente d’approbation. Le stock est encore dans la succursale source et ne bougera pas avant validation.",
+        "rejectedNotice": "Ce transfert a été refusé, aucun stock n’a bougé.",
+        "rejectionReasonLabel": "Motif du refus",
+        "rejectionReasonPlaceholder": "Indiquez le motif au demandeur pour qu’il sache quoi corriger",
+        "confirmRejection": "Confirmer le refus",
+        "scope": "Portée",
+        "crossBranch": "Entre succursales",
+        "withinBranch": "Au sein d’une succursale",
         "receiptRecorded": "Réception du transfert enregistrée.",
         "receiveFailed": "Impossible de réceptionner le transfert.",
         "transferLines": "Lignes du transfert",
@@ -425,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Chronologie du transfert",
         "timeline": {
             "created": "Créé",
+            "awaitingApproval": "En attente d’approbation",
+            "approved": "Approuvé",
+            "rejected": "Refusé",
             "sent": "Envoyé",
             "partiallyReceived": "Partiellement reçu",
             "completed": "Terminé"
@@ -476,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Seuil de réapprovisionnement",
         "safetyStock": "Stock de sécurité",
         "leadTimeDays": "Délai d'approvisionnement (jours)",
+        "vatRate": "Taux de TVA (%)",
+        "vatRateHint": "Vide reprend la valeur par défaut de l’espace. 0 signifie taux zéro ou exonéré.",
+        "sdRate": "Droit supplémentaire (%)",
+        "sdRateHint": "Marchandises de la Third Schedule uniquement. Vide signifie aucun.",
         "quantityUnit": "Unité de quantité",
         "brand": "Marque",
         "noBrand": "Aucune marque",
@@ -492,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "par ex. 365"
+            "warrantyDays": "par ex. 365",
+            "vatRate": "ex. 15",
+            "sdRate": "ex. 25"
         }
     }
 } as const;

@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "أنشئ مشروعًا أولًا — كل مهمة تنتمي إلى مشروع.",
         createFailed: "تعذّر إنشاء المهمة",
         openFull: "فتح الصفحة الكاملة",
+        assigneeNoTeam: "لا أحد في فريق هذا المشروع بعد.",
+        assigneeAddTeam: "إضافة أعضاء الفريق",
+        assigneeLoadFailed: "تعذّر قراءة فريق هذا المشروع.",
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: "الغلاف",
         none: "بلا غلاف",
         pick: "لون الغلاف {color}",
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: "التعليقات",
+            activity: "النشاط",
+            time: "سجل الساعات",
+            remaining: "سجل الساعات المتبقية",
+            attachments: "المرفقات",
+        },
+        record: "سجل المهمة",
+        addChecklistItem: "إضافة عنصر",
+        logTime: "تسجيل الوقت",
+        spark: {
+            title: "المتبقي",
+            hover: "مرّر للتفاصيل",
+        },
     },
 
     checklist: {

@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "Créez d'abord un projet — chaque tâche appartient à l'un d'eux.",
         createFailed: "Impossible de créer la tâche",
         openFull: "Ouvrir la page entière",
+        assigneeNoTeam: "Personne ne fait encore partie de l’équipe de ce projet.",
+        assigneeAddTeam: "Ajouter des membres",
+        assigneeLoadFailed: "Impossible de charger l’équipe de ce projet.",
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: "Couverture",
         none: "Aucune couverture",
         pick: "Couleur de couverture {color}",
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: "Commentaires",
+            activity: "Activité",
+            time: "Journal des heures",
+            remaining: "Historique des heures restantes",
+            attachments: "Pièces jointes",
+        },
+        record: "Journal de la tâche",
+        addChecklistItem: "Ajouter un élément",
+        logTime: "Saisir du temps",
+        spark: {
+            title: "Restant",
+            hover: "survolez pour le détail",
+        },
     },
 
     checklist: {

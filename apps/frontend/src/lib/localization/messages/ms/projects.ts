@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: 'Cipta projek dahulu — setiap tugasan milik sebuah projek.',
         createFailed: 'Tugasan tidak dapat dicipta',
         openFull: 'Buka halaman penuh',
+        assigneeNoTeam: 'Belum ada sesiapa dalam pasukan projek ini.',
+        assigneeAddTeam: 'Tambah ahli pasukan',
+        assigneeLoadFailed: 'Pasukan projek ini tidak dapat dibaca.',
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: 'Kulit',
         none: 'Tiada kulit',
         pick: 'Warna kulit {color}',
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: 'Komen',
+            activity: 'Aktiviti',
+            time: 'Log Jam',
+            remaining: 'Sejarah Baki Jam',
+            attachments: 'Lampiran',
+        },
+        record: 'Rekod tugasan',
+        addChecklistItem: 'Tambah item',
+        logTime: 'Log masa',
+        spark: {
+            title: 'Baki',
+            hover: 'tuding untuk perincian',
+        },
     },
 
     checklist: {

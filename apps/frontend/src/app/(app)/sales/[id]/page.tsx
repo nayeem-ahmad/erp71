@@ -6,7 +6,7 @@ import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, B
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
-import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
+import { printSalesInvoice, PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -457,7 +457,7 @@ function SaleDetailPageContent() {
                                 onClick={() => { setPaperSize(size); handlePrint(size); }}
                                 className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
                             >
-                                {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
+                                {paperSizeLabel(size)}
                             </button>
                         ))}
                     </div>

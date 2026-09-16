@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "Die Umlagerung konnte nicht angelegt werden.",
         "emptyMessage": "Noch keine Lagerumlagerungen erfasst",
         "searchPlaceholder": "Umlagerungen durchsuchen...",
+        "unknownBranch": "Nicht zugeordnete Filiale",
+        "allScopes": "Alle Filialen",
+        "crossBranchOnly": "Zwischen Filialen",
+        "withinBranchOnly": "Innerhalb einer Filiale",
+        "withinBranch": "Gleiche Filiale",
+        "crossBranchNotice": "Diese Umlagerung geht über Filialgrenzen und wartet daher auf Genehmigung — bis zur Freigabe verlässt kein Bestand das Quelllager.",
         "columns": {
             "transferNumber": "Umlagerungsnr.",
             "source": "Quelle",
             "destination": "Ziel",
+            "branch": "Filiale",
             "outstanding": "Offen",
             "created": "Erstellt",
             "voucher": "Beleg"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "Entwurf",
             "sent": "Gesendet",
             "partiallyReceived": "Teilweise erhalten",
-            "received": "Erhalten"
+            "received": "Erhalten",
+            "pendingApproval": "Genehmigung ausstehend",
+            "rejected": "Abgelehnt"
         }
     },
     "inventoryShrinkage": {
@@ -242,6 +251,23 @@ export const inventoryExtrasMessages = {
         "upload": "Hochladen",
         "print": "Drucken"
     },
+    "warehousesPage": {
+        "title": "Lager",
+        "subtitle": "Lagerorte pro Filiale, mit Standardwerten und Status",
+        "newWarehouse": "Neues Lager",
+        "editWarehouse": "Lager bearbeiten",
+        "branch": "Filiale",
+        "code": "Code",
+        "status": "Status",
+        "emptyMessage": "Noch keine Lager",
+        "searchPlaceholder": "Lager suchen...",
+        "selectBranch": "Filiale auswählen",
+        "nameRequired": "Name ist erforderlich",
+        "nameDuplicate": "In dieser Filiale gibt es bereits ein Lager mit diesem Namen",
+        "branchRequired": "Filiale ist erforderlich",
+        "codeHint": "Leer lassen, um automatisch zu generieren",
+        "manageWarehouses": "Lager verwalten"
+    },
     "inventorySettings": {
         "title": "Bestandseinstellungen",
         "subtitle": "Lager-Standardwerte, Warnschwellen und Katalog der Korrekturgründe festlegen",
@@ -279,6 +305,11 @@ export const inventoryExtrasMessages = {
         "costingWeightedAverageHelp": "Jeder Verkauf wird mit dem laufenden Durchschnitt dessen bewertet, wofür der vorhandene Bestand tatsächlich eingekauft wurde.",
         "costingLatestCostHelp": "Jeder Verkauf wird mit dem jüngsten Einstandspreis aus der Produktpreisliste bewertet.",
         "costingMethodNote": "Gilt nur für neue Verkäufe. Bereits erfasste Verkäufe behalten die gespeicherten Kosten.",
+        "stockPolicy": "Bestandsrichtlinie",
+        "allowNegativeStock": "Verkauf ohne Bestand erlauben",
+        "allowNegativeStockOnHelp": "Verkäufe, Kasse und Shop-Bestellungen können über den verfügbaren Bestand hinaus gebucht werden. Der Bestand wird negativ, bis ein Einkauf nachgetragen ist.",
+        "allowNegativeStockOffHelp": "Ein Verkauf wird abgelehnt, wenn eine Position mehr verlangt als verfügbar ist.",
+        "allowNegativeStockNote": "Gilt nur für Verkäufe. Umlagerungen, Inventuren, Schwund und Produktion setzen immer verfügbaren Bestand voraus.",
         "shrinkage": "Schwund",
         "discrepancy": "Abweichung",
         "reasonCode": "Grundcode",
@@ -304,6 +335,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "Produkte unter dem Meldebestand mit vorgeschlagenen Bestellmengen",
             "subtitlePrioritize": "Produkte priorisieren, die auch unter Berücksichtigung zulaufender Umlagerungen unter dem Zielbestand liegen",
             "allWarehouses": "Alle Lager",
+            "allBranches": "Alle Filialen",
             "allGroups": "Alle Gruppen",
             "allSubgroups": "Alle Untergruppen",
             "uncategorized": "Nicht kategorisiert",
@@ -327,6 +359,7 @@ export const inventoryExtrasMessages = {
             "title": "Verfügbarer Bestand",
             "subtitle": "Menge je Lager, bewertet zum gleitenden durchschnittlichen Einkaufspreis",
             "allWarehouses": "Alle Lager",
+            "allBranches": "Alle Filialen",
             "allGroups": "Alle Gruppen",
             "allSubgroups": "Alle Untergruppen",
             "allBrands": "Alle Marken",
@@ -413,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "Ware vereinnahmen",
         "transferSent": "Umlagerung an das Ziellager gesendet.",
         "sendFailed": "Die Umlagerung konnte nicht gesendet werden.",
+        "submitForApproval": "Zur Genehmigung einreichen",
+        "approveTransfer": "Genehmigen",
+        "rejectTransfer": "Ablehnen",
+        "transferApproved": "Umlagerung genehmigt — der Bestand hat das Quelllager verlassen.",
+        "approveFailed": "Die Umlagerung konnte nicht genehmigt werden.",
+        "transferRejected": "Umlagerung abgelehnt.",
+        "rejectFailed": "Die Umlagerung konnte nicht abgelehnt werden.",
+        "awaitingApprovalNotice": "Wartet auf Genehmigung. Der Bestand liegt weiterhin in der Quellfiliale und bewegt sich erst nach der Freigabe.",
+        "rejectedNotice": "Diese Umlagerung wurde abgelehnt, es wurde kein Bestand bewegt.",
+        "rejectionReasonLabel": "Grund der Ablehnung",
+        "rejectionReasonPlaceholder": "Nennen Sie dem Anforderer den Grund, damit er weiß, was zu ändern ist",
+        "confirmRejection": "Ablehnung bestätigen",
+        "scope": "Umfang",
+        "crossBranch": "Zwischen Filialen",
+        "withinBranch": "Innerhalb einer Filiale",
         "receiptRecorded": "Wareneingang zur Umlagerung erfasst.",
         "receiveFailed": "Die Umlagerung konnte nicht vereinnahmt werden.",
         "transferLines": "Umlagerungszeilen",
@@ -425,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "Verlauf der Umlagerung",
         "timeline": {
             "created": "Erstellt",
+            "awaitingApproval": "Wartet auf Genehmigung",
+            "approved": "Genehmigt",
+            "rejected": "Abgelehnt",
             "sent": "Gesendet",
             "partiallyReceived": "Teilweise erhalten",
             "completed": "Abgeschlossen"
@@ -476,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Meldebestand",
         "safetyStock": "Sicherheitsbestand",
         "leadTimeDays": "Wiederbeschaffungszeit (Tage)",
+        "vatRate": "USt-Satz (%)",
+        "vatRateHint": "Leer übernimmt den Arbeitsbereichs-Standard. 0 bedeutet nullbesteuert oder befreit.",
+        "sdRate": "Zusatzabgabe (%)",
+        "sdRateHint": "Nur Waren des Third Schedule. Leer bedeutet keine.",
         "quantityUnit": "Mengeneinheit",
         "brand": "Marke",
         "noBrand": "Keine Marke",
@@ -492,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "z. B. 365"
+            "warrantyDays": "z. B. 365",
+            "vatRate": "z. B. 15",
+            "sdRate": "z. B. 25"
         }
     }
 } as const;

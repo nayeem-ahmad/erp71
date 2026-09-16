@@ -31,6 +31,13 @@ jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
+// Opening a print window is the one thing jsdom cannot do; everything else in
+// the printer module (paper sizes, their labels) stays real.
+jest.mock('@/lib/sales-invoice-printer', () => ({
+    ...jest.requireActual('@/lib/sales-invoice-printer'),
+    printSalesInvoice: jest.fn(),
+}));
+
 const MAIN_WAREHOUSE = {
     id: 'wh-main',
     name: 'Main Store',
@@ -536,5 +543,197 @@ describe('NewSalePage — duplicating an existing sale', () => {
                 items: [expect.objectContaining({ productId: 'prod-1', quantity: 2, priceAtSale: 150 })],
             }));
         });
+    });
+});
+
+describe('NewSalePage — overall discount in taka', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', stocks: [{ quantity: 7 }] },
+        ]);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+        window.sessionStorage.setItem('store_id', 'store-1');
+    });
+
+    /** One ৳100 line in the cart, which is what the discount is taken off. */
+    const addRice = async () => {
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    };
+
+    it('takes a flat discount off the total and works out the percentage', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+        await addRice();
+
+        fireEvent.click(screen.getByTitle('Discount by amount'));
+        fireEvent.change(screen.getByLabelText('Discount amount'), { target: { value: '20' } });
+
+        expect(screen.getByText('20.00%')).toBeInTheDocument();
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '80' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({
+                discountAmount: 20,
+                totalAmount: 80,
+            }));
+        });
+    });
+
+    it('still posts a percentage discount the way it always did', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+        await addRice();
+
+        fireEvent.change(screen.getByLabelText('Discount percent'), { target: { value: '15' } });
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '85' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({
+                discountAmount: 15,
+                totalAmount: 85,
+            }));
+        });
+    });
+});
+
+describe('NewSalePage — offering to print after the sale is saved', () => {
+    const { printSalesInvoice } = require('@/lib/sales-invoice-printer');
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', stocks: [{ quantity: 7 }] },
+        ]);
+        (api.createNewSale as jest.Mock).mockResolvedValue({
+            serial_number: 'S-00001',
+            reference_number: '2607-001',
+        });
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+        window.sessionStorage.setItem('store_id', 'store-1');
+    });
+
+    /** Sell one Rice 5kg for cash and press Create Sale. */
+    const sellOneItem = async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '100' } });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Sale' })); });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+    };
+
+    it('asks whether to print, naming the sale that was just saved', async () => {
+        await sellOneItem();
+
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toHaveTextContent('Sale saved');
+        expect(dialog).toHaveTextContent('S-00001');
+        expect(dialog).toHaveTextContent('Print the invoice now?');
+    });
+
+    it('prints what was saved, not the cart it cleared', async () => {
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        // The screen behind the prompt is already reset for the next customer.
+        expect(screen.queryByText('Rice 5kg')).not.toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({
+                // No reference was typed, so the sale number identifies the invoice.
+                referenceNumber: 'S-00001',
+                items: [expect.objectContaining({ name: 'Rice 5kg', quantity: 1, unitPrice: 100 })],
+                total: 100,
+            }),
+            'A4',
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('prints on the paper the operator picks in the prompt', async () => {
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: 'Thermal80' } });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80');
+    });
+
+    it('prints nothing when the operator declines', async () => {
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'No, thanks' }));
+        });
+
+        expect(printSalesInvoice).not.toHaveBeenCalled();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('does not ask after parking a draft — nothing has been invoiced yet', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 });

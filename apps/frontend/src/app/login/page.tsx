@@ -95,12 +95,12 @@ function LoginPageContent() {
         setError(null);
 
         try {
-            const loginRes = await api.login({ identifier, password });
+            const loginRes = await api.login({ identifier, password, remember_me: rememberMe });
             if (loginRes?.requires_2fa && loginRes?.user_id) {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
+            const { redirectTo } = await storeAuthResponse(loginRes, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: unknown) {
             setError(describeAuthError(err));
@@ -115,8 +115,8 @@ function LoginPageContent() {
         setIsLoading(true);
         setError(null);
         try {
-            const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
+            const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode, rememberMe);
+            const { redirectTo } = await storeAuthResponse(loginRes, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: unknown) {
             setError(describeAuthError(err));
@@ -143,13 +143,14 @@ function LoginPageContent() {
             const authRes = await api.googleSignIn({
                 credential,
                 acceptedTermsVersion: CURRENT_TERMS_VERSION,
+                remember_me: rememberMe,
             });
             if (authRes?.requires_2fa && authRes?.user_id) {
                 // Google proved the identity; the authenticator app still has to.
                 setTwoFactorUserId(authRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
+            const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
             // A first-time Google account has no workspace yet — the wizard
             // collects the organization details a password signup asks for upfront.
             router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
@@ -169,7 +170,7 @@ function LoginPageContent() {
             setTwoFactorUserId(authRes.user_id);
             return;
         }
-        const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
+        const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
         router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
     };
 
@@ -179,7 +180,7 @@ function LoginPageContent() {
 
         try {
             const auth = await api.demoLogin();
-            await storeAuthResponse(auth, true); // demo always persists
+            await storeAuthResponse(auth);
             localStorage.removeItem('onboarding_complete');
             router.push('/dashboard/onboarding');
         } catch (err: any) {
@@ -333,6 +334,7 @@ function LoginPageContent() {
                         <div className={mobileAvailable ? 'mb-3' : ''}>
                             <MobileSignInPanel
                                 onSuccess={handleMobileAuth}
+                                rememberMe={rememberMe}
                                 onError={setError}
                                 onAvailabilityChange={setMobileAvailable}
                                 // An unrecognised number is signed up rather than

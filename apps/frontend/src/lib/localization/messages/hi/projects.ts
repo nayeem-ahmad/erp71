@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "पहले एक परियोजना बनाएँ — हर कार्य किसी एक से जुड़ा होता है।",
         createFailed: "कार्य नहीं बन सका",
         openFull: "पूरा पृष्ठ खोलें",
+        assigneeNoTeam: "इस प्रोजेक्ट की टीम में अभी कोई नहीं है।",
+        assigneeAddTeam: "टीम सदस्य जोड़ें",
+        assigneeLoadFailed: "इस प्रोजेक्ट की टीम नहीं पढ़ी जा सकी।",
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: "कवर",
         none: "कोई कवर नहीं",
         pick: "कवर रंग {color}",
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: "टिप्पणियाँ",
+            activity: "गतिविधि",
+            time: "घंटा लॉग",
+            remaining: "शेष घंटों का इतिहास",
+            attachments: "अनुलग्नक",
+        },
+        record: "कार्य अभिलेख",
+        addChecklistItem: "आइटम जोड़ें",
+        logTime: "समय दर्ज करें",
+        spark: {
+            title: "शेष",
+            hover: "विवरण के लिए होवर करें",
+        },
     },
 
     checklist: {

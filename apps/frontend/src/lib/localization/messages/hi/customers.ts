@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "छूट %",
             "birthday": "जन्मदिन",
             "birthdayHint": "उस दिन स्वतः जन्मदिन फ़ॉलो-अप बनाता है।",
+            "bin": "बीआईएन (क्रेता वैट पंजीकरण)",
+            "binHint": "क्रेता का 13-अंकीय बीआईएन, यदि वे वैट पंजीकृत हैं। मूसक 6.3 और 6.2 बिक्री बही में छपता है।",
             "individual": "व्यक्तिगत",
             "organization": "संस्था",
             "adding": "जोड़ा जा रहा है...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "मालिक का नाम",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "123 मेन रोड..."
+                "address": "123 मेन रोड...",
+                "bin": "जैसे 000000000-0101"
             },
             editTitle: "ग्राहक संपादित करें",
             editSubtitle: "ग्राहक का विवरण अपडेट करें",

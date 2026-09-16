@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "Legen Sie zuerst ein Projekt an — jede Aufgabe gehört zu einem.",
         createFailed: "Die Aufgabe konnte nicht erstellt werden",
         openFull: "Ganze Seite öffnen",
+        assigneeNoTeam: "Diesem Projekt ist noch niemand zugeordnet.",
+        assigneeAddTeam: "Teammitglieder hinzufügen",
+        assigneeLoadFailed: "Das Team dieses Projekts konnte nicht geladen werden.",
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: "Titelbild",
         none: "Kein Titelbild",
         pick: "Titelfarbe {color}",
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: "Kommentare",
+            activity: "Aktivität",
+            time: "Stundenprotokoll",
+            remaining: "Verlauf der Reststunden",
+            attachments: "Anhänge",
+        },
+        record: "Aufgabenverlauf",
+        addChecklistItem: "Eintrag hinzufügen",
+        logTime: "Zeit erfassen",
+        spark: {
+            title: "Rest",
+            hover: "für Details bewegen",
+        },
     },
 
     checklist: {

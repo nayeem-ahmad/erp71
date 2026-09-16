@@ -20,6 +20,8 @@ export const routes = {
         new: '/sales/new',
         detail: (id: string) => `/sales/${id}` as const,
         invoice: (id: string) => `/sales/${id}/invoice` as const,
+        /** মূসক-৬.৩ · the NBR tax invoice, as opposed to the shop's own. */
+        mushak: (id: string) => `/sales/${id}/mushak` as const,
         pos: '/sales/pos',
         customerPayments: '/sales/customer-payments',
         customerLedger: '/sales/customer-ledger',
@@ -27,6 +29,8 @@ export const routes = {
         returns: '/sales/returns',
         returnNew: '/sales/returns/new',
         returnDetail: (id: string) => `/sales/returns/${id}` as const,
+        /** মূসক-৬.৭ · the credit note raised against a return. */
+        returnMushak: (id: string) => `/sales/returns/${id}/mushak` as const,
         orders: '/sales/orders',
         orderNew: '/sales/orders/new',
         orderDetail: (id: string) => `/sales/orders/${id}` as const,
@@ -50,6 +54,8 @@ export const routes = {
         territories: '/sales/territories',
         reports: {
             summary: '/sales/reports/summary',
+            /** মূসক-৬.২ and মূসক-৬.১০, on one screen. */
+            mushak: '/sales/reports/mushak',
             products: '/sales/reports/products',
             monthly: '/sales/reports/monthly',
             customers: '/sales/reports/customers',
@@ -149,6 +155,7 @@ export const routes = {
         labels: '/inventory/labels',
         ledger: '/inventory/ledger',
         categories: '/inventory/categories',
+        warehouses: '/inventory/warehouses',
         settings: '/inventory/settings',
         brands: '/inventory/brands',
         reports: {

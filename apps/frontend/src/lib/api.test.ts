@@ -79,11 +79,12 @@ function errorJson(status: number, statusText: string, body?: unknown) {
 // call instead.
 jest.mock('./session-expiry', () => ({
     handleExpiredSession: jest.fn(),
+    handleMissingSession: jest.fn(),
 }));
 
 /** The API module under test (imported after mocks are wired). */
 import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
-import { handleExpiredSession } from './session-expiry';
+import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import { resetWorkspaceBootstrapForTests } from './session-store';
 
 // ---------------------------------------------------------------------------
@@ -369,14 +370,20 @@ describe('fetchAllCursorPages', () => {
         expect(opts.headers.get('Content-Type')).toBe('application/json');
     });
 
-    it('omits Authorization header when no token in localStorage', async () => {
+    it('does not call an authenticated endpoint with no session to call it with', async () => {
         localStorageMock._setAll({});
         mockFetch.mockReturnValue(okJson({ data: null }));
 
-        await fetchWithAuth('/public');
+        await expect(fetchWithAuth('/private')).rejects.toMatchObject({
+            status: 401,
+            code: 'NOT_AUTHENTICATED',
+        });
 
-        const [, opts] = mockFetch.mock.calls[0];
-        expect(opts.headers.get('Authorization')).toBeNull();
+        expect(mockFetch).not.toHaveBeenCalled();
+        // Not an expiry: nothing expired, and `handleExpiredSession` would wipe
+        // shared localStorage out from under whatever else is open.
+        expect(handleMissingSession).toHaveBeenCalled();
+        expect(handleExpiredSession).not.toHaveBeenCalled();
     });
 
     it('omits tenant and store headers when not in localStorage', async () => {
@@ -3661,5 +3668,84 @@ describe('stale workspace recovery', () => {
         mockFetch.mockReturnValue(invalidTenant());
 
         await expect(fetchWithAuth('/dashboard')).rejects.toThrow('Invalid tenant context');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-tab renewal lock
+// ---------------------------------------------------------------------------
+
+describe('cross-tab renewal lock', () => {
+    function renewalOk(accessToken = 'fresh-token', refreshToken = 'fresh-refresh') {
+        return okJson({ data: { access_token: accessToken, refresh_token: refreshToken, expires_in: 3600 } });
+    }
+
+    function refreshCalls() {
+        return mockFetch.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'));
+    }
+
+    /**
+     * jsdom ships no Web Locks, so each test installs the shape it wants.
+     * `beforeHolding` runs while the lock is notionally held and before the
+     * renewal body sees storage — which is where another tab's write lands.
+     */
+    function installLocks(beforeHolding: () => void = () => {}) {
+        const request = jest.fn(async (_name: string, callback: () => Promise<unknown>) => {
+            beforeHolding();
+            return callback();
+        });
+        Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+        return request;
+    }
+
+    afterEach(() => {
+        // `delete navigator.locks` would be a no-op on a defined property.
+        Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    });
+
+    beforeEach(() => {
+        localStorageMock._setAll({ access_token: 'stale-token', refresh_token: 'refresh-abc' });
+    });
+
+    it('queues the exchange behind a named lock every tab shares', async () => {
+        const request = installLocks();
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: 'recovered' }));
+
+        await expect(fetchWithAuth('/sales')).resolves.toBe('recovered');
+
+        expect(request).toHaveBeenCalledWith('erp71:session-renewal', expect.any(Function));
+    });
+
+    it('uses the token another tab just minted instead of replaying its own', async () => {
+        // The tab ahead of us in the queue renewed while we waited. Our token is
+        // spent, and presenting it is the replay that ends the session.
+        installLocks(() => {
+            localStorage.setItem('access_token', 'other-tab-token');
+            localStorage.setItem('refresh_token', 'other-tab-refresh');
+        });
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(okJson({ data: 'recovered' }));
+
+        await expect(fetchWithAuth('/sales')).resolves.toBe('recovered');
+
+        expect(refreshCalls()).toHaveLength(0);
+        const [, retryOpts] = mockFetch.mock.calls[1];
+        expect(retryOpts.headers.get('Authorization')).toBe('Bearer other-tab-token');
+    });
+
+    it('still renews where the browser has no Web Locks to take', async () => {
+        mockFetch
+            .mockReturnValueOnce(errorJson(401, 'Unauthorized'))
+            .mockReturnValueOnce(renewalOk())
+            .mockReturnValueOnce(okJson({ data: 'recovered' }));
+
+        await expect(fetchWithAuth('/sales')).resolves.toBe('recovered');
+
+        expect(refreshCalls()).toHaveLength(1);
+        expect(handleExpiredSession).not.toHaveBeenCalled();
     });
 });

@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "تعذّر إنشاء التحويل.",
         "emptyMessage": "لم تُسجَّل تحويلات مستودعات بعد",
         "searchPlaceholder": "ابحث في التحويلات...",
+        "unknownBranch": "فرع غير مُعيَّن",
+        "allScopes": "كل الفروع",
+        "crossBranchOnly": "بين الفروع",
+        "withinBranchOnly": "داخل فرع واحد",
+        "withinBranch": "نفس الفرع",
+        "crossBranchNotice": "هذا التحويل يتجاوز الفروع، لذا ينتظر الموافقة — لا يخرج أي مخزون من المستودع المصدر حتى يُصرِّح به من يملك حق الموافقة.",
         "columns": {
             "transferNumber": "رقم التحويل",
             "source": "المصدر",
             "destination": "الوجهة",
+            "branch": "الفرع",
             "outstanding": "المتبقي",
             "created": "تاريخ الإنشاء",
             "voucher": "القيد"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "مسودة",
             "sent": "مُرسل",
             "partiallyReceived": "مستلَم جزئيًا",
-            "received": "مستلَم"
+            "received": "مستلَم",
+            "pendingApproval": "في انتظار الموافقة",
+            "rejected": "مرفوض"
         }
     },
     "inventoryShrinkage": {
@@ -242,6 +251,23 @@ export const inventoryExtrasMessages = {
         "upload": "رفع",
         "print": "طباعة"
     },
+    "warehousesPage": {
+        "title": "المستودعات",
+        "subtitle": "مواقع المخزون لكل فرع، مع الافتراضيات والحالة",
+        "newWarehouse": "مستودع جديد",
+        "editWarehouse": "تعديل المستودع",
+        "branch": "الفرع",
+        "code": "الرمز",
+        "status": "الحالة",
+        "emptyMessage": "لا توجد مستودعات بعد",
+        "searchPlaceholder": "ابحث في المستودعات...",
+        "selectBranch": "اختر فرعًا",
+        "nameRequired": "الاسم مطلوب",
+        "nameDuplicate": "يوجد بالفعل مستودع بهذا الاسم في هذا الفرع",
+        "branchRequired": "الفرع مطلوب",
+        "codeHint": "اتركه فارغًا لإنشائه تلقائيًا",
+        "manageWarehouses": "إدارة المستودعات"
+    },
     "inventorySettings": {
         "title": "إعدادات المخزون",
         "subtitle": "اضبط افتراضيات المستودعات وحدود التنبيه وقوائم أسباب التسوية",
@@ -279,6 +305,11 @@ export const inventoryExtrasMessages = {
         "costingWeightedAverageHelp": "تُحتسب تكلفة كل عملية بيع بالمتوسط الجاري لما اشتُري به المخزون المتاح فعليًا.",
         "costingLatestCostHelp": "تُحتسب تكلفة كل عملية بيع بأحدث سعر تكلفة في قائمة أسعار المنتج.",
         "costingMethodNote": "ينطبق على المبيعات الجديدة فقط. أما المبيعات المسجّلة فتحتفظ بالتكلفة التي حُفظت بها.",
+        "stockPolicy": "سياسة المخزون",
+        "allowNegativeStock": "السماح بالبيع دون مخزون",
+        "allowNegativeStockOnHelp": "يمكن حفظ المبيعات وعمليات نقطة البيع وطلبات المتجر بأكثر من الكمية المتاحة. يصبح رصيد المخزون سالبًا حتى تُسجّل عملية شراء.",
+        "allowNegativeStockOffHelp": "يُرفض البيع عندما يطلب أحد السطور أكثر من الكمية المتاحة.",
+        "allowNegativeStockNote": "ينطبق على البيع فقط. أما التحويلات والجرد والفاقد والتصنيع فتتطلب دائمًا توفر المخزون.",
         "shrinkage": "الفاقد",
         "discrepancy": "الفروقات",
         "reasonCode": "رمز السبب",
@@ -304,6 +335,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "المنتجات دون حدود إعادة الطلب مع كميات شراء مقترحة",
             "subtitlePrioritize": "رتّب حسب الأولوية المنتجات التي تبقى دون المخزون المستهدف بعد احتساب التحويلات الواردة",
             "allWarehouses": "كل المستودعات",
+            "allBranches": "كل الفروع",
             "allGroups": "كل المجموعات",
             "allSubgroups": "كل المجموعات الفرعية",
             "uncategorized": "بلا تصنيف",
@@ -327,6 +359,7 @@ export const inventoryExtrasMessages = {
             "title": "المخزون المتاح",
             "subtitle": "الكمية لكل مستودع مقوَّمة بمتوسط تكلفة الشراء المرجّح",
             "allWarehouses": "كل المستودعات",
+            "allBranches": "كل الفروع",
             "allGroups": "كل المجموعات",
             "allSubgroups": "كل المجموعات الفرعية",
             "allBrands": "كل العلامات التجارية",
@@ -413,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "استلام المخزون",
         "transferSent": "أُرسل التحويل إلى مستودع الوجهة.",
         "sendFailed": "تعذّر إرسال التحويل.",
+        "submitForApproval": "إرسال للموافقة",
+        "approveTransfer": "موافقة",
+        "rejectTransfer": "رفض",
+        "transferApproved": "تمت الموافقة على التحويل — خرج المخزون من المستودع المصدر.",
+        "approveFailed": "تعذَّرت الموافقة على التحويل.",
+        "transferRejected": "تم رفض التحويل.",
+        "rejectFailed": "تعذَّر رفض التحويل.",
+        "awaitingApprovalNotice": "في انتظار الموافقة. المخزون لا يزال في الفرع المصدر ولن يتحرك قبل الموافقة.",
+        "rejectedNotice": "تم رفض هذا التحويل، لذا لم يتحرك أي مخزون.",
+        "rejectionReasonLabel": "سبب الرفض",
+        "rejectionReasonPlaceholder": "اذكر السبب لمقدّم الطلب ليعرف ما يجب تغييره",
+        "confirmRejection": "تأكيد الرفض",
+        "scope": "النطاق",
+        "crossBranch": "بين الفروع",
+        "withinBranch": "داخل فرع واحد",
         "receiptRecorded": "تم تسجيل استلام التحويل.",
         "receiveFailed": "تعذّر استلام التحويل.",
         "transferLines": "أسطر التحويل",
@@ -425,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "الخط الزمني للتحويل",
         "timeline": {
             "created": "أُنشئ",
+            "awaitingApproval": "في انتظار الموافقة",
+            "approved": "تمت الموافقة",
+            "rejected": "مرفوض",
             "sent": "أُرسل",
             "partiallyReceived": "استُلم جزئيًا",
             "completed": "اكتمل"
@@ -476,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "مستوى إعادة الطلب",
         "safetyStock": "مخزون الأمان",
         "leadTimeDays": "أيام التوريد",
+        "vatRate": "نسبة ضريبة القيمة المضافة (%)",
+        "vatRateHint": "الترك فارغًا يستخدم القيمة الافتراضية لمساحة العمل. 0 تعني نسبة صفرية أو معفاة.",
+        "sdRate": "الرسم التكميلي (%)",
+        "sdRateHint": "سلع الجدول الثالث فقط. الفراغ يعني لا يوجد.",
         "quantityUnit": "وحدة الكمية",
         "brand": "العلامة التجارية",
         "noBrand": "بلا علامة تجارية",
@@ -492,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "مثل 365"
+            "warrantyDays": "مثل 365",
+            "vatRate": "مثال: 15",
+            "sdRate": "مثال: 25"
         }
     }
 } as const;

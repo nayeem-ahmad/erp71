@@ -44,6 +44,8 @@ export const customersMessages = {
                 discountPct: "Diskaun %",
                 birthday: "Hari Lahir",
                 birthdayHint: "Menjana susulan hari lahir automatik pada hari itu.",
+                bin: "BIN (pendaftaran VAT pembeli)",
+                binHint: "BIN 13 digit pembeli, jika mereka berdaftar VAT. Dicetak pada Mushak 6.3 dan dalam buku jualan 6.2.",
                 individual: "Individu",
                 organization: "Organisasi",
                 adding: "Menambah...",
@@ -62,6 +64,7 @@ export const customersMessages = {
                     phone: "+60123456789",
                     email: "ahmad@example.com",
                     address: "123 Jalan Utama...",
+                    bin: "cth. 000000000-0101",
                 },
             },
             profile: {

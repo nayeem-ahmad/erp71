@@ -371,4 +371,121 @@ describe('InventoryReportsService', () => {
             );
         });
     });
+
+    /**
+     * A branch reaches stock only through its warehouses, so every report on
+     * this service has to resolve `storeId` to the warehouse relation. Without
+     * it the unfiltered report mixes every branch into one set of numbers and
+     * there is no way to ask for one.
+     */
+    describe('branch filter', () => {
+        it('scopes reorder stock and in-transit quantities to the branch', async () => {
+            db.inventorySettings.findUnique.mockResolvedValue(null);
+            db.product.findMany.mockResolvedValue([]);
+            db.warehouseTransferItem.findMany.mockResolvedValue([]);
+
+            await service.getReorderSuggestions('tenant-1', { storeId: 'store-1' });
+
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: expect.objectContaining({
+                        stocks: expect.objectContaining({ where: { warehouse: { store_id: 'store-1' } } }),
+                    }),
+                }),
+            );
+            // Stock already on its way into the branch counts toward it.
+            expect(db.warehouseTransferItem.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        transfer: expect.objectContaining({ destinationWarehouse: { store_id: 'store-1' } }),
+                    }),
+                }),
+            );
+        });
+
+        it('scopes valuation stock to the branch', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getInventoryValuation('tenant-1', { storeId: 'store-1' });
+
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: expect.objectContaining({
+                        stocks: expect.objectContaining({ where: { warehouse: { store_id: 'store-1' } } }),
+                    }),
+                }),
+            );
+        });
+
+        it('scopes shrinkage rows to the branch', async () => {
+            db.inventoryShrinkage.findMany.mockResolvedValue([]);
+
+            await service.getShrinkageSummary('tenant-1', { storeId: 'store-1' });
+
+            expect(db.inventoryShrinkage.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ warehouse: { store_id: 'store-1' } }),
+                }),
+            );
+        });
+
+        it('scopes the aging last-sold lookup to the branch', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getStockAging('tenant-1', { storeId: 'store-1' });
+
+            expect(db.inventoryMovement.groupBy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ warehouse: { store_id: 'store-1' }, movement_type: 'SALE' }),
+                }),
+            );
+        });
+
+        it('builds stock-on-hand columns from that branch\'s warehouses only', async () => {
+            db.warehouse.findMany.mockResolvedValue([]);
+
+            await service.getStockOnHand('tenant-1', { storeId: 'store-1' });
+
+            expect(db.warehouse.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ store_id: 'store-1', is_active: true }),
+                }),
+            );
+        });
+
+        /**
+         * Both filters apply rather than one overriding the other: asking for a
+         * warehouse *and* a branch it is not in is a contradiction, and reporting
+         * nothing is the honest answer to it.
+         */
+        it('combines a warehouse and a branch filter rather than letting one win', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getInventoryValuation('tenant-1', { storeId: 'store-1', warehouseId: 'wh-1' });
+
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: expect.objectContaining({
+                        stocks: expect.objectContaining({
+                            where: { warehouse_id: 'wh-1', warehouse: { store_id: 'store-1' } },
+                        }),
+                    }),
+                }),
+            );
+        });
+
+        it('leaves every report tenant-wide when neither filter is set', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getInventoryValuation('tenant-1', {});
+
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: expect.objectContaining({
+                        stocks: expect.objectContaining({ where: undefined }),
+                    }),
+                }),
+            );
+        });
+    });
 });

@@ -27,6 +27,7 @@ import {
     boardCanvasClass,
     boardCanvasStyle,
     boardColumnLiftClass,
+    boardHeaderPlateClass,
 } from '@/components/projects/board-background';
 import {
     columnWidthClass,
@@ -355,7 +356,7 @@ export default function BoardPage() {
                     <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 md:p-4">
                         <p className="text-sm text-red-700">{t.common.error}</p>
                         <Link href={routes.projects.boards}>
-                            <Button variant="secondary" className="min-h-touch">
+                            <Button variant="secondary" className="max-md:min-h-touch">
                                 {t.common.back}
                             </Button>
                         </Link>
@@ -372,58 +373,71 @@ export default function BoardPage() {
 
     return (
         <PageShell>
-            <PageHeader
-                title={board.name}
-                subtitle={board.description ?? undefined}
-                breadcrumbs={modulePageBreadcrumbs(
-                    t.dashboardHome.breadcrumbHome,
-                    t.sidebar.modules.projects,
-                    board.name,
-                    'projects',
-                )}
-                actions={
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button className="min-h-touch" onClick={() => setAdding(true)}>
-                            <Plus className="h-4 w-4" />
-                            {m.addTasks}
-                        </Button>
-                        <BoardViewMenu {...boardView} />
-                        <Button
-                            variant="secondary"
-                            className="min-h-touch"
-                            onClick={() => setPickingBackground(true)}
-                        >
-                            <ImageIcon className="h-4 w-4" />
-                            {m.background.title}
-                        </Button>
-                        <Link href={routes.projects.boardColumns(boardId)}>
-                            <Button variant="secondary" className="min-h-touch">
-                                {m.boardSettings}
-                            </Button>
-                        </Link>
-                    </div>
-                }
-            />
+            {/* The background is painted here rather than on the column
+                scroller, so it runs behind the title and breadcrumb the way
+                Jira and Trello paint a board. The header is part of the board,
+                not chrome sitting above it.
 
-            <BoardFilterBar
-                filters={filters}
-                onChange={setFilters}
-                assignees={assigneeOptions}
-                labels={labels}
-                shown={shown}
-                total={total}
-            />
-
-            {/* Columns scroll inside their own container so the page body never
-                scrolls sideways on a phone. The board's background is painted
-                on that same container rather than on the page: it belongs
-                behind the columns, not behind the header and filter bar, which
-                are chrome for reading the board rather than part of it. */}
+                `space-y-4` is the page's own gap between the header and the
+                columns; it has to be restated because this wrapper is now the
+                child `PageShell` spaces, and without it the two would sit
+                flush inside one painted surface. */}
             <div
-                className={`overflow-x-auto pb-2 ${boardCanvasClass(board)}`}
+                data-testid="board-canvas"
+                className={`space-y-4 ${boardCanvasClass(board)}`}
                 style={boardCanvasStyle(board)}
             >
-                <div className="flex min-w-max gap-3">
+                <div className={boardHeaderPlateClass(board)}>
+                    <PageHeader
+                        title={board.name}
+                        subtitle={board.description ?? undefined}
+                        breadcrumbs={modulePageBreadcrumbs(
+                            t.dashboardHome.breadcrumbHome,
+                            t.sidebar.modules.projects,
+                            board.name,
+                            'projects',
+                        )}
+                        actions={
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                {/* Filters sit beside the buttons rather than
+                                    on a row of their own: the bar they used to
+                                    live on cost a whole row of board height to
+                                    four selects. */}
+                                <BoardFilterBar
+                                    filters={filters}
+                                    onChange={setFilters}
+                                    assignees={assigneeOptions}
+                                    labels={labels}
+                                    shown={shown}
+                                    total={total}
+                                />
+                                <Button className="max-md:min-h-touch" onClick={() => setAdding(true)}>
+                                    <Plus className="h-4 w-4" />
+                                    {m.addTasks}
+                                </Button>
+                                <BoardViewMenu {...boardView} />
+                                <Button
+                                    variant="secondary"
+                                    className="max-md:min-h-touch"
+                                    onClick={() => setPickingBackground(true)}
+                                >
+                                    <ImageIcon className="h-4 w-4" />
+                                    {m.background.title}
+                                </Button>
+                                <Link href={routes.projects.boardColumns(boardId)}>
+                                    <Button variant="secondary" className="max-md:min-h-touch">
+                                        {m.boardSettings}
+                                    </Button>
+                                </Link>
+                            </div>
+                        }
+                    />
+                </div>
+
+                {/* Columns scroll inside their own container so the page body
+                    never scrolls sideways on a phone. */}
+                <div className="overflow-x-auto pb-2">
+                    <div className="flex min-w-max gap-3">
                     {unsorted.length > 0 && (
                         <div
                             className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${lift} ${motionClass(view, 'column')}`}
@@ -587,6 +601,7 @@ export default function BoardPage() {
                             </div>
                         );
                     })}
+                    </div>
                 </div>
             </div>
 
@@ -686,81 +701,99 @@ function BoardFilterBar({
     const active = hasActiveFilter(filters);
 
     return (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-white p-3">
-            <label className="flex flex-col gap-1 text-xs text-gray-500">
-                {f.assignee}
-                <Select
-                    className="min-h-touch"
-                    value={filters.assignee}
-                    onChange={(e) => onChange({ ...filters, assignee: e.target.value })}
-                >
-                    <option value="all">{t.common.all}</option>
-                    <option value="none">{f.unassigned}</option>
-                    {assignees.map((option) => (
-                        <option key={option.key} value={option.key}>
-                            {option.label}
-                        </option>
-                    ))}
-                </Select>
-            </label>
+        /* No card of its own any more: this sits among the header's buttons, so
+           a border and white fill around four selects would read as a panel
+           floating in the action row. The labels move onto the controls as
+           `aria-label`, which keeps every select named for a screen reader
+           without spending a line of height on visible label text — the point
+           of moving the filters up here was to get that height back.
 
-            <label className="flex flex-col gap-1 text-xs text-gray-500">
-                {f.priority}
-                <Select
-                    className="min-h-touch"
-                    value={filters.priority}
-                    onChange={(e) => onChange({ ...filters, priority: e.target.value })}
-                >
-                    <option value="all">{t.common.all}</option>
-                    {(['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const).map((value) => (
-                        <option key={value} value={value}>
-                            {t.projects.priority[value]}
-                        </option>
-                    ))}
-                </Select>
-            </label>
+           `[&_select]:w-auto` is the load-bearing part: `Select` ships `w-full`
+           from `compactDensity.formField`, which is right in a form column and
+           wrong in a header row — each select claims the full width and the
+           four of them stack into a tall ladder instead of sitting in a line.
+           Overriding it here rather than in `Select` keeps every form on the
+           app untouched. The selects then size to their content, so the widest
+           option label sets the width; `max-w-[9rem]` stops a long assignee
+           name from pushing the buttons off the row.
+
+           `max-w-full` is what makes it wrap on a phone. `PageHeader` lays its
+           actions out in a `flex-shrink-0` column, so that column takes its
+           natural content width — 898px at a 360px viewport — and a nested
+           wrapping row given 898px of space never has any reason to wrap. It
+           overflows the plate instead and clips the last filter, which puts
+           "Due" out of reach on a phone. Capping this row at the width it
+           actually has gives `flex-wrap` a real boundary to break against.
+           Fixing `PageHeader` itself would be the deeper repair, but it is a
+           shared primitive behind every module header — logged as a follow-up
+           rather than changed from inside one board page. */
+        <div className="flex max-w-full flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:max-w-[9rem]">
+            <Select
+                aria-label={f.assignee}
+                className="max-md:min-h-touch"
+                value={filters.assignee}
+                onChange={(e) => onChange({ ...filters, assignee: e.target.value })}
+            >
+                <option value="all">{f.assignee}</option>
+                <option value="none">{f.unassigned}</option>
+                {assignees.map((option) => (
+                    <option key={option.key} value={option.key}>
+                        {option.label}
+                    </option>
+                ))}
+            </Select>
+
+            <Select
+                aria-label={f.priority}
+                className="max-md:min-h-touch"
+                value={filters.priority}
+                onChange={(e) => onChange({ ...filters, priority: e.target.value })}
+            >
+                <option value="all">{f.priority}</option>
+                {(['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const).map((value) => (
+                    <option key={value} value={value}>
+                        {t.projects.priority[value]}
+                    </option>
+                ))}
+            </Select>
 
             {/* Only offered once the tenant has labels — an empty select is a
                 dead control that just makes the bar longer. */}
             {labels.length > 0 && (
-                <label className="flex flex-col gap-1 text-xs text-gray-500">
-                    {f.label}
-                    <Select
-                        className="min-h-touch"
-                        value={filters.label}
-                        onChange={(e) => onChange({ ...filters, label: e.target.value })}
-                    >
-                        <option value="all">{t.common.all}</option>
-                        <option value="none">{f.noLabel}</option>
-                        {labels.map((label) => (
-                            <option key={label.id} value={label.id}>
-                                {label.name}
-                            </option>
-                        ))}
-                    </Select>
-                </label>
+                <Select
+                    aria-label={f.label}
+                    className="max-md:min-h-touch"
+                    value={filters.label}
+                    onChange={(e) => onChange({ ...filters, label: e.target.value })}
+                >
+                    <option value="all">{f.label}</option>
+                    <option value="none">{f.noLabel}</option>
+                    {labels.map((label) => (
+                        <option key={label.id} value={label.id}>
+                            {label.name}
+                        </option>
+                    ))}
+                </Select>
             )}
 
-            <label className="flex flex-col gap-1 text-xs text-gray-500">
-                {f.due}
-                <Select
-                    className="min-h-touch"
-                    value={filters.due}
-                    onChange={(e) =>
-                        onChange({ ...filters, due: e.target.value as BoardFilters['due'] })
-                    }
-                >
-                    <option value="all">{t.common.all}</option>
-                    <option value="overdue">{f.overdue}</option>
-                    <option value="today">{f.dueToday}</option>
-                    <option value="week">{f.dueThisWeek}</option>
-                    <option value="none">{f.noDueDate}</option>
-                </Select>
-            </label>
+            <Select
+                aria-label={f.due}
+                className="max-md:min-h-touch"
+                value={filters.due}
+                onChange={(e) =>
+                    onChange({ ...filters, due: e.target.value as BoardFilters['due'] })
+                }
+            >
+                <option value="all">{f.due}</option>
+                <option value="overdue">{f.overdue}</option>
+                <option value="today">{f.dueToday}</option>
+                <option value="week">{f.dueThisWeek}</option>
+                <option value="none">{f.noDueDate}</option>
+            </Select>
 
             {active && (
                 <>
-                    <span className="pb-2 text-xs text-gray-500">
+                    <span className="text-xs text-gray-500">
                         {f.showing
                             .replace('{shown}', String(shown))
                             .replace('{total}', String(total))}
@@ -768,7 +801,7 @@ function BoardFilterBar({
                     <Button
                         type="button"
                         variant="ghost"
-                        className="min-h-touch"
+                        className="max-md:min-h-touch"
                         onClick={() => onChange(NO_FILTERS)}
                     >
                         <X className="me-1 h-4 w-4" />
@@ -886,7 +919,7 @@ function TaskCard({
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
-                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                    className="-ms-1 max-md:min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
@@ -920,7 +953,7 @@ function TaskCard({
                         e.stopPropagation();
                         onRemove();
                     }}
-                    className="min-h-touch min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                    className="max-md:min-h-touch max-md:min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -61,6 +61,11 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.list': { id: 'sales.list', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.sales', href: '/sales/list' },
   'sales.new': { id: 'sales.new', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.newSalesEntry', href: '/sales/new' },
   'sales.cashier-sessions': { id: 'sales.cashier-sessions', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.cashierSessions', href: '/sales/cashier-sessions' },
+  // NBR Mushak 6.2 / 6.10. Deliberately NOT inside the `sales.reports`
+  // subgroup: that one is `advancedOnly`, and the sales book is a statutory
+  // record every VAT-registered shop has to keep — not an analytics extra to
+  // be sold as an upgrade.
+  'sales.mushak': { id: 'sales.mushak', kind: 'link', icon: 'FileCheck', labelKey: 'sidebar.items.mushakBooks', href: '/sales/reports/mushak' },
   'sales.receivables': { id: 'sales.receivables', kind: 'subgroup', icon: 'Wallet', labelKey: 'sales.hub.receivables' },
   'sales.receivables.customer-payments': { id: 'sales.receivables.customer-payments', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.items.customerPayment', href: '/sales/customer-payments' },
   'sales.receivables.customer-ledger': { id: 'sales.receivables.customer-ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.customerLedger', href: '/sales/customer-ledger' },
@@ -186,6 +191,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'inventory.setup': { id: 'inventory.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'inventory.hub.setup' },
   'inventory.setup.brands': { id: 'inventory.setup.brands', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.brands', href: '/inventory/brands' },
   'inventory.setup.categories': { id: 'inventory.setup.categories', kind: 'link', icon: 'FolderTree', labelKey: 'sidebar.items.categories', href: '/inventory/categories' },
+  'inventory.setup.warehouses': { id: 'inventory.setup.warehouses', kind: 'link', icon: 'Warehouse', labelKey: 'sidebar.items.warehouses', href: '/inventory/warehouses' },
   'inventory.setup.settings': { id: 'inventory.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.inventorySettings', href: '/inventory/settings' },
 
   // The module keeps no `href` of its own: its four screens are child links, and
@@ -370,7 +376,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.order-flow.delivery', 'sales', 7),
   layoutNode('sales.order-flow.warranty-claims', 'sales', 8),
   layoutNode('sales.storefront.orders', 'sales', 9),
-  layoutNode('sales.reports', 'sales', 10),
+  layoutNode('sales.mushak', 'sales', 10),
+  layoutNode('sales.reports', 'sales', 11),
   layoutNode('sales.reports.summary', 'sales.reports', 0),
   layoutNode('sales.reports.products', 'sales.reports', 1),
   layoutNode('sales.reports.consolidated', 'sales.reports', 2),
@@ -382,7 +389,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.receivables.customer-ledger', 'sales.reports', 8),
   layoutNode('sales.receivables.due-aging', 'sales.reports', 9),
   layoutNode('sales.customers.loyalty', 'sales.reports', 10),
-  layoutNode('sales.setup', 'sales', 11),
+  layoutNode('sales.setup', 'sales', 12),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),
   layoutNode('sales.setup.territories', 'sales.setup', 2),
@@ -471,7 +478,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.products', 'inventory.setup', 0),
   layoutNode('inventory.setup.categories', 'inventory.setup', 1),
   layoutNode('inventory.setup.brands', 'inventory.setup', 2),
-  layoutNode('inventory.setup.settings', 'inventory.setup', 3),
+  layoutNode('inventory.setup.warehouses', 'inventory.setup', 3),
+  layoutNode('inventory.setup.settings', 'inventory.setup', 4),
 
   layoutNode('crm', null, 7),
   layoutNode('crm.overview', 'crm', 0),

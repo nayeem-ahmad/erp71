@@ -142,10 +142,17 @@ export const inventoryExtrasMessages = {
         "createFailed": "स्थानांतरण नहीं बन सका।",
         "emptyMessage": "अभी कोई गोदाम स्थानांतरण दर्ज नहीं",
         "searchPlaceholder": "स्थानांतरण खोजें...",
+        "unknownBranch": "अनिर्धारित शाखा",
+        "allScopes": "सभी शाखाएँ",
+        "crossBranchOnly": "शाखाओं के बीच",
+        "withinBranchOnly": "एक शाखा के भीतर",
+        "withinBranch": "वही शाखा",
+        "crossBranchNotice": "यह स्थानांतरण शाखाओं के बीच है, इसलिए यह अनुमोदन की प्रतीक्षा करेगा — अनुमोदन मिलने तक स्रोत गोदाम से कोई स्टॉक नहीं जाएगा।",
         "columns": {
             "transferNumber": "स्थानांतरण #",
             "source": "स्रोत",
             "destination": "गंतव्य",
+            "branch": "शाखा",
             "outstanding": "बकाया",
             "created": "बनाया गया",
             "voucher": "वाउचर"
@@ -154,7 +161,9 @@ export const inventoryExtrasMessages = {
             "draft": "ड्राफ़्ट",
             "sent": "भेजा गया",
             "partiallyReceived": "आंशिक रूप से प्राप्त",
-            "received": "प्राप्त"
+            "received": "प्राप्त",
+            "pendingApproval": "अनुमोदन प्रतीक्षित",
+            "rejected": "अस्वीकृत"
         }
     },
     "inventoryShrinkage": {
@@ -242,6 +251,23 @@ export const inventoryExtrasMessages = {
         "upload": "अपलोड करें",
         "print": "प्रिंट"
     },
+    "warehousesPage": {
+        "title": "गोदाम",
+        "subtitle": "शाखा अनुसार स्टॉक स्थान, डिफ़ॉल्ट और स्थिति के साथ",
+        "newWarehouse": "नया गोदाम",
+        "editWarehouse": "गोदाम संपादित करें",
+        "branch": "शाखा",
+        "code": "कोड",
+        "status": "स्थिति",
+        "emptyMessage": "अभी कोई गोदाम नहीं",
+        "searchPlaceholder": "गोदाम खोजें...",
+        "selectBranch": "शाखा चुनें",
+        "nameRequired": "नाम आवश्यक है",
+        "nameDuplicate": "इस शाखा में इस नाम का गोदाम पहले से मौजूद है",
+        "branchRequired": "शाखा आवश्यक है",
+        "codeHint": "स्वतः बनाने के लिए खाली छोड़ें",
+        "manageWarehouses": "गोदाम प्रबंधित करें"
+    },
     "inventorySettings": {
         "title": "इन्वेंट्री सेटिंग्स",
         "subtitle": "गोदाम डिफ़ॉल्ट, अलर्ट सीमाएँ और समायोजन कारण सूचियाँ कॉन्फ़िगर करें",
@@ -279,6 +305,11 @@ export const inventoryExtrasMessages = {
         "costingWeightedAverageHelp": "हर बिक्री की लागत उस चालू औसत पर लगती है जिस पर मौजूदा स्टॉक वास्तव में खरीदा गया था।",
         "costingLatestCostHelp": "हर बिक्री की लागत उत्पाद मूल्य सूची के सबसे हालिया लागत मूल्य पर लगती है।",
         "costingMethodNote": "केवल नई बिक्री पर लागू। पहले से दर्ज बिक्री अपनी सहेजी गई लागत रखती है।",
+        "stockPolicy": "स्टॉक नीति",
+        "allowNegativeStock": "स्टॉक के बिना बिक्री की अनुमति दें",
+        "allowNegativeStockOnHelp": "बिक्री, पीओएस और स्टोरफ़्रंट ऑर्डर उपलब्ध मात्रा से अधिक के लिए भी सहेजे जा सकते हैं। खरीद दर्ज होने तक स्टॉक शेष ऋणात्मक रहेगा।",
+        "allowNegativeStockOffHelp": "जब कोई पंक्ति उपलब्ध मात्रा से अधिक मांगती है तो बिक्री अस्वीकार कर दी जाती है।",
+        "allowNegativeStockNote": "केवल बिक्री पर लागू। स्थानांतरण, स्टॉक टेक, शृंकेज और निर्माण के लिए स्टॉक उपलब्ध होना हमेशा आवश्यक है।",
         "shrinkage": "क्षति",
         "discrepancy": "विसंगति",
         "reasonCode": "कारण कोड",
@@ -304,6 +335,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "पुनःऑर्डर सीमा से नीचे के उत्पाद, सुझाई गई खरीद मात्रा के साथ",
             "subtitlePrioritize": "आने वाले स्थानांतरण गिनने के बाद भी लक्ष्य स्टॉक से नीचे रहने वाले उत्पादों को प्राथमिकता दें",
             "allWarehouses": "सभी गोदाम",
+            "allBranches": "सभी शाखाएँ",
             "allGroups": "सभी समूह",
             "allSubgroups": "सभी उपसमूह",
             "uncategorized": "अवर्गीकृत",
@@ -327,6 +359,7 @@ export const inventoryExtrasMessages = {
             "title": "उपलब्ध स्टॉक",
             "subtitle": "भारित औसत खरीद लागत पर मूल्यांकित प्रति गोदाम मात्रा",
             "allWarehouses": "सभी गोदाम",
+            "allBranches": "सभी शाखाएँ",
             "allGroups": "सभी समूह",
             "allSubgroups": "सभी उपसमूह",
             "allBrands": "सभी ब्रांड",
@@ -413,6 +446,21 @@ export const inventoryExtrasMessages = {
         "receiveStock": "स्टॉक प्राप्त करें",
         "transferSent": "स्थानांतरण गंतव्य गोदाम को भेजा गया।",
         "sendFailed": "स्थानांतरण भेजा नहीं जा सका।",
+        "submitForApproval": "अनुमोदन के लिए भेजें",
+        "approveTransfer": "अनुमोदित करें",
+        "rejectTransfer": "अस्वीकार करें",
+        "transferApproved": "स्थानांतरण अनुमोदित — स्टॉक स्रोत गोदाम से निकल गया है।",
+        "approveFailed": "स्थानांतरण अनुमोदित नहीं हो सका।",
+        "transferRejected": "स्थानांतरण अस्वीकृत।",
+        "rejectFailed": "स्थानांतरण अस्वीकार नहीं हो सका।",
+        "awaitingApprovalNotice": "अनुमोदन की प्रतीक्षा। स्टॉक अभी स्रोत शाखा में ही है और अनुमोदन तक नहीं हटेगा।",
+        "rejectedNotice": "यह स्थानांतरण अस्वीकृत हुआ, इसलिए कोई स्टॉक नहीं हटा।",
+        "rejectionReasonLabel": "अस्वीकृति का कारण",
+        "rejectionReasonPlaceholder": "अनुरोधकर्ता को कारण बताएं, ताकि उन्हें पता चले क्या बदलना है",
+        "confirmRejection": "अस्वीकृति की पुष्टि करें",
+        "scope": "दायरा",
+        "crossBranch": "शाखाओं के बीच",
+        "withinBranch": "एक शाखा के भीतर",
         "receiptRecorded": "स्थानांतरण प्राप्ति दर्ज हुई।",
         "receiveFailed": "स्थानांतरण प्राप्त नहीं हो सका।",
         "transferLines": "स्थानांतरण लाइनें",
@@ -425,6 +473,9 @@ export const inventoryExtrasMessages = {
         "transferTimeline": "स्थानांतरण समयरेखा",
         "timeline": {
             "created": "बनाया गया",
+            "awaitingApproval": "अनुमोदन प्रतीक्षित",
+            "approved": "अनुमोदित",
+            "rejected": "अस्वीकृत",
             "sent": "भेजा गया",
             "partiallyReceived": "आंशिक रूप से प्राप्त",
             "completed": "पूर्ण"
@@ -476,6 +527,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "पुनःऑर्डर स्तर",
         "safetyStock": "सुरक्षा स्टॉक",
         "leadTimeDays": "लीड टाइम दिन",
+        "vatRate": "वैट दर (%)",
+        "vatRateHint": "खाली छोड़ने पर कार्यक्षेत्र की डिफ़ॉल्ट दर लगेगी। 0 का अर्थ शून्य-दर या छूट प्राप्त।",
+        "sdRate": "अनुपूरक शुल्क (%)",
+        "sdRateHint": "केवल तृतीय अनुसूची की वस्तुएँ। खाली का अर्थ कोई नहीं।",
         "quantityUnit": "मात्रा इकाई",
         "brand": "ब्रांड",
         "noBrand": "कोई ब्रांड नहीं",
@@ -492,7 +547,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "जैसे 365"
+            "warrantyDays": "जैसे 365",
+            "vatRate": "जैसे 15",
+            "sdRate": "जैसे 25"
         }
     }
 } as const;

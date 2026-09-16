@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: 'Create a project first — every task belongs to one.',
         createFailed: 'Could not create the task',
         openFull: 'Open full page',
+        assigneeNoTeam: "No one is on this project's team yet.",
+        assigneeAddTeam: 'Add team members',
+        assigneeLoadFailed: "Could not read this project's team.",
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: 'Cover',
         none: 'No cover',
         pick: 'Cover colour {color}',
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: 'Comments',
+            activity: 'Activity',
+            time: 'Hour Log',
+            remaining: 'Remaining Hours History',
+            attachments: 'Attachments',
+        },
+        record: 'Task record',
+        addChecklistItem: 'Add item',
+        logTime: 'Log time',
+        spark: {
+            title: 'Remaining',
+            hover: 'hover for detail',
+        },
     },
 
     checklist: {

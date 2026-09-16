@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: 'আগে একটি প্রকল্প তৈরি করুন — প্রতিটি টাস্ক কোনো না কোনো প্রকল্পের।',
         createFailed: 'টাস্ক তৈরি করা যায়নি',
         openFull: 'পূর্ণ পৃষ্ঠা খুলুন',
+        assigneeNoTeam: 'এই প্রকল্পের দলে এখনো কেউ নেই।',
+        assigneeAddTeam: 'দলের সদস্য যোগ করুন',
+        assigneeLoadFailed: 'এই প্রকল্পের দল পড়া যায়নি।',
     },
 
     description: {
@@ -318,6 +321,24 @@ export const projectsMessages = {
         title: 'কভার',
         none: 'কভার নেই',
         pick: 'কভারের রং {color}',
+    },
+
+    /** The task card's own furniture: its bottom tabs and its sidebar chart. */
+    card: {
+        tabs: {
+            comments: 'মন্তব্য',
+            activity: 'কার্যক্রম',
+            time: 'ঘণ্টার লগ',
+            remaining: 'অবশিষ্ট ঘণ্টার ইতিহাস',
+            attachments: 'সংযুক্তি',
+        },
+        record: 'টাস্ক রেকর্ড',
+        addChecklistItem: 'আইটেম যোগ করুন',
+        logTime: 'সময় লগ করুন',
+        spark: {
+            title: 'অবশিষ্ট',
+            hover: 'বিস্তারিত দেখতে হোভার করুন',
+        },
     },
 
     checklist: {

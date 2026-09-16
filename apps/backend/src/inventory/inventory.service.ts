@@ -9,7 +9,7 @@ import {
     UpdateInventorySettingsDto,
     UpdateWarehouseDto,
 } from './inventory.dto';
-import { assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
@@ -31,6 +31,11 @@ export class InventoryService {
         return this.db.warehouse.findMany({
             where: { tenant_id: tenantId },
             orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+            // The branch, so a picker can say which one a warehouse belongs to.
+            // Names are only unique *within* a branch, and this list is
+            // tenant-wide, so two branches legitimately naming a location
+            // "Godown" would otherwise render as two identical options.
+            include: { store: { select: { id: true, name: true } } },
         });
     }
 
@@ -40,35 +45,66 @@ export class InventoryService {
             throw new BadRequestException('Store not found for this tenant.');
         }
 
-        const code = dto.code?.trim() || await this.generateWarehouseCode(tenantId, dto.name);
+        const name = requireWarehouseName(dto.name);
+        await this.assertNameAvailable(tenantId, dto.storeId, name);
+
+        const code = dto.code?.trim() || await this.generateWarehouseCode(tenantId, name);
         const duplicate = await this.db.warehouse.findFirst({ where: { tenant_id: tenantId, code } });
         if (duplicate) {
             throw new BadRequestException('A warehouse with this code already exists.');
         }
 
-        return this.db.$transaction(async (tx) => {
-            if (dto.isDefault) {
-                await tx.warehouse.updateMany({
-                    where: { tenant_id: tenantId, store_id: dto.storeId },
-                    data: { is_default: false },
-                });
-            }
+        try {
+            return await this.db.$transaction(async (tx) => {
+                if (dto.isDefault) {
+                    await tx.warehouse.updateMany({
+                        where: { tenant_id: tenantId, store_id: dto.storeId },
+                        data: { is_default: false },
+                    });
+                }
 
-            return tx.warehouse.create({
-                data: {
-                    tenant_id: tenantId,
-                    store_id: dto.storeId,
-                    name: dto.name,
-                    code,
-                    is_default: dto.isDefault ?? false,
-                    is_active: true,
-                },
+                return tx.warehouse.create({
+                    data: {
+                        tenant_id: tenantId,
+                        store_id: dto.storeId,
+                        name,
+                        code,
+                        is_default: dto.isDefault ?? false,
+                        is_active: true,
+                    },
+                });
             });
-        });
+        } catch (error) {
+            throw asWarehouseWriteError(error);
+        }
     }
 
     async updateWarehouse(tenantId: string, id: string, dto: UpdateWarehouseDto) {
-        const warehouse = await assertWarehouseBelongsToTenant(this.db as any, tenantId, id);
+        // Deliberately not assertWarehouseBelongsToTenant: that guard exists for
+        // stock movements and rejects inactive warehouses, which made Activate a
+        // one-way door — a deactivated warehouse could never be brought back, or
+        // even renamed. This screen's whole job is editing that flag, so it needs
+        // tenant scoping without the is_active check.
+        const warehouse = await this.db.warehouse.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+        if (!warehouse) {
+            throw new BadRequestException('Warehouse not found for this tenant.');
+        }
+
+        // A store whose default is inactive has no usable fallback, so the
+        // default has to be handed to another warehouse first.
+        if (dto.isActive === false && warehouse.is_default) {
+            throw new BadRequestException('Make another warehouse the default before deactivating this one.');
+        }
+
+        // `undefined` means the caller left the name alone — most edits from this
+        // screen only flip a status. A name that was *sent* has to be a real one,
+        // and has to be free in this branch.
+        const name = dto.name === undefined ? undefined : requireWarehouseName(dto.name);
+        if (name !== undefined && name !== warehouse.name) {
+            await this.assertNameAvailable(tenantId, warehouse.store_id, name, id);
+        }
 
         if (dto.code && dto.code !== warehouse.code) {
             const duplicate = await this.db.warehouse.findFirst({
@@ -79,24 +115,28 @@ export class InventoryService {
             }
         }
 
-        return this.db.$transaction(async (tx) => {
-            if (dto.isDefault) {
-                await tx.warehouse.updateMany({
-                    where: { tenant_id: tenantId, store_id: warehouse.store_id },
-                    data: { is_default: false },
-                });
-            }
+        try {
+            return await this.db.$transaction(async (tx) => {
+                if (dto.isDefault) {
+                    await tx.warehouse.updateMany({
+                        where: { tenant_id: tenantId, store_id: warehouse.store_id },
+                        data: { is_default: false },
+                    });
+                }
 
-            return tx.warehouse.update({
-                where: { id },
-                data: {
-                    ...(dto.name !== undefined ? { name: dto.name } : {}),
-                    ...(dto.code !== undefined ? { code: dto.code } : {}),
-                    ...(dto.isDefault !== undefined ? { is_default: dto.isDefault } : {}),
-                    ...(dto.isActive !== undefined ? { is_active: dto.isActive } : {}),
-                },
+                return tx.warehouse.update({
+                    where: { id },
+                    data: {
+                        ...(name !== undefined ? { name } : {}),
+                        ...(dto.code !== undefined ? { code: dto.code } : {}),
+                        ...(dto.isDefault !== undefined ? { is_default: dto.isDefault } : {}),
+                        ...(dto.isActive !== undefined ? { is_active: dto.isActive } : {}),
+                    },
+                });
             });
-        });
+        } catch (error) {
+            throw asWarehouseWriteError(error);
+        }
     }
 
     async importWarehouses(
@@ -115,6 +155,8 @@ export class InventoryService {
             castRow: (raw) => ({
                 name: String(raw.name ?? '').trim(),
             }),
+            dedupeKeys: (row) => [`name:${store.id}:${row.name.toLowerCase()}`],
+            describeDedupeKey: () => 'name in the same branch',
             findDuplicate: async (row) => {
                 const existing = await this.db.warehouse.findFirst({
                     where: { tenant_id: tenantId, store_id: store.id, name: { equals: row.name, mode: 'insensitive' } },
@@ -168,6 +210,7 @@ export class InventoryService {
                 ...(dto.defaultLeadTimeDays !== undefined ? { default_lead_time_days: dto.defaultLeadTimeDays } : {}),
                 ...(dto.discrepancyApprovalThreshold !== undefined ? { discrepancy_approval_threshold: dto.discrepancyApprovalThreshold } : {}),
                 ...(dto.costingMethod !== undefined ? { costing_method: dto.costingMethod } : {}),
+                ...(dto.allowNegativeStock !== undefined ? { allow_negative_stock: dto.allowNegativeStock } : {}),
             },
             include: this.settingsInclude(),
         });
@@ -314,15 +357,92 @@ export class InventoryService {
         }
     }
 
+    /**
+     * A branch may not hold two warehouses of the same name. Matched
+     * case-insensitively, because "Main Godown" and "main godown" are the same
+     * place to everyone reading a picker, even though the unique index behind
+     * this — Postgres compares text bytewise — would let both through.
+     */
+    private async assertNameAvailable(
+        tenantId: string,
+        storeId: string,
+        name: string,
+        excludeId?: string,
+    ) {
+        const duplicate = await this.db.warehouse.findFirst({
+            where: {
+                tenant_id: tenantId,
+                store_id: storeId,
+                name: { equals: name, mode: 'insensitive' },
+                ...(excludeId ? { NOT: { id: excludeId } } : {}),
+            },
+        });
+        if (duplicate) {
+            throw new BadRequestException('A warehouse with this name already exists in this branch.');
+        }
+    }
+
+    /**
+     * A code for a warehouse whose creator did not type one.
+     *
+     * The suffix is chosen by looking at what is actually taken, not by counting.
+     * Counting only holds while nothing is ever deleted: with `MAIN`, `MAIN-2`
+     * and `MAIN-3` on file, removing `MAIN-2` leaves a count of 2 and the next
+     * code generated is `MAIN-3` — already taken, so the create failed on a code
+     * the user never typed and could not see.
+     */
     private async generateWarehouseCode(tenantId: string, name: string) {
         const prefix = name
             .toUpperCase()
             .replace(/[^A-Z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 10) || 'WAREHOUSE';
-        const count = await this.db.warehouse.count({ where: { tenant_id: tenantId, code: { startsWith: prefix } } });
-        return count === 0 ? prefix : `${prefix}-${count + 1}`;
+
+        const rows = await this.db.warehouse.findMany({
+            where: { tenant_id: tenantId, code: { startsWith: prefix } },
+            select: { code: true },
+        });
+        const taken = new Set(rows.map((row) => row.code));
+        if (!taken.has(prefix)) return prefix;
+
+        // Terminates: `taken` is finite, so one of the first `taken.size + 1`
+        // candidates is necessarily free.
+        for (let suffix = 2; ; suffix++) {
+            const candidate = `${prefix}-${suffix}`;
+            if (!taken.has(candidate)) return candidate;
+        }
     }
+}
+
+/**
+ * The duplicate checks above read before they write, so two requests racing on
+ * the same name can both pass them; the unique indexes are what actually stop
+ * the second one. This turns the Prisma error they raise into the sentence the
+ * caller would have got had it lost the race by a moment more, and leaves every
+ * other failure exactly as it was.
+ */
+function asWarehouseWriteError(error: any): any {
+    if (error?.code !== 'P2002') return error;
+    const target = String(error?.meta?.target ?? '');
+    return new BadRequestException(
+        target.includes('name')
+            ? 'A warehouse with this name already exists in this branch.'
+            : 'A warehouse with this code already exists.',
+    );
+}
+
+/**
+ * The service's own last word on "a warehouse must have a name". CreateWarehouseDto
+ * and UpdateWarehouseDto already reject a blank one, but they only guard the HTTP
+ * edge — importers, seeds and future callers reach these methods directly, and a
+ * nameless warehouse is a blank row in every warehouse picker in the product.
+ */
+function requireWarehouseName(name: unknown): string {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (!trimmed) {
+        throw new BadRequestException('Warehouse name is required.');
+    }
+    return trimmed;
 }
 
 function buildDateWindow(from?: string, to?: string) {

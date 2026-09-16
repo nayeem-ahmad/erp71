@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Square, Trash2 } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -15,10 +15,8 @@ import {
     StatusBadge,
 } from '@/components/ui';
 import {
-    coverClass,
     labelClass,
     labelsOf,
-    LABEL_COLORS,
     type ProjectLabel,
     type ProjectLabelColor,
 } from '@/components/projects/board-tasks';
@@ -29,6 +27,31 @@ import {
     type FeedEntry,
 } from '@/components/projects/task-activity';
 import RemainingHoursChart from '@/components/projects/RemainingHoursChart';
+import RemainingSparkline from '@/components/projects/RemainingSparkline';
+import { Tabs, TabPanel } from '@/components/ui/compact/Tabs';
+
+/** The five records a card carries, as the bottom tab strip names them. */
+type RecordTab = 'comments' | 'activity' | 'time' | 'remaining' | 'attachments';
+
+/**
+ * One sidebar field: its name on the left, its control on the right.
+ *
+ * The five pickers used to wrap as one group, which packed two or three onto a
+ * line and left the reader matching chips to meanings by guesswork — "Medium"
+ * reads as a priority or a size depending on what you expected to find. A
+ * caption column costs one line each and makes the column scannable.
+ *
+ * `min-w-0` on the control side so a long assignee name or story title
+ * ellipsises inside its chip instead of pushing the caption out of the row.
+ */
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-2">
+            <span className="shrink-0 text-xs text-gray-500">{label}</span>
+            <div className="flex min-w-0 justify-end">{children}</div>
+        </div>
+    );
+}
 import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
@@ -208,6 +231,7 @@ export function TaskCardBody({
     canSaveWork,
     allLabels,
     members,
+    membersFailed,
     stories,
     sprints,
     localeInfo,
@@ -235,6 +259,8 @@ export function TaskCardBody({
     canSaveWork: boolean;
     allLabels: ProjectLabel[];
     members: ProjectMemberRow[];
+    /** The roster read failed, rather than coming back with nobody on it. */
+    membersFailed: boolean;
     stories: StoryOption[];
     sprints: SprintOption[];
     localeInfo: ReturnType<typeof useI18n>['localeInfo'];
@@ -254,25 +280,66 @@ export function TaskCardBody({
     const { t } = useI18n();
     const m = t.projects;
 
+    /* No tab selected until one is asked for, which is the whole reason the
+       collapsibles these replaced existed.
+
+       Defaulting to Comments would have read better — it is the tab someone
+       usually wants — but `ActivitySection` fetches on mount, so making it the
+       default put the comment feed, the activity log and the watcher list back
+       into the cost of opening a card: three requests became six, undoing the
+       reduction 4F measured and recorded. A tab strip that starts closed keeps
+       that reduction and still costs one click, the same click the collapsible
+       header cost. */
+    const [recordTab, setRecordTab] = useState<RecordTab | null>(null);
+
+    /* Log time opens on a heading and a "+", not on its four fields: a card is
+       opened to read far more often than to log, and an empty timesheet under
+       the description made every read scroll past it. The checklist does the
+       same, but owns its own flag — its add form lives inside
+       `ChecklistSection` rather than out here. */
+    const [loggingTime, setLoggingTime] = useState(false);
+
     return (
         /* Trello's card, in two columns: the work itself in the wide
            one, everything that merely describes it beside it. Placed
            explicitly rather than by source order so the sidebar sits
            under the title on a phone — where status and assignee are
            the first things reached for — and on the right on desktop. */
-        <div className="grid gap-4 md:grid-cols-3">
-            <aside className="space-y-3 md:col-start-3 md:row-start-1">
+        /* `grid-cols-1` is not decoration. Without a base column count only
+           `md:grid-cols-3` is declared, so below `md` the grid falls back to a
+           single *implicit* track, and an implicit track is `auto` — it sizes
+           to its widest content rather than to the grid. Measured on a phone:
+           one 574px track inside a 302px grid, clipping the chips, the third
+           figure and the date input off the right edge with no scroll to reach
+           them. `grid-cols-1` emits `repeat(1, minmax(0, 1fr))`, which is the
+           constraint that was missing. `min-w-0` on the child cannot fix this:
+           the child was already free to shrink; the track was not. */
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {/* `min-w-0` is load-bearing: a grid item defaults to
+                `min-width: auto`, which refuses to shrink below its content's
+                intrinsic width. Without it this column lays out at its widest
+                child — measured at 574px inside a 302px grid on a phone — and
+                clips the chips, the third figure and the date input off the
+                right edge, with no scroll to reach them. */}
+            <aside className="min-w-0 space-y-3 md:col-start-3 md:row-start-1">
                 <section className="space-y-3 rounded-md border border-gray-200 p-3">
                     <h3 className="text-sm font-medium">{m.task.details}</h3>
 
-                    {/* The four pickers, as chips rather than stacked
-                        selects. A native select is right for four options and
-                        wrong for a twenty-person roster or a groomed backlog:
-                        it cannot be typed into. Dates, labels and the cover
-                        keep their own sections below — dates because start and
-                        due share a cross-field check that does not fit one
-                        chip. */}
-                    <div className="flex flex-wrap gap-1.5">
+                    {/* One field per row: a caption on the left, its chip on
+                        the right. They used to wrap as one group, which packed
+                        two or three onto a line and left the reader matching
+                        chips to meanings by colour and guesswork — "Medium"
+                        could be a priority or a size. A caption column costs
+                        one line each and makes the sidebar scannable.
+
+                        Still chips rather than native selects: a select is
+                        right for four options and wrong for a twenty-person
+                        roster or a groomed backlog, because it cannot be typed
+                        into. Dates and labels keep their own sections below —
+                        dates because start and due share a cross-field check
+                        that does not fit one chip. */}
+                    <div className="flex flex-col gap-1">
+                        <FieldRow label={m.fields.status}>
                         <ChipPopover
                             label={m.fields.status}
                             value={task.status?.id ?? ''}
@@ -285,15 +352,21 @@ export function TaskCardBody({
                             disabled={busy}
                             onPick={changeStatus}
                         />
+                        </FieldRow>
 
+                        <FieldRow label={m.fields.assignee}>
                         <AssigneeField
                             task={task}
                             taskId={taskId}
+                            projectId={task.project?.id}
                             members={members}
+                            membersFailed={membersFailed}
                             onSaved={apply}
                             onWanted={onMembersWanted}
                         />
+                        </FieldRow>
 
+                        <FieldRow label={m.stories.field}>
                         <UserStoryField
                             task={task}
                             taskId={taskId}
@@ -301,11 +374,13 @@ export function TaskCardBody({
                             onSaved={apply}
                             onWanted={onStoriesWanted}
                         />
+                        </FieldRow>
 
                         {/* New here. Priority was only ever set from the create
                             modal and filtered from the list — the card itself
                             could not change it. `UpdateTaskDto` already takes
                             it, so this is the picker catching up. */}
+                        <FieldRow label={m.fields.priority}>
                         <ChipPopover
                             label={m.fields.priority}
                             value={task.priority ?? ''}
@@ -328,10 +403,12 @@ export function TaskCardBody({
                             disabled={busy}
                             onPick={changePriority}
                         />
+                        </FieldRow>
 
                         {/* Sprint was already on every task read and shown
                             nowhere. Clearing it returns the task to the
                             backlog — the module's own words for it. */}
+                        <FieldRow label={m.fields.sprint}>
                         <ChipPopover
                             label={m.fields.sprint}
                             value={task.sprint?.id ?? ''}
@@ -353,15 +430,19 @@ export function TaskCardBody({
                             emptyLabel={m.sprint.backlog}
                             filterable
                         />
+                        </FieldRow>
                     </div>
 
-                    <EstimateField task={task} taskId={taskId} onSaved={apply} />
-
-                    {/* Read-only, unlike the estimate above them:
-                        logged is the sum of the time entries and
-                        remaining is set by the form in the main
-                        column, which records why it moved. */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Three across rather than an input above a pair of tiles:
+                        estimate, logged and remaining are one thought — what
+                        the job was going to cost, what it has cost, what is
+                        left — and reading them needs them on one line. The
+                        estimate is still the only editable one of the three;
+                        logged is the sum of the time entries and remaining is
+                        set by the form in the main column, which records why
+                        it moved. */}
+                    <div className="grid grid-cols-3 gap-2">
+                        <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
                         <Metric
                             label={m.task.logged}
                             value={`${num(task.logged_hours)}h`}
@@ -372,6 +453,21 @@ export function TaskCardBody({
                             highlight
                         />
                     </div>
+
+                    {/* The shape of those three figures over time, at a glance.
+                        The full chart is a tab away and answers the same
+                        question in more detail; this is here because "is this
+                        converging" is worth answering without a click, and the
+                        history it draws is already loaded for the tab. */}
+                    <RemainingSparkline
+                        history={history}
+                        dateLocale={localeInfo.dateLocale}
+                        labels={{
+                            title: m.card.spark.title,
+                            remaining: m.overview.remaining,
+                            hover: m.card.spark.hover,
+                        }}
+                    />
 
                     {/* Read-only, unlike the sprint chip above: milestones have
                         create/update/delete endpoints and no list, so there is
@@ -384,15 +480,20 @@ export function TaskCardBody({
 
                 <DatesSection task={task} taskId={taskId} onSaved={apply} />
 
+                {/* One control, not two. Colour and labels were separate
+                    sections saying the same thing in two idioms — a label
+                    already carries a colour, and the cover was a seventh
+                    colour chosen independently of them. The cover now follows
+                    the task's first label, so the board draws what the card
+                    says rather than something set elsewhere. */}
                 <LabelsSection
+                    task={task}
                     taskId={taskId}
                     all={allLabels}
                     selected={labelsOf(task)}
                     onSaved={apply}
                     onWanted={onLabelsWanted}
                 />
-
-                <CoverSection task={task} taskId={taskId} onSaved={apply} />
             </aside>
 
             <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
@@ -426,8 +527,21 @@ export function TaskCardBody({
                 <section className="rounded-md border border-gray-200 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-medium">{m.time.log}</h3>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="max-md:min-h-touch"
+                            aria-expanded={loggingTime}
+                            onClick={() => setLoggingTime((open) => !open)}
+                        >
+                            <Plus className="h-4 w-4" />
+                            {m.card.logTime}
+                        </Button>
                     </div>
-                    <form onSubmit={saveWork} className="mt-2 space-y-2">
+                    <form
+                        onSubmit={saveWork}
+                        className={`mt-2 space-y-2 ${loggingTime ? '' : 'hidden'}`}
+                    >
                         {/* One row on a desktop, stacked on a phone.
                             Four fields that are one act do not need
                             four rows of a modal. */}
@@ -485,7 +599,7 @@ export function TaskCardBody({
                             <Button
                                 type="submit"
                                 disabled={busy || !canSaveWork}
-                                className="min-h-touch"
+                                className="max-md:min-h-touch"
                             >
                                 {t.common.save}
                             </Button>
@@ -494,18 +608,45 @@ export function TaskCardBody({
                     <p className="mt-2 text-xs text-gray-500">{m.time.remainingHint}</p>
                 </section>
 
-                {/* Everything below here is the record rather than
-                    the work: read on demand, and fetched on demand
-                    with it. Six of the ten requests opening a card
-                    used to make were for these. */}
-                <CollapsibleSection title={m.attachments.title}>
-                    <AttachmentsSection taskId={taskId} />
-                </CollapsibleSection>
+                {/* Everything below here is the record rather than the work,
+                    and it is four tabs rather than four stacked collapsibles:
+                    they answer different questions about the same task and
+                    only one is ever wanted at a time, so stacking them made
+                    the card a scroll to reach the last of them.
 
-                <CollapsibleSection
-                    title={m.tabs.time}
-                    count={(task.timeEntries ?? []).length}
-                >
+                    The lazy-fetch guarantee the collapsibles existed for is
+                    kept, not traded away — `TabPanel` unmounts what is not
+                    selected, so a card opening on Comments still fetches only
+                    the comment feed. Six of the ten requests opening a card
+                    used to make were for these. */}
+                <section className="pt-1">
+                    <Tabs<RecordTab>
+                        tabs={[
+                            { key: 'comments', label: m.card.tabs.comments, count: task._count?.comments },
+                            { key: 'activity', label: m.card.tabs.activity },
+                            { key: 'time', label: m.card.tabs.time, count: (task.timeEntries ?? []).length },
+                            { key: 'remaining', label: m.card.tabs.remaining, count: history.length },
+                            { key: 'attachments', label: m.card.tabs.attachments },
+                        ]}
+                        value={recordTab}
+                        onChange={setRecordTab}
+                        idPrefix="task-record"
+                        label={m.card.record}
+                    />
+
+                    <TabPanel tabKey="comments" value={recordTab} idPrefix="task-record">
+                        <ActivitySection taskId={taskId} onChanged={markChanged} show="comments" />
+                    </TabPanel>
+
+                    <TabPanel tabKey="activity" value={recordTab} idPrefix="task-record">
+                        <ActivitySection taskId={taskId} onChanged={markChanged} show="activity" />
+                    </TabPanel>
+
+                    <TabPanel tabKey="attachments" value={recordTab} idPrefix="task-record">
+                        <AttachmentsSection taskId={taskId} />
+                    </TabPanel>
+
+                    <TabPanel tabKey="time" value={recordTab} idPrefix="task-record">
                     {(task.timeEntries ?? []).length === 0 ? (
                         <p className="text-sm text-gray-500">{m.time.empty}</p>
                     ) : (
@@ -522,7 +663,7 @@ export function TaskCardBody({
                                     <button
                                         type="button"
                                         aria-label={t.common.delete}
-                                        className="min-h-touch px-2 text-red-600"
+                                        className="max-md:min-h-touch px-2 text-red-600"
                                         disabled={busy}
                                         onClick={() => deleteEntry(entry.id)}
                                     >
@@ -532,12 +673,9 @@ export function TaskCardBody({
                             ))}
                         </ul>
                     )}
-                </CollapsibleSection>
+                    </TabPanel>
 
-                <CollapsibleSection
-                    title={m.remaining.history}
-                    count={history.length}
-                >
+                    <TabPanel tabKey="remaining" value={recordTab} idPrefix="task-record">
                     {history.length === 0 ? (
                         <p className="text-sm text-gray-500">{m.remaining.empty}</p>
                     ) : (
@@ -610,14 +748,8 @@ export function TaskCardBody({
                             </ul>
                         </>
                     )}
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                    title={m.activity.title}
-                    count={task._count?.comments}
-                >
-                    <ActivitySection taskId={taskId} onChanged={markChanged} />
-                </CollapsibleSection>
+                    </TabPanel>
+                </section>
             </div>
         </div>
     );
@@ -713,16 +845,28 @@ export function useTaskCard(
      * before this runs — it only needs the list to offer somebody else.
      */
     const [membersWanted, setMembersWanted] = useState(false);
+    /**
+     * The read failed, as opposed to returning a project nobody is on. These
+     * were one state until people reported the picker as broken: a private
+     * project 404s for a non-member, a missing `VIEW_PROJECTS` 403s, and a
+     * member holding two stores with neither selected 400s — all three drew the
+     * same empty list as a project with no team.
+     */
+    const [membersFailed, setMembersFailed] = useState(false);
     useEffect(() => {
         if (!projectId || !membersWanted) return;
         let live = true;
         api.getProject(projectId)
             .then((result: unknown) => {
                 const rows = (result as { members?: ProjectMemberRow[] } | null)?.members;
-                if (live) setMembers(Array.isArray(rows) ? rows : []);
+                if (!live) return;
+                setMembers(Array.isArray(rows) ? rows : []);
+                setMembersFailed(false);
             })
             .catch(() => {
-                if (live) setMembers([]);
+                if (!live) return;
+                setMembers([]);
+                setMembersFailed(true);
             });
         return () => {
             live = false;
@@ -953,7 +1097,7 @@ export function useTaskCard(
     return {
         task, statuses, history, busy, timeForm, setTimeForm,
         hours, canSaveWork, hoursLeftAfter,
-        allLabels, members, stories, sprints, localeInfo,
+        allLabels, members, membersFailed, stories, sprints, localeInfo,
         apply, refresh, markChanged, close,
         changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
@@ -987,6 +1131,7 @@ export default function TaskDetailPanel({
         canSaveWork,
         allLabels,
         members,
+        membersFailed,
         stories,
         localeInfo,
         apply,
@@ -1044,6 +1189,7 @@ export default function TaskDetailPanel({
                         canSaveWork={canSaveWork}
                         allLabels={allLabels}
                         members={members}
+                        membersFailed={membersFailed}
                         stories={stories}
                         localeInfo={localeInfo}
                         apply={apply}
@@ -1084,13 +1230,18 @@ export default function TaskDetailPanel({
 function AssigneeField({
     task,
     taskId,
+    projectId,
     members,
+    membersFailed,
     onSaved,
     onWanted,
 }: {
     task: Task;
     taskId: string;
+    /** For the link out to the team, where an empty roster is filled in. */
+    projectId?: string;
     members: ProjectMemberRow[];
+    membersFailed: boolean;
     onSaved: (updated: unknown) => Promise<unknown>;
     /** Fires when the picker is first touched, so the roster loads then. */
     onWanted: () => void;
@@ -1100,6 +1251,27 @@ function AssigneeField({
     const [saving, setSaving] = useState(false);
 
     const options = useMemo(() => assigneeOptionsFor(members, task), [members, task]);
+
+    /**
+     * Why the list is short, when it is. Three states used to look identical —
+     * the roster still loading, a project nobody is on, and a read that failed —
+     * and the picker said nothing about any of them.
+     */
+    const note = membersFailed ? (
+        m.task.assigneeLoadFailed
+    ) : members.length > 0 ? null : projectId ? (
+        <>
+            {m.task.assigneeNoTeam}{' '}
+            <Link
+                href={routes.projects.detail(projectId)}
+                className="font-medium text-blue-600 hover:underline"
+            >
+                {m.task.assigneeAddTeam}
+            </Link>
+        </>
+    ) : (
+        m.task.assigneeNoTeam
+    );
 
     const change = async (value: string) => {
         setSaving(true);
@@ -1133,6 +1305,7 @@ function AssigneeField({
             onOpen={onWanted}
             onPick={change}
             emptyLabel={m.task.unassigned}
+            note={note}
             filterable
         />
     );
@@ -1223,10 +1396,13 @@ function EstimateField({
     task,
     taskId,
     onSaved,
+    compact = false,
 }: {
     task: Task;
     taskId: string;
     onSaved: (updated: unknown) => Promise<unknown>;
+    /** Render as one of the three figures rather than as a labelled form field. */
+    compact?: boolean;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -1254,6 +1430,40 @@ function EstimateField({
             setSaving(false);
         }
     };
+
+    // `compact` puts it in the three-across row beside Logged and Remaining,
+    // where it has to read as one of three figures rather than as a form field
+    // — same control, same id, borrowing `Metric`'s frame so the row is even.
+    if (compact) {
+        return (
+            <div className="rounded-md border border-gray-200 px-1.5 py-1 text-center">
+                <label htmlFor="task-estimate" className="block text-xs text-gray-500">
+                    {m.task.estimate}
+                </label>
+                <input
+                    id="task-estimate"
+                    type="number"
+                    min="0"
+                    step="0.25"
+                    value={value}
+                    disabled={saving}
+                    onChange={(e) => setValue(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            commit();
+                        }
+                        if (event.key === 'Escape') {
+                            event.stopPropagation();
+                            setValue(current);
+                        }
+                    }}
+                    className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium tabular-nums text-gray-900 focus:outline-none focus:ring-0"
+                />
+            </div>
+        );
+    }
 
     return (
         <Field label={m.task.estimate} htmlFor="task-estimate">
@@ -1344,7 +1554,7 @@ function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => P
         <Button
             type="button"
             variant={mine ? 'secondary' : 'ghost'}
-            className="min-h-touch"
+            className="max-md:min-h-touch"
             disabled={busy || elsewhere}
             title={elsewhere ? m.timer.elsewhere : undefined}
             onClick={() =>
@@ -1500,7 +1710,13 @@ function DescriptionSection({
                     type="button"
                     onClick={() => setEditing(true)}
                     aria-label={m.title}
-                    className="mt-2 w-full rounded-md border border-transparent px-2 py-1.5 text-start hover:border-gray-300 hover:bg-gray-50"
+                    // A resting container, not a bare hover target. The
+                    // description is the first thing read and it used to sit
+                    // as loose text with no edge, so an empty one showed
+                    // nothing to click and a filled one ran into the checklist
+                    // below it. `min-h` keeps the shape whether or not there
+                    // is anything in it.
+                    className="mt-2 min-h-[6rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
                 >
                     {description === '' ? (
                         <span className="text-sm text-gray-500">{m.add}</span>
@@ -1542,66 +1758,6 @@ function DescriptionSection({
                         setEditing(false);
                     }}
                 />
-            </div>
-        </section>
-    );
-}
-
-/**
- * A strip of colour across the top of the card. Purely visual — nothing reads
- * it but the board.
- */
-function CoverSection({
-    task,
-    taskId,
-    onSaved,
-}: {
-    task: Task;
-    taskId: string;
-    onSaved: (updated: unknown) => Promise<unknown>;
-}) {
-    const { t } = useI18n();
-    const m = t.projects;
-    const [saving, setSaving] = useState(false);
-
-    const pick = async (color: ProjectLabelColor | '') => {
-        setSaving(true);
-        try {
-            // '' clears it, the same PATCH convention the dates use.
-            await onSaved(await api.updateProjectTask(taskId, { coverColor: color }));
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : m.task.updated);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <h3 className="mb-2 text-sm font-medium">{m.cover.title}</h3>
-            <div className="flex flex-wrap items-center gap-1.5">
-                {LABEL_COLORS.map((color) => (
-                    <button
-                        key={color}
-                        type="button"
-                        disabled={saving}
-                        aria-pressed={task.cover_color === color}
-                        aria-label={m.cover.pick.replace('{color}', m.labels.colors[color])}
-                        onClick={() => pick(color)}
-                        className={`h-7 w-10 rounded disabled:opacity-60 ${coverClass(color)} ${
-                            task.cover_color === color ? 'ring-2 ring-blue-600 ring-offset-1' : ''
-                        }`}
-                    />
-                ))}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-touch"
-                    disabled={saving || !task.cover_color}
-                    onClick={() => pick('')}
-                >
-                    {m.cover.none}
-                </Button>
             </div>
         </section>
     );
@@ -1699,7 +1855,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
             <h3 className="text-sm font-medium">{m.title}</h3>
             <p className="mt-0.5 text-xs text-gray-500">{m.hint}</p>
 
-            <label className="mt-2 inline-flex min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+            <label className="mt-2 inline-flex max-md:min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
                 <Paperclip className="h-4 w-4" />
                 {m.add}
                 <input
@@ -1738,7 +1894,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                             <button
                                 type="button"
                                 aria-label={`${m.deleteFile} ${item.file_name}`}
-                                className="min-h-touch px-2 text-red-600 disabled:opacity-40"
+                                className="max-md:min-h-touch px-2 text-red-600 disabled:opacity-40"
                                 disabled={busy}
                                 onClick={() => remove(item.id)}
                             >
@@ -1761,9 +1917,22 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
 function ActivitySection({
     taskId,
     onChanged,
+    show = 'all',
 }: {
     taskId: string;
     onChanged?: () => void;
+    /**
+     * Which half of the feed to draw. Comments and the activity log answer
+     * different questions — "what did someone say" and "what happened to this
+     * task" — and interleaving them buried a two-line reply between six status
+     * moves. They are two tabs now, but one fetch: `load()` already pulls both
+     * and `mergeFeed` already tags each entry with its `kind`, so the split is
+     * a filter rather than a second request.
+     *
+     * The comment box belongs to `comments` only; there is nothing to write on
+     * an activity log.
+     */
+    show?: 'all' | 'comments' | 'activity';
 }) {
     const { t } = useI18n();
     const m = t.projects.activity;
@@ -1776,6 +1945,17 @@ function ActivitySection({
     const [editBody, setEditBody] = useState('');
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+
+    /* One fetch, two tabs: `mergeFeed` already tags every entry with its kind,
+       so each tab is a filter over the same feed rather than a second request.
+
+       The two vocabularies do not match and must be mapped rather than
+       compared: the tab is `comments` (it holds many) while the entry kind is
+       `comment` (it is one). Comparing them directly type-checks — both are
+       string-literal unions, they simply never overlap on that member — and
+       silently empties the tab. */
+    const wantedKind = show === 'comments' ? 'comment' : 'activity';
+    const shown = show === 'all' ? feed : feed.filter((entry) => entry.kind === wantedKind);
 
     const load = useCallback(async () => {
         try {
@@ -1846,7 +2026,7 @@ function ActivitySection({
                 <Button
                     type="button"
                     variant={watching ? 'secondary' : 'ghost'}
-                    className="min-h-touch"
+                    className="max-md:min-h-touch"
                     disabled={saving}
                     aria-pressed={watching}
                     onClick={() =>
@@ -1863,30 +2043,34 @@ function ActivitySection({
             </div>
             <p className="mt-0.5 text-xs text-gray-500">{m.watchHint}</p>
 
-            <form onSubmit={submit} className="mt-2 space-y-2">
-                <Textarea
-                    rows={2}
-                    value={draft}
-                    aria-label={m.commentPlaceholder}
-                    placeholder={m.commentPlaceholder}
-                    onChange={(e) => setDraft(e.target.value)}
-                />
-                <Button
-                    type="submit"
-                    className="min-h-touch"
-                    disabled={saving || draft.trim() === ''}
-                >
-                    {m.comment}
-                </Button>
-            </form>
+            {/* Nothing to write on an activity log — it records what the
+                system saw, not what anyone wants to say about it. */}
+            {show !== 'activity' && (
+                <form onSubmit={submit} className="mt-2 space-y-2">
+                    <Textarea
+                        rows={2}
+                        value={draft}
+                        aria-label={m.commentPlaceholder}
+                        placeholder={m.commentPlaceholder}
+                        onChange={(e) => setDraft(e.target.value)}
+                    />
+                    <Button
+                        type="submit"
+                        className="max-md:min-h-touch"
+                        disabled={saving || draft.trim() === ''}
+                    >
+                        {m.comment}
+                    </Button>
+                </form>
+            )}
 
             {failed ? (
                 <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
-            ) : feed.length === 0 ? (
+            ) : shown.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
             ) : (
                 <ul className="mt-3 space-y-2">
-                    {feed.map((entry) => (
+                    {shown.map((entry) => (
                         <li key={`${entry.kind}-${entry.id}`} className="text-sm">
                             {entry.kind === 'comment' ? (
                                 <div className="rounded-md bg-gray-50 p-2">
@@ -1906,7 +2090,7 @@ function ActivitySection({
                                             <div className="flex gap-2">
                                                 <Button
                                                     type="button"
-                                                    className="min-h-touch"
+                                                    className="max-md:min-h-touch"
                                                     disabled={saving}
                                                     onClick={() => commitEdit(entry)}
                                                 >
@@ -1915,7 +2099,7 @@ function ActivitySection({
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
-                                                    className="min-h-touch"
+                                                    className="max-md:min-h-touch"
                                                     onClick={() => setEditingId(null)}
                                                 >
                                                     {t.common.cancel}
@@ -1932,7 +2116,7 @@ function ActivitySection({
                                         <div className="mt-1 flex gap-2 text-xs">
                                             <button
                                                 type="button"
-                                                className="min-h-touch text-blue-600"
+                                                className="max-md:min-h-touch text-blue-600"
                                                 onClick={() => {
                                                     setEditingId(entry.id);
                                                     setEditBody(entry.body);
@@ -1942,7 +2126,7 @@ function ActivitySection({
                                             </button>
                                             <button
                                                 type="button"
-                                                className="min-h-touch text-red-600"
+                                                className="max-md:min-h-touch text-red-600"
                                                 disabled={saving}
                                                 onClick={() =>
                                                     run(() => api.deleteTaskComment(entry.id))
@@ -2010,22 +2194,16 @@ function DatesSection({
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
-            {/* Stacked, not side by side: this card lives in the sidebar now,
-                where two date inputs in a row are narrower than the dates they
-                have to show.
+            {/* Due only. The start date came off the card deliberately: it was
+                a second date to keep in step with the first hour logged, which
+                already says when work began, and two sources for one fact is
+                how they drift. The column is untouched — `start_date` is still
+                written by whatever sets it and still read by the Gantt; this
+                card just stopped asking someone to type it.
 
                 `Field` only ties its label to the control when given htmlFor —
                 without the matching id these inputs have no accessible name. */}
             <div className="grid gap-2">
-                <Field label={m.dates.start} htmlFor="task-start-date">
-                    <Input
-                        id="task-start-date"
-                        type="date"
-                        value={start}
-                        disabled={saving}
-                        onChange={(e) => save('startDate', e.target.value)}
-                    />
-                </Field>
                 <Field
                     label={m.dates.due}
                     htmlFor="task-due-date"
@@ -2049,12 +2227,14 @@ function DatesSection({
  * chip you tap is the chip you will see on the card.
  */
 function LabelsSection({
+    task,
     taskId,
     all,
     selected,
     onSaved,
     onWanted,
 }: {
+    task: Task;
     taskId: string;
     all: ProjectLabel[];
     selected: ProjectLabel[];
@@ -2068,16 +2248,42 @@ function LabelsSection({
 
     const selectedIds = new Set(selected.map((label) => label.id));
 
+    /**
+     * The cover follows the first label, and is written in the same PATCH.
+     *
+     * This is what merging the two controls actually means: the cover was a
+     * colour chosen with no relation to the labels beside it, so a card could
+     * carry a red "Bug" chip and a purple stripe. Deriving it removes the
+     * second, independent choice rather than hiding it — and the board still
+     * reads `cover_color`, so nothing downstream changes.
+     *
+     * A task with no labels has no cover, which is `''` — the same clear
+     * convention the dates and the old cover picker used.
+     */
+    const coverFor = (ids: string[]): ProjectLabelColor | '' => {
+        const first = ids[0];
+        if (!first) return '';
+        const pool = all.length > 0 ? all : selected;
+        return pool.find((label) => label.id === first)?.color ?? '';
+    };
+
     const toggle = async (labelId: string) => {
         const next = new Set(selectedIds);
         if (next.has(labelId)) next.delete(labelId);
         else next.add(labelId);
+        const labelIds = [...next];
 
         setSaving(true);
         try {
             // The whole set every time — the endpoint replaces rather than
-            // patches, so there is no add/remove pair to keep in step.
-            await onSaved(await api.updateProjectTask(taskId, { labelIds: [...next] }));
+            // patches, so there is no add/remove pair to keep in step. The
+            // cover rides along so the two cannot disagree.
+            await onSaved(
+                await api.updateProjectTask(taskId, {
+                    labelIds,
+                    coverColor: coverFor(labelIds),
+                }),
+            );
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
@@ -2095,6 +2301,7 @@ function LabelsSection({
                 )}
                 {(all.length > 0 ? all : selected).map((label) => {
                     const on = selectedIds.has(label.id);
+                    const isCover = task.cover_color != null && on && selected[0]?.id === label.id;
                     return (
                         <button
                             key={label.id}
@@ -2102,11 +2309,15 @@ function LabelsSection({
                             disabled={saving}
                             aria-pressed={on}
                             onClick={() => toggle(label.id)}
-                            className={`min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
+                            className={`max-md:min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
                                 on ? 'ring-2 ring-blue-600' : 'opacity-50'
                             }`}
                         >
                             {label.name}
+                            {/* The one that is also the card's cover. Marked so
+                                the rule is visible rather than something the
+                                board reveals later. */}
+                            {isCover && <span className="ms-1 opacity-70">●</span>}
                         </button>
                     );
                 })}
@@ -2129,6 +2340,8 @@ function ChecklistSection({
     /** The board card already says this; a second "Drag to move" in nine
         catalogues would be the same sentence twice. */
     const dragLabel = t.projects.board.card.drag;
+    /** The add form is behind the "+" in this section's header. */
+    const [adding, setAdding] = useState(false);
 
     const [newText, setNewText] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -2241,16 +2454,28 @@ function ChecklistSection({
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">{m.title}</h3>
-                {items.length > 0 && (
-                    <span className="text-xs text-gray-500">
-                        {done === items.length
-                            ? m.allDone
-                            : m.progress
-                                  .replace('{done}', String(done))
-                                  .replace('{total}', String(items.length))}
-                    </span>
-                )}
+                <h3 className="text-sm font-medium">
+                    {m.title}
+                    {items.length > 0 && (
+                        <span className="ms-2 text-xs font-normal text-gray-500">
+                            {done === items.length
+                                ? m.allDone
+                                : m.progress
+                                      .replace('{done}', String(done))
+                                      .replace('{total}', String(items.length))}
+                        </span>
+                    )}
+                </h3>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    className="max-md:min-h-touch"
+                    aria-expanded={adding}
+                    onClick={() => setAdding((open) => !open)}
+                >
+                    <Plus className="h-4 w-4" />
+                    {t.projects.card.addChecklistItem}
+                </Button>
             </div>
 
             {items.length > 0 && (
@@ -2330,7 +2555,7 @@ function ChecklistSection({
                             ) : (
                                 <button
                                     type="button"
-                                    className={`min-h-touch flex-1 text-start text-sm ${
+                                    className={`max-md:min-h-touch flex-1 text-start text-sm ${
                                         item.is_done ? 'text-gray-400 line-through' : ''
                                     }`}
                                     onClick={() => {
@@ -2374,22 +2599,29 @@ function ChecklistSection({
                 </ul>
             )}
 
-            <form onSubmit={add} className="mt-2 flex gap-2">
-                <Input
-                    value={newText}
-                    placeholder={m.placeholder}
-                    className="flex-1"
-                    onChange={(e) => setNewText(e.target.value)}
-                />
-                <Button
-                    type="submit"
-                    variant="secondary"
-                    className="min-h-touch"
-                    disabled={saving || newText.trim() === ''}
-                >
-                    {m.add}
-                </Button>
-            </form>
+            {/* Behind the "+" in the header rather than always open: a card is
+                read far more often than it is added to, and a permanently
+                open input under the last item made every read scroll past a
+                field nobody was filling. */}
+            {adding && (
+                <form onSubmit={add} className="mt-2 flex gap-2">
+                    <Input
+                        value={newText}
+                        placeholder={m.placeholder}
+                        className="flex-1"
+                        autoFocus
+                        onChange={(e) => setNewText(e.target.value)}
+                    />
+                    <Button
+                        type="submit"
+                        variant="secondary"
+                        className="max-md:min-h-touch"
+                        disabled={saving || newText.trim() === ''}
+                    >
+                        {m.add}
+                    </Button>
+                </form>
+            )}
         </section>
     );
 }

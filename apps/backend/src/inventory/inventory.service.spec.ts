@@ -90,6 +90,7 @@ describe('InventoryService', () => {
             expect(db.warehouse.findMany).toHaveBeenCalledWith({
                 where: { tenant_id: tenantId },
                 orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+                include: { store: { select: { id: true, name: true } } },
             });
             expect(result).toEqual(warehouses);
         });
@@ -143,13 +144,16 @@ describe('InventoryService', () => {
             const dto = { name: 'East Warehouse', storeId: 'store-1', isDefault: false };
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(0); // no existing with prefix
+            db.warehouse.findMany.mockResolvedValue([]); // nothing taken with that prefix
             db.warehouse.create.mockResolvedValue({ id: 'wh-2' });
 
             await service.createWarehouse(tenantId, dto as any);
 
             // Generated code should be based on the name uppercased with non-alphanum replaced
-            expect(db.warehouse.count).toHaveBeenCalled();
+            expect(db.warehouse.findMany).toHaveBeenCalledWith({
+                where: { tenant_id: tenantId, code: { startsWith: 'EAST-WAREH' } },
+                select: { code: true },
+            });
             // "EAST WAREHOUSE" -> "EAST-WAREHOUSE" -> uppercase -> slice(0,10) -> "EAST-WAREH"
             expect(db.warehouse.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -158,11 +162,11 @@ describe('InventoryService', () => {
             );
         });
 
-        it('should append count suffix when generated code prefix conflicts', async () => {
+        it('should append a suffix when the generated code prefix is taken', async () => {
             const dto = { name: 'East', storeId: 'store-1', isDefault: false };
             db.store.findFirst.mockResolvedValue(store);
             db.warehouse.findFirst.mockResolvedValue(null);
-            db.warehouse.count.mockResolvedValue(2); // 2 already exist with prefix
+            db.warehouse.findMany.mockResolvedValue([{ code: 'EAST' }, { code: 'EAST-2' }]);
             db.warehouse.create.mockResolvedValue({ id: 'wh-3' });
 
             await service.createWarehouse(tenantId, dto as any);
@@ -170,6 +174,46 @@ describe('InventoryService', () => {
             expect(db.warehouse.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({ code: 'EAST-3' }),
+                }),
+            );
+        });
+
+        // The bug a count could not survive: with EAST, EAST-2 and EAST-3 on file,
+        // deleting EAST-2 left a count of 2 and the next code generated was EAST-3,
+        // which already existed — so the create failed on a code the user never
+        // typed and could not see. Probing what is actually taken fills the gap.
+        it('should reuse a suffix freed by a deleted warehouse', async () => {
+            const dto = { name: 'East', storeId: 'store-1', isDefault: false };
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([{ code: 'EAST' }, { code: 'EAST-3' }]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-3b' });
+
+            await service.createWarehouse(tenantId, dto as any);
+
+            expect(db.warehouse.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'EAST-2' }),
+                }),
+            );
+        });
+
+        // `startsWith` also matches longer unrelated codes, so the candidate walk
+        // has to step over them rather than stop at the first gap in the numbering.
+        it('should skip past unrelated codes sharing the prefix', async () => {
+            const dto = { name: 'East', storeId: 'store-1', isDefault: false };
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([
+                { code: 'EAST' }, { code: 'EAST-2' }, { code: 'EAST-3' }, { code: 'EASTERN' },
+            ]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-3c' });
+
+            await service.createWarehouse(tenantId, dto as any);
+
+            expect(db.warehouse.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'EAST-4' }),
                 }),
             );
         });
@@ -215,13 +259,98 @@ describe('InventoryService', () => {
         it('should throw BadRequestException when code already exists', async () => {
             const dto = { name: 'Dup WH', storeId: 'store-1', code: 'DUP', isDefault: false };
             db.store.findFirst.mockResolvedValue(store);
-            db.warehouse.findFirst.mockResolvedValue({ id: 'existing-wh', code: 'DUP' });
+            // The name is checked before the code, so the first lookup has to come
+            // back clean or this would fail on the wrong rule.
+            db.warehouse.findFirst
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'existing-wh', code: 'DUP' });
 
             const promise = service.createWarehouse(tenantId, dto);
 
             await expect(promise).rejects.toThrow(BadRequestException);
             await expect(promise).rejects.toThrow('A warehouse with this code already exists.');
             expect(db.warehouse.create).not.toHaveBeenCalled();
+        });
+
+        // The bug: `@IsString()` accepts an empty string, so a warehouse could be
+        // saved with no name at all and then showed up as a blank option in every
+        // warehouse picker in the product.
+        it.each([
+            ['an empty name', ''],
+            ['a whitespace-only name', '   '],
+            ['a missing name', undefined],
+        ])('should refuse %s', async (_label, name) => {
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+
+            const promise = service.createWarehouse(tenantId, { name, storeId: 'store-1' } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Warehouse name is required.');
+            expect(db.warehouse.create).not.toHaveBeenCalled();
+        });
+
+        it('should store the name trimmed', async () => {
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-trim' });
+
+            await service.createWarehouse(tenantId, { name: '  Cold Store  ', storeId: 'store-1' } as any);
+
+            expect(db.warehouse.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Cold Store' }) }),
+            );
+        });
+
+        it('should refuse a name another warehouse in the branch already has', async () => {
+            const dto = { name: 'Main Godown', storeId: 'store-1', code: 'MAIN2', isDefault: false };
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValueOnce({ id: 'existing-wh', name: 'Main Godown' });
+
+            const promise = service.createWarehouse(tenantId, dto);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('A warehouse with this name already exists in this branch.');
+            expect(db.warehouse.create).not.toHaveBeenCalled();
+        });
+
+        // "Main Godown" and "main godown" are the same place to anyone reading a
+        // picker, so the lookup folds case — the unique index behind it cannot.
+        it('should match an existing name case-insensitively and within the branch', async () => {
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([]);
+            db.warehouse.create.mockResolvedValue({ id: 'wh-6' });
+
+            await service.createWarehouse(tenantId, { name: 'Main Godown', storeId: 'store-1' } as any);
+
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(1, {
+                where: {
+                    tenant_id: tenantId,
+                    store_id: 'store-1',
+                    name: { equals: 'Main Godown', mode: 'insensitive' },
+                },
+            });
+        });
+
+        // Two requests can pass the read-before-write check at once; the unique
+        // index is what stops the second, and its error must not reach the user raw.
+        it('should turn a unique-index violation on the name into the same message', async () => {
+            db.store.findFirst.mockResolvedValue(store);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            db.warehouse.findMany.mockResolvedValue([]);
+            db.warehouse.create.mockRejectedValue(
+                Object.assign(new Error('Unique constraint failed'), {
+                    code: 'P2002',
+                    meta: { target: ['tenant_id', 'store_id', 'name'] },
+                }),
+            );
+
+            const promise = service.createWarehouse(tenantId, { name: 'Raced', storeId: 'store-1' } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('A warehouse with this name already exists in this branch.');
         });
     });
 
@@ -238,19 +367,109 @@ describe('InventoryService', () => {
             is_active: true,
         };
 
+        /**
+         * `findFirst` serves three distinct purposes here: the tenant-scoped guard
+         * that resolves the row being edited, then — only when the dto carries the
+         * field — the duplicate-name check and the duplicate-code check. The helper
+         * below queues the guard and whichever duplicate check the test cares
+         * about, in that order, so no test has to care about the others' calls.
+         */
+        const mockLookups = (warehouse: any, duplicate: any = null) => {
+            db.warehouse.findFirst
+                .mockResolvedValueOnce(warehouse)
+                .mockResolvedValueOnce(duplicate);
+        };
+
         beforeEach(() => {
-            mockAssertWarehouse.mockResolvedValue(existingWarehouse as any);
+            // The movement guard rejects inactive warehouses, which is what made
+            // Activate a one-way door. Mocked as a rejection so that if this code
+            // path ever calls it again, these tests fail loudly rather than pass.
+            mockAssertWarehouse.mockRejectedValue(new BadRequestException('Warehouse is inactive.'));
+        });
+
+        // Settings is the one screen whose job is to flip is_active, so it must
+        // not use the movement guard — that one refuses inactive warehouses, so
+        // Deactivate worked once and Activate could never undo it.
+        it('should reactivate an inactive warehouse', async () => {
+            const inactive = { ...existingWarehouse, is_active: false, is_default: false };
+            mockLookups(inactive);
+            db.warehouse.update.mockResolvedValue({ ...inactive, is_active: true });
+
+            const result = await service.updateWarehouse(tenantId, warehouseId, { isActive: true } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_active: true }) }),
+            );
+            expect(result.is_active).toBe(true);
+        });
+
+        it('should rename an inactive warehouse', async () => {
+            const inactive = { ...existingWarehouse, is_active: false, is_default: false };
+            mockLookups(inactive);
+            db.warehouse.update.mockResolvedValue({ ...inactive, name: 'Renamed' });
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Renamed' } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Renamed' }) }),
+            );
+        });
+
+        // Deactivating the default would leave the store pointing at a dead
+        // warehouse, so the default has to be handed over first.
+        it('should refuse to deactivate the default warehouse', async () => {
+            mockLookups({ ...existingWarehouse, is_default: true });
+
+            const promise = service.updateWarehouse(tenantId, warehouseId, { isActive: false } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Make another warehouse the default before deactivating this one.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
+        });
+
+        it('should deactivate a non-default warehouse', async () => {
+            mockLookups({ ...existingWarehouse, is_default: false });
+            db.warehouse.update.mockResolvedValue({ ...existingWarehouse, is_active: false });
+
+            await service.updateWarehouse(tenantId, warehouseId, { isActive: false } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ is_active: false }) }),
+            );
+        });
+
+        it('should scope the lookup to the tenant', async () => {
+            mockLookups(existingWarehouse);
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Renamed' } as any);
+
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(1, {
+                where: { id: warehouseId, tenant_id: tenantId },
+            });
+        });
+
+        it('should throw when the warehouse belongs to another tenant', async () => {
+            mockLookups(null);
+
+            const promise = service.updateWarehouse(tenantId, 'bad-wh', {} as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Warehouse not found for this tenant.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
         });
 
         it('should update a warehouse without changing code', async () => {
             const dto = { name: 'Renamed WH' };
             const updated = { ...existingWarehouse, name: 'Renamed WH' };
+            mockLookups(existingWarehouse);
             db.warehouse.update.mockResolvedValue(updated);
 
             const result = await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(mockAssertWarehouse).toHaveBeenCalledWith(db, tenantId, warehouseId);
-            expect(db.warehouse.findFirst).not.toHaveBeenCalled();
+            // Two calls: the guard, then the duplicate-name check the rename earns.
+            // No code change, so no duplicate-code check.
+            expect(db.warehouse.findFirst).toHaveBeenCalledTimes(2);
             expect(db.warehouse.update).toHaveBeenCalledWith(
                 expect.objectContaining({ where: { id: warehouseId } }),
             );
@@ -259,20 +478,114 @@ describe('InventoryService', () => {
 
         it('should update code when new code is unique', async () => {
             const dto = { code: 'NEW-CODE' };
-            db.warehouse.findFirst.mockResolvedValue(null); // no duplicate
+            mockLookups(existingWarehouse, null); // no duplicate
             const updated = { ...existingWarehouse, code: 'NEW-CODE' };
             db.warehouse.update.mockResolvedValue(updated);
 
             await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(db.warehouse.findFirst).toHaveBeenCalledWith({
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(2, {
                 where: { tenant_id: tenantId, code: 'NEW-CODE', NOT: { id: warehouseId } },
             });
         });
 
+        it.each([
+            ['an empty name', ''],
+            ['a whitespace-only name', '   '],
+        ])('should refuse %s on rename', async (_label, name) => {
+            mockLookups(existingWarehouse);
+
+            const promise = service.updateWarehouse(tenantId, warehouseId, { name } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('Warehouse name is required.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
+        });
+
+        it('should refuse a rename onto a name the branch already holds', async () => {
+            mockLookups(
+                { ...existingWarehouse, name: 'Back Store' },
+                { id: 'other-wh', name: 'Main Godown' },
+            );
+
+            const promise = service.updateWarehouse(tenantId, warehouseId, { name: 'Main Godown' } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('A warehouse with this name already exists in this branch.');
+            expect(db.warehouse.update).not.toHaveBeenCalled();
+        });
+
+        it('should exclude the warehouse being edited and scope to its own branch', async () => {
+            mockLookups({ ...existingWarehouse, name: 'Back Store' });
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Cold Store' } as any);
+
+            expect(db.warehouse.findFirst).toHaveBeenNthCalledWith(2, {
+                where: {
+                    tenant_id: tenantId,
+                    store_id: existingWarehouse.store_id,
+                    name: { equals: 'Cold Store', mode: 'insensitive' },
+                    NOT: { id: warehouseId },
+                },
+            });
+        });
+
+        // Fixing the capitalisation of a name is not a collision with itself.
+        it('should allow a rename that only changes case', async () => {
+            mockLookups({ ...existingWarehouse, name: 'main godown' });
+            db.warehouse.update.mockResolvedValue({ ...existingWarehouse, name: 'Main Godown' });
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: 'Main Godown' } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Main Godown' }) }),
+            );
+        });
+
+        it('should store a renamed warehouse trimmed', async () => {
+            mockLookups({ ...existingWarehouse, name: 'Back Store' });
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
+
+            await service.updateWarehouse(tenantId, warehouseId, { name: '  Cold Store  ' } as any);
+
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Cold Store' }) }),
+            );
+        });
+
+        // Flipping a status must not have to resend the name, and must not be
+        // read as clearing it.
+        it('should leave the name alone when the dto does not carry one', async () => {
+            mockLookups({ ...existingWarehouse, name: 'Back Store', is_default: false });
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
+
+            await service.updateWarehouse(tenantId, warehouseId, { isActive: false } as any);
+
+            expect(db.warehouse.findFirst).toHaveBeenCalledTimes(1);
+            expect(db.warehouse.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: { is_active: false } }),
+            );
+        });
+
+        it('should turn a unique-index violation on the name into the same message', async () => {
+            mockLookups({ ...existingWarehouse, name: 'Back Store' });
+            db.warehouse.update.mockRejectedValue(
+                Object.assign(new Error('Unique constraint failed'), {
+                    code: 'P2002',
+                    meta: { target: ['tenant_id', 'store_id', 'name'] },
+                }),
+            );
+
+            const promise = service.updateWarehouse(tenantId, warehouseId, { name: 'Raced' } as any);
+
+            await expect(promise).rejects.toThrow(BadRequestException);
+            await expect(promise).rejects.toThrow('A warehouse with this name already exists in this branch.');
+        });
+
         it('should throw BadRequestException when new code already exists', async () => {
             const dto = { code: 'TAKEN-CODE' };
-            db.warehouse.findFirst.mockResolvedValue({ id: 'other-wh', code: 'TAKEN-CODE' });
+            mockLookups(existingWarehouse, { id: 'other-wh', code: 'TAKEN-CODE' });
 
             const promise = service.updateWarehouse(tenantId, warehouseId, dto as any);
 
@@ -283,15 +596,21 @@ describe('InventoryService', () => {
 
         it('should skip duplicate check when code is unchanged', async () => {
             const dto = { code: 'OLD-CODE', name: 'Updated Name' }; // same as existingWarehouse.code
+            mockLookups(existingWarehouse);
             db.warehouse.update.mockResolvedValue({ ...existingWarehouse, ...dto });
 
             await service.updateWarehouse(tenantId, warehouseId, dto as any);
 
-            expect(db.warehouse.findFirst).not.toHaveBeenCalled();
+            // The guard and the rename's name check — the unchanged code adds none.
+            expect(db.warehouse.findFirst).toHaveBeenCalledTimes(2);
+            expect(db.warehouse.findFirst).not.toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ code: 'OLD-CODE' }) }),
+            );
         });
 
         it('should unset other defaults when isDefault is true', async () => {
             const dto = { isDefault: true };
+            mockLookups(existingWarehouse);
             db.warehouse.updateMany = jest.fn().mockResolvedValue({ count: 1 });
             db.warehouse.update.mockResolvedValue({ ...existingWarehouse, is_default: true });
 
@@ -303,12 +622,13 @@ describe('InventoryService', () => {
             });
         });
 
-        it('should throw when assertWarehouseBelongsToTenant throws', async () => {
-            mockAssertWarehouse.mockRejectedValue(new BadRequestException('Warehouse not found for this tenant.'));
+        it('should not consult the movement guard', async () => {
+            mockLookups(existingWarehouse);
+            db.warehouse.update.mockResolvedValue(existingWarehouse);
 
-            const promise = service.updateWarehouse(tenantId, 'bad-wh', {} as any);
+            await service.updateWarehouse(tenantId, warehouseId, { isActive: true } as any);
 
-            await expect(promise).rejects.toThrow(BadRequestException);
+            expect(mockAssertWarehouse).not.toHaveBeenCalled();
         });
     });
 
@@ -647,7 +967,7 @@ describe('InventoryService', () => {
         it('creates a new warehouse when no duplicate exists', async () => {
             db.store.findFirst.mockResolvedValueOnce(store);
             db.warehouse.findFirst.mockResolvedValueOnce(null); // findDuplicate: no existing by name
-            db.warehouse.count.mockResolvedValueOnce(0); // generateWarehouseCode: no prefix conflicts
+            db.warehouse.findMany.mockResolvedValueOnce([]); // generateWarehouseCode: prefix free
             db.warehouse.create.mockResolvedValue({ id: 'wh-new' });
 
             const result = await service.importWarehouses(tenantId, [{ name: 'North WH' }], 'skip');
@@ -714,7 +1034,7 @@ describe('InventoryService', () => {
             db.warehouse.findFirst
                 .mockResolvedValueOnce(null) // findDuplicate row 1: no duplicate
                 .mockRejectedValueOnce(new Error('DB connection lost')); // findDuplicate row 2: DB error
-            db.warehouse.count.mockResolvedValueOnce(0); // generateWarehouseCode for row 1
+            db.warehouse.findMany.mockResolvedValueOnce([]); // generateWarehouseCode for row 1
             db.warehouse.create.mockResolvedValue({ id: 'wh-new' });
 
             const result = await service.importWarehouses(

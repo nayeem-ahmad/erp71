@@ -44,6 +44,8 @@ export const customersMessages = {
             "discountPct": "Rabatt %",
             "birthday": "Geburtstag",
             "birthdayHint": "Erzeugt am Tag selbst automatisch eine Geburtstags-Wiedervorlage.",
+            "bin": "BIN (USt-Nr. des Käufers)",
+            "binHint": "Die 13-stellige BIN des Käufers, sofern USt-registriert. Erscheint auf dem Mushak 6.3 und im Verkaufsbuch 6.2.",
             "individual": "Privatperson",
             "organization": "Organisation",
             "adding": "Wird hinzugefügt...",
@@ -55,7 +57,8 @@ export const customersMessages = {
                 "ownerName": "Name des Inhabers",
                 "phone": '+8801234567890',
                 "email": 'john@example.com',
-                "address": "Hauptstraße 123..."
+                "address": "Hauptstraße 123...",
+                "bin": "z. B. 000000000-0101"
             },
             editTitle: "Kunde bearbeiten",
             editSubtitle: "Kundendaten aktualisieren",

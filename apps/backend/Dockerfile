@@ -162,6 +162,25 @@ ENV GIT_SHA=$GIT_SHA
 # formality. It is idempotent and degrades to a no-op on a fresh database that
 # has no User table yet. See prisma/sync-user-mobile-unique.ts.
 #
+# sync:store-name-unique runs BEFORE db push for exactly the same reason, and
+# before sync:warehouse-name-unique below. db push creates the unique index on
+# (Store.tenant_id, name), over a column that is already populated and was never
+# constrained: `@MinLength(1)` with no trim let a whitespace-only branch name
+# through as '', and rename checked neither blank nor duplicate. It has to lead
+# the warehouse repair because a nameless warehouse is renamed after the branch
+# holding it, so a branch fixed first hands it a real name rather than the
+# "Branch Warehouse" fallback. See prisma/sync-store-name-unique.ts.
+#
+# sync:warehouse-name-unique runs BEFORE db push for exactly the same reason.
+# db push creates the unique index on (Warehouse.tenant_id, store_id, name),
+# over a column that is already populated and was never constrained: a warehouse
+# could be saved with a blank name, or with a name another warehouse in the same
+# branch already had. Postgres refuses to build the index over those, db push
+# exits non-zero, and the backend never boots. Repairing the names first — blank
+# ones take the branch's name, repeats are suffixed with their code — makes the
+# index a formality. Idempotent, and a no-op on a fresh database with no
+# Warehouse table yet. See prisma/sync-warehouse-name-unique.ts.
+#
 # sync:tenant-role-templates creates the per-module role templates (Sales
 # Manager, Sales User, ... plus Tenant Admin) for tenants that predate them, and
 # gives existing members and pending invitations their TenantUserRole /
@@ -178,4 +197,14 @@ ENV GIT_SHA=$GIT_SHA
 # permission checks, sees it work. Must run AFTER sync:tenant-role-templates,
 # which is what creates the Tenant Admin role it grants onto. See
 # prisma/sync-cancel-entry-permission.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:project-members puts each project's manager and creator on its team.
+# REQUIRED for any workspace that created a project before this ran: the task
+# Assignee picker offers a project's roster and nothing else, and projects used
+# to be seeded with members only when they were PRIVATE — while PUBLIC is the
+# default. So every ordinary project had an empty roster and its tasks could not
+# be assigned to anybody, with nothing on screen saying why. `create` now seeds
+# both people; this is the half a code change cannot reach. Never rewrites an
+# existing row, so a deliberate removal is not undone on the next boot. See
+# prisma/sync-project-members.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:store-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:warehouse-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:project-members --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
