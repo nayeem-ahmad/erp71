@@ -80,6 +80,7 @@ export default function TaskDetailPage() {
                     canSaveWork={card.canSaveWork}
                     allLabels={card.allLabels}
                     members={card.members}
+                    membersFailed={card.membersFailed}
                     stories={card.stories}
                     localeInfo={card.localeInfo}
                     apply={card.apply}

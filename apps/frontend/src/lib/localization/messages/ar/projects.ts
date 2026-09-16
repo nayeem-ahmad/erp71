@@ -210,6 +210,9 @@ export const projectsMessages = {
         noProjects: "أنشئ مشروعًا أولًا — كل مهمة تنتمي إلى مشروع.",
         createFailed: "تعذّر إنشاء المهمة",
         openFull: "فتح الصفحة الكاملة",
+        assigneeNoTeam: "لا أحد في فريق هذا المشروع بعد.",
+        assigneeAddTeam: "إضافة أعضاء الفريق",
+        assigneeLoadFailed: "تعذّر قراءة فريق هذا المشروع.",
     },
 
     description: {
