@@ -27,15 +27,15 @@ parameters of the entry.
 | Entry | Where | Approval state | Permission | Routing |
 |---|---|---|---|---|
 | Voucher | `schema.prisma:3584` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
-| Leave request | `schema.prisma:5392` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5431`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4680`), anyone holding the permission |
-| Expense claim | `schema.prisma:4993` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
+| Leave request | `schema.prisma:5415` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5454`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4703`), anyone holding the permission |
+| Expense claim | `schema.prisma:5016` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
 | Warehouse transfer | `schema.prisma:1770` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
 | Product demand | `schema.prisma:1948` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single approver |
 | CRM activity | `schema.prisma:3214` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
-| Fund transfer | `schema.prisma:4202` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
-| Payroll run | `schema.prisma:5075` | `status`, `approved_by`, `approved_at` | — | single approver |
+| Fund transfer | `schema.prisma:4225` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
+| Payroll run | `schema.prisma:5098` | `status`, `approved_by`, `approved_at` | — | single approver |
 | Stock take | `InventorySettings`, `schema.prisma:1742` | `discrepancy_approval_threshold` | — | a threshold, hard-coded in shape |
-| Warranty claim | `schema.prisma:4234` | status enum incl. `APPROVED` | — | single approver |
+| Warranty claim | `schema.prisma:4257` | status enum incl. `APPROVED` | — | single approver |
 
 Twelve `approved_by` columns across the schema.
 
@@ -83,10 +83,10 @@ permission, N times." Authority does not vary with the entry.
 Also missing, and needed for people-based routing:
 
 - **`Employee.manager_id`** — there is no reporting line on `Employee`
-  (`schema.prisma:4583`). `hiring_manager_id` on `JobPost` and `manager_id` on
+  (`schema.prisma:4606`). `hiring_manager_id` on `JobPost` and `manager_id` on
   `Project` are the only manager fields in the schema, and neither is a
   hierarchy.
-- **`Department.head_employee_id`** — `Department` (`schema.prisma:4553`) is a
+- **`Department.head_employee_id`** — `Department` (`schema.prisma:4576`) is a
   name and nothing else.
 
 ---
@@ -375,7 +375,7 @@ with `conditions: null` matching everything, which is how the catch-all row at
 
 | Type | Resolves to | Source |
 |---|---|---|
-| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4163`) — the existing matrix |
+| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4186`) — the existing matrix |
 | `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1237`) |
 | `USER` | one named user | `approver_ref` is the user id |
 | `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`** |

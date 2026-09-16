@@ -517,7 +517,7 @@ describe('SalesService', () => {
       expect(tx.saleItem.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
       expect(tx.paymentRecord.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
       expect(tx.paymentRecord.create).toHaveBeenCalledWith({
-        data: { sale_id: 'draft-1', payment_method: 'Cash', amount: 30, account_id: null },
+        data: expect.objectContaining({ sale_id: 'draft-1', payment_method: 'Cash', amount: 30, account_id: null }),
       });
 
       expect(applyInventoryMovement).toHaveBeenCalledWith(
@@ -554,6 +554,34 @@ describe('SalesService', () => {
           data: expect.objectContaining({ total_amount: 15, amount_paid: 15 }),
         }),
       );
+    });
+
+    it('posts the cheque the draft was parked with', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        ...draftRow,
+        payments: [{
+          payment_method: 'Bank',
+          amount: 30,
+          account_id: null,
+          bank_name: 'City Bank',
+          bank_branch: 'Gulshan',
+          bank_account_number: '1234567890',
+          reference_no: 'CHQ-889001',
+          instrument_date: new Date(Date.UTC(2026, 8, 25)),
+        }],
+      });
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          bank_name: 'City Bank',
+          bank_branch: 'Gulshan',
+          bank_account_number: '1234567890',
+          reference_no: 'CHQ-889001',
+          instrument_date: new Date(Date.UTC(2026, 8, 25)),
+        }),
+      });
     });
 
     it('refuses to finalize a sale that is not a draft', async () => {
@@ -696,9 +724,79 @@ describe('SalesService', () => {
         data: expect.objectContaining({
           payments: {
             create: [
-              { payment_method: 'CASH', amount: 60, account_id: null },
-              { payment_method: 'BKASH', amount: 40, account_id: null },
+              expect.objectContaining({ payment_method: 'CASH', amount: 60, account_id: null }),
+              expect.objectContaining({ payment_method: 'BKASH', amount: 40, account_id: null }),
             ],
+          },
+        }),
+      });
+    });
+
+    it('stores the cheque details taken with a bank payment', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-cheque' });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+        payments: [{
+          paymentMethod: 'Bank',
+          amount: 100,
+          bankName: 'City Bank',
+          bankBranch: 'Gulshan',
+          bankAccountNumber: '1234567890',
+          referenceNo: 'CHQ-889001',
+          instrumentDate: '2026-09-25',
+        }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          payments: {
+            create: [{
+              payment_method: 'Bank',
+              amount: 100,
+              account_id: null,
+              bank_name: 'City Bank',
+              bank_branch: 'Gulshan',
+              bank_account_number: '1234567890',
+              reference_no: 'CHQ-889001',
+              // A post-dated cheque keeps the day written on it: the sale is
+              // today's, the instrument is the 25th.
+              instrument_date: new Date(Date.UTC(2026, 8, 25)),
+            }],
+          },
+        }),
+      });
+    });
+
+    it('stores a cash payment with no instrument details attached', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-cash' });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 20,
+        amountPaid: 20,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 20 }],
+        payments: [{ paymentMethod: 'Cash', amount: 20 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          payments: {
+            create: [{
+              payment_method: 'Cash',
+              amount: 20,
+              account_id: null,
+              bank_name: null,
+              bank_branch: null,
+              bank_account_number: null,
+              reference_no: null,
+              instrument_date: null,
+            }],
           },
         }),
       });
@@ -1001,6 +1099,43 @@ describe('SalesService', () => {
 
       const updateArg = tx.sale.update.mock.calls[0][0];
       expect(updateArg.data).not.toHaveProperty('sale_date');
+    });
+
+    it('rewrites the cheque details when payments are edited', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+      tx.paymentRecord.create.mockResolvedValue({});
+
+      await service.update('tenant-1', 's1', {
+        payments: [{
+          paymentMethod: 'Bank',
+          amount: 100,
+          // Dropped before this went through paymentRecordData: the update path
+          // wrote only the method and the amount, so editing a sale erased the
+          // ledger account the payment had been posted against.
+          accountId: 'acct-1',
+          bankName: 'Dutch-Bangla Bank',
+          referenceNo: 'CHQ-100200',
+          instrumentDate: '2026-10-01',
+        }],
+      });
+
+      expect(tx.paymentRecord.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 's1' } });
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: {
+          sale_id: 's1',
+          payment_method: 'Bank',
+          amount: 100,
+          account_id: 'acct-1',
+          bank_name: 'Dutch-Bangla Bank',
+          bank_branch: null,
+          bank_account_number: null,
+          reference_no: 'CHQ-100200',
+          instrument_date: new Date(Date.UTC(2026, 9, 1)),
+        },
+      });
     });
 
     it('honours an explicit totalAmount over the sum of the lines', async () => {
