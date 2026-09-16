@@ -53,10 +53,12 @@ export default function StockOnHandPage() {
     const [rows, setRows] = useState<StockOnHandRow[]>([]);
     const [warehouseColumns, setWarehouseColumns] = useState<WarehouseColumn[]>([]);
     const [summary, setSummary] = useState<StockOnHandSummary | null>(null);
+    const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
     const [subgroups, setSubgroups] = useState<any[]>([]);
     const [brands, setBrands] = useState<any[]>([]);
+    const [storeId, setStoreId] = useState('');
     const [warehouseId, setWarehouseId] = useState('');
     const [groupId, setGroupId] = useState('');
     const [subgroupId, setSubgroupId] = useState('');
@@ -70,12 +72,13 @@ export default function StockOnHandPage() {
 
     useEffect(() => {
         void loadReport();
-    }, [warehouseId, groupId, subgroupId, brandId, includeZeroStock]);
+    }, [storeId, warehouseId, groupId, subgroupId, brandId, includeZeroStock]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             const data = await api.getStockOnHand({
+                storeId: storeId || undefined,
                 warehouseId: warehouseId || undefined,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
@@ -94,12 +97,14 @@ export default function StockOnHandPage() {
 
     const loadFilters = async () => {
         try {
-            const [warehouseData, groupData, subgroupData, brandData] = await Promise.all([
+            const [storeData, warehouseData, groupData, subgroupData, brandData] = await Promise.all([
+                api.getStores(),
                 api.getInventoryWarehouses(),
                 api.getProductGroups(),
                 api.getProductSubgroups(),
                 api.getBrands(),
             ]);
+            setStores(storeData);
             setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
             setGroups(groupData);
             setSubgroups(subgroupData);
@@ -108,6 +113,16 @@ export default function StockOnHandPage() {
             console.error('Failed to load stock on hand filters', error);
         }
     };
+
+    // A warehouse belongs to exactly one branch, so picking a branch narrows the
+    // warehouse picker to that branch's own — the same scoping the entry screens
+    // get from `useWarehouses`. The branch select clears `warehouseId` on the way
+    // past: the two filters are AND-ed server-side, so a warehouse left over from
+    // another branch would report nothing at all.
+    const visibleWarehouses = useMemo(
+        () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
+        [warehouses, storeId],
+    );
 
     const filteredSubgroups = useMemo(
         () => subgroups.filter((subgroup: any) => !groupId || subgroup.group_id === groupId),
@@ -232,13 +247,22 @@ export default function StockOnHandPage() {
 
             <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-center">
                 <select
+                    value={storeId}
+                    onChange={(e) => { setStoreId(e.target.value); setWarehouseId(''); }}
+                    aria-label={strings.allBranches}
+                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
+                >
+                    <option value="">{strings.allBranches}</option>
+                    {stores.map((store: any) => <option key={store.id} value={store.id}>{store.name}</option>)}
+                </select>
+                <select
                     value={warehouseId}
                     onChange={(e) => setWarehouseId(e.target.value)}
                     aria-label={strings.allWarehouses}
                     className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
                 >
                     <option value="">{strings.allWarehouses}</option>
-                    {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
+                    {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}
                 </select>
                 <select
                     value={groupId}
