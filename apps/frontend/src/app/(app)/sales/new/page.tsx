@@ -236,7 +236,12 @@ function NewSalePageContent() {
         payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
         subtotal: totals.subtotal,
         discountAmount: totals.discount > 0 ? totals.discount : undefined,
-        discountPercent: totals.discountPercent > 0 ? totals.discountPercent : undefined,
+        // Rounded because a flat discount derives its percentage from the
+        // subtotal, and "Discount (7.142857142857143%)" is not a line anyone
+        // wants on an invoice.
+        discountPercent: totals.discountPercent > 0
+            ? Math.round(totals.discountPercent * 100) / 100
+            : undefined,
         vat: totals.vat > 0 ? totals.vat : undefined,
         transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
         laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,

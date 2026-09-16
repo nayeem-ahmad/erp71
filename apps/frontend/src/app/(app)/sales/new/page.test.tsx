@@ -546,6 +546,79 @@ describe('NewSalePage — duplicating an existing sale', () => {
     });
 });
 
+describe('NewSalePage — overall discount in taka', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', stocks: [{ quantity: 7 }] },
+        ]);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+        window.sessionStorage.setItem('store_id', 'store-1');
+    });
+
+    /** One ৳100 line in the cart, which is what the discount is taken off. */
+    const addRice = async () => {
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    };
+
+    it('takes a flat discount off the total and works out the percentage', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+        await addRice();
+
+        fireEvent.click(screen.getByTitle('Discount by amount'));
+        fireEvent.change(screen.getByLabelText('Discount amount'), { target: { value: '20' } });
+
+        expect(screen.getByText('20.00%')).toBeInTheDocument();
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '80' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({
+                discountAmount: 20,
+                totalAmount: 80,
+            }));
+        });
+    });
+
+    it('still posts a percentage discount the way it always did', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+        await addRice();
+
+        fireEvent.change(screen.getByLabelText('Discount percent'), { target: { value: '15' } });
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '85' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({
+                discountAmount: 15,
+                totalAmount: 85,
+            }));
+        });
+    });
+});
+
 describe('NewSalePage — offering to print after the sale is saved', () => {
     const { printSalesInvoice } = require('@/lib/sales-invoice-printer');
 
