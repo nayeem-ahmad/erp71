@@ -13,9 +13,11 @@ export class CreatePaymentMethodDto {
   @IsString()
   name: string;
 
+  // Nullable as well as optional: the form's "no account linked" choice sends
+  // an explicit null, and on update that null is what unlinks an account.
   @IsOptional()
   @IsString()
-  account_id?: string;
+  account_id?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -67,4 +69,17 @@ export class PaymentMethodResponseDto {
   show_on_entry: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+/**
+ * Minimal account row for the "link a ledger account" picker on the payment
+ * method form. Deliberately not the accounting module's account shape: it
+ * carries no balances, so it needs none of that module's entitlements.
+ */
+export class PaymentMethodAccountDto {
+  id: string;
+  name: string;
+  code: string | null;
+  type: string;
+  category: string;
 }
