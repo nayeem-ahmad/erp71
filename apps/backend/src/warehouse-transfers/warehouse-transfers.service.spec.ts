@@ -20,10 +20,11 @@ describe('WarehouseTransfersService', () => {
     let tx: any;
 
     beforeEach(async () => {
-        // The module-level mocks above are shared across every test in the file,
-        // so their call lists have to be emptied between them — otherwise
-        // "was not posted" cannot be told apart from "was posted by an earlier
-        // test". Implementations are re-set below, after the clear.
+        // The module-level mocks are shared across every test in the file, so
+        // their call lists have to be emptied between them: several approval
+        // cases assert that NOTHING moved or posted, and a leaked call from an
+        // earlier test would satisfy that in the wrong direction. Implementations
+        // are re-set below, after the clear.
         jest.clearAllMocks();
 
         tx = {
@@ -332,5 +333,268 @@ describe('WarehouseTransfersService', () => {
                 }),
             }),
         );
+    });
+
+    describe('cross-branch approval', () => {
+        /** Source in `store-1`, destination in `store-2`. */
+        const acrossBranches = () => {
+            (assertWarehouseBelongsToTenant as jest.Mock)
+                .mockResolvedValueOnce({ id: 'wh-source', store_id: 'store-1' })
+                .mockResolvedValueOnce({ id: 'wh-dest', store_id: 'store-2' });
+        };
+
+        beforeEach(() => {
+            tx.product.count.mockResolvedValue(1);
+            tx.warehouseTransfer.count.mockResolvedValue(0);
+            // `items` because `create` passes `transferInclude()`, so the real
+            // row always carries its lines — and since dev's create-as-SENT
+            // posting landed, `postTransfer` reduces over them. An empty list
+            // is the honest fixture here: these cases assert the branch columns
+            // and the parked status, not an amount.
+            tx.warehouseTransfer.create.mockResolvedValue({ id: 'transfer-1', items: [] });
+            tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+        });
+
+        it('derives the branch columns and parks a cross-branch transfer for approval', async () => {
+            acrossBranches();
+
+            await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(tx.warehouseTransfer.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    source_store_id: 'store-1',
+                    destination_store_id: 'store-2',
+                    is_cross_branch: true,
+                    requires_approval: true,
+                    // Asked for SENT, held at PENDING_APPROVAL instead.
+                    status: 'PENDING_APPROVAL',
+                    sent_at: null,
+                }),
+                include: expect.any(Object),
+            });
+        });
+
+        it('moves no stock while a cross-branch transfer awaits approval', async () => {
+            acrossBranches();
+
+            await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+        });
+
+        /**
+         * `create` posts to the ledger when it saves straight to SENT. A
+         * cross-branch transfer never reaches SENT there — it parks at
+         * PENDING_APPROVAL — so it must not post either, and this pins that.
+         *
+         * Worth its own case because the two halves were written apart: the
+         * create-time posting and this approval gate met for the first time in
+         * a merge, and nothing else fails if the status guard is later loosened.
+         * Posting before anyone approved would book a movement of stock that has
+         * not moved and that no one has authorised.
+         */
+        it('posts nothing either, while a cross-branch transfer awaits approval', async () => {
+            acrossBranches();
+
+            const result = await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(result.posting_status).toBeNull();
+        });
+
+        it('stamps the branches but requires no approval inside one branch', async () => {
+            await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(tx.warehouseTransfer.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    source_store_id: 'store-1',
+                    destination_store_id: 'store-1',
+                    is_cross_branch: false,
+                    requires_approval: false,
+                    status: 'SENT',
+                }),
+                include: expect.any(Object),
+            });
+            expect(applyInventoryMovement).toHaveBeenCalledTimes(1);
+        });
+
+        it('sends a draft that needs approval to PENDING_APPROVAL rather than out', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                status: 'DRAFT',
+                requires_approval: true,
+                source_warehouse_id: 'wh-source',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, note: null }],
+            });
+
+            const result = await service.send('tenant-1', 'transfer-1');
+
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+                where: { id: 'transfer-1' },
+                data: { status: 'PENDING_APPROVAL' },
+            });
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(result.posting_status).toBeNull();
+        });
+
+        it('releases the stock and stamps the approver on approval', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                transfer_number: 'TRF-00001',
+                status: 'PENDING_APPROVAL',
+                is_cross_branch: true,
+                source_warehouse_id: 'wh-source',
+                source_store_id: 'store-1',
+                destination_store_id: 'store-2',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, note: null, product: { price: 100 } }],
+            });
+
+            await service.approve('tenant-1', 'transfer-1', 'user-1');
+
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+                where: { id: 'transfer-1' },
+                data: expect.objectContaining({ approved_by: 'user-1', approval_date: expect.any(Date) }),
+            });
+            expect(applyInventoryMovement).toHaveBeenCalledWith(
+                tx,
+                expect.objectContaining({
+                    warehouseId: 'wh-source',
+                    quantityDelta: -3,
+                    movementType: 'TRANSFER_OUT',
+                }),
+            );
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+                where: { id: 'transfer-1' },
+                data: expect.objectContaining({ status: 'SENT' }),
+            });
+        });
+
+        it('attributes an approved cross-branch transfer to the inter-store scope', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                transfer_number: 'TRF-00001',
+                status: 'PENDING_APPROVAL',
+                is_cross_branch: true,
+                source_warehouse_id: 'wh-source',
+                source_store_id: 'store-1',
+                destination_store_id: 'store-2',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, note: null, product: { price: 100 } }],
+            });
+
+            await service.approve('tenant-1', 'transfer-1', 'user-1');
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    conditionValue: 'inter_store',
+                    attribution: 'INTER_BRANCH',
+                    storeId: 'store-1',
+                    counterpartyStoreId: 'store-2',
+                }),
+            );
+        });
+
+        it('rejects with a reason and moves nothing', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                status: 'PENDING_APPROVAL',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, note: null }],
+            });
+
+            await service.reject('tenant-1', 'transfer-1', 'user-1', { reason: '  not enough stock here  ' });
+
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+                where: { id: 'transfer-1' },
+                data: expect.objectContaining({
+                    status: 'REJECTED',
+                    rejected_by: 'user-1',
+                    rejection_reason: 'not enough stock here',
+                }),
+            });
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+        });
+
+        it('stores no reason when the approver gave only whitespace', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                status: 'PENDING_APPROVAL',
+                items: [],
+            });
+
+            await service.reject('tenant-1', 'transfer-1', 'user-1', { reason: '   ' });
+
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
+                where: { id: 'transfer-1' },
+                data: expect.objectContaining({ rejection_reason: null }),
+            });
+        });
+
+        it.each(['DRAFT', 'SENT', 'RECEIVED', 'REJECTED'])(
+            'refuses to approve a transfer in %s',
+            async (status) => {
+                tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', status, items: [] });
+
+                await expect(service.approve('tenant-1', 'transfer-1', 'user-1')).rejects.toThrow(BadRequestException);
+                expect(applyInventoryMovement).not.toHaveBeenCalled();
+            },
+        );
+
+        it('refuses to receive a transfer that is still awaiting approval', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                status: 'PENDING_APPROVAL',
+                destination_warehouse_id: 'wh-dest',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, quantity_received: 0, note: null }],
+            });
+
+            await expect(
+                service.receive('tenant-1', 'transfer-1', { items: [{ productId: 'prod-1', quantityReceived: 1 }] }),
+            ).rejects.toThrow(BadRequestException);
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+        });
+
+        it('filters the list to cross-branch transfers only', async () => {
+            db.warehouseTransfer.findMany.mockResolvedValue([]);
+
+            await service.findAll('tenant-1', { isCrossBranch: true });
+
+            expect(db.warehouseTransfer.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ is_cross_branch: true }),
+                }),
+            );
+        });
+
+        it('keeps the list unfiltered when no scope is asked for', async () => {
+            db.warehouseTransfer.findMany.mockResolvedValue([]);
+
+            await service.findAll('tenant-1', {});
+
+            expect(db.warehouseTransfer.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.not.objectContaining({ is_cross_branch: expect.anything() }),
+                }),
+            );
+        });
     });
 });
