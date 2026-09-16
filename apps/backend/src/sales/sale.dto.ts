@@ -73,9 +73,25 @@ export class CreateSaleDto {
     @Type(() => InlineCustomerDto)
     newCustomer?: InlineCustomerDto;
 
+    /**
+     * Only consulted when the seller has no open cashier session — when they
+     * do, the till comes off the session, which is the thing that actually
+     * knows which counter this person is standing at.
+     */
     @IsOptional()
     @IsString()
     counterId?: string;
+
+    /**
+     * Which screen rang this sale up. `POS` is the only value that means
+     * anything today: it is what the "require an open cashier session" setting
+     * gates on, so turning that setting on stops a cashier selling without a
+     * shift without also blocking back-office invoicing, which never involves
+     * a till. Absent on every other entry screen.
+     */
+    @IsOptional()
+    @IsString()
+    source?: string;
 
     @IsOptional()
     @IsString()

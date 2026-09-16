@@ -294,25 +294,46 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 
 - [ ] **The heatmap's totals deliberately exceed the "Conversations logged" tile, and nothing on screen says why.** `getActivityHeatmap` counts every DONE and every PLANNED row, while `getActivity` narrows to `channel_id != null` and `getFollowUps` to `subject != null` — each card measures a specific thing off the shared table. That is the honest reading for something labelled "activity", but two numbers on one dashboard that disagree by construction will get asked about. Worth either a note in the panel subtitle or a rethink of what the KPI tile is really counting.
 
-### Multi-cashier till operation — gaps found 2026-09-16
+### Multi-cashier till operation — LANDED 2026-09-16, follow-ups below
 
-Every piece exists — `PosCounter` per store, `CashierSession` per cashier per shift, `CashTransaction` for drawer movements, `counter_id`/`created_by` on every `Sale`, and the two mutual-exclusion locks in `cashier-sessions.service.ts:20-41` (one open session per person, one per till) — and nothing joins them up: the session is a bookkeeping record that the selling path never reads. Found while answering "how is multi-cashier operation managed". Each item below is a gap between `docs/user-manual/shop-owner-guide.md` §3.1–3.9, which describes the intended behaviour to customers, and what the code does.
+The audit that opened this section is in COMPLETED; the shape of the fix was to
+make `CashierSession` the thing a shift is recorded against rather than a
+bookkeeping row the selling path never read. What is left:
 
-- [ ] **POS never checks that a session is open.** `sales/pos/page.tsx` imports nothing from cashier-sessions; it reads `localStorage.getItem('counter_id')` (`:423`) and posts the sale. The manual's "Before selling, you must open a cashier session" (§3.1) is therefore enforced nowhere, and a shop can trade for a week without a session ever being opened and notice nothing missing. Gating checkout on `GET /cashier-sessions/open` is the small version; the honest version needs the item below, because a gate the sale is not *recorded* against is still only advice.
+- [ ] **Counters are still not assignable to staff.** Any cashier can claim any
+  free till, which is what the code has always done and is now what the manual
+  says (§3.9 was corrected — it previously claimed you could assign staff to
+  counters "via role settings", which was never true of any model). Whether a
+  shop wants the constraint is a product question, not a bug: it needs a
+  `PosCounter` ↔ `User` join and a decision about what happens when the
+  assigned cashier is off sick. Raise it only if a tenant asks.
 
-- [ ] **A sale is not linked to the session that rang it.** `Sale` carries `counter_id` and `created_by` but no `session_id`, so "what did this shift take?" is reconstructed from (user, counter, time window) rather than read off a key — and that reconstruction is ambiguous in exactly the case the feature exists for: two cashiers sharing till 1 across a morning and an evening shift. A nullable `Sale.session_id`, stamped from the caller's open session, is the column the rest of this list wants.
+- [ ] **Sessions already open when the migration landed are unguarded.** The
+  "one open session per till" rule is now a unique index over
+  `open_counter_key`, which is set on open and cleared on close. Rows that were
+  already OPEN carry NULL and so cannot collide — they are protected by the
+  service check alone until they close and reopen, which is at most one shift.
+  Backfilling them was deliberately skipped: if a tenant already holds two open
+  sessions on one counter, the backfill is what would fail, in the boot chain,
+  on their production database. Worth a one-off query after the deploy to see
+  whether any tenant is in that state.
 
-- [ ] **Closing a session records the count and computes no variance.** `closeSession` (`cashier-sessions.service.ts:78`) writes `closing_cash` and `status: 'CLOSED'` and that is the entire reconciliation. Manual §3.8 promises "Review the cash variance (expected vs actual)" and a session report with "total sales, payment method breakdown, and cash variance" — none of it exists, on the API or the page. Expected cash is not even derivable today: a cash sale writes no `CashTransaction`, so the only drawer movements on record are the ones somebody typed into the cash in/out modal. Needs the `session_id` above, then expected = opening + cash sales − cash refunds + cash-ins − cash-outs, with the difference stored on close so an over/short is a recorded fact rather than a recollection.
+- [ ] **A refund still comes out of the drawer even when the sale was paid by
+  card.** `SalesReturnsService` settles every return in cash — it has no record
+  of the original tender to give it back through — so `expected_cash` deducts
+  the full refund. That is what a Bangladeshi shop actually does at the
+  counter, and it is wrong for a card sale refunded to the card. Fixing it
+  means teaching a return which tender it is reversing, which is the same
+  decision the over-credit item under the Mushak follow-ups is waiting on.
 
-- [ ] **No manager can see the shop's open tills.** `GET /cashier-sessions/store/:storeId` exists (`:95`) and no frontend calls it — the Cashier Sessions page only ever loads `GET /cashier-sessions/open`, which keys on the caller's own user id. An owner with three counters running has no screen showing three open sessions, their floats, or who is on them, which is most of what managing a multi-cashier floor means day to day.
-
-- [ ] **The one-session-per-counter lock is check-then-create with no index behind it.** `counterInUse` (`:35`) reads, then `create` writes, and `CashierSession` carries only `@@index([tenant_id, counter_id])` — no partial unique on (`counter_id`, `status = 'OPEN'`). Two cashiers tapping Open on the same till in the same second both pass. Postgres takes a partial unique index for this; the service check then becomes the friendly error rather than the only defence.
-
-- [ ] **The till a sale is tagged with comes from localStorage, not from the session.** Opening a session writes `counter_id` into localStorage (`cashier-sessions/page.tsx:70`) and POS reads it back on every sale (`pos/page.tsx:423`), so the tag follows the *browser*: open a session on the counter tablet and sell from the back-office desktop and the sale is untagged; two people sharing one device overwrite each other's till. The session already knows its counter — the sale path should ask the API rather than the browser. The offline queue (`lib/pos-db.ts`) captures `counterId` per pending sale, so whatever is wrong at ring-up is faithfully preserved through the sync.
-
-- [ ] **"Assign staff to specific counters via role settings" (§3.9) does not exist.** Nothing ties a `User` to a `PosCounter`; the dropdown at session open lists every ACTIVE counter in the store, so any cashier can claim any till. Either build the assignment or correct the manual — the manual is what a customer reads first.
-
-- [ ] **`openSession` trusts the client's `storeId`.** It arrives straight from the browser (`getWorkspaceItem('store_id')`) and is written to the row unvalidated; only the *counter* is checked against it (`validateCounterBelongsToStore`), so a session opened without a counter can name any store id. Same tenant, so not a cross-tenant leak, but it lets a shift — and its cash — be filed against a branch the person does not work at.
+- [ ] **An offline sale is stamped with whatever shift is open when it syncs**,
+  not the one that was open when it was rung. The queue carries `source: 'POS'`
+  so the requirement is still applied on arrival, but a sale rung at the end of
+  one shift and synced during the next lands in the wrong till's takings. The
+  honest fix is to queue the session id alongside the sale and have the server
+  accept it when it is still that user's own session — deferred because it
+  needs a rule for what to do when that shift has since been closed and
+  counted.
 
 ---
 
@@ -1357,6 +1378,22 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 ---
 
 ## COMPLETED
+
+- [x] **Multi-cashier operation: a shift is now the thing a sale is recorded against** — done 2026-09-16. Asked as a question ("how will multi-cashier operation be managed?"), which turned into an audit, which found every primitive present and nothing joined up: `PosCounter`, `CashierSession` with its two open-session locks, `CashTransaction` and `Sale.counter_id`/`created_by` all existed, and the POS checkout path read none of them. It took the till from `localStorage` and never asked whether a shift was open.
+
+  **`Sale.session_id` and `SalesReturn.session_id`** (migration `20260916170000_cashier_session_reconciliation`, both nullable and permanently so — a back-office invoice belongs to no shift). Stamped server-side from the seller's *own* open session inside the sale's transaction, never from the request, so the shift on a sale is the one that was open at the moment it posted. A draft is stamped when it is parked and **re-stamped when it is finalised**, because the money arrives then. A refund is filed against the shift that *paid it out*, not the one that made the sale — the money leaves whichever drawer is open when the customer is handed it back.
+
+  **The till now comes off the session**, with the browser's `counter_id` kept only as the fallback for a tenant that tags counters without running shifts. That closes the case where a cashier opened a shift on the counter tablet, sold from the back-office desktop, and tagged the sale with the wrong counter or none.
+
+  **Reconciliation is real.** The close screen used to show `opening + cash in − cash out` as "expected cash" — which omits every cash sale, so a till that had sold anything always read short by exactly its takings, confidently. `getSessionSummary` now derives takings from the shift's own sales, counts only the cash half of them towards the drawer, deducts refunds, and applies the recorded movements; `closeSession` freezes `expected_cash` and `variance` onto the row rather than leaving them to be re-derived later, so a backdated sale cannot rewrite a count somebody signed off on. The page gained a live Shift Summary (takings, cash sales, refunds, breakdown by payment method) and an **Open Tills** panel — `GET /cashier-sessions/store/:storeId` had existed since counters shipped with no caller, so an owner with three counters running could see none of them.
+
+  **Both open-session locks are in the database now.** They were check-then-create, which two cashiers tapping Open in the same second both pass. A partial unique index (`WHERE status = 'OPEN'`) cannot be expressed in the Prisma schema, and production applies the schema rather than the migrations — so the condition is carried in a column instead: `open_counter_key`/`open_user_key` mirror the id while open and are NULL once closed, and Postgres treats NULLs as distinct. The service check survives as the friendly error; the P2002 is translated to the same message.
+
+  **`SalesSettings.require_cashier_session`**, default **off**: an upgrade must not stop a shop mid-sale for a workflow it has never used. When on, POS refuses checkout without a shift (banner on the page, not just a toast at the till) and the API refuses the same sale. Gated on an explicit `source: 'POS'` marker so back-office invoicing is untouched — a workflow control, not a security boundary, and the comment in `active-session.util.ts` says so.
+
+  Also: `openSession` now validates that the store belongs to the tenant (it was written verbatim from the browser); the page's three `alert()` calls became toasts, per the UI rules; and `docs/user-manual/shop-owner-guide.md` §3.1/§3.8/§3.9 were corrected — §3.8 promised a variance and a session report that did not exist, and §3.9 promised counter-to-staff assignment that no model has ever had.
+
+  Backend 292 suites / 5585 tests and frontend 345 suites / 4080 tests green, including 13 new reconciliation and session-stamping tests; both typechecks clean; message catalogue parity holds across all nine locales.
 
 - [x] **Admin › Inbox › Support was unusable on a phone — picking a thread showed nothing** — reported as "Admin > Inbox > Support - the UI is not mobile friendly". The page is a two-up master/detail (`apps/frontend/src/app/(app)/admin/support/page.tsx`) that laid out the same way at every width: a `w-80 shrink-0` thread list beside a `flex-1 min-w-0` conversation. At 360px those fixed parts — 320px of list, a 16px gap, 24px of page padding — already exceed the viewport, so the conversation pane was squeezed to zero and the reply box with it. **Tapping a thread appeared to do nothing**: the row took its selected highlight and the messages rendered off-screen in a column with no width. Confirmed in a real Chromium at 360×740 before the fix, with the first row highlighted and no conversation anywhere on screen.
 

@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: 'محطة نقطة البيع',
         subtitle: 'اختيار سريع وفوترة',
         helpTooltip: 'اختر الأصناف، ثم طريقة الدفع، ثم اضغط إتمام البيع. للدفع المقسّم أضف عدة صفوف دفع. ويُحسب الباقي تلقائيًا.',
+        openShift: 'افتح الوردية',
         offline: {
             banner: 'أنت غير متصل. ستُحفظ المبيعات في الطابور وتُزامَن عند عودة الاتصال.',
             pending: '{count} قيد الانتظار',
@@ -1100,6 +1101,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: 'الرجاء إدخال {count} رقمًا تسلسليًا لـ {product}.',
             serialUnique: 'يجب أن تكون الأرقام التسلسلية لـ {product} فريدة.',
+            sessionRequired: 'افتح جلسة صندوق قبل البيع على الكاونتر.',
             insufficientPaid: 'المبلغ المدفوع غير كافٍ!',
             saleOffline: 'حُفظ البيع دون اتصال — سيُزامَن عند عودة الاتصال',
             offlineFailed: 'تعذّر حفظ البيع دون اتصال. حاول مرة أخرى.',

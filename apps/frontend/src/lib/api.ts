@@ -2813,6 +2813,10 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
+    /** Takings, payment-method breakdown and expected cash for one shift. */
+    getCashierSessionSummary: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/summary`),
+    /** Every till open in a store right now, each with its own summary. */
+    getOpenCashierSessionsByStore: (storeId: string) => fetchWithAuth(`/cashier-sessions/store/${storeId}/open`),
     // POS Counters
     getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
     getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),

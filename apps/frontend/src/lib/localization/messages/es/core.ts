@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: "Terminal de punto de venta",
         subtitle: "Selección rápida y cobro",
         helpTooltip: "Selecciona artículos, elige un método de pago y pulsa Cobrar. Para pagos divididos, añade varias líneas de pago. El cambio se calcula automáticamente.",
+        openShift: "Abrir turno",
         offline: {
             banner: "Estás sin conexión. Las ventas se pondrán en cola y se sincronizarán cuando vuelvas a conectarte.",
             pending: "{count} pendientes",
@@ -1100,6 +1101,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: "Indica {count} número(s) de serie para {product}.",
             serialUnique: "Los números de serie de {product} deben ser únicos.",
+            sessionRequired: "Abre una sesión de caja antes de vender en el mostrador.",
             insufficientPaid: "¡El importe pagado es insuficiente!",
             saleOffline: "Venta guardada sin conexión — se sincronizará cuando vuelvas a estar en línea",
             offlineFailed: "No se pudo guardar la venta sin conexión. Inténtalo de nuevo.",

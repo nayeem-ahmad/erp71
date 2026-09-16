@@ -1022,6 +1022,7 @@ export const coreMessages = {
             title: "Terminal POS",
             subtitle: "Pemilihan pantas & bil",
             helpTooltip: "Pilih item, pilih kaedah bayaran, kemudian tekan Checkout. Untuk bayaran berpecah, tambah beberapa baris bayaran. Baki diterima dikira secara automatik.",
+            openShift: "Buka Syif",
             offline: {
                 banner: "Anda sedang luar talian. Jualan akan diatur dan disegerakkan apabila anda bersambung semula.",
                 pending: "{count} menunggu",
@@ -1101,6 +1102,7 @@ export const coreMessages = {
             notifications: {
                 serialRequired: "Sila berikan {count} nombor siri untuk {product}.",
                 serialUnique: "Nombor siri untuk {product} mesti unik.",
+                sessionRequired: "Buka sesi juruwang sebelum menjual di kaunter.",
                 insufficientPaid: "Jumlah dibayar tidak mencukupi!",
                 saleOffline: "Jualan disimpan luar talian — akan disegerakkan apabila dalam talian",
                 offlineFailed: "Gagal menyimpan jualan luar talian. Sila cuba lagi.",
