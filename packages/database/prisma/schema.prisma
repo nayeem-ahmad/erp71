@@ -505,6 +505,17 @@ model RefreshToken {
   id          String    @id @default(uuid())
   user_id     String
   token_hash  String    @unique
+  /// Every token minted from one sign-in shares this id, and rotation carries it
+  /// to the successor. A replay revokes the family rather than the account, so a
+  /// stale token in one browser cannot sign the same person out of their phone.
+  ///
+  /// Nullable only for tokens issued before the column existed: production
+  /// applies schema with `prisma db push`, and a NOT NULL column cannot be added
+  /// to a populated table without a default. `RefreshTokenService` reads a null
+  /// as "this row is its own family", so an old token revokes nothing but
+  /// itself. Every token minted since carries one, and the last of the old ones
+  /// expires within JWT_REFRESH_TTL_DAYS of the deploy.
+  family_id   String?
   /// Set when this token has been exchanged. Rotation means a token is usable
   /// once; `replaced_by` keeps the chain so a replay can be traced to a family.
   used_at     DateTime?
@@ -521,6 +532,7 @@ model RefreshToken {
 
   @@index([user_id])
   @@index([expires_at])
+  @@index([family_id])
 }
 
 model EmailVerificationToken {

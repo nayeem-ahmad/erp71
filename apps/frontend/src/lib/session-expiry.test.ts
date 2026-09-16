@@ -27,7 +27,8 @@ beforeEach(() => {
 
 describe('clearStoredSession', () => {
     it('removes session keys from BOTH storage backends', () => {
-        // "Remember me" writes the token to localStorage, otherwise sessionStorage.
+        // Credentials live in localStorage; sessionStorage is where they used to
+        // go when "Remember me" was unchecked, and an old tab may still hold one.
         localStorage.setItem('access_token', 'local-token');
         sessionStorage.setItem('access_token', 'session-token');
         setWorkspaceItem('tenant_id', 'tenant-1');
@@ -91,6 +92,27 @@ describe('resolveExpiredSessionRedirect', () => {
         expect(resolveExpiredSessionRedirect('/storefront/settings')).toBe(
             '/login?redirect=%2Fstorefront%2Fsettings&reason=expired',
         );
+    });
+
+    describe('when the browser was never signed in', () => {
+        it('still carries the path they were trying to reach', () => {
+            expect(resolveExpiredSessionRedirect('/sales/orders', '', { expired: false })).toBe(
+                '/login?redirect=%2Fsales%2Forders',
+            );
+        });
+
+        it('does not claim a session expired when none ever existed', () => {
+            // A bookmark opened in a signed-out browser is not a fault, and saying
+            // it is has sent people looking for one.
+            expect(resolveExpiredSessionRedirect('/dashboard', '', { expired: false }))
+                .not.toContain('reason=expired');
+            expect(resolveExpiredSessionRedirect('/select-account', '', { expired: false }))
+                .toBe('/login');
+        });
+
+        it('returns null on the login page, exactly as an expiry does', () => {
+            expect(resolveExpiredSessionRedirect('/login', '', { expired: false })).toBeNull();
+        });
     });
 });
 

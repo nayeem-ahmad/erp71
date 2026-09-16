@@ -64,19 +64,32 @@ function isSignedOutPath(pathname: string): boolean {
 }
 
 /**
- * Where an expired session on `pathname` should land. Returns `null` when the
- * user is already on the login page and no navigation is warranted.
+ * Where a session that can no longer be used on `pathname` should land. Returns
+ * `null` when the user is already on the login page and no navigation is
+ * warranted.
+ *
+ * `expired` separates the two ways of getting here, because they read very
+ * differently to the person: a token the server refused is worth explaining, and
+ * arriving with no token at all — a bookmark opened in a signed-out browser — is
+ * not. Telling the second one their session expired is a small lie that has sent
+ * people looking for a fault that is not there.
  *
  * Pure so the routing rules can be tested directly — jsdom makes
  * `window.location` immutable, so the navigation itself is covered by the
  * Playwright spec in `e2e/session-expiry.spec.ts`.
  */
-export function resolveExpiredSessionRedirect(pathname: string, search = ''): string | null {
+export function resolveExpiredSessionRedirect(
+    pathname: string,
+    search = '',
+    { expired = true }: { expired?: boolean } = {},
+): string | null {
     if (pathname === '/login' || pathname.startsWith('/login/')) return null;
-    if (isSignedOutPath(pathname)) return '/login?reason=expired';
+
+    const reason = expired ? 'reason=expired' : '';
+    if (isSignedOutPath(pathname)) return reason ? `/login?${reason}` : '/login';
 
     const returnTo = encodeURIComponent(`${pathname}${search}`);
-    return `/login?redirect=${returnTo}&reason=expired`;
+    return `/login?redirect=${returnTo}${reason ? `&${reason}` : ''}`;
 }
 
 /**
@@ -112,6 +125,27 @@ export function handleExpiredSession(): void {
     clearStoredSession();
 
     const target = resolveExpiredSessionRedirect(window.location.pathname, window.location.search);
+    if (target) window.location.replace(target);
+}
+
+/**
+ * Send a browser that was never signed in to the login page.
+ *
+ * Deliberately not `handleExpiredSession`. Nothing expired, so it does not say
+ * so — and, more importantly, it clears nothing. `clearStoredSession` reaches
+ * into localStorage, which every tab shares, so treating "this request had no
+ * token" as an expiry meant one stray navigation wiped `last_tenant_id` and the
+ * workspace pointer out from under whatever else the user had open.
+ */
+export function handleMissingSession(): void {
+    if (typeof window === 'undefined') return;
+    if (!claimExpiredSessionRedirect()) return;
+
+    const target = resolveExpiredSessionRedirect(
+        window.location.pathname,
+        window.location.search,
+        { expired: false },
+    );
     if (target) window.location.replace(target);
 }
 
