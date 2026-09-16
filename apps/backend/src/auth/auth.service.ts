@@ -165,13 +165,17 @@ export class AuthService {
         };
     }
 
-    async completeTwoFactorLogin(userId: string, meta: AuditRequestMeta = {}) {
+    async completeTwoFactorLogin(
+        userId: string,
+        meta: AuditRequestMeta = {},
+        options: { rememberMe?: boolean } = {},
+    ) {
         // `login()` returns early for 2FA users, so this is the only place a
         // second-factor sign-in can be recorded.
         this.audit
             .logForUserTenants('USER_LOGIN', 'User', { userId, ...meta }, userId, { two_factor: true })
             .catch(() => {});
-        return this.generateAuthResponse(userId, meta);
+        return this.generateAuthResponse(userId, meta, options);
     }
 
     /**
@@ -236,7 +240,7 @@ export class AuthService {
         this.audit
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id)
             .catch(() => {});
-        return this.generateAuthResponse(user.id, meta);
+        return this.generateAuthResponse(user.id, meta, { rememberMe: dto.remember_me });
     }
 
     /** The original email + password path, unchanged in behaviour. */
@@ -324,7 +328,7 @@ export class AuthService {
             (await this.db.user.findUnique({ where: { email: profile.email } }));
 
         if (existing) {
-            return this.completeGoogleLoginForExistingUser(existing, profile, meta);
+            return this.completeGoogleLoginForExistingUser(existing, profile, meta, dto.remember_me);
         }
 
         return this.createUserFromGoogle(profile, dto, meta);
@@ -342,6 +346,7 @@ export class AuthService {
         },
         profile: GoogleProfile,
         meta: AuditRequestMeta,
+        rememberMe?: boolean,
     ) {
         if (user.google_id && user.google_id !== profile.googleId) {
             // The address moved between Google accounts. Trusting the new one would
@@ -368,7 +373,10 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'google' })
             .catch(() => {});
 
-        return { ...(await this.generateAuthResponse(user.id, meta)), is_new_user: false };
+        return {
+            ...(await this.generateAuthResponse(user.id, meta, { rememberMe })),
+            is_new_user: false,
+        };
     }
 
     private async createUserFromGoogle(profile: GoogleProfile, dto: GoogleSignInDto, meta: AuditRequestMeta) {
@@ -468,12 +476,12 @@ export class AuthService {
 
         const linked = await this.db.user.findUnique({ where: { firebase_uid: profile.firebaseUid } });
         if (linked) {
-            return this.completeMobileLoginForExistingUser(linked, profile, meta);
+            return this.completeMobileLoginForExistingUser(linked, profile, meta, dto.remember_me);
         }
 
         const byNumber = await this.db.user.findUnique({ where: { mobile: profile.phoneNumber } });
         if (byNumber) {
-            return this.completeMobileLoginForExistingUser(byNumber, profile, meta);
+            return this.completeMobileLoginForExistingUser(byNumber, profile, meta, dto.remember_me);
         }
 
         return this.createUserFromMobile(profile, dto, meta);
@@ -489,6 +497,7 @@ export class AuthService {
         },
         profile: FirebasePhoneProfile,
         meta: AuditRequestMeta,
+        rememberMe?: boolean,
     ) {
         await applyVerifiedMobileIdentity(this.db, user, profile);
 
@@ -501,7 +510,10 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'mobile' })
             .catch(() => {});
 
-        return { ...(await this.generateAuthResponse(user.id, meta)), is_new_user: false };
+        return {
+            ...(await this.generateAuthResponse(user.id, meta, { rememberMe })),
+            is_new_user: false,
+        };
     }
 
     private async createUserFromMobile(
@@ -748,7 +760,20 @@ export class AuthService {
         return { defaultPlanCode: code as 'BASIC' | 'ACCOUNTING' | 'STANDARD' };
     }
 
-    private async generateAuthResponse(userId: string, meta: AuditRequestMeta = {}) {
+    /**
+     * Build a signed-in session for `userId`.
+     *
+     * `rememberMe` reaches only the refresh token's lifetime. It used to decide
+     * which browser storage the frontend put the tokens in — sessionStorage when
+     * unchecked — which made a session die with the tab it was created in and
+     * left every other tab looking signed out. Storage is shared across tabs
+     * now, so the choice means what the checkbox says: a month, or a day.
+     */
+    private async generateAuthResponse(
+        userId: string,
+        meta: AuditRequestMeta = {},
+        options: { rememberMe?: boolean } = {},
+    ) {
         const user = await this.db.user.findUnique({
             where: { id: userId },
             include: {
@@ -790,7 +815,7 @@ export class AuthService {
 
         const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
         const payload = { sub: user.id, email: user.email, tv: user.token_version, scope: AUTH_SCOPE_APP };
-        const refresh = await this.refreshTokens.issue(user.id, meta);
+        const refresh = await this.refreshTokens.issue(user.id, meta, { rememberMe: options.rememberMe });
         return {
             access_token: this.jwtService.sign(payload, { expiresIn: accessTokenTtl() }),
             refresh_token: refresh.token,

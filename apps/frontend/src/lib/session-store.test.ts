@@ -2,6 +2,7 @@ import {
     clearCredentials,
     clearWorkspace,
     getAccessToken,
+    hasStoredSession,
     getLastTenantId,
     getRefreshToken,
     getWorkspaceItem,
@@ -113,45 +114,41 @@ describe('bootstrapping a tab that has no workspace of its own', () => {
 });
 
 describe('credentials', () => {
-    it('keeps a "Remember me" session in localStorage so a new tab is signed in', () => {
-        setCredentials({ access_token: 'a', refresh_token: 'r' }, true);
+    it('puts a session where every tab of the browser can see it', () => {
+        setCredentials({ access_token: 'a', refresh_token: 'r' });
 
         expect(localStorage.getItem('access_token')).toBe('a');
         expect(sessionStorage.getItem('access_token')).toBeNull();
     });
 
-    it('keeps a session without "Remember me" in the tab that opened it', () => {
-        setCredentials({ access_token: 'a', refresh_token: 'r' }, false);
+    it('signs a newly-opened tab in', () => {
+        setCredentials({ access_token: 'a', refresh_token: 'r' });
 
-        expect(sessionStorage.getItem('access_token')).toBe('a');
-        expect(localStorage.getItem('access_token')).toBeNull();
+        newTab();
+
+        // The bug this replaced: credentials in sessionStorage meant a second
+        // tab — duplicated, bookmarked or opened from a link — saw a login page.
+        expect(getAccessToken()).toBe('a');
+        expect(getRefreshToken()).toBe('r');
     });
 
-    it('stops a remembered token from outranking a later sign-in as someone else', () => {
-        setCredentials({ access_token: 'account-a', refresh_token: 'ra' }, true);
-        setCredentials({ access_token: 'account-b', refresh_token: 'rb' }, false);
+    it('lets a later sign-in replace an earlier account outright', () => {
+        setCredentials({ access_token: 'account-a', refresh_token: 'ra' });
+        setCredentials({ access_token: 'account-b', refresh_token: 'rb' });
 
         expect(getAccessToken()).toBe('account-b');
         expect(getRefreshToken()).toBe('rb');
-        expect(localStorage.getItem('access_token')).toBeNull();
-    });
-
-    it('prefers the tab\'s own token over one another tab remembered', () => {
-        setCredentials({ access_token: 'tab-local' }, false);
-        localStorage.setItem('access_token', 'other-tab');
-
-        expect(getAccessToken()).toBe('tab-local');
     });
 
     it('drops a stale refresh token when a sign-in returns none', () => {
-        setCredentials({ access_token: 'a', refresh_token: 'r' }, true);
-        setCredentials({ access_token: 'b' }, true);
+        setCredentials({ access_token: 'a', refresh_token: 'r' });
+        setCredentials({ access_token: 'b' });
 
         expect(getRefreshToken()).toBeNull();
     });
 
     it('clears both backends on sign-out', () => {
-        setCredentials({ access_token: 'a', refresh_token: 'r' }, true);
+        setCredentials({ access_token: 'a', refresh_token: 'r' });
         sessionStorage.setItem('access_token', 'leftover');
 
         clearCredentials();
@@ -160,22 +157,60 @@ describe('credentials', () => {
         expect(getRefreshToken()).toBeNull();
     });
 
-    describe('renewal', () => {
-        it('does not promote a tab-scoped session into a remembered one', () => {
-            setCredentials({ access_token: 'a', refresh_token: 'r' }, false);
-
-            updateCredentials({ access_token: 'a2', refresh_token: 'r2' });
-
-            expect(sessionStorage.getItem('access_token')).toBe('a2');
-            expect(localStorage.getItem('access_token')).toBeNull();
+    describe('hasStoredSession', () => {
+        it('is false in a browser that has never signed in', () => {
+            expect(hasStoredSession()).toBe(false);
         });
 
-        it('keeps a remembered session remembered', () => {
-            setCredentials({ access_token: 'a', refresh_token: 'r' }, true);
+        it('is true while either token survives', () => {
+            setCredentials({ access_token: 'a', refresh_token: 'r' });
+            expect(hasStoredSession()).toBe(true);
+
+            localStorage.removeItem('access_token');
+            expect(hasStoredSession()).toBe(true);
+        });
+    });
+
+    describe('sessions that predate the move out of sessionStorage', () => {
+        it('adopts one rather than signing the tab out mid-task', () => {
+            sessionStorage.setItem('access_token', 'legacy-a');
+            sessionStorage.setItem('refresh_token', 'legacy-r');
+
+            expect(getAccessToken()).toBe('legacy-a');
+            expect(getRefreshToken()).toBe('legacy-r');
+            // Moved, not copied: a spent token left behind is what gets replayed.
+            expect(sessionStorage.getItem('access_token')).toBeNull();
+            expect(localStorage.getItem('access_token')).toBe('legacy-a');
+        });
+
+        it('defers to a sign-in that has happened since, and drops the old copy', () => {
+            setCredentials({ access_token: 'current', refresh_token: 'current-r' });
+            sessionStorage.setItem('access_token', 'legacy-a');
+            sessionStorage.setItem('refresh_token', 'legacy-r');
+            resetWorkspaceBootstrapForTests();
+
+            expect(getAccessToken()).toBe('current');
+            expect(sessionStorage.getItem('access_token')).toBeNull();
+        });
+
+        it('runs once, so a token this tab clears does not come back', () => {
+            sessionStorage.setItem('access_token', 'legacy-a');
+            expect(getAccessToken()).toBe('legacy-a');
+
+            clearCredentials();
+
+            expect(getAccessToken()).toBeNull();
+        });
+    });
+
+    describe('renewal', () => {
+        it('writes the new tokens where every tab reads them', () => {
+            setCredentials({ access_token: 'a', refresh_token: 'r' });
 
             updateCredentials({ access_token: 'a2', refresh_token: 'r2' });
 
             expect(localStorage.getItem('access_token')).toBe('a2');
+            expect(getRefreshToken()).toBe('r2');
             expect(sessionStorage.getItem('access_token')).toBeNull();
         });
     });
@@ -183,32 +218,32 @@ describe('credentials', () => {
 
 describe('isAccessTokenNearExpiry', () => {
     it('is false for a token with plenty of life left', () => {
-        setCredentials({ access_token: 'a', expires_in: 3600 }, true);
+        setCredentials({ access_token: 'a', expires_in: 3600 });
 
         expect(isAccessTokenNearExpiry()).toBe(false);
     });
 
     it('is true once the token is inside the renewal window', () => {
-        setCredentials({ access_token: 'a', expires_in: 30 }, true);
+        setCredentials({ access_token: 'a', expires_in: 30 });
 
         expect(isAccessTokenNearExpiry()).toBe(true);
     });
 
     it('is true for a token that already lapsed', () => {
-        setCredentials({ access_token: 'a', expires_in: 3600 }, true);
+        setCredentials({ access_token: 'a', expires_in: 3600 });
         localStorage.setItem('access_token_expires_at', String(Date.now() - 1000));
 
         expect(isAccessTokenNearExpiry()).toBe(true);
     });
 
     it('stays false when the expiry is unknown, so the 401 path handles it', () => {
-        setCredentials({ access_token: 'a' }, true);
+        setCredentials({ access_token: 'a' });
 
         expect(isAccessTokenNearExpiry()).toBe(false);
     });
 
     it('ignores a corrupted expiry rather than renewing on every request', () => {
-        setCredentials({ access_token: 'a' }, true);
+        setCredentials({ access_token: 'a' });
         localStorage.setItem('access_token_expires_at', 'soon');
 
         expect(isAccessTokenNearExpiry()).toBe(false);

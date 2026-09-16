@@ -16,11 +16,12 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
-import { handleExpiredSession } from './session-expiry';
+import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
     getAccessToken,
     getRefreshToken,
     getWorkspaceItem,
+    hasStoredSession,
     isAccessTokenNearExpiry,
     updateCredentials,
 } from './session-store';
@@ -190,10 +191,54 @@ async function renewalBackoffFrom(response: Response): Promise<number> {
     return RENEWAL_BACKOFF_MS;
 }
 
+/**
+ * Name of the cross-tab lock every renewal queues behind.
+ *
+ * `renewalInFlight` only de-dupes within one tab. Every tab shares one refresh
+ * token and it is good for a single exchange, so two of them renewing at once is
+ * two uses of the same token — which is exactly what the backend's replay
+ * detection exists to catch, and it ends the session it fires on. The lock makes
+ * them take turns; the loser then finds the winner's token already in storage
+ * and skips its own exchange entirely.
+ */
+const RENEWAL_LOCK = 'erp71:session-renewal';
+
+/**
+ * Run `exchange` with the cross-tab renewal lock held.
+ *
+ * Falls back to running it directly where the Web Locks API is missing — Safari
+ * before 15.4, and any non-secure origin. That is what this did before the lock
+ * existed, so the fallback is no worse than the status quo and not worth
+ * refusing to renew over.
+ */
+async function withRenewalLock(exchange: () => Promise<RenewalOutcome>): Promise<RenewalOutcome> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (!locks?.request) return exchange();
+    return (await locks.request(RENEWAL_LOCK, exchange)) as RenewalOutcome;
+}
+
 async function performRenewal(): Promise<RenewalOutcome> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return 'rejected';
 
+    return withRenewalLock(async () => {
+        // Re-read inside the lock. Whoever held it before us may have renewed
+        // already, in which case the token we queued with is spent — presenting
+        // it is the replay — and theirs is in shared storage, which is what the
+        // caller's retry picks up.
+        const current = getRefreshToken();
+        if (!current) return 'rejected';
+        if (current !== refreshToken) return 'renewed';
+        // Likewise for a backoff the winner just started: the server refused
+        // *this* session moments ago, so asking again now learns nothing.
+        if (Date.now() < renewalBlockedUntil) return 'unavailable';
+
+        return exchangeRefreshToken(current);
+    });
+}
+
+/** The exchange itself. Only ever called with the renewal lock held. */
+async function exchangeRefreshToken(refreshToken: string): Promise<RenewalOutcome> {
     let response: Response;
     try {
         response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -348,12 +393,29 @@ async function renewIfNearExpiry(): Promise<void> {
     if (isAccessTokenNearExpiry()) await renewSession();
 }
 
+/**
+ * What an authenticated call does in a browser holding no session at all.
+ *
+ * Sending it anyway produces a 401, and every 401 out of these helpers is read
+ * as "your session ended" — which is how opening the app in a signed-out browser
+ * came to announce an expiry that never happened, and to run the teardown that
+ * goes with one over shared localStorage. Answering here keeps that story
+ * straight and saves the round trip.
+ */
+function signedOutError(): ApiError {
+    handleMissingSession();
+    return new ApiError('You are not signed in.', 401, 'NOT_AUTHENTICATED');
+}
+
 export async function fetchBlobWithAuth(
     endpoint: string,
     options: RequestInit = {},
     isRetry = false,
 ): Promise<{ blob: Blob; filename: string }> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -435,7 +497,10 @@ async function isInvalidTenant(response: Response): Promise<boolean> {
 }
 
 async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<any> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -2776,9 +2841,9 @@ export const api = {
         }
         return body && 'data' in body ? body.data : body;
     }),
-    verify2FALogin: (userId: string, code: string) => fetch(`${API_BASE}/auth/2fa/verify`, {
+    verify2FALogin: (userId: string, code: string, rememberMe = false) => fetch(`${API_BASE}/auth/2fa/verify`, {
         method: 'POST',
-        body: JSON.stringify({ userId, code }),
+        body: JSON.stringify({ userId, code, remember_me: rememberMe }),
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
@@ -2799,7 +2864,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string }) =>
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/google`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -2820,7 +2885,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string }) =>
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/mobile`, {
             method: 'POST',
             body: JSON.stringify(data),

@@ -87,7 +87,12 @@ describe('MobileSignInPanel', () => {
         );
         expect(confirm).toHaveBeenCalledWith('123456');
         await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ access_token: 'x' }));
-        expect(mobileSignIn).toHaveBeenCalledWith({ idToken: 'firebase-id-token' });
+        // `remember_me` decides the session's lifetime, so the app's own exchange
+        // always states it — the panel defaults it off, like the login form.
+        expect(mobileSignIn).toHaveBeenCalledWith({
+            idToken: 'firebase-id-token',
+            remember_me: false,
+        });
     });
 
     it('rejects an unusable number before asking Firebase for an SMS', async () => {
@@ -122,6 +127,7 @@ describe('MobileSignInPanel', () => {
             idToken: 'firebase-id-token',
             email: 'owner@shop.com',
             name: undefined,
+            remember_me: false,
         });
         expect(sendCode).toHaveBeenCalledTimes(1);
     });
@@ -146,7 +152,20 @@ describe('MobileSignInPanel', () => {
             email: 'owner@shop.com',
             tenantName: 'Dhaka Retail Co.',
             planCode: 'STANDARD',
+            remember_me: false,
         }));
+    });
+
+    it('sends the surrounding form\'s "Remember me" with the exchange', async () => {
+        const onSuccess = jest.fn();
+        mobileSignIn.mockResolvedValue({ access_token: 'x' });
+
+        render(<MobileSignInPanel onSuccess={onSuccess} rememberMe />);
+        await verifyNumber();
+
+        await waitFor(() => expect(mobileSignIn).toHaveBeenCalledWith(
+            expect.objectContaining({ remember_me: true }),
+        ));
     });
 
     it('posts through the caller\'s own exchange when it supplies one', async () => {

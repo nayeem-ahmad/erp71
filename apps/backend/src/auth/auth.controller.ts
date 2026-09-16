@@ -235,8 +235,15 @@ export class AuthController {
     @Throttle({ default: { ttl: 60_000, limit: 60 } })
     @ThrottleAccount({ ttl: 60_000, limit: 10 })
     @Post('2fa/verify')
-    async totpVerify(@Body() body: { userId: string; code: string }, @Request() req) {
+    async totpVerify(
+        @Body() body: { userId: string; code: string; remember_me?: boolean },
+        @Request() req,
+    ) {
         await this.totpService.verifyTotpForLogin(body.userId, body.code);
-        return this.authService.completeTwoFactorLogin(body.userId, extractRequestMeta(req));
+        // The login form collected "Remember me" before it knew a second factor
+        // was wanted, so the choice rides along on this leg too.
+        return this.authService.completeTwoFactorLogin(body.userId, extractRequestMeta(req), {
+            rememberMe: body.remember_me,
+        });
     }
 }

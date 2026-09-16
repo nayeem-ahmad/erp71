@@ -21,7 +21,7 @@ function DemoPageContent() {
             try {
                 const auth = await api.demoLogin();
                 if (cancelled) return;
-                await storeAuthResponse(auth, true); // demo always persists
+                await storeAuthResponse(auth);
                 localStorage.removeItem('onboarding_complete');
                 router.replace('/dashboard/onboarding');
             } catch (err: any) {
