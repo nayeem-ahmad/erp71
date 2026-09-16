@@ -27,6 +27,14 @@ describe('costBehaviourFor', () => {
         expect(costBehaviourFor('TRANSFER_IN')).toBe('QUANTITY_ONLY');
         expect(costBehaviourFor('STOCK_TAKE_ADJUSTMENT')).toBe('QUANTITY_ONLY');
     });
+
+    // Found stock arrives from nowhere: there is no document behind it saying
+    // what it cost, so it joins the pool at the average the rest of that
+    // product already sits at. Promoting it to REVALUE would let a counter
+    // restate inventory value from a stock screen.
+    it('keeps found stock off the average', () => {
+        expect(costBehaviourFor('STOCK_FOUND')).toBe('QUANTITY_ONLY');
+    });
 });
 
 describe('applyToPool — receipts', () => {

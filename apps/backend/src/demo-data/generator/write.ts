@@ -1041,7 +1041,11 @@ export class DemoWriter {
             data: {
                 tenant_id: this.world.tenantId, warehouse_id: store.warehouseId, reason_id: reason.id,
                 reference_number: referenceNumber, created_at: date,
-                notes: large ? anomalyNote('LARGE_SHRINKAGE') : undefined,
+                // A note is required on every new entry (see
+                // CreateInventoryShrinkageDto), so demo data carries one too —
+                // a demo tenant whose write-offs have no note shows a screen
+                // nobody could have produced through the app.
+                notes: large ? anomalyNote('LARGE_SHRINKAGE') : `${qty} × ${product.name} written off as ${reason.code}`,
                 items: { create: [{ product_id: product.id, quantity: qty, unit_cost: product.cost }] },
             },
         });

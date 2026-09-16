@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 const toBoolean = ({ value }: { value: unknown }) => {
@@ -179,4 +179,14 @@ export class GetShrinkageSummaryDto {
     @IsOptional()
     @IsString()
     to?: string;
+
+    /**
+     * Which side of the count to report. Defaults to LOSS — this is the
+     * shrinkage report, and stock found over the book is a gain, so summing the
+     * two would net a theft against a miscount and report neither honestly.
+     * FOUND asks the same question of the surpluses.
+     */
+    @IsOptional()
+    @IsIn(['LOSS', 'FOUND'])
+    direction?: 'LOSS' | 'FOUND';
 }
