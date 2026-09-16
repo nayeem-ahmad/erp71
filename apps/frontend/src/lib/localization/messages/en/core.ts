@@ -346,6 +346,7 @@ export const coreMessages = {
             salesQuotations: 'Sales Quotations',
             warrantyClaims: 'Warranty Claims',
             cashierSessions: 'Cashier Sessions',
+            mushakBooks: 'NBR VAT Books (Mushak)',
             loyaltyPoints: 'Loyalty Points',
             jobsBom: 'Jobs & BOM',
             purchases: 'Purchases',

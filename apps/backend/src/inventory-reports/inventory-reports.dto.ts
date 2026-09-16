@@ -10,6 +10,17 @@ const toBoolean = ({ value }: { value: unknown }) => {
 };
 
 export class GetStockAgingDto {
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Without it every report spans the whole tenant, which mixes
+     * branches that have nothing to do with each other into one set of numbers.
+     * Combines with `warehouseId` rather than overriding it — a warehouse
+     * outside the named branch matches neither filter and reports nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
     @IsOptional()
     @IsUUID()
     warehouseId?: string;
@@ -36,6 +47,17 @@ export class GetStockAgingDto {
 }
 
 export class GetReorderSuggestionsDto {
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Without it every report spans the whole tenant, which mixes
+     * branches that have nothing to do with each other into one set of numbers.
+     * Combines with `warehouseId` rather than overriding it — a warehouse
+     * outside the named branch matches neither filter and reports nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
     @IsOptional()
     @IsUUID()
     warehouseId?: string;
@@ -50,6 +72,17 @@ export class GetReorderSuggestionsDto {
 }
 
 export class GetInventoryValuationDto {
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Without it every report spans the whole tenant, which mixes
+     * branches that have nothing to do with each other into one set of numbers.
+     * Combines with `warehouseId` rather than overriding it — a warehouse
+     * outside the named branch matches neither filter and reports nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
     @IsOptional()
     @IsUUID()
     warehouseId?: string;
@@ -64,6 +97,17 @@ export class GetInventoryValuationDto {
 }
 
 export class GetStockOnHandDto {
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Without it every report spans the whole tenant, which mixes
+     * branches that have nothing to do with each other into one set of numbers.
+     * Combines with `warehouseId` rather than overriding it — a warehouse
+     * outside the named branch matches neither filter and reports nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
     /**
      * Narrows the report to a single warehouse: that warehouse becomes the only
      * quantity column, and the weighted average cost is computed from that
@@ -97,6 +141,17 @@ export class GetStockOnHandDto {
 }
 
 export class GetShrinkageSummaryDto {
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Without it every report spans the whole tenant, which mixes
+     * branches that have nothing to do with each other into one set of numbers.
+     * Combines with `warehouseId` rather than overriding it — a warehouse
+     * outside the named branch matches neither filter and reports nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
     @IsOptional()
     @IsUUID()
     warehouseId?: string;

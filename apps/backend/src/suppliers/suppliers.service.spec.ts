@@ -22,6 +22,7 @@ describe('SuppliersService', () => {
                 count: jest.fn(),
                 findFirst: jest.fn(),
                 update: jest.fn(),
+                upsert: jest.fn(),
             },
             supplierCreditTransaction: {
                 count: jest.fn(),
@@ -64,9 +65,88 @@ describe('SuppliersService', () => {
     });
 
     it('rejects duplicate supplier names per tenant', async () => {
-        db.supplier.findUnique.mockResolvedValue({ id: 'sup-existing' });
+        db.supplier.findUnique.mockResolvedValue({ id: 'sup-existing', deleted_at: null });
 
         await expect(service.create('tenant-1', { name: 'ACME Supply' })).rejects.toThrow(BadRequestException);
+    });
+
+    // The unique index spans soft-deleted rows, so a deleted supplier keeps its
+    // name. Refusing the name would leave the shopkeeper unable to add a
+    // supplier they cannot see anywhere — and the one they added never reaches
+    // the purchase picker.
+    it('brings back a soft-deleted supplier rather than refusing its name', async () => {
+        db.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
+        db.supplier.update.mockResolvedValue({ id: 'sup-deleted', name: 'ACME Supply' });
+
+        const result = await service.create('tenant-1', { name: 'ACME Supply', phone: '01700000000' });
+
+        expect(db.supplier.create).not.toHaveBeenCalled();
+        expect(db.supplier.update).toHaveBeenCalledWith({
+            where: { id: 'sup-deleted' },
+            data: expect.objectContaining({ deleted_at: null, name: 'ACME Supply', phone: '01700000000' }),
+        });
+        expect(result.id).toBe('sup-deleted');
+    });
+
+    it('trims the supplier name so a stray space cannot create a second row', async () => {
+        db.supplier.findUnique.mockResolvedValue(null);
+        db.supplier.create.mockResolvedValue({ id: 'sup-1' });
+
+        await service.create('tenant-1', { name: '  ACME Supply  ' });
+
+        expect(db.supplier.findUnique).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { tenant_id_name: { tenant_id: 'tenant-1', name: 'ACME Supply' } },
+            }),
+        );
+        expect(db.supplier.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({ name: 'ACME Supply' }),
+        });
+    });
+
+    it('refuses a blank name rather than listing a supplier nobody can read', async () => {
+        await expect(service.create('tenant-1', { name: '   ' })).rejects.toThrow(BadRequestException);
+        expect(db.supplier.create).not.toHaveBeenCalled();
+    });
+
+    it('says a rename is blocked by a deleted supplier, not by a visible one', async () => {
+        db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Old Name' });
+        db.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
+
+        await expect(service.update('tenant-1', 'sup-1', { name: 'ACME Supply' }))
+            .rejects.toThrow(/deleted supplier/i);
+    });
+
+    describe('importRows', () => {
+        it('counts a live supplier of the same name as a duplicate', async () => {
+            db.supplier.findUnique.mockResolvedValue({ id: 'sup-1', deleted_at: null });
+
+            const result = await service.importRows('tenant-1', [{ name: 'ACME Supply' }], 'skip');
+
+            expect(result).toMatchObject({ created: 0, skipped: 1 });
+            expect(db.supplier.upsert).not.toHaveBeenCalled();
+        });
+
+        // Skipping the row leaves nothing behind; updating the tombstone in
+        // place leaves a supplier still hidden from every list. Either way the
+        // import reports a supplier that never reaches the purchase picker.
+        it('brings a soft-deleted supplier back instead of skipping its row', async () => {
+            db.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
+
+            const result = await service.importRows(
+                'tenant-1',
+                [{ name: 'ACME Supply', phone: '01700000000' }],
+                'skip',
+            );
+
+            expect(result).toMatchObject({ created: 1, skipped: 0 });
+            expect(db.supplier.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id_name: { tenant_id: 'tenant-1', name: 'ACME Supply' } },
+                    update: expect.objectContaining({ deleted_at: null, phone: '01700000000' }),
+                }),
+            );
+        });
     });
 
     it('returns paginated supplier lists', async () => {

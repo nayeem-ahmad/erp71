@@ -36,6 +36,11 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
         groupId: '',
         subgroupId: '',
         unitType: 'none' as CompoundUnitType,
+        // Blank means "inherit": VAT falls back to the workspace default, and
+        // supplementary duty to none. A typed 0 is an explicit zero-rating and
+        // is sent as such, which is why these stay strings until submit.
+        vatRate: '',
+        sdRate: '',
         description: '',
         images_gallery: [] as string[],
     });
@@ -87,6 +92,8 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 groupId: initialProduct.group?.id || '',
                 subgroupId: initialProduct.subgroup?.id || '',
                 unitType: (initialProduct.unit_type as CompoundUnitType) || 'none',
+                vatRate: initialProduct.vat_rate != null ? String(initialProduct.vat_rate) : '',
+                sdRate: initialProduct.sd_rate != null ? String(initialProduct.sd_rate) : '',
                 description: initialProduct.description || '',
                 images_gallery: initialProduct.images_gallery || [],
             });
@@ -110,6 +117,8 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 groupId: '',
                 subgroupId: '',
                 unitType: 'none',
+                vatRate: '',
+                sdRate: '',
                 description: '',
                 images_gallery: [],
             });
@@ -179,6 +188,10 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 groupId: formData.groupId || undefined,
                 subgroupId: formData.subgroupId || undefined,
                 unitType: formData.unitType,
+                // null, not undefined: clearing the box has to reach the API as
+                // "inherit the default" rather than "leave whatever is stored".
+                vatRate: formData.vatRate === '' ? null : parseFloat(formData.vatRate),
+                sdRate: formData.sdRate === '' ? null : parseFloat(formData.sdRate),
                 description: formData.description || undefined,
                 images_gallery: formData.images_gallery,
             });
@@ -326,6 +339,41 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                                 <option key={key} value={key}>{COMPOUND_UNIT_DEFS[key].label}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                </div>
+
+                                {/* The rates a Mushak 6.3 prints per line.
+                                    Snapshotted onto each sale as it is posted,
+                                    so editing them here never restates an
+                                    invoice already issued. */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.vatRate}</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
+                                            placeholder={t.addProductModal.placeholders.vatRate}
+                                            className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                            value={formData.vatRate}
+                                            onChange={(e) => setFormData({ ...formData, vatRate: e.target.value })}
+                                        />
+                                        <p className="mt-1 ms-1 text-xs text-gray-400">{t.addProductModal.vatRateHint}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.addProductModal.sdRate}</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
+                                            placeholder={t.addProductModal.placeholders.sdRate}
+                                            className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                            value={formData.sdRate}
+                                            onChange={(e) => setFormData({ ...formData, sdRate: e.target.value })}
+                                        />
+                                        <p className="mt-1 ms-1 text-xs text-gray-400">{t.addProductModal.sdRateHint}</p>
                                     </div>
                                 </div>
 

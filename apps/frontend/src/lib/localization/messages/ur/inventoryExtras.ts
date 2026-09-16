@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "دوبارہ آرڈر کی حد سے نیچے پروڈکٹس، تجویز کردہ خریداری مقدار کے ساتھ",
             "subtitlePrioritize": "آنے والی منتقلیوں کو شمار کرنے کے بعد ہدف اسٹاک سے نیچے رہ جانے والے پروڈکٹس کو ترجیح دیں",
             "allWarehouses": "تمام گودام",
+            "allBranches": "تمام برانچیں",
             "allGroups": "تمام گروپ",
             "allSubgroups": "تمام ذیلی گروپ",
             "uncategorized": "غیر درجہ بند",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "دستیاب اسٹاک",
             "subtitle": "فی گودام مقدار، وزنی اوسط خریداری لاگت پر مالیت",
             "allWarehouses": "تمام گودام",
+            "allBranches": "تمام برانچیں",
             "allGroups": "تمام گروپ",
             "allSubgroups": "تمام ذیلی گروپ",
             "allBrands": "تمام برانڈز",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "دوبارہ آرڈر کی سطح",
         "safetyStock": "حفاظتی اسٹاک",
         "leadTimeDays": "رسد کے دن",
+        "vatRate": "ویٹ کی شرح (%)",
+        "vatRateHint": "خالی چھوڑنے پر ورک اسپیس کی ڈیفالٹ شرح لاگو ہوگی۔ 0 کا مطلب زیرو ریٹڈ یا مستثنیٰ۔",
+        "sdRate": "اضافی ڈیوٹی (%)",
+        "sdRateHint": "صرف تھرڈ شیڈول اشیاء۔ خالی کا مطلب کوئی نہیں۔",
         "quantityUnit": "مقدار کا یونٹ",
         "brand": "برانڈ",
         "noBrand": "کوئی برانڈ نہیں",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "مثلاً 365"
+            "warrantyDays": "مثلاً 365",
+            "vatRate": "مثلاً 15",
+            "sdRate": "مثلاً 25"
         }
     }
 } as const;

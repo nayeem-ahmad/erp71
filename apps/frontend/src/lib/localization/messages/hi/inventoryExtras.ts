@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "पुनःऑर्डर सीमा से नीचे के उत्पाद, सुझाई गई खरीद मात्रा के साथ",
             "subtitlePrioritize": "आने वाले स्थानांतरण गिनने के बाद भी लक्ष्य स्टॉक से नीचे रहने वाले उत्पादों को प्राथमिकता दें",
             "allWarehouses": "सभी गोदाम",
+            "allBranches": "सभी शाखाएँ",
             "allGroups": "सभी समूह",
             "allSubgroups": "सभी उपसमूह",
             "uncategorized": "अवर्गीकृत",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "उपलब्ध स्टॉक",
             "subtitle": "भारित औसत खरीद लागत पर मूल्यांकित प्रति गोदाम मात्रा",
             "allWarehouses": "सभी गोदाम",
+            "allBranches": "सभी शाखाएँ",
             "allGroups": "सभी समूह",
             "allSubgroups": "सभी उपसमूह",
             "allBrands": "सभी ब्रांड",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "पुनःऑर्डर स्तर",
         "safetyStock": "सुरक्षा स्टॉक",
         "leadTimeDays": "लीड टाइम दिन",
+        "vatRate": "वैट दर (%)",
+        "vatRateHint": "खाली छोड़ने पर कार्यक्षेत्र की डिफ़ॉल्ट दर लगेगी। 0 का अर्थ शून्य-दर या छूट प्राप्त।",
+        "sdRate": "अनुपूरक शुल्क (%)",
+        "sdRateHint": "केवल तृतीय अनुसूची की वस्तुएँ। खाली का अर्थ कोई नहीं।",
         "quantityUnit": "मात्रा इकाई",
         "brand": "ब्रांड",
         "noBrand": "कोई ब्रांड नहीं",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "जैसे 365"
+            "warrantyDays": "जैसे 365",
+            "vatRate": "जैसे 15",
+            "sdRate": "जैसे 25"
         }
     }
 } as const;

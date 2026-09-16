@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "Productos por debajo de su nivel de reposición con las cantidades de compra sugeridas",
             "subtitlePrioritize": "Priorice los productos que siguen por debajo del stock objetivo una vez contabilizados los traslados entrantes",
             "allWarehouses": "Todos los almacenes",
+            "allBranches": "Todas las sucursales",
             "allGroups": "Todos los grupos",
             "allSubgroups": "Todos los subgrupos",
             "uncategorized": "Sin categorizar",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "Existencias disponibles",
             "subtitle": "Cantidad por almacén valorada al coste medio ponderado de compra",
             "allWarehouses": "Todos los almacenes",
+            "allBranches": "Todas las sucursales",
             "allGroups": "Todos los grupos",
             "allSubgroups": "Todos los subgrupos",
             "allBrands": "Todas las marcas",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Nivel de reposición",
         "safetyStock": "Existencias de seguridad",
         "leadTimeDays": "Plazo de entrega (días)",
+        "vatRate": "Tipo de IVA (%)",
+        "vatRateHint": "En blanco usa el valor por defecto del espacio. 0 significa tipo cero o exento.",
+        "sdRate": "Derecho suplementario (%)",
+        "sdRateHint": "Solo bienes del Third Schedule. En blanco significa ninguno.",
         "quantityUnit": "Unidad de cantidad",
         "brand": "Marca",
         "noBrand": "Sin marca",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "p. ej. 365"
+            "warrantyDays": "p. ej. 365",
+            "vatRate": "p. ej. 15",
+            "sdRate": "p. ej. 25"
         }
     }
 } as const;

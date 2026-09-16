@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "المنتجات دون حدود إعادة الطلب مع كميات شراء مقترحة",
             "subtitlePrioritize": "رتّب حسب الأولوية المنتجات التي تبقى دون المخزون المستهدف بعد احتساب التحويلات الواردة",
             "allWarehouses": "كل المستودعات",
+            "allBranches": "كل الفروع",
             "allGroups": "كل المجموعات",
             "allSubgroups": "كل المجموعات الفرعية",
             "uncategorized": "بلا تصنيف",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "المخزون المتاح",
             "subtitle": "الكمية لكل مستودع مقوَّمة بمتوسط تكلفة الشراء المرجّح",
             "allWarehouses": "كل المستودعات",
+            "allBranches": "كل الفروع",
             "allGroups": "كل المجموعات",
             "allSubgroups": "كل المجموعات الفرعية",
             "allBrands": "كل العلامات التجارية",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "مستوى إعادة الطلب",
         "safetyStock": "مخزون الأمان",
         "leadTimeDays": "أيام التوريد",
+        "vatRate": "نسبة ضريبة القيمة المضافة (%)",
+        "vatRateHint": "الترك فارغًا يستخدم القيمة الافتراضية لمساحة العمل. 0 تعني نسبة صفرية أو معفاة.",
+        "sdRate": "الرسم التكميلي (%)",
+        "sdRateHint": "سلع الجدول الثالث فقط. الفراغ يعني لا يوجد.",
         "quantityUnit": "وحدة الكمية",
         "brand": "العلامة التجارية",
         "noBrand": "بلا علامة تجارية",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "مثل 365"
+            "warrantyDays": "مثل 365",
+            "vatRate": "مثال: 15",
+            "sdRate": "مثال: 25"
         }
     }
 } as const;

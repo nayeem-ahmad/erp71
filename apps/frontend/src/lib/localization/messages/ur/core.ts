@@ -346,6 +346,7 @@ export const coreMessages = {
             salesQuotations: 'سیلز کوٹیشنز',
             warrantyClaims: 'وارنٹی کلیمز',
             cashierSessions: 'کیشیئر سیشنز',
+            mushakBooks: 'این بی آر ویٹ رجسٹر (مشک)',
             loyaltyPoints: 'لائلٹی پوائنٹس',
             jobsBom: 'جابز اور بی او ایم',
             purchases: 'خریداری',

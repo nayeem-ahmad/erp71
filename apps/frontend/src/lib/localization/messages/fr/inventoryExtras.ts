@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "Produits sous leur seuil de réapprovisionnement, avec les quantités d'achat suggérées",
             "subtitlePrioritize": "Priorisez les produits sous le stock cible une fois les transferts entrants pris en compte",
             "allWarehouses": "Tous les entrepôts",
+            "allBranches": "Toutes les agences",
             "allGroups": "Tous les groupes",
             "allSubgroups": "Tous les sous-groupes",
             "uncategorized": "Non classé",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "Stock disponible",
             "subtitle": "Quantité par entrepôt valorisée au coût d'achat moyen pondéré",
             "allWarehouses": "Tous les entrepôts",
+            "allBranches": "Toutes les agences",
             "allGroups": "Tous les groupes",
             "allSubgroups": "Tous les sous-groupes",
             "allBrands": "Toutes les marques",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Seuil de réapprovisionnement",
         "safetyStock": "Stock de sécurité",
         "leadTimeDays": "Délai d'approvisionnement (jours)",
+        "vatRate": "Taux de TVA (%)",
+        "vatRateHint": "Vide reprend la valeur par défaut de l’espace. 0 signifie taux zéro ou exonéré.",
+        "sdRate": "Droit supplémentaire (%)",
+        "sdRateHint": "Marchandises de la Third Schedule uniquement. Vide signifie aucun.",
         "quantityUnit": "Unité de quantité",
         "brand": "Marque",
         "noBrand": "Aucune marque",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
-            "warrantyDays": "par ex. 365"
+            "warrantyDays": "par ex. 365",
+            "vatRate": "ex. 15",
+            "sdRate": "ex. 25"
         }
     }
 } as const;

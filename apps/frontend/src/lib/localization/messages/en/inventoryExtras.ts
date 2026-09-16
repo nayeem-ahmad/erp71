@@ -326,6 +326,7 @@ export const inventoryExtrasMessages = {
             "subtitle": "Products below reorder thresholds with suggested purchase quantities",
             "subtitlePrioritize": "Prioritize products that are below target stock after accounting for inbound transfers",
             "allWarehouses": "All Warehouses",
+            "allBranches": "All Branches",
             "allGroups": "All Groups",
             "allSubgroups": "All Subgroups",
             "uncategorized": "Uncategorized",
@@ -349,6 +350,7 @@ export const inventoryExtrasMessages = {
             "title": "Stock on Hand",
             "subtitle": "Quantity per warehouse valued at weighted average purchase cost",
             "allWarehouses": "All Warehouses",
+            "allBranches": "All Branches",
             "allGroups": "All Groups",
             "allSubgroups": "All Subgroups",
             "allBrands": "All Brands",
@@ -498,6 +500,10 @@ export const inventoryExtrasMessages = {
         "reorderLevel": "Reorder Level",
         "safetyStock": "Safety Stock",
         "leadTimeDays": "Lead Time Days",
+        "vatRate": "VAT Rate (%)",
+        "vatRateHint": "Blank uses the workspace default. 0 means zero-rated or exempt.",
+        "sdRate": "Supplementary Duty (%)",
+        "sdRateHint": "Third Schedule goods only. Blank means none.",
         "quantityUnit": "Quantity Unit",
         "brand": "Brand",
         "noBrand": "No Brand",
@@ -514,7 +520,9 @@ export const inventoryExtrasMessages = {
             "sku": "WH-KB-1032",
             "price": "120.00",
             "initialStock": "50",
-            "warrantyDays": "e.g. 365"
+            "warrantyDays": "e.g. 365",
+            "vatRate": "e.g. 15",
+            "sdRate": "e.g. 25"
         }
     }
 } as const;
