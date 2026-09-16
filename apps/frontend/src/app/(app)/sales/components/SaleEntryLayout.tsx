@@ -14,9 +14,20 @@ import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
 
+/**
+ * Which of the two discount figures the user is typing. Shops that negotiate
+ * "take ৳500 off" outnumber the ones that think in percentages, so the entry
+ * form accepts either and derives the other.
+ */
+export type DiscountMode = 'PERCENT' | 'AMOUNT';
+
 /** The adjustment figures the entry form layers on top of the line subtotal. */
 export interface SaleAdjustments {
+    /** The typed percentage. Ignored while `discountMode` is 'AMOUNT'. */
     discountPercent: number;
+    /** The typed flat discount. Ignored while `discountMode` is 'PERCENT'. */
+    discountAmount: number;
+    discountMode: DiscountMode;
     rounding: number;
     transportCost: number;
     laborCost: number;
@@ -24,13 +35,22 @@ export interface SaleAdjustments {
 
 export interface SaleTotals extends SaleAdjustments {
     subtotal: number;
+    /** What the discount actually comes to in taka, however it was entered. */
     discount: number;
+    /**
+     * `discount` as a share of the subtotal. In 'AMOUNT' mode this is the
+     * calculated percentage rather than the (unused) typed one, so the form,
+     * the printed invoice and anything else reading totals agree.
+     */
+    discountPercent: number;
     vat: number;
     total: number;
 }
 
 export const EMPTY_ADJUSTMENTS: SaleAdjustments = {
     discountPercent: 0,
+    discountAmount: 0,
+    discountMode: 'PERCENT',
     rounding: 0,
     transportCost: 0,
     laborCost: 0,
@@ -46,7 +66,17 @@ export function computeSaleTotals(
     vatRate: number,
 ): SaleTotals {
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-    const discount = subtotal * (adjustments.discountPercent / 100);
+    // A flat discount is taken as typed, a percentage one off the subtotal.
+    // Either way it is capped at the subtotal: a discount on its own must
+    // never drag the invoice below zero, and an over-typed figure would
+    // otherwise be posted as a negative sale.
+    const requested = adjustments.discountMode === 'AMOUNT'
+        ? adjustments.discountAmount || 0
+        : subtotal * ((adjustments.discountPercent || 0) / 100);
+    const discount = Math.min(Math.max(requested, 0), subtotal);
+    const discountPercent = adjustments.discountMode === 'AMOUNT'
+        ? (subtotal > 0 ? (discount / subtotal) * 100 : 0)
+        : adjustments.discountPercent || 0;
     const afterDiscount = subtotal - discount;
     const vat = afterDiscount * (vatRate / 100);
     const total =
@@ -56,7 +86,9 @@ export function computeSaleTotals(
         + (adjustments.laborCost || 0)
         + (adjustments.rounding || 0);
 
-    return { subtotal, discount, vat, total, ...adjustments };
+    // Adjustments first: the derived figures below are what callers read, and
+    // the typed percentage must not shadow the calculated one.
+    return { ...adjustments, subtotal, discount, discountPercent, vat, total };
 }
 
 interface SaleEntryLayoutProps {
