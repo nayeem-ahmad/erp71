@@ -27,8 +27,12 @@ jest.mock('@/lib/api', () => ({
         getPurchase: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getInventorySettings: jest.fn(),
+        getPaymentMethods: jest.fn(),
     },
 }));
+
+const CASH_METHOD = { id: 'pm-1', name: 'Cash', type: 'Cash', is_active: true, show_on_entry: true, sort_order: 1 };
+const BKASH_METHOD = { id: 'pm-2', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 2 };
 
 const COFFEE = {
     id: 'prod-1',
@@ -77,6 +81,7 @@ describe('NewPurchasePage', () => {
         // and the case where no picker must appear at all.
         (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
         (api.getInventorySettings as jest.Mock).mockResolvedValue({ default_purchase_warehouse_id: null });
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BKASH_METHOD]);
 
         Object.defineProperty(window, 'localStorage', {
             value: {
@@ -330,6 +335,78 @@ describe('NewPurchasePage', () => {
                 notes: 'Weekly beans',
                 items: [{ productId: 'prod-1', quantity: 4, unitCost: 12.5 }],
             }));
+        });
+    });
+
+    describe('paying at the counter', () => {
+        /** One 40.00 line, so the bill total is a round 40. */
+        const billOf40 = async () => {
+            await renderPage();
+            await stageProduct();
+            fireEvent.change(screen.getByLabelText('Unit Cost'), { target: { value: '10' } });
+            fireEvent.change(screen.getByLabelText('Qty'), { target: { value: '4' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+            await screen.findByLabelText('Cash amount');
+        };
+
+        it('sends nothing when no tender is entered, so the bill stays on the account', async () => {
+            await billOf40();
+
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+            });
+
+            await waitFor(() => {
+                expect(api.createPurchase).toHaveBeenCalledWith(
+                    expect.objectContaining({ payments: undefined }),
+                );
+            });
+        });
+
+        it('posts what was handed over, by method', async () => {
+            await billOf40();
+
+            fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '25' } });
+            fireEvent.change(screen.getByLabelText('bKash amount'), { target: { value: '15' } });
+
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+            });
+
+            await waitFor(() => {
+                expect(api.createPurchase).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        payments: [
+                            // The canonical method string, not the friendly
+                            // name — that is what the backend classifies on.
+                            { paymentMethod: 'Cash', amount: 25, accountId: undefined },
+                            { paymentMethod: 'Mobile Wallet', amount: 15, accountId: undefined },
+                        ],
+                    }),
+                );
+            });
+        });
+
+        it('shows what is still owed to the supplier as the tender is entered', async () => {
+            await billOf40();
+
+            expect(screen.getByText('Supplier due ৳ 40.00')).toBeInTheDocument();
+
+            fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '15' } });
+            expect(screen.getByText('Supplier due ৳ 25.00')).toBeInTheDocument();
+
+            fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '40' } });
+            expect(screen.getByText('✓ Settled')).toBeInTheDocument();
+        });
+
+        it('blocks posting a tender larger than the bill', async () => {
+            await billOf40();
+
+            fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '60' } });
+
+            expect(screen.getByText('Overpaid ৳ 20.00')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /post purchase/i })).toBeDisabled();
+            expect(api.createPurchase).not.toHaveBeenCalled();
         });
     });
 

@@ -334,9 +334,22 @@ A stock take reconciles physical shelf counts against system quantities.
 
 > **Note:** Posting cannot be undone without a reversing adjustment. Always double-check large variances before posting.
 
-### 5.7 Shrinkage (Damaged / Stolen Stock)
+### 5.7 Shrinkage and Found Stock
 
-Record damaged, expired, or stolen stock via **Inventory → Shrinkage → Record Shrinkage**. This deducts stock and posts a shrinkage expense entry if accounting is configured. View the **Shrinkage Report** to track losses over time.
+Both sides of a count that does not match the book are recorded from **Inventory → Shrinkage**. Pick the entry type at the top of the form:
+
+| Entry type | Use it when | Effect |
+|------------|-------------|--------|
+| **Stock lost (shrinkage)** | Goods are damaged, expired, or stolen | Deducts stock, numbered `SHR-00001` |
+| **Stock found (extra)** | The shelf holds more than the book says | Adds stock back, numbered `FND-00001` |
+
+A **reason and a note are both required** on every entry. The reason comes from your own catalogue (**Inventory → Settings → Reason Catalog**), and each entry type has its own list — "Theft" can explain missing stock, never extra stock. The note is the only evidence behind the entry, so write what happened and who checked: *"crushed by forklift, bay 3, photos with Rahim"*, not just *"damage"*.
+
+> **Finding extra stock across many products at once?** Use a **Stock Take** (§5.6) instead. A stock take counts the whole warehouse and posts every variance in both directions in one session. A found-stock entry is for the one-off — two cartons behind the rack.
+
+Found stock joins your inventory at the average cost the rest of that product is already held at, so putting it back never changes what your stock is worth per unit.
+
+View the **Shrinkage Report** to track losses over time; switch its direction filter to **Stock found** to review surpluses separately. The two are never added together — a loss and a gain netted against each other would hide both.
 
 ### 5.8 Product Labels
 

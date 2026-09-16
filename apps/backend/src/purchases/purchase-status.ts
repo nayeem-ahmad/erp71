@@ -26,3 +26,21 @@ export type PurchaseStatus = (typeof PurchaseStatus)[keyof typeof PurchaseStatus
  * otherwise, and an equality check would silently drop it.
  */
 export const ACTIVE_PURCHASE = { status: { not: PurchaseStatus.CANCELLED } } as const;
+
+/**
+ * `Purchase.payment_status` for an amount paid against a bill total.
+ *
+ * Two callers write this column — supplier payments allocated to a bill after
+ * the fact, and a purchase entry that settles at the counter — and a bill that
+ * one of them calls PAID and the other PARTIAL is a reconciliation bug waiting
+ * to happen, so the thresholds live here rather than in either service.
+ *
+ * The 0.005 tolerances are the same ones the rest of the money code uses: these
+ * are Decimal(12,2) columns, so anything under half a poisha is rounding, not a
+ * balance.
+ */
+export function purchasePaymentStatus(paidAmount: number, totalAmount: number): string {
+    if (paidAmount <= 0.005) return 'UNPAID';
+    if (paidAmount >= totalAmount - 0.005) return 'PAID';
+    return 'PARTIAL';
+}

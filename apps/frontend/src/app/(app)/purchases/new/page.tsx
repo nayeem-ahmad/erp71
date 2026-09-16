@@ -17,9 +17,10 @@ import ProductSearch, { availableQtyOf } from '@/components/document-entry/Produ
 import type { PartyOption } from '@/components/document-entry/PartySearchSelect';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
-import type { LineItem } from '@/lib/hooks/useNewSaleCart';
+import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SupplierSelection, { type NewSupplierDraft } from '../components/SupplierSelection';
+import PurchasePaymentSection from '../components/PurchasePaymentSection';
 import PurchaseTotals, {
     computePurchaseTotals,
     EMPTY_PURCHASE_ADJUSTMENTS,
@@ -29,7 +30,7 @@ import PurchaseTotals, {
 /**
  * Purchase entry, built on the same frame as sale entry: one slim meta strip,
  * a supplier typeahead beside the product search, the compact line table, and
- * a right panel carrying the totals and the post button.
+ * a right panel carrying the totals, the tender strip and the post button.
  *
  * `?productId=` seeds the first line, which is how the products list sends a
  * shopkeeper here to restock one item. `?from=products` sends them back there
@@ -52,6 +53,9 @@ function NewPurchasePageContent() {
     const [draftNameInvalid, setDraftNameInvalid] = useState(false);
     const [adjustments, setAdjustments] = useState<PurchaseAdjustments>(EMPTY_PURCHASE_ADJUSTMENTS);
     const [notes, setNotes] = useState('');
+    // What is being handed over at the counter. Empty is the old behaviour and
+    // still the common one — the whole bill goes on the supplier's account.
+    const [payments, setPayments] = useState<Payment[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
 
@@ -68,6 +72,11 @@ function NewPurchasePageContent() {
     const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
 
     const totals = useMemo(() => computePurchaseTotals(items, adjustments), [items, adjustments]);
+    const amountPaid = useMemo(
+        () => payments.reduce((sum, payment) => sum + payment.amount, 0),
+        [payments],
+    );
+    const overpaid = amountPaid - totals.total > 0.005;
 
     useEffect(() => {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
@@ -161,6 +170,9 @@ function NewPurchasePageContent() {
                     freightAmount: Number(purchase.freight_amount ?? 0),
                 });
                 setNotes(purchase.notes ?? '');
+                // Deliberately not copied: what was paid on the original bill.
+                // A copy is a new purchase, and the cash for it has not moved.
+                setPayments([]);
                 setDuplicatedFrom(purchase.purchase_number ?? '');
                 // A copy buys the same goods into the same place unless the user
                 // says otherwise, per-line splits included.
@@ -216,6 +228,13 @@ function NewPurchasePageContent() {
         }
         setDraftNameInvalid(false);
 
+        // Paying more than the bill would leave the supplier holding an advance
+        // this screen has no way to record, and the service rejects it anyway.
+        if (overpaid) {
+            toast.error(t.purchaseShared.paymentExceedsTotal);
+            return;
+        }
+
         setSubmitting(true);
         try {
             const purchase = await api.createPurchase({
@@ -245,6 +264,13 @@ function NewPurchasePageContent() {
                 discountAmount: totals.discountAmount,
                 freightAmount: totals.freightAmount,
                 notes: notes || undefined,
+                payments: payments.length
+                    ? payments.map((payment) => ({
+                          paymentMethod: payment.method,
+                          amount: payment.amount,
+                          accountId: payment.accountId,
+                      }))
+                    : undefined,
             });
 
             toast.success(
@@ -339,11 +365,20 @@ function NewPurchasePageContent() {
                 />
             }
             panel={
-                <PurchaseTotals
-                    totals={totals}
-                    onChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
-                    previousPayable={Number(supplier?.due_balance ?? 0)}
-                />
+                <>
+                    <PurchaseTotals
+                        totals={totals}
+                        onChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
+                        previousPayable={Number(supplier?.due_balance ?? 0)}
+                    />
+                    <div className="border-t pt-3">
+                        <PurchasePaymentSection
+                            payments={payments}
+                            total={totals.total}
+                            onPaymentChange={setPayments}
+                        />
+                    </div>
+                </>
             }
             actions={
                 <>
@@ -355,7 +390,7 @@ function NewPurchasePageContent() {
                     </Link>
                     <button
                         type="submit"
-                        disabled={submitting || items.length === 0 || totals.total < 0}
+                        disabled={submitting || items.length === 0 || totals.total < 0 || overpaid}
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
                     >
                         {submitting ? t.purchases.modal.saving : t.purchases.modal.postPurchase}
