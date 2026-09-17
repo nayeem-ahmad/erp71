@@ -29,6 +29,7 @@ export default function SalesSettingsPage() {
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [refFormat, setRefFormat] = useState('');
     const [posEnabled, setPosEnabled] = useState(true);
+    const [requireCashierSession, setRequireCashierSession] = useState(false);
     const [isShopOwner, setIsShopOwner] = useState(false);
 
     const loadSettings = useCallback(async () => {
@@ -42,6 +43,7 @@ export default function SalesSettingsPage() {
             if (data?.paper_size) setPaperSize(data.paper_size as PaperSize);
             if (data?.reference_number_format) setRefFormat(data.reference_number_format);
             setPosEnabled(data?.pos_enabled !== false);
+            setRequireCashierSession(Boolean(data?.require_cashier_session));
         } catch (err: any) {
             toast.error(err?.message || 'Failed to load settings');
         } finally {
@@ -60,7 +62,7 @@ export default function SalesSettingsPage() {
             await api.updateSalesSettings({
                 paper_size: paperSize,
                 ...(refFormat ? { reference_number_format: refFormat } : {}),
-                ...(isShopOwner ? { pos_enabled: posEnabled } : {}),
+                ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession } : {}),
             });
             window.dispatchEvent(new Event('erp71:sales-settings-updated'));
             toast.success('Sales settings saved');
@@ -127,6 +129,21 @@ export default function SalesSettingsPage() {
                                     <span className="block text-sm font-semibold text-gray-700">Enable Point of Sale (POS)</span>
                                     <span className="block mt-1 text-xs text-gray-400">
                                         When disabled, the POS menu link and page are hidden. Staff can still record sales via New Sales Entry.
+                                    </span>
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <Checkbox
+                                    checked={requireCashierSession}
+                                    onChange={(e) => setRequireCashierSession(e.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-gray-700">Require an open cashier session at POS</span>
+                                    <span className="block mt-1 text-xs text-gray-400">
+                                        Cashiers must open a shift before they can check out, so every counter sale
+                                        belongs to a till that can be counted at the end of it. Back-office sales
+                                        entry is unaffected.
                                     </span>
                                 </span>
                             </label>

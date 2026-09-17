@@ -16,6 +16,7 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
+import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
     getAccessToken,
@@ -578,6 +579,118 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
 
+/** A frame from an authenticated event stream, already split and parsed. */
+export type StreamHandlers = {
+    onFrame: (frame: SseFrame) => void;
+    /** Called with `true` once frames are flowing, `false` when the stream drops. */
+    onConnected?: (connected: boolean) => void;
+};
+
+/** Backoff between reconnects, in ms — each step, then holding at the last. */
+const STREAM_RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+
+/**
+ * How long a connection has to have lasted before the backoff is forgiven. A
+ * server or proxy that accepts the request and drops it straight away would
+ * otherwise be retried once a second forever, since "connected" on its own says
+ * nothing about whether the stream works.
+ */
+const STREAM_HEALTHY_MS = 10_000;
+
+/**
+ * Holds an authenticated Server-Sent Events stream open, reconnecting for as
+ * long as the caller wants it.
+ *
+ * Lives here rather than in a component because the session plumbing does: the
+ * bearer token, the tenant header and the API base are all module state in this
+ * file, and an `EventSource` cannot carry the first two anyway (it sends no
+ * headers), which is why this reads the body with `fetch` instead.
+ *
+ * Errors are deliberately quiet. Every caller re-reads the same data over
+ * ordinary requests as a fallback, so a stream that cannot be established is a
+ * screen that updates a little later — not a screen that shows an error. The
+ * returned function stops the stream and the reconnecting.
+ */
+export function openAuthedStream(endpoint: string, handlers: StreamHandlers): () => void {
+    const controller = new AbortController();
+    let stopped = false;
+    let attempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRetry = () => {
+        if (stopped) return;
+        const wait = STREAM_RETRY_MS[Math.min(attempt, STREAM_RETRY_MS.length - 1)];
+        attempt += 1;
+        retryTimer = setTimeout(() => void connect(), wait);
+    };
+
+    const connect = async () => {
+        if (stopped) return;
+        if (!hasStoredSession()) {
+            scheduleRetry();
+            return;
+        }
+        try {
+            await renewIfNearExpiry();
+            const headers = new Headers({ Accept: 'text/event-stream' });
+            const token = getAccessToken();
+            if (token) headers.set('Authorization', `Bearer ${token}`);
+            const tenantId = resolveTenantHeader();
+            if (tenantId) headers.set('x-tenant-id', tenantId);
+
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers,
+                signal: controller.signal,
+                cache: 'no-store',
+            });
+            if (!response.ok || !response.body) {
+                // A 401 here is not treated as the end of the session: the
+                // fallback requests go through `requestWithAuth`, which renews
+                // or signs out on its own terms. Streams only ever retry.
+                handlers.onConnected?.(false);
+                scheduleRetry();
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            const openedAt = Date.now();
+            let buffer = '';
+            // Connected: the server opens with a frame of its own, but say so
+            // now so the caller can relax its poll even if that frame is late.
+            handlers.onConnected?.(true);
+
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const { frames, rest } = readSseFrames(buffer);
+                buffer = rest;
+                for (const frame of frames) handlers.onFrame(frame);
+            }
+
+            // The server caps how long one connection lives, so a clean end is
+            // routine rather than a failure — a stream that lasted reconnects
+            // from the top of the backoff instead of being treated as an error.
+            if (Date.now() - openedAt >= STREAM_HEALTHY_MS) attempt = 0;
+            handlers.onConnected?.(false);
+            scheduleRetry();
+        } catch {
+            if (stopped) return;
+            handlers.onConnected?.(false);
+            scheduleRetry();
+        }
+    };
+
+    void connect();
+
+    return () => {
+        stopped = true;
+        if (retryTimer) clearTimeout(retryTimer);
+        controller.abort();
+    };
+}
+
 /**
  * What the HR screen knows about an employee's login. Everything here is
  * derivable from the employee row, which is why there is no endpoint to read it
@@ -937,6 +1050,15 @@ function dashboardWindowFetcher(path: string) {
         if (params?.mine) query.set('mine', 'true');
         return fetchWithAuth(`${path}${query.toString() ? `?${query.toString()}` : ''}`);
     };
+}
+
+/** Account row returned by the payment-method account picker (no balances). */
+export interface PaymentMethodAccount {
+    id: string;
+    name: string;
+    code: string | null;
+    type: string;
+    category: string;
 }
 
 export const api = {
@@ -2813,6 +2935,10 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
+    /** Takings, payment-method breakdown and expected cash for one shift. */
+    getCashierSessionSummary: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/summary`),
+    /** Every till open in a store right now, each with its own summary. */
+    getOpenCashierSessionsByStore: (storeId: string) => fetchWithAuth(`/cashier-sessions/store/${storeId}/open`),
     // POS Counters
     getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
     getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),
@@ -3607,7 +3733,13 @@ export const api = {
     mergeFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/merge`, { method: 'POST' }),
     rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
-    getSupportThreads: () => fetchWithAuth('/support/threads'),
+    getSupportThreads: (params?: { search?: string; status?: string; category?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.category) query.set('category', params.category);
+        return fetchWithAuth(`/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     createSupportThread: (data: {
         category?: 'support' | 'bug' | 'feature' | 'general';
         subject?: string;
@@ -3619,6 +3751,11 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * Live thread changes for this workspace. Each frame is a nudge to re-read
+     * a thread, never the thread itself — see `openAuthedStream`.
+     */
+    openSupportStream: (handlers: StreamHandlers) => openAuthedStream('/support/stream', handlers),
     getSupportMessages: (threadId: string) => fetchWithAuth(`/support/threads/${threadId}/messages`),
     sendSupportMessage: (threadId: string, body: string) =>
         fetchWithAuth(`/support/threads/${threadId}/messages`, {
@@ -4635,6 +4772,10 @@ export const api = {
         const q = type ? `?type=${type}` : '';
         return fetchWithAuth(`/payment-methods${q}`);
     },
+    // Separate from getAccounts(): that one hits the accounting module, which is
+    // entitlement-gated, so it 403s on plans that still get payment methods.
+    getPaymentMethodAccounts: (): Promise<PaymentMethodAccount[]> =>
+        fetchWithAuth('/payment-methods/accounts'),
     createPaymentMethod: (data: any) => fetchWithAuth('/payment-methods', {
         method: 'POST',
         body: JSON.stringify(data),

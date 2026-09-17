@@ -15,6 +15,7 @@ import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { creditDueAmount } from '../customers/customer-credit.utils';
+import { findOpenSessionForUser } from '../cashier-sessions/active-session.util';
 
 @Injectable()
 export class SalesReturnsService {
@@ -142,11 +143,17 @@ export class SalesReturnsService {
 
             // 3. Create the return record first, so movements can reference its
             //    row id (every other caller passes the id, not the RET- string).
+            // The drawer this refund comes out of is whichever one the person
+            // handing the money back has open — not the shift that made the
+            // original sale, which may be weeks ago and somebody else's.
+            const session = await findOpenSessionForUser(tx, tenantId, userId);
+
             const salesReturn = await tx.salesReturn.create({
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
                     sale_id: sale?.id ?? null,
+                    session_id: session?.id ?? null,
                     return_number: returnNumber,
                     total_refund: totalRefund,
                     reason: dto.reason,

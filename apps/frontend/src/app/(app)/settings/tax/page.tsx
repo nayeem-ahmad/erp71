@@ -20,6 +20,7 @@ export default function TaxSettingsPage() {
     // splitting the two leaves half-configured workspaces printing documents
     // NBR will not accept.
     const [mushakEnabled, setMushakEnabled] = useState(false);
+    const [mushakPosReceipt, setMushakPosReceipt] = useState(false);
     const [issueAddress, setIssueAddress] = useState('');
     const [officerName, setOfficerName] = useState('');
     const [officerDesignation, setOfficerDesignation] = useState('');
@@ -36,6 +37,7 @@ export default function TaxSettingsPage() {
                 setVatRegNo(d?.vat_registration_no ?? '');
                 setBusinessTin(d?.business_tin ?? '');
                 setMushakEnabled(d?.mushak_enabled ?? false);
+                setMushakPosReceipt(d?.mushak_pos_receipt ?? false);
                 setIssueAddress(d?.mushak_issue_address ?? '');
                 setOfficerName(d?.mushak_officer_name ?? '');
                 setOfficerDesignation(d?.mushak_officer_designation ?? '');
@@ -63,6 +65,7 @@ export default function TaxSettingsPage() {
                     vat_registration_no: vatRegNo || null,
                     business_tin: businessTin || null,
                     mushak_enabled: mushakEnabled,
+                    mushak_pos_receipt: mushakEnabled && mushakPosReceipt,
                     mushak_issue_address: issueAddress || null,
                     mushak_officer_name: officerName || null,
                     mushak_officer_designation: officerDesignation || null,
@@ -162,6 +165,20 @@ export default function TaxSettingsPage() {
                             onChange={e => setMushakEnabled(e.target.checked)}
                         />
                     </Field>
+
+                    {/* A sub-option of the above: a workspace with no BIN must not
+                        print something that looks like a tax invoice, so this is
+                        unreachable until Mushak itself is on. */}
+                    {mushakEnabled && (
+                        <div className="ms-6 border-s border-gray-200 ps-4">
+                            <Field label={m.mushak.posReceipt.label} hint={m.mushak.posReceipt.hint}>
+                                <Checkbox
+                                    checked={mushakPosReceipt}
+                                    onChange={e => setMushakPosReceipt(e.target.checked)}
+                                />
+                            </Field>
+                        </div>
+                    )}
 
                     <Field label={m.mushak.issueAddress.label} hint={m.mushak.issueAddress.hint} className="max-w-xl">
                         <Textarea
