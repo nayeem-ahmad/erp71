@@ -208,19 +208,41 @@ export class InventoryReportsService {
         const warehouses = await this.db.warehouse.findMany({
             where: {
                 tenant_id: tenantId,
-                is_active: true,
                 ...(query.warehouseId ? { id: query.warehouseId } : {}),
                 ...(query.storeId ? { store_id: query.storeId } : {}),
+                // `is_active` decides whether new documents may post *into* a
+                // warehouse. It says nothing about what is already on its
+                // shelves, and this report's columns are the only thing that
+                // decides which stock it can see at all — so requiring it here
+                // deleted a closed warehouse's units from every view of the
+                // report at once: each branch, each warehouse, and the
+                // unfiltered one. Deactivate the warehouse holding the stock
+                // and the page went blank, while the Inventory Overview, which
+                // counts every ProductStock row, kept reporting those units.
+                //
+                // A closed warehouse therefore keeps its column for as long as
+                // it holds anything (`not: 0` covers negative stock, which this
+                // app does record). Once emptied it drops out, so closing a
+                // warehouse still tidies the report — just not before its
+                // contents have gone somewhere.
+                OR: [
+                    { is_active: true },
+                    { productStocks: { some: { quantity: { not: 0 } } } },
+                ],
             },
-            select: { id: true, name: true, code: true, is_default: true },
-            orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+            select: { id: true, name: true, code: true, is_default: true, is_active: true },
+            // Closed-but-stocked warehouses sort last: they are the tail of the
+            // report rather than the shape of it, and the live ones keep the
+            // order they have always had (default first, then alphabetical).
+            orderBy: [{ is_active: 'desc' }, { is_default: 'desc' }, { name: 'asc' }],
         });
 
         const warehouseIds = warehouses.map((warehouse) => warehouse.id);
 
-        // An unknown or inactive warehouseId leaves no columns to report on.
-        // Returning empty totals beats reporting the whole tenant as if no
-        // filter had been asked for.
+        // An unknown warehouseId, a branch with no warehouses, or a shop that
+        // has not set one up leaves no columns to report on. Returning empty
+        // totals beats reporting the whole tenant as if no filter had been
+        // asked for.
         if (warehouseIds.length === 0) {
             return {
                 summary: {
