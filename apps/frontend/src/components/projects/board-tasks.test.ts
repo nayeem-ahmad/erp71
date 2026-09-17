@@ -1,6 +1,9 @@
 import {
     applyFilters,
     coverClass,
+    CARD_SORTS,
+    matchesText,
+    sortCards,
     isOverWip,
     assigneeKeyOf,
     assigneeNameOf,
@@ -320,5 +323,128 @@ describe('projectLabelOf', () => {
     it('is null without a project, so the card renders nothing rather than a stray dash', () => {
         expect(projectLabelOf(null)).toBeNull();
         expect(projectLabelOf(undefined)).toBeNull();
+    });
+});
+
+describe('text search', () => {
+    const card = (overrides: Partial<BoardTask> = {}) =>
+        task({
+            title: 'Fix the login screen',
+            description: 'The OTP field rejects a leading zero',
+            project: { id: 'p1', code: 'ALP', name: 'Alpha Rollout', short_name: 'ALPHA' },
+            assignee: { id: 'u1', name: 'Rahim Uddin', email: 'rahim@example.com' },
+            labels: [{ label: blocked }],
+            ...overrides,
+        });
+
+    it('matches nothing in particular when the box is empty', () => {
+        expect(matchesText(card(), '')).toBe(true);
+        expect(matchesText(card(), '   ')).toBe(true);
+    });
+
+    it('matches the title, ignoring case', () => {
+        expect(matchesText(card(), 'LOGIN')).toBe(true);
+        expect(matchesText(card(), 'logout')).toBe(false);
+    });
+
+    it('reaches the description, which the card may not even be showing', () => {
+        expect(matchesText(card(), 'leading zero')).toBe(true);
+    });
+
+    it('reaches the project by code, short name and full name', () => {
+        expect(matchesText(card(), 'alp')).toBe(true);
+        expect(matchesText(card(), 'alpha')).toBe(true);
+        expect(matchesText(card(), 'rollout')).toBe(true);
+    });
+
+    it('reaches the assignee and the labels', () => {
+        expect(matchesText(card(), 'rahim')).toBe(true);
+        expect(matchesText(card(), 'blocked')).toBe(true);
+    });
+
+    it('requires every word, in any field and any order', () => {
+        // The point of splitting: "login alp" is the login card in ALP, and no
+        // single field contains that string.
+        expect(matchesText(card(), 'login alp')).toBe(true);
+        expect(matchesText(card(), 'alp login')).toBe(true);
+        expect(matchesText(card(), 'login beta')).toBe(false);
+    });
+
+    it('narrows the board through matchesFilters, alongside the other filters', () => {
+        expect(matchesFilters(card(), { ...NO_FILTERS, text: 'login' })).toBe(true);
+        expect(matchesFilters(card(), { ...NO_FILTERS, text: 'login', priority: 'URGENT' })).toBe(
+            false,
+        );
+        expect(hasActiveFilter({ ...NO_FILTERS, text: 'login' })).toBe(true);
+        // Whitespace alone is not a filter: it must not turn on the "showing x
+        // of y" line or the Clear button.
+        expect(hasActiveFilter({ ...NO_FILTERS, text: '  ' })).toBe(false);
+    });
+});
+
+describe('sortCards', () => {
+    const named = (id: string, overrides: Partial<BoardTask> = {}) =>
+        task({ id, title: id, ...overrides });
+
+    it('puts the earliest due date first and the undated last', () => {
+        const cards = [
+            named('none'),
+            named('later', { due_date: '2026-10-01T00:00:00.000Z' }),
+            named('sooner', { due_date: '2026-09-01T00:00:00.000Z' }),
+        ];
+
+        expect(sortCards(cards, 'due').map((c) => c.id)).toEqual(['sooner', 'later', 'none']);
+    });
+
+    it('puts the most urgent first, whatever order the priorities arrived in', () => {
+        const cards = [
+            named('low', { priority: 'LOW' }),
+            named('urgent', { priority: 'URGENT' }),
+            named('medium', { priority: 'MEDIUM' }),
+            named('high', { priority: 'HIGH' }),
+        ];
+
+        expect(sortCards(cards, 'priority').map((c) => c.id)).toEqual([
+            'urgent',
+            'high',
+            'medium',
+            'low',
+        ]);
+    });
+
+    it('sorts by title and by assignee, unassigned last', () => {
+        const cards = [
+            task({ id: 'b', title: 'Beta' }),
+            task({ id: 'a', title: 'Alpha' }),
+        ];
+        expect(sortCards(cards, 'title').map((c) => c.id)).toEqual(['a', 'b']);
+
+        const holders = [
+            named('nobody'),
+            named('zara', { assignee: { id: 'u2', name: 'Zara', email: 'z@x' } }),
+            named('amina', { assignee: { id: 'u1', name: 'Amina', email: 'a@x' } }),
+        ];
+        expect(sortCards(holders, 'assignee').map((c) => c.id)).toEqual([
+            'amina',
+            'zara',
+            'nobody',
+        ]);
+    });
+
+    it('keeps ties in the order they were already in, and leaves the input alone', () => {
+        const cards = [named('first'), named('second'), named('third')];
+        const sorted = sortCards(cards, 'priority');
+
+        expect(sorted.map((c) => c.id)).toEqual(['first', 'second', 'third']);
+        // The caller renders the board from its own state until the server
+        // answers, so a sort that mutated the array would move cards twice.
+        expect(cards.map((c) => c.id)).toEqual(['first', 'second', 'third']);
+        expect(sorted).not.toBe(cards);
+    });
+
+    it('has a comparison for every sort it offers', () => {
+        for (const key of CARD_SORTS) {
+            expect(() => sortCards([named('a'), named('b')], key)).not.toThrow();
+        }
     });
 });

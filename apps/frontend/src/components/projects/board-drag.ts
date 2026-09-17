@@ -84,3 +84,36 @@ export function toFullIndex(
     const anchor = full.findIndex((task) => task.id === visible[visibleIndex].id);
     return anchor === -1 ? full.length : anchor;
 }
+
+/**
+ * Which column the pointer is over, for a column drag rather than a card one.
+ *
+ * Deliberately the same `[data-board-column]` marker the card drop uses: a
+ * column dragged over another column is over that column's element, cards and
+ * all, so there is nothing extra to mark up.
+ */
+export function columnAtPoint(
+    point: { x: number; y: number },
+    doc: Document,
+): string | null {
+    const columnEl = doc.elementFromPoint(point.x, point.y)?.closest(`[${COLUMN_ATTR}]`);
+    return columnEl?.getAttribute(COLUMN_ATTR) ?? null;
+}
+
+/**
+ * `ids` with `moved` dropped into the slot `target` currently holds.
+ *
+ * "Into its slot" rather than "before it" because a column drag has to work in
+ * both directions: inserting *before* the column under the pointer moves
+ * nothing at all when the drag went rightwards (the dragged column was already
+ * in front of it), which reads as the board refusing half the gesture.
+ * Landing on the target's own index gives the expected result either way —
+ * dragging To Do onto Done sends it past Done, and dragging it back returns it.
+ */
+export function withColumnMoved(ids: string[], moved: string, target: string): string[] {
+    const at = ids.indexOf(target);
+    if (moved === target || at === -1 || !ids.includes(moved)) return ids;
+
+    const rest = ids.filter((id) => id !== moved);
+    return [...rest.slice(0, at), moved, ...rest.slice(at)];
+}

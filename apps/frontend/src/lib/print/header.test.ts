@@ -1,5 +1,7 @@
 import {
     applyTokens,
+    footerBleeds,
+    footerPinsToBottom,
     footerRepeats,
     hasFooter,
     headerConfigFromBranding,
@@ -369,5 +371,165 @@ describe('line formatting', () => {
 
         expect(html).not.toContain('position:fixed');
         expect(html).toContain('text-align:left');
+    });
+});
+
+describe('logo width', () => {
+    const withLogo = (logo: Record<string, unknown>) =>
+        renderHeaderHtml({ logo: { url: 'https://cdn.example.com/logo.png', ...logo } } as DeepPartial<PrintHeaderConfig>, ctx, 'A4');
+
+    it('prints at its natural width when no cap is set', () => {
+        const html = withLogo({ heightMm: 16 });
+
+        expect(html).toContain('height:16mm');
+        expect(html).not.toContain('max-width:');
+    });
+
+    it('caps the width only when the tenant asks for a cap', () => {
+        expect(withLogo({ heightMm: 16, maxWidthMm: 40 })).toContain('max-width:40mm');
+    });
+
+    it('clamps an out-of-range cap rather than emitting it raw', () => {
+        expect(withLogo({ heightMm: 16, maxWidthMm: 9999 })).toContain('max-width:250mm');
+    });
+
+    it('drops the height when the logo is sized by width', () => {
+        const html = withLogo({ heightMm: 16, fullWidth: true });
+
+        expect(html).toContain('p71-hd-logo--full');
+        expect(html).not.toContain('height:16mm');
+    });
+
+    it('no longer caps the stylesheet default at 60mm', () => {
+        expect(headerCss({}, 'A4')).not.toContain('max-width: 60mm');
+    });
+});
+
+describe('title position', () => {
+    const render = (config: DeepPartial<PrintHeaderConfig>) => renderHeaderHtml(config, ctx, 'A4');
+
+    it('keeps a stored config printing where it always did', () => {
+        // No `position`: logo-left put the title beside the brand, on the right.
+        expect(render({ layout: 'logo-left' })).toContain('p71-hd-doc--beside p71-hd-doc--right');
+        expect(render({ layout: 'logo-right' })).toContain('p71-hd-doc--beside p71-hd-doc--left');
+        expect(render({ layout: 'logo-above' })).toContain('p71-hd-doc--below p71-hd-doc--center');
+    });
+
+    it('lifts the title out of the band into a row of its own', () => {
+        const html = render({ layout: 'logo-left', title: { position: 'above-center' } });
+        const bandStart = html.indexOf('class="p71-hd p71-hd--logo-left"');
+        const titleStart = html.indexOf('p71-hd-doc--above');
+
+        expect(titleStart).toBeGreaterThanOrEqual(0);
+        expect(titleStart).toBeLessThan(bandStart);
+    });
+
+    it('puts a below-positioned title after the band', () => {
+        const html = render({ layout: 'logo-left', title: { position: 'below-right' } });
+
+        expect(html.indexOf('p71-hd-doc--below')).toBeGreaterThan(html.indexOf('p71-hd--logo-left'));
+    });
+
+    it('applies a nudge as a relative offset so the title stays in the flow', () => {
+        const html = render({ title: { position: 'above-center', offsetXMm: -6, offsetYMm: 3 } });
+
+        expect(html).toContain('left:-6mm;top:3mm');
+        expect(headerCss({ title: { position: 'above-center' } }, 'A4')).toContain('position: relative');
+    });
+
+    it('omits the offset style when there is no nudge', () => {
+        expect(render({ title: { position: 'above-center' } })).not.toContain('left:0mm');
+    });
+
+    it('clamps a nudge far beyond the page', () => {
+        expect(render({ title: { offsetXMm: 9999, offsetYMm: -9999 } })).toContain('left:100mm;top:-100mm');
+    });
+
+    it('ignores a position that is not one of the known slots', () => {
+        const html = render({
+            layout: 'logo-left',
+            title: { position: 'center;position:fixed' as never },
+        });
+
+        expect(html).not.toContain('position:fixed');
+        expect(html).toContain('p71-hd-doc--beside p71-hd-doc--right');
+    });
+
+    it('centres the title on a thermal roll, which has no room for slots', () => {
+        const html = renderHeaderHtml({ title: { position: 'beside-right', offsetXMm: 20 } }, ctx, 'Thermal58');
+
+        expect(html).toContain('p71-hd-doc--below p71-hd-doc--center');
+        expect(html).not.toContain('left:20mm');
+    });
+});
+
+describe('footer bleed and pinning', () => {
+    const footerBase = {
+        show: true,
+        lines: [{ text: 'Bank: Sonali 123' }],
+        images: [{ url: 'https://cdn.example.com/strip.png', heightMm: 12, fullWidth: true }],
+        rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+        spacingMm: 4,
+        repeatOnEveryPage: true,
+    };
+
+    it('renders a full-width footer image in a row of its own', () => {
+        const html = renderFooterHtml({ footer: footerBase } as DeepPartial<PrintHeaderConfig>, ctx, 'A4');
+
+        expect(html).toContain('p71-ft-images--full');
+        expect(html).toContain('p71-img-el--full');
+        // Sized by width, so no height is pinned onto the image.
+        expect(html).not.toContain('height:12mm');
+    });
+
+    it('cancels the page margin when the footer bleeds', () => {
+        const css = headerCss({ footer: { ...footerBase, bleed: true } } as DeepPartial<PrintHeaderConfig>, 'A4');
+
+        expect(css).toContain('margin-left: -15mm');
+        expect(css).toContain('margin-right: -15mm');
+        // No explicit width: a box wider than its wrapper is cropped at both
+        // edges instead of bleeding. Negative margins alone do the job.
+        expect(css).not.toContain('width: calc(');
+    });
+
+    it('keeps footer text inside the margin even while the band bleeds', () => {
+        const css = headerCss({ footer: { ...footerBase, bleed: true } } as DeepPartial<PrintHeaderConfig>, 'A4');
+
+        expect(css).toContain('.p71-ft-line { padding-left: 15mm; padding-right: 15mm; }');
+        expect(css).toContain('.p71-ft .p71-ft-images--full { padding-left: 0; padding-right: 0; }');
+    });
+
+    it('uses the paper size\'s own margin', () => {
+        expect(headerCss({ footer: { ...footerBase, bleed: true } } as DeepPartial<PrintHeaderConfig>, 'A5'))
+            .toContain('margin-left: -10mm');
+    });
+
+    it('emits no bleed rules when the footer does not bleed', () => {
+        expect(headerCss({ footer: footerBase } as DeepPartial<PrintHeaderConfig>, 'A4')).not.toContain('margin-left: -');
+    });
+
+    it('pins independently of whether the footer repeats', () => {
+        // The two settings answer different questions. A short invoice whose
+        // footer floats mid-page wants pinning alone, and gating it behind
+        // repeating is what made the setting look like it did nothing.
+        expect(footerPinsToBottom(
+            { footer: { ...footerBase, pinToPageBottom: true } } as DeepPartial<PrintHeaderConfig>,
+            'A4',
+        )).toBe(true);
+        expect(footerPinsToBottom(
+            { footer: { ...footerBase, pinToPageBottom: true, repeatOnEveryPage: false } } as DeepPartial<PrintHeaderConfig>,
+            'A4',
+        )).toBe(true);
+        expect(footerPinsToBottom(
+            { footer: { ...footerBase, pinToPageBottom: false } } as DeepPartial<PrintHeaderConfig>,
+            'A4',
+        )).toBe(false);
+    });
+
+    it('never pins or bleeds on a roll, which has no page bottom or margin', () => {
+        const config = { footer: { ...footerBase, pinToPageBottom: true, bleed: true } } as DeepPartial<PrintHeaderConfig>;
+
+        expect(footerPinsToBottom(config, 'Thermal80')).toBe(false);
+        expect(footerBleeds(config, 'Thermal80')).toBe(false);
     });
 });

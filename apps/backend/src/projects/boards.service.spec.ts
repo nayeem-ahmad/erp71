@@ -693,4 +693,169 @@ describe('BoardsService', () => {
             expect(uploaded).toHaveProperty('background_image_url', 'https://cdn/new.jpg');
         });
     });
+    /**
+     * The bulk half of the board: the column menu's "move all cards to", the
+     * selection bar's actions, and "sort cards". All three end in the same
+     * per-column renumber the single-card drop uses, so the assertions below
+     * are about *which* rows come out in which order.
+     */
+    describe('bulk card actions', () => {
+        /**
+         * A board membership row as both halves of these calls read it: the
+         * `{ id, task_id }` the renumber selects, plus the joined task the
+         * closing `findOne` walks.
+         */
+        const membership = (id: string, taskId: string, statusId = 's1') => ({
+            ...card(taskId, 'p1', statusId),
+            id,
+            task_id: taskId,
+        });
+
+        beforeEach(() => {
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 'k1', project_id: 'p1', status_id: 's1' },
+                { id: 'k2', project_id: 'p1', status_id: 's1' },
+            ]);
+            db.boardTask.findMany.mockResolvedValue([
+                membership('bt1', 'k1'),
+                membership('bt2', 'k2'),
+            ]);
+        });
+
+        it('moves several cards into one column and appends them in the order sent', async () => {
+            db.boardTask.findMany
+                // The membership lookup for the two cards being moved…
+                .mockResolvedValueOnce([membership('bt1', 'k1'), membership('bt2', 'k2')])
+                // …then the target column's own rows, inside the transaction.
+                .mockResolvedValueOnce([membership('bt9', 'k9', 's2')]);
+
+            await service.moveCards(owner, 'b1', { taskIds: ['k2', 'k1'], columnId: 'c2' });
+
+            // One status resolution per project, not per card.
+            expect(columns.resolveStatusId).toHaveBeenCalledTimes(1);
+            expect(tasks.move).toHaveBeenCalledTimes(2);
+            expect(tasks.move).toHaveBeenCalledWith(owner, 'k2', {
+                statusId: 's-target',
+                sortOrder: Number.MAX_SAFE_INTEGER,
+            });
+            // The card already in c2 keeps the top; the two arrive under it in
+            // the order the request listed them.
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt9' }, data: { sort_order: 0 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt2' }, data: { sort_order: 1 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(3, { where: { id: 'bt1' }, data: { sort_order: 2 } });
+        });
+
+        it('refuses the whole move when one card’s project is unmapped, before writing anything', async () => {
+            columns.resolveStatusId.mockResolvedValue(null);
+
+            await expect(
+                service.moveCards(owner, 'b1', { taskIds: ['k1', 'k2'], columnId: 'c2' }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            // A half-applied bulk move is worse than a refused one: nothing
+            // moved, so nothing has to be worked out afterwards.
+            expect(tasks.move).not.toHaveBeenCalled();
+            expect(db.boardTask.update).not.toHaveBeenCalled();
+        });
+
+        it('leaves a card that is already in the target column alone rather than rewriting its status', async () => {
+            // Both cards are in s1, which c1 binds — "move to c1" is a no-op
+            // for the status and a reposition for the board.
+            await service.moveCards(owner, 'b1', { taskIds: ['k1', 'k2'], columnId: 'c1' });
+
+            expect(tasks.move).not.toHaveBeenCalled();
+            expect(db.boardTask.update).toHaveBeenCalled();
+        });
+
+        it('refuses a card that is not on this board', async () => {
+            db.boardTask.findMany.mockResolvedValueOnce([membership('bt1', 'k1')]);
+
+            await expect(
+                service.moveCards(owner, 'b1', { taskIds: ['k1', 'k2'], columnId: 'c2' }),
+            ).rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('scopes the bulk move’s task lookup to what the viewer may see', async () => {
+            db.projectTask.findMany.mockResolvedValue([{ id: 'k1', project_id: 'p1', status_id: 's1' }]);
+
+            await expect(
+                service.moveCards(staff(), 'b1', { taskIds: ['k1', 'k2'], columnId: 'c2' }),
+            ).rejects.toBeInstanceOf(NotFoundException);
+
+            expect(db.projectTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        AND: [{ project: { OR: visibilityOr('u2') } }],
+                    }),
+                }),
+            );
+        });
+
+        it('takes several cards off the board in one call without touching the tasks', async () => {
+            db.projectTask.findMany.mockResolvedValue([{ id: 'k1' }, { id: 'k2' }]);
+
+            await service.removeCards(owner, 'b1', ['k1', 'k2', 'k1']);
+
+            expect(db.boardTask.deleteMany).toHaveBeenCalledWith({
+                // Deduped: a repeated id is not a second card.
+                where: { board_id: 'b1', tenant_id: tenantId, task_id: { in: ['k1', 'k2'] } },
+            });
+            expect(db.projectTask.update).toBeUndefined();
+        });
+
+        it('refuses a bulk remove that reaches a card the viewer cannot see', async () => {
+            db.projectTask.findMany.mockResolvedValue([{ id: 'k1' }]);
+
+            await expect(service.removeCards(staff(), 'b1', ['k1', 'k2'])).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.boardTask.deleteMany).not.toHaveBeenCalled();
+        });
+
+        it('writes a sorted column back in the order it was given', async () => {
+            db.boardTask.findMany.mockResolvedValue([
+                membership('bt1', 'k1'),
+                membership('bt2', 'k2'),
+                membership('bt3', 'k3'),
+            ]);
+
+            await service.orderCards(owner, 'b1', 'c1', ['k3', 'k1', 'k2']);
+
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt3' }, data: { sort_order: 0 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt1' }, data: { sort_order: 1 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(3, { where: { id: 'bt2' }, data: { sort_order: 2 } });
+        });
+
+        it('leaves a card it was not sent in the slot it already holds', async () => {
+            db.boardTask.findMany.mockResolvedValue([
+                membership('bt1', 'k1'),
+                membership('bt2', 'k2'),
+                membership('bt3', 'k3'),
+            ]);
+
+            // k2 is filtered out of the view doing the sorting — it must not be
+            // swept to the bottom of a column its owner cannot see.
+            await service.orderCards(owner, 'b1', 'c1', ['k3', 'k1']);
+
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(1, { where: { id: 'bt3' }, data: { sort_order: 0 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(2, { where: { id: 'bt2' }, data: { sort_order: 1 } });
+            expect(db.boardTask.update).toHaveBeenNthCalledWith(3, { where: { id: 'bt1' }, data: { sort_order: 2 } });
+        });
+
+        it('ignores an id that is no longer in the column rather than refusing the sort', async () => {
+            db.boardTask.findMany.mockResolvedValue([membership('bt1', 'k1')]);
+
+            await expect(service.orderCards(owner, 'b1', 'c1', ['gone', 'k1'])).resolves.toBeDefined();
+            expect(db.boardTask.update).toHaveBeenCalledWith({ where: { id: 'bt1' }, data: { sort_order: 0 } });
+        });
+
+        it('404s a column that is not on this board', async () => {
+            await expect(
+                service.moveCards(owner, 'b1', { taskIds: ['k1'], columnId: 'nope' }),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            await expect(service.orderCards(owner, 'b1', 'nope', ['k1'])).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+        });
+    });
 });
