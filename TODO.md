@@ -1393,6 +1393,18 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **The task card's timer moved in with the hours, and the description got room** — done 2026-09-17, reported as *"From task entry/edit UI, move time tracker (play) icon to the right column within hour related elements. Currently it's above Description. Also, Increase the area of description a little."*
+
+  The clock sat in a right-aligned row of its own at the top of the reading column, directly above the description — a control over the hours placed above prose it has nothing to do with, spending a row of card height to do it. It now sits under the estimate/logged/remaining grid in the sidebar, with the three figures it moves. The comment defending the old position ("reachable without scrolling") still holds: the sidebar block is above the fold.
+
+  `TimerButton` takes a `full` prop for this, because it is a button with a *word* on it — Start / Stop / Running elsewhere — not a bare icon. At a third of the sidebar it would clip in the longer locales, so in its new home it fills the column. The `aside` is `min-w-0`, so `w-full` takes the column width and cannot overflow it, which is the failure the sidebar's own comment warns about.
+
+  Description: resting box `min-h-[6rem]` → `min-h-[10rem]`, editor `rows={6}` → `rows={10}`. Removing the timer row also gives the column back its height, so the description now leads it.
+
+  **The timer had no test coverage at all, and the reason was invisible:** `getProjectTimer` was never mocked, so the read threw, `TimerButton` caught it and rendered `null` by design — every assertion about the clock would have passed against a button that was not there. Mocked now, which is what let the placement be pinned. Three new tests (the grouping, start, stop); the placement one was mutation-checked by moving the button back above the description, which fails it.
+
+  **Verified:** 111 tests on the panel, full frontend suite **4222 / 355 suites** green, `tsc --noEmit` clean, lint clean. **Not done: not opened in a running browser** — no local backend is up, so the new sidebar layout was checked by reading the markup rather than rendered. Worth a look at 360px when the stack is next running.
+
 - [x] **The board task picker hides what is already on the board, and can load everything** — done 2026-09-17, reported as *"when trying to add tasks to board, don't show tasks in the list that are already on the board. Also, do not limit to load only 50 items (keep option to load all)."*
 
   **This reverses a deliberate choice from #670**, which kept a board's own cards listed but greyed and marked `On board`, on the reasoning that "what is already here" is half the question when filling a board. In use it was the wrong call: the rows cannot be picked, so they are only something to scroll past, and the board itself already shows what is on it. They are now filtered out entirely and the `onBoard` string is retired from all nine catalogs.
