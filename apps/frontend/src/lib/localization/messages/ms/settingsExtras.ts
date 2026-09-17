@@ -228,6 +228,10 @@ export const settingsExtrasMessages = {
                     label: "Keluarkan dokumen Mushak",
                     hint: "Jika dimatikan, jualan mencetak invois kedai biasa, bukan invois cukai.",
                 },
+                posReceipt: {
+                    label: "Mushak 6.3 sebagai resit POS",
+                    hint: "Kaunter POS mencetak invois cukai 6.3 dan bukan resit biasa. Kedua-dua format kekal tersedia bagi setiap jualan.",
+                },
                 issueAddress: {
                     label: "Alamat pengeluaran",
                     placeholder: "Premis berdaftar",

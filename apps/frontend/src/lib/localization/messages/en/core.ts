@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: 'Paid',
             changeDue: 'Change Due',
             printReceipt: 'Print POS Receipt',
+            printMushak: 'Print Mushak 6.3',
+            mushakAfterSync: 'Mushak 6.3 can be printed once this sale syncs.',
             skipContinue: 'Skip & Continue',
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: '{count} pts redeemed',
             pointsEarned: '{count} pts earned',
             checkoutFailed: 'Checkout failed. Please check stock levels.',
+            mushakPrintFailed: 'Could not print the Mushak 6.3.',
             invalidDiscount: 'Invalid discount code',
         },
     },

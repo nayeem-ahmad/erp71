@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: "Payé",
             changeDue: "Monnaie à rendre",
             printReceipt: "Imprimer le ticket de caisse",
+            printMushak: "Imprimer Mushak 6.3",
+            mushakAfterSync: "Mushak 6.3 pourra être imprimé une fois cette vente synchronisée.",
             skipContinue: "Passer et continuer",
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: "{count} pts utilisés",
             pointsEarned: "{count} pts gagnés",
             checkoutFailed: "Échec de l'encaissement. Veuillez vérifier les niveaux de stock.",
+            mushakPrintFailed: "Impossible d’imprimer le Mushak 6.3.",
             invalidDiscount: "Code de réduction invalide",
         },
     },

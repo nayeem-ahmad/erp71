@@ -125,6 +125,7 @@ export class TenantsService {
         vat_registration_no: true,
         business_tin: true,
         mushak_enabled: true,
+        mushak_pos_receipt: true,
         mushak_issue_address: true,
         mushak_officer_name: true,
         mushak_officer_designation: true,
@@ -149,6 +150,13 @@ export class TenantsService {
         if (dto.vat_registration_no !== undefined) data.vat_registration_no = dto.vat_registration_no || null;
         if (dto.business_tin !== undefined) data.business_tin = dto.business_tin || null;
         if (dto.mushak_enabled !== undefined) data.mushak_enabled = dto.mushak_enabled;
+        if (dto.mushak_pos_receipt !== undefined) data.mushak_pos_receipt = dto.mushak_pos_receipt;
+        // The POS format is a sub-option of issuing Mushak documents at all, so
+        // switching Mushak off clears it here rather than leaving a stranded
+        // true that would resurrect the 6.3 counter format if Mushak were ever
+        // re-enabled. Enforced on the server because the checkbox that hides it
+        // is only a convenience.
+        if (dto.mushak_enabled === false) data.mushak_pos_receipt = false;
         if (dto.mushak_issue_address !== undefined) data.mushak_issue_address = dto.mushak_issue_address?.trim() || null;
         if (dto.mushak_officer_name !== undefined) data.mushak_officer_name = dto.mushak_officer_name?.trim() || null;
         if (dto.mushak_officer_designation !== undefined) {

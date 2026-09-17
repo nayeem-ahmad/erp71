@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: 'المدفوع',
             changeDue: 'الباقي',
             printReceipt: 'طباعة إيصال نقطة البيع',
+            printMushak: 'طباعة مشك 6.3',
+            mushakAfterSync: 'يمكن طباعة مشك 6.3 بعد مزامنة هذه العملية.',
             skipContinue: 'تخطٍّ ومتابعة',
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: 'استُبدلت {count} نقطة',
             pointsEarned: 'اكتُسبت {count} نقطة',
             checkoutFailed: 'فشل إتمام البيع. تحقّق من مستويات المخزون.',
+            mushakPrintFailed: 'تعذرت طباعة مشك 6.3.',
             invalidDiscount: 'رمز خصم غير صالح',
         },
     },

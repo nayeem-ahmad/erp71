@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: 'ادا شدہ',
             changeDue: 'واپس رقم',
             printReceipt: 'پی او ایس رسید پرنٹ کریں',
+            printMushak: 'مشک 6.3 پرنٹ کریں',
+            mushakAfterSync: 'یہ فروخت سنک ہونے پر مشک 6.3 پرنٹ کیا جا سکے گا۔',
             skipContinue: 'چھوڑیں اور آگے بڑھیں',
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: '{count} پوائنٹس استعمال ہوئے',
             pointsEarned: '{count} پوائنٹس ملے',
             checkoutFailed: 'چیک آؤٹ ناکام۔ اسٹاک کی سطح جانچ لیں۔',
+            mushakPrintFailed: 'مشک 6.3 پرنٹ نہیں ہو سکا۔',
             invalidDiscount: 'رعایتی کوڈ غلط ہے',
         },
     },

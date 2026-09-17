@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: "Bezahlt",
             changeDue: "Rückgeld",
             printReceipt: "Kassenbon drucken",
+            printMushak: "Mushak 6.3 drucken",
+            mushakAfterSync: "Mushak 6.3 kann gedruckt werden, sobald dieser Verkauf synchronisiert ist.",
             skipContinue: "Überspringen & fortfahren",
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: "{count} Punkte eingelöst",
             pointsEarned: "{count} Punkte gutgeschrieben",
             checkoutFailed: "Kassiervorgang fehlgeschlagen. Bitte prüfen Sie die Bestände.",
+            mushakPrintFailed: "Mushak 6.3 konnte nicht gedruckt werden.",
             invalidDiscount: "Ungültiger Rabattcode",
         },
     },

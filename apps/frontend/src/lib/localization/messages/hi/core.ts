@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: "भुगतान किया",
             changeDue: "लौटाई जाने वाली राशि",
             printReceipt: "POS रसीद प्रिंट करें",
+            printMushak: "मूसक 6.3 प्रिंट करें",
+            mushakAfterSync: "यह बिक्री सिंक होने पर मूसक 6.3 प्रिंट किया जा सकेगा।",
             skipContinue: "छोड़ें और जारी रखें",
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: "{count} पॉइंट भुनाए गए",
             pointsEarned: "{count} पॉइंट अर्जित",
             checkoutFailed: "चेकआउट विफल। कृपया स्टॉक स्तर जाँचें।",
+            mushakPrintFailed: "मूसक 6.3 प्रिंट नहीं हो सका।",
             invalidDiscount: "अमान्य छूट कोड",
         },
     },

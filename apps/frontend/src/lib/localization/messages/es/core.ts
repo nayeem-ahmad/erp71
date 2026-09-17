@@ -1070,6 +1070,8 @@ export const coreMessages = {
             paid: "Pagado",
             changeDue: "Cambio",
             printReceipt: "Imprimir recibo del POS",
+            printMushak: "Imprimir Mushak 6.3",
+            mushakAfterSync: "Mushak 6.3 podrá imprimirse cuando esta venta se sincronice.",
             skipContinue: "Omitir y continuar",
         },
         payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: "{count} pts canjeados",
             pointsEarned: "{count} pts obtenidos",
             checkoutFailed: "Error en el cobro. Comprueba los niveles de existencias.",
+            mushakPrintFailed: "No se pudo imprimir el Mushak 6.3.",
             invalidDiscount: "Código de descuento no válido",
         },
     },
