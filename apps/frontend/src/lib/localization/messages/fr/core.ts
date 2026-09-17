@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: "Terminal de caisse",
         subtitle: "Sélection rapide et encaissement",
         helpTooltip: "Sélectionnez les articles, choisissez un mode de paiement, puis appuyez sur Encaisser. Pour les paiements fractionnés, ajoutez plusieurs lignes de paiement. La monnaie à rendre est calculée automatiquement.",
+        openShift: "Ouvrir le poste",
         offline: {
             banner: "Vous êtes hors ligne. Les ventes seront mises en file d'attente et synchronisées à la reconnexion.",
             pending: "{count} en attente",
@@ -1100,6 +1101,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: "Veuillez fournir {count} numéro(s) de série pour {product}.",
             serialUnique: "Les numéros de série de {product} doivent être uniques.",
+            sessionRequired: "Ouvrez une session de caisse avant de vendre au comptoir.",
             insufficientPaid: "Montant payé insuffisant !",
             saleOffline: "Vente enregistrée hors ligne — elle sera synchronisée une fois en ligne",
             offlineFailed: "Échec de l'enregistrement de la vente hors ligne. Veuillez réessayer.",

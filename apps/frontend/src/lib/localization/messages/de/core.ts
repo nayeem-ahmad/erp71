@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: "Kassenterminal",
         subtitle: "Schnelle Auswahl & Abrechnung",
         helpTooltip: "Artikel auswählen, Zahlungsart wählen, dann auf Kassieren drücken. Für Teilzahlungen mehrere Zahlungszeilen hinzufügen. Das Rückgeld wird automatisch berechnet.",
+        openShift: "Schicht öffnen",
         offline: {
             banner: "Sie sind offline. Verkäufe werden in die Warteschlange gestellt und synchronisiert, sobald Sie wieder verbunden sind.",
             pending: "{count} ausstehend",
@@ -1100,6 +1101,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: "Bitte geben Sie {count} Seriennummer(n) für {product} an.",
             serialUnique: "Die Seriennummern für {product} müssen eindeutig sein.",
+            sessionRequired: "Öffnen Sie eine Kassensitzung, bevor Sie am Schalter verkaufen.",
             insufficientPaid: "Der gezahlte Betrag reicht nicht aus!",
             saleOffline: "Verkauf offline gespeichert — wird synchronisiert, sobald Sie online sind",
             offlineFailed: "Offline-Verkauf konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",

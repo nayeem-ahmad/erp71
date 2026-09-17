@@ -106,6 +106,14 @@ export default function POSPage() {
 
     const { isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount } = useOfflineSync();
 
+    // The shift this cashier has open, and whether this tenant insists on one.
+    // POS used to know about neither: it read a counter id out of localStorage
+    // and sold, so a cashier who never opened a shift could ring a day of
+    // sales that reconciled against nothing.
+    const [cashierSession, setCashierSession] = useState<any>(null);
+    const [sessionRequired, setSessionRequired] = useState(false);
+    const [sessionChecked, setSessionChecked] = useState(false);
+
     const loadRecentSales = useCallback(async () => {
         if (!isOnline) return;
         setHistoryLoading(true);
@@ -164,7 +172,29 @@ export default function POSPage() {
 
     useEffect(() => {
         loadProducts();
+        loadCashierSession();
     }, []);
+
+    const loadCashierSession = async () => {
+        try {
+            const [session, settings] = await Promise.all([
+                api.getOpenCashierSession().catch(() => null),
+                api.getSalesSettings().catch(() => null),
+            ]);
+            setCashierSession(session ?? null);
+            setSessionRequired(Boolean(settings?.require_cashier_session));
+        } catch {
+            // Offline or a 5xx: fall through to the pre-existing behaviour
+            // rather than locking the till out of selling. The backend applies
+            // the same rule on the way in, so nothing is let through that the
+            // API would have refused.
+        } finally {
+            setSessionChecked(true);
+        }
+    };
+
+    // Only ever blocks when the tenant asked for it *and* we know the answer.
+    const blockedForNoSession = sessionChecked && sessionRequired && !cashierSession;
 
     const resolveSalesWarehouseId = (settings: any): string | null => {
         if (!settings) return null;
@@ -378,6 +408,11 @@ export default function POSPage() {
     const handleCheckoutClick = async () => {
         if (cart.length === 0) return;
 
+        if (blockedForNoSession) {
+            addNotification(t.pos.notifications.sessionRequired, 'error');
+            return;
+        }
+
         // Validate serial numbers BEFORE showing Payment Details dialog
         if (!validateSerialNumbers()) {
             return;
@@ -420,13 +455,18 @@ export default function POSPage() {
         if (bkashAmount > 0) payments.push({ paymentMethod: 'BKASH', amount: bkashAmount });
         if (cardAmount > 0) payments.push({ paymentMethod: 'CARD', amount: cardAmount });
 
-        const counterId = localStorage.getItem('counter_id') || undefined;
+        // The session is the authority on which till this is. localStorage is
+        // kept only as the fallback for a tenant that tags counters without
+        // running shifts — it is per-browser, so it goes stale the moment a
+        // cashier opens their shift on one device and sells from another.
+        const counterId = cashierSession?.counter_id || localStorage.getItem('counter_id') || undefined;
         const effectivePointsToRedeem = redeemPointsEnabled && selectedCustomer && loyaltyPointsRedeemed > 0
             ? loyaltyPointsRedeemed
             : 0;
 
         const saleData = {
             storeId: getWorkspaceItem('store_id') || '',
+            source: 'POS',
             ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
             ...(counterId ? { counterId } : {}),
             ...(customerDraft
@@ -582,6 +622,24 @@ export default function POSPage() {
                         <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                         {isSyncing ? t.pos.offline.syncing : t.pos.offline.syncNow}
                     </button>
+                </div>
+            )}
+
+            {/* No shift open, and this tenant sells only through a till. Said
+                here rather than only at checkout, so a cashier finds out before
+                they have scanned a basket. */}
+            {blockedForNoSession && (
+                <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center justify-between gap-4 flex-shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                        <span>{t.pos.notifications.sessionRequired}</span>
+                    </div>
+                    <Link
+                        href="/sales/cashier-sessions"
+                        className="flex items-center gap-1.5 text-xs font-bold bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 min-h-touch"
+                    >
+                        {t.pos.openShift}
+                    </Link>
                 </div>
             )}
 

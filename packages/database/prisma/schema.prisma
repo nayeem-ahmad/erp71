@@ -1205,6 +1205,12 @@ model SalesSettings {
   paper_size              String  @default("A4") // A4, A5, Letter, Thermal80, Thermal58
   reference_number_format String  @default("YYMM-#") // Format template
   pos_enabled             Boolean @default(true)
+  /// When on, POS refuses to check out unless the seller has an open cashier
+  /// session. Off by default so no existing tenant is stopped mid-sale by an
+  /// upgrade; a shop that runs proper shifts turns it on. Sales are stamped
+  /// with the seller's session either way — this only decides whether a
+  /// missing session blocks the sale.
+  require_cashier_session Boolean @default(false)
 
   /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
   /// buyer's bank opening an LC) knows where to remit. Held on the tenant
@@ -2518,6 +2524,13 @@ model Sale {
   tenant_id        String
   store_id         String
   counter_id       String?
+  /// The cashier session (shift) this sale was rung up in, stamped from the
+  /// seller's own open session rather than sent by the client. Nullable and
+  /// always will be: a back-office invoice, an imported sale and everything
+  /// rung before this column existed belong to no shift. It is what makes a
+  /// till reconcilable — `counter_id` alone cannot separate the morning
+  /// cashier from the evening one on the same counter.
+  session_id       String?
   serial_number    String
   reference_number String? // User-editable reference, unique per tenant
   total_amount     Decimal  @db.Decimal(12, 2)
@@ -2582,6 +2595,7 @@ model Sale {
   store          Store           @relation(fields: [store_id], references: [id])
   warehouse      Warehouse?      @relation("SaleWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   counter        PosCounter?     @relation(fields: [counter_id], references: [id])
+  session        CashierSession? @relation(fields: [session_id], references: [id])
   customer_id    String?
   customer       Customer?       @relation(fields: [customer_id], references: [id])
   quotation      Quotation?      @relation(fields: [quotation_id], references: [id])
@@ -2597,6 +2611,7 @@ model Sale {
   @@index([tenant_id, created_at])
   @@index([tenant_id, sale_date])
   @@index([tenant_id, store_id])
+  @@index([tenant_id, session_id])
   @@index([tenant_id, customer_id])
   @@index([tenant_id, counter_id])
   @@index([tenant_id, quotation_id])
@@ -3786,6 +3801,11 @@ model SalesReturn {
   /// is validated — the lines must belong to that sale and stay within what is
   /// still returnable on it.
   sale_id          String?
+  /// The cashier session that handed the money back, stamped from the
+  /// refunder's own open session. Deliberately not the session that made the
+  /// original sale: a refund comes out of the drawer that is open when it is
+  /// paid, which is often a different shift on a different day.
+  session_id       String?
   return_number    String
   /// The source system's own document number. Not unique — an imported
   /// reference can repeat, matching Purchase.reference_number.
@@ -3804,12 +3824,14 @@ model SalesReturn {
   tenant    Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store     Store             @relation(fields: [store_id], references: [id])
   sale      Sale?             @relation(fields: [sale_id], references: [id])
+  session   CashierSession?   @relation(fields: [session_id], references: [id])
   warehouse Warehouse?        @relation("SalesReturnWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   items     SalesReturnItem[]
 
   @@unique([tenant_id, return_number])
   @@index([tenant_id, reference_number])
   @@index([tenant_id, warehouse_id])
+  @@index([tenant_id, session_id])
 }
 
 model SalesReturnItem {
@@ -4041,13 +4063,40 @@ model CashierSession {
   closing_cash Decimal   @default(0) @db.Decimal(12, 2)
   status       String    @default("OPEN") // OPEN, CLOSED
 
+  /// What the drawer should hold at close — opening float, plus cash taken at
+  /// this till, less cash refunded, plus/minus the recorded cash movements.
+  /// Computed and frozen on close rather than re-derived on read, because a
+  /// later backdated sale or a corrected refund must not quietly rewrite the
+  /// count a cashier signed off on.
+  expected_cash Decimal? @db.Decimal(12, 2)
+  /// `closing_cash - expected_cash`: negative is short, positive is over.
+  /// Null on every session closed before this column existed — those were
+  /// never reconciled and must not be made to look as though they balanced.
+  variance      Decimal? @db.Decimal(12, 2)
+
+  /// Mirrors `counter_id` while the session is OPEN and is null once it
+  /// closes, which turns "one open session per till" into a plain unique
+  /// index Prisma can express and `prisma db push` can apply — Postgres
+  /// treats NULLs as distinct, so any number of closed sessions coexist on a
+  /// counter. A partial unique index (`WHERE status = 'OPEN'`) says the same
+  /// thing and cannot be written in the Prisma schema, which production
+  /// reconciles from. `open_user_key` is the same trick for "one open session
+  /// per person". Sessions already open when this shipped carry NULL in both
+  /// and are unguarded until they close and reopen.
+  open_counter_key String?
+  open_user_key    String?
+
   // Relations
   tenant           Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store            Store             @relation(fields: [store_id], references: [id], onDelete: Cascade)
   user             User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
   counter          PosCounter?       @relation(fields: [counter_id], references: [id])
   cashTransactions CashTransaction[]
+  sales            Sale[]
+  salesReturns     SalesReturn[]
 
+  @@unique([tenant_id, open_counter_key])
+  @@unique([tenant_id, open_user_key])
   @@index([tenant_id, status])
   @@index([tenant_id, counter_id])
 }

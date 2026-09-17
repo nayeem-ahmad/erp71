@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: 'POS Terminal',
         subtitle: 'Quick selection & billing',
         helpTooltip: 'Select items, choose a payment method, then press Checkout. For split payments, add multiple payment rows. Change due is calculated automatically.',
+        openShift: 'Open Shift',
         offline: {
             banner: 'You are offline. Sales will be queued and synced when you reconnect.',
             pending: '{count} pending',
@@ -1100,6 +1101,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: 'Please provide {count} serial number(s) for {product}.',
             serialUnique: 'Serial numbers for {product} must be unique.',
+            sessionRequired: 'Open a cashier session before selling at the counter.',
             insufficientPaid: 'Insufficient amount paid!',
             saleOffline: 'Sale saved offline — will sync when online',
             offlineFailed: 'Failed to save offline sale. Please try again.',
