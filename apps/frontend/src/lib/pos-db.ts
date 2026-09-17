@@ -16,6 +16,15 @@ export interface PendingSale {
   storeId: string;
   warehouseId?: string;
   counterId?: string;
+  /**
+   * Carried through the queue so a sale rung offline is still recognised as a
+   * counter sale when it syncs — the "require an open cashier session" check
+   * is applied on the way in, and a queued sale must not slip past a rule the
+   * same sale would have met online. The session itself is resolved at sync
+   * time from whoever's shift is open then, which is the honest answer: an
+   * offline sale has no server-side shift until it arrives.
+   */
+  source?: string;
   customerId?: string;
   discountAmount?: number;
   pointsToRedeem?: number;

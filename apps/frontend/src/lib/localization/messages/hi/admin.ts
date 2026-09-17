@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: "इनबॉक्स",
         subtitle: "दुकान मालिकों से सहायता और प्रतिक्रिया · {total} थ्रेड",
         loadFailed: "थ्रेड लोड नहीं हो सके",
-        searchPlaceholder: "विषय से खोजें…",
+        searchPlaceholder: "टिकट नंबर या विषय से खोजें…",
         loading: "थ्रेड लोड हो रहे हैं…",
         noThreads: "कोई थ्रेड नहीं मिला।",
         allStatuses: "सभी स्थितियाँ",
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: "सभी उपयोगकर्ता",
         unknownUser: "अज्ञात उपयोगकर्ता",
         startedBy: "{user} द्वारा शुरू किया गया",
+        ticketLabel: "टिकट #{number}",
         types: {
             support: "मदद",
             bug: "बग",

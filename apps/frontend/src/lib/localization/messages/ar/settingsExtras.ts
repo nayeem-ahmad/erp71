@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "إيصالات الاستلام",
             SALES_ORDER: "أوامر البيع",
             SALES_RETURN: "مرتجعات المبيعات",
+            DELIVERY_CHALLAN: "أذون التسليم",
             PURCHASE_ORDER: "أوامر الشراء",
             PURCHASE_RETURN: "مرتجعات المشتريات",
             LIST_REPORT: "تقارير القوائم",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "إصدار مستندات مشك",
                 hint: "عند الإيقاف تطبع المبيعات فاتورة متجر عادية بدل الفاتورة الضريبية.",
+            },
+            posReceipt: {
+                label: "مشك 6.3 كإيصال نقطة البيع",
+                hint: "تطبع نقطة البيع الفاتورة الضريبية 6.3 بدل الإيصال العادي. يبقى كلا التنسيقين متاحاً لكل عملية بيع.",
             },
             issueAddress: {
                 label: "عنوان الإصدار",

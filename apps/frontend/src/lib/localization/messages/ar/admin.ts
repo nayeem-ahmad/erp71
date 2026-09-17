@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: 'صندوق الوارد',
         subtitle: 'الدعم والملاحظات من أصحاب المتاجر · {total} محادثة',
         loadFailed: 'تعذّر تحميل المحادثات',
-        searchPlaceholder: 'ابحث بالموضوع…',
+        searchPlaceholder: 'ابحث برقم التذكرة أو الموضوع…',
         loading: 'جارٍ تحميل المحادثات…',
         noThreads: 'لم يُعثر على محادثات.',
         allStatuses: 'كل الحالات',
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: 'كل المستخدمين',
         unknownUser: 'مستخدم غير معروف',
         startedBy: 'بدأها {user}',
+        ticketLabel: 'التذكرة #{number}',
         types: {
             support: 'مساعدة',
             bug: 'خلل',

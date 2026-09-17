@@ -51,6 +51,9 @@ export class SalesSettingsService {
           paper_size: dto.paper_size ?? settings.paper_size,
           reference_number_format: dto.reference_number_format ?? settings.reference_number_format,
           ...(dto.pos_enabled !== undefined ? { pos_enabled: dto.pos_enabled } : {}),
+          ...(dto.require_cashier_session !== undefined
+            ? { require_cashier_session: dto.require_cashier_session }
+            : {}),
         },
       });
     }
@@ -69,6 +72,9 @@ export class SalesSettingsService {
       paper_size: settings.paper_size as PaperSize,
       reference_number_format: settings.reference_number_format,
       pos_enabled: settings.pos_enabled ?? true,
+      // Off unless a tenant has deliberately turned it on: an upgrade must
+      // not stop a shop mid-sale for a workflow it has never used.
+      require_cashier_session: settings.require_cashier_session ?? false,
       created_at: settings.created_at,
       updated_at: settings.updated_at,
     };

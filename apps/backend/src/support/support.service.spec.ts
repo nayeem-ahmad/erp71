@@ -16,8 +16,10 @@ function makeService(opts?: {
             ),
         },
         supportThread: {
+            // `ticketNumber` comes from a Postgres sequence, so the row that
+            // comes back carries one the caller never sent.
             create: jest.fn().mockImplementation(({ data }: any) =>
-                Promise.resolve({ id: 'th-1', ...data }),
+                Promise.resolve({ id: 'th-1', ticketNumber: 12, ...data }),
             ),
         },
     };
@@ -62,7 +64,7 @@ describe('SupportService.createKnock', () => {
         const { service, tx, email } = makeService();
         const result = await service.createKnock({ ...base, category: 'support' });
 
-        expect(result).toEqual({ id: 'th-1', feedbackId: null });
+        expect(result).toEqual({ id: 'th-1', ticketNumber: 12, feedbackId: null });
         expect(tx.feedback.create).not.toHaveBeenCalled();
         expect(tx.supportThread.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
@@ -92,7 +94,7 @@ describe('SupportService.createKnock', () => {
             page: '/sales/new',
         });
 
-        expect(result).toEqual({ id: 'th-1', feedbackId: 'fb-1' });
+        expect(result).toEqual({ id: 'th-1', ticketNumber: 12, feedbackId: 'fb-1' });
         expect(tx.feedback.create).toHaveBeenCalledWith({
             data: {
                 tenantId: 'ten-1',

@@ -13,7 +13,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getPaymentMethods: jest.fn(),
-        getAccounts: jest.fn(),
+        getPaymentMethodAccounts: jest.fn(),
         createPaymentMethod: jest.fn(),
         updatePaymentMethod: jest.fn(),
         deletePaymentMethod: jest.fn(),
@@ -21,10 +21,16 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn() },
+}));
+
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { PAYMENT_METHOD_TYPE_VALUES } from '@erp71/shared-types';
 
 const mockApi = api as jest.Mocked<typeof api>;
+const mockToast = toast as jest.Mocked<typeof toast>;
 
 const sampleMethods = [
     { id: 'm1', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 2 },
@@ -33,7 +39,7 @@ const sampleMethods = [
 
 beforeEach(() => {
     jest.clearAllMocks();
-    mockApi.getAccounts.mockResolvedValue([]);
+    mockApi.getPaymentMethodAccounts.mockResolvedValue([]);
 });
 
 describe('PaymentMethodsSettingsPage', () => {
@@ -109,6 +115,80 @@ describe('PaymentMethodsSettingsPage', () => {
         await waitFor(() => expect(mockApi.createPaymentMethod).toHaveBeenCalled());
         const payload = mockApi.createPaymentMethod.mock.calls[0][0] as { type: string };
         expect(PAYMENT_METHOD_TYPE_VALUES).toContain(payload.type);
+    });
+
+    // Regression: the page loaded methods and accounts in one Promise.all, so the
+    // entitlement-gated accounts call ("This feature requires an active
+    // subscription.") rejected the batch and left the list blank for every tenant
+    // without the accounting module.
+    it('still renders the methods list when the accounts lookup fails', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue(sampleMethods);
+        mockApi.getPaymentMethodAccounts.mockRejectedValue(
+            new Error('This feature requires an active subscription.'),
+        );
+
+        const { container } = render(<PaymentMethodsSettingsPage />);
+
+        await waitFor(() => {
+            expect(container.querySelectorAll('.text-sm.font-bold.text-gray-900')).toHaveLength(2);
+        });
+        expect(mockToast.error).not.toHaveBeenCalled();
+    });
+
+    it('explains an empty account picker when the accounts lookup failed', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([]);
+        mockApi.getPaymentMethodAccounts.mockRejectedValue(new Error('403'));
+
+        render(<PaymentMethodsSettingsPage />);
+        fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
+
+        expect(screen.getByText(/Accounts could not be loaded/i)).toBeInTheDocument();
+    });
+
+    it('populates the account picker from the ungated payment-method lookup', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([]);
+        mockApi.getPaymentMethodAccounts.mockResolvedValue([
+            { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        ]);
+
+        render(<PaymentMethodsSettingsPage />);
+        fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('option', { name: '[110101] Cash in Hand' })).toBeInTheDocument();
+        });
+    });
+
+    // Regression: the form sent `undefined` for "no account linked", which the
+    // backend reads as "leave it alone" — an existing link could never be cleared.
+    it('sends an explicit null when no account is linked', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([]);
+        mockApi.createPaymentMethod.mockResolvedValue({} as never);
+
+        render(<PaymentMethodsSettingsPage />);
+        fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
+        fireEvent.change(screen.getByPlaceholderText('e.g. bKash, Main Cash'), {
+            target: { value: 'Main Till' },
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+        });
+
+        await waitFor(() => expect(mockApi.createPaymentMethod).toHaveBeenCalled());
+        expect(mockApi.createPaymentMethod.mock.calls[0][0]).toMatchObject({ account_id: null });
+    });
+
+    it('shows the linked account name next to the method type', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([
+            { id: 'm1', name: 'Main Till', type: 'Cash', account_id: 'acc-1', is_active: true, show_on_entry: true, sort_order: 1 },
+        ]);
+        mockApi.getPaymentMethodAccounts.mockResolvedValue([
+            { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        ]);
+
+        render(<PaymentMethodsSettingsPage />);
+
+        expect(await screen.findByText(/Cash · Cash in Hand/)).toBeInTheDocument();
     });
 
     it('offers every shared PaymentMethodType value as a selectable option', async () => {

@@ -75,12 +75,12 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
 
     // ── purchases ────────────────────────────────────────────────────────────
-    // Only 'credit' — and that is accurate, not a shortcut. CreatePurchaseDto has no
-    // paidAmount field, purchases.service never writes Purchase.paid_amount (schema
-    // default 0), and it books the full total as supplier credit. A purchase is
-    // ALWAYS a payable in this data model. Recording a cash buy is a two-step flow:
-    // purchase, then supplier payment. purchase/cash and purchase/bank rules would be
-    // unreachable, so they do not exist. See TODO.md follow-ups.
+    // Only 'credit' — and that is still accurate, not a shortcut. The bill always
+    // raises the payable in full, exactly as the supplier's invoice does. A purchase
+    // entry can now be settled at the counter, but that money posts as its own
+    // supplier_payment leg (below) rather than netting into the bill, so
+    // purchase/cash and purchase/bank rules would still be unreachable and do not
+    // exist.
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'purchases.service.ts:140', expectation: 'rule' },
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'purchase-orders.service.ts:137', expectation: 'rule' },
 
@@ -103,6 +103,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // SupplierCreditTransaction has no payment_method column. See TODO.md.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
+    // A purchase paid at the counter posts the same 'pay' tuple, on legKey 'paid'
+    // against the Purchase rather than a standalone SupplierCreditTransaction —
+    // same rule, same accounts, so the payable is debited whichever screen the
+    // money was entered on.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'purchases.service.ts create (paid leg)', expectation: 'rule' },
 
     // ── depreciation ─────────────────────────────────────────────────────────
     { eventType: 'depreciation', conditionKey: 'none', conditionValue: null, emittedBy: 'accounting.service.ts:runDepreciation', expectation: 'rule' },

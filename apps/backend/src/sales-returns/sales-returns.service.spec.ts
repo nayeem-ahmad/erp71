@@ -72,6 +72,11 @@ describe('SalesReturnsService', () => {
           count: jest.fn(),
           findFirst: jest.fn()
       },
+      cashierSession: {
+          // No shift open by default — a refund at the back office comes out
+          // of no drawer.
+          findFirst: jest.fn().mockResolvedValue(null)
+      },
         voucher: {
           findMany: jest.fn(),
           findFirst: jest.fn(),
@@ -335,6 +340,7 @@ describe('SalesReturnsService — returns without a sale', () => {
       productCost: { findMany: jest.fn().mockResolvedValue([]) },
       productPrice: { findMany: jest.fn().mockResolvedValue([]) },
       sale: { findUnique: jest.fn() },
+      cashierSession: { findFirst: jest.fn().mockResolvedValue(null) },
       product: { findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }) },
       salesReturn: { create: jest.fn().mockResolvedValue({ id: 'ret-1', return_number: 'RET-1', total_refund: 250, items: [] }) },
       customer: { update: jest.fn(), findUnique: jest.fn() },
@@ -406,6 +412,7 @@ describe('SalesReturnsService — posting condition value', () => {
     const buildModule = async (sale: unknown) => {
         const tx = {
             sale: { findUnique: jest.fn().mockResolvedValue(sale) },
+            cashierSession: { findFirst: jest.fn().mockResolvedValue(null) },
             salesReturn: {
                 create: jest.fn().mockResolvedValue({
                     id: 'ret-1',
@@ -475,6 +482,7 @@ describe('SalesReturnsService — posting condition value', () => {
         // nondeterministically.
         const tx = {
             sale: { findUnique: jest.fn().mockResolvedValue(saleRow({})) },
+            cashierSession: { findFirst: jest.fn().mockResolvedValue(null) },
             salesReturn: {
                 create: jest.fn().mockResolvedValue({
                     id: 'ret-1',

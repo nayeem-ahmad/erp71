@@ -1046,7 +1046,7 @@ export const adminMessages = {
             title: "ইনবক্স",
             subtitle: "শপ ওনারদের সাপোর্ট ও ফিডব্যাক · মোট {total} থ্রেড",
             loadFailed: "থ্রেড লোড করতে ব্যর্থ",
-            searchPlaceholder: "বিষয় খুঁজুন…",
+            searchPlaceholder: "টিকিট নম্বর বা বিষয় দিয়ে খুঁজুন…",
             loading: "থ্রেড লোড হচ্ছে…",
             noThreads: "কোনো থ্রেড পাওয়া যায়নি।",
             allStatuses: "সব স্ট্যাটাস",
@@ -1056,6 +1056,7 @@ export const adminMessages = {
             allUsers: "সব ব্যবহারকারী",
             unknownUser: "অজানা ব্যবহারকারী",
             startedBy: "শুরু করেছেন {user}",
+            ticketLabel: "টিকিট #{number}",
             types: {
                 support: "সাহায্য",
                 bug: "বাগ",
