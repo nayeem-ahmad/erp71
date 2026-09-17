@@ -259,6 +259,7 @@ export const salesMessages = {
             list: {
                 title: "বিক্রয়",
                 subtitle: "সব transactions",
+                printInvoice: "ইনভয়েস প্রিন্ট",
             },
             hub: {
                 moduleLabel: "বিক্রয় মডিউল",

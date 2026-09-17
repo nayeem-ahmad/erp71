@@ -259,6 +259,7 @@ export const salesMessages = {
         list: {
             title: "बिक्री",
             subtitle: "सभी लेन-देन",
+            printInvoice: "चालान प्रिंट करें",
         },
         hub: {
             moduleLabel: "बिक्री मॉड्यूल",

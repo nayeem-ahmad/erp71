@@ -259,6 +259,7 @@ export const salesMessages = {
             list: {
                 title: "Jualan",
                 subtitle: "Semua transactions",
+                printInvoice: "Cetak Invois",
             },
             hub: {
                 moduleLabel: "Modul Jualan",
