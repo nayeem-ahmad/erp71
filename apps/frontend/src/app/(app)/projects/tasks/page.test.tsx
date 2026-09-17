@@ -34,6 +34,7 @@ jest.mock('@/lib/api', () => ({
         createProjectTask: jest.fn(),
         updateProjectTask: jest.fn(),
         deleteProjectTask: jest.fn(),
+        bulkDeleteProjectTasks: jest.fn(),
         importProjectTasks: jest.fn(),
     },
 }));
@@ -98,6 +99,7 @@ beforeEach(() => {
     api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-new' });
     api.updateProjectTask.mockReset().mockResolvedValue({ id: 't1' });
     api.deleteProjectTask.mockReset().mockResolvedValue({ success: true });
+    api.bulkDeleteProjectTasks.mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
     api.importProjectTasks.mockReset().mockResolvedValue({
         created: 0, updated: 0, skipped: 0, errors: [],
     });
@@ -452,7 +454,11 @@ describe('Tasks page', () => {
             const dialog = await screen.findByRole('dialog');
             fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
-            await waitFor(() => expect(api.deleteProjectTask).toHaveBeenCalledWith('t1'));
+            // One request for the whole selection, not one per row: fanning out
+            // over `deleteProjectTask` burns the 20-per-minute rate limit and a
+            // real selection comes back 429 on everything past the twentieth.
+            await waitFor(() => expect(api.bulkDeleteProjectTasks).toHaveBeenCalledWith(['t1']));
+            expect(api.deleteProjectTask).not.toHaveBeenCalled();
         });
     });
     /**
