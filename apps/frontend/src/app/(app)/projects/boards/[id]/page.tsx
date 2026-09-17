@@ -9,19 +9,21 @@ import {
     FolderKanban,
     GitBranch,
     GripVertical,
-    Image as ImageIcon,
     MessageSquare,
     Plus,
+    Search,
+    Settings,
     Trash2,
     X,
 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Select, StatusBadge } from '@/components/ui';
+import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
-import BoardViewMenu from '@/components/projects/BoardViewMenu';
-import BoardBackgroundModal from '@/components/projects/BoardBackgroundModal';
+import BoardColumnComposer from '@/components/projects/BoardColumnComposer';
+import BoardColumnHead from '@/components/projects/BoardColumnHead';
+import BoardSettingsModal from '@/components/projects/BoardSettingsModal';
 import { useBoardView } from '@/components/projects/use-board-view';
 import {
     boardCanvasClass,
@@ -40,9 +42,11 @@ import {
 import {
     CARD_ATTR,
     COLUMN_ATTR,
+    columnAtPoint,
     movedFar,
     resolveDropTarget,
     toFullIndex,
+    withColumnMoved,
     type DropTarget,
 } from '@/components/projects/board-drag';
 import {
@@ -60,9 +64,11 @@ import {
     matchesFilters,
     NO_FILTERS,
     projectLabelOf,
+    sortCards,
     type BoardColumn,
     type BoardFilters,
     type BoardTask,
+    type CardSort,
     type DueState,
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
@@ -80,6 +86,12 @@ interface BoardSummary {
     /** A palette key; see `board-background.ts`. Null on a plain board. */
     background_color?: string | null;
     background_image_url?: string | null;
+}
+
+/** What `GET /projects/boards/:id` answers with — and every bulk write too. */
+interface BoardResponse extends BoardSummary {
+    columns?: BoardColumn[];
+    unsorted?: BoardTask[];
 }
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
@@ -103,6 +115,23 @@ interface DragState {
     title: string;
 }
 
+/**
+ * A column being dragged along the board. Same shape as a card's drag and the
+ * same rules — a threshold before a mouse gesture counts, no threshold from the
+ * grip — because they are the same gesture at two scales, and two drags that
+ * behaved differently would be two things to learn.
+ */
+interface ColumnDragState {
+    columnId: string;
+    pointerId: number;
+    origin: { x: number; y: number };
+    point: { x: number; y: number };
+    active: boolean;
+    /** The column under the pointer: where this one lands if released now. */
+    targetId: string | null;
+    name: string;
+}
+
 export default function BoardPage() {
     const params = useParams<{ id: string }>();
     const boardId = params.id;
@@ -124,8 +153,17 @@ export default function BoardPage() {
     const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
+    const [columnDrag, setColumnDrag] = useState<ColumnDragState | null>(null);
     const [adding, setAdding] = useState(false);
-    const [pickingBackground, setPickingBackground] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    /**
+     * The cards the bulk bar acts on, in the order they were picked. An array
+     * rather than a Set because that order is what "move these five" sends, and
+     * a Set's iteration order is an accident of insertion the reader cannot see.
+     */
+    const [selection, setSelection] = useState<string[]>([]);
+    /** One guard over every bulk action: two in flight would race on the board. */
+    const [busy, setBusy] = useState(false);
     const [projects, setProjects] = useState<ComposerProject[]>([]);
     // Which project a composed card belongs to. Held here rather than per
     // column so picking it once covers the whole board.
@@ -163,31 +201,43 @@ export default function BoardPage() {
         );
         return ids.size === 1 ? [...ids][0] : '';
     }, [boardTasks]);
+    /**
+     * Every project with a card on the board, for board settings — which needs
+     * it to decide whose statuses each column can bind, and would otherwise
+     * re-read the whole board to work out what this page already knows.
+     */
+    const projectsOnBoard = useMemo(() => {
+        const byId = new Map<string, NonNullable<BoardTask['project']>>();
+        for (const task of boardTasks) {
+            if (task.project) byId.set(task.project.id, task.project);
+        }
+        return [...byId.values()];
+    }, [boardTasks]);
     const filtered = hasActiveFilter(filters);
     const shown = countTasks(visibleColumns) + visibleUnsorted.length;
     const total = countTasks(columns) + unsorted.length;
 
+    /**
+     * Paints a whole board response. Shared with the bulk actions below, which
+     * answer with the same shape `getBoard` does rather than making the page
+     * fetch it again.
+     */
+    const applyBoard = useCallback((res: BoardResponse) => {
+        setBoard({
+            id: res.id,
+            name: res.name,
+            description: res.description ?? null,
+            background_color: res.background_color ?? null,
+            background_image_url: res.background_image_url ?? null,
+        });
+        setColumns(res.columns ?? []);
+        setUnsorted(res.unsorted ?? []);
+    }, []);
+
     const loadBoard = useCallback(async () => {
         setLoading(true);
         try {
-            const res = (await api.getBoard(boardId)) as {
-                id: string;
-                name: string;
-                description?: string | null;
-                background_color?: string | null;
-                background_image_url?: string | null;
-                columns?: BoardColumn[];
-                unsorted?: BoardTask[];
-            };
-            setBoard({
-                id: res.id,
-                name: res.name,
-                description: res.description ?? null,
-                background_color: res.background_color ?? null,
-                background_image_url: res.background_image_url ?? null,
-            });
-            setColumns(res.columns ?? []);
-            setUnsorted(res.unsorted ?? []);
+            applyBoard((await api.getBoard(boardId)) as BoardResponse);
             setLoadError(false);
         } catch (error) {
             // Distinguished from "still loading" below, so a 403/404/network
@@ -199,7 +249,7 @@ export default function BoardPage() {
         } finally {
             setLoading(false);
         }
-    }, [boardId, t.common.error]);
+    }, [applyBoard, boardId, t.common.error]);
 
     useEffect(() => {
         loadBoard();
@@ -231,6 +281,24 @@ export default function BoardPage() {
             .find((id) => id && projects.some((project) => project.id === id));
         setComposerProject(onBoard ?? projects[0].id);
     }, [projects, boardTasks, composerProject]);
+
+    /**
+     * The bulk bar acts on what is on screen. A filter typed (or a search run)
+     * after a selection must not leave a card selected that its owner can no
+     * longer see — "remove these four" has to mean the four in front of them.
+     */
+    useEffect(() => {
+        setSelection((current) => {
+            if (current.length === 0) return current;
+            const visible = new Set(
+                [...visibleColumns.flatMap((column) => column.tasks), ...visibleUnsorted].map(
+                    (task) => task.id,
+                ),
+            );
+            const next = current.filter((id) => visible.has(id));
+            return next.length === current.length ? current : next;
+        });
+    }, [visibleColumns, visibleUnsorted]);
 
     const move = async (taskId: string, columnId: string, sortOrder: number) => {
         const task =
@@ -266,6 +334,134 @@ export default function BoardPage() {
             }
             await loadBoard();
         }
+    };
+
+    /**
+     * One guard and one failure path for every board-level write below. Two in
+     * flight would race on the same cards, and a failure reloads rather than
+     * trying to unpick whichever of them applied its change to the board
+     * before asking the server for it.
+     */
+    const run = async (action: () => Promise<unknown>, done?: string) => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            await action();
+            if (done) toast.success(done);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t.common.error);
+            await loadBoard();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /** The whole order, because that is what the endpoint takes — see the DTO. */
+    const applyColumnOrder = (ids: string[]) => {
+        const byId = new Map(columns.map((column) => [column.id, column]));
+        const next = ids.map((id) => byId.get(id)).filter((column): column is BoardColumn => !!column);
+        if (next.length !== columns.length) return;
+
+        setColumns(next);
+        run(() => api.reorderBoardColumns(boardId, ids), m.columnsReordered);
+    };
+
+    const moveColumn = (columnId: string, delta: number) => {
+        const ids = columns.map((column) => column.id);
+        const at = ids.indexOf(columnId);
+        const to = at + delta;
+        if (at === -1 || to < 0 || to >= ids.length) return;
+        applyColumnOrder(withColumnMoved(ids, columnId, ids[to]));
+    };
+
+    const renameColumn = (columnId: string, name: string) => {
+        setColumns((cols) =>
+            cols.map((column) => (column.id === columnId ? { ...column, name } : column)),
+        );
+        run(() => api.updateBoardColumn(boardId, columnId, { name }), m.columnRenamed);
+    };
+
+    /**
+     * Sorts what is on screen and stores the result. The comparison happens
+     * here rather than on the server (see `sortCards`), and it is deliberately
+     * the *visible* cards that are sorted: a filtered column rearranges the
+     * cards its reader can see, and the server leaves the rest where they are.
+     */
+    const sortColumn = (columnId: string, by: CardSort) => {
+        const visible = visibleColumns.find((column) => column.id === columnId);
+        if (!visible || visible.tasks.length === 0) return;
+
+        const ordered = sortCards(visible.tasks, by);
+
+        // Dealt back into the slots the sorted cards already occupied, which is
+        // exactly what the server does with the ids it is sent: a card the
+        // filter is hiding keeps its place rather than being swept to an end
+        // the reader cannot see.
+        const sorted = new Set(ordered.map((task) => task.id));
+        const queue = [...ordered];
+        setColumns((cols) =>
+            cols.map((column) =>
+                column.id === columnId
+                    ? {
+                          ...column,
+                          tasks: column.tasks.map((task) =>
+                              sorted.has(task.id) ? (queue.shift() as BoardTask) : task,
+                          ),
+                      }
+                    : column,
+            ),
+        );
+        run(
+            () => api.setBoardColumnCardOrder(boardId, columnId, ordered.map((task) => task.id)),
+            m.cardsSorted,
+        );
+    };
+
+    /**
+     * Several cards into one column. Not applied optimistically, unlike the
+     * moves above: a card crossing a lane changes its status, and which status
+     * it lands in is the server's answer, not one the board can guess for a
+     * card whose project maps that column differently.
+     */
+    const moveCards = (taskIds: string[], columnId: string) => {
+        if (taskIds.length === 0) return;
+        run(async () => {
+            const board = await api.moveBoardCards(boardId, { taskIds, columnId });
+            applyBoard(board);
+            setSelection([]);
+            toast.success(m.cardsMoved.replace('{count}', String(taskIds.length)));
+        });
+    };
+
+    const removeCards = (taskIds: string[]) => {
+        if (taskIds.length === 0) return;
+        run(async () => {
+            const board = await api.removeBoardCards(boardId, taskIds);
+            applyBoard(board);
+            setSelection([]);
+            toast.success(m.cardsRemoved.replace('{count}', String(taskIds.length)));
+        });
+    };
+
+    const toggleSelected = (taskId: string) =>
+        setSelection((current) =>
+            current.includes(taskId)
+                ? current.filter((id) => id !== taskId)
+                : [...current, taskId],
+        );
+
+    /**
+     * Adds the column's visible cards to the selection rather than replacing
+     * it, so "select all" in two columns is a selection spanning both — which
+     * is the only way to move a mixed set in one go.
+     */
+    const selectAllIn = (columnId: string) => {
+        const visible = visibleColumns.find((column) => column.id === columnId);
+        if (!visible) return;
+        setSelection((current) => [
+            ...current,
+            ...visible.tasks.map((task) => task.id).filter((id) => !current.includes(id)),
+        ]);
     };
 
     const removeCard = async (taskId: string) => {
@@ -358,6 +554,80 @@ export default function BoardPage() {
 
     const cancelDrag = () => setDrag(null);
 
+    // ── Dragging a column ───────────────────────────────────────────────────
+    // Deliberately a second, separate gesture rather than a mode of the card
+    // drag: the two never overlap (a card is never a drop target for a column)
+    // and folding them together would mean every card event asking which kind
+    // of drag it is in.
+
+    const beginColumnDrag = (
+        e: React.PointerEvent,
+        column: BoardColumn,
+        { fromHandle }: { fromHandle: boolean },
+    ) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.pointerType !== 'mouse' && !fromHandle) return;
+        if (busy) return;
+
+        const element = e.currentTarget as Element & { setPointerCapture?: (id: number) => void };
+        element.setPointerCapture?.(e.pointerId);
+
+        setColumnDrag({
+            columnId: column.id,
+            pointerId: e.pointerId,
+            origin: { x: e.clientX, y: e.clientY },
+            point: { x: e.clientX, y: e.clientY },
+            active: fromHandle,
+            targetId: null,
+            name: column.name,
+        });
+    };
+
+    const continueColumnDrag = (e: React.PointerEvent) => {
+        if (!columnDrag || e.pointerId !== columnDrag.pointerId) return;
+
+        const point = { x: e.clientX, y: e.clientY };
+        const active = columnDrag.active || movedFar(columnDrag.origin, point);
+        if (!active) {
+            setColumnDrag({ ...columnDrag, point });
+            return;
+        }
+
+        e.preventDefault();
+        setColumnDrag({
+            ...columnDrag,
+            point,
+            active: true,
+            targetId: columnAtPoint(point, document),
+        });
+    };
+
+    const endColumnDrag = (e: React.PointerEvent) => {
+        if (!columnDrag || e.pointerId !== columnDrag.pointerId) return;
+        setColumnDrag(null);
+
+        // Under the threshold the gesture was a click on the head, which is
+        // not a drag and must not reorder anything.
+        if (!columnDrag.active || !columnDrag.targetId) return;
+        if (columnDrag.targetId === columnDrag.columnId) return;
+
+        applyColumnOrder(
+            withColumnMoved(
+                columns.map((column) => column.id),
+                columnDrag.columnId,
+                columnDrag.targetId,
+            ),
+        );
+    };
+
+    const cancelColumnDrag = () => setColumnDrag(null);
+
+    /** Where a column's "move all cards to" can send them: everywhere but here. */
+    const targetsFor = (columnId: string) =>
+        columns
+            .filter((column) => column.id !== columnId)
+            .map((column) => ({ id: column.id, name: column.name }));
+
     if (!board) {
         if (loadError) {
             return (
@@ -417,10 +687,12 @@ export default function BoardPage() {
                         )}
                         actions={
                             <div className="flex flex-wrap items-center justify-end gap-2">
-                                {/* Filters sit beside the buttons rather than
-                                    on a row of their own: the bar they used to
-                                    live on cost a whole row of board height to
-                                    four selects. */}
+                                {/* The search box and the filters sit beside
+                                    the buttons rather than on a row of their
+                                    own: the bar they used to live on cost a
+                                    whole row of board height to five controls.
+                                    It is also why the header is down to two
+                                    buttons — see the settings one below. */}
                                 <BoardFilterBar
                                     filters={filters}
                                     onChange={setFilters}
@@ -433,24 +705,37 @@ export default function BoardPage() {
                                     <Plus className="h-4 w-4" />
                                     {m.addTasks}
                                 </Button>
-                                <BoardViewMenu {...boardView} />
+                                {/* One way in for everything that is not a
+                                    card: the columns, the background and this
+                                    browser's appearance settings. It replaced
+                                    an Appearance popover, a Background button
+                                    and a link to a settings page, which were
+                                    three buttons deciding between themselves
+                                    how much of a phone's header was left for
+                                    the filters. */}
                                 <Button
                                     variant="secondary"
                                     className="max-md:min-h-touch"
-                                    onClick={() => setPickingBackground(true)}
+                                    onClick={() => setSettingsOpen(true)}
                                 >
-                                    <ImageIcon className="h-4 w-4" />
-                                    {m.background.title}
+                                    <Settings className="h-4 w-4" />
+                                    {m.boardSettings}
                                 </Button>
-                                <Link href={routes.projects.boardColumns(boardId)}>
-                                    <Button variant="secondary" className="max-md:min-h-touch">
-                                        {m.boardSettings}
-                                    </Button>
-                                </Link>
                             </div>
                         }
                     />
                 </div>
+
+                {selection.length > 0 && (
+                    <SelectionBar
+                        count={selection.length}
+                        columns={columns}
+                        busy={busy}
+                        onMove={(columnId) => moveCards(selection, columnId)}
+                        onRemove={() => removeCards(selection)}
+                        onClear={() => setSelection([])}
+                    />
+                )}
 
                 {/* Columns scroll inside their own container so the page body
                     never scrolls sideways on a phone. */}
@@ -477,6 +762,9 @@ export default function BoardPage() {
                                         task={task}
                                         view={view}
                                         index={index}
+                                        selecting={selection.length > 0}
+                                        selected={selection.includes(task.id)}
+                                        onToggleSelected={() => toggleSelected(task.id)}
                                         dragging={drag?.active === true && drag.taskId === task.id}
                                         onPointerDownBody={(e) =>
                                             beginDrag(e, task, { fromHandle: false })
@@ -510,54 +798,70 @@ export default function BoardPage() {
                         const overWip = isOverWip(full);
                         const held = full?.tasks.length ?? column.tasks.length;
                         const tint = tintOf(view, column.category);
+                        const draggingColumn =
+                            columnDrag?.active === true && columnDrag.columnId === column.id;
                         return (
                             <div
                                 key={column.id}
                                 {...{ [COLUMN_ATTR]: column.id }}
-                                className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${lift} ${motionClass(view, 'column')}`}
+                                className={`group/column flex ${widthClass} flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
+                                    // The column the pointer is over while another
+                                    // is being dragged: where it lands if released
+                                    // now. Marked on the target rather than by a
+                                    // gap opening up, because a board wide enough
+                                    // to need reordering is a board where the gap
+                                    // would be off screen.
+                                    columnDrag?.active && columnDrag.targetId === column.id
+                                        ? 'border-blue-400 ring-2 ring-blue-200'
+                                        : 'border-gray-200'
+                                }`}
                                 style={{ animationDelay: staggerDelay(view, columnIndex) }}
                             >
                                 {/* The column's stage, as a rule across its head.
                                     Colour is the fastest way to tell three lanes
                                     apart at a glance, and it costs no row height. */}
                                 <div aria-hidden className={`h-1 w-full ${tint.bar}`} />
-                                <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white/70 px-3 py-2">
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        {view.columnTint === 'category' && (
-                                            <span
-                                                aria-hidden
-                                                className={`h-2 w-2 shrink-0 rounded-full ${tint.dot}`}
-                                            />
-                                        )}
-                                        <span className="truncate text-sm font-medium">
-                                            {column.name}
-                                        </span>
-                                    </span>
-                                    <span className="flex shrink-0 items-center gap-1.5 text-xs text-gray-500">
-                                        {column.wip_limit ? (
-                                            <StatusBadge
-                                                tone={overWip ? 'danger' : 'neutral'}
-                                                aria-label={
-                                                    overWip
-                                                        ? t.projects.columns.overLimit.replace(
-                                                              '{name}',
-                                                              column.name,
-                                                          )
-                                                        : undefined
-                                                }
-                                            >
-                                                {held}/{column.wip_limit}
-                                            </StatusBadge>
-                                        ) : (
-                                            <span
-                                                className={`rounded-full px-1.5 py-0.5 font-medium transition-colors ${tint.chip}`}
-                                            >
-                                                {column.tasks.length}
-                                            </span>
-                                        )}
-                                        {remaining > 0 ? `${remaining}${bm.columnTotal}` : ''}
-                                    </span>
-                                </div>
+                                <BoardColumnHead
+                                    columnId={column.id}
+                                    name={column.name}
+                                    category={column.category}
+                                    view={view}
+                                    held={held}
+                                    shown={column.tasks.length}
+                                    wipLimit={column.wip_limit}
+                                    overWip={overWip}
+                                    remaining={remaining}
+                                    remainingLabel={bm.columnTotal}
+                                    dragging={draggingColumn}
+                                    busy={busy}
+                                    onRename={(name) => renameColumn(column.id, name)}
+                                    onMoveLeft={
+                                        columnIndex > 0 ? () => moveColumn(column.id, -1) : undefined
+                                    }
+                                    onMoveRight={
+                                        columnIndex < visibleColumns.length - 1
+                                            ? () => moveColumn(column.id, 1)
+                                            : undefined
+                                    }
+                                    onSort={(by) => sortColumn(column.id, by)}
+                                    targets={targetsFor(column.id)}
+                                    onMoveAllCards={(targetId) =>
+                                        moveCards(
+                                            column.tasks.map((task) => task.id),
+                                            targetId,
+                                        )
+                                    }
+                                    onSelectAll={() => selectAllIn(column.id)}
+                                    onPointerDownHead={(e) =>
+                                        beginColumnDrag(e, column, { fromHandle: false })
+                                    }
+                                    onPointerDownHandle={(e) =>
+                                        beginColumnDrag(e, column, { fromHandle: true })
+                                    }
+                                    onPointerMove={continueColumnDrag}
+                                    onPointerUp={endColumnDrag}
+                                    onPointerCancel={cancelColumnDrag}
+                                />
 
                                 {/* How full the column is, as a bar rather than a
                                     number to read. It grows into place so a card
@@ -588,6 +892,9 @@ export default function BoardPage() {
                                                 task={task}
                                                 view={view}
                                                 index={index}
+                                                selecting={selection.length > 0}
+                                                selected={selection.includes(task.id)}
+                                                onToggleSelected={() => toggleSelected(task.id)}
                                                 dragging={drag?.active === true && drag.taskId === task.id}
                                                 onPointerDownBody={(e) =>
                                                     beginDrag(e, task, { fromHandle: false })
@@ -619,6 +926,16 @@ export default function BoardPage() {
                             </div>
                         );
                     })}
+
+                    {/* After the last column, where a new lane belongs. It is
+                        outside the map so it is there on a board with no
+                        columns at all — which is exactly the board that most
+                        needs it. */}
+                    <BoardColumnComposer
+                        boardId={boardId}
+                        widthClass={widthClass}
+                        onCreated={loadBoard}
+                    />
                     </div>
                 </div>
             </div>
@@ -637,6 +954,18 @@ export default function BoardPage() {
                     style={{ left: drag.point.x + 12, top: drag.point.y + 12 }}
                 >
                     {drag.title}
+                </div>
+            )}
+
+            {columnDrag?.active && (
+                <div
+                    aria-hidden
+                    className={`pointer-events-none fixed z-modal max-w-[16rem] truncate rounded-md border border-blue-300 bg-white px-2 py-1 text-sm font-medium shadow-xl ${
+                        view.animate ? 'motion-safe:-rotate-2' : ''
+                    }`}
+                    style={{ left: columnDrag.point.x + 12, top: columnDrag.point.y + 12 }}
+                >
+                    {columnDrag.name}
                 </div>
             )}
 
@@ -660,15 +989,19 @@ export default function BoardPage() {
                 />
             )}
 
-            {pickingBackground && (
-                <BoardBackgroundModal
+            {settingsOpen && (
+                <BoardSettingsModal
                     boardId={boardId}
+                    boardName={board.name}
+                    boardView={boardView}
                     background={board}
-                    onClose={() => setPickingBackground(false)}
+                    projectsOnBoard={projectsOnBoard}
+                    onColumnsChanged={loadBoard}
+                    onClose={() => setSettingsOpen(false)}
                     // Repainted from what the API returned rather than by
                     // reloading: the cards have not changed, and pulling the
                     // whole board back would blink every column for a colour.
-                    onChanged={(next) =>
+                    onBackgroundChanged={(next) =>
                         setBoard((prev) =>
                             prev
                                 ? {
@@ -701,6 +1034,76 @@ function DropIndicator({ animate }: { animate: boolean }) {
     );
 }
 
+/**
+ * What can be done to the cards that are picked out, while they are picked out.
+ *
+ * A strip across the top of the board rather than a floating bar: the board
+ * already has one floating surface (the time tracker) and a second one would
+ * cover the bottom of a column, which is where the composer lives. It only
+ * exists while something is selected, so it costs nothing the rest of the time.
+ */
+function SelectionBar({
+    count,
+    columns,
+    busy,
+    onMove,
+    onRemove,
+    onClear,
+}: {
+    count: number;
+    columns: BoardColumn[];
+    busy: boolean;
+    onMove: (columnId: string) => void;
+    onRemove: () => void;
+    onClear: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.boards;
+
+    return (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 p-2">
+            <span className="text-sm font-medium text-blue-900">
+                {m.selectedCount.replace('{count}', String(count))}
+            </span>
+
+            {/* A select rather than a list of buttons: a board can have a dozen
+                columns, and the bar has to survive a phone. Resets to its
+                placeholder after each move, because the move it just made is
+                not a state this control is in. */}
+            <Select
+                aria-label={m.moveSelectedTo}
+                className="w-auto max-w-[12rem] max-md:min-h-touch"
+                value=""
+                disabled={busy || columns.length === 0}
+                onChange={(e) => {
+                    if (e.target.value) onMove(e.target.value);
+                }}
+            >
+                <option value="">{m.moveSelectedTo}</option>
+                {columns.map((column) => (
+                    <option key={column.id} value={column.id}>
+                        {column.name}
+                    </option>
+                ))}
+            </Select>
+
+            <Button
+                variant="secondary"
+                className="max-md:min-h-touch"
+                disabled={busy}
+                onClick={onRemove}
+            >
+                <Trash2 className="h-4 w-4" />
+                {m.removeCard}
+            </Button>
+            <Button variant="ghost" className="max-md:min-h-touch" onClick={onClear}>
+                <X className="h-4 w-4" />
+                {m.clearSelection}
+            </Button>
+        </div>
+    );
+}
+
 function BoardFilterBar({
     filters,
     onChange,
@@ -718,6 +1121,7 @@ function BoardFilterBar({
 }) {
     const { t } = useI18n();
     const f = t.projects.board.filters;
+    const m = t.projects.boards;
     const active = hasActiveFilter(filters);
 
     return (
@@ -748,6 +1152,25 @@ function BoardFilterBar({
            shared primitive behind every module header — logged as a follow-up
            rather than changed from inside one board page. */
         <div className="flex max-w-full flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:max-w-[9rem]">
+            {/* First in the row because it is what a full board is reached for:
+                on a board of two hundred cards, typing three letters is the
+                fastest of the five controls here and the only one that reaches
+                a card's own words rather than its metadata. */}
+            <span className="relative">
+                <Search
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 start-2"
+                />
+                <Input
+                    type="search"
+                    aria-label={m.searchCards}
+                    placeholder={m.searchCards}
+                    className="w-40 max-md:min-h-touch ps-7"
+                    value={filters.text}
+                    onChange={(e) => onChange({ ...filters, text: e.target.value })}
+                />
+            </span>
+
             <Select
                 aria-label={f.assignee}
                 className="max-md:min-h-touch"
@@ -838,6 +1261,9 @@ function TaskCard({
     view,
     index,
     dragging,
+    selecting,
+    selected,
+    onToggleSelected,
     onOpen,
     onRemove,
     onPointerDownBody,
@@ -851,6 +1277,14 @@ function TaskCard({
     /** Position in its column, for the entrance stagger. */
     index: number;
     dragging: boolean;
+    /**
+     * True while anything on the board is selected. The box then shows on every
+     * card rather than only on the chosen ones, so a selection started from one
+     * column's menu can be widened or narrowed by hand from anywhere.
+     */
+    selecting: boolean;
+    selected: boolean;
+    onToggleSelected: () => void;
     onOpen: () => void;
     onRemove: () => void;
     onPointerDownBody: (e: React.PointerEvent) => void;
@@ -919,14 +1353,33 @@ function TaskCard({
             style={{ animationDelay: staggerDelay(view, index) }}
             // pan-y keeps the column scrollable by finger; the grip below opts
             // out of that so a touch drag can start there.
-            className={`group touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
-                dragging ? 'opacity-40' : ''
-            } ${motionClass(view, 'card')}`}
+            className={`group touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+                selected ? 'border-blue-500 ring-1 ring-blue-300' : 'border-gray-200'
+            } ${dragging ? 'opacity-40' : ''} ${motionClass(view, 'card')}`}
         >
             {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}
 
             <div className={d.cardPad}>
             <div className="flex items-start gap-1">
+                {/* Shown only while a selection is running, and then on every
+                    card: a permanent checkbox on every card of every board
+                    would be a column of boxes to read past for the majority of
+                    readers who never select anything. */}
+                {selecting && (
+                    <span
+                        className="pt-0.5"
+                        // Stopped before the article's handler, so ticking a box
+                        // neither arms a drag nor opens the card.
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <Checkbox
+                            checked={selected}
+                            aria-label={`${m.selectCard}: ${task.title}`}
+                            onChange={onToggleSelected}
+                        />
+                    </span>
+                )}
                 {/* Both chrome buttons fade in on hover on a pointer device, so a
                     full column reads as cards rather than as rows of controls.
                     They stay put on touch, where the grip is the only way to

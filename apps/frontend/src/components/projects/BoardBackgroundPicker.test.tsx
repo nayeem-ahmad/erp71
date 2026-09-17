@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See AddBoardTasksModal.test.tsx.
-import BoardBackgroundModal from './BoardBackgroundModal';
+import BoardBackgroundPicker from './BoardBackgroundPicker';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
@@ -53,7 +53,7 @@ const file = (name: string, type: string, size: number) => {
 
 const plain = { background_color: null, background_image_url: null };
 
-describe('BoardBackgroundModal', () => {
+describe('BoardBackgroundPicker', () => {
     const realFileReader = globalThis.FileReader;
 
     beforeEach(() => {
@@ -77,10 +77,9 @@ describe('BoardBackgroundModal', () => {
     it('saves a colour on click — there is no second step to forget', async () => {
         const onChanged = jest.fn();
         render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={onChanged}
             />,
         );
@@ -100,10 +99,9 @@ describe('BoardBackgroundModal', () => {
 
     it('marks the colour the board is already wearing', () => {
         render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={{ background_color: 'RED', background_image_url: null }}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );
@@ -122,10 +120,9 @@ describe('BoardBackgroundModal', () => {
         stubFileReader('data:image/png;base64,AAAA');
         const onChanged = jest.fn();
         const { container } = render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={onChanged}
             />,
         );
@@ -148,10 +145,9 @@ describe('BoardBackgroundModal', () => {
     it('refuses a file too large to survive the JSON body limit, before reading it', async () => {
         stubFileReader('data:image/png;base64,AAAA');
         const { container } = render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );
@@ -168,10 +164,9 @@ describe('BoardBackgroundModal', () => {
     it('refuses a file that is not one of the stored image types', async () => {
         stubFileReader('data:application/pdf;base64,AAAA');
         const { container } = render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );
@@ -187,20 +182,18 @@ describe('BoardBackgroundModal', () => {
 
     it('offers removal only once there is a background to remove', () => {
         const { rerender } = render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );
         expect(screen.queryByRole('button', { name: /remove background/i })).toBeNull();
 
         rerender(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={{ background_color: 'AMBER', background_image_url: null }}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );
@@ -210,10 +203,9 @@ describe('BoardBackgroundModal', () => {
     it('removes the background on request', async () => {
         const onChanged = jest.fn();
         render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={{ background_color: null, background_image_url: 'https://cdn/x.jpg' }}
-                onClose={jest.fn()}
                 onChanged={onChanged}
             />,
         );
@@ -228,10 +220,9 @@ describe('BoardBackgroundModal', () => {
         (api.updateBoard as jest.Mock).mockRejectedValue(new Error('Board not found'));
         const onChanged = jest.fn();
         render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={plain}
-                onClose={jest.fn()}
                 onChanged={onChanged}
             />,
         );
@@ -245,10 +236,9 @@ describe('BoardBackgroundModal', () => {
 
     it('shows the picture the board is wearing, so a replace is an informed one', () => {
         render(
-            <BoardBackgroundModal
+            <BoardBackgroundPicker
                 boardId="b1"
                 background={{ background_color: null, background_image_url: 'https://cdn/x.jpg' }}
-                onClose={jest.fn()}
                 onChanged={jest.fn()}
             />,
         );

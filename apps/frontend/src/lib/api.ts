@@ -5094,6 +5094,31 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** Several cards into one column at once — the column menu and the selection bar. */
+    moveBoardCards: (id: string, data: { taskIds: string[]; columnId: string }) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/move`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Several cards off the board at once. The tasks themselves are untouched. */
+    removeBoardCards: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/remove`, {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * One column's cards, top to bottom, as a sort left them. The rule stays in
+     * the browser; only the result is stored, so the next drag is not fighting
+     * a sort order the board would keep reapplying.
+     */
+    setBoardColumnCardOrder: (id: string, columnId: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getBoardColumns: (id: string) => fetchWithAuth(`/projects/boards/${id}/columns`),
     createBoardColumn: (id: string, data: { name: string; category: string; wipLimit?: number }) =>
         fetchWithAuth(`/projects/boards/${id}/columns`, {
@@ -5105,6 +5130,13 @@ export const api = {
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The whole column order, left to right — see `ReorderBoardColumnsDto`. */
+    reorderBoardColumns: (id: string, columnIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ columnIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoardColumn: (id: string, columnId: string) =>
