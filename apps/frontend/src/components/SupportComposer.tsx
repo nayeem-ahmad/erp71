@@ -2,10 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatMessage } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 import { Button, Field, Input, Textarea } from '@/components/ui';
 
 export type KnockCategory = 'support' | 'bug' | 'feature' | 'general';
+
+/** The thread a submission opened, as its ticket. */
+export type CreatedKnock = { id: string; ticketNumber: number };
 
 export function availableKnockCategories(
     supportEnabled: boolean,
@@ -34,7 +38,7 @@ export default function SupportComposer({
     supportEnabled: boolean;
     feedbackEnabled: boolean;
     capturePage?: boolean;
-    onCreated: (threadId: string) => void;
+    onCreated: (created: CreatedKnock) => void;
     onCancel: () => void;
 }) {
     const { t } = useI18n();
@@ -65,8 +69,14 @@ export default function SupportComposer({
                 subject: subject.trim() || undefined,
                 body: body.trim(),
                 page: capturePage && typeof window !== 'undefined' ? window.location.pathname : undefined,
-            }) as { id: string };
-            onCreated(res.id);
+            }) as CreatedKnock;
+            // The number is the one thing worth carrying away from this form,
+            // and one of the two places it is submitted from navigates away
+            // immediately — so it is said here rather than in either caller.
+            if (res.ticketNumber) {
+                toast.success(formatMessage(m.createdToast, { number: res.ticketNumber }));
+            }
+            onCreated(res);
         } catch (err: any) {
             setStatus('error');
             setErrorMsg(err?.message || m.defaultError);

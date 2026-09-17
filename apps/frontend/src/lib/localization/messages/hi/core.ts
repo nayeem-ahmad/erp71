@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: "POS टर्मिनल",
         subtitle: "त्वरित चयन और बिलिंग",
         helpTooltip: "आइटम चुनें, भुगतान विधि चुनें, फिर चेकआउट दबाएँ। विभाजित भुगतान के लिए कई भुगतान पंक्तियाँ जोड़ें। लौटाई जाने वाली राशि अपने आप गणना होती है।",
+        openShift: "शिफ़्ट खोलें",
         offline: {
             banner: "आप ऑफ़लाइन हैं। बिक्री कतार में रहेगी और दोबारा जुड़ने पर सिंक हो जाएगी।",
             pending: "{count} लंबित",
@@ -1069,6 +1070,8 @@ export const coreMessages = {
             paid: "भुगतान किया",
             changeDue: "लौटाई जाने वाली राशि",
             printReceipt: "POS रसीद प्रिंट करें",
+            printMushak: "मूसक 6.3 प्रिंट करें",
+            mushakAfterSync: "यह बिक्री सिंक होने पर मूसक 6.3 प्रिंट किया जा सकेगा।",
             skipContinue: "छोड़ें और जारी रखें",
         },
         payment: {
@@ -1100,6 +1103,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: "कृपया {product} के लिए {count} सीरियल नंबर दें।",
             serialUnique: "{product} के सीरियल नंबर अद्वितीय होने चाहिए।",
+            sessionRequired: "काउंटर पर बिक्री से पहले कैशियर सेशन खोलें।",
             insufficientPaid: "भुगतान की गई राशि अपर्याप्त है!",
             saleOffline: "बिक्री ऑफ़लाइन सहेजी गई — ऑनलाइन होने पर सिंक होगी",
             offlineFailed: "ऑफ़लाइन बिक्री सहेजने में विफल। कृपया फिर से प्रयास करें।",
@@ -1108,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: "{count} पॉइंट भुनाए गए",
             pointsEarned: "{count} पॉइंट अर्जित",
             checkoutFailed: "चेकआउट विफल। कृपया स्टॉक स्तर जाँचें।",
+            mushakPrintFailed: "मूसक 6.3 प्रिंट नहीं हो सका।",
             invalidDiscount: "अमान्य छूट कोड",
         },
     },

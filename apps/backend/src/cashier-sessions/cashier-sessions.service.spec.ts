@@ -28,11 +28,23 @@ describe('CashierSessionsService', () => {
       cashTransaction: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
+      },
+      store: {
+        // The store is validated before a session is filed against it, so the
+        // default is "this store exists in this tenant" and the tests that
+        // care about the refusal override it.
+        findFirst: jest.fn().mockResolvedValue({ id: 'store-1' }),
+      },
+      sale: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      salesReturn: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
@@ -546,6 +558,251 @@ describe('CashierSessionsService', () => {
       );
       await expect(service.getCashTransactions('t1', 'sess-1')).rejects.toThrow(
         'Session does not belong to this tenant',
+      );
+    });
+  });
+  // ── Reconciliation: what the drawer should hold ──────────────────────────
+
+  describe('getSessionSummary', () => {
+    const openSession = {
+      id: 'sess-1',
+      tenant_id: 't1',
+      status: 'OPEN',
+      opening_cash: 500,
+      closing_cash: 0,
+      variance: null,
+    };
+
+    it('counts cash takings towards expected cash and leaves other tenders out', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([
+        {
+          id: 's1',
+          total_amount: 1000,
+          payments: [
+            { payment_method: 'CASH', amount: 400 },
+            { payment_method: 'BKASH', amount: 600 },
+          ],
+        },
+        {
+          id: 's2',
+          total_amount: 250,
+          payments: [{ payment_method: 'CARD', amount: 250 }],
+        },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.salesCount).toBe(2);
+      expect(summary.salesTotal).toBe(1250);
+      expect(summary.cashTakings).toBe(400);
+      // 500 float + 400 cash. The 850 taken on bKash and card is real revenue
+      // and is not in the drawer, so it must not be counted at the close.
+      expect(summary.expectedCash).toBe(900);
+      expect(summary.paymentBreakdown).toEqual([
+        { method: 'BKASH', amount: 600 },
+        { method: 'CASH', amount: 400 },
+        { method: 'CARD', amount: 250 },
+      ]);
+    });
+
+    it('reads a renamed tender the same way the ledger does', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([
+        {
+          id: 's1',
+          total_amount: 700,
+          payments: [
+            // Tenant-named methods. Only the last one is money in the drawer,
+            // and the split has to match what the posting rules booked.
+            { payment_method: 'bKash Personal', amount: 200 },
+            { payment_method: 'Debit Card', amount: 300 },
+            { payment_method: 'Cash on Counter', amount: 200 },
+          ],
+        },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.cashTakings).toBe(200);
+      expect(summary.expectedCash).toBe(700); // 500 float + 200 cash
+    });
+
+    it('takes refunds this shift paid out back off expected cash', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([
+        { id: 's1', total_amount: 300, payments: [{ payment_method: 'CASH', amount: 300 }] },
+      ]);
+      db.salesReturn.findMany.mockResolvedValue([{ total_refund: 120 }]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.refunds).toBe(120);
+      expect(summary.expectedCash).toBe(680); // 500 + 300 - 120
+    });
+
+    it('applies recorded cash movements in both directions', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.cashTransaction.findMany.mockResolvedValue([
+        { amount: 200, type: 'LOAN' },
+        { amount: -50, type: 'PAYOUT' },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.cashIn).toBe(200);
+      expect(summary.cashOut).toBe(50);
+      expect(summary.expectedCash).toBe(650); // 500 + 200 - 50
+    });
+
+    it('reports no variance while the shift is still open', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.closingCash).toBeNull();
+      expect(summary.variance).toBeNull();
+    });
+
+    it('refuses a session belonging to another tenant', async () => {
+      db.cashierSession.findUnique.mockResolvedValue({ ...openSession, tenant_id: 'other' });
+
+      await expect(service.getSessionSummary('t1', 'sess-1')).rejects.toThrow('Session not found');
+    });
+  });
+
+  describe('closeSession reconciliation', () => {
+    beforeEach(() => {
+      db.cashierSession.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        tenant_id: 't1',
+        status: 'OPEN',
+        opening_cash: 500,
+        closing_cash: 0,
+        variance: null,
+      });
+      db.cashierSession.update.mockResolvedValue({ id: 'sess-1', status: 'CLOSED' });
+    });
+
+    it('freezes expected cash and the variance onto the row', async () => {
+      db.sale.findMany.mockResolvedValue([
+        { id: 's1', total_amount: 300, payments: [{ payment_method: 'CASH', amount: 300 }] },
+      ]);
+
+      await service.closeSession('t1', 'sess-1', { closingCash: 790 });
+
+      expect(db.cashierSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            expected_cash: 800, // 500 float + 300 cash taken
+            variance: -10, // counted 790 — the till is ten short
+          }),
+        }),
+      );
+    });
+
+    it('releases the till and the cashier for the next shift', async () => {
+      await service.closeSession('t1', 'sess-1', { closingCash: 500 });
+
+      expect(db.cashierSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            open_counter_key: null,
+            open_user_key: null,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('getOpenSessionsByStore', () => {
+    it('returns each open till with what it is holding', async () => {
+      db.cashierSession.findMany.mockResolvedValue([
+        { id: 'sess-1', tenant_id: 't1', status: 'OPEN', opening_cash: 500, closing_cash: 0, variance: null },
+      ]);
+      db.cashierSession.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        tenant_id: 't1',
+        status: 'OPEN',
+        opening_cash: 500,
+        closing_cash: 0,
+        variance: null,
+      });
+      db.sale.findMany.mockResolvedValue([
+        { id: 's1', total_amount: 100, payments: [{ payment_method: 'CASH', amount: 100 }] },
+      ]);
+
+      const rows = await service.getOpenSessionsByStore('t1', 'store-1');
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].summary.expectedCash).toBe(600);
+      expect(db.cashierSession.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenant_id: 't1', store_id: 'store-1', status: 'OPEN' }),
+        }),
+      );
+    });
+  });
+  describe('openSession guards', () => {
+    const openDto = { storeId: 'store-1', openingCash: 500 };
+
+    beforeEach(() => {
+      db.cashierSession.findFirst.mockResolvedValue(null);
+      db.cashierSession.create.mockResolvedValue({ id: 'sess-1', counter: null });
+    });
+
+    it('refuses a store that does not belong to this tenant', async () => {
+      db.store.findFirst.mockResolvedValue(null);
+
+      await expect(service.openSession('t1', 'u1', openDto)).rejects.toThrow('Store not found');
+      expect(db.cashierSession.create).not.toHaveBeenCalled();
+    });
+
+    it('claims the till and the cashier through the unique-index columns', async () => {
+      await service.openSession('t1', 'u1', { ...openDto, counterId: 'c1' });
+
+      expect(db.cashierSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ open_counter_key: 'c1', open_user_key: 'u1' }),
+        }),
+      );
+    });
+
+    it('leaves the counter claim null when no till was chosen, so others still open', async () => {
+      await service.openSession('t1', 'u1', openDto);
+
+      expect(db.cashierSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ open_counter_key: null, open_user_key: 'u1' }),
+        }),
+      );
+    });
+
+    it('turns the lost half of a same-second race into the same refusal as the check', async () => {
+      // What the query engine raises when the other cashier's INSERT landed
+      // first — shape, not class: see the comment on the catch.
+      db.cashierSession.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), {
+          code: 'P2002',
+          meta: { target: ['tenant_id', 'open_counter_key'] },
+        }),
+      );
+
+      await expect(service.openSession('t1', 'u1', { ...openDto, counterId: 'c1' })).rejects.toThrow(
+        'This counter already has an open session',
+      );
+    });
+
+    it('names the person rather than the till when it is their own second session', async () => {
+      db.cashierSession.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), {
+          code: 'P2002',
+          meta: { target: ['tenant_id', 'open_user_key'] },
+        }),
+      );
+
+      await expect(service.openSession('t1', 'u1', openDto)).rejects.toThrow(
+        'User already has an open cashier session',
       );
     });
   });

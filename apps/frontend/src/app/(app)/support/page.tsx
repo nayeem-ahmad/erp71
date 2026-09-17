@@ -11,12 +11,29 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import SupportComposer from '@/components/SupportComposer';
+import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
+import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
+
+/**
+ * How often the screen re-reads itself when the live stream is *not* carrying
+ * events — a browser that refused it, or a proxy that ate it. Matches the chat
+ * page's message poll, which is the cadence this screen is held to.
+ */
+const FALLBACK_POLL_MS = 5_000;
+
+/**
+ * And how often it re-reads while the stream *is* live. Not zero: an event
+ * dropped between the publisher and this tab would otherwise never be noticed,
+ * and one request a minute is a cheap floor under the whole mechanism.
+ */
+const SAFETY_POLL_MS = 60_000;
 
 type KnockCategory = 'support' | 'bug' | 'feature' | 'general';
 
 type Thread = {
     id: string;
+    ticketNumber: number;
     subject: string;
     status: string;
     category: KnockCategory;
@@ -36,6 +53,15 @@ type Message = {
     createdAt: string;
 };
 
+type ThreadInfo = {
+    id?: string;
+    ticketNumber?: number;
+    subject: string;
+    status: string;
+    category?: string;
+    page?: string | null;
+};
+
 function CategoryBadge({ category, label }: { category: string; label: string }) {
     const tone =
         category === 'bug'
@@ -50,6 +76,15 @@ function CategoryBadge({ category, label }: { category: string; label: string })
             {label}
         </span>
     );
+}
+
+/**
+ * The ticket's number, the one thing on this screen a shop owner reads out over
+ * the phone. `tabular-nums` so a column of them lines up.
+ */
+function TicketNumber({ value, className = '' }: { value: number | undefined; className?: string }) {
+    if (!value) return null;
+    return <span className={`shrink-0 font-semibold tabular-nums text-gray-500 ${className}`}>#{value}</span>;
 }
 
 export default function SupportPage() {
@@ -70,12 +105,7 @@ export default function SupportPage() {
 
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [threadInfo, setThreadInfo] = useState<{
-        subject: string;
-        status: string;
-        category?: string;
-        page?: string | null;
-    } | null>(null);
+    const [threadInfo, setThreadInfo] = useState<ThreadInfo | null>(null);
     const [replyBody, setReplyBody] = useState('');
     const [sending, setSending] = useState(false);
     const [loadingThreads, setLoadingThreads] = useState(true);
@@ -84,7 +114,9 @@ export default function SupportPage() {
     const [showNewForm, setShowNewForm] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /** Which thread is open, for the stream callback and the poll. */
+    const activeThreadIdRef = useRef<string | null>(null);
+    activeThreadIdRef.current = activeThreadId;
     /** Latest filters, so the poll interval never refetches through a stale closure. */
     const filtersRef = useRef({ appliedSearch, statusFilter, categoryFilter });
     filtersRef.current = { appliedSearch, statusFilter, categoryFilter };
@@ -150,6 +182,31 @@ export default function SupportPage() {
         }
     };
 
+    /**
+     * A thread moved on the admin side. The event is only a nudge — what is on
+     * screen is re-read from the API — so a duplicate costs a request and a
+     * missed one is picked up by the poll below.
+     */
+    const handleStreamEvent = (event: SupportStreamEvent) => {
+        const isOpenThread = event.threadId === activeThreadIdRef.current;
+        if (isOpenThread) void loadMessages(event.threadId, { silent: true });
+        void loadThreads({ silent: true });
+
+        if (event.kind === 'status') {
+            const template = event.status === 'resolved' ? page.resolvedNotice : page.reopenedNotice;
+            toast.info(fmt(template, { number: event.ticketNumber }));
+            return;
+        }
+        // A reply into the open thread needs no announcement — it appears in the
+        // conversation, the way a chat message does. One into any other ticket
+        // would otherwise go unnoticed until the list is next looked at.
+        if (event.actor === 'admin' && !isOpenThread) {
+            toast.info(fmt(page.replyNotice, { number: event.ticketNumber }));
+        }
+    };
+
+    const { connected } = useSupportStream(handleStreamEvent);
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const thread = params.get('thread');
@@ -174,18 +231,25 @@ export default function SupportPage() {
     useEffect(() => {
         if (!activeThreadId) return;
         void loadMessages(activeThreadId);
-
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => {
-            void loadMessages(activeThreadId, { silent: true });
-            void loadThreads({ silent: true });
-        }, 10000);
-
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeThreadId]);
+
+    /**
+     * The safety net under the stream. Runs whether or not a thread is open —
+     * the list's statuses go stale too, and this used to stand still until
+     * something was selected, so a ticket resolved while the list was on screen
+     * stayed "open" until the page was navigated.
+     */
+    useEffect(() => {
+        const timer = setInterval(() => {
+            void loadThreads({ silent: true });
+            const open = activeThreadIdRef.current;
+            if (open) void loadMessages(open, { silent: true });
+        }, connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS);
+
+        return () => clearInterval(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connected]);
 
     useEffect(() => {
         const lastId = messages[messages.length - 1]?.id ?? null;
@@ -374,7 +438,10 @@ export default function SupportPage() {
                                     className={`w-full text-start px-3 md:px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
+                                        <p className="flex min-w-0 items-baseline gap-1.5">
+                                            <TicketNumber value={thread.ticketNumber} className="text-[11px]" />
+                                            <span className="truncate text-sm font-bold text-gray-900">{thread.subject}</span>
+                                        </p>
                                         <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-success-light text-success-text' : 'bg-warning-light text-warning-text'}`}>
                                             {thread.status}
                                         </span>
@@ -417,6 +484,11 @@ export default function SupportPage() {
                                     </button>
                                     <div className="min-w-0">
                                         <p className="font-semibold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                        {threadInfo?.ticketNumber && (
+                                            <p className="text-[11px] tabular-nums text-gray-500">
+                                                {fmt(page.ticketLabel, { number: threadInfo.ticketNumber })}
+                                            </p>
+                                        )}
                                         {threadInfo?.page && (
                                             <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
                                         )}
@@ -508,9 +580,9 @@ export default function SupportPage() {
                             feedbackEnabled={feedback}
                             capturePage
                             onCancel={() => setShowNewForm(false)}
-                            onCreated={(threadId) => {
+                            onCreated={(created) => {
                                 setShowNewForm(false);
-                                selectThread(threadId);
+                                selectThread(created.id);
                                 /* A live filter that excludes the new conversation would
                                    make it vanish from the list the moment it was created,
                                    so creating one clears them. */

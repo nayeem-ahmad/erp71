@@ -14,7 +14,8 @@ import { IsString, MinLength, IsIn, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { DatabaseService } from '../database/database.service';
-import { threadCategoryWhere } from './support.util';
+import { parseTicketNumberQuery, threadCategoryWhere } from './support.util';
+import { SupportEventsService } from './support-events.service';
 
 class AdminSendMessageDto {
     @IsString()
@@ -32,7 +33,10 @@ class UpdateThreadDto {
 @Controller('admin/support')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class AdminSupportController {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly events: SupportEventsService,
+    ) {}
 
     /**
      * Options for the inbox's tenant/user dropdowns. Derived from the threads
@@ -114,7 +118,16 @@ export class AdminSupportController {
             ...threadCategoryWhere(category, kind),
         };
         if (status && ['open', 'resolved'].includes(status)) where.status = status;
-        if (search) where.subject = { contains: search, mode: 'insensitive' };
+        if (search) {
+            // A ticket number is what a shop owner reads down the phone, so the
+            // one search box takes either. Still an OR with the subject: a
+            // number is also a perfectly good thing to have in a subject line
+            // ("Order 1042 not printing"), and dropping that match would make
+            // the box quietly worse at the job it already did.
+            const ticketNumber = parseTicketNumberQuery(search);
+            const bySubject = { subject: { contains: search, mode: 'insensitive' } };
+            where.OR = ticketNumber === null ? [bySubject] : [{ ticketNumber }, bySubject];
+        }
         if (tenantId) where.tenantId = tenantId;
         if (userId) where.createdById = userId;
 
@@ -141,6 +154,7 @@ export class AdminSupportController {
         return {
             data: data.map((t) => ({
                 id: t.id,
+                ticketNumber: t.ticketNumber,
                 subject: t.subject,
                 status: t.status,
                 category: t.category,
@@ -184,6 +198,7 @@ export class AdminSupportController {
         return {
             thread: {
                 id: thread.id,
+                ticketNumber: thread.ticketNumber,
                 subject: thread.subject,
                 status: thread.status,
                 category: thread.category,
@@ -225,9 +240,19 @@ export class AdminSupportController {
             },
         });
 
+        // A reply reopens the thread, so the tenant is told about both at once.
         await this.db.supportThread.update({
             where: { id },
             data: { updatedAt: new Date(), status: 'open' },
+        });
+
+        this.events.publish({
+            kind: 'message',
+            tenantId: thread.tenantId,
+            threadId: thread.id,
+            ticketNumber: thread.ticketNumber,
+            status: 'open',
+            actor: 'admin',
         });
 
         return { id: message.id };
@@ -242,6 +267,20 @@ export class AdminSupportController {
             where: { id },
             data: { ...(dto.status && { status: dto.status }) },
         });
+
+        // The reason this endpoint publishes at all: a shop owner watching the
+        // thread sees it resolved (or reopened) as it happens, instead of on
+        // whatever refresh they happen to do next.
+        if (updated.status !== thread.status) {
+            this.events.publish({
+                kind: 'status',
+                tenantId: updated.tenantId,
+                threadId: updated.id,
+                ticketNumber: updated.ticketNumber,
+                status: updated.status,
+                actor: 'admin',
+            });
+        }
 
         return { id: updated.id, status: updated.status };
     }

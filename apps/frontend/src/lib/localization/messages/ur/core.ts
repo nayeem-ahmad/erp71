@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: 'پی او ایس ٹرمینل',
         subtitle: 'فوری انتخاب اور بلنگ',
         helpTooltip: 'آئٹمز منتخب کریں، ادائیگی کا طریقہ چنیں، پھر چیک آؤٹ دبائیں۔ تقسیم شدہ ادائیگی کے لیے کئی ادائیگی قطاریں شامل کریں۔ واپس رقم خود بخود شمار ہو جاتی ہے۔',
+        openShift: 'شفٹ کھولیں',
         offline: {
             banner: 'آپ آف لائن ہیں۔ فروخت قطار میں رکھی جائے گی اور دوبارہ رابطہ ہونے پر ہم آہنگ ہو جائے گی۔',
             pending: '{count} زیرِ التوا',
@@ -1069,6 +1070,8 @@ export const coreMessages = {
             paid: 'ادا شدہ',
             changeDue: 'واپس رقم',
             printReceipt: 'پی او ایس رسید پرنٹ کریں',
+            printMushak: 'مشک 6.3 پرنٹ کریں',
+            mushakAfterSync: 'یہ فروخت سنک ہونے پر مشک 6.3 پرنٹ کیا جا سکے گا۔',
             skipContinue: 'چھوڑیں اور آگے بڑھیں',
         },
         payment: {
@@ -1100,6 +1103,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: 'براہِ کرم {product} کے لیے {count} سیریل نمبر فراہم کریں۔',
             serialUnique: '{product} کے سیریل نمبر منفرد ہونے چاہئیں۔',
+            sessionRequired: 'کاؤنٹر پر فروخت سے پہلے کیشیئر سیشن کھولیں۔',
             insufficientPaid: 'ادا شدہ رقم ناکافی ہے!',
             saleOffline: 'فروخت آف لائن محفوظ ہو گئی — آن لائن ہونے پر ہم آہنگ ہو جائے گی',
             offlineFailed: 'آف لائن فروخت محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔',
@@ -1108,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: '{count} پوائنٹس استعمال ہوئے',
             pointsEarned: '{count} پوائنٹس ملے',
             checkoutFailed: 'چیک آؤٹ ناکام۔ اسٹاک کی سطح جانچ لیں۔',
+            mushakPrintFailed: 'مشک 6.3 پرنٹ نہیں ہو سکا۔',
             invalidDiscount: 'رعایتی کوڈ غلط ہے',
         },
     },

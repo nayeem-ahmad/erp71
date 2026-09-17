@@ -273,4 +273,45 @@ describe('TenantsService', () => {
         ).rejects.toThrow(/IANA/);
         expect(db.tenant.update).not.toHaveBeenCalled();
     });
+
+    /**
+     * The POS 6.3 format is a sub-option of issuing Mushak documents at all.
+     * The settings form hides it when Mushak is off, but the form is only a
+     * convenience — the rule has to hold at the API.
+     */
+    describe('mushak POS receipt format', () => {
+        const savedData = () => db.tenant.update.mock.calls[0][0].data;
+
+        it('stores the POS format when Mushak is on', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateTaxSettings('tenant-1', {
+                mushak_enabled: true,
+                mushak_pos_receipt: true,
+            } as any);
+
+            expect(savedData().mushak_pos_receipt).toBe(true);
+        });
+
+        it('clears the POS format when Mushak itself is switched off', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            // A workspace that surrenders its BIN must not keep a setting that
+            // would silently resume printing tax invoices if Mushak came back.
+            await service.updateTaxSettings('tenant-1', {
+                mushak_enabled: false,
+                mushak_pos_receipt: true,
+            } as any);
+
+            expect(savedData().mushak_pos_receipt).toBe(false);
+        });
+
+        it('leaves the POS format alone when the request does not mention it', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateTaxSettings('tenant-1', { business_tin: '123' } as any);
+
+            expect(savedData()).not.toHaveProperty('mushak_pos_receipt');
+        });
+    });
 });

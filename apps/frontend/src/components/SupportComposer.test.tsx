@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SupportComposer, {
     availableKnockCategories,
     defaultKnockCategory,
 } from './SupportComposer';
+import { useToastStore } from '@/lib/toast';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -59,6 +60,33 @@ describe('SupportComposer', () => {
         );
         expect(screen.queryByRole('button', { name: 'Bug' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'I need help' })).not.toBeInTheDocument();
+    });
+
+    it('hands the new ticket back and says its number', async () => {
+        const { api } = require('@/lib/api');
+        api.createSupportThread.mockResolvedValue({ id: 'thr-1', ticketNumber: 12 });
+        useToastStore.setState({ toasts: [] });
+        const onCreated = jest.fn();
+
+        render(
+            <SupportComposer
+                supportEnabled
+                feedbackEnabled={false}
+                onCreated={onCreated}
+                onCancel={jest.fn()}
+            />,
+        );
+        fireEvent.change(screen.getByPlaceholderText('Describe what you need help with…'), {
+            target: { value: 'The printer does nothing' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: 'thr-1', ticketNumber: 12 }));
+        // Said here rather than by the caller, because the widget navigates away
+        // the moment this resolves.
+        expect(useToastStore.getState().toasts.map((item) => item.message)).toEqual([
+            'Ticket #12 created.',
+        ]);
     });
 
     it('lets the user pick a type when both flags are on', () => {

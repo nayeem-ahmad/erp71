@@ -20,15 +20,14 @@ const IMPORT_FIELDS: ImportField[] = [
 interface Account {
     id: string;
     name: string;
-    code?: string;
+    code?: string | null;
 }
 
 interface PaymentMethod {
     id: string;
     name: string;
     type: string;
-    account_id?: string;
-    account?: Account;
+    account_id?: string | null;
     is_active: boolean;
     show_on_entry: boolean;
     sort_order: number;
@@ -51,11 +50,12 @@ const PAYMENT_TYPES = PAYMENT_METHOD_TYPE_VALUES.map((value) => ({
 interface MethodFormProps {
     initial?: Partial<PaymentMethod>;
     accounts: Account[];
+    accountsError?: string | null;
     onSave: (data: any) => Promise<void>;
     onCancel: () => void;
 }
 
-function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
+function MethodForm({ initial, accounts, accountsError, onSave, onCancel }: MethodFormProps) {
     const [name, setName] = useState(initial?.name ?? '');
     const [type, setType] = useState<string>(initial?.type ?? PaymentMethodType.CASH);
     const [accountId, setAccountId] = useState(initial?.account_id ?? '');
@@ -72,7 +72,9 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
             await onSave({
                 name: name.trim(),
                 type,
-                account_id: accountId || undefined,
+                // null, not undefined: the backend leaves an absent key alone,
+                // so undefined could never clear an existing link.
+                account_id: accountId || null,
                 is_active: isActive,
                 show_on_entry: showOnEntry,
                 sort_order: Number(serial) || 0,
@@ -134,6 +136,12 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                             </option>
                         ))}
                     </Select>
+                    {accountsError ? (
+                        <p className="mt-1 text-xs text-amber-600">
+                            Accounts could not be loaded, so this list is empty. The method still
+                            saves without a linked account.
+                        </p>
+                    ) : null}
                 </Field>
 
                 <div className="flex items-center gap-3 pt-6">
@@ -188,22 +196,37 @@ export default function PaymentMethodsSettingsPage() {
     const pageTitle = 'Payment Methods';
     const [methods, setMethods] = useState<PaymentMethod[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [accountsError, setAccountsError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [importOpen, setImportOpen] = useState(false);
 
+    // Settled, not Promise.all: the account picker is an optional extra, and a
+    // rejection there used to take the payment-method list down with it — the
+    // page rendered empty and toasted whatever the accounts call had complained
+    // about. The two loads are independent, so failure is too.
     const loadData = useCallback(async () => {
         try {
-            const [methodsData, accountsData] = await Promise.all([
+            const [methodsResult, accountsResult] = await Promise.allSettled([
                 api.getPaymentMethods(),
-                api.getAccounts(),
+                api.getPaymentMethodAccounts(),
             ]);
-            setMethods(methodsData ?? []);
-            setAccounts(accountsData?.data ?? accountsData ?? []);
-        } catch (err: any) {
-            toast.error(err?.message || 'Failed to load data');
+
+            if (methodsResult.status === 'fulfilled') {
+                setMethods(methodsResult.value ?? []);
+            } else {
+                toast.error((methodsResult.reason as any)?.message || 'Failed to load payment methods');
+            }
+
+            if (accountsResult.status === 'fulfilled') {
+                setAccounts(accountsResult.value ?? []);
+                setAccountsError(null);
+            } else {
+                setAccounts([]);
+                setAccountsError((accountsResult.reason as any)?.message || 'Failed to load accounts');
+            }
         } finally {
             setLoading(false);
         }
@@ -252,6 +275,11 @@ export default function PaymentMethodsSettingsPage() {
     const typeLabel = (type: string) =>
         PAYMENT_TYPES.find((pt) => pt.value === type)?.label ?? type;
 
+    // The API returns account_id only, so the name is resolved against the
+    // picker's own list rather than read off a relation that never ships.
+    const accountName = (accountId?: string | null) =>
+        accountId ? accounts.find((acc) => acc.id === accountId)?.name : undefined;
+
     return (
         <PageShell maxWidth="full">
             <PageHeader
@@ -287,6 +315,7 @@ export default function PaymentMethodsSettingsPage() {
                 {showCreate && (
                     <MethodForm
                         accounts={accounts}
+                        accountsError={accountsError}
                         onSave={handleCreate}
                         onCancel={() => setShowCreate(false)}
                     />
@@ -312,6 +341,7 @@ export default function PaymentMethodsSettingsPage() {
                                     <MethodForm
                                         initial={method}
                                         accounts={accounts}
+                                        accountsError={accountsError}
                                         onSave={(data) => handleUpdate(method.id, data)}
                                         onCancel={() => setEditingId(null)}
                                     />
@@ -332,7 +362,7 @@ export default function PaymentMethodsSettingsPage() {
                                                 </div>
                                                 <p className="text-xs text-gray-500">
                                                     {typeLabel(method.type)}
-                                                    {method.account?.name ? ` · ${method.account.name}` : ''}
+                                                    {accountName(method.account_id) ? ` · ${accountName(method.account_id)}` : ''}
                                                 </p>
                                             </div>
                                         </div>

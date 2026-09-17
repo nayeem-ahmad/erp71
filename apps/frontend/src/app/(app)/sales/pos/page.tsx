@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, UserPlus, History, Receipt } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
-import { api } from '@/lib/api';
+import { api, fetchWithAuth } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
+import { printMushakReceipt } from '@/lib/mushak-receipt-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { formatBDT, formatDateTime } from '@/lib/format';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
@@ -83,6 +84,21 @@ export default function POSPage() {
     const [bkashAmount, setBkashAmount] = useState<number>(0);
     const [cardAmount, setCardAmount] = useState<number>(0);
     const [lastSale, setLastSale] = useState<any>(null);
+    /**
+     * Whether this workspace's counter prints the মূসক-৬.৩ tax invoice as its
+     * default receipt. Only the default: both formats stay reachable from the
+     * success screen, because whether a buyer needs a tax invoice is the
+     * buyer's business and not a workspace-wide setting.
+     */
+    const [mushakPosReceipt, setMushakPosReceipt] = useState(false);
+    /**
+     * Whether this workspace issues Mushak documents at all. Separate from the
+     * flag above: a shop with no BIN must not be offered a 6.3 even as a
+     * secondary action, so this gates whether the button exists while
+     * `mushakPosReceipt` only decides which button is primary.
+     */
+    const [mushakEnabled, setMushakEnabled] = useState(false);
+    const [printingMushak, setPrintingMushak] = useState(false);
 
     const [discountCodeInput, setDiscountCodeInput] = useState('');
     const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; name: string; amount: number } | null>(null);
@@ -106,6 +122,14 @@ export default function POSPage() {
 
     const { isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount } = useOfflineSync();
 
+    // The shift this cashier has open, and whether this tenant insists on one.
+    // POS used to know about neither: it read a counter id out of localStorage
+    // and sold, so a cashier who never opened a shift could ring a day of
+    // sales that reconciled against nothing.
+    const [cashierSession, setCashierSession] = useState<any>(null);
+    const [sessionRequired, setSessionRequired] = useState(false);
+    const [sessionChecked, setSessionChecked] = useState(false);
+
     const loadRecentSales = useCallback(async () => {
         if (!isOnline) return;
         setHistoryLoading(true);
@@ -127,6 +151,21 @@ export default function POSPage() {
             void loadRecentSales();
         }
     }, [rightPanelTab, loadRecentSales]);
+
+    // Which format this counter defaults to. A failure here is not worth
+    // blocking the till for: the counter falls back to the ordinary receipt,
+    // which is what it printed before this setting existed.
+    useEffect(() => {
+        fetchWithAuth('/tenants/tax-settings')
+            .then(d => {
+                setMushakEnabled(Boolean(d?.mushak_enabled));
+                setMushakPosReceipt(Boolean(d?.mushak_enabled && d?.mushak_pos_receipt));
+            })
+            .catch(() => {
+                setMushakEnabled(false);
+                setMushakPosReceipt(false);
+            });
+    }, []);
 
     const addNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         toast[type](message);
@@ -164,7 +203,29 @@ export default function POSPage() {
 
     useEffect(() => {
         loadProducts();
+        loadCashierSession();
     }, []);
+
+    const loadCashierSession = async () => {
+        try {
+            const [session, settings] = await Promise.all([
+                api.getOpenCashierSession().catch(() => null),
+                api.getSalesSettings().catch(() => null),
+            ]);
+            setCashierSession(session ?? null);
+            setSessionRequired(Boolean(settings?.require_cashier_session));
+        } catch {
+            // Offline or a 5xx: fall through to the pre-existing behaviour
+            // rather than locking the till out of selling. The backend applies
+            // the same rule on the way in, so nothing is let through that the
+            // API would have refused.
+        } finally {
+            setSessionChecked(true);
+        }
+    };
+
+    // Only ever blocks when the tenant asked for it *and* we know the answer.
+    const blockedForNoSession = sessionChecked && sessionRequired && !cashierSession;
 
     const resolveSalesWarehouseId = (settings: any): string | null => {
         if (!settings) return null;
@@ -378,6 +439,11 @@ export default function POSPage() {
     const handleCheckoutClick = async () => {
         if (cart.length === 0) return;
 
+        if (blockedForNoSession) {
+            addNotification(t.pos.notifications.sessionRequired, 'error');
+            return;
+        }
+
         // Validate serial numbers BEFORE showing Payment Details dialog
         if (!validateSerialNumbers()) {
             return;
@@ -420,13 +486,18 @@ export default function POSPage() {
         if (bkashAmount > 0) payments.push({ paymentMethod: 'BKASH', amount: bkashAmount });
         if (cardAmount > 0) payments.push({ paymentMethod: 'CARD', amount: cardAmount });
 
-        const counterId = localStorage.getItem('counter_id') || undefined;
+        // The session is the authority on which till this is. localStorage is
+        // kept only as the fallback for a tenant that tags counters without
+        // running shifts — it is per-browser, so it goes stale the moment a
+        // cashier opens their shift on one device and sells from another.
+        const counterId = cashierSession?.counter_id || localStorage.getItem('counter_id') || undefined;
         const effectivePointsToRedeem = redeemPointsEnabled && selectedCustomer && loyaltyPointsRedeemed > 0
             ? loyaltyPointsRedeemed
             : 0;
 
         const saleData = {
             storeId: getWorkspaceItem('store_id') || '',
+            source: 'POS',
             ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
             ...(counterId ? { counterId } : {}),
             ...(customerDraft
@@ -555,6 +626,34 @@ export default function POSPage() {
         });
     };
 
+    /**
+     * মূসক-৬.৩ on the thermal roll. The document is built server-side, so this
+     * needs the sale's server id — an offline sale queued to IndexedDB has none
+     * and cannot produce a compliant tax invoice until it syncs, which is why
+     * the button that calls this is hidden in that case.
+     */
+    const handlePrintMushak = async (saleSnapshot: typeof lastSale) => {
+        if (!saleSnapshot?.sale?.id) return;
+        const { sale, payments, totalPaid: paid } = saleSnapshot;
+
+        setPrintingMushak(true);
+        try {
+            const doc = await api.getMushakTaxInvoice(sale.id);
+            await printMushakReceipt({
+                ...doc,
+                date: formatDateTime(doc.invoice?.issuedAt ?? sale.created_at ?? new Date()),
+                payments: payments.map((p: any) => ({ method: p.paymentMethod, amount: p.amount })),
+                amountPaid: paid,
+                storeName: printHeader.companyName,
+                headerConfig: printHeader.headerConfig,
+            });
+        } catch (err: any) {
+            addNotification(err?.message || t.pos.notifications.mushakPrintFailed, 'error');
+        } finally {
+            setPrintingMushak(false);
+        }
+    };
+
     const filteredProducts = products.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.sku?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -582,6 +681,24 @@ export default function POSPage() {
                         <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                         {isSyncing ? t.pos.offline.syncing : t.pos.offline.syncNow}
                     </button>
+                </div>
+            )}
+
+            {/* No shift open, and this tenant sells only through a till. Said
+                here rather than only at checkout, so a cashier finds out before
+                they have scanned a basket. */}
+            {blockedForNoSession && (
+                <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center justify-between gap-4 flex-shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                        <span>{t.pos.notifications.sessionRequired}</span>
+                    </div>
+                    <Link
+                        href="/sales/cashier-sessions"
+                        className="flex items-center gap-1.5 text-xs font-bold bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 min-h-touch"
+                    >
+                        {t.pos.openShift}
+                    </Link>
                 </div>
             )}
 
@@ -976,13 +1093,56 @@ export default function POSPage() {
                                     <span>{formatBDT(lastSale.changeDue)}</span>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => handlePrintReceipt(lastSale)}
-                                className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 rtl:space-x-reverse transition-all hover:-translate-y-0.5"
-                            >
-                                <Printer className="w-5 h-5" />
-                                <span>{t.pos.saleComplete.printReceipt}</span>
-                            </button>
+                            {/* The setting picks which format is the primary
+                                button; the other stays one tap away, because
+                                whether this buyer needs a tax invoice is not a
+                                workspace-wide decision. A sale queued offline
+                                has no server id, so no 6.3 can be issued for it
+                                until it syncs — see handlePrintMushak. */}
+                            {(() => {
+                                const canPrintMushak = mushakPosReceipt && Boolean(lastSale.sale?.id);
+                                const primaryClass = 'w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 rtl:space-x-reverse transition-all hover:-translate-y-0.5';
+                                const secondaryClass = 'mt-2 w-full border border-gray-200 text-gray-700 hover:border-blue-600 hover:text-blue-600 py-3 rounded-lg font-semibold text-xs flex items-center justify-center space-x-2 rtl:space-x-reverse transition-all disabled:opacity-50';
+
+                                const receiptButton = (primary: boolean) => (
+                                    <button
+                                        onClick={() => handlePrintReceipt(lastSale)}
+                                        className={primary ? primaryClass : secondaryClass}
+                                    >
+                                        <Printer className={primary ? 'w-5 h-5' : 'w-4 h-4'} />
+                                        <span>{t.pos.saleComplete.printReceipt}</span>
+                                    </button>
+                                );
+
+                                const mushakButton = (primary: boolean) => (
+                                    <button
+                                        onClick={() => handlePrintMushak(lastSale)}
+                                        disabled={printingMushak}
+                                        className={primary ? primaryClass : secondaryClass}
+                                    >
+                                        <Printer className={primary ? 'w-5 h-5' : 'w-4 h-4'} />
+                                        <span>{t.pos.saleComplete.printMushak}</span>
+                                    </button>
+                                );
+
+                                // No BIN, no tax invoice in any format.
+                                if (!mushakEnabled) return receiptButton(true);
+
+                                if (!lastSale.sale?.id) {
+                                    return (
+                                        <>
+                                            {receiptButton(true)}
+                                            <p className="mt-2 text-center text-xs text-gray-400">
+                                                {t.pos.saleComplete.mushakAfterSync}
+                                            </p>
+                                        </>
+                                    );
+                                }
+
+                                return canPrintMushak
+                                    ? <>{mushakButton(true)}{receiptButton(false)}</>
+                                    : <>{receiptButton(true)}{mushakButton(false)}</>;
+                            })()}
                         </div>
                         <div className="px-6 pb-6">
                             <button

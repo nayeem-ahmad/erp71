@@ -26,6 +26,11 @@ import {
     assertCustomerCreditForSale,
     creditDueAmount,
 } from '../customers/customer-credit.utils';
+import {
+    assertSessionForPosSale,
+    findOpenSessionForUser,
+    requiresCashierSession,
+} from '../cashier-sessions/active-session.util';
 
 /**
  * Columns the sales list may sort on. An allowlist rather than passing the
@@ -67,6 +72,7 @@ export class SalesService {
 
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            const session = await this.resolveCashierSession(tx, tenantId, userId, dto);
 
             // 1. Generate Serial Number (Simplified for v0.1)
             const serialNumber = `SL-${Date.now()}`;
@@ -81,7 +87,8 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    counter_id: dto.counterId ?? null,
+                    counter_id: session.counterId,
+                    session_id: session.sessionId,
                     customer_id: dto.customerId,
                     serial_number: serialNumber,
                     reference_number: referenceNumber,
@@ -117,6 +124,41 @@ export class SalesService {
         }
 
         return result;
+    }
+
+    /**
+     * The shift this sale belongs to, and the till it was rung on.
+     *
+     * Both are read from the seller's own open session rather than taken from
+     * the request. The browser used to be the authority on the till — POS read
+     * a `counter_id` out of localStorage — which put the wrong counter on a
+     * sale whenever a session was opened on one device and sales were rung on
+     * another, and no counter at all on the second cashier to share a machine.
+     * What the client sent is still honoured when no session is open, so a
+     * tenant that tags counters without running shifts keeps working exactly
+     * as before.
+     */
+    private async resolveCashierSession(
+        tx: any,
+        tenantId: string,
+        userId: string,
+        dto: CreateSaleDto,
+        options: { enforce?: boolean } = {},
+    ): Promise<{ sessionId: string | null; counterId: string | null }> {
+        const isPosSale = dto.source === 'POS';
+        const enforce = options.enforce !== false;
+
+        const [session, required] = await Promise.all([
+            findOpenSessionForUser(tx, tenantId, userId),
+            enforce && isPosSale ? requiresCashierSession(tx, tenantId) : Promise.resolve(false),
+        ]);
+
+        assertSessionForPosSale(session, required, isPosSale);
+
+        return {
+            sessionId: session?.id ?? null,
+            counterId: session?.counter_id ?? dto.counterId ?? null,
+        };
     }
 
     /**
@@ -578,6 +620,7 @@ export class SalesService {
             // marked CONVERTED here: a parked draft posts nothing, so the quote
             // is still live until the draft is finalised.
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            const draftSession = await this.resolveCashierSession(tx, tenantId, userId, dto, { enforce: false });
 
             // A draft is not a tax invoice — nothing is posted and no 6.3 may
             // be issued against it — but the entry screen still shows a VAT
@@ -598,7 +641,8 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    counter_id: dto.counterId ?? null,
+                    counter_id: draftSession.counterId,
+                    session_id: draftSession.sessionId,
                     customer_id: dto.customerId,
                     serial_number: `SL-${Date.now()}`,
                     reference_number: referenceNumber,
@@ -725,6 +769,9 @@ export class SalesService {
 
             // Validate everything before a single row changes.
             const prep = await this.prepareSale(tx, tenantId, saleDto);
+            const finalizeSession = await this.resolveCashierSession(tx, tenantId, userId, saleDto, {
+                enforce: false,
+            });
 
             // Replace the parked lines and payments with what is being posted.
             // applySalePostings recreates the items (with unit cost attached).
@@ -752,6 +799,11 @@ export class SalesService {
                     // saved with no warehouse at all, and the posted sale must
                     // record the one its stock actually left.
                     warehouse_id: prep.warehouses.entryWarehouseId,
+                    // Re-stamped rather than inherited: the money arrives now,
+                    // so the sale belongs to the shift finalising it, which is
+                    // often not the one that parked it.
+                    session_id: finalizeSession.sessionId,
+                    counter_id: finalizeSession.counterId,
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                 },
             });
