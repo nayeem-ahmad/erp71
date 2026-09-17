@@ -54,8 +54,31 @@ describe('CreatePrintTemplateDto', () => {
         ).toHaveLength(0);
     });
 
+    it('accepts a v3 config placing the title and bleeding the footer', async () => {
+        expect(
+            await parse({
+                ...base,
+                version: 3,
+                logo: { heightMm: 16, showOnThermal: true, fullWidth: true },
+                title: {
+                    ...base.title,
+                    position: 'above-center',
+                    offsetXMm: -4,
+                    offsetYMm: 2,
+                },
+                footer: { ...footer, pinToPageBottom: true, bleed: true },
+            }),
+        ).toHaveLength(0);
+    });
+
     it('rejects a version the renderer does not know', async () => {
-        expect((await parse({ ...base, version: 3 })).length).toBeGreaterThan(0);
+        expect((await parse({ ...base, version: 4 })).length).toBeGreaterThan(0);
+    });
+
+    it('rejects a title position outside the known slots', async () => {
+        expect(
+            (await parse({ ...base, title: { ...base.title, position: 'middle-middle' } })).length,
+        ).toBeGreaterThan(0);
     });
 
     describe('images', () => {
