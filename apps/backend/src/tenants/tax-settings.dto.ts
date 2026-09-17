@@ -33,6 +33,15 @@ export class UpdateTaxSettingsDto {
     @IsBoolean()
     mushak_enabled?: boolean;
 
+    /**
+     * Whether the POS counter's default print is the 6.3 rather than the
+     * ordinary receipt. Ignored unless `mushak_enabled` is on — a workspace
+     * without a BIN cannot issue a tax invoice in any format.
+     */
+    @IsOptional()
+    @IsBoolean()
+    mushak_pos_receipt?: boolean;
+
     /** চালানপত্র ইস্যুর ঠিকানা — the registered premises. */
     @IsOptional()
     @IsString()

@@ -729,6 +729,12 @@ model Tenant {
   /// note. Off by default: a shop that is not VAT-registered must not hand a
   /// customer something that looks like a tax invoice.
   mushak_enabled             Boolean   @default(false)
+  /// Whether the POS counter prints the 6.3 tax invoice as its default receipt
+  /// rather than the shop's ordinary slip. Only meaningful when
+  /// `mushak_enabled` is on. Off by default so enabling Mushak does not
+  /// silently change what every existing counter hands a walk-in customer;
+  /// either format stays reachable per sale from the POS success screen.
+  mushak_pos_receipt         Boolean   @default(false)
   /// চালানপত্র ইস্যুর ঠিকানা — the address a tax invoice is issued from, which
   /// is the registered premises and not necessarily the branch that sold the
   /// goods. Printed in the issuer block of every 6.x document.

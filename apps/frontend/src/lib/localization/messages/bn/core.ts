@@ -1070,6 +1070,8 @@ export const coreMessages = {
                 paid: "পরিশোধিত",
                 changeDue: "ফেরত দিতে হবে",
                 printReceipt: "পস রসিদ প্রিন্ট করুন",
+                printMushak: "মূসক-৬.৩ ছাপুন",
+                mushakAfterSync: "এই বিক্রয় সিঙ্ক হলে মূসক-৬.৩ ছাপা যাবে।",
                 skipContinue: "এড়িয়ে যান ও চালিয়ে যান",
             },
             payment: {
@@ -1110,6 +1112,7 @@ export const coreMessages = {
                 pointsRedeemed: "{count} পয়েন্ট রিডিম",
                 pointsEarned: "{count} পয়েন্ট অর্জিত",
                 checkoutFailed: "চেকআউট ব্যর্থ। স্টক পরিমাণ পরীক্ষা করুন।",
+                mushakPrintFailed: "মূসক-৬.৩ ছাপা যায়নি।",
                 invalidDiscount: "অবৈধ ডিসকাউন্ট কোড",
             },
         },

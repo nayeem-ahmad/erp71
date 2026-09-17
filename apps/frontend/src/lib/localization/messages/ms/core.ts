@@ -1071,6 +1071,8 @@ export const coreMessages = {
                 paid: "Dibayar",
                 changeDue: "Baki Diterima",
                 printReceipt: "Cetak Resit POS",
+                printMushak: "Cetak Mushak 6.3",
+                mushakAfterSync: "Mushak 6.3 boleh dicetak sebaik jualan ini disegerakkan.",
                 skipContinue: "Langkau & Teruskan",
             },
             payment: {
@@ -1111,6 +1113,7 @@ export const coreMessages = {
                 pointsRedeemed: "{count} mata ditebus",
                 pointsEarned: "{count} mata diperoleh",
                 checkoutFailed: "Checkout gagal. Sila semak tahap stok.",
+                mushakPrintFailed: "Mushak 6.3 tidak dapat dicetak.",
                 invalidDiscount: "Kod diskaun tidak sah",
             },
         },

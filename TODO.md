@@ -102,6 +102,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## HIGH PRIORITY — Ship within first 2 weeks of launch
 
+- [ ] **Print a real Mushak 6.3 thermal receipt before a shop relies on one.** The renderer (`apps/frontend/src/lib/mushak-receipt-printer.ts`, shipped 2026-09-17, see COMPLETED) is covered by 11 tests asserting every statutory field survives at both 80mm and 58mm, but no slip has been put through an actual thermal printer or even rendered in a running browser. Two things need eyes rather than assertions: whether the stacked per-line block stays legible on a 58mm roll (the narrowest `PaperSize` the print stack supports), and whether the Bangla glyphs render on typical POS printer firmware — a thermal printer falling back to tofu on `মূসক-৬.৩` would produce a document NBR will not accept, and no unit test can catch that. If 58mm proves unusable, the fallback is to force A4/A5 for the 6.3 on those tenants rather than print something illegible.
+
 - [ ] **An ordinary user still cannot put a third person on a project team.** `POST /projects/:id/members` requires `MANAGE_PROJECTS` (`projects.controller.ts:265-266`), and `GET /projects/member-candidates` — the workspace directory the Team card picks from — requires it too (`:207-208`). Seeding the manager and creator on every project (done 2026-09-16, see COMPLETED) means the Assignee picker is never *empty*, but a project lead holding only `VIEW_PROJECTS` + `MANAGE_PROJECT_TASKS` still cannot widen it, and the "Add team members" link the picker now shows them lands on a Team card whose Add button 403s. Either the link should be conditional on the permission, or adding somebody already in the workspace to a project should not need the permission that also lets you delete the project — the second is the better shape, since `MANAGE_PROJECT_TASKS` is already "may change who holds this task".
 
 - [ ] **A narrow record scope empties the quick-add `@` vocabulary.** `/project-tasks/assignees` is filtered through `taskFilter` (`project-tasks.service.ts:192-196`), so a member every one of whose roles says `OWN` gets back only themselves. The Tasks page hides the assignee *filter* for them (`tasks/page.tsx:236`) but feeds the same array to the composer's vocabulary (`:740-743`), so typing `@` offers them nobody — the same complaint as the empty picker, on a surface the 2026-09-16 fix did not touch. The composer's roster should come from the project's members like every other assignee control, not from "who holds a task you can see".
@@ -1383,6 +1385,18 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 ---
 
 ## COMPLETED
+
+- [x] **Mushak 6.3 as a POS receipt format** — done 2026-09-17. A VAT-registered workspace can now make the মূসক-৬.৩ কর চালানপত্র the counter's default print instead of the ordinary slip.
+
+  No new backend document work was needed: a POS sale is an ordinary `Sale`, so `GET /mushak/6.3/:saleId` already served it and `computeSaleTax` stays the single source of the figures. What was missing was a thermal rendering and the wiring.
+
+  New `Tenant.mushak_pos_receipt` (migration `20260917100000_mushak_pos_receipt`, defaulted false so no live counter changes behaviour on deploy). It is a sub-option of `mushak_enabled`: the settings form nests it, and `updateTaxSettings` additionally *clears* it whenever Mushak is switched off, so a workspace that surrenders its BIN cannot leave a stranded `true` that would resume printing tax invoices later. Three unit tests cover that rule.
+
+  New `apps/frontend/src/lib/mushak-receipt-printer.ts`. The A4 form lays out ten gazetted columns side by side, which does not fit an 80mm roll, so this renders the same document as a stacked block per line (description → qty × unit value → SD and VAT rates with amounts → line total incl. tax). Wording is copied from the A4 `MushakDocument` so the two cannot drift. Nothing statutory is dropped at 58mm — the layout compresses, the content does not. 11 tests, including a 58mm case and HTML escaping.
+
+  POS success screen: the setting decides which format is the *primary* button, with the other one tap away, because whether a buyer needs a tax invoice is the buyer's business and not a workspace-wide decision. The 6.3 button is absent entirely when `mushak_enabled` is off. A sale queued offline has no server id and so cannot produce a compliant 6.3 — the counter prints the ordinary receipt and says the 6.3 becomes available after sync. Strings added across all nine locales.
+
+  **Not verified:** nothing was printed on real hardware. The 58mm layout is asserted in tests but has not been looked at on paper, and no 6.3 has been rendered in a running browser — see the open item below.
 
 - [x] **Support tickets have a number, and a status change on the admin side lands on the tenant's screen as it happens** — asked for as *"for each support from tenant, will have a unique serial number (integer, easy to remember). Also, when the ticket status updated on platform admin side, the change should be loaded on tenant side immediately (like chat message)"*.
 
