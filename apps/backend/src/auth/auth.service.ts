@@ -692,7 +692,32 @@ export class AuthService {
         ]);
     }
 
+    /**
+     * The platform admin's switch over every "Try Demo" entry point — the
+     * sign-in page button, the marketing hero CTA and `/demo`.
+     *
+     * Opt-out rather than opt-in: an operator who never touches the setting
+     * keeps the demo they have today, and a settings read that fails leaves the
+     * demo up rather than taking it down on a transient database error.
+     */
+    async isDemoLoginEnabled(): Promise<boolean> {
+        const configured = await this.platformSettings
+            .getRawValue('general', 'demo_enabled')
+            .catch(() => null);
+        return configured !== 'false';
+    }
+
     async demoLogin() {
+        if (!(await this.isDemoLoginEnabled())) {
+            throw new ForbiddenException({
+                message: 'The demo is not available on this platform.',
+                // Distinct from the "not seeded" failure below so the visitor is
+                // told the demo is switched off rather than shown an operator's
+                // seed-script instructions.
+                code: 'DEMO_DISABLED',
+            });
+        }
+
         const user = await this.db.user.findUnique({
             where: { email: DEMO_ACCOUNT_EMAIL },
         });

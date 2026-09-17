@@ -522,6 +522,7 @@ export const coreMessages = {
             defaultError: 'Login failed. Please check your credentials.',
             tooManyAttempts: 'Too many sign-in attempts. Please wait {seconds, plural, one {# second} other {# seconds}} and try again.',
             demoFailed: 'Demo login failed. Please try again.',
+            demoDisabled: 'The demo is currently switched off. Please sign in or create an account.',
             sessionExpired: 'Your session has expired. Please sign in again.',
             googleFailed: 'Google sign-in failed. Please try again.',
             termsNotice: 'Continuing with Google or your mobile number creates an account if you do not have one, and means you agree to our',

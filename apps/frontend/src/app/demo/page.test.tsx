@@ -8,7 +8,19 @@ jest.mock('next/navigation', () => ({
     useRouter: () => ({ replace: replaceMock }),
 }));
 
+// `ApiError` has to be a real class: the page narrows on `instanceof` to tell a
+// demo the platform admin switched off from one that simply failed.
 jest.mock('../../lib/api', () => ({
+    ApiError: class ApiError extends Error {
+        constructor(
+            message: string,
+            public readonly status: number,
+            public readonly code?: string,
+        ) {
+            super(message);
+            this.name = 'ApiError';
+        }
+    },
     api: {
         demoLogin: jest.fn(),
         getMe: jest.fn(),
@@ -65,5 +77,17 @@ describe('DemoPage', () => {
 
         expect(await screen.findByText('Demo unavailable')).toBeInTheDocument();
         expect(screen.getByText('Demo account not available')).toBeInTheDocument();
+    });
+
+    it('says the demo is switched off rather than repeating the backend sentence', async () => {
+        const { api, ApiError } = require('../../lib/api');
+        api.demoLogin.mockRejectedValueOnce(
+            new ApiError('The demo is not available on this platform.', 403, 'DEMO_DISABLED'),
+        );
+
+        render(<DemoPage />);
+
+        expect(await screen.findByText('Demo unavailable')).toBeInTheDocument();
+        expect(screen.getByText(/currently switched off/i)).toBeInTheDocument();
     });
 });

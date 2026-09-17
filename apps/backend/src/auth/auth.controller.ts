@@ -118,6 +118,18 @@ export class AuthController {
         await this.authService.logout(req.user.userId, extractRequestMeta(req));
     }
 
+    /**
+     * Whether the platform admin has left "Try Demo" switched on. Read by the
+     * sign-in page and the marketing hero before they render the button, for
+     * the same reason as `/auth/google/config`: the switch lives in platform
+     * settings, so it has to be readable without a session and without
+     * rebuilding the frontend.
+     */
+    @Get('demo/config')
+    async demoConfig() {
+        return { enabled: await this.authService.isDemoLoginEnabled() };
+    }
+
     @Throttle({ default: { ttl: 60_000, limit: 10 } })
     @Post('demo')
     async demoLogin() {

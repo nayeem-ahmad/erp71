@@ -14,12 +14,16 @@ type GeneralSettings = {
     platform_name: string;
     support_email: string;
     maintenance_mode: string;
+    demo_enabled: string;
 };
 
 const DEFAULTS: GeneralSettings = {
     platform_name: 'ERP71',
     support_email: 'support@erp71.com',
     maintenance_mode: 'false',
+    // Matches the backend's default: an operator who never opens this page keeps
+    // the "Try Demo" buttons they have today.
+    demo_enabled: 'true',
 };
 
 export default function PlatformGeneralSettingsPage() {
@@ -37,6 +41,7 @@ export default function PlatformGeneralSettingsPage() {
                     platform_name: d.platform_name ?? DEFAULTS.platform_name,
                     support_email: d.support_email ?? DEFAULTS.support_email,
                     maintenance_mode: d.maintenance_mode ?? DEFAULTS.maintenance_mode,
+                    demo_enabled: d.demo_enabled ?? DEFAULTS.demo_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))
@@ -65,6 +70,8 @@ export default function PlatformGeneralSettingsPage() {
 
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
     const maintenanceOn = settings.maintenance_mode === 'true';
+    // Anything other than an explicit 'false' is on, the way the backend reads it.
+    const demoOn = settings.demo_enabled !== 'false';
 
     return (
         <PageShell>
@@ -126,6 +133,26 @@ export default function PlatformGeneralSettingsPage() {
                                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${maintenanceOn ? 'bg-red-600' : 'bg-gray-200'}`}
                             >
                                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${maintenanceOn ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 pt-2">
+                            <div>
+                                <p className="text-sm font-semibold text-gray-800">{m.demo.label}</p>
+                                <p className="mt-0.5 text-xs text-gray-500">{m.demo.hint}</p>
+                                {!demoOn && (
+                                    <p className="mt-1 text-xs font-semibold text-amber-600">{m.demo.offNotice}</p>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={demoOn}
+                                aria-label={m.demo.label}
+                                onClick={() => set('demo_enabled', demoOn ? 'false' : 'true')}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${demoOn ? 'bg-blue-600' : 'bg-gray-200'}`}
+                            >
+                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${demoOn ? 'translate-x-5' : 'translate-x-0'}`} />
                             </button>
                         </div>
 
