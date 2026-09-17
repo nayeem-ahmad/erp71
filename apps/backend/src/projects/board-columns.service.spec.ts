@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { DatabaseService } from '../database/database.service';
@@ -325,5 +325,52 @@ describe('BoardColumnsService column CRUD', () => {
         await expect(service.updateColumn(tenantId, 'b1', 'c2', { name: 'X' })).rejects.toBeInstanceOf(
             NotFoundException,
         );
+    });
+    describe('reorderColumns', () => {
+        beforeEach(() => {
+            db.boardColumn.update = jest.fn().mockResolvedValue({});
+            db.$transaction = jest.fn(async (operations: any) => Promise.all(operations));
+        });
+
+        it('writes each column’s new index, left to right', async () => {
+            await service.reorderColumns(tenantId, 'b1', ['c4', 'c1', 'c3', 'c2']);
+
+            expect(db.boardColumn.update).toHaveBeenNthCalledWith(1, {
+                where: { id: 'c4' },
+                data: { sort_order: 0 },
+            });
+            expect(db.boardColumn.update).toHaveBeenNthCalledWith(4, {
+                where: { id: 'c2' },
+                data: { sort_order: 3 },
+            });
+            // One transaction, so a board is never left half-reordered.
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+        });
+
+        it('refuses a list that leaves a column out', async () => {
+            await expect(service.reorderColumns(tenantId, 'b1', ['c1', 'c2'])).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(db.boardColumn.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses a list naming a column twice', async () => {
+            await expect(
+                service.reorderColumns(tenantId, 'b1', ['c1', 'c1', 'c3', 'c4']),
+            ).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('refuses a column from another board', async () => {
+            await expect(
+                service.reorderColumns(tenantId, 'b1', ['c1', 'c2', 'c3', 'elsewhere']),
+            ).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('refuses a board in another tenant', async () => {
+            db.board.findFirst.mockResolvedValue(null);
+            await expect(service.reorderColumns(tenantId, 'b1', ['c1'])).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+        });
     });
 });

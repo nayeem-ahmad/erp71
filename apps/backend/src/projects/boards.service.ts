@@ -14,6 +14,7 @@ import {
     CreateBoardCardDto,
     CreateBoardDto,
     MoveBoardCardDto,
+    MoveBoardCardsDto,
     SetBoardBackgroundImageDto,
     UpdateBoardDto,
 } from './board.dto';
@@ -413,6 +414,212 @@ export class BoardsService {
         await this.db.boardTask.deleteMany({
             where: { board_id: boardId, tenant_id: tenantId, task_id: taskId },
         });
+    }
+
+    /**
+     * Every card that renders in one column, in the order it renders: the
+     * board's membership rows whose task sits in one of the column's bound
+     * statuses. The same set `moveCard` renumbers against, lifted out because
+     * the bulk operations below all need it too.
+     *
+     * Deliberately not narrowed to what the *viewer* can see. `sort_order` is
+     * the board's, not one reader's, so a narrow viewer reordering the cards
+     * they hold must not renumber a colleague's card out from under them —
+     * `orderCards` keeps every row it was not sent in the slot it already
+     * occupies for exactly that reason.
+     */
+    private columnCardRows(
+        tx: any,
+        tenantId: string,
+        boardId: string,
+        boundStatusIds: string[],
+    ): Promise<{ id: string; task_id: string }[]> {
+        return tx.boardTask.findMany({
+            where: {
+                board_id: boardId,
+                tenant_id: tenantId,
+                task: { status_id: { in: boundStatusIds }, deleted_at: null },
+            },
+            orderBy: [{ sort_order: 'asc' }, { added_at: 'asc' }],
+            select: { id: true, task_id: true },
+        });
+    }
+
+    /** Writes `sort_order` = position, in one pass over an already-ordered list. */
+    private async writeCardOrder(tx: any, ordered: { id: string }[]) {
+        for (let i = 0; i < ordered.length; i += 1) {
+            await tx.boardTask.update({ where: { id: ordered[i].id }, data: { sort_order: i } });
+        }
+    }
+
+    /** A column of this board with its bindings, or a 404. */
+    private async assertColumn(tenantId: string, boardId: string, columnId: string) {
+        const columns = await this.columns.listColumns(tenantId, boardId);
+        const column = (columns as any[]).find((row) => row.id === columnId);
+        if (!column) throw new NotFoundException('Board column not found');
+        return column;
+    }
+
+    /**
+     * Several cards into one column at once — what the column menu's "move all
+     * cards to" and the selection bar send.
+     *
+     * Every status is resolved before anything is written, and an unmapped
+     * project refuses the whole call. A per-card best effort would leave the
+     * user looking at a column that took eleven of their thirteen cards with
+     * nothing on screen saying which two stayed behind.
+     */
+    async moveCards(viewer: ProjectViewer, boardId: string, dto: MoveBoardCardsDto) {
+        const tenantId = viewer.tenantId;
+        await this.assertBoard(tenantId, boardId);
+
+        // Deduped for the same reason addTasks dedupes: a repeated id is not a
+        // missing card, and it must not be appended to the column twice.
+        const taskIds = [...new Set(dto.taskIds)];
+
+        const column = await this.assertColumn(tenantId, boardId, dto.columnId);
+        const boundStatusIds = (column.bindings ?? []).map((binding: any) => binding.status_id);
+
+        const memberships = await this.db.boardTask.findMany({
+            where: { board_id: boardId, tenant_id: tenantId, task_id: { in: taskIds } },
+            select: { id: true, task_id: true },
+        });
+        if (memberships.length !== taskIds.length) {
+            throw new NotFoundException('One or more cards are not on this board');
+        }
+
+        const tasks = await this.db.projectTask.findMany({
+            where: {
+                id: { in: taskIds },
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.taskFilter(viewer)),
+            } as never,
+            select: { id: true, project_id: true, status_id: true },
+        });
+        if (tasks.length !== taskIds.length) {
+            throw new NotFoundException('One or more tasks were not found');
+        }
+
+        // Resolved once per project rather than once per card: a board that
+        // mixes three projects asks three questions, not thirty.
+        const statusOfProject = new Map<string, string | null>();
+        for (const task of tasks as { project_id: string }[]) {
+            if (statusOfProject.has(task.project_id)) continue;
+            statusOfProject.set(
+                task.project_id,
+                await this.columns.resolveStatusId(tenantId, boardId, dto.columnId, task.project_id),
+            );
+        }
+
+        // A card whose status is already bound here is staying in its own
+        // column, so it needs no mapping — only the ones actually crossing a
+        // lane do. Checked before the first write; see the note above.
+        const moving = (tasks as { id: string; project_id: string; status_id: string }[]).filter(
+            (task) => !boundStatusIds.includes(task.status_id),
+        );
+        if (moving.some((task) => !statusOfProject.get(task.project_id))) {
+            throw new BadRequestException(
+                'That column is not mapped to a status in one of these cards’ projects. Map it in board settings first.',
+            );
+        }
+
+        for (const task of moving) {
+            // Through the same path a single drop takes, so the activity row,
+            // `completed_at` and the watcher notification are identical.
+            // MAX_SAFE_INTEGER is clamped to "last" by `move` itself: a bulk
+            // move has no one place in the project's own status list, and the
+            // end is the one that disturbs nobody else's order.
+            await this.tasks.move(viewer, task.id, {
+                statusId: statusOfProject.get(task.project_id)!,
+                sortOrder: Number.MAX_SAFE_INTEGER,
+            });
+        }
+
+        const membershipOfTask = new Map(
+            memberships.map((row: { id: string; task_id: string }) => [row.task_id, row]),
+        );
+        await this.db.$transaction(async (tx: any) => {
+            const rows = await this.columnCardRows(tx, tenantId, boardId, boundStatusIds);
+            const moved = new Set(taskIds);
+            // Appended in the order they were sent, which for the column menu
+            // is the order they were read in the column they came from.
+            await this.writeCardOrder(tx, [
+                ...rows.filter((row) => !moved.has(row.task_id)),
+                ...taskIds.map((taskId) => membershipOfTask.get(taskId)!),
+            ]);
+        });
+
+        return this.findOne(viewer, boardId);
+    }
+
+    /** Several cards off the board at once. The tasks themselves are untouched. */
+    async removeCards(viewer: ProjectViewer, boardId: string, taskIds: string[]) {
+        const tenantId = viewer.tenantId;
+        await this.assertBoard(tenantId, boardId);
+
+        const unique = [...new Set(taskIds)];
+        // The same check `removeTask` makes, in one query: a card the viewer
+        // cannot see is a card they must not be able to pull off a board
+        // everyone else is using.
+        const visible = await this.db.projectTask.findMany({
+            where: {
+                id: { in: unique },
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.taskFilter(viewer)),
+            } as never,
+            select: { id: true },
+        });
+        if (visible.length !== unique.length) {
+            throw new NotFoundException('One or more tasks were not found');
+        }
+
+        await this.db.boardTask.deleteMany({
+            where: { board_id: boardId, tenant_id: tenantId, task_id: { in: unique } },
+        });
+
+        return this.findOne(viewer, boardId);
+    }
+
+    /**
+     * One column's cards, top to bottom — what "sort cards" sends after
+     * comparing them in the browser.
+     *
+     * Cards the caller did not name keep the slots they already hold, and the
+     * named ones are dealt back into the slots they occupied between them. So
+     * sorting a filtered column rearranges the cards on screen and leaves the
+     * hidden ones exactly where they were, rather than sweeping them to the
+     * bottom of a column the user cannot see.
+     */
+    async orderCards(viewer: ProjectViewer, boardId: string, columnId: string, taskIds: string[]) {
+        const tenantId = viewer.tenantId;
+        await this.assertBoard(tenantId, boardId);
+
+        const column = await this.assertColumn(tenantId, boardId, columnId);
+        const boundStatusIds = (column.bindings ?? []).map((binding: any) => binding.status_id);
+
+        await this.db.$transaction(async (tx: any) => {
+            const rows = await this.columnCardRows(tx, tenantId, boardId, boundStatusIds);
+            const rowOfTask = new Map(rows.map((row) => [row.task_id, row]));
+
+            // Only ids that are actually in this column; a stale id is ignored
+            // rather than refused, because the list was built from a view that
+            // may be a moment behind the board.
+            const named = taskIds.filter((taskId) => rowOfTask.has(taskId));
+            const slots = rows
+                .map((row, index) => index)
+                .filter((index) => named.includes(rows[index].task_id));
+
+            const ordered = [...rows];
+            slots.forEach((slot, position) => {
+                ordered[slot] = rowOfTask.get(named[position])!;
+            });
+
+            await this.writeCardOrder(tx, ordered);
+        });
+
+        return this.findOne(viewer, boardId);
     }
 
     /**

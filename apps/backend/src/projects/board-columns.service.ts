@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectSettingsService } from './project-settings.service';
 import {
@@ -196,6 +196,44 @@ export class BoardColumnsService {
                 ...(dto.wipLimit !== undefined ? { wip_limit: dto.wipLimit } : {}),
             },
         });
+    }
+
+    /**
+     * The board's columns, left to right.
+     *
+     * Takes the whole set rather than one column's new index so the result is
+     * a list the caller can see, not an arithmetic the server has to be
+     * trusted with — and so a list that has gone stale (a column added or
+     * deleted in another tab since the drag started) is refused rather than
+     * silently applied to a different board than the one that was dragged.
+     */
+    async reorderColumns(tenantId: string, boardId: string, columnIds: string[]) {
+        await this.assertBoard(tenantId, boardId);
+
+        const columns = await this.db.boardColumn.findMany({
+            where: { board_id: boardId, tenant_id: tenantId },
+            select: { id: true },
+        });
+
+        const unique = new Set(columnIds);
+        const known = new Set(columns.map((column: { id: string }) => column.id));
+        if (
+            unique.size !== columnIds.length ||
+            unique.size !== known.size ||
+            columnIds.some((id) => !known.has(id))
+        ) {
+            throw new BadRequestException(
+                'The column order must list every column on this board exactly once.',
+            );
+        }
+
+        await this.db.$transaction(
+            columnIds.map((id, index) =>
+                this.db.boardColumn.update({ where: { id }, data: { sort_order: index } }),
+            ),
+        );
+
+        return this.listColumns(tenantId, boardId);
     }
 
     /**

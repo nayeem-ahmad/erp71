@@ -138,6 +138,13 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         removeTask: [StorePermission.MANAGE_PROJECTS],
         moveCard: [StorePermission.MANAGE_PROJECTS],
 
+        // Doing a thing to many cards is the same permission as doing it to
+        // one; ordering a column's cards is moving cards, not changing the
+        // column's shape, so none of these three take the settings permission.
+        moveCards: [StorePermission.MANAGE_PROJECTS],
+        removeCards: [StorePermission.MANAGE_PROJECTS],
+        orderColumnCards: [StorePermission.MANAGE_PROJECTS],
+
         // The board's background, not the reader's: everyone who opens the
         // board sees it, so setting it takes the same permission as renaming
         // the board rather than the none that a view preference takes.
@@ -153,6 +160,7 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         updateColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],
         deleteColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],
         setColumnStatuses: [StorePermission.MANAGE_PROJECT_SETTINGS],
+        reorderColumns: [StorePermission.MANAGE_PROJECT_SETTINGS],
     };
 
     it('declares a permission for every handler on the controller — nothing unguarded', () => {
