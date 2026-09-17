@@ -441,17 +441,29 @@ export function TaskCardBody({
                         logged is the sum of the time entries and remaining is
                         set by the form in the main column, which records why
                         it moved. */}
-                    <div className="grid grid-cols-3 gap-2">
-                        <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
-                        <Metric
-                            label={m.task.logged}
-                            value={`${num(task.logged_hours)}h`}
-                        />
-                        <Metric
-                            label={m.task.remaining}
-                            value={`${num(task.remaining_hours)}h`}
-                            highlight
-                        />
+                    <div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
+                            <Metric
+                                label={m.task.logged}
+                                value={`${num(task.logged_hours)}h`}
+                            />
+                            <Metric
+                                label={m.task.remaining}
+                                value={`${num(task.remaining_hours)}h`}
+                                highlight
+                            />
+                        </div>
+
+                        {/* The clock, under the three figures it moves. It used
+                            to lead the reading column on the grounds of being
+                            reachable without scrolling — which it still is here,
+                            and now it sits with the numbers it changes rather
+                            than above a description it has nothing to do with.
+                            Full width because the button carries a word, not
+                            just an icon, and a third of this column would clip
+                            it in the longer locales. */}
+                        <TimerButton taskId={taskId} onChanged={refresh} full />
                     </div>
 
                     {/* The shape of those three figures over time, at a glance.
@@ -497,15 +509,6 @@ export function TaskCardBody({
             </aside>
 
             <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                {/* Lifted out of the work row below and put first, so the clock is
-                    reachable without scrolling. It stays in the body rather than
-                    moving to the header: the modal and the page have two different
-                    headers, and a button in both would be two copies to keep in
-                    step. */}
-                <div className="flex items-center justify-end">
-                    <TimerButton taskId={taskId} onChanged={refresh} />
-                </div>
-
                 <DescriptionSection
                     description={task.description ?? ''}
                     taskId={taskId}
@@ -1507,7 +1510,16 @@ function EstimateField({
  * rather than hidden, because silently doing nothing is how you end up with two
  * people certain they had a timer going.
  */
-function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => Promise<void> }) {
+function TimerButton({
+    taskId,
+    onChanged,
+    full = false,
+}: {
+    taskId: string;
+    onChanged: () => Promise<void>;
+    /** Fill the column, for the narrow sidebar the button now lives in. */
+    full?: boolean;
+}) {
     const { t } = useI18n();
     const m = t.projects;
 
@@ -1554,7 +1566,7 @@ function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => P
         <Button
             type="button"
             variant={mine ? 'secondary' : 'ghost'}
-            className="max-md:min-h-touch"
+            className={`max-md:min-h-touch${full ? ' mt-2 w-full justify-center' : ''}`}
             disabled={busy || elsewhere}
             title={elsewhere ? m.timer.elsewhere : undefined}
             onClick={() =>
@@ -1716,7 +1728,7 @@ function DescriptionSection({
                     // nothing to click and a filled one ran into the checklist
                     // below it. `min-h` keeps the shape whether or not there
                     // is anything in it.
-                    className="mt-2 min-h-[6rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
+                    className="mt-2 min-h-[10rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
                 >
                     {description === '' ? (
                         <span className="text-sm text-gray-500">{m.add}</span>
@@ -1745,7 +1757,7 @@ function DescriptionSection({
             >
                 <RichTextEditor
                     autoFocus
-                    rows={6}
+                    rows={10}
                     value={value}
                     onChange={setValue}
                     disabled={saving}
