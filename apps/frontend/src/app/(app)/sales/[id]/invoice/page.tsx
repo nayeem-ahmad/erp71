@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Download, FileCheck, Printer } from 'lucide-react';
+import { Download, FileCheck, Printer, Truck } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
+import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 
 interface InvoiceData {
     sale: {
@@ -65,6 +67,7 @@ export default function InvoicePage() {
     const [data, setData] = useState<InvoiceData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
 
     useEffect(() => {
         if (!params.id) return;
@@ -76,6 +79,37 @@ export default function InvoicePage() {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    /**
+     * The rider's copy of the same sale. Printed through the challan printer
+     * rather than this page's own layout because the challan must show no
+     * prices at all, and hiding columns from an invoice is how a price ends up
+     * back on it the next time this page changes.
+     */
+    const handleChallanPrint = () => {
+        if (!data) return;
+        printDeliveryChallan({
+            challanNumber: data.sale.serial_number,
+            invoiceNumber: data.sale.serial_number,
+            date: formatDate(data.sale.created_at, locale),
+            companyName:
+                challanHeader.companyName
+                ?? data.tenant?.brand_business_name
+                ?? data.tenant?.name
+                ?? undefined,
+            headerConfig: challanHeader.headerConfig,
+            customerName: data.sale.customer?.name,
+            customerPhone: data.sale.customer?.phone ?? undefined,
+            deliveryAddress: data.sale.customer?.address ?? undefined,
+            items: data.sale.items.map((item) => ({
+                name: item.product?.name ?? t.shared.unknownProduct,
+                sku: item.product?.sku ?? undefined,
+                quantity: item.quantity,
+            })),
+            note: data.sale.note ?? undefined,
+            labels: t.sales.challan,
+        });
     };
 
     if (loading) {
@@ -180,6 +214,13 @@ export default function InvoicePage() {
                                     <FileCheck className="h-4 w-4" />
                                     {t.sales.mushak.viewMushakInvoice}
                                 </Link>
+                                <button
+                                    onClick={handleChallanPrint}
+                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+                                >
+                                    <Truck className="h-4 w-4" />
+                                    {t.sales.challan.action}
+                                </button>
                                 <button
                                     onClick={handlePrint}
                                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"

@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "मनी रसीदें",
             SALES_ORDER: "बिक्री ऑर्डर",
             SALES_RETURN: "बिक्री वापसी",
+            DELIVERY_CHALLAN: "डिलीवरी चालान",
             PURCHASE_ORDER: "खरीद ऑर्डर",
             PURCHASE_RETURN: "खरीद वापसी",
             LIST_REPORT: "सूची रिपोर्ट",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "मूसक दस्तावेज़ जारी करें",
                 hint: "बंद होने पर बिक्री पर कर चालान के बजाय सामान्य दुकान चालान छपेगा।",
+            },
+            posReceipt: {
+                label: "पीओएस रसीद के रूप में मूसक 6.3",
+                hint: "पीओएस काउंटर सामान्य रसीद के बजाय 6.3 कर चालान छापेगा। हर बिक्री पर दोनों प्रारूप उपलब्ध रहेंगे।",
             },
             issueAddress: {
                 label: "जारी करने का पता",

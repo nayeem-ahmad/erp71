@@ -206,7 +206,11 @@ export class ListStockLedgerQueryDto {
     @IsString()
     to?: string;
 
+    // Query strings carry numbers as text and the global ValidationPipe runs without
+    // implicit conversion, so without this `limit=25` stays the string "25", fails
+    // @IsInt, and the whole request 400s — which is what an empty ledger looked like.
     @IsOptional()
+    @Type(() => Number)
     @IsInt()
     @Min(1)
     @Max(500)

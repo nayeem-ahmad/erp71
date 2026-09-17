@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: 'Money receipts',
             SALES_ORDER: 'Sales orders',
             SALES_RETURN: 'Sales returns',
+            DELIVERY_CHALLAN: 'Delivery challans',
             PURCHASE_ORDER: 'Purchase orders',
             PURCHASE_RETURN: 'Purchase returns',
             LIST_REPORT: 'List reports',
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "Issue Mushak documents",
                 hint: "Off means sales print a plain shop invoice instead of a tax invoice.",
+            },
+            posReceipt: {
+                label: "Mushak 6.3 as the POS receipt",
+                hint: "The POS counter prints the 6.3 tax invoice instead of the ordinary receipt. Either format stays available per sale.",
             },
             issueAddress: {
                 label: "Address of issue",

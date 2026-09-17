@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Recibos de cobro",
             SALES_ORDER: "Pedidos de venta",
             SALES_RETURN: "Devoluciones de venta",
+            DELIVERY_CHALLAN: "Albaranes de entrega",
             PURCHASE_ORDER: "Pedidos de compra",
             PURCHASE_RETURN: "Devoluciones de compra",
             LIST_REPORT: "Informes de lista",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "Emitir documentos Mushak",
                 hint: "Desactivado, las ventas imprimen una factura de tienda normal en lugar de una factura fiscal.",
+            },
+            posReceipt: {
+                label: "Mushak 6.3 como recibo del TPV",
+                hint: "El TPV imprime la factura fiscal 6.3 en lugar del recibo normal. Ambos formatos siguen disponibles por venta.",
             },
             issueAddress: {
                 label: "Dirección de emisión",

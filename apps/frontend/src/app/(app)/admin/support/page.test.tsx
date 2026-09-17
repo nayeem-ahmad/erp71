@@ -20,6 +20,7 @@ jest.mock('@/components/admin/FeedbackAutomationPanel', () => {
 
 const thread = {
     id: 'thr-1',
+    ticketNumber: 12,
     subject: 'POS will not print',
     status: 'open',
     category: 'support',
@@ -47,6 +48,7 @@ describe('AdminSupportPage', () => {
         api.getAdminSupportFilters.mockResolvedValue({ tenants: [], users: [] });
         api.getAdminSupportMessages.mockResolvedValue({
             thread: {
+                ticketNumber: thread.ticketNumber,
                 subject: thread.subject,
                 status: 'open',
                 tenant: thread.tenant,
@@ -92,6 +94,31 @@ describe('AdminSupportPage', () => {
         expect(threadListPane()).not.toHaveClass('hidden');
         // `hidden md:flex` — the empty "pick a thread" pane is desktop-only.
         expect(conversationPane()).toHaveClass('hidden', 'md:flex');
+    });
+
+    it('shows each thread by its ticket number, in the list and in the conversation', async () => {
+        await openThread();
+
+        expect(within(threadListPane()).getByText('#12')).toBeInTheDocument();
+        // The same number the shop owner sees, so a phone call about "ticket 12"
+        // lands on the same thread on both screens.
+        expect(within(conversationPane()).getByText('Ticket #12')).toBeInTheDocument();
+    });
+
+    it('searches by ticket number as well as by subject', async () => {
+        const { api } = require('@/lib/api');
+        render(<AdminSupportPage />);
+        await screen.findByText('POS will not print');
+
+        fireEvent.change(screen.getByPlaceholderText('Search by ticket # or subject…'), {
+            target: { value: '#12' },
+        });
+
+        await waitFor(() =>
+            expect(api.getAdminSupportThreads).toHaveBeenCalledWith(
+                expect.objectContaining({ search: '#12' }),
+            ),
+        );
     });
 
     it('swaps the inbox for the conversation once a thread is open', async () => {

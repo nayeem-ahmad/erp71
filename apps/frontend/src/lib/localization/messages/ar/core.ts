@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: 'محطة نقطة البيع',
         subtitle: 'اختيار سريع وفوترة',
         helpTooltip: 'اختر الأصناف، ثم طريقة الدفع، ثم اضغط إتمام البيع. للدفع المقسّم أضف عدة صفوف دفع. ويُحسب الباقي تلقائيًا.',
+        openShift: 'افتح الوردية',
         offline: {
             banner: 'أنت غير متصل. ستُحفظ المبيعات في الطابور وتُزامَن عند عودة الاتصال.',
             pending: '{count} قيد الانتظار',
@@ -1069,6 +1070,8 @@ export const coreMessages = {
             paid: 'المدفوع',
             changeDue: 'الباقي',
             printReceipt: 'طباعة إيصال نقطة البيع',
+            printMushak: 'طباعة مشك 6.3',
+            mushakAfterSync: 'يمكن طباعة مشك 6.3 بعد مزامنة هذه العملية.',
             skipContinue: 'تخطٍّ ومتابعة',
         },
         payment: {
@@ -1100,6 +1103,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: 'الرجاء إدخال {count} رقمًا تسلسليًا لـ {product}.',
             serialUnique: 'يجب أن تكون الأرقام التسلسلية لـ {product} فريدة.',
+            sessionRequired: 'افتح جلسة صندوق قبل البيع على الكاونتر.',
             insufficientPaid: 'المبلغ المدفوع غير كافٍ!',
             saleOffline: 'حُفظ البيع دون اتصال — سيُزامَن عند عودة الاتصال',
             offlineFailed: 'تعذّر حفظ البيع دون اتصال. حاول مرة أخرى.',
@@ -1108,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: 'استُبدلت {count} نقطة',
             pointsEarned: 'اكتُسبت {count} نقطة',
             checkoutFailed: 'فشل إتمام البيع. تحقّق من مستويات المخزون.',
+            mushakPrintFailed: 'تعذرت طباعة مشك 6.3.',
             invalidDiscount: 'رمز خصم غير صالح',
         },
     },

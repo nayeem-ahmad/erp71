@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: "Bandeja de entrada",
         subtitle: "Soporte y comentarios de los comerciantes · {total} conversaciones",
         loadFailed: "No se pudieron cargar las conversaciones",
-        searchPlaceholder: "Buscar por asunto…",
+        searchPlaceholder: "Buscar por n.º de ticket o asunto…",
         loading: "Cargando conversaciones…",
         noThreads: "No se encontraron conversaciones.",
         allStatuses: "Todos los estados",
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: "Todos los usuarios",
         unknownUser: "Usuario desconocido",
         startedBy: "Iniciado por {user}",
+        ticketLabel: "Ticket #{number}",
         types: {
             support: "Ayuda",
             bug: "Error",

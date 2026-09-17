@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Reçus de paiement",
             SALES_ORDER: "Commandes clients",
             SALES_RETURN: "Retours clients",
+            DELIVERY_CHALLAN: "Bons de livraison",
             PURCHASE_ORDER: "Commandes fournisseurs",
             PURCHASE_RETURN: "Retours fournisseurs",
             LIST_REPORT: "Rapports de liste",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "Émettre des documents Mushak",
                 hint: "Désactivé, les ventes impriment une facture de magasin ordinaire au lieu d’une facture fiscale.",
+            },
+            posReceipt: {
+                label: "Mushak 6.3 comme reçu de caisse",
+                hint: "La caisse imprime la facture fiscale 6.3 au lieu du reçu ordinaire. Les deux formats restent disponibles par vente.",
             },
             issueAddress: {
                 label: "Adresse d’émission",

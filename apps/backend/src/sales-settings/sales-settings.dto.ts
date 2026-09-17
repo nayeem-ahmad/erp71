@@ -20,6 +20,10 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsBoolean()
   pos_enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  require_cashier_session?: boolean;
 }
 
 export class SalesSettingsResponseDto {
@@ -28,6 +32,7 @@ export class SalesSettingsResponseDto {
   paper_size: PaperSize;
   reference_number_format: string;
   pos_enabled: boolean;
+  require_cashier_session: boolean;
   created_at: Date;
   updated_at: Date;
 }

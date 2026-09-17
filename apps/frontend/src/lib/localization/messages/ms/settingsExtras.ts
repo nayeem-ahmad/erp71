@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Resit wang",
             SALES_ORDER: "Pesanan jualan",
             SALES_RETURN: "Pulangan jualan",
+            DELIVERY_CHALLAN: "Nota penghantaran",
             PURCHASE_ORDER: "Pesanan belian",
             PURCHASE_RETURN: "Pulangan belian",
             LIST_REPORT: "Laporan senarai",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
                 enable: {
                     label: "Keluarkan dokumen Mushak",
                     hint: "Jika dimatikan, jualan mencetak invois kedai biasa, bukan invois cukai.",
+                },
+                posReceipt: {
+                    label: "Mushak 6.3 sebagai resit POS",
+                    hint: "Kaunter POS mencetak invois cukai 6.3 dan bukan resit biasa. Kedua-dua format kekal tersedia bagi setiap jualan.",
                 },
                 issueAddress: {
                     label: "Alamat pengeluaran",

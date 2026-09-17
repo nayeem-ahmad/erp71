@@ -1021,6 +1021,7 @@ export const coreMessages = {
             title: "পস টার্মিনাল",
             subtitle: "দ্রুত নির্বাচন ও বিলিং",
             helpTooltip: "পণ্য নির্বাচন করুন, পেমেন্ট পদ্ধতি বেছে নিন, তারপর চেকআউট চাপুন। বিভক্ত পেমেন্টের জন্য একাধিক পেমেন্ট সারি যোগ করুন। বাকি টাকা স্বয়ংক্রিয়ভাবে হিসাব করা হয়।",
+            openShift: "শিফট শুরু করুন",
             offline: {
                 banner: "আপনি অফলাইনে আছেন। বিক্রয় সারিবদ্ধ হবে এবং পুনঃসংযোগে সিঙ্ক হবে।",
                 pending: "{count} অপেক্ষমাণ",
@@ -1069,6 +1070,8 @@ export const coreMessages = {
                 paid: "পরিশোধিত",
                 changeDue: "ফেরত দিতে হবে",
                 printReceipt: "পস রসিদ প্রিন্ট করুন",
+                printMushak: "মূসক-৬.৩ ছাপুন",
+                mushakAfterSync: "এই বিক্রয় সিঙ্ক হলে মূসক-৬.৩ ছাপা যাবে।",
                 skipContinue: "এড়িয়ে যান ও চালিয়ে যান",
             },
             payment: {
@@ -1100,6 +1103,7 @@ export const coreMessages = {
             notifications: {
                 serialRequired: "{product}-এর জন্য {count}টি সিরিয়াল নম্বর দিন।",
                 serialUnique: "{product}-এর সিরিয়াল নম্বরগুলো অনন্য হতে হবে।",
+                sessionRequired: "কাউন্টারে বিক্রি শুরুর আগে ক্যাশিয়ার সেশন খুলুন।",
                 insufficientPaid: "পর্যাপ্ত পরিমাণ পরিশোধ করা হয়নি!",
                 saleOffline: "বিক্রয় অফলাইনে সংরক্ষিত — অনলাইনে সিঙ্ক হবে",
                 offlineFailed: "অফলাইনে বিক্রয় সংরক্ষণ ব্যর্থ। আবার চেষ্টা করুন।",
@@ -1108,6 +1112,7 @@ export const coreMessages = {
                 pointsRedeemed: "{count} পয়েন্ট রিডিম",
                 pointsEarned: "{count} পয়েন্ট অর্জিত",
                 checkoutFailed: "চেকআউট ব্যর্থ। স্টক পরিমাণ পরীক্ষা করুন।",
+                mushakPrintFailed: "মূসক-৬.৩ ছাপা যায়নি।",
                 invalidDiscount: "অবৈধ ডিসকাউন্ট কোড",
             },
         },

@@ -80,6 +80,11 @@ describe('SalesService', () => {
       salesSettings: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      cashierSession: {
+        // No shift open by default: that is what a back-office invoice and
+        // the overwhelming majority of tenants look like.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       saleItem: {
         create: jest.fn(),
         deleteMany: jest.fn(),
@@ -414,6 +419,102 @@ describe('SalesService', () => {
       });
 
       expect(tx.customer.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create() — the cashier session a sale belongs to', () => {
+    const posDto = {
+      storeId: 'store-1',
+      totalAmount: 100,
+      amountPaid: 100,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      source: 'POS',
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 0, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 0 });
+    });
+
+    it('stamps the seller\'s open shift onto the sale', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        counter_id: 'counter-1',
+        store_id: 'store-1',
+      });
+
+      await service.create('tenant-1', 'user-1', posDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ session_id: 'sess-1', counter_id: 'counter-1' }),
+        }),
+      );
+    });
+
+    it('takes the till from the shift, not from what the browser sent', async () => {
+      // The stale localStorage case: this cashier opened their shift on
+      // counter 2, and the tab they are selling from remembers counter 9.
+      tx.cashierSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        counter_id: 'counter-2',
+        store_id: 'store-1',
+      });
+
+      await service.create('tenant-1', 'user-1', { ...posDto, counterId: 'counter-9' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ counter_id: 'counter-2' }),
+        }),
+      );
+    });
+
+    it('still honours a counter sent without a shift, so counter-only tenants are unchanged', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', { ...posDto, counterId: 'counter-9' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ counter_id: 'counter-9', session_id: null }),
+        }),
+      );
+    });
+
+    it('refuses a counter sale with no shift open when the tenant requires one', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+      tx.salesSettings.findUnique.mockResolvedValue({ require_cashier_session: true });
+
+      await expect(service.create('tenant-1', 'user-1', posDto)).rejects.toThrow(
+        'Open a cashier session before selling at the counter.',
+      );
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('does not apply that requirement to a back-office invoice', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+      tx.salesSettings.findUnique.mockResolvedValue({ require_cashier_session: true });
+
+      const { source, ...backOffice } = posDto;
+      await expect(service.create('tenant-1', 'user-1', backOffice)).resolves.toBeDefined();
+    });
+
+    it('leaves the sale unattached when the tenant runs no shifts at all', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', posDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ session_id: null, counter_id: null }),
+        }),
+      );
     });
   });
 
