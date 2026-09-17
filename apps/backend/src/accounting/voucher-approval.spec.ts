@@ -90,7 +90,7 @@ describe('AccountingService — voucher approval', () => {
         voucherDetail: { aggregate: jest.fn(), findMany: jest.fn(), groupBy: jest.fn(), deleteMany: jest.fn() },
         voucherSequence: { upsert: jest.fn(), update: jest.fn() },
         voucherAttachment: { deleteMany: jest.fn(), createMany: jest.fn() },
-        fiscalPeriod: { findFirst: jest.fn() },
+        fiscalPeriod: { findFirst: jest.fn(), findMany: jest.fn() },
         accountingSettings: { findUnique: jest.fn(), upsert: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -101,6 +101,7 @@ describe('AccountingService — voucher approval', () => {
         jest.resetAllMocks();
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
         db.fiscalPeriod.findFirst.mockResolvedValue(null);
+        db.fiscalPeriod.findMany.mockResolvedValue([]);
         db.accountingSettings.findUnique.mockResolvedValue(null);
         auditLog.mockResolvedValue(undefined);
 
@@ -283,8 +284,8 @@ describe('AccountingService — voucher approval', () => {
     describe('bulk approval', () => {
         it('approves only the rows that are not already in the target state', async () => {
             db.voucher.findMany.mockResolvedValue([
-                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING },
-                { id: 'v-2', approval_status: VoucherApprovalStatus.APPROVED },
+                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING, date: new Date('2026-05-10') },
+                { id: 'v-2', approval_status: VoucherApprovalStatus.APPROVED, date: new Date('2026-05-11') },
             ]);
             db.voucher.updateMany.mockResolvedValue({ count: 1 });
 
@@ -295,13 +296,13 @@ describe('AccountingService — voucher approval', () => {
                 'user-9',
             );
 
-            expect(result).toEqual({ updated: 1, skipped: 1, notFound: 0 });
+            expect(result).toEqual({ updated: 1, skipped: 1, lockedPeriod: 0, notFound: 0 });
             expect(db.voucher.updateMany.mock.calls[0][0].where.id).toEqual({ in: ['v-1'] });
         });
 
         it('reports ids belonging to another tenant as notFound instead of failing the batch', async () => {
             db.voucher.findMany.mockResolvedValue([
-                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING },
+                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING, date: new Date('2026-05-10') },
             ]);
             db.voucher.updateMany.mockResolvedValue({ count: 1 });
 
@@ -312,23 +313,23 @@ describe('AccountingService — voucher approval', () => {
                 'user-9',
             );
 
-            expect(result).toEqual({ updated: 1, skipped: 0, notFound: 1 });
+            expect(result).toEqual({ updated: 1, skipped: 0, lockedPeriod: 0, notFound: 1 });
         });
 
         it('does not write at all when every selected voucher is already approved', async () => {
             db.voucher.findMany.mockResolvedValue([
-                { id: 'v-1', approval_status: VoucherApprovalStatus.APPROVED },
+                { id: 'v-1', approval_status: VoucherApprovalStatus.APPROVED, date: new Date('2026-05-10') },
             ]);
 
             const result = await service.bulkUpdateVoucherApproval('tenant-1', { ids: ['v-1'] }, 'approve', 'user-9');
 
-            expect(result).toEqual({ updated: 0, skipped: 1, notFound: 0 });
+            expect(result).toEqual({ updated: 0, skipped: 1, lockedPeriod: 0, notFound: 0 });
             expect(db.voucher.updateMany).not.toHaveBeenCalled();
         });
 
         it('carries the reason on a bulk reject and clears it on a bulk approve', async () => {
             db.voucher.findMany.mockResolvedValue([
-                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING },
+                { id: 'v-1', approval_status: VoucherApprovalStatus.PENDING, date: new Date('2026-05-10') },
             ]);
             db.voucher.updateMany.mockResolvedValue({ count: 1 });
 
