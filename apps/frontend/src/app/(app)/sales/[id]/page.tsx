@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, Ban, Truck } from 'lucide-react';
+import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, Ban, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
-import { printSalesInvoice, PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
+import { printSalesInvoice, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
@@ -19,7 +19,7 @@ import SaleEntryLayout, {
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
-import { useDismissOnClickOutside } from '@/lib/click-outside';
+import PaperSizeMenu from '../components/PaperSizeMenu';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
@@ -68,8 +68,6 @@ function SaleDetailPageContent() {
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [showCancelModal, setShowCancelModal] = useState(false);
-    const [showPaperMenu, setShowPaperMenu] = useState(false);
-    const printMenuRef = useRef<HTMLDivElement>(null);
 
     // Cancelling reverses stock, balances and the ledger, so the action is
     // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
@@ -81,12 +79,6 @@ function SaleDetailPageContent() {
     const isDraft = sale?.status === 'DRAFT';
     const isCancelled = sale?.status === 'CANCELLED';
     const saleId = params.id as string;
-
-    const isInsidePrintMenu = useCallback(
-        (target: Node) => !!printMenuRef.current?.contains(target),
-        [],
-    );
-    useDismissOnClickOutside(showPaperMenu, isInsidePrintMenu, () => setShowPaperMenu(false));
 
     const loadSale = useCallback(async (id: string) => {
         try {
@@ -296,7 +288,6 @@ function SaleDetailPageContent() {
     const handleChallanPrint = (size?: PaperSize) => {
         if (!sale) return;
         const selectedSize = size ?? paperSize;
-        setShowPaperMenu(false);
         printDeliveryChallan(
             {
                 challanNumber: sale.reference_number || sale.serial_number,
@@ -321,7 +312,6 @@ function SaleDetailPageContent() {
     const handlePrint = (size?: PaperSize) => {
         if (!sale) return;
         const selectedSize = size ?? paperSize;
-        setShowPaperMenu(false);
         printSalesInvoice(
             {
                 referenceNumber: sale.reference_number || sale.serial_number,
@@ -483,41 +473,12 @@ function SaleDetailPageContent() {
                 <Truck className="w-4 h-4" />
                 {t.sales.challan.action}
             </button>
-            <div className="relative" ref={printMenuRef}>
-                <div className="flex items-center border rounded overflow-hidden">
-                    <button
-                        type="button"
-                        onClick={() => handlePrint()}
-                        className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
-                    >
-                        <Printer className="w-4 h-4" />
-                        {paperSize}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setShowPaperMenu((v) => !v)}
-                        className="px-1.5 py-2 border-s text-gray-500 hover:bg-gray-50"
-                        title="Choose paper size"
-                    >
-                        <ChevronDown className="w-4 h-4" />
-                    </button>
-                </div>
-                {showPaperMenu && (
-                    <div className="absolute end-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                        <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                        {PAPER_SIZES.map((size) => (
-                            <button
-                                key={size}
-                                type="button"
-                                onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
-                            >
-                                {paperSizeLabel(size)}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <PaperSizeMenu
+                paperSize={paperSize}
+                onPaperSizeChange={setPaperSize}
+                onPrint={(size) => handlePrint(size)}
+                label="Paper Size"
+            />
             <Link
                 href={`/sales/${sale.id}/invoice`}
                 className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"

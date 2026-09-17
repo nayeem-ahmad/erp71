@@ -522,6 +522,7 @@ export const coreMessages = {
                 defaultError: "Log masuk gagal. Sila semak kelayakan anda.",
                 tooManyAttempts: "Terlalu banyak percubaan log masuk. Sila tunggu {seconds, plural, other {# saat}} dan cuba lagi.",
                 demoFailed: "Log masuk demo gagal. Sila cuba lagi.",
+                demoDisabled: "Demo kini dimatikan. Sila log masuk atau buka akaun.",
                 sessionExpired: "Sesi anda telah tamat. Sila log masuk semula.",
                 googleFailed: "Log masuk Google gagal. Sila cuba lagi.",
                 termsNotice: "Meneruskan dengan Google atau nombor mudah alih anda akan mencipta akaun jika anda belum ada, dan bermakna anda bersetuju dengan",

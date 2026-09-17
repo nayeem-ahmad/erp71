@@ -74,6 +74,17 @@ export default function HomeClient() {
     }, []);
     const displayPlans = useMemo(() => buildMarketingPlansFromApi(apiPlans), [apiPlans]);
 
+    // The hero's "Try Demo" opens `/demo`, which signs the visitor straight into
+    // the shared demo workspace — so it follows the same platform-admin switch
+    // as the button on the sign-in page. Hidden until the backend has answered,
+    // rather than offered and then withdrawn.
+    const [demoAvailable, setDemoAvailable] = useState(false);
+    useEffect(() => {
+        api.getDemoConfig()
+            .then((config) => setDemoAvailable(config?.enabled !== false))
+            .catch(() => setDemoAvailable(false));
+    }, []);
+
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
             <MarketingNav />
@@ -103,13 +114,15 @@ export default function HomeClient() {
                                 {m.hero.startTrial}
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" />
                             </Link>
-                            <Link
-                                href="/demo"
-                                className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center flex items-center justify-center gap-2"
-                            >
-                                <PlayCircle className="w-5 h-5 text-blue-500" />
-                                {m.hero.tryDemo}
-                            </Link>
+                            {demoAvailable && (
+                                <Link
+                                    href="/demo"
+                                    className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center flex items-center justify-center gap-2"
+                                >
+                                    <PlayCircle className="w-5 h-5 text-blue-500" />
+                                    {m.hero.tryDemo}
+                                </Link>
+                            )}
                         </div>
                         <p className="text-sm text-gray-400">{m.hero.footnote}</p>
                         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">

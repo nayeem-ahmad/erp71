@@ -20,33 +20,52 @@ configures a policy sees no behaviour change at all.
 
 ## 1. What already exists
 
-Approval is not a new idea in this codebase. It has been solved **ten separate
-times**, each slightly differently, and none of the ten can route on the
-parameters of the entry.
+Approval is not a new idea in this codebase. It has been solved **eleven
+separate times**, each slightly differently, and none of the eleven can route on
+the parameters of the entry.
 
 | Entry | Where | Approval state | Permission | Routing |
 |---|---|---|---|---|
 | Voucher | `schema.prisma:3605` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
-| Leave request | `schema.prisma:5470` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5509`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4758`), anyone holding the permission |
+| Leave request | `schema.prisma:5470` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5509`, its own `approver_id`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4758`), anyone holding the permission |
 | Expense claim | `schema.prisma:5071` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
 | Warehouse transfer | `schema.prisma:1782` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
-| Product demand | `schema.prisma:1960` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single approver |
+| Product demand | `schema.prisma:1960` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single reviewer |
 | CRM activity | `schema.prisma:3235` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
+| Payroll run | `schema.prisma:5153` | `status`, `approved_by`, `approved_at` | `MANAGE_HR` | single approver |
+| Overtime record | `schema.prisma:5380` | `status` (`PENDING \| APPROVED \| REJECTED`), `approved_by`, `approved_at` | **none** — `JwtAuthGuard` only | single reviewer, who may approve *fewer* minutes than were recorded |
+| Stock take | `InventorySettings`, `schema.prisma:1754` | `discrepancy_approval_threshold`; `StockTakeSession.status` (`:1908`) | — | a threshold, hard-coded in shape |
+| Warranty claim | `schema.prisma:4312` | `status` includes `APPROVED`, but **no approver column** | **none** — `JwtAuthGuard` only | unrecorded — nobody is stored as having approved it |
 | Fund transfer | `schema.prisma:4280` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
-| Payroll run | `schema.prisma:5153` | `status`, `approved_by`, `approved_at` | — | single approver |
-| Stock take | `InventorySettings`, `schema.prisma:1754` | `discrepancy_approval_threshold` | — | a threshold, hard-coded in shape |
-| Warranty claim | `schema.prisma:4312` | status enum incl. `APPROVED` | — | single approver |
 
-Twelve `approved_by` columns across the schema.
+Nine columns record who signed: seven `approved_by` (voucher, leave request,
+expense claim, warehouse transfer, CRM activity, payroll run, overtime record),
+plus `LeaveRequestApproval.approver_id` for the per-level rows and
+`ProductDemand.reviewed_by`. Two of the eleven flows — warranty claim and fund
+transfer — record nobody at all.
 
-One of the ten is not an approval flow at all: **`APPROVE_FUND_TRANSFER` is
-defined, labelled and granted to two roles in
-`packages/shared-types/index.ts:67,615,932,1017` and is not referenced by a
-single line of backend code.** `FundTransfer` has no approval column and no
-guard consults the permission. A tenant can tick "Approve fund transfers" in the
-role editor today and it does nothing. Worth fixing on its own; it also makes
-fund transfers the cleanest Phase 4 adoption, since there is no legacy
-behaviour to preserve.
+### Three of the eleven have no approval authority check
+
+The fragmentation is not only that the same problem was solved eleven times. In
+three of those eleven, *anyone signed in can approve*:
+
+- **`APPROVE_FUND_TRANSFER` is defined, labelled and granted to two roles in
+  `packages/shared-types/index.ts:67,615,932,1017` and is not referenced by a
+  single line of backend code.** `FundTransfer` has no approval column and no
+  guard consults the permission. A tenant can tick "Approve fund transfers" in
+  the role editor today and it does nothing.
+- **Overtime review** (`attendance.controller.ts:106`,
+  `PATCH attendance/overtime/:id/review`) carries no `@RequireStorePermission`
+  at all — only the controller-level `JwtAuthGuard` and a plan check. Any signed-in
+  user can approve overtime minutes, and the service stamps their id into
+  `approved_by`.
+- **Warranty claim status** (`warranty-claims.controller.ts:43`,
+  `PATCH warranty-claims/:id/status`) is likewise `JwtAuthGuard`-only, and
+  `APPROVED` is one of its six valid statuses.
+
+Each is worth fixing on its own, independent of this plan. They also make those
+three the cleanest Phase 4 adoptions, since there is no approval behaviour to
+preserve — for fund transfers, none exists at all.
 
 The **voucher** flow is the most mature and is the right template to generalise
 from:
@@ -76,9 +95,10 @@ Three lessons from it that the generic engine must inherit, not relitigate:
 ### 1.1 What is missing today
 
 No flow anywhere can express *"a voucher under ৳50,000 is the branch manager's
-call; over ৳500,000 it needs the owner."* Every one of the ten is
+call; over ৳500,000 it needs the owner."* Every one of the eleven is
 "whoever holds the permission, once" — or, for leave, "whoever holds the
-permission, N times." Authority does not vary with the entry.
+permission, N times", or, for three of them, "whoever is signed in". Authority
+does not vary with the entry.
 
 Also missing, and needed for people-based routing:
 
@@ -545,7 +565,7 @@ replace it. This also means `StorePermissionGuard` needs no changes.
 | **1** | Engine, dark. 4 tables + migration, `ApprovalsModule`, `condition.util.ts` + `rule-match.util.ts` + resolver, all spec'd. Wired to nothing. | no behaviour change |
 | **2** | Voucher pilot. `require_voucher_approval` becomes an `ApprovalPolicy` row; "no rules" degenerates to today's behaviour (one step, anyone with `APPROVE_VOUCHER`). Back-fill migration. | amount-banded voucher approval |
 | **3** | UI. Unified `/approvals` queue (`PageShell` + `PageHeader`), generalised badge hook, policy editor with the test panel, per-entity deep links. | the feature becomes visible |
-| **4** | Adoption, one small PR each: purchase orders, expense claims, fund transfers, warehouse transfers, product demands, sales discounts. | ten bespoke flows become one |
+| **4** | Adoption, one small PR each: purchase orders, expense claims, fund transfers, warehouse transfers, product demands, overtime records, warranty claims, sales discounts. | eleven bespoke flows become one |
 | **5** | Delegation / out-of-office, SLA escalation, parallel + quorum steps, approve-from-notification on mobile. | the long tail |
 
 Phases 1 and 2 are the real work. Phase 4 is repetitive and cheap *because* of

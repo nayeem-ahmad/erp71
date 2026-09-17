@@ -2953,13 +2953,30 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCounter: (id: string) => fetchWithAuth(`/counters/${id}`, { method: 'DELETE' }),
+    // Whether the platform admin has left "Try Demo" on. Runtime-configured
+    // rather than a NEXT_PUBLIC_ build arg, for the same reason as the Google
+    // and Firebase configs: flipping the switch is a settings save, not a
+    // frontend rebuild.
+    getDemoConfig: () => fetch(`${API_BASE}/auth/demo/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load demo config');
+        return body && 'data' in body ? body.data : body;
+    }),
     demoLogin: () => fetch(`${API_BASE}/auth/demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
+        // An `ApiError` rather than a bare `Error`: a demo the platform admin
+        // switched off comes back as `DEMO_DISABLED`, which the pages word for a
+        // visitor instead of repeating the backend's sentence.
         if (!res.ok) {
-            throw new Error(body?.message || body?.error?.message || 'Demo account not available');
+            throw new ApiError(
+                body?.error?.message || body?.message || 'Demo account not available',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
         }
         return body && 'data' in body ? body.data : body;
     }),

@@ -522,6 +522,7 @@ export const coreMessages = {
             defaultError: "Error al iniciar sesión. Comprueba tus credenciales.",
             tooManyAttempts: "Demasiados intentos de inicio de sesión. Espera {seconds, plural, one {# segundo} other {# segundos}} e inténtalo de nuevo.",
             demoFailed: "Error al iniciar la demo. Inténtalo de nuevo.",
+            demoDisabled: "La demo está desactivada actualmente. Inicia sesión o crea una cuenta.",
             sessionExpired: "Tu sesión ha caducado. Vuelve a iniciar sesión.",
             googleFailed: "Error al iniciar sesión con Google. Inténtalo de nuevo.",
             termsNotice: "Continuar con Google o tu número de móvil crea una cuenta si no tienes una, y significa que aceptas nuestras",
