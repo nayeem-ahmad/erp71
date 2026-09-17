@@ -5148,6 +5148,22 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`, { method: 'DELETE' }),
+    /**
+     * Delete a whole selection in one request.
+     *
+     * One call, not one `deleteProjectTask` per row: the API's default throttle
+     * is 20 requests a minute per address, so a fan-out over a real selection
+     * came back as `429 Too Many Requests` on everything past the twentieth.
+     *
+     * Ids the caller cannot delete (gone already, or in a project they cannot
+     * open) are skipped rather than failing the batch — `skipped` says how many.
+     */
+    bulkDeleteProjectTasks: (ids: string[]): Promise<{ deleted: number; skipped: number }> =>
+        fetchWithAuth('/project-tasks/bulk-delete', {
+            method: 'POST',
+            body: JSON.stringify({ ids }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     addTaskChecklistItem: (taskId: string, data: { text: string }) =>
         fetchWithAuth(`/project-tasks/${taskId}/checklist`, {
             method: 'POST',
