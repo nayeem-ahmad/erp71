@@ -28,6 +28,9 @@ const getProject = jest.fn();
 const getProjectStories = jest.fn();
 const getSprints = jest.fn();
 const logProjectTime = jest.fn();
+const getProjectTimer = jest.fn();
+const startProjectTimer = jest.fn();
+const stopProjectTimer = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -57,6 +60,12 @@ jest.mock('@/lib/api', () => ({
         getProjectStories: (...args: unknown[]) => getProjectStories(...args),
         getSprints: (...args: unknown[]) => getSprints(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
+        // Left unmocked the timer read threw, `TimerButton` caught it and
+        // rendered nothing — so every assertion about the clock passed against
+        // an absent button. Mocked to "no timer running" so it actually renders.
+        getProjectTimer: (...args: unknown[]) => getProjectTimer(...args),
+        startProjectTimer: (...args: unknown[]) => startProjectTimer(...args),
+        stopProjectTimer: (...args: unknown[]) => stopProjectTimer(...args),
         deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
 }));
@@ -104,6 +113,9 @@ beforeEach(() => {
         getProjectStories,
         getSprints,
         logProjectTime,
+        getProjectTimer,
+        startProjectTimer,
+        stopProjectTimer,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
@@ -117,6 +129,8 @@ beforeEach(() => {
     getProjectStories.mockResolvedValue([]);
     getSprints.mockResolvedValue([]);
     getTaskAttachments.mockResolvedValue([]);
+    // No timer running, so the button offers Start.
+    getProjectTimer.mockResolvedValue(null);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -981,6 +995,51 @@ describe('TaskDetailPanel assignee', () => {
                 screen.queryByText("Could not read this project's team."),
             ).not.toBeInTheDocument();
         });
+    });
+});
+
+describe('TaskDetailPanel timer', () => {
+    /**
+     * The clock belongs with the figures it moves. It used to sit in its own
+     * right-aligned row above the description, which put a control over the
+     * hours at the top of the reading column and spent a row of height doing it.
+     */
+    it('sits with the hours it affects, not above the description', async () => {
+        panel();
+
+        const timer = await screen.findByRole('button', { name: /start/i });
+
+        // The block holding the three figures is the timer's own container now.
+        // Asserted through `Logged (h)` rather than a class or a testid: the
+        // grouping is the thing being pinned, and the label is what a reader
+        // sees grouping them.
+        // Metric tile -> the three-across grid -> the block that also holds the
+        // timer, which is the grouping this test exists to pin.
+        const hours = screen.getByText('Logged (h)').closest('div')!.parentElement!.parentElement!;
+
+        expect(hours).toContainElement(timer);
+        expect(hours).toContainElement(screen.getByText('Remaining (h)'));
+
+        // And it is no longer the first thing in the description column.
+        const description = screen.getByRole('button', { name: 'Description' });
+        expect(description.parentElement).not.toContainElement(timer);
+    });
+
+    it('starts the timer for this task', async () => {
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: /start/i }));
+
+        await waitFor(() => expect(startProjectTimer).toHaveBeenCalledWith({ taskId: 't1' }));
+    });
+
+    it('offers to stop the clock it is already running', async () => {
+        getProjectTimer.mockResolvedValue({ task: { id: 't1' } });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: /stop/i }));
+
+        await waitFor(() => expect(stopProjectTimer).toHaveBeenCalled());
     });
 });
 
