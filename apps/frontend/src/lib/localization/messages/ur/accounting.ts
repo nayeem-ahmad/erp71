@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: '{count} واؤچر منظور ہو گئے',
             bulkRejected: '{count} واؤچر مسترد ہو گئے',
             bulkNoPending: 'منتخب واؤچرز میں سے کوئی بھی منظوری کا منتظر نہیں ہے۔',
+            bulkLockedPeriod: '{count} ویسے ہی رہنے دیے گئے — ان کا مہینہ بند ہے۔',
             queueBadge: 'واؤچر منظوری کے منتظر',
             noPermission: 'آپ کو واؤچر منظور کرنے کی اجازت نہیں ہے۔',
             pendingNotice: 'یہ واؤچر منظوری کا منتظر ہے اور صرف منظور شدہ والی رپورٹس سے خارج ہے۔',
