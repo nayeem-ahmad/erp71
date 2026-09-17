@@ -13,7 +13,10 @@
 import {
     DEFAULT_HEADER_CONFIG,
     FONT_STACKS,
+    defaultTitlePosition,
     isThermalPaper,
+    PAGE_MARGIN_MM,
+    TITLE_POSITIONS,
     type DeepPartial,
     type HeaderContext,
     type HeaderLine,
@@ -21,6 +24,7 @@ import {
     type PrintFontFamily,
     type PrintHeaderConfig,
     type TemplateImage,
+    type TitlePosition,
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -161,6 +165,11 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
             ...config.title,
             fontSizePt: Math.min(config.title.fontSizePt, narrow ? 10 : 12),
             letterSpacingPx: 0,
+            // A roll is one narrow column: the title can only sit above or
+            // below the brand, centred, and a nudge would push it off the roll.
+            position: titlePosition(config).startsWith('above') ? 'above-center' : 'below-center',
+            offsetXMm: 0,
+            offsetYMm: 0,
         },
         baseFontSizePt: Math.min(config.baseFontSizePt, narrow ? 8 : 9),
         spacingMm: Math.min(config.spacingMm, 2),
@@ -169,6 +178,10 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
             spacingMm: Math.min(config.footer?.spacingMm ?? 4, 2),
             // A roll has no page bottom to pin a footer to; it prints once.
             repeatOnEveryPage: false,
+            pinToPageBottom: false,
+            // A roll is cut to length and already edge to edge — bleeding a
+            // band past the 3-4mm margin only risks the thermal head's edge.
+            bleed: false,
         },
     };
 }
@@ -198,6 +211,23 @@ function alignment(value: string | undefined, fallback: Alignment): Alignment {
     return (ALIGNMENTS as readonly string[]).includes(value ?? '')
         ? (value as Alignment)
         : fallback;
+}
+
+/**
+ * The title's slot: the stored one when it is a value we know, otherwise the
+ * placement the layout implied before the control existed.
+ */
+export function titlePosition(config: PrintHeaderConfig): TitlePosition {
+    const stored = config.title?.position;
+    return (TITLE_POSITIONS as readonly string[]).includes(stored ?? '')
+        ? (stored as TitlePosition)
+        : defaultTitlePosition(config.layout);
+}
+
+/** Splits a slot into its row ('above' | 'beside' | 'below') and alignment. */
+function titleSlot(position: TitlePosition): { row: string; align: Alignment } {
+    const [row, align] = position.split('-');
+    return { row, align: alignment(align, 'right') };
 }
 
 function lineStyle(line: HeaderLine, config: PrintHeaderConfig): string {
@@ -248,6 +278,29 @@ function usableImages(
     });
 }
 
+/** A single image cell — the picture (or a blank slot) plus its caption. */
+function renderImageCell(image: TemplateImage): string {
+    const url = safeImageUrl(image.url);
+    const caption = image.caption?.trim();
+    const captionHtml = caption ? `<div class="p71-img-cap">${escapeHtml(caption)}</div>` : '';
+
+    // Full width: the width is the constraint and the height follows the
+    // aspect ratio, so a letterhead strip spans the band instead of being
+    // boxed into its height.
+    if (image.fullWidth) {
+        const slot = url
+            ? `<img class="p71-img-el p71-img-el--full" src="${escapeHtml(url)}" alt="">`
+            : `<div class="p71-img-el p71-img-el--full" style="height:${num(image.heightMm, 14, 3, 60)}mm"></div>`;
+        return `<div class="p71-img p71-img--full">${slot}${captionHtml}</div>`;
+    }
+
+    const height = num(image.heightMm, 14, 3, 60);
+    const slot = url
+        ? `<img class="p71-img-el" src="${escapeHtml(url)}" alt="" style="height:${height}mm">`
+        : `<div class="p71-img-el" style="height:${height}mm"></div>`;
+    return `<div class="p71-img">${slot}${captionHtml}</div>`;
+}
+
 function renderImages(
     images: TemplateImage[] | undefined,
     paperSize: PaperSize,
@@ -256,35 +309,40 @@ function renderImages(
     const usable = usableImages(images, paperSize);
     if (usable.length === 0) return '';
 
+    // A full-width image cannot share a row — it gets one of its own, in the
+    // order it was added relative to the rest.
+    const full = usable.filter((image) => image.fullWidth);
+    const inline = usable.filter((image) => !image.fullWidth);
+    const fullHtml = full.map((image) => `<div class="${prefix}-images ${prefix}-images--full">${renderImageCell(image)}</div>`).join('');
+    if (inline.length === 0) return fullHtml;
+
     const bucket = (align: Alignment): string => {
-        const entries = usable.filter((image) => alignment(image.align, 'left') === align);
+        const entries = inline.filter((image) => alignment(image.align, 'left') === align);
         if (entries.length === 0) return `<div class="p71-img-col p71-img-col--${align}"></div>`;
 
-        const cells = entries
-            .map((image) => {
-                const url = safeImageUrl(image.url);
-                const height = num(image.heightMm, 14, 3, 60);
-                const caption = image.caption?.trim();
-                const slot = url
-                    ? `<img class="p71-img-el" src="${escapeHtml(url)}" alt="" style="height:${height}mm">`
-                    : `<div class="p71-img-el" style="height:${height}mm"></div>`;
-                const captionHtml = caption
-                    ? `<div class="p71-img-cap">${escapeHtml(caption)}</div>`
-                    : '';
-                return `<div class="p71-img">${slot}${captionHtml}</div>`;
-            })
-            .join('');
+        const cells = entries.map(renderImageCell).join('');
         return `<div class="p71-img-col p71-img-col--${align}">${cells}</div>`;
     };
 
-    return `<div class="${prefix}-images">${ALIGNMENTS.map(bucket).join('')}</div>`;
+    return `${fullHtml}<div class="${prefix}-images">${ALIGNMENTS.map(bucket).join('')}</div>`;
 }
 
 function renderLogo(config: PrintHeaderConfig): string {
     const url = safeImageUrl(config.logo.url);
     if (!url || config.layout === 'text-only') return '';
+
+    // A full-width logo is sized by width and lets its height follow the aspect
+    // ratio — the only way a banner wordmark fills the band it was drawn for.
+    if (config.logo.fullWidth) {
+        return `<img class="p71-hd-logo p71-hd-logo--full" src="${escapeHtml(url)}" alt="">`;
+    }
+
     const height = num(config.logo.heightMm, 16, 3, 60);
-    return `<img class="p71-hd-logo" src="${escapeHtml(url)}" alt="" style="height:${height}mm">`;
+    // No cap set means uncapped: the logo takes the width its ratio asks for.
+    const maxWidth = typeof config.logo.maxWidthMm === 'number'
+        ? `;max-width:${num(config.logo.maxWidthMm, 60, 5, 250)}mm`
+        : '';
+    return `<img class="p71-hd-logo" src="${escapeHtml(url)}" alt="" style="height:${height}mm${maxWidth}">`;
 }
 
 function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
@@ -295,7 +353,16 @@ function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
     if (ctx.docDate?.trim()) meta.push(ctx.docDate.trim());
     if (!title && meta.length === 0) return '';
 
-    return `<div class="p71-hd-doc">
+    const { row, align } = titleSlot(titlePosition(config));
+    // Relative, so the block keeps its place in the flow and only its painted
+    // position moves — a large nudge cannot make the title disappear.
+    const offsetX = num(config.title.offsetXMm, 0, -100, 100);
+    const offsetY = num(config.title.offsetYMm, 0, -100, 100);
+    const offset = offsetX || offsetY
+        ? ` style="left:${offsetX}mm;top:${offsetY}mm"`
+        : '';
+
+    return `<div class="p71-hd-doc p71-hd-doc--${row} p71-hd-doc--${align}"${offset}>
         ${title ? `<div class="p71-hd-title">${escapeHtml(title)}</div>` : ''}
         ${meta.map((entry) => `<div class="p71-hd-meta">${escapeHtml(entry)}</div>`).join('')}
     </div>`;
@@ -328,10 +395,25 @@ export function renderHeaderHtml(
         ${nameHtml || linesHtml ? `<div class="p71-hd-text">${nameHtml}${linesHtml}</div>` : ''}
     </div>`;
 
-    const bandHtml = `<div class="p71-hd p71-hd--${resolved.layout}">${brandHtml}${docHtml}</div>`;
+    // `beside` keeps the title in the band, sharing the row with the brand.
+    // `above`/`below` lift it out into a full-width row of its own, which is
+    // what a centred banner title needs — inside the band it would only ever be
+    // as wide as the space the brand left it.
+    const { row } = titleSlot(titlePosition(resolved));
+    const inBand = row === 'beside';
+
+    const bandHtml = `<div class="p71-hd p71-hd--${resolved.layout}">${brandHtml}${inBand ? docHtml : ''}</div>`;
+
+    let rowsHtml = bandHtml;
+    if (row === 'above') rowsHtml = `${docHtml}${bandHtml}`;
+    else if (row === 'below') rowsHtml = `${bandHtml}${docHtml}`;
+
     // The image strip sits under the band so it spans the full width rather
     // than competing with the document block for the space beside it.
-    return imagesHtml ? `<div class="p71-hd-wrap">${bandHtml}${imagesHtml}</div>` : bandHtml;
+    if (imagesHtml) return `<div class="p71-hd-wrap">${rowsHtml}${imagesHtml}</div>`;
+    // A title on its own row needs a wrapper to carry the divider that the band
+    // would otherwise draw above it.
+    return inBand ? rowsHtml : `<div class="p71-hd-wrap">${rowsHtml}</div>`;
 }
 
 /**
@@ -351,9 +433,16 @@ export function renderFooterHtml(
     const imagesHtml = renderImages(footer.images, paperSize, 'p71-ft');
     if (!linesHtml && !imagesHtml) return '';
 
+    // A bleeding footer that is pinned to the page bottom runs off the bottom
+    // edge too; one that flows after the content keeps the bottom margin, or
+    // it would collide with whatever follows.
+    const bleedBottom = footer.bleed && footer.pinToPageBottom && footer.repeatOnEveryPage
+        ? ' p71-ft--bleed-bottom'
+        : '';
+
     // Images above the text: a signature block belongs directly under the
     // content it signs off, with the address strip closing the page.
-    return `<div class="p71-ft">${imagesHtml}${linesHtml}</div>`;
+    return `<div class="p71-ft${bleedBottom}">${imagesHtml}${linesHtml}</div>`;
 }
 
 /** Whether a tenant footer would render anything for this config. */
@@ -374,6 +463,35 @@ export function footerRepeats(
 }
 
 /**
+ * Whether the footer runs past the page margin to the paper edge.
+ *
+ * The print window drops its centred max-width when this is on — a band cannot
+ * reach the paper edge from inside a column narrower than the page.
+ */
+export function footerBleeds(
+    config: DeepPartial<PrintHeaderConfig> | undefined,
+    paperSize: PaperSize,
+): boolean {
+    return !!resolveHeaderConfig(config, paperSize).footer?.bleed;
+}
+
+/**
+ * Whether the footer should sit on the page's bottom edge rather than directly
+ * under the content.
+ *
+ * Only a repeating footer can be pinned: pinning works by stretching the
+ * document table to the full page height so its `<tfoot>` is pushed down, and
+ * a non-repeating footer has no `<tfoot>` to push.
+ */
+export function footerPinsToBottom(
+    config: DeepPartial<PrintHeaderConfig> | undefined,
+    paperSize: PaperSize,
+): boolean {
+    const footer = resolveHeaderConfig(config, paperSize).footer;
+    return !!footer?.pinToPageBottom && !!footer?.repeatOnEveryPage;
+}
+
+/**
  * The stylesheet for `renderHeaderHtml`. Kept separate so a document can place
  * it in `<head>` alongside its own rules.
  */
@@ -388,10 +506,12 @@ export function headerCss(
     const ruleWidth = num(resolved.rule.thicknessPx, 2, 0, 8);
     const centred = resolved.layout === 'logo-above' || resolved.layout === 'logo-center';
 
-    // With images the wrapper is the outer element and carries the divider;
-    // without them the band itself does. Emitted once either way, so switching
-    // the divider off leaves no border declaration behind.
+    // The divider belongs to whichever element is outermost: the wrapper when
+    // there is one, the band itself otherwise. Emitted once either way, so
+    // switching the divider off leaves no border declaration behind.
     const hasImages = usableImages(resolved.images, paperSize).length > 0;
+    const titleOutsideBand = titleSlot(titlePosition(resolved)).row !== 'beside';
+    const wrapped = hasImages || titleOutsideBand;
     const divider = resolved.rule.show ? `border-bottom: ${ruleWidth}px solid ${ruleColor};` : '';
 
     return `
@@ -401,9 +521,9 @@ export function headerCss(
         align-items: flex-start;
         justify-content: space-between;
         font-family: ${FONT_STACKS[resolved.fontFamily]};
-        padding-bottom: ${hasImages ? 0 : spacing}mm;
-        margin-bottom: ${hasImages ? Math.max(spacing - 1, 1) : spacing}mm;
-        ${hasImages ? '' : divider}
+        padding-bottom: ${wrapped ? 0 : spacing}mm;
+        margin-bottom: ${wrapped ? Math.max(spacing - 1, 1) : spacing}mm;
+        ${wrapped ? '' : divider}
     }
     .p71-hd--logo-right { flex-direction: row-reverse; }
     .p71-hd--logo-above,
@@ -411,9 +531,16 @@ export function headerCss(
     .p71-hd--text-only { flex-direction: column; align-items: ${centred || thermal ? 'center' : 'flex-start'}; }
     .p71-hd--logo-above .p71-hd-brand { flex-direction: column; align-items: center; }
 
-    .p71-hd-brand { display: flex; gap: 3mm; align-items: center; }
-    .p71-hd-logo { display: block; width: auto; max-width: 60mm; object-fit: contain; }
-    .p71-hd-text { ${centred || thermal ? 'text-align: center;' : ''} }
+    .p71-hd-brand { display: flex; gap: 3mm; align-items: center; min-width: 0; }
+    /* No max-width here: a cap is written inline only when the tenant sets one,
+       so a wide wordmark prints at whatever width its height asks for. */
+    .p71-hd-logo { display: block; width: auto; max-width: 100%; object-fit: contain; }
+    /* Sized by width instead: the height follows the aspect ratio. */
+    .p71-hd-logo--full { width: 100%; height: auto; max-width: 100%; }
+    .p71-hd--logo-above .p71-hd-brand,
+    .p71-hd--logo-center .p71-hd-brand,
+    .p71-hd--text-only .p71-hd-brand { width: 100%; }
+    .p71-hd-text { ${centred || thermal ? 'text-align: center;' : ''} min-width: 0; }
 
     .p71-hd-name {
         font-size: ${num(resolved.company.fontSizePt, 16, 6, 48)}pt;
@@ -423,7 +550,17 @@ export function headerCss(
     }
     .p71-hd-line { line-height: 1.35; }
 
-    .p71-hd-doc { ${centred || thermal ? 'text-align: center;' : 'text-align: right;'} ${thermal ? 'margin-top: 1mm;' : ''} }
+    /* Alignment comes from the title's own slot, not from the logo layout. */
+    .p71-hd-doc { position: relative; ${thermal ? 'margin-top: 1mm;' : ''} }
+    .p71-hd-doc--left { text-align: left; }
+    .p71-hd-doc--center { text-align: center; }
+    .p71-hd-doc--right { text-align: right; }
+    /* Out of the band it owns a full-width row, so its alignment has room to
+       mean something. In the band it only takes the space the brand leaves. */
+    .p71-hd-doc--above, .p71-hd-doc--below { width: 100%; }
+    .p71-hd-doc--above { margin-bottom: ${Math.max(spacing - 1, 1)}mm; }
+    .p71-hd-doc--below { margin-top: ${Math.max(spacing - 1, 1)}mm; }
+    .p71-hd-doc--beside { flex: 0 1 auto; }
     .p71-hd-title {
         font-size: ${num(resolved.title.fontSizePt, 20, 6, 48)}pt;
         font-weight: bold;
@@ -438,8 +575,9 @@ export function headerCss(
         margin-top: 0.5mm;
     }
 
-    ${hasImages ? `
-    /* The header band plus its image strip. */
+    ${wrapped ? `
+    /* The header band plus whatever rows sit outside it — an image strip, a
+       title on its own row, or both. */
     .p71-hd-wrap {
         padding-bottom: ${spacing}mm;
         margin-bottom: ${spacing}mm;
@@ -477,7 +615,13 @@ function imageCss(thermal: boolean): string {
     .p71-img-col--right { justify-content: flex-end; }
     .p71-img-col:empty { ${thermal ? 'display: none;' : ''} }
     .p71-img { text-align: center; }
-    img.p71-img-el { display: block; width: auto; max-width: 50mm; object-fit: contain; }
+    img.p71-img-el { display: block; width: auto; max-width: 100%; object-fit: contain; }
+
+    /* A full-width image owns its row and is sized by width, not height. */
+    .p71-hd-images--full, .p71-ft-images--full { display: block; }
+    .p71-img--full { width: 100%; }
+    .p71-img--full img.p71-img-el--full,
+    .p71-img--full .p71-img-el--full { width: 100%; max-width: 100%; height: auto; }
     .p71-img-cap {
         border-top: 1px solid #999999;
         margin-top: 1mm;
@@ -498,6 +642,12 @@ function footerCssBlock(resolved: PrintHeaderConfig, paperSize: PaperSize): stri
     const ruleWidth = num(footer.rule?.thicknessPx, 1, 0, 8);
     const ruleColor = cssColor(footer.rule?.color, '#d1d5db');
 
+    // Bleeding cancels the `@page` margin with an equal negative one, so the
+    // band runs to the true paper edge. The bottom margin is cancelled too —
+    // a footer pinned to the page bottom should touch it, not stop short.
+    const margin = PAGE_MARGIN_MM[paperSize];
+    const bleed = !!footer.bleed;
+
     return `
     .p71-ft {
         font-family: ${fontStack(resolved.fontFamily, 'sans')};
@@ -506,6 +656,24 @@ function footerCssBlock(resolved: PrintHeaderConfig, paperSize: PaperSize): stri
         ${footer.rule?.show ? `border-top: ${ruleWidth}px solid ${ruleColor};` : ''}
         ${thermal ? 'text-align: center;' : ''}
     }
+    ${bleed ? `
+    /* Bleeding is a print-only trick: the negative margins cancel the @page
+       margin, which exists only on paper. On screen there is no such margin to
+       cancel — applying them there just pushes the band off the viewport and
+       the browser crops both its edges. */
+    @media print {
+        .p71-ft {
+            margin-left: -${margin}mm;
+            margin-right: -${margin}mm;
+            max-width: none;
+        }
+        /* The band reaches the paper edge, but its text should not sit in the
+           margin — only a full-width image is meant to run right to the edge. */
+        .p71-ft .p71-ft-line { padding-left: ${margin}mm; padding-right: ${margin}mm; }
+        .p71-ft .p71-ft-images { padding-left: ${margin}mm; padding-right: ${margin}mm; }
+        .p71-ft .p71-ft-images--full { padding-left: 0; padding-right: 0; }
+        .p71-ft--bleed-bottom { margin-bottom: -${margin}mm; }
+    }` : ''}
     .p71-ft-line { line-height: 1.35; }
     .p71-ft-images + .p71-ft-line { margin-top: ${Math.max(spacing - 1, 1)}mm; }`;
 }

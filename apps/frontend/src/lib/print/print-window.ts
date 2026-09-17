@@ -6,21 +6,47 @@
  * loading. This module owns all three.
  */
 
-import { footerRepeats, headerCss, renderFooterHtml } from './header';
+import {
+    footerBleeds,
+    footerPinsToBottom,
+    footerRepeats,
+    headerCss,
+    renderFooterHtml,
+} from './header';
 import {
     isThermalPaper,
+    PAGE_MARGIN_MM,
     type DeepPartial,
     type HeaderContext,
     type PaperSize,
     type PrintHeaderConfig,
 } from './types';
 
-const PAGE_CSS: Record<PaperSize, string> = {
-    A4: '@page { size: A4 portrait; margin: 15mm; }',
-    A5: '@page { size: A5 portrait; margin: 10mm; }',
-    Letter: '@page { size: letter portrait; margin: 15mm; }',
-    Thermal80: '@page { size: 80mm auto; margin: 4mm; }',
-    Thermal58: '@page { size: 58mm auto; margin: 3mm; }',
+/** Sizes are paired with the margins in `PAGE_MARGIN_MM` — keep them in step. */
+const PAGE_SIZE: Record<PaperSize, string> = {
+    A4: 'A4 portrait',
+    A5: 'A5 portrait',
+    Letter: 'letter portrait',
+    Thermal80: '80mm auto',
+    Thermal58: '58mm auto',
+};
+
+function pageCss(paperSize: PaperSize): string {
+    return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${PAGE_MARGIN_MM[paperSize]}mm; }`;
+}
+
+/**
+ * The printable height of one page — the sheet minus its two margins.
+ *
+ * A footer pinned to the page bottom needs it: the document table is stretched
+ * to exactly this height so the browser pushes the `<tfoot>` down to the edge.
+ * Rolls print to an open-ended length and have no page bottom, so they are
+ * absent here and never pin.
+ */
+const PAGE_CONTENT_HEIGHT_MM: Partial<Record<PaperSize, number>> = {
+    A4: 297 - PAGE_MARGIN_MM.A4 * 2,
+    A5: 210 - PAGE_MARGIN_MM.A5 * 2,
+    Letter: 279 - PAGE_MARGIN_MM.Letter * 2,
 };
 
 const WINDOW_SIZE: Record<PaperSize, { width: number; height: number }> = {
@@ -62,6 +88,24 @@ export interface PrintDocumentOptions {
     autoPrint?: boolean;
 }
 
+/**
+ * The content column.
+ *
+ * Capped and centred so long lines stay readable in the preview window. In
+ * print the cap is irrelevant — the page is already the right measure — and a
+ * bleeding footer has to escape it, so printing drops it. See the bleed rules
+ * in `headerCss`, which are print-only for the same reason.
+ */
+function wrapCss(thermal: boolean, bleeds: boolean): string {
+    const base = thermal
+        ? '.p71-wrap { padding: 6px; }'
+        : '.p71-wrap { max-width: 780px; margin: 0 auto; }';
+    if (thermal || !bleeds) return base;
+
+    return `${base}
+        @media print { .p71-wrap { max-width: none; margin: 0; } }`;
+}
+
 /** Builds the full HTML document. Exported for tests and the settings preview. */
 export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const thermal = isThermalPaper(opts.paperSize);
@@ -78,13 +122,27 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     // not survive pagination, so a repeating band has to live in thead/tfoot.
     const useTable = repeatHeader || repeatFooter;
 
-    const content = useTable
-        ? `<table class="p71-doc">
-            ${repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : ''}
-            ${repeatFooter ? `<tfoot><tr><td>${footer}</td></tr></tfoot>` : ''}
-            <tbody><tr><td>${repeatHeader ? '' : header}${opts.bodyHtml}${repeatFooter ? '' : footer}</td></tr></tbody>
-        </table>`
-        : `${header}${opts.bodyHtml}${footer}`;
+    // Pinning stretches the table to a full page so the browser pushes the
+    // `<tfoot>` to the bottom edge. Only possible on a fixed-height sheet.
+    const pageHeightMm = PAGE_CONTENT_HEIGHT_MM[opts.paperSize];
+    const bleeds = !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
+    const pinFooter = repeatFooter
+        && !!pageHeightMm
+        && footerPinsToBottom(opts.headerConfig, opts.paperSize);
+
+    let content: string;
+    if (useTable) {
+        const theadHtml = repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : '';
+        const tfootHtml = repeatFooter ? `<tfoot><tr><td>${footer}</td></tr></tfoot>` : '';
+        const bodyInner = `${repeatHeader ? '' : header}${opts.bodyHtml}${repeatFooter ? '' : footer}`;
+        content = `<table class="p71-doc${pinFooter ? ' p71-doc--pinned' : ''}">
+            ${theadHtml}
+            ${tfootHtml}
+            <tbody><tr><td>${bodyInner}</td></tr></tbody>
+        </table>`;
+    } else {
+        content = `${header}${opts.bodyHtml}${footer}`;
+    }
 
     return `<!DOCTYPE html>
 <html>
@@ -99,13 +157,28 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             color: #111;
             background: #fff;
         }
-        .p71-wrap { ${thermal ? 'padding: 6px;' : 'max-width: 780px; margin: 0 auto;'} }
+        ${wrapCss(thermal, bleeds)}
         .p71-doc { width: 100%; border-collapse: collapse; }
         .p71-doc > thead > tr > td,
         .p71-doc > tfoot > tr > td,
         .p71-doc > tbody > tr > td { padding: 0; border: 0; }
+        ${pinFooter ? `
+        /* A full-page-height table leaves the tbody to absorb the slack, which
+           pushes the tfoot onto the bottom edge of every page it prints on. */
+        @media print {
+            .p71-doc--pinned { height: ${pageHeightMm}mm; }
+            .p71-doc--pinned > tbody > tr > td { vertical-align: top; }
+            .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
+        }
+        /* On screen there are no pages, so the same rule is applied to the
+           viewport instead — the preview then shows what will print. */
+        @media screen {
+            .p71-doc--pinned { height: 100%; }
+            html, body, .p71-wrap { height: 100%; }
+            .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
+        }` : ''}
         ${headerCss(opts.headerConfig, opts.paperSize)}
-        ${PAGE_CSS[opts.paperSize]}
+        ${pageCss(opts.paperSize)}
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         ${opts.styles ?? ''}
     </style>
