@@ -48,6 +48,7 @@ describe('ProjectTasksService', () => {
                 count: jest.fn().mockResolvedValue(0),
                 create: jest.fn().mockResolvedValue({ id: 'task-new' }),
                 update: jest.fn().mockResolvedValue({}),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
                 groupBy: jest.fn().mockResolvedValue([]),
             },
             projectTaskStatus: { findFirst: jest.fn().mockResolvedValue(todo) },
@@ -1085,6 +1086,57 @@ describe('ProjectTasksService', () => {
             }),
         );
     });
+    describe('bulkRemove', () => {
+        it('soft-deletes the whole selection in one query', async () => {
+            // One `updateMany`, not one `update` per id: the page used to fan
+            // out a DELETE per row and spend its whole rate-limit budget.
+            db.projectTask.updateMany.mockResolvedValue({ count: 3 });
+
+            const result = await service.bulkRemove(OWNER, ['task-1', 'task-2', 'task-3']);
+
+            expect(db.projectTask.updateMany).toHaveBeenCalledTimes(1);
+            const [{ where, data }] = db.projectTask.updateMany.mock.calls.at(-1);
+            expect(where).toMatchObject({
+                id: { in: ['task-1', 'task-2', 'task-3'] },
+                tenant_id: 'tenant-1',
+                deleted_at: null,
+            });
+            expect(data.deleted_at).toBeInstanceOf(Date);
+            expect(result).toEqual({ success: true, deleted: 3, skipped: 0 });
+        });
+
+        it('dedupes repeated ids so the skipped count stays honest', async () => {
+            db.projectTask.updateMany.mockResolvedValue({ count: 2 });
+
+            const result = await service.bulkRemove(OWNER, ['task-1', 'task-1', 'task-2']);
+
+            const [{ where }] = db.projectTask.updateMany.mock.calls.at(-1);
+            expect(where.id.in).toEqual(['task-1', 'task-2']);
+            // Without the dedupe this would report one task skipped that the
+            // caller never asked about twice over.
+            expect(result).toEqual({ success: true, deleted: 2, skipped: 0 });
+        });
+
+        it('skips what the viewer cannot reach rather than failing the batch', async () => {
+            // Two of the three are a teammate's; the visibility filter drops
+            // them, and the one they do own still gets deleted.
+            db.projectTask.updateMany.mockResolvedValue({ count: 1 });
+
+            const result = await service.bulkRemove(narrow('user-7'), [
+                'task-1',
+                'task-2',
+                'task-3',
+            ]);
+
+            const [{ where }] = db.projectTask.updateMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([
+                { project: { OR: visibilityOr('user-7') } },
+                { OR: ownTaskOr('user-7') },
+            ]);
+            expect(result).toEqual({ success: true, deleted: 1, skipped: 2 });
+        });
+    });
+
     /**
      * Record scope. Visibility decides which projects reach the list; this
      * decides whose rows are in it. The Tasks page's assignee filter is the

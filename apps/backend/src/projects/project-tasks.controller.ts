@@ -22,6 +22,7 @@ import { ProjectActivityService } from './project-activity.service';
 import { ProjectCommentsService } from './project-comments.service';
 import { ProjectAttachmentsService } from './project-attachments.service';
 import {
+    BulkDeleteTasksDto,
     CreateAttachmentDto,
     CreateChecklistItemDto,
     CreateCommentDto,
@@ -72,6 +73,21 @@ export class ProjectTasksController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
         return this.tasks.importRows(tenant, body.rows, body.mode);
+    }
+
+    /**
+     * Delete a whole selection in one request. Declared before `:id` so
+     * `/project-tasks/bulk-delete` is never read as a task id — same reason as
+     * `import` above.
+     *
+     * POST rather than `DELETE /project-tasks` with a body: request bodies on
+     * DELETE are not reliably forwarded by proxies, and Caddy sits in front of
+     * this in production.
+     */
+    @Post('bulk-delete')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    bulkRemove(@Tenant() tenant: TenantContext, @Body() dto: BulkDeleteTasksDto) {
+        return this.tasks.bulkRemove(tenant, dto.ids);
     }
 
     @Get(':id')
