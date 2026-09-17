@@ -13,6 +13,21 @@ export type PaperSize = 'A4' | 'A5' | 'Letter' | 'Thermal80' | 'Thermal58';
 export const PAPER_SIZES: PaperSize[] = ['A4', 'A5', 'Letter', 'Thermal80', 'Thermal58'];
 
 /**
+ * The `@page` margin each paper size prints with, in mm.
+ *
+ * Shared with the renderer because a bleeding footer cancels this margin out
+ * with a negative one — the two have to be the same number or the band lands
+ * short of the paper edge.
+ */
+export const PAGE_MARGIN_MM: Record<PaperSize, number> = {
+    A4: 15,
+    A5: 10,
+    Letter: 15,
+    Thermal80: 4,
+    Thermal58: 3,
+};
+
+/**
  * Menu label for a paper size. The two thermal rolls are the only ones whose
  * name does not say how wide they are, and picking the wrong roll is the one
  * mistake that wastes a whole print.
@@ -48,6 +63,34 @@ export type HeaderLayout =
 
 export type PrintFontFamily = 'sans' | 'serif' | 'mono' | 'bengali';
 
+/**
+ * Where the document title block sits, independently of the logo layout.
+ *
+ * `beside-*` is the original behaviour — the title shares the header band with
+ * the brand. `above-*` and `below-*` give it a row of its own spanning the full
+ * width, which is what a centred "TAX INVOICE" banner needs.
+ */
+export type TitlePosition =
+    | 'beside-left'
+    | 'beside-right'
+    | 'above-left'
+    | 'above-center'
+    | 'above-right'
+    | 'below-left'
+    | 'below-center'
+    | 'below-right';
+
+export const TITLE_POSITIONS: TitlePosition[] = [
+    'above-left',
+    'above-center',
+    'above-right',
+    'beside-left',
+    'beside-right',
+    'below-left',
+    'below-center',
+    'below-right',
+];
+
 export interface HeaderLine {
     /** Free text; may contain {{tokens}} — see TOKENS in header.ts. */
     text: string;
@@ -78,6 +121,15 @@ export interface TemplateImage {
     caption?: string;
     /** Narrow rolls rarely render extra imagery legibly — opt in per image. */
     showOnThermal?: boolean;
+    /**
+     * Stretch the image across the whole band rather than sizing it to its
+     * height. The band is the printable width by default and the full paper
+     * width when the footer bleeds — see `PrintFooterConfig.bleed`.
+     *
+     * `heightMm` stops constraining a full-width image: the width wins and the
+     * height follows the aspect ratio, which is what a letterhead strip needs.
+     */
+    fullWidth?: boolean;
 }
 
 /**
@@ -102,21 +154,54 @@ export interface PrintFooterConfig {
      * `<thead>` — see print-window.ts.
      */
     repeatOnEveryPage: boolean;
+    /**
+     * Push the footer down to the bottom edge of the page instead of letting it
+     * sit directly under the content. A short invoice then prints its footer on
+     * the page bottom rather than halfway up, which is what a pre-printed
+     * letterhead looks like.
+     *
+     * Only meaningful with `repeatOnEveryPage`, which puts the footer in a
+     * `<tfoot>` — the one element a browser will pin to the bottom of every
+     * printed page. Off it, the footer flows after the content as before.
+     */
+    pinToPageBottom?: boolean;
+    /**
+     * Let the footer escape the `@page` margin and run to the true paper edge.
+     *
+     * Most office printers clip a few millimetres of the sheet, so a bleeding
+     * band loses its outermost edge — a full-width strip survives that, a
+     * bordered box does not.
+     */
+    bleed?: boolean;
 }
 
 export interface PrintHeaderConfig {
     /**
-     * 1 — header only. 2 — adds `images` and `footer`.
+     * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
+     * title placement, and footer pinning/bleed.
      *
-     * Both shapes are readable: every field added in 2 is filled from
+     * Every shape is readable: fields added in a later version are filled from
      * `DEFAULT_HEADER_CONFIG` by `resolveHeaderConfig`, so a stored v1 config
      * renders unchanged and only gains a footer once a tenant designs one.
+     * The v3 additions all default to the behaviour v2 already printed.
      */
-    version: 1 | 2;
+    version: 1 | 2 | 3;
     layout: HeaderLayout;
     logo: {
         url?: string;
         heightMm: number;
+        /**
+         * Cap on the logo's printed width. Omitted means uncapped: the logo
+         * takes whatever width its aspect ratio asks for at `heightMm`, which
+         * is what a wide banner wordmark needs.
+         */
+        maxWidthMm?: number;
+        /**
+         * Size the logo by width instead of height — it spans the whole
+         * brand column and the height follows the aspect ratio. `heightMm`
+         * is then ignored.
+         */
+        fullWidth?: boolean;
         /** 58mm rolls rarely render a logo legibly — off by default there. */
         showOnThermal: boolean;
     };
@@ -134,6 +219,19 @@ export interface PrintHeaderConfig {
         uppercase: boolean;
         letterSpacingPx: number;
         color: string;
+        /**
+         * Where the title block sits. Absent on stored configs, which predate
+         * the control — they keep the layout-derived placement they printed
+         * with (see `defaultTitlePosition`).
+         */
+        position?: TitlePosition;
+        /**
+         * Fine-tuning nudge from the slot, in mm. Applied as a relative offset,
+         * so the title still takes its place in the flow and only its painted
+         * position shifts — a tenant cannot push it off the page and lose it.
+         */
+        offsetXMm?: number;
+        offsetYMm?: number;
     };
     lines: HeaderLine[];
     /** Extra header imagery beside the logo — badges, certifications, a QR. */
@@ -186,14 +284,24 @@ export const DEFAULT_FOOTER_CONFIG: PrintFooterConfig = {
     rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
     spacingMm: 4,
     repeatOnEveryPage: false,
+    pinToPageBottom: false,
+    bleed: false,
 };
 
 export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
-    version: 2,
+    version: 3,
     layout: 'logo-left',
     logo: { heightMm: 16, showOnThermal: true },
     company: { show: true, fontSizePt: 16, bold: true, color: '#1d4ed8' },
-    title: { show: true, fontSizePt: 20, uppercase: true, letterSpacingPx: 2, color: '#1d4ed8' },
+    title: {
+        show: true,
+        fontSizePt: 20,
+        uppercase: true,
+        letterSpacingPx: 2,
+        color: '#1d4ed8',
+        offsetXMm: 0,
+        offsetYMm: 0,
+    },
     lines: [
         { text: '{{address}}', fontSizePt: 9, color: '#555555' },
         { text: 'Tel: {{phone}}', fontSizePt: 9, color: '#555555' },
@@ -218,6 +326,19 @@ export const DEFAULT_THERMAL_OVERRIDES: DeepPartial<PrintHeaderConfig> = {
     baseFontSizePt: 8,
     spacingMm: 2,
 };
+
+/**
+ * The placement a config prints with when it has no explicit `title.position`.
+ *
+ * Reproduces exactly where the title sat before the control existed: beside the
+ * brand on the two side-by-side layouts, centred under it on the stacked ones.
+ * Stored templates therefore keep printing as they did.
+ */
+export function defaultTitlePosition(layout: HeaderLayout): TitlePosition {
+    if (layout === 'logo-right') return 'beside-left';
+    if (layout === 'logo-left') return 'beside-right';
+    return 'below-center';
+}
 
 export function isThermalPaper(paperSize: PaperSize): boolean {
     return paperSize === 'Thermal80' || paperSize === 'Thermal58';
