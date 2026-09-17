@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "منی رسیدیں",
             SALES_ORDER: "سیلز آرڈرز",
             SALES_RETURN: "سیلز واپسیاں",
+            DELIVERY_CHALLAN: "ڈیلیوری چالان",
             PURCHASE_ORDER: "خریداری کے آرڈرز",
             PURCHASE_RETURN: "خریداری کی واپسیاں",
             LIST_REPORT: "فہرستی رپورٹس",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "مشک دستاویزات جاری کریں",
                 hint: "بند ہونے پر فروخت پر ٹیکس چالان کے بجائے عام دکان انوائس چھپے گا۔",
+            },
+            posReceipt: {
+                label: "پی او ایس رسید کے طور پر مشک 6.3",
+                hint: "پی او ایس کاؤنٹر عام رسید کے بجائے 6.3 ٹیکس چالان چھاپے گا۔ ہر فروخت پر دونوں فارمیٹ دستیاب رہیں گے۔",
             },
             issueAddress: {
                 label: "اجرا کا پتہ",

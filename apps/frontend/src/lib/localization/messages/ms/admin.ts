@@ -1046,7 +1046,7 @@ export const adminMessages = {
             title: "Peti masuk",
             subtitle: "Sokongan dan maklum balas daripada pemilik kedai · {total} utas",
             loadFailed: "Gagal memuatkan utas",
-            searchPlaceholder: "Cari mengikut subjek…",
+            searchPlaceholder: "Cari ikut nombor tiket atau subjek…",
             loading: "Memuatkan utas…",
             noThreads: "Tiada utas ditemui.",
             allStatuses: "Semua status",
@@ -1056,6 +1056,7 @@ export const adminMessages = {
             allUsers: "Semua pengguna",
             unknownUser: "Pengguna tidak diketahui",
             startedBy: "Dimulakan oleh {user}",
+            ticketLabel: "Tiket #{number}",
             types: {
                 support: "Bantuan",
                 bug: "Pepijat",

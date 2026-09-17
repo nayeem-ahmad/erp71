@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: 'اِن باکس',
         subtitle: 'دکان کے مالکان کی سپورٹ اور فیڈ بیک · {total} گفتگو',
         loadFailed: 'گفتگو لوڈ نہیں ہو سکی',
-        searchPlaceholder: 'موضوع سے تلاش کریں…',
+        searchPlaceholder: 'ٹکٹ نمبر یا موضوع سے تلاش کریں…',
         loading: 'گفتگو لوڈ ہو رہی ہے…',
         noThreads: 'کوئی گفتگو نہیں ملی۔',
         allStatuses: 'تمام حیثیتیں',
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: 'تمام صارفین',
         unknownUser: 'نامعلوم صارف',
         startedBy: '{user} نے شروع کیا',
+        ticketLabel: 'ٹکٹ #{number}',
         types: {
             support: 'مدد',
             bug: 'بگ',

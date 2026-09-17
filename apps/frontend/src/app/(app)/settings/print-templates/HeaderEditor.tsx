@@ -30,6 +30,7 @@ const DOC_TYPES: PrintDocType[] = [
     'MONEY_RECEIPT',
     'SALES_ORDER',
     'SALES_RETURN',
+    'DELIVERY_CHALLAN',
     'PURCHASE_ORDER',
     'PURCHASE_RETURN',
     'LIST_REPORT',

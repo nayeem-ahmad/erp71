@@ -143,6 +143,26 @@ export default function BoardPage() {
         [unsorted, filters],
     );
     const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
+
+    /** Every card on the board, columns and Unsorted alike. */
+    const boardTasks = useMemo(
+        () => columns.flatMap((column) => column.tasks).concat(unsorted),
+        [columns, unsorted],
+    );
+    const boardTaskIds = useMemo(() => boardTasks.map((task) => task.id), [boardTasks]);
+    /**
+     * The project the picker opens on. Only when every card on the board comes
+     * from the same one: on a board that genuinely mixes projects there is no
+     * right answer, and guessing would hide the rest behind a filter the reader
+     * never set. `composerProject` is not it — that falls back to the first
+     * project in the workspace, which on an empty board is arbitrary.
+     */
+    const boardProjectId = useMemo(() => {
+        const ids = new Set(
+            boardTasks.map((task) => task.project?.id).filter((id): id is string => Boolean(id)),
+        );
+        return ids.size === 1 ? [...ids][0] : '';
+    }, [boardTasks]);
     const filtered = hasActiveFilter(filters);
     const shown = countTasks(visibleColumns) + visibleUnsorted.length;
     const total = countTasks(columns) + unsorted.length;
@@ -206,13 +226,11 @@ export default function BoardPage() {
     // of a board that only ever draws from one project.
     useEffect(() => {
         if (composerProject || projects.length === 0) return;
-        const onBoard = columns
-            .flatMap((column) => column.tasks)
-            .concat(unsorted)
+        const onBoard = boardTasks
             .map((task) => task.project?.id)
             .find((id) => id && projects.some((project) => project.id === id));
         setComposerProject(onBoard ?? projects[0].id);
-    }, [projects, columns, unsorted, composerProject]);
+    }, [projects, boardTasks, composerProject]);
 
     const move = async (taskId: string, columnId: string, sortOrder: number) => {
         const task =
@@ -635,6 +653,8 @@ export default function BoardPage() {
             {adding && (
                 <AddBoardTasksModal
                     boardId={boardId}
+                    onBoardTaskIds={boardTaskIds}
+                    defaultProjectId={boardProjectId}
                     onClose={() => setAdding(false)}
                     onAdded={() => loadBoard()}
                 />

@@ -93,6 +93,31 @@ describe('CreatePrintTemplateDto', () => {
         });
     });
 
+    describe('document type assignment', () => {
+        const parseDocTypes = (doc_types: string[]) =>
+            validate(
+                plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', doc_types, config: base }),
+                { whitelist: true, forbidNonWhitelisted: true },
+            );
+
+        /*
+         * The boundary a tenant actually hits: assigning a letterhead to the
+         * delivery challan in Settings → Print Templates. Drop the enum member
+         * and this save starts 400ing.
+         */
+        it('accepts a template assigned to the delivery challan', async () => {
+            expect(await parseDocTypes(['DELIVERY_CHALLAN'])).toHaveLength(0);
+        });
+
+        it('accepts the challan alongside the invoice on one template', async () => {
+            expect(await parseDocTypes(['SALES_INVOICE', 'DELIVERY_CHALLAN'])).toHaveLength(0);
+        });
+
+        it('rejects a document type the renderer has no printer for', async () => {
+            expect((await parseDocTypes(['DELIVERY_NOTE'])).length).toBeGreaterThan(0);
+        });
+    });
+
     describe('line formatting', () => {
         it('accepts underline, a per-line font and letter spacing', async () => {
             expect(

@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import type { Payment } from '@/lib/hooks/useNewSaleCart';
+import type { Payment, PaymentInstrument } from '@/lib/hooks/useNewSaleCart';
+import { instrumentSummary, paymentInstrumentSummary, pickInstrument } from '@/lib/payment-instrument';
 
 /**
  * The tender strip shared by sale and purchase entry: one amount box per
@@ -76,23 +77,78 @@ const genericPicks: PickMethod[] = GENERIC_METHODS.map((m) => ({
     type: m.type,
 }));
 
+interface InstrumentField {
+    key: keyof PaymentInstrument;
+    /** Which label on `PaymentSectionLabels` names this box for this tender. */
+    label: keyof PaymentSectionLabels;
+    type?: 'date';
+}
+
+/**
+ * What is worth recording about each tender, which is not the same set for all
+ * of them: a cheque needs the bank it is drawn on and the account behind it, a
+ * card needs its issuer and approval code, a wallet needs the number the money
+ * came from and its transaction id. Cash needs none, which is also what tells
+ * the strip not to offer the panel at all.
+ */
+const INSTRUMENT_FIELDS: Record<string, InstrumentField[]> = {
+    Bank: [
+        { key: 'bankName', label: 'instrumentBank' },
+        { key: 'bankBranch', label: 'instrumentBranch' },
+        { key: 'bankAccountNumber', label: 'instrumentAccountNumber' },
+        { key: 'referenceNo', label: 'instrumentChequeNo' },
+        { key: 'instrumentDate', label: 'instrumentChequeDate', type: 'date' },
+    ],
+    Card: [
+        { key: 'bankName', label: 'instrumentIssuer' },
+        { key: 'referenceNo', label: 'instrumentApprovalNo' },
+        { key: 'instrumentDate', label: 'instrumentPaymentDate', type: 'date' },
+    ],
+    'Mobile Wallet': [
+        { key: 'bankAccountNumber', label: 'instrumentWalletNumber' },
+        { key: 'referenceNo', label: 'instrumentTransactionId' },
+        { key: 'instrumentDate', label: 'instrumentPaymentDate', type: 'date' },
+    ],
+};
+
+const instrumentFieldsFor = (canonical: string): InstrumentField[] => INSTRUMENT_FIELDS[canonical] ?? [];
+
+/**
+ * Prefer the exact defined method (name + classification). A payment reloaded
+ * from a saved document carries only the canonical method string, so fall back
+ * to the first method of that classification — otherwise an amount taken via
+ * "bKash" would come back blank on the edit form.
+ */
+function matchMethod(methods: PickMethod[], p: Payment): PickMethod | undefined {
+    return methods.find((m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method)
+        ?? methods.find((m) => canonicalFor(m.type) === p.method);
+}
+
 function paymentsToAmounts(methods: PickMethod[], payments: Payment[]): Record<string, number> {
     const next: Record<string, number> = {};
     for (const p of payments) {
-        // Prefer the exact defined method (name + classification). A payment
-        // reloaded from a saved document carries only the canonical method
-        // string, so fall back to the first method of that classification —
-        // otherwise an amount taken via "bKash" would come back blank on the
-        // edit form.
-        const match =
-            methods.find((m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method)
-            ?? methods.find((m) => canonicalFor(m.type) === p.method);
+        const match = matchMethod(methods, p);
         if (match) next[match.key] = (next[match.key] || 0) + p.amount;
     }
     return next;
 }
 
-function amountsToPayments(methods: PickMethod[], amounts: Record<string, number>): Payment[] {
+function paymentsToInstruments(methods: PickMethod[], payments: Payment[]): Record<string, PaymentInstrument> {
+    const next: Record<string, PaymentInstrument> = {};
+    for (const p of payments) {
+        const match = matchMethod(methods, p);
+        if (!match) continue;
+        const detail = pickInstrument(p);
+        if (Object.keys(detail).length > 0) next[match.key] = detail;
+    }
+    return next;
+}
+
+function amountsToPayments(
+    methods: PickMethod[],
+    amounts: Record<string, number>,
+    instruments: Record<string, PaymentInstrument>,
+): Payment[] {
     return methods
         .filter((m) => (amounts[m.key] || 0) > 0)
         .map((m) => ({
@@ -100,6 +156,9 @@ function amountsToPayments(methods: PickMethod[], amounts: Record<string, number
             label: m.name,
             accountId: m.account_id,
             amount: amounts[m.key],
+            // Only where the tender can have one. A row switched back to cash
+            // must not carry a cheque number that is no longer on screen.
+            ...(instrumentFieldsFor(canonicalFor(m.type)).length > 0 ? instruments[m.key] ?? {} : {}),
         }));
 }
 
@@ -118,6 +177,24 @@ export interface PaymentSectionLabels {
     addMethod: string;
     addMethodAria: string;
     noPayments: string;
+
+    // The cheque / transfer details panel, only rendered when the caller opts
+    // into `captureInstrument`. Which boxes it shows, and so which of these
+    // name them, follows the tender — see INSTRUMENT_FIELDS above.
+    /** Opens the panel on a bank tender — the cheque case. */
+    instrumentToggle: string;
+    /** Opens it on a card or wallet, which have no cheque to name. */
+    instrumentToggleAlt: string;
+    instrumentBank: string;
+    instrumentBranch: string;
+    instrumentAccountNumber: string;
+    instrumentIssuer: string;
+    instrumentWalletNumber: string;
+    instrumentChequeNo: string;
+    instrumentChequeDate: string;
+    instrumentApprovalNo: string;
+    instrumentTransactionId: string;
+    instrumentPaymentDate: string;
 }
 
 export const DEFAULT_PAYMENT_SECTION_LABELS: PaymentSectionLabels = {
@@ -131,6 +208,18 @@ export const DEFAULT_PAYMENT_SECTION_LABELS: PaymentSectionLabels = {
     addMethod: '+ Add method…',
     addMethodAria: 'Add payment method',
     noPayments: 'No payments recorded.',
+    instrumentToggle: '+ Bank / cheque details',
+    instrumentToggleAlt: '+ Payment details',
+    instrumentBank: 'Bank',
+    instrumentBranch: 'Branch',
+    instrumentAccountNumber: 'A/C number',
+    instrumentIssuer: 'Card issuer',
+    instrumentWalletNumber: 'Wallet number',
+    instrumentChequeNo: 'Cheque / ref. no.',
+    instrumentChequeDate: 'Cheque date',
+    instrumentApprovalNo: 'Approval / ref. no.',
+    instrumentTransactionId: 'Transaction ID',
+    instrumentPaymentDate: 'Payment date',
 };
 
 interface PaymentSectionProps {
@@ -149,6 +238,13 @@ interface PaymentSectionProps {
     blockedReason?: string;
     /** An extra line under the header, e.g. the customer's remaining credit. */
     hint?: ReactNode;
+    /**
+     * Offer the bank / cheque / transaction details panel on every non-cash
+     * tender. Opt-in because the details have to reach a table that stores
+     * them: sale entry does, so it turns this on; purchase entry has nowhere
+     * to put them yet and would silently drop whatever was typed.
+     */
+    captureInstrument?: boolean;
 }
 
 export default function PaymentSection({
@@ -160,9 +256,12 @@ export default function PaymentSection({
     locale,
     blockedReason,
     hint,
+    captureInstrument = false,
 }: PaymentSectionProps) {
     const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
     const [amounts, setAmounts] = useState<Record<string, number>>({});
+    const [instruments, setInstruments] = useState<Record<string, PaymentInstrument>>({});
+    const [openInstruments, setOpenInstruments] = useState<string[]>([]); // keys whose panel is expanded
     const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
 
     const copy = useMemo(() => ({ ...DEFAULT_PAYMENT_SECTION_LABELS, ...labels }), [labels]);
@@ -206,22 +305,46 @@ export default function PaymentSection({
     );
     const allMethods = useMemo(() => (hasUsableMethods ? activeSorted : genericPicks), [hasUsableMethods, activeSorted]);
 
+    // The last array this strip emitted, so the effect below can tell the
+    // parent echoing our own change back from the parent handing us a
+    // different document. Emptiness alone cannot: a shop with one payment
+    // method sends no payments both when the cart is cleared and when the
+    // operator empties the amount box to retype a figure.
+    const lastEmitted = useRef<Payment[] | null>(null);
+
     const emitPayments = useCallback(
-        (nextAmounts: Record<string, number>) => {
-            onPaymentChange(amountsToPayments(allMethods, nextAmounts));
+        (nextAmounts: Record<string, number>, nextInstruments: Record<string, PaymentInstrument>) => {
+            const next = amountsToPayments(allMethods, nextAmounts, nextInstruments);
+            lastEmitted.current = next;
+            onPaymentChange(next);
         },
         [allMethods, onPaymentChange],
     );
 
-    // Reconcile local amount inputs when payments reset (e.g. after checkout) or methods load.
+    // Reconcile local inputs when payments reset (e.g. after checkout) or methods load.
     useEffect(() => {
         setAmounts(paymentsToAmounts(allMethods, payments));
+
+        const next = paymentsToInstruments(allMethods, payments);
+        const echo = lastEmitted.current === payments;
+        // Our own change coming back keeps whatever is being typed, so an
+        // amount cleared for a keystroke does not take the cheque entered
+        // against it. Anything else — a cart cleared after checkout, a saved
+        // sale loaded for editing — replaces the panel outright.
+        setInstruments((prev) => (echo ? { ...prev, ...next } : next));
+        if (!echo) setOpenInstruments((open) => (open.length > 0 ? [] : open));
     }, [payments, allMethods]);
 
     const updateAmount = (key: string, value: number) => {
         const nextAmounts = { ...amounts, [key]: value };
         setAmounts(nextAmounts);
-        emitPayments(nextAmounts);
+        emitPayments(nextAmounts, instruments);
+    };
+
+    const updateInstrument = (key: string, field: keyof PaymentInstrument, value: string) => {
+        const nextInstruments = { ...instruments, [key]: { ...instruments[key], [field]: value } };
+        setInstruments(nextInstruments);
+        emitPayments(amounts, nextInstruments);
     };
 
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -237,24 +360,74 @@ export default function PaymentSection({
             ? (balanceAllowed ? copy.keepingDue : copy.due).replace('{amount}', money(unpaid))
             : copy.overpaid.replace('{amount}', money(Math.abs(balance)));
 
-    const renderMethodRow = (m: PickMethod) => (
-        <div key={m.key} className="flex items-center gap-2">
-            <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={m.name}>
-                {m.name}
-                {m.inactive ? <span className="text-gray-400 font-normal text-xs ms-1">{copy.inactive}</span> : null}
-            </span>
-            <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amounts[m.key] || ''}
-                onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                aria-label={copy.amount.replace('{method}', m.name)}
-                className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
-            />
-        </div>
-    );
+    const toggleInstrument = (key: string) =>
+        setOpenInstruments((open) => (open.includes(key) ? open.filter((k) => k !== key) : [...open, key]));
+
+    const renderMethodRow = (m: PickMethod) => {
+        const canonical = canonicalFor(m.type);
+        const fields = captureInstrument ? instrumentFieldsFor(canonical) : [];
+        const detail = instruments[m.key];
+        const summary = instrumentSummary(detail);
+        const expanded = openInstruments.includes(m.key);
+        // Offered once money has actually come in on this tender — a cheque
+        // number without an amount beside it records nothing, and four empty
+        // panels down a shop's method list is noise on every sale. Once it is
+        // open, or something has been typed into it, it stays put: emptying the
+        // amount box to retype it must not pull the panel out from under the
+        // cursor.
+        const offerInstrument = fields.length > 0
+            && ((amounts[m.key] || 0) > 0 || expanded || Object.keys(detail ?? {}).length > 0);
+
+        return (
+            <div key={m.key} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={m.name}>
+                        {m.name}
+                        {m.inactive ? <span className="text-gray-400 font-normal text-xs ms-1">{copy.inactive}</span> : null}
+                    </span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={amounts[m.key] || ''}
+                        onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        aria-label={copy.amount.replace('{method}', m.name)}
+                        className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
+                    />
+                </div>
+
+                {offerInstrument && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => toggleInstrument(m.key)}
+                            aria-expanded={expanded}
+                            className="block w-full text-start text-xs text-blue-600 hover:underline max-md:min-h-touch"
+                        >
+                            {summary || (canonical === 'Bank' ? copy.instrumentToggle : copy.instrumentToggleAlt)}
+                        </button>
+                        {expanded && (
+                            <div className="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 sm:grid-cols-2">
+                                {fields.map((field) => (
+                                    <label key={field.key} className="block text-[11px] text-gray-500">
+                                        {copy[field.label]}
+                                        <input
+                                            type={field.type ?? 'text'}
+                                            value={detail?.[field.key] ?? ''}
+                                            onChange={(e) => updateInstrument(m.key, field.key, e.target.value)}
+                                            aria-label={`${m.name} ${copy[field.label]}`}
+                                            className="mt-0.5 w-full rounded border px-2 py-1 text-sm text-gray-900 max-md:min-h-touch"
+                                        />
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-2">
@@ -279,14 +452,20 @@ export default function PaymentSection({
                 {readOnly && payments.length === 0 && (
                     <p className="text-sm text-gray-400">{copy.noPayments}</p>
                 )}
-                {readOnly && payments.map((p, i) => (
-                    <div key={`${p.label || p.method}-${i}`} className="flex items-center gap-2">
-                        <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700">
-                            {p.label || p.method}
-                        </span>
-                        <span className="text-sm text-gray-900">{money(p.amount)}</span>
-                    </div>
-                ))}
+                {readOnly && payments.map((p, i) => {
+                    const summary = paymentInstrumentSummary(p);
+                    return (
+                        <div key={`${p.label || p.method}-${i}`}>
+                            <div className="flex items-center gap-2">
+                                <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700">
+                                    {p.label || p.method}
+                                </span>
+                                <span className="text-sm text-gray-900">{money(p.amount)}</span>
+                            </div>
+                            {summary && <p className="text-[11px] text-gray-500">{summary}</p>}
+                        </div>
+                    );
+                })}
             </div>
 
             {!readOnly && addableMethods.length > 0 && (

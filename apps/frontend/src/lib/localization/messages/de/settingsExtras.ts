@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Zahlungsquittungen",
             SALES_ORDER: "Kundenaufträge",
             SALES_RETURN: "Verkaufsretouren",
+            DELIVERY_CHALLAN: "Lieferscheine",
             PURCHASE_ORDER: "Bestellungen",
             PURCHASE_RETURN: "Einkaufsretouren",
             LIST_REPORT: "Listenberichte",
@@ -226,6 +227,10 @@ export const settingsExtrasMessages = {
             enable: {
                 label: "Mushak-Dokumente ausstellen",
                 hint: "Aus bedeutet, dass Verkäufe eine einfache Ladenrechnung statt einer Steuerrechnung drucken.",
+            },
+            posReceipt: {
+                label: "Mushak 6.3 als POS-Beleg",
+                hint: "Die Kasse druckt die Steuerrechnung 6.3 statt des gewöhnlichen Belegs. Beide Formate bleiben pro Verkauf verfügbar.",
             },
             issueAddress: {
                 label: "Ausstellungsadresse",

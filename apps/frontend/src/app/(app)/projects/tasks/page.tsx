@@ -464,19 +464,23 @@ export default function TasksPage() {
         if (!rows?.length) return;
         setBusy(true);
         try {
-            // No bulk endpoint for tasks, so these go one at a time. `allSettled`
-            // rather than `all`: one task in a project the viewer cannot manage
-            // must not throw away the deletes that did land.
-            const results = await Promise.allSettled(
-                rows.map((row) => api.deleteProjectTask(row.id)),
+            // One request for the whole selection. The obvious version — a
+            // `deleteProjectTask` per row — spent the caller's entire rate-limit
+            // budget (20 requests a minute per address, and not raised in
+            // production), so past the twentieth row every delete came back 429
+            // and the page reported a half-finished job as a failure.
+            const { deleted, skipped } = await api.bulkDeleteProjectTasks(
+                rows.map((row) => row.id),
             );
-            const failed = results.filter((result) => result.status === 'rejected').length;
-            const deleted = results.length - failed;
             if (deleted > 0) toast.success(fmt(m.tasks.deletedCount, { count: deleted }));
-            if (failed > 0) toast.error(fmt(m.tasks.deleteFailedCount, { count: failed }));
+            // Rows somebody else deleted first, or in a project this viewer
+            // cannot manage: the server skips them rather than failing the batch.
+            if (skipped > 0) toast.error(fmt(m.tasks.deleteFailedCount, { count: skipped }));
             setPendingBulkDelete(null);
             clearSelection();
             await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.deleteFailed);
         } finally {
             setBusy(false);
         }

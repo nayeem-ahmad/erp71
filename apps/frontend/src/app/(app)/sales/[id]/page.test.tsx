@@ -147,6 +147,80 @@ beforeEach(() => {
 });
 
 describe('SaleDetailPage — view mode', () => {
+    it('prints a delivery challan carrying the goods and the parties, but no money', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        expect(write).toHaveBeenCalledTimes(1);
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Delivery Challan');
+        // Numbered off the sale so the rider's paper and the invoice match up.
+        expect(html).toContain('REF-9');
+        expect(html).toContain('Alice Smith');
+        expect(html).toContain('Gadget X');
+        expect(html).toContain('Handle with care');
+        // 1000 a unit, 3000 the sale — neither figure belongs on this document.
+        expect(html).not.toMatch(/৳|BDT|\$/);
+        expect(html).not.toMatch(/Unit Price|Subtotal|VAT|Payment/i);
+
+        open.mockRestore();
+    });
+
+    it('prints the challan on the paper size the operator picked for the invoice', async () => {
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        // Choosing A5 from the print menu prints the invoice and remembers the
+        // choice; the challan that follows must go on the same paper, not A4.
+        fireEvent.click(screen.getByTitle('Choose paper size'));
+        fireEvent.click(screen.getByRole('button', { name: 'A5' }));
+        open.mockClear();
+
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        expect(open).toHaveBeenCalledWith('', '_blank', 'width=670,height=600');
+
+        open.mockRestore();
+    });
+
+    it('prints a challan for a walk-in sale, which has no customer to address', async () => {
+        getApi().getSale.mockResolvedValue({ ...mockSale, customer: null, customer_id: null });
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Gadget X');
+        // Nobody to address it to, but somebody still signs for the goods.
+        expect(html).not.toContain('Deliver To');
+        expect(html).toContain('Received By');
+
+        open.mockRestore();
+    });
+
     it('shows loading state initially', () => {
         getApi().getSale.mockReturnValue(new Promise(() => {}));
         render(<SaleDetailPage />);

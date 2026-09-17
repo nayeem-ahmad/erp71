@@ -17,6 +17,7 @@ import { PaymentMethodsService } from './payment-methods.service';
 import {
   CreatePaymentMethodDto,
   UpdatePaymentMethodDto,
+  PaymentMethodAccountDto,
   PaymentMethodResponseDto,
   PaymentMethodType,
 } from './payment-methods.dto';
@@ -47,6 +48,14 @@ export class PaymentMethodsController {
     @Query('type') type?: PaymentMethodType,
   ): Promise<PaymentMethodResponseDto[]> {
     return this.paymentMethodsService.findAll(tenant.tenantId, type);
+  }
+
+  // Must stay above @Get(':id'), which would otherwise swallow 'accounts'.
+  @Get('accounts')
+  async findLinkableAccounts(
+    @Tenant() tenant: TenantContext,
+  ): Promise<PaymentMethodAccountDto[]> {
+    return this.paymentMethodsService.findLinkableAccounts(tenant.tenantId);
   }
 
   @Get('default/:type')

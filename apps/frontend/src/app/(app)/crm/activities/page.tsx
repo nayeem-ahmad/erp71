@@ -7,8 +7,7 @@ import { AlertTriangle, CalendarPlus, Eye, PhoneCall, RefreshCw } from 'lucide-r
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { hasPermission, isOwner } from '@/lib/permissions';
-import { getWorkspaceItem } from '@/lib/session-store';
+import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
@@ -130,7 +129,7 @@ export default function CrmActivitiesPage() {
     // Everyone sees who has been signed off; only a reviewer can change it. The
     // switch is rendered disabled rather than hidden for the rest, so a rep can
     // tell "nobody has approved this yet" from "you cannot see the approvals".
-    const [canApprove, setCanApprove] = useState(false);
+    const canApprove = useCanApproveCrmActivity();
     const { options: memberOptions } = useTeamMemberOptions(m.filters.me);
 
     /**
@@ -199,16 +198,6 @@ export default function CrmActivitiesPage() {
         if (!scopeReady) return;
         api.getCrmActivitySummary({ mine: mineOnly || undefined }).then(setSummary).catch(() => null);
     }, [mineOnly, scopeReady]);
-
-    useEffect(() => {
-        api.getMe()
-            .then((me) => {
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
-                    ?? me?.tenants?.[0];
-                setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_CRM_ACTIVITY'));
-            })
-            .catch(() => setCanApprove(false));
-    }, []);
 
     /**
      * Flipped in place, not reloaded: the list is filtered and a reload would

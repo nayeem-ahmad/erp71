@@ -1021,6 +1021,7 @@ export const coreMessages = {
         title: 'POS Terminal',
         subtitle: 'Quick selection & billing',
         helpTooltip: 'Select items, choose a payment method, then press Checkout. For split payments, add multiple payment rows. Change due is calculated automatically.',
+        openShift: 'Open Shift',
         offline: {
             banner: 'You are offline. Sales will be queued and synced when you reconnect.',
             pending: '{count} pending',
@@ -1069,6 +1070,8 @@ export const coreMessages = {
             paid: 'Paid',
             changeDue: 'Change Due',
             printReceipt: 'Print POS Receipt',
+            printMushak: 'Print Mushak 6.3',
+            mushakAfterSync: 'Mushak 6.3 can be printed once this sale syncs.',
             skipContinue: 'Skip & Continue',
         },
         payment: {
@@ -1100,6 +1103,7 @@ export const coreMessages = {
         notifications: {
             serialRequired: 'Please provide {count} serial number(s) for {product}.',
             serialUnique: 'Serial numbers for {product} must be unique.',
+            sessionRequired: 'Open a cashier session before selling at the counter.',
             insufficientPaid: 'Insufficient amount paid!',
             saleOffline: 'Sale saved offline — will sync when online',
             offlineFailed: 'Failed to save offline sale. Please try again.',
@@ -1108,6 +1112,7 @@ export const coreMessages = {
             pointsRedeemed: '{count} pts redeemed',
             pointsEarned: '{count} pts earned',
             checkoutFailed: 'Checkout failed. Please check stock levels.',
+            mushakPrintFailed: 'Could not print the Mushak 6.3.',
             invalidDiscount: 'Invalid discount code',
         },
     },

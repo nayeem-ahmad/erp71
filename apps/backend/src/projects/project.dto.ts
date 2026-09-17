@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
+    ArrayNotEmpty,
     IsArray,
     IsBoolean,
     IsDateString,
@@ -353,6 +355,27 @@ export class ListTasksDto {
 
     @IsOptional() @IsString()
     sortDir?: string;
+}
+
+/**
+ * The Tasks page's "delete selected" action.
+ *
+ * One request for the whole selection rather than a `DELETE /project-tasks/:id`
+ * per row: the platform's default throttle is 20 requests a minute per address
+ * (`THROTTLE_LIMIT`, see app.module.ts) and is not raised in production, so a
+ * selection of any real size used to spend the caller's whole budget and come
+ * back as `429 Too Many Requests` on everything past the twentieth — a partial
+ * delete reported as a failure.
+ *
+ * Capped at the same 200 as a task page's `limit`: a selection cannot hold more
+ * rows than one page of the list it was made on.
+ */
+export class BulkDeleteTasksDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
 }
 
 export class CreateTaskDto {
