@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { BlogListPost } from '@/lib/blog/api';
+import { categoryName, type BlogListPost } from '@/lib/blog/api';
+import { blogHref, DEFAULT_BLOG_LOCALE, type BlogLocale } from '@/lib/blog/locale';
 import { postMeta } from './PostCard';
 
 /**
@@ -32,11 +33,13 @@ function initials(name: string): string {
 export default function FeaturedPost({
     post,
     basePath = '/blog',
+    locale = DEFAULT_BLOG_LOCALE,
 }: {
     post: BlogListPost;
     basePath?: string;
+    locale?: BlogLocale;
 }) {
-    const href = `${basePath}/${post.slug}`;
+    const href = blogHref(`${basePath}/${post.slug}`, locale);
 
     return (
         <article className="group grid items-center gap-6 md:grid-cols-5 md:gap-10">
@@ -60,13 +63,13 @@ export default function FeaturedPost({
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     {post.category && (
                         <Link
-                            href={`${basePath}/category/${post.category.slug}`}
+                            href={blogHref(`${basePath}/category/${post.category.slug}`, locale)}
                             className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:bg-blue-100"
                         >
-                            {post.category.name_en}
+                            {categoryName(post.category, locale)}
                         </Link>
                     )}
-                    <span className="text-[11px] uppercase tracking-wide text-gray-400">{postMeta(post)}</span>
+                    <span className="text-[11px] uppercase tracking-wide text-gray-400">{postMeta(post, locale)}</span>
                 </div>
 
                 <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-gray-900 md:text-4xl">

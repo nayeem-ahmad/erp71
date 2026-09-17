@@ -214,8 +214,8 @@ describe('InventoryReportsService', () => {
 
     describe('getStockOnHand', () => {
         const warehouses = [
-            { id: 'wh-1', name: 'Dhaka Main', code: 'WH-1', is_default: true },
-            { id: 'wh-2', name: 'Chattogram', code: 'WH-2', is_default: false },
+            { id: 'wh-1', name: 'Dhaka Main', code: 'WH-1', is_default: true, is_active: true },
+            { id: 'wh-2', name: 'Chattogram', code: 'WH-2', is_default: false, is_active: true },
         ];
 
         const product = (id: string, name: string, stocks: { warehouse_id: string; quantity: number }[]) => ({
@@ -359,6 +359,48 @@ describe('InventoryReportsService', () => {
             expect(db.product.findMany).not.toHaveBeenCalled();
         });
 
+        /**
+         * The report's columns are the only route its rows have to any stock, so
+         * requiring `is_active` here did not hide one column — it emptied the
+         * whole report, on every branch and every warehouse at once, the moment
+         * the warehouse holding the stock was deactivated.
+         */
+        it('keeps a closed warehouse that still holds stock, so its units stay in the report', async () => {
+            db.warehouse.findMany.mockResolvedValue([
+                warehouses[0],
+                { id: 'wh-old', name: 'Old Godown', code: 'WH-OLD', is_default: false, is_active: false },
+            ]);
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [
+                    { warehouse_id: 'wh-1', quantity: 0 },
+                    { warehouse_id: 'wh-old', quantity: 40 },
+                ]),
+            ]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows).toHaveLength(1);
+            expect(result.summary.totalQuantity).toBe(40);
+            expect(result.warehouses.find((warehouse) => warehouse.id === 'wh-old')).toMatchObject({
+                is_active: false,
+                quantity: 40,
+            });
+        });
+
+        it('asks for the active warehouses plus any that still hold stock', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getStockOnHand('tenant-1', {});
+
+            expect(db.warehouse.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        OR: [{ is_active: true }, { productStocks: { some: { quantity: { not: 0 } } } }],
+                    }),
+                }),
+            );
+        });
+
         it('excludes service products, which are never stock-tracked', async () => {
             db.product.findMany.mockResolvedValue([]);
 
@@ -448,7 +490,7 @@ describe('InventoryReportsService', () => {
 
             expect(db.warehouse.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: expect.objectContaining({ store_id: 'store-1', is_active: true }),
+                    where: expect.objectContaining({ store_id: 'store-1' }),
                 }),
             );
         });

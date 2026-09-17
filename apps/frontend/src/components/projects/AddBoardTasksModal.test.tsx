@@ -100,6 +100,103 @@ describe('AddBoardTasksModal', () => {
         await waitFor(() => expect(api.addBoardTasks).toHaveBeenCalledWith('b1', ['k1', 'k2']));
     });
 
+    it('picks every listed task at once from the select-all box', async () => {
+        // The complaint this answers: filling a board from a project meant one
+        // click per card with nothing to select them together.
+        render(<AddBoardTasksModal boardId="b1" onClose={jest.fn()} onAdded={jest.fn()} />);
+        await screen.findByText('Fix login');
+
+        fireEvent.click(screen.getByRole('checkbox', { name: /select all/i }));
+        fireEvent.click(screen.getByRole('button', { name: /add/i }));
+
+        await waitFor(() => expect(api.addBoardTasks).toHaveBeenCalledWith('b1', ['k1', 'k2']));
+    });
+
+    it('drops the whole selection on clear, including picks scrolled out of view', async () => {
+        render(<AddBoardTasksModal boardId="b1" onClose={jest.fn()} onAdded={jest.fn()} />);
+        await screen.findByText('Fix login');
+
+        fireEvent.click(screen.getByRole('checkbox', { name: /select all/i }));
+        expect(await screen.findByText(/2 selected/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /clear all/i }));
+
+        // Nothing left to add, so the footer button goes back to disabled.
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /add/i })).toBeDisabled(),
+        );
+    });
+
+    it('marks a task already on the board and refuses to pick it again', async () => {
+        render(
+            <AddBoardTasksModal
+                boardId="b1"
+                onBoardTaskIds={['k1']}
+                onClose={jest.fn()}
+                onAdded={jest.fn()}
+            />,
+        );
+        await screen.findByText('Fix login');
+
+        expect(screen.getByRole('checkbox', { name: /fix login/i })).toBeDisabled();
+        expect(screen.getByText(/on board/i)).toBeInTheDocument();
+
+        // Select-all skips it too — re-adding a card is a no-op server-side, but
+        // offering it back is what made the picker hard to read in the first place.
+        fireEvent.click(screen.getByRole('checkbox', { name: /select all/i }));
+        fireEvent.click(screen.getByRole('button', { name: /add/i }));
+
+        await waitFor(() => expect(api.addBoardTasks).toHaveBeenCalledWith('b1', ['k2']));
+    });
+
+    it('opens on the board own project when it was given one', async () => {
+        render(
+            <AddBoardTasksModal
+                boardId="b1"
+                defaultProjectId="p2"
+                onClose={jest.fn()}
+                onAdded={jest.fn()}
+            />,
+        );
+
+        await waitFor(() =>
+            expect(api.getProjectTasks).toHaveBeenLastCalledWith(
+                expect.objectContaining({ projectId: 'p2' }),
+            ),
+        );
+    });
+
+    it('pages through the rest of a project rather than stopping at the first 50', async () => {
+        // The old picker asked for 50 rows and said nothing about the rest, so a
+        // project with more tasks than that simply could not be seen in full.
+        (api.getProjectTasks as jest.Mock).mockImplementation((params: Record<string, unknown>) =>
+            Promise.resolve(
+                params?.page === 2
+                    ? { items: [{ id: 'k3', title: 'Third task' }], total: 3 }
+                    : {
+                          items: [
+                              { id: 'k1', title: 'Fix login' },
+                              { id: 'k2', title: 'Ship docs' },
+                          ],
+                          total: 3,
+                      },
+            ),
+        );
+
+        render(<AddBoardTasksModal boardId="b1" onClose={jest.fn()} onAdded={jest.fn()} />);
+        await screen.findByText('Fix login');
+        expect(screen.getByText(/showing 2 of 3/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /load more/i }));
+
+        // Appended, not replaced: an earlier page must stay pickable.
+        expect(await screen.findByText('Third task')).toBeInTheDocument();
+        expect(screen.getByText('Fix login')).toBeInTheDocument();
+        expect(api.getProjectTasks).toHaveBeenLastCalledWith(
+            expect.objectContaining({ page: 2, limit: 50 }),
+        );
+    });
+
     it('keeps an earlier pick selected when the search text no longer returns it', async () => {
         // Same guard as above, but for the debounced search filter instead of
         // the project select.
