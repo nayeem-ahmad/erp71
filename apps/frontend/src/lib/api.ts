@@ -939,6 +939,15 @@ function dashboardWindowFetcher(path: string) {
     };
 }
 
+/** Account row returned by the payment-method account picker (no balances). */
+export interface PaymentMethodAccount {
+    id: string;
+    name: string;
+    code: string | null;
+    type: string;
+    category: string;
+}
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -4641,6 +4650,10 @@ export const api = {
         const q = type ? `?type=${type}` : '';
         return fetchWithAuth(`/payment-methods${q}`);
     },
+    // Separate from getAccounts(): that one hits the accounting module, which is
+    // entitlement-gated, so it 403s on plans that still get payment methods.
+    getPaymentMethodAccounts: (): Promise<PaymentMethodAccount[]> =>
+        fetchWithAuth('/payment-methods/accounts'),
     createPaymentMethod: (data: any) => fetchWithAuth('/payment-methods', {
         method: 'POST',
         body: JSON.stringify(data),

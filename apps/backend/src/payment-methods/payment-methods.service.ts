@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import {
   CreatePaymentMethodDto,
   UpdatePaymentMethodDto,
+  PaymentMethodAccountDto,
   PaymentMethodResponseDto,
   PaymentMethodType,
 } from './payment-methods.dto';
@@ -66,6 +67,34 @@ export class PaymentMethodsService {
     return paymentMethods.map((pm) => this.mapToResponse(pm));
   }
 
+  /**
+   * Accounts the settings form can link a payment method to.
+   *
+   * Payment methods are a free-plan setting, but the only other account list —
+   * `GET /accounting/accounts` — sits on `AccountingController`, which requires
+   * the `premiumAccounting` entitlement and the VIEW_LEDGER store permission.
+   * Calling it from here 403'd for every tenant without the accounting module,
+   * which is why the picker came up empty. This returns names and codes only,
+   * with no balances or ledger data, so it needs neither.
+   */
+  async findLinkableAccounts(tenantId: string): Promise<PaymentMethodAccountDto[]> {
+    const accounts = await this.db.account.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true, code: true, type: true, category: true },
+      // Fixed-width codes make a plain string sort the hierarchy order; accounts
+      // still awaiting a code sort last under Postgres' NULLS LAST default.
+      orderBy: [{ code: 'asc' }, { name: 'asc' }],
+    });
+
+    return accounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      code: account.code ?? null,
+      type: account.type,
+      category: account.category,
+    }));
+  }
+
   async findById(id: string, tenantId: string): Promise<PaymentMethodResponseDto> {
     const paymentMethod = await this.db.paymentMethod.findFirst({
       where: {
@@ -122,12 +151,18 @@ export class PaymentMethodsService {
       }
     }
 
+    // `??` here meant an explicit null fell back to the stored account, so
+    // clearing the link in the form silently kept the old one. Only an absent
+    // key leaves the current value alone.
+    const nextAccountId =
+      dto.account_id === undefined ? paymentMethod.account_id : dto.account_id || null;
+
     const updated = await this.db.paymentMethod.update({
       where: { id },
       data: {
         type: dto.type,
         name: dto.name,
-        account_id: dto.account_id ?? paymentMethod.account_id,
+        account_id: nextAccountId,
         is_active: dto.is_active ?? paymentMethod.is_active,
         sort_order: dto.sort_order ?? paymentMethod.sort_order,
         show_on_entry: dto.show_on_entry ?? paymentMethod.show_on_entry,

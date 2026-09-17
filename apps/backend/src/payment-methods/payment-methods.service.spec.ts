@@ -47,6 +47,7 @@ describe('PaymentMethodsService', () => {
       },
       account: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
 
@@ -109,6 +110,49 @@ describe('PaymentMethodsService', () => {
     it('passes through show_on_entry when provided on update', async () => {
       await service.update('pm-1', tenantId, { show_on_entry: true } as any);
       expect(updateMock.mock.calls[0][0].data.show_on_entry).toBe(true);
+    });
+
+    it('keeps the linked account when account_id is omitted', async () => {
+      findFirstMock.mockImplementation(({ where }: any) =>
+        Promise.resolve(where?.id ? { ...existingPaymentMethod, account_id: 'acc-1' } : null),
+      );
+      await service.update('pm-1', tenantId, { name: 'Till 2' } as any);
+      expect(updateMock.mock.calls[0][0].data.account_id).toBe('acc-1');
+    });
+
+    // Regression: `dto.account_id ?? existing` treated the form's explicit null
+    // as "not provided", so clearing the picker silently kept the old account.
+    it('unlinks the account when account_id is explicitly null', async () => {
+      findFirstMock.mockImplementation(({ where }: any) =>
+        Promise.resolve(where?.id ? { ...existingPaymentMethod, account_id: 'acc-1' } : null),
+      );
+      await service.update('pm-1', tenantId, { account_id: null } as any);
+      expect(updateMock.mock.calls[0][0].data.account_id).toBeNull();
+    });
+  });
+
+  describe('findLinkableAccounts()', () => {
+    it('scopes the lookup to the tenant and returns picker fields only', async () => {
+      db.account.findMany.mockResolvedValue([
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+      ]);
+
+      const result = await service.findLinkableAccounts(tenantId);
+
+      expect(db.account.findMany.mock.calls[0][0].where).toEqual({ tenant_id: tenantId });
+      expect(result).toEqual([
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+      ]);
+    });
+
+    it('normalises a missing account code to null', async () => {
+      db.account.findMany.mockResolvedValue([
+        { id: 'acc-2', name: 'Uncoded', code: null, type: 'asset', category: 'general' },
+      ]);
+
+      const [account] = await service.findLinkableAccounts(tenantId);
+
+      expect(account.code).toBeNull();
     });
   });
 });
