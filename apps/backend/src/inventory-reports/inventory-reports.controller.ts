@@ -6,6 +6,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import {
     GetInventoryValuationDto,
+    GetProductTransactionHistoryDto,
     GetReorderSuggestionsDto,
     GetShrinkageSummaryDto,
     GetStockAgingDto,
@@ -43,5 +44,15 @@ export class InventoryReportsController {
     @Get('shrinkage-summary')
     getShrinkageSummary(@Tenant() tenant: TenantContext, @Query() query: GetShrinkageSummaryDto) {
         return this.service.getShrinkageSummary(tenant.tenantId, query);
+    }
+
+    /**
+     * The tenant's zone is threaded through rather than defaulted in the
+     * service: this report cuts an opening balance at the start of `from`, and a
+     * boundary an hour out moves a day's movements to the wrong side of it.
+     */
+    @Get('product-transaction-history')
+    getProductTransactionHistory(@Tenant() tenant: TenantContext, @Query() query: GetProductTransactionHistoryDto) {
+        return this.service.getProductTransactionHistory(tenant.tenantId, query, tenant.timezone);
     }
 }
