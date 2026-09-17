@@ -57,3 +57,7 @@ next-env.d.ts
 
 # Brainstorming visual companion
 .superpowers/
+
+# Local DB dumps (never commit — contains live customer data)
+/backups/
+*.dump

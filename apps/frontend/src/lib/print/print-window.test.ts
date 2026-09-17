@@ -247,3 +247,120 @@ describe('buildPrintDocument — tenant footer', () => {
         expect(html.indexOf('<tfoot>')).toBeLessThan(html.indexOf('<tbody>'));
     });
 });
+
+describe('a footer pinned to the page bottom', () => {
+    const footer = {
+        show: true,
+        lines: [{ text: 'Bank: Sonali 123' }],
+        images: [],
+        rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+        spacingMm: 4,
+        repeatOnEveryPage: true,
+        pinToPageBottom: true,
+    };
+    const pinned = { ...base, headerConfig: { footer } };
+
+    it('stretches the document table to a full page so the tfoot is pushed down', () => {
+        const html = buildPrintDocument(pinned);
+
+        expect(html).toContain('p71-doc--pinned');
+        // A4 is 297mm tall less its two 15mm margins.
+        expect(html).toContain('.p71-doc--pinned { height: 267mm; }');
+        expect(html).toContain('<tfoot>');
+    });
+
+    it('uses each paper size\'s own printable height', () => {
+        expect(buildPrintDocument({ ...pinned, paperSize: 'A5' }))
+            .toContain('.p71-doc--pinned { height: 190mm; }');
+    });
+
+    it('does not pin on a roll, which prints to an open-ended length', () => {
+        expect(buildPrintDocument({ ...pinned, paperSize: 'Thermal80' })).not.toContain('p71-doc--pinned');
+    });
+
+    it('does not pin a footer that does not repeat — there is no tfoot', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, repeatOnEveryPage: false } },
+        });
+
+        expect(html).not.toContain('p71-doc--pinned');
+    });
+
+    it('drops the centred column so a bleeding footer can reach the paper edge', () => {
+        const html = buildPrintDocument({ ...base, headerConfig: { footer: { ...footer, bleed: true } } });
+
+        // Print-only: on screen there is no @page margin to escape, and the
+        // band would just overflow the viewport and be cropped.
+        expect(html).toContain('@media print { .p71-wrap { max-width: none; margin: 0; } }');
+        expect(html).toContain('max-width: 780px');
+    });
+
+    it('keeps the centred column when nothing bleeds', () => {
+        const html = buildPrintDocument(pinned);
+
+        expect(html).toContain('max-width: 780px');
+        expect(html).not.toContain('@media print { .p71-wrap');
+    });
+});
+
+describe('a pinned footer that does not repeat', () => {
+    // The reported bug: pinToPageBottom was silently ignored unless
+    // repeatOnEveryPage was also on, so a short invoice printed its footer in
+    // the middle of the sheet. The two settings are independent.
+    const footer = {
+        show: true,
+        lines: [{ text: 'Bank: Sonali 123' }],
+        images: [],
+        rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+        spacingMm: 4,
+        repeatOnEveryPage: false,
+        pinToPageBottom: true,
+    };
+    const opts = { ...base, headerConfig: { footer } };
+
+    it('uses a page-tall flex column rather than a repeating tfoot', () => {
+        const html = buildPrintDocument(opts);
+
+        expect(html).toContain('p71-sheet');
+        expect(html).toContain('min-height: 267mm');
+        // A <tfoot> repeats on every page by default, which is wrong for a
+        // footer meant to print once.
+        expect(html).not.toContain('<tfoot>');
+    });
+
+    it('keeps the footer out of the table when a repeating header needs one', () => {
+        const html = buildPrintDocument({ ...opts, repeatHeader: true, headerHtml: '<div>hd</div>' });
+
+        expect(html).toContain('<thead>');
+        expect(html).not.toContain('<tfoot>');
+        // The footer must be a sibling of the table: a cell cannot be pushed to
+        // the sheet's bottom by the flex column around it. Compared inside
+        // <body>, since the class name also appears earlier in the stylesheet.
+        const body = html.slice(html.indexOf('<body>'));
+        expect(body.indexOf('</table>')).toBeLessThan(body.indexOf('class="p71-ft'));
+    });
+
+    it('still repeats the footer in a tfoot when that is what was asked for', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, repeatOnEveryPage: true } },
+        });
+
+        expect(html).toContain('<tfoot>');
+        expect(html).toContain('p71-doc--pinned');
+    });
+
+    it('does not pin on a roll, which has no page bottom', () => {
+        expect(buildPrintDocument({ ...opts, paperSize: 'Thermal80' })).not.toContain('p71-sheet');
+    });
+
+    it('leaves an unpinned footer flowing under the content', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, pinToPageBottom: false } },
+        });
+
+        expect(html).not.toContain('p71-sheet');
+    });
+});

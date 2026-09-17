@@ -2953,13 +2953,30 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCounter: (id: string) => fetchWithAuth(`/counters/${id}`, { method: 'DELETE' }),
+    // Whether the platform admin has left "Try Demo" on. Runtime-configured
+    // rather than a NEXT_PUBLIC_ build arg, for the same reason as the Google
+    // and Firebase configs: flipping the switch is a settings save, not a
+    // frontend rebuild.
+    getDemoConfig: () => fetch(`${API_BASE}/auth/demo/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load demo config');
+        return body && 'data' in body ? body.data : body;
+    }),
     demoLogin: () => fetch(`${API_BASE}/auth/demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
+        // An `ApiError` rather than a bare `Error`: a demo the platform admin
+        // switched off comes back as `DEMO_DISABLED`, which the pages word for a
+        // visitor instead of repeating the backend's sentence.
         if (!res.ok) {
-            throw new Error(body?.message || body?.error?.message || 'Demo account not available');
+            throw new ApiError(
+                body?.error?.message || body?.message || 'Demo account not available',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
         }
         return body && 'data' in body ? body.data : body;
     }),
@@ -5094,6 +5111,31 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** Several cards into one column at once — the column menu and the selection bar. */
+    moveBoardCards: (id: string, data: { taskIds: string[]; columnId: string }) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/move`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Several cards off the board at once. The tasks themselves are untouched. */
+    removeBoardCards: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/remove`, {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * One column's cards, top to bottom, as a sort left them. The rule stays in
+     * the browser; only the result is stored, so the next drag is not fighting
+     * a sort order the board would keep reapplying.
+     */
+    setBoardColumnCardOrder: (id: string, columnId: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getBoardColumns: (id: string) => fetchWithAuth(`/projects/boards/${id}/columns`),
     createBoardColumn: (id: string, data: { name: string; category: string; wipLimit?: number }) =>
         fetchWithAuth(`/projects/boards/${id}/columns`, {
@@ -5105,6 +5147,13 @@ export const api = {
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The whole column order, left to right — see `ReorderBoardColumnsDto`. */
+    reorderBoardColumns: (id: string, columnIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ columnIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoardColumn: (id: string, columnId: string) =>

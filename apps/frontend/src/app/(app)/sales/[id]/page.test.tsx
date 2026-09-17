@@ -188,7 +188,9 @@ describe('SaleDetailPage — view mode', () => {
         // Choosing A5 from the print menu prints the invoice and remembers the
         // choice; the challan that follows must go on the same paper, not A4.
         fireEvent.click(screen.getByTitle('Choose paper size'));
-        fireEvent.click(screen.getByRole('button', { name: 'A5' }));
+        // The menu is portalled, so it mounts a tick after the click rather
+        // than synchronously with it.
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'A5' }));
         open.mockClear();
 
         fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));

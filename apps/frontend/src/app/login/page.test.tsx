@@ -48,6 +48,8 @@ jest.mock('../../lib/api', () => ({
     // Google sign-in stays off in these tests; the button renders nothing.
     getGoogleAuthConfig: jest.fn().mockResolvedValue({ enabled: false, client_id: null }),
     googleSignIn: jest.fn(),
+    // The platform-admin switch behind "Try Demo"; on unless a test says otherwise.
+    getDemoConfig: jest.fn().mockResolvedValue({ enabled: true }),
   }
 }));
 
@@ -174,13 +176,26 @@ describe('Login UI Authentication Mapping', () => {
     const { api } = require('../../lib/api');
 
     render(<LoginPage />);
-    fireEvent.click(screen.getByRole('button', { name: /try demo/i }));
+    // The button waits on `/auth/demo/config`, so it appears a tick after render.
+    fireEvent.click(await screen.findByRole('button', { name: /try demo/i }));
 
     await waitFor(() => {
       expect(api.demoLogin).toHaveBeenCalled();
       expect(localStorage.getItem('demo_session')).toBe('1');
       expect(pushMock).toHaveBeenCalledWith('/dashboard/onboarding');
     });
+  });
+
+  it('hides the demo button when the platform admin has switched Try Demo off', async () => {
+    const { api } = require('../../lib/api');
+    api.getDemoConfig.mockResolvedValueOnce({ enabled: false });
+
+    render(<LoginPage />);
+
+    // Waiting on the sign-in button proves the page finished rendering, so the
+    // absent demo button is a decision rather than a race.
+    await waitFor(() => expect(api.getDemoConfig).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /try demo/i })).not.toBeInTheDocument();
   });
 
   it('sets tenant and store in localStorage on successful login', async () => {

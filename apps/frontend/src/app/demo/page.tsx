@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, PlayCircle, ArrowRight } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { useI18n } from '@/lib/i18n';
 
@@ -24,9 +24,16 @@ function DemoPageContent() {
                 await storeAuthResponse(auth);
                 localStorage.removeItem('onboarding_complete');
                 router.replace('/dashboard/onboarding');
-            } catch (err: any) {
+            } catch (err: unknown) {
                 if (!cancelled) {
-                    setError(err.message || t.auth.login.demoFailed);
+                    // A demo the platform admin switched off is not a failure to
+                    // apologise for — say it is unavailable rather than repeating
+                    // the backend's sentence, which is written for an operator.
+                    setError(
+                        err instanceof ApiError && err.code === 'DEMO_DISABLED'
+                            ? t.auth.login.demoDisabled
+                            : (err instanceof Error && err.message) || t.auth.login.demoFailed,
+                    );
                     setLoading(false);
                 }
             }
@@ -37,7 +44,7 @@ function DemoPageContent() {
         return () => {
             cancelled = true;
         };
-    }, [router, t.auth.login.demoFailed]);
+    }, [router, t.auth.login.demoDisabled, t.auth.login.demoFailed]);
 
     if (loading && !error) {
         return (

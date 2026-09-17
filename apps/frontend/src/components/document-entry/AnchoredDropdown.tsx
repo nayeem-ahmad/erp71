@@ -4,6 +4,7 @@ import {
     useCallback,
     useEffect,
     useLayoutEffect,
+    useRef,
     useState,
     type CSSProperties,
     type ReactNode,
@@ -23,9 +24,10 @@ interface AnchorBox {
     left: number;
     width: number;
     bottom: number;
+    right: number;
 }
 
-const ZERO_BOX: AnchorBox = { top: 0, left: 0, width: 0, bottom: 0 };
+const ZERO_BOX: AnchorBox = { top: 0, left: 0, width: 0, bottom: 0, right: 0 };
 
 interface AnchoredDropdownProps {
     /** The field the panel hangs off — usually the search input itself. */
@@ -39,6 +41,14 @@ interface AnchoredDropdownProps {
      * then only use the anchor's width as a floor.
      */
     matchAnchorWidth?: boolean;
+    /**
+     * Line the panel's right edge up with the anchor's, rather than its left.
+     *
+     * For a panel wider than what it hangs off — a menu under an icon button —
+     * growing leftwards is what keeps it on screen and under its trigger. Only
+     * a hint: a panel that would run off the left edge is clamped back.
+     */
+    align?: 'start' | 'end';
     className?: string;
     role?: string;
     'aria-label'?: string;
@@ -69,6 +79,7 @@ export default function AnchoredDropdown({
     panelRef,
     maxHeight = 320,
     matchAnchorWidth = true,
+    align = 'start',
     className = '',
     role,
     'aria-label': ariaLabel,
@@ -76,6 +87,14 @@ export default function AnchoredDropdown({
 }: AnchoredDropdownProps) {
     const [box, setBox] = useState<AnchorBox>(ZERO_BOX);
     const [mounted, setMounted] = useState(false);
+    /**
+     * The panel's own width, for a panel that is not matching the anchor's.
+     * Unknown until it has rendered once, so the first paint positions from the
+     * anchor and the measurement corrects it — the panel is only ever a few
+     * pixels out for one frame, and never outside the viewport.
+     */
+    const [measuredWidth, setMeasuredWidth] = useState(0);
+    const innerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => setMounted(true), []);
 
@@ -88,8 +107,15 @@ export default function AnchoredDropdown({
                 && previous.left === rect.left
                 && previous.width === rect.width
                 && previous.bottom === rect.bottom
+                && previous.right === rect.right
                 ? previous
-                : { top: rect.top, left: rect.left, width: rect.width, bottom: rect.bottom }
+                : {
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    bottom: rect.bottom,
+                    right: rect.right,
+                }
         ));
     }, [anchorRef]);
 
@@ -104,6 +130,17 @@ export default function AnchoredDropdown({
         };
     }, [measure]);
 
+    // Only a panel sizing itself needs its own width known; one matching the
+    // anchor already has it. Measured from the content box so the clamp is not
+    // fighting the `maxWidth` it just applied.
+    useLayoutEffect(() => {
+        if (matchAnchorWidth) return;
+        const panel = innerRef.current;
+        if (!panel) return;
+        const width = panel.scrollWidth;
+        setMeasuredWidth((previous) => (previous === width ? previous : width));
+    }, [matchAnchorWidth, children, box.width]);
+
     if (!mounted) return null;
 
     const viewportHeight = window.innerHeight;
@@ -112,15 +149,40 @@ export default function AnchoredDropdown({
     const flipUp = roomBelow < MIN_ROOM_BELOW && roomAbove > roomBelow;
 
     const style: CSSProperties = flipUp
-        ? { position: 'fixed', left: box.left, bottom: viewportHeight - box.top + GAP, maxHeight: Math.min(maxHeight, roomAbove) }
-        : { position: 'fixed', left: box.left, top: box.bottom + GAP, maxHeight: Math.min(maxHeight, roomBelow) };
+        ? { position: 'fixed', bottom: viewportHeight - box.top + GAP, maxHeight: Math.min(maxHeight, roomAbove) }
+        : { position: 'fixed', top: box.bottom + GAP, maxHeight: Math.min(maxHeight, roomBelow) };
 
     if (matchAnchorWidth) style.width = box.width;
     else style.minWidth = box.width;
 
+    // Horizontal placement. `align: 'end'` hangs the panel off the anchor's
+    // right edge, which is what a menu wider than its trigger needs — an icon
+    // button pinned near a panel's right edge would otherwise push its menu
+    // off-screen. Either way the result is clamped into the viewport, so a
+    // panel can never end up half outside it; `maxWidth` keeps a panel wider
+    // than the whole viewport from reintroducing the overflow.
+    const panelWidth = matchAnchorWidth
+        ? box.width
+        : Math.max(measuredWidth, box.width);
+    const viewportWidth = window.innerWidth;
+
+    if (panelWidth > 0) {
+        const preferred = align === 'end' ? box.right - panelWidth : box.left;
+        const maxLeft = viewportWidth - panelWidth - EDGE;
+        style.left = Math.max(EDGE, Math.min(preferred, Math.max(EDGE, maxLeft)));
+    } else {
+        style.left = box.left;
+    }
+    style.maxWidth = viewportWidth - EDGE * 2;
+
     return createPortal(
         <div
-            ref={panelRef}
+            ref={(node) => {
+                innerRef.current = node;
+                // The owner's click-outside test needs this element too, so the
+                // caller's ref is populated alongside our own.
+                if (panelRef) panelRef.current = node;
+            }}
             role={role}
             aria-label={ariaLabel}
             style={style}

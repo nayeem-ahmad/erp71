@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -992,6 +992,35 @@ describe('AuthService', () => {
             db.user.findUnique.mockResolvedValueOnce(null);
 
             await expect(service.demoLogin()).rejects.toBeInstanceOf(ServiceUnavailableException);
+        });
+
+        it('refuses when the platform admin has switched the demo off', async () => {
+            platformSettings.getRawValue.mockResolvedValue('false');
+
+            await expect(service.demoLogin()).rejects.toBeInstanceOf(ForbiddenException);
+            // Refused before the account is even looked for: the switch is the
+            // answer whether or not the demo workspace was ever seeded.
+            expect(db.user.findUnique).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('isDemoLoginEnabled', () => {
+        it('is on when the setting has never been touched', async () => {
+            platformSettings.getRawValue.mockResolvedValue(null);
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(true);
+        });
+
+        it('is off only for an explicit false', async () => {
+            platformSettings.getRawValue.mockResolvedValue('false');
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(false);
+        });
+
+        it('stays on when the settings read fails — a transient settings error should not take the demo down', async () => {
+            platformSettings.getRawValue.mockRejectedValue(new Error('db down'));
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(true);
         });
     });
 

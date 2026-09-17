@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: "Paramètres généraux",
-                    description: "Nom de la plateforme, e-mail d'assistance et mode maintenance.",
+                    description: "Nom de la plateforme, e-mail d'assistance, mode maintenance et interrupteur de la démo.",
                 },
                 tenantFeatures: {
                     label: "Fonctionnalités des espaces",
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: "Mode maintenance",
                 hint: "Lorsqu'il est activé, l'API renvoie une erreur 503 pour toutes les requêtes non administrateur.",
                 activeWarning: "Le mode maintenance est ACTIVÉ — les espaces ne peuvent pas accéder à la plateforme.",
+            },
+            demo: {
+                label: "Essayer la démo",
+                hint: "Affiche le bouton de démo sur la page de connexion et sur la page d'accueil marketing. Il connecte directement les visiteurs à l'espace de démo partagé.",
+                offNotice: "Essayer la démo est DÉSACTIVÉ — les boutons sont masqués et la connexion à la démo est refusée.",
             },
             saved: "Paramètres généraux enregistrés.",
         },
