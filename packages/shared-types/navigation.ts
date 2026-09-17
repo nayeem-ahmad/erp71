@@ -76,11 +76,6 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.order-flow.delivery': { id: 'sales.order-flow.delivery', kind: 'link', icon: 'MapPin', labelKey: 'sidebar.items.delivery', href: '/sales/delivery' },
   'sales.order-flow.returns': { id: 'sales.order-flow.returns', kind: 'link', icon: 'ArrowLeftRight', labelKey: 'sidebar.items.salesReturns', href: '/sales/returns' },
   'sales.order-flow.warranty-claims': { id: 'sales.order-flow.warranty-claims', kind: 'link', icon: 'ShieldCheck', labelKey: 'sidebar.items.warrantyClaims', href: '/sales/warranty-claims' },
-  'sales.storefront': { id: 'sales.storefront', kind: 'subgroup', icon: 'Globe', labelKey: 'sidebar.modules.storefront' },
-  'sales.storefront.orders': { id: 'sales.storefront.orders', kind: 'link', icon: 'ShoppingBag', labelKey: 'sidebar.items.storefrontOrders', href: '/storefront', exact: true },
-  'sales.storefront.settings': { id: 'sales.storefront.settings', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.storefrontSettings', href: '/storefront/settings' },
-  'sales.storefront.pages': { id: 'sales.storefront.pages', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.storefrontPages', href: '/storefront/pages' },
-  'sales.storefront.menu': { id: 'sales.storefront.menu', kind: 'link', icon: 'Menu', labelKey: 'sidebar.items.storefrontMenu', href: '/storefront/menu' },
   'sales.customers': { id: 'sales.customers', kind: 'subgroup', icon: 'Users', labelKey: 'sales.hub.customersCrm' },
   'sales.customers.list': { id: 'sales.customers.list', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.customers', href: '/sales/customers' },
   'sales.customers.loyalty': { id: 'sales.customers.loyalty', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.loyaltyPoints', href: '/sales/loyalty' },
@@ -102,6 +97,22 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.setup.price-lists': { id: 'sales.setup.price-lists', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.priceLists', href: '/sales/price-lists' },
   'sales.setup.territories': { id: 'sales.setup.territories', kind: 'link', icon: 'MapPin', labelKey: 'sidebar.items.territories', href: '/sales/territories' },
   'sales.setup.settings': { id: 'sales.setup.settings', kind: 'link', icon: 'Cog', labelKey: 'sidebar.items.salesSettings', href: '/settings/sales' },
+
+  // The shop's own public website. Promoted out of Sales on 2026-09-17: its
+  // parts had been scattered across two places — web orders sat beside the POS
+  // in `sales`, while the settings, pages and menu that shape the site were
+  // filed under `sales.setup` among price lists and territories, and the shop
+  // blog was in the registry under `account-settings` and in no layout at all,
+  // so it had no sidebar entry anywhere. Running a website is its own job; it
+  // now reads as one.
+  storefront: { id: 'storefront', kind: 'module', icon: 'Globe', labelKey: 'sidebar.modules.storefront', moduleKey: 'storefront' },
+  'storefront.orders': { id: 'storefront.orders', kind: 'link', icon: 'ShoppingBag', labelKey: 'sidebar.items.storefrontOrders', href: '/storefront', exact: true },
+  'storefront.pages': { id: 'storefront.pages', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.storefrontPages', href: '/storefront/pages' },
+  'storefront.menu': { id: 'storefront.menu', kind: 'link', icon: 'Menu', labelKey: 'sidebar.items.storefrontMenu', href: '/storefront/menu' },
+  // Lives at /settings/blog because that is where the page has always been; the
+  // nav id says where it belongs, not where it is served from.
+  'storefront.blog': { id: 'storefront.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.storefrontBlog', href: '/settings/blog' },
+  'storefront.settings': { id: 'storefront.settings', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.storefrontSettings', href: '/storefront/settings' },
 
   purchase: { id: 'purchase', kind: 'module', icon: 'Truck', labelKey: 'sidebar.modules.purchase', moduleKey: 'purchase' },
   'purchase.overview': { id: 'purchase.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/purchases', exact: true },
@@ -288,7 +299,6 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
   // Business-plan tool. The Sidebar also hides it from users without MANAGE_SHORT_LINKS.
   'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener', entitlement: 'urlShortener' },
-  'account-settings.blog': { id: 'account-settings.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.storefrontBlog', href: '/settings/blog' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },
   'account-settings.billing': { id: 'account-settings.billing', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.modules.billing', href: '/billing', billingGated: true },
   'account-settings.sms-credits': { id: 'account-settings.sms-credits', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsCredits', href: '/sms-credits' },
@@ -362,6 +372,15 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
  * still names `purchase.imports*` also now fails `validateNavLayout` — those ids
  * are gone from the registry — which means it is replaced by this default at
  * read time and needs nothing at all.
+ *
+ * The 2026-09-17 Storefront split did the same for the shop's own website,
+ * and the same two cases apply. A saved layout naming `sales.storefront.*` or
+ * `account-settings.blog` now fails `validateNavLayout` and is replaced by this
+ * default at read time, so it needs nothing. A layout that somehow keeps
+ * validating can take the new module with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=storefront,storefront.orders,storefront.pages,storefront.menu,storefront.blog,storefront.settings`
+ * and then needs a reset from Navigation settings to drop the old placements,
+ * since `addNavNodesToLayout` adds but never reparents.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -375,9 +394,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.order-flow.orders', 'sales', 6),
   layoutNode('sales.order-flow.delivery', 'sales', 7),
   layoutNode('sales.order-flow.warranty-claims', 'sales', 8),
-  layoutNode('sales.storefront.orders', 'sales', 9),
-  layoutNode('sales.mushak', 'sales', 10),
-  layoutNode('sales.reports', 'sales', 11),
+  layoutNode('sales.mushak', 'sales', 9),
+  layoutNode('sales.reports', 'sales', 10),
   layoutNode('sales.reports.summary', 'sales.reports', 0),
   layoutNode('sales.reports.products', 'sales.reports', 1),
   layoutNode('sales.reports.consolidated', 'sales.reports', 2),
@@ -389,18 +407,22 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.receivables.customer-ledger', 'sales.reports', 8),
   layoutNode('sales.receivables.due-aging', 'sales.reports', 9),
   layoutNode('sales.customers.loyalty', 'sales.reports', 10),
-  layoutNode('sales.setup', 'sales', 12),
+  layoutNode('sales.setup', 'sales', 11),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),
   layoutNode('sales.setup.territories', 'sales.setup', 2),
   layoutNode('sales.customers.list', 'sales.setup', 3),
   layoutNode('sales.cashier-sessions', 'sales.setup', 4),
-  layoutNode('sales.storefront.settings', 'sales.setup', 5),
-  layoutNode('sales.storefront.pages', 'sales.setup', 6),
-  layoutNode('sales.storefront.menu', 'sales.setup', 7),
-  layoutNode('sales.setup.settings', 'sales.setup', 8),
+  layoutNode('sales.setup.settings', 'sales.setup', 5),
 
-  layoutNode('purchase', null, 2),
+  layoutNode('storefront', null, 2),
+  layoutNode('storefront.orders', 'storefront', 0),
+  layoutNode('storefront.pages', 'storefront', 1),
+  layoutNode('storefront.menu', 'storefront', 2),
+  layoutNode('storefront.blog', 'storefront', 3),
+  layoutNode('storefront.settings', 'storefront', 4),
+
+  layoutNode('purchase', null, 3),
   layoutNode('purchase.overview', 'purchase', 0),
   layoutNode('purchase.list', 'purchase', 1),
   layoutNode('purchase.payables.supplier-payments', 'purchase', 2),
@@ -415,12 +437,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('purchase.setup', 'purchase', 8),
   layoutNode('purchase.setup.suppliers', 'purchase.setup', 0),
 
-  layoutNode('imports', null, 3),
+  layoutNode('imports', null, 4),
   layoutNode('imports.shipments', 'imports', 0),
   layoutNode('imports.lc-register', 'imports', 1),
   layoutNode('imports.duty-report', 'imports', 2),
 
-  layoutNode('accounting', null, 4),
+  layoutNode('accounting', null, 5),
   layoutNode('accounting.overview', 'accounting', 0),
   layoutNode('accounting.vouchers', 'accounting', 1),
   layoutNode('accounting.vouchers-list', 'accounting', 2),
@@ -456,12 +478,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 9),
   layoutNode('accounting.setup.settings', 'accounting.setup', 10),
 
-  layoutNode('expenses', null, 5),
+  layoutNode('expenses', null, 6),
   layoutNode('expenses.list', 'expenses', 0),
   layoutNode('expenses.categories', 'expenses', 1),
   layoutNode('expenses.reports', 'expenses', 2),
 
-  layoutNode('inventory', null, 6),
+  layoutNode('inventory', null, 7),
   layoutNode('inventory.overview', 'inventory', 0),
   layoutNode('inventory.demands', 'inventory', 1),
   layoutNode('inventory.transfers', 'inventory', 2),
@@ -481,7 +503,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.setup.warehouses', 'inventory.setup', 3),
   layoutNode('inventory.setup.settings', 'inventory.setup', 4),
 
-  layoutNode('crm', null, 7),
+  layoutNode('crm', null, 8),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.contacts', 'crm', 2),
@@ -490,7 +512,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.customers', 'crm', 6),
   layoutNode('crm.setup', 'crm', 7),
 
-  layoutNode('projects', null, 8),
+  layoutNode('projects', null, 9),
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
@@ -499,13 +521,13 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.hour-log-report', 'projects', 5),
   layoutNode('projects.setup', 'projects', 6),
 
-  layoutNode('manufacturing', null, 9),
+  layoutNode('manufacturing', null, 10),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
   layoutNode('manufacturing.jobs', 'manufacturing', 1),
   layoutNode('manufacturing.analytics', 'manufacturing', 2),
   layoutNode('manufacturing.product-pl', 'manufacturing', 3),
 
-  layoutNode('hr', null, 10),
+  layoutNode('hr', null, 11),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.attendance', 'hr', 2),
@@ -532,16 +554,16 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.designations', 'hr.setup', 1),
   layoutNode('hr.setup.schedules', 'hr.setup', 2),
 
-  layoutNode('account-settings', null, 11),
+  layoutNode('account-settings', null, 12),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
-  layoutNode('chat', null, 12),
-  layoutNode('support', null, 13),
-  layoutNode('admin', null, 14),
+  layoutNode('chat', null, 13),
+  layoutNode('support', null, 14),
+  layoutNode('admin', null, 15),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -553,8 +575,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 15),
-  layoutNode('help', null, 16),
+  layoutNode('whats-new', null, 16),
+  layoutNode('help', null, 17),
 ];
 
 /**
