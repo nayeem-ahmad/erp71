@@ -31,6 +31,10 @@ export enum PrintDocType {
     MONEY_RECEIPT = 'MONEY_RECEIPT',
     SALES_ORDER = 'SALES_ORDER',
     SALES_RETURN = 'SALES_RETURN',
+    /// The delivery challan that rides with the goods. Same letterhead family
+    /// as the invoice, but a tenant usually wants a plainer one on the copy a
+    /// rider carries, so it gets its own assignable type.
+    DELIVERY_CHALLAN = 'DELIVERY_CHALLAN',
     PURCHASE_ORDER = 'PURCHASE_ORDER',
     PURCHASE_RETURN = 'PURCHASE_RETURN',
     LIST_REPORT = 'LIST_REPORT',

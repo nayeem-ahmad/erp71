@@ -35,6 +35,7 @@ jest.mock('lucide-react', () => ({
     Download: () => <span data-testid="icon-download" />,
     FileCheck: () => <span data-testid="icon-file-check" />,
     Printer: () => <span data-testid="icon-printer" />,
+    Truck: () => <span data-testid="icon-truck" />,
     ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
@@ -251,6 +252,68 @@ describe('InvoicePage', () => {
         });
         fireEvent.click(screen.getByRole('button', { name: /^print$/i }));
         expect(mockPrint).toHaveBeenCalled();
+    });
+
+    it('prints a delivery challan with the goods but none of the money', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /delivery challan/i })).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        expect(write).toHaveBeenCalledTimes(1);
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Delivery Challan');
+        expect(html).toContain('SALE-INV-001');
+        // Every product on the invoice rides along, with its SKU...
+        expect(html).toContain('Premium Widget');
+        expect(html).toContain('Basic Widget');
+        expect(html).toContain('PW-001');
+        expect(html).toContain('Mohammed Rahman');
+        expect(html).toContain('123 Dhaka Road');
+        // ...and not one of its prices does.
+        expect(html).not.toMatch(/৳|BDT|\$/);
+        expect(html).not.toMatch(/Unit Price|Subtotal|VAT|Payment/i);
+
+        open.mockRestore();
+    });
+
+    it('prints a challan for a walk-in sale, which has no customer to address', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: { ...mockInvoiceData.sale, customer: null },
+        });
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /delivery challan/i })).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Premium Widget');
+        expect(html).not.toContain('Deliver To');
+        // Somebody still signs for the goods.
+        expect(html).toContain('Received By');
+
+        open.mockRestore();
     });
 
     it('renders COMPLETED status badge', async () => {

@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, Ban } from 'lucide-react';
+import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, Ban, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printSalesInvoice, PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
+import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -261,6 +262,9 @@ function SaleDetailPageContent() {
     };
 
     const printHeader = usePrintHeader('SALES_INVOICE');
+    // Its own template, so a shop can put a plainer letterhead on the copy a
+    // rider carries than on the invoice the customer keeps.
+    const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
 
     const handlePOSPrint = async () => {
         if (!sale) return;
@@ -283,6 +287,35 @@ function SaleDetailPageContent() {
             amountPaid: parseFloat(sale.amount_paid),
             note: sale.note,
         });
+    };
+
+    /**
+     * The delivery copy: the same goods, none of the money. `printDeliveryChallan`
+     * has no field to put a price in, so this cannot leak one by omission.
+     */
+    const handleChallanPrint = (size?: PaperSize) => {
+        if (!sale) return;
+        const selectedSize = size ?? paperSize;
+        setShowPaperMenu(false);
+        printDeliveryChallan(
+            {
+                challanNumber: sale.reference_number || sale.serial_number,
+                invoiceNumber: sale.serial_number,
+                date: formatDate(sale.sale_date ?? sale.created_at, locale),
+                companyName: challanHeader.companyName,
+                headerConfig: challanHeader.headerConfig,
+                customerName: customer?.name,
+                customerPhone: customer?.phone,
+                deliveryAddress: customer?.address ?? undefined,
+                items: items.map((i) => ({
+                    name: i.name,
+                    quantity: i.quantity,
+                })),
+                note: description || undefined,
+                labels: t.sales.challan,
+            },
+            selectedSize,
+        );
     };
 
     const handlePrint = (size?: PaperSize) => {
@@ -441,6 +474,14 @@ function SaleDetailPageContent() {
             >
                 <Printer className="w-4 h-4" />
                 {t.sales.detail.posReceipt}
+            </button>
+            <button
+                type="button"
+                onClick={() => handleChallanPrint()}
+                className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
+            >
+                <Truck className="w-4 h-4" />
+                {t.sales.challan.action}
             </button>
             <div className="relative" ref={printMenuRef}>
                 <div className="flex items-center border rounded overflow-hidden">
