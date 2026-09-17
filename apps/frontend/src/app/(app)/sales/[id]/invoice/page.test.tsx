@@ -287,6 +287,35 @@ describe('InvoicePage', () => {
         open.mockRestore();
     });
 
+    it('prints a challan for a walk-in sale, which has no customer to address', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: { ...mockInvoiceData.sale, customer: null },
+        });
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /delivery challan/i })).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Premium Widget');
+        expect(html).not.toContain('Deliver To');
+        // Somebody still signs for the goods.
+        expect(html).toContain('Received By');
+
+        open.mockRestore();
+    });
+
     it('renders COMPLETED status badge', async () => {
         render(<InvoicePage />);
         await waitFor(() => {

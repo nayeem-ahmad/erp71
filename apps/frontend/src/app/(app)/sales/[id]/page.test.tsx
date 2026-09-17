@@ -175,6 +175,52 @@ describe('SaleDetailPage — view mode', () => {
         open.mockRestore();
     });
 
+    it('prints the challan on the paper size the operator picked for the invoice', async () => {
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        // Choosing A5 from the print menu prints the invoice and remembers the
+        // choice; the challan that follows must go on the same paper, not A4.
+        fireEvent.click(screen.getByTitle('Choose paper size'));
+        fireEvent.click(screen.getByRole('button', { name: 'A5' }));
+        open.mockClear();
+
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        expect(open).toHaveBeenCalledWith('', '_blank', 'width=670,height=600');
+
+        open.mockRestore();
+    });
+
+    it('prints a challan for a walk-in sale, which has no customer to address', async () => {
+        getApi().getSale.mockResolvedValue({ ...mockSale, customer: null, customer_id: null });
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Gadget X');
+        // Nobody to address it to, but somebody still signs for the goods.
+        expect(html).not.toContain('Deliver To');
+        expect(html).toContain('Received By');
+
+        open.mockRestore();
+    });
+
     it('shows loading state initially', () => {
         getApi().getSale.mockReturnValue(new Promise(() => {}));
         render(<SaleDetailPage />);
