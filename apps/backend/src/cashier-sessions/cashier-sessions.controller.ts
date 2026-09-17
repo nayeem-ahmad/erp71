@@ -44,12 +44,33 @@ export class CashierSessionsController {
     return this.cashierSessionsService.getSessionsByStore(tenant.tenantId, storeId);
   }
 
+  /**
+   * The floor view: every till open in a store right now, with what each is
+   * holding. Ordered before `:sessionId` so "open" is not read as an id.
+   */
+  @Get('store/:storeId/open')
+  async getOpenSessionsByStore(
+    @Tenant() tenant: TenantContext,
+    @Param('storeId') storeId: string,
+  ) {
+    return this.cashierSessionsService.getOpenSessionsByStore(tenant.tenantId, storeId);
+  }
+
   @Get(':sessionId')
   async getSessionById(
     @Tenant() tenant: TenantContext,
     @Param('sessionId') sessionId: string,
   ) {
     return this.cashierSessionsService.getSessionById(tenant.tenantId, sessionId);
+  }
+
+  /** Takings, payment-method breakdown and expected cash for one shift. */
+  @Get(':sessionId/summary')
+  async getSessionSummary(
+    @Tenant() tenant: TenantContext,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.cashierSessionsService.getSessionSummary(tenant.tenantId, sessionId);
   }
 
   @Post(':sessionId/cash-transaction')

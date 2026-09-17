@@ -16,6 +16,12 @@ export interface InvoiceItem {
 export interface InvoicePayment {
     method: string;
     amount: number;
+    /**
+     * The instrument behind the payment — "CHQ-889001 · City Bank". Printed
+     * beside the method so the invoice says which cheque settled it, which is
+     * the whole point of having recorded one.
+     */
+    reference?: string;
 }
 
 export interface InvoiceData {
@@ -115,6 +121,7 @@ function buildStyles(isThermal: boolean): string {
         .payments-section h3 { font-size:${isThermal ? '10px' : '11px'}; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:${isThermal ? '#444' : '#6b7280'}; margin-bottom:5px; }
         .payments-table { width:100%; border-collapse:collapse; }
         .pay-label  { font-size:${isThermal ? '10px' : '13px'}; color:#444; padding:${isThermal ? '2px 0' : '3px 0'}; }
+        .pay-ref    { font-size:${isThermal ? '9px' : '11px'}; color:#777; }
         .pay-amount { text-align:right; font-weight:bold; font-size:${isThermal ? '10px' : '13px'}; padding:${isThermal ? '2px 0' : '3px 0'}; }
 
         /* Note */
@@ -142,7 +149,9 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
     }).join('');
 
     const paymentRows = data.payments.map((p) =>
-        `<tr><td class="pay-label">${esc(paymentLabel(p.method))}</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
+        `<tr><td class="pay-label">${esc(paymentLabel(p.method))}${
+            p.reference ? `<br><span class="pay-ref">${esc(p.reference)}</span>` : ''
+        }</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
     ).join('');
 
     return `

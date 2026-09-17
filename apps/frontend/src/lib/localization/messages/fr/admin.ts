@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: "Boîte de réception",
         subtitle: "Assistance et retours des commerçants · {total} conversations",
         loadFailed: "Impossible de charger les conversations",
-        searchPlaceholder: "Rechercher par objet…",
+        searchPlaceholder: "Rechercher par n° de ticket ou objet…",
         loading: "Chargement des conversations…",
         noThreads: "Aucune conversation trouvée.",
         allStatuses: "Tous les statuts",
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: "Tous les utilisateurs",
         unknownUser: "Utilisateur inconnu",
         startedBy: "Ouvert par {user}",
+        ticketLabel: "Ticket #{number}",
         types: {
             support: "Aide",
             bug: "Anomalie",

@@ -8,6 +8,7 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    MaxLength,
     ValidateNested,
 } from 'class-validator';
 import { InlineCustomerDto } from '../customers/customer.dto';
@@ -37,7 +38,51 @@ export class CreateSaleItemDto {
     serialNumbers?: string[];
 }
 
-export class CreatePaymentDto {
+/**
+ * The instrument a non-cash payment arrived on. Every field is optional and
+ * every one is free text: the shop is recording what is written on a piece of
+ * paper it has been handed, not selecting from anything the system knows about.
+ *
+ * The entry form relabels them per tender — a cheque's number, a transfer's
+ * reference and a wallet's transaction id all land in `referenceNo` — so one
+ * set covers all of them. `accountId` on the payment bodies below is a
+ * different thing: the *ledger* account the payment posts to.
+ */
+export class PaymentInstrumentDto {
+    /** The bank a cheque is drawn on, or the card's issuer. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    bankName?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    bankBranch?: string;
+
+    /** The account the cheque or transfer comes out of, as written. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    bankAccountNumber?: string;
+
+    /** Cheque number, wallet transaction id, or card approval code. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    referenceNo?: string;
+
+    /**
+     * The date on the instrument — `YYYY-MM-DD` from the entry form's date
+     * box. Routinely later than the sale's own date: a post-dated cheque is an
+     * ordinary way to be paid here.
+     */
+    @IsOptional()
+    @IsDateString()
+    instrumentDate?: string;
+}
+
+export class CreatePaymentDto extends PaymentInstrumentDto {
     @IsString()
     @IsNotEmpty()
     paymentMethod: string;
@@ -73,9 +118,25 @@ export class CreateSaleDto {
     @Type(() => InlineCustomerDto)
     newCustomer?: InlineCustomerDto;
 
+    /**
+     * Only consulted when the seller has no open cashier session — when they
+     * do, the till comes off the session, which is the thing that actually
+     * knows which counter this person is standing at.
+     */
     @IsOptional()
     @IsString()
     counterId?: string;
+
+    /**
+     * Which screen rang this sale up. `POS` is the only value that means
+     * anything today: it is what the "require an open cashier session" setting
+     * gates on, so turning that setting on stops a cashier selling without a
+     * shift without also blocking back-office invoicing, which never involves
+     * a till. Absent on every other entry screen.
+     */
+    @IsOptional()
+    @IsString()
+    source?: string;
 
     @IsOptional()
     @IsString()
@@ -216,7 +277,7 @@ export class UpdateSaleItemDto {
     serialNumbers?: string[];
 }
 
-export class UpdatePaymentDto {
+export class UpdatePaymentDto extends PaymentInstrumentDto {
     @IsString()
     @IsNotEmpty()
     paymentMethod: string;

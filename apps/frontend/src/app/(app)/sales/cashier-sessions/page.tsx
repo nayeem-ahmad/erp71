@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, CheckCircle, AlertCircle, Monitor } from 'lucide-react';
+import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, CheckCircle, AlertCircle, Monitor, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -10,6 +10,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { toast } from '@/lib/toast';
 
 export default function CashierSessionsPage() {
     const { t, locale } = useI18n();
@@ -26,10 +27,17 @@ export default function CashierSessionsPage() {
     const [showTxModal, setShowTxModal] = useState(false);
     const [counters, setCounters] = useState<any[]>([]);
     const [selectedCounterId, setSelectedCounterId] = useState<string>('');
+    // What the shift actually took, from the API. The page used to compute
+    // "expected cash" in the browser as opening + cash in − cash out, which
+    // leaves out every cash sale — so a till that had sold anything always
+    // read short by exactly its takings.
+    const [summary, setSummary] = useState<any>(null);
+    const [openTills, setOpenTills] = useState<any[]>([]);
 
     useEffect(() => {
         loadSession();
         loadCounters();
+        loadOpenTills();
     }, []);
 
     const loadSession = async () => {
@@ -37,14 +45,34 @@ export default function CashierSessionsPage() {
             const data = await api.getOpenCashierSession();
             setSession(data);
             if (data?.id) {
-                const txData = await api.getCashTransactions(data.id);
+                const [txData, summaryData] = await Promise.all([
+                    api.getCashTransactions(data.id),
+                    api.getCashierSessionSummary(data.id).catch(() => null),
+                ]);
                 setTransactions(txData);
+                setSummary(summaryData);
+            } else {
+                setSummary(null);
             }
         } catch (error) {
             console.error('Failed to load session', error);
             setSession(null);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // The floor view. Anyone who may open a session may see the tills beside
+    // theirs — a cashier needs to know counter 2 is already taken, and it is
+    // the only way a supervisor sees the shop at all.
+    const loadOpenTills = async () => {
+        try {
+            const storeId = getWorkspaceItem('store_id') || '';
+            if (!storeId) return;
+            const data = await api.getOpenCashierSessionsByStore(storeId);
+            setOpenTills(Array.isArray(data) ? data : []);
+        } catch {
+            // Non-fatal: the panel is additional context, not the page.
         }
     };
 
@@ -75,8 +103,9 @@ export default function CashierSessionsPage() {
             setOpeningCash(0);
             setSelectedCounterId('');
             loadSession();
+            loadOpenTills();
         } catch (error: any) {
-            alert(error.message || t.shared.errors.openSession);
+            toast.error(error.message || t.shared.errors.openSession);
         }
     };
 
@@ -89,9 +118,11 @@ export default function CashierSessionsPage() {
             setClosingCash(0);
             setSession(null);
             setTransactions([]);
+            setSummary(null);
             loadSession();
+            loadOpenTills();
         } catch (error: any) {
-            alert(error.message || t.shared.errors.closeSession);
+            toast.error(error.message || t.shared.errors.closeSession);
         }
     };
 
@@ -107,15 +138,27 @@ export default function CashierSessionsPage() {
             setTxAmount(0);
             setTxType('DROP');
             setTxDescription('');
-            const txData = await api.getCashTransactions(session.id);
+            const [txData, summaryData] = await Promise.all([
+                api.getCashTransactions(session.id),
+                api.getCashierSessionSummary(session.id).catch(() => null),
+            ]);
             setTransactions(txData);
+            setSummary(summaryData);
         } catch (error: any) {
-            alert(error.message || t.shared.errors.addTransaction);
+            toast.error(error.message || t.shared.errors.addTransaction);
         }
     };
 
     const totalCashIn = transactions.filter((tx) => parseFloat(tx.amount) > 0).reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
     const totalCashOut = transactions.filter((tx) => parseFloat(tx.amount) < 0).reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount)), 0);
+
+    // The server is the only thing that knows what the till sold, so the local
+    // arithmetic is a placeholder for the moment before the summary lands —
+    // never a second opinion about it.
+    const expectedCash = summary
+        ? Number(summary.expectedCash)
+        : parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut;
+    const difference = closingCash - expectedCash;
 
     if (loading) {
         return (
@@ -199,6 +242,48 @@ export default function CashierSessionsPage() {
                             </div>
                         </div>
 
+                        {/* What the shift has taken so far. Sales are the half
+                            of a till's day that this page could not see. */}
+                        {summary && (
+                            <div className="bg-white rounded-lg shadow-sm p-6 space-y-4">
+                                <h3 className="text-lg font-bold tracking-tight">{t.cashierSessions.shiftSummary}</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.cashierSessions.takings}</span>
+                                        <span className="text-lg font-bold text-gray-900">{formatBDT(Number(summary.salesTotal), { locale })}</span>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.cashierSessions.cashSales}</span>
+                                        <span className="text-lg font-bold text-gray-900">{formatBDT(Number(summary.cashTakings), { locale })}</span>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.cashierSessions.refunds}</span>
+                                        <span className="text-lg font-bold text-gray-900">{formatBDT(Number(summary.refunds), { locale })}</span>
+                                    </div>
+                                    <div className="bg-blue-50 p-3 rounded-lg">
+                                        <span className="text-xs font-medium text-blue-500 block mb-1">{t.cashierSessions.expectedCash}</span>
+                                        <span className="text-lg font-bold text-blue-600">{formatBDT(Number(summary.expectedCash), { locale })}</span>
+                                    </div>
+                                </div>
+                                {summary.paymentBreakdown?.length > 0 && (
+                                    <div>
+                                        <span className="text-xs font-medium text-gray-500 block mb-2">{t.cashierSessions.paymentBreakdown}</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {summary.paymentBreakdown.map((row: any) => (
+                                                <span key={row.method} className="text-xs bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5">
+                                                    <span className="font-semibold text-gray-700">{row.method}</span>
+                                                    <span className="ms-2 text-gray-500">{formatBDT(Number(row.amount), { locale })}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                <span className="block text-xs text-gray-400">
+                                    {t.cashierSessions.salesCount}: {summary.salesCount}
+                                </span>
+                            </div>
+                        )}
+
                         {/* Add Cash Transaction */}
                         <div className="flex justify-end">
                             <button
@@ -260,6 +345,59 @@ export default function CashierSessionsPage() {
                 )}
             
 
+            {/* Every till open in this branch. The API for this has existed
+                since counters shipped and nothing ever called it, so an owner
+                with three counters running could not see any of them. */}
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-lg font-bold tracking-tight flex items-center gap-2">
+                        <Users className="w-5 h-5 text-blue-600" />
+                        {t.cashierSessions.openTills}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">{t.cashierSessions.openTillsSubtitle}</p>
+                </div>
+                {openTills.length === 0 ? (
+                    <div className="p-8 text-center text-gray-300">
+                        <Monitor className="w-12 h-12 mx-auto opacity-20 mb-2" />
+                        <p className="text-xs font-semibold">{t.cashierSessions.noOpenTills}</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-50">
+                        {openTills.map((till: any) => (
+                            <div key={till.id} className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-gray-50/50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                                        <Monitor className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-bold text-gray-900 block">
+                                            {till.counter ? `#${till.counter.counter_number} — ${till.counter.name}` : t.shared.form.walkInNoCounter}
+                                        </span>
+                                        <span className="text-xs text-gray-400">
+                                            {till.user?.name ?? t.shared.dash} · {formatDateTime(till.opened_at)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-end">
+                                    <div>
+                                        <span className="text-[10px] font-semibold text-gray-400 block">{t.cashierSessions.takings}</span>
+                                        <span className="text-sm font-bold text-gray-900">
+                                            {formatBDT(Number(till.summary?.salesTotal ?? 0), { locale })}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] font-semibold text-blue-400 block">{t.cashierSessions.expectedCash}</span>
+                                        <span className="text-sm font-bold text-blue-600">
+                                            {formatBDT(Number(till.summary?.expectedCash ?? 0), { locale })}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Open Session Modal */}
             {showOpenModal && (
                 <ModalShell size="sm" onBackdropClick={() => setShowOpenModal(false)}>
@@ -308,8 +446,17 @@ export default function CashierSessionsPage() {
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                                 <span className="text-[10px] font-semibold text-blue-400 block mb-1">{t.cashierSessions.expectedCash}</span>
                                 <span className="text-2xl font-bold text-blue-600">
-                                    {formatBDT(parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)}
+                                    {formatBDT(expectedCash, { locale })}
                                 </span>
+                                <span className="block mt-1 text-[11px] text-blue-400">{t.cashierSessions.expectedCashHint}</span>
+                                {summary && (
+                                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-blue-500">
+                                        <span>{t.cashierSessions.openingCash}: {formatBDT(Number(summary.openingCash), { locale })}</span>
+                                        <span>{t.cashierSessions.cashSales}: {formatBDT(Number(summary.cashTakings), { locale })}</span>
+                                        <span>{t.cashierSessions.refunds}: {formatBDT(Number(summary.refunds), { locale })}</span>
+                                        <span>{t.cashierSessions.cashIn}/{t.cashierSessions.cashOut}: {formatBDT(Number(summary.cashIn) - Number(summary.cashOut), { locale })}</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.cashierSessions.actualClosingCash}</label>
@@ -323,10 +470,16 @@ export default function CashierSessionsPage() {
                                 />
                             </div>
                             {closingCash > 0 && (
-                                <div className={`p-3 rounded-lg ${Math.abs(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)) < 0.01 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
-                                    <span className="text-[10px] font-semibold block mb-1">{t.cashierSessions.difference}</span>
+                                <div className={`p-3 rounded-lg ${Math.abs(difference) < 0.01 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                    <span className="text-[10px] font-semibold block mb-1">
+                                        {Math.abs(difference) < 0.01
+                                            ? t.cashierSessions.balanced
+                                            : difference > 0
+                                                ? t.cashierSessions.cashOver
+                                                : t.cashierSessions.cashShort}
+                                    </span>
                                     <span className="text-lg font-bold">
-                                        {formatBDT(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut))}
+                                        {formatBDT(difference, { locale })}
                                     </span>
                                 </div>
                             )}

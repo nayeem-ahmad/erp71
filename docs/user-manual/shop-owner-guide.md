@@ -134,14 +134,21 @@ The POS is where you process everyday sales. Go to **Sales → POS** (or press t
 
 ### 3.1 Starting a Cashier Session
 
-Before selling, you must **open a cashier session**:
+Go to **Sales → Cashier Sessions** and **open a cashier session**:
 
-1. Click **Open Session**.
+1. Click **Open Shift**.
 2. Select the **counter** you are operating (e.g. Counter 1, Main Counter).
 3. Enter the **opening float** — the cash in the till at the start of the shift (e.g. ৳500).
-4. Click **Start Session**.
+4. Click **Open Shift**.
 
-You can only have one open session per counter at a time.
+You can only have one open session per counter, and one per person, at a time.
+
+Every sale you then make is recorded against that shift, which is what makes
+the till countable at the end of it. By default POS will still let you sell
+without opening one — those sales simply belong to no shift. If you want the
+till to refuse, turn on **Settings → Sales → Require an open cashier session at
+POS**; POS then asks for a shift before checkout, and back-office sales entry
+is unaffected.
 
 ### 3.2 Processing a Sale
 
@@ -190,16 +197,35 @@ Enter a **discount code** in the promo code field before checkout. The code's di
 
 At the end of a shift:
 
-1. Go to **Sales → Cashier Sessions** and click your open session.
-2. Enter the **closing cash count** (physical cash in the till).
-3. Review the **cash variance** (expected vs actual). Investigate any large discrepancy.
-4. Click **Close Session**.
+1. Go to **Sales → Cashier Sessions**, where your open shift is shown.
+2. Click **Close Shift**.
+3. Check the **expected cash** — your opening float, plus the cash you took,
+   less refunds you paid out and cash you moved out of the drawer. Card, bKash
+   and Nagad takings are listed separately and are deliberately *not* in this
+   figure: they never reached the drawer.
+4. Enter the **closing cash count** (what you physically counted).
+5. Review the difference — **Over**, **Short** or **Balanced**. Investigate
+   anything large before closing; the figure is recorded against the shift and
+   is not editable afterwards.
+6. Click **Close Shift**.
 
-The session report summarises total sales, payment method breakdown, and cash variance for handover or audit.
+The **Shift Summary** on the same page shows takings, cash sales, refunds and a
+breakdown by payment method while the shift is still running, so a handover
+does not have to wait for the close.
 
 ### 3.9 Multiple Counters
 
-If your store has multiple checkout counters, each runs its own session. Go to **Settings → Counters** to add or rename counters. Assign staff to specific counters via role settings.
+If your store has multiple checkout counters, each runs its own session. Go to
+**Settings → Counters** to add or rename counters.
+
+The **Open Tills** panel on the Cashier Sessions page lists every counter open
+in the branch right now — who is on it, when they opened, what it has taken and
+what its drawer should hold. That is how a supervisor sees the floor without
+standing at it.
+
+Counters are not assigned to particular staff: any cashier can open any free
+counter, and a counter with a shift already open on it cannot be taken by a
+second person.
 
 ---
 

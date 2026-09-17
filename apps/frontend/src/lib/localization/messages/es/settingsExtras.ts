@@ -227,6 +227,10 @@ export const settingsExtrasMessages = {
                 label: "Emitir documentos Mushak",
                 hint: "Desactivado, las ventas imprimen una factura de tienda normal en lugar de una factura fiscal.",
             },
+            posReceipt: {
+                label: "Mushak 6.3 como recibo del TPV",
+                hint: "El TPV imprime la factura fiscal 6.3 en lugar del recibo normal. Ambos formatos siguen disponibles por venta.",
+            },
             issueAddress: {
                 label: "Dirección de emisión",
                 placeholder: "Local registrado",

@@ -15,6 +15,7 @@ type ThreadUser = { id: string; name: string; email: string };
 
 type Thread = {
     id: string;
+    ticketNumber: number;
     subject: string;
     status: string;
     category: string;
@@ -62,6 +63,7 @@ export default function AdminSupportPage() {
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [threadInfo, setThreadInfo] = useState<{
+        ticketNumber?: number;
         subject: string;
         status: string;
         tenant: string;
@@ -408,7 +410,12 @@ export default function AdminSupportPage() {
                                     className={`w-full text-start px-3 md:px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
+                                        <p className="flex min-w-0 items-baseline gap-1.5">
+                                            <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gray-500">
+                                                #{thread.ticketNumber}
+                                            </span>
+                                            <span className="truncate text-sm font-bold text-gray-900">{thread.subject}</span>
+                                        </p>
                                         <StatusBadge tone={thread.status === 'resolved' ? 'success' : 'warning'} className="shrink-0 text-[9px]">
                                             {thread.status}
                                         </StatusBadge>
@@ -461,6 +468,11 @@ export default function AdminSupportPage() {
                                     </button>
                                     <div className="min-w-0">
                                         <p className="font-bold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                        {threadInfo?.ticketNumber && (
+                                            <p className="text-[11px] font-semibold tabular-nums text-gray-500">
+                                                {formatMessage(m.ticketLabel, { number: threadInfo.ticketNumber })}
+                                            </p>
+                                        )}
                                         {threadInfo?.tenant && (
                                             <p className="text-xs text-gray-500 font-semibold truncate">{threadInfo.tenant}</p>
                                         )}
