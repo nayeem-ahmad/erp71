@@ -119,7 +119,7 @@ export const settingsExtrasMessages = {
             titleOffsetY: "Nach unten verschieben (mm)",
             titleOffsetHint: "Feinabstimmung ausgehend von der gewählten Position. Negative Werte verschieben den Titel nach links und nach oben.",
             pinFooter: "Fußzeile an den unteren Seitenrand schieben",
-            pinFooterNeedsRepeat: "Schalten Sie zuerst die Wiederholung der Fußzeile ein — sie setzt die Fußzeile auf jede Seite.",
+            pinFooterHint: "Hält die Fußzeile am unteren Rand des Blattes, auch wenn eine kurze Rechnung sie sonst mitten auf der Seite stehen ließe.",
             bleedFooter: "Fußzeile bis an die Papierkante laufen lassen",
             bleedFooterHint: "Ignoriert den Seitenrand, sodass ein Fußzeilenbild das ganze Blatt überspannt. Die meisten Drucker beschneiden einige Millimeter am Rand — halten Sie alles Lesbare davon fern.",
             underline: "Unterstrichen",

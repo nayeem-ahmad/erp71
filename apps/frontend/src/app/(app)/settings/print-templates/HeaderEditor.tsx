@@ -395,28 +395,15 @@ export default function HeaderEditor({
                             <CheckboxRow
                                 label={fields.repeatFooter}
                                 checked={config.footer.repeatOnEveryPage}
-                                onChange={(repeatOnEveryPage) =>
-                                    patchFooter({
-                                        repeatOnEveryPage,
-                                        // Pinning rides on the repeating footer's
-                                        // <tfoot>; without it there is nothing to
-                                        // pin, so the checkbox must not linger on.
-                                        pinToPageBottom: repeatOnEveryPage
-                                            ? config.footer.pinToPageBottom
-                                            : false,
-                                    })
-                                }
+                                onChange={(repeatOnEveryPage) => patchFooter({ repeatOnEveryPage })}
                             />
 
                             <CheckboxRow
                                 label={fields.pinFooter}
                                 checked={!!config.footer.pinToPageBottom}
-                                disabled={!config.footer.repeatOnEveryPage}
                                 onChange={(pinToPageBottom) => patchFooter({ pinToPageBottom })}
                             />
-                            {config.footer.repeatOnEveryPage ? null : (
-                                <p className="text-xs text-gray-400">{fields.pinFooterNeedsRepeat}</p>
-                            )}
+                            <p className="text-xs text-gray-400">{fields.pinFooterHint}</p>
 
                             <CheckboxRow
                                 label={fields.bleedFooter}

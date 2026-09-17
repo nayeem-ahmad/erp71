@@ -119,7 +119,7 @@ export const settingsExtrasMessages = {
             titleOffsetY: "Alih ke bawah (mm)",
             titleOffsetHint: "Penalaan halus daripada kedudukan yang dipilih. Nilai negatif mengalihkan tajuk ke kiri dan ke atas.",
             pinFooter: "Tolak pengaki ke tepi bawah halaman",
-            pinFooterNeedsRepeat: "Hidupkan pengulangan pengaki dahulu — itulah yang meletakkannya pada setiap halaman.",
+            pinFooterHint: "Mengekalkan pengaki di bahagian bawah helaian walaupun invois pendek akan meninggalkannya di tengah halaman.",
             bleedFooter: "Biarkan pengaki mencapai tepi kertas",
             bleedFooterHint: "Mengabaikan jidar halaman supaya imej pengaki merentas seluruh helaian. Kebanyakan pencetak memotong beberapa milimeter di tepi, jadi jauhkan apa-apa yang perlu dibaca daripadanya.",
             underline: "Garis bawah",
