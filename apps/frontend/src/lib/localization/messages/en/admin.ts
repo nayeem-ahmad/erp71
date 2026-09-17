@@ -1053,7 +1053,7 @@ export const adminMessages = {
         title: 'Inbox',
         subtitle: 'Support and feedback from shop owners · {total} threads',
         loadFailed: 'Failed to load threads',
-        searchPlaceholder: 'Search by subject…',
+        searchPlaceholder: 'Search by ticket # or subject…',
         loading: 'Loading threads…',
         noThreads: 'No threads found.',
         allStatuses: 'All statuses',
@@ -1063,6 +1063,7 @@ export const adminMessages = {
         allUsers: 'All users',
         unknownUser: 'Unknown user',
         startedBy: 'Started by {user}',
+        ticketLabel: 'Ticket #{number}',
         types: {
             support: 'Help',
             bug: 'Bug',

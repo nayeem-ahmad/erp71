@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "تم الإرسال",
         successDescription: "سنرد في هذه المحادثة.",
         defaultError: "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
+        createdToast: "تم إنشاء التذكرة #{number}.",
     },
     supportPage: {
         title: "الدعم",
@@ -86,6 +87,10 @@ export const componentsMessages = {
         resolved: "تم الحل",
         replyPlaceholder: "اكتب رسالة… (Enter للإرسال)",
         createTitle: "محادثة جديدة",
+        ticketLabel: "التذكرة #{number}",
+        resolvedNotice: "حدَّد الدعم التذكرة #{number} كمحلولة.",
+        reopenedNotice: "أُعيد فتح التذكرة #{number}.",
+        replyNotice: "رد جديد على التذكرة #{number}.",
         searchPlaceholder: "ابحث في المحادثات…",
         allStatuses: "كل الحالات",
         statusOpen: "مفتوحة",

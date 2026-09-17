@@ -6491,20 +6491,27 @@ model AiMessage {
 // ── Support Chat ──────────────────────────────────────────────────────────────
 
 model SupportThread {
-  id          String   @id @default(cuid())
-  tenantId    String
-  subject     String
-  status      String   @default("open") // open | resolved
+  id           String   @id @default(cuid())
+  /// The number a shop owner and an admin say out loud to mean this ticket.
+  /// Sequential across the whole platform, not per tenant: both sides of a
+  /// conversation see the same one, and an admin inbox holding every tenant's
+  /// threads cannot have two #7s in it. Assigned by a Postgres sequence, so it
+  /// survives `prisma db push` (which is how production applies schema) without
+  /// a backfill script and cannot be handed out twice under concurrency.
+  ticketNumber Int      @unique @default(autoincrement())
+  tenantId     String
+  subject      String
+  status       String   @default("open") // open | resolved
   /// support | bug | feature | general
-  category    String   @default("support")
-  page        String?
-  feedbackId  String?  @unique
+  category     String   @default("support")
+  page         String?
+  feedbackId   String?  @unique
   /// The shop user who opened the thread. Nullable because the user row may be
   /// removed, and because pre-2026-09 threads are backfilled from their first
   /// message's sender — a thread with no messages has nobody to attribute it to.
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   feedback  Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)

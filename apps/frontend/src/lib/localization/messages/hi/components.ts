@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "भेज दिया गया",
         successDescription: "हम इसी बातचीत में उत्तर देंगे।",
         defaultError: "कुछ गड़बड़ हो गई। कृपया फिर कोशिश करें।",
+        createdToast: "टिकट #{number} बन गया।",
     },
     supportPage: {
         title: "सहायता",
@@ -86,6 +87,10 @@ export const componentsMessages = {
         resolved: "हल हो गया",
         replyPlaceholder: "संदेश लिखें… (भेजने के लिए Enter)",
         createTitle: "नई बातचीत",
+        ticketLabel: "टिकट #{number}",
+        resolvedNotice: "सहायता टीम ने टिकट #{number} को हल कर दिया।",
+        reopenedNotice: "टिकट #{number} फिर से खोला गया।",
+        replyNotice: "टिकट #{number} पर नया उत्तर।",
         searchPlaceholder: "बातचीत खोजें…",
         allStatuses: "सभी स्टेटस",
         statusOpen: "खुला",

@@ -44,7 +44,9 @@ export class SupportService {
         return features;
     }
 
-    async createKnock(input: CreateKnockInput): Promise<{ id: string; feedbackId: string | null }> {
+    async createKnock(
+        input: CreateKnockInput,
+    ): Promise<{ id: string; ticketNumber: number; feedbackId: string | null }> {
         if (!isKnockCategory(input.category)) {
             throw new BadRequestException('category must be one of: support, bug, feature, general');
         }
@@ -97,7 +99,7 @@ export class SupportService {
                 },
             });
 
-            return { id: thread.id, feedbackId };
+            return { id: thread.id, ticketNumber: thread.ticketNumber, feedbackId };
         });
 
         if (result.feedbackId) {
