@@ -222,6 +222,7 @@ export class StorefrontService {
                 storefront_hero_headline: tenant.storefront_hero_headline,
                 storefront_logo: tenant.storefront_logo,
                 storefront_logo_show_name: tenant.storefront_logo_show_name,
+                brand_primary_color: tenant.brand_primary_color,
                 loyalty_enabled: tenant.loyalty_points_enabled,
                 loyalty_earn_rate: tenant.loyalty_earn_rate ? Number(tenant.loyalty_earn_rate) : null,
                 loyalty_redeem_rate: tenant.loyalty_redeem_rate ? Number(tenant.loyalty_redeem_rate) : null,
@@ -231,6 +232,32 @@ export class StorefrontService {
             trending_products,
             all_products,
             menu_links,
+        };
+    }
+
+    /**
+     * The shop's identity, and nothing else.
+     *
+     * `getStorefront` above answers with the whole catalogue — every in-stock
+     * product, the featured categories, the menu. That is the right payload for
+     * the page a shopper browses and the wrong one for `generateMetadata`,
+     * which needs a name, a headline and an image to build a `<title>` and an
+     * OG card. Rendering the storefront's `<head>` used to mean fetching a
+     * thousand products to read one string off the front of them.
+     *
+     * Cheap enough to sit on the hot path of every storefront page: one indexed
+     * lookup by slug, no price resolution, no menu.
+     */
+    async getStorefrontMeta(slug: string) {
+        const tenant = await this.findEnabledTenant(slug);
+
+        return {
+            name: tenant.name,
+            slug,
+            storefront_hero_image: tenant.storefront_hero_image,
+            storefront_hero_headline: tenant.storefront_hero_headline,
+            storefront_logo: tenant.storefront_logo,
+            brand_primary_color: tenant.brand_primary_color,
         };
     }
 
@@ -1153,6 +1180,7 @@ export class StorefrontService {
                 storefront_hero_headline: true,
                 storefront_logo: true,
                 storefront_logo_show_name: true,
+                brand_primary_color: true,
                 loyalty_points_enabled: true,
                 loyalty_earn_rate: true,
                 loyalty_redeem_rate: true,

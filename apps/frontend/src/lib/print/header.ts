@@ -436,7 +436,7 @@ export function renderFooterHtml(
     // A bleeding footer that is pinned to the page bottom runs off the bottom
     // edge too; one that flows after the content keeps the bottom margin, or
     // it would collide with whatever follows.
-    const bleedBottom = footer.bleed && footer.pinToPageBottom && footer.repeatOnEveryPage
+    const bleedBottom = footer.bleed && footer.pinToPageBottom
         ? ' p71-ft--bleed-bottom'
         : '';
 
@@ -479,16 +479,16 @@ export function footerBleeds(
  * Whether the footer should sit on the page's bottom edge rather than directly
  * under the content.
  *
- * Only a repeating footer can be pinned: pinning works by stretching the
- * document table to the full page height so its `<tfoot>` is pushed down, and
- * a non-repeating footer has no `<tfoot>` to push.
+ * Independent of `repeatOnEveryPage`. Both put the footer in a `<tfoot>`, but
+ * they answer different questions — "on every page or only the last?" versus
+ * "at the page bottom or right under the content?" — and a short invoice whose
+ * footer floats in the middle of the sheet is the usual reason to want this.
  */
 export function footerPinsToBottom(
     config: DeepPartial<PrintHeaderConfig> | undefined,
     paperSize: PaperSize,
 ): boolean {
-    const footer = resolveHeaderConfig(config, paperSize).footer;
-    return !!footer?.pinToPageBottom && !!footer?.repeatOnEveryPage;
+    return !!resolveHeaderConfig(config, paperSize).footer?.pinToPageBottom;
 }
 
 /**

@@ -140,9 +140,16 @@ export default function StorefrontHeader({
                                     : 'text-gray-500 hover:text-gray-900 transition-colors',
                             ),
                         )}
-                        <a href="#contact" className="text-gray-500 hover:text-gray-900 transition-colors">
+                        {/*
+                          * Absolute, not a bare `#contact`. The enquiry form
+                          * lives on the storefront home page, so a relative
+                          * fragment reached it from the home page and from
+                          * nowhere else — on `/shop` it used to scroll to the
+                          * copyright line.
+                          */}
+                        <Link href={`/store/${slug}#contact`} className="text-gray-500 hover:text-gray-900 transition-colors">
                             {m.nav.contact}
-                        </a>
+                        </Link>
                     </nav>
 
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -232,9 +239,9 @@ export default function StorefrontHeader({
                             closeMobileMenu,
                         ),
                     )}
-                    <a href="#contact" className={navLinkCls} onClick={closeMobileMenu}>
+                    <Link href={`/store/${slug}#contact`} className={navLinkCls} onClick={closeMobileMenu}>
                         {m.nav.contact}
-                    </a>
+                    </Link>
                 </div>
             ) : null}
         </header>

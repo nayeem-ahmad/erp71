@@ -508,12 +508,20 @@ describe('footer bleed and pinning', () => {
         expect(headerCss({ footer: footerBase } as DeepPartial<PrintHeaderConfig>, 'A4')).not.toContain('margin-left: -');
     });
 
-    it('pins only a repeating footer — there is no tfoot to pin otherwise', () => {
-        const config = { footer: { ...footerBase, pinToPageBottom: true } } as DeepPartial<PrintHeaderConfig>;
-
-        expect(footerPinsToBottom(config, 'A4')).toBe(true);
+    it('pins independently of whether the footer repeats', () => {
+        // The two settings answer different questions. A short invoice whose
+        // footer floats mid-page wants pinning alone, and gating it behind
+        // repeating is what made the setting look like it did nothing.
+        expect(footerPinsToBottom(
+            { footer: { ...footerBase, pinToPageBottom: true } } as DeepPartial<PrintHeaderConfig>,
+            'A4',
+        )).toBe(true);
         expect(footerPinsToBottom(
             { footer: { ...footerBase, pinToPageBottom: true, repeatOnEveryPage: false } } as DeepPartial<PrintHeaderConfig>,
+            'A4',
+        )).toBe(true);
+        expect(footerPinsToBottom(
+            { footer: { ...footerBase, pinToPageBottom: false } } as DeepPartial<PrintHeaderConfig>,
             'A4',
         )).toBe(false);
     });

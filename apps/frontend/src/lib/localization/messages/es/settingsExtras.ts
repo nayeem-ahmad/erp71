@@ -119,7 +119,7 @@ export const settingsExtrasMessages = {
             titleOffsetY: "Desplazar hacia abajo (mm)",
             titleOffsetHint: "Ajuste fino desde la posición elegida. Los valores negativos mueven el título a la izquierda y hacia arriba.",
             pinFooter: "Empujar el pie de página al borde inferior de la página",
-            pinFooterNeedsRepeat: "Active primero la repetición del pie de página: eso es lo que lo coloca en cada página.",
+            pinFooterHint: "Mantiene el pie al final de la hoja incluso cuando una factura corta lo dejaría en mitad de la página.",
             bleedFooter: "Dejar que el pie de página llegue al borde del papel",
             bleedFooterHint: "Ignora el margen de la página para que una imagen del pie abarque toda la hoja. La mayoría de las impresoras recortan unos milímetros del borde, así que mantenga alejado de él todo lo que deba leerse.",
             underline: "Subrayado",

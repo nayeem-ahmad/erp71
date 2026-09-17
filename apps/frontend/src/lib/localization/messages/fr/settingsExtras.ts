@@ -119,7 +119,7 @@ export const settingsExtrasMessages = {
             titleOffsetY: "Décaler vers le bas (mm)",
             titleOffsetHint: "Réglage fin à partir de la position choisie. Les valeurs négatives déplacent le titre vers la gauche et vers le haut.",
             pinFooter: "Pousser le pied de page au bord inférieur de la page",
-            pinFooterNeedsRepeat: "Activez d'abord la répétition du pied de page : c'est elle qui le place sur chaque page.",
+            pinFooterHint: "Garde le pied de page en bas de la feuille même lorsqu'une facture courte le laisserait au milieu de la page.",
             bleedFooter: "Laisser le pied de page atteindre le bord du papier",
             bleedFooterHint: "Ignore la marge de la page pour qu'une image de pied de page couvre toute la feuille. La plupart des imprimantes rognent quelques millimètres au bord : gardez-en à distance tout ce qui doit être lu.",
             underline: "Souligné",

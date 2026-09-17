@@ -106,6 +106,55 @@ function wrapCss(thermal: boolean, bleeds: boolean): string {
         @media print { .p71-wrap { max-width: none; margin: 0; } }`;
 }
 
+/**
+ * Arranges the header, body and footer into the page structure their settings
+ * ask for.
+ *
+ * A repeating footer must live in a `<tfoot>`, the only element a browser
+ * repeats across printed pages — `position: fixed` does not survive
+ * pagination. But a `<tfoot>` repeats *by default*, which makes it the wrong
+ * home for a footer meant to print once. So a footer that is pinned without
+ * repeating goes in a page-tall flex column instead: the body absorbs the
+ * slack, pushing the footer to the bottom of a short document, and simply
+ * flows past the break on a long one — the foot of the last page either way.
+ * Both behaviours were verified against printed PDFs, not just asserted on.
+ */
+function layoutDocument(parts: {
+    header: string;
+    bodyHtml: string;
+    footer: string;
+    repeatHeader: boolean;
+    repeatFooter: boolean;
+    pinFooter: boolean;
+    flexPin: boolean;
+}): string {
+    const { header, bodyHtml, footer, repeatHeader, repeatFooter, pinFooter, flexPin } = parts;
+
+    if (repeatHeader || repeatFooter) {
+        const thead = repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : '';
+        const tfoot = repeatFooter ? `<tfoot><tr><td>${footer}</td></tr></tfoot>` : '';
+        // Whatever a table section did not take stays in the body, in order.
+        const inner = `${repeatHeader ? '' : header}${bodyHtml}${repeatFooter || flexPin ? '' : footer}`;
+        const table = `<table class="p71-doc${pinFooter && repeatFooter ? ' p71-doc--pinned' : ''}">
+            ${thead}
+            ${tfoot}
+            <tbody><tr><td>${inner}</td></tr></tbody>
+        </table>`;
+        // The footer is a sibling of the table, not a row inside it — a cell
+        // cannot be pushed to the sheet's bottom by the column around it.
+        return flexPin ? `<div class="p71-sheet">${table}${footer}</div>` : table;
+    }
+
+    if (flexPin) {
+        return `<div class="p71-sheet">
+            <div class="p71-sheet-body">${header}${bodyHtml}</div>
+            ${footer}
+        </div>`;
+    }
+
+    return `${header}${bodyHtml}${footer}`;
+}
+
 /** Builds the full HTML document. Exported for tests and the settings preview. */
 export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const thermal = isThermalPaper(opts.paperSize);
@@ -118,31 +167,31 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
 
     const repeatHeader = !!opts.repeatHeader && !!header;
     const repeatFooter = !!tenantFooter && footerRepeats(opts.headerConfig, opts.paperSize);
-    // Chrome only repeats table sections across pages — `position: fixed` does
-    // not survive pagination, so a repeating band has to live in thead/tfoot.
-    const useTable = repeatHeader || repeatFooter;
 
     // Pinning stretches the table to a full page so the browser pushes the
-    // `<tfoot>` to the bottom edge. Only possible on a fixed-height sheet.
+    // `<tfoot>` down to the bottom edge. Only possible on a fixed-height sheet,
+    // so a roll — which prints to an open-ended length — never pins.
     const pageHeightMm = PAGE_CONTENT_HEIGHT_MM[opts.paperSize];
     const bleeds = !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
-    const pinFooter = repeatFooter
+    const pinFooter = !!tenantFooter
         && !!pageHeightMm
         && footerPinsToBottom(opts.headerConfig, opts.paperSize);
 
-    let content: string;
-    if (useTable) {
-        const theadHtml = repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : '';
-        const tfootHtml = repeatFooter ? `<tfoot><tr><td>${footer}</td></tr></tfoot>` : '';
-        const bodyInner = `${repeatHeader ? '' : header}${opts.bodyHtml}${repeatFooter ? '' : footer}`;
-        content = `<table class="p71-doc${pinFooter ? ' p71-doc--pinned' : ''}">
-            ${theadHtml}
-            ${tfootHtml}
-            <tbody><tr><td>${bodyInner}</td></tr></tbody>
-        </table>`;
-    } else {
-        content = `${header}${opts.bodyHtml}${footer}`;
-    }
+    // Repeating and pinning are independent settings answering different
+    // questions — "every page or only the last?" versus "at the page bottom or
+    // right under the content?" — so they need different mechanisms. See
+    // `layoutDocument`.
+    const useTable = repeatHeader || repeatFooter;
+    const flexPin = pinFooter && !repeatFooter;
+    const content = layoutDocument({
+        header,
+        bodyHtml: opts.bodyHtml,
+        footer,
+        repeatHeader,
+        repeatFooter,
+        pinFooter,
+        flexPin,
+    });
 
     return `<!DOCTYPE html>
 <html>
@@ -162,20 +211,33 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         .p71-doc > thead > tr > td,
         .p71-doc > tfoot > tr > td,
         .p71-doc > tbody > tr > td { padding: 0; border: 0; }
-        ${pinFooter ? `
+        ${pinFooter && repeatFooter ? `
         /* A full-page-height table leaves the tbody to absorb the slack, which
-           pushes the tfoot onto the bottom edge of every page it prints on. */
+           pushes the repeating tfoot onto the bottom edge of every page. */
         @media print {
             .p71-doc--pinned { height: ${pageHeightMm}mm; }
             .p71-doc--pinned > tbody > tr > td { vertical-align: top; }
             .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
         }
-        /* On screen there are no pages, so the same rule is applied to the
-           viewport instead — the preview then shows what will print. */
         @media screen {
             .p71-doc--pinned { height: 100%; }
             html, body, .p71-wrap { height: 100%; }
             .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
+        }` : ''}
+        ${flexPin ? `
+        /* A page-tall flex column: the body absorbs the slack, so the footer is
+           pushed to the page bottom when the document is short and flows past
+           the break when it is long — the foot of the last page either way.
+           The height is stated in mm because a percentage resolves against the
+           viewport, which knows nothing about the @page box. */
+        .p71-sheet { display: flex; flex-direction: column; min-height: ${pageHeightMm}mm; }
+        .p71-sheet > .p71-sheet-body, .p71-sheet > .p71-doc { flex: 1 0 auto; }
+        .p71-sheet > .p71-ft { margin-top: auto; }
+        @media screen {
+            /* No pages on screen, so the viewport stands in for the sheet and
+               the preview shows where the footer will actually print. */
+            html, body { height: 100%; }
+            .p71-wrap { min-height: 100%; }
         }` : ''}
         ${headerCss(opts.headerConfig, opts.paperSize)}
         ${pageCss(opts.paperSize)}

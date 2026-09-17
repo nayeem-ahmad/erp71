@@ -120,7 +120,7 @@ export const settingsExtrasMessages = {
             titleOffsetY: 'Nudge down (mm)',
             titleOffsetHint: 'Fine-tuning from the chosen position. Negative values move the title left and up.',
             pinFooter: 'Push the footer to the bottom edge of the page',
-            pinFooterNeedsRepeat: 'Turn on repeating the footer first — that is what places it on each page.',
+            pinFooterHint: "Keeps the footer at the foot of the sheet even when a short invoice would otherwise leave it in the middle of the page.",
             bleedFooter: 'Let the footer run to the paper edge',
             bleedFooterHint: 'Ignores the page margin so a footer image spans the whole sheet. Most printers trim a few millimetres at the edge, so keep anything that must be read away from it.',
             lineFont: 'Font',
