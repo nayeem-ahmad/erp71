@@ -146,3 +146,47 @@ export class SetBoardColumnStatusesDto {
     @IsUUID('4', { each: true })
     statusIds!: string[];
 }
+
+/**
+ * The board's columns, left to right. The whole set every time rather than one
+ * column's new index: a reorder is a rearrangement of a list, and sending the
+ * list is what makes two people dragging at once end with one of the two
+ * orders rather than an interleaving of both.
+ */
+export class ReorderBoardColumnsDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsUUID('4', { each: true })
+    columnIds!: string[];
+}
+
+/** Several cards into one column, in the order given. */
+export class MoveBoardCardsDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsUUID('4', { each: true })
+    taskIds!: string[];
+
+    @IsUUID()
+    columnId!: string;
+}
+
+/** Several cards off the board. The tasks themselves are untouched. */
+export class RemoveBoardCardsDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsUUID('4', { each: true })
+    taskIds!: string[];
+}
+
+/**
+ * One column's cards, top to bottom. What the column's "sort cards" action
+ * sends: the client already holds every card it is sorting, so the comparison
+ * (and the tie-breaks a reader can see) stays where the data is, and the server
+ * only has to store the result.
+ */
+export class OrderBoardColumnCardsDto {
+    @IsArray()
+    @IsUUID('4', { each: true })
+    taskIds!: string[];
+}

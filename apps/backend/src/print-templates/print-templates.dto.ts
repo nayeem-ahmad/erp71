@@ -55,6 +55,16 @@ export enum PaperSize {
 const LAYOUTS = ['logo-left', 'logo-right', 'logo-center', 'logo-above', 'text-only'] as const;
 const FONT_FAMILIES = ['sans', 'serif', 'mono', 'bengali'] as const;
 const ALIGNMENTS = ['left', 'center', 'right'] as const;
+const TITLE_POSITIONS = [
+    'above-left',
+    'above-center',
+    'above-right',
+    'beside-left',
+    'beside-right',
+    'below-left',
+    'below-center',
+    'below-right',
+] as const;
 
 /*
  * The config mirrors PrintHeaderConfig in the frontend's lib/print/types.ts —
@@ -72,6 +82,18 @@ export class HeaderLogoDto {
     @Min(3)
     @Max(60)
     heightMm: number;
+
+    /** Absent means uncapped — the logo takes the width its ratio asks for. */
+    @IsOptional()
+    @IsNumber()
+    @Min(5)
+    @Max(250)
+    maxWidthMm?: number;
+
+    /** Size by width instead of height; `heightMm` is then ignored. */
+    @IsOptional()
+    @IsBoolean()
+    fullWidth?: boolean;
 
     @IsBoolean()
     showOnThermal: boolean;
@@ -117,6 +139,28 @@ export class HeaderTitleDto {
 
     @IsHexColor()
     color: string;
+
+    /**
+     * Where the title block sits. Absent on configs stored before the control
+     * existed — the renderer then derives it from the layout, so they keep
+     * printing as they did.
+     */
+    @IsOptional()
+    @IsIn(TITLE_POSITIONS)
+    position?: (typeof TITLE_POSITIONS)[number];
+
+    /** Nudge from the slot, in mm. Negative moves left/up. */
+    @IsOptional()
+    @IsNumber()
+    @Min(-100)
+    @Max(100)
+    offsetXMm?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(-100)
+    @Max(100)
+    offsetYMm?: number;
 }
 
 export class HeaderLineDto {
@@ -190,6 +234,14 @@ export class TemplateImageDto {
     @IsOptional()
     @IsBoolean()
     showOnThermal?: boolean;
+
+    /**
+     * Stretch across the whole band, sized by width. `heightMm` no longer
+     * constrains it — the height follows the aspect ratio.
+     */
+    @IsOptional()
+    @IsBoolean()
+    fullWidth?: boolean;
 }
 
 
@@ -232,12 +284,29 @@ export class PrintFooterConfigDto {
 
     @IsBoolean()
     repeatOnEveryPage: boolean;
+
+    /**
+     * Sit on the page's bottom edge rather than directly under the content.
+     * Needs `repeatOnEveryPage` — the renderer ignores it otherwise.
+     */
+    @IsOptional()
+    @IsBoolean()
+    pinToPageBottom?: boolean;
+
+    /** Run past the page margin to the paper edge. */
+    @IsOptional()
+    @IsBoolean()
+    bleed?: boolean;
 }
 
 export class PrintHeaderConfigDto {
-    /** 1 — header only. 2 — adds `images` and `footer`. Both are accepted. */
+    /**
+     * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
+     * title placement and footer pinning/bleed. All are accepted; the fields a
+     * version predates are optional and default to what it already printed.
+     */
     @IsInt()
-    @IsIn([1, 2])
+    @IsIn([1, 2, 3])
     version: number;
 
     @IsIn(LAYOUTS)

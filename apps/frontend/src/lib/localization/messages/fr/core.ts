@@ -522,6 +522,7 @@ export const coreMessages = {
             defaultError: "Échec de la connexion. Veuillez vérifier vos identifiants.",
             tooManyAttempts: "Trop de tentatives de connexion. Veuillez patienter {seconds, plural, one {# seconde} other {# secondes}} avant de réessayer.",
             demoFailed: "Échec de la connexion à la démo. Veuillez réessayer.",
+            demoDisabled: "La démo est actuellement désactivée. Connectez-vous ou créez un compte.",
             sessionExpired: "Votre session a expiré. Veuillez vous reconnecter.",
             googleFailed: "Échec de la connexion Google. Veuillez réessayer.",
             termsNotice: "Continuer avec Google ou votre numéro de mobile crée un compte si vous n'en avez pas, et vaut acceptation de nos",

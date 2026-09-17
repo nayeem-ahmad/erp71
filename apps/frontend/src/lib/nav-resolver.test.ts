@@ -70,6 +70,53 @@ describe('nav-resolver', () => {
         expect(purchaseHrefs.filter((href) => href.startsWith('/purchases/imports'))).toEqual([]);
     });
 
+    it('exposes storefront as its own top-level module, not scattered across Sales', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+
+        const storefront = modules.find((mod) => mod.key === 'storefront');
+        expect(storefront?.label).toBe('Storefront');
+        // Flat links in running order: the day-to-day screen first, the three
+        // that shape the site next, settings last — the same shape every other
+        // module uses.
+        expect((storefront?.children ?? []).map((child) => ('type' in child ? child.label : child.href))).toEqual([
+            '/storefront',
+            '/storefront/pages',
+            '/storefront/menu',
+            '/settings/blog',
+            '/storefront/settings',
+        ]);
+    });
+
+    it('leaves nothing storefront-shaped behind in Sales or Account Settings', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+
+        const hrefsOf = (key: string) => {
+            const mod = modules.find((m) => m.key === key);
+            return (mod?.children ?? []).flatMap((child) =>
+                'type' in child ? child.children.map((link) => link.href) : [child.href],
+            );
+        };
+
+        // The pages did not move, so only the owning module's tree proves the
+        // split — same reasoning as the Imports test above.
+        expect(hrefsOf('sales').filter((href) => href.startsWith('/storefront'))).toEqual([]);
+        expect(hrefsOf('account-settings')).not.toContain('/settings/blog');
+    });
+
+    it('gives the shop blog a sidebar entry for the first time', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+
+        // It was in the registry under `account-settings` and in no layout at
+        // all, so it had no sidebar entry anywhere — reachable only by typing
+        // the URL or following a link from a post editor.
+        const everyHref = modules.flatMap((mod) =>
+            (mod.children ?? []).flatMap((child) =>
+                'type' in child ? child.children.map((link) => link.href) : [child.href],
+            ),
+        );
+        expect(everyHref.filter((href) => href === '/settings/blog')).toEqual(['/settings/blog']);
+    });
+
     it('exposes the four manufacturing screens as flat links under the module', () => {
         const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
         const manufacturing = modules.find((mod) => mod.key === 'manufacturing');

@@ -1,12 +1,14 @@
 'use client';
 
 import { Field, Input, Select } from '@/components/ui';
+import { defaultTitlePosition, TITLE_POSITIONS } from '@/lib/print';
 import type {
     HeaderLayout,
     PrintDocType,
     PrintFontFamily,
     PrintFooterConfig,
     PrintHeaderConfig,
+    TitlePosition,
 } from '@/lib/print';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -134,6 +136,7 @@ export default function HeaderEditor({
                         value={config.logo.heightMm}
                         min={3}
                         max={60}
+                        disabled={!!config.logo.fullWidth}
                         onChange={(heightMm) => patch({ logo: { ...config.logo, heightMm } })}
                     />
                     <Field label={fields.layout}>
@@ -147,6 +150,43 @@ export default function HeaderEditor({
                         </Select>
                     </Field>
                 </div>
+
+                <CheckboxRow
+                    label={fields.logoFullWidth}
+                    checked={!!config.logo.fullWidth}
+                    onChange={(fullWidth) => patch({ logo: { ...config.logo, fullWidth } })}
+                />
+
+                {config.logo.fullWidth ? null : (
+                    <>
+                        <CheckboxRow
+                            label={fields.logoCapWidth}
+                            checked={typeof config.logo.maxWidthMm === 'number'}
+                            onChange={(capped) =>
+                                patch({
+                                    logo: {
+                                        ...config.logo,
+                                        // Undefined is the uncapped state, so a
+                                        // wide logo prints at its natural width.
+                                        maxWidthMm: capped ? 60 : undefined,
+                                    },
+                                })
+                            }
+                        />
+                        {typeof config.logo.maxWidthMm === 'number' ? (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <NumberField
+                                    label={fields.logoMaxWidth}
+                                    value={config.logo.maxWidthMm}
+                                    min={5}
+                                    max={250}
+                                    onChange={(maxWidthMm) => patch({ logo: { ...config.logo, maxWidthMm } })}
+                                />
+                            </div>
+                        ) : null}
+                    </>
+                )}
+                <p className="text-xs text-gray-400">{fields.logoWidthHint}</p>
 
                 <CheckboxRow
                     label={fields.showOnThermal}
@@ -222,6 +262,39 @@ export default function HeaderEditor({
                     checked={config.title.uppercase}
                     onChange={(uppercase) => patch({ title: { ...config.title, uppercase } })}
                 />
+
+                <Field label={fields.titlePosition} hint={fields.titlePositionHint}>
+                    <Select
+                        value={config.title.position ?? defaultTitlePosition(config.layout)}
+                        onChange={(e) =>
+                            patch({ title: { ...config.title, position: e.target.value as TitlePosition } })
+                        }
+                    >
+                        {TITLE_POSITIONS.map((position) => (
+                            <option key={position} value={position}>
+                                {copy.titlePositions[position]}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <NumberField
+                        label={fields.titleOffsetX}
+                        value={config.title.offsetXMm ?? 0}
+                        min={-100}
+                        max={100}
+                        onChange={(offsetXMm) => patch({ title: { ...config.title, offsetXMm } })}
+                    />
+                    <NumberField
+                        label={fields.titleOffsetY}
+                        value={config.title.offsetYMm ?? 0}
+                        min={-100}
+                        max={100}
+                        onChange={(offsetYMm) => patch({ title: { ...config.title, offsetYMm } })}
+                    />
+                </div>
+                <p className="text-xs text-gray-400">{fields.titleOffsetHint}</p>
             </Section>
 
             <Section title={copy.sections.lines}>
@@ -324,6 +397,20 @@ export default function HeaderEditor({
                                 checked={config.footer.repeatOnEveryPage}
                                 onChange={(repeatOnEveryPage) => patchFooter({ repeatOnEveryPage })}
                             />
+
+                            <CheckboxRow
+                                label={fields.pinFooter}
+                                checked={!!config.footer.pinToPageBottom}
+                                onChange={(pinToPageBottom) => patchFooter({ pinToPageBottom })}
+                            />
+                            <p className="text-xs text-gray-400">{fields.pinFooterHint}</p>
+
+                            <CheckboxRow
+                                label={fields.bleedFooter}
+                                checked={!!config.footer.bleed}
+                                onChange={(bleed) => patchFooter({ bleed })}
+                            />
+                            <p className="text-xs text-gray-400">{fields.bleedFooterHint}</p>
                         </div>
                     </div>
                 ) : null}

@@ -522,6 +522,7 @@ export const coreMessages = {
             defaultError: "Anmeldung fehlgeschlagen. Bitte prüfen Sie Ihre Zugangsdaten.",
             tooManyAttempts: "Zu viele Anmeldeversuche. Bitte warten Sie {seconds, plural, one {# Sekunde} other {# Sekunden}} und versuchen Sie es erneut.",
             demoFailed: "Demo-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+            demoDisabled: "Die Demo ist derzeit deaktiviert. Bitte melden Sie sich an oder erstellen Sie ein Konto.",
             sessionExpired: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
             googleFailed: "Google-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
             termsNotice: "Wenn Sie mit Google oder Ihrer Mobilnummer fortfahren, wird ein Konto erstellt, falls Sie noch keines haben, und Sie stimmen unseren",

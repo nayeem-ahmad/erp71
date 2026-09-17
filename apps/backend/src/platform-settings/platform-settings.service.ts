@@ -103,6 +103,14 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // whether any tenant's plan includes the accounting module.
         platform_accounting_enabled: { isSecret: false, default: 'true' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
+        // The "Try Demo" entry points: the sign-in page button, the marketing
+        // hero CTA, and `/demo`. On by default — the shared demo workspace is
+        // how a visitor meets the product — so this is a kill switch for an
+        // operator who does not want anonymous sessions on their deployment.
+        // Deliberately not a PlatformFeatures key: it governs the signed-out
+        // pages, so no tenant has an opinion about it and no session payload
+        // carries it. `/auth/demo/config` serves it unauthenticated instead.
+        demo_enabled:          { isSecret: false, default: 'true' },
     },
     navigation: {
         tenant_layout: { isSecret: false },

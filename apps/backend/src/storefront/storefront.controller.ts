@@ -69,6 +69,17 @@ export class StorefrontController {
         return this.storefrontService.getStorefront(slug, req.user?.userId);
     }
 
+    /**
+     * Public: the shop's identity alone, for a page's `<head>`.
+     *
+     * Declared before `:slug/products/:productId` and after `:slug` purely for
+     * readability — neither can shadow a two-segment literal path.
+     */
+    @Get(':slug/meta')
+    getStorefrontMeta(@Param('slug') slug: string) {
+        return this.storefrontService.getStorefrontMeta(slug);
+    }
+
     /** Public: one product, for a shareable product page. */
     @Get(':slug/products/:productId')
     getPublicProduct(@Param('slug') slug: string, @Param('productId') productId: string) {

@@ -207,6 +207,8 @@ export interface BoardFilters {
     priority: string;
     due: DueFilter;
     label: string;
+    /** Free text, matched across everything a card carries. See `matchesText`. */
+    text: string;
 }
 
 export const NO_FILTERS: BoardFilters = {
@@ -214,6 +216,7 @@ export const NO_FILTERS: BoardFilters = {
     priority: 'all',
     due: 'all',
     label: 'all',
+    text: '',
 };
 
 export function hasActiveFilter(filters: BoardFilters): boolean {
@@ -221,8 +224,47 @@ export function hasActiveFilter(filters: BoardFilters): boolean {
         filters.assignee !== 'all' ||
         filters.priority !== 'all' ||
         filters.due !== 'all' ||
-        filters.label !== 'all'
+        filters.label !== 'all' ||
+        filters.text.trim() !== ''
     );
+}
+
+/**
+ * Everything on a card worth searching, as one lower-cased string: its title
+ * and description, the project it belongs to (code, short name and full name,
+ * because a card only shows one of the three), whoever holds it, and its
+ * labels.
+ *
+ * Description is included even though the card may not be showing it — someone
+ * searching for a phrase they wrote in a task means the task, not the part of
+ * it that happens to be on screen.
+ */
+function haystackOf(task: BoardTask): string {
+    return [
+        task.title,
+        task.description ?? '',
+        task.project?.code ?? '',
+        task.project?.short_name ?? '',
+        task.project?.name ?? '',
+        assigneeNameOf(task) ?? '',
+        ...labelsOf(task).map((label) => label.name),
+    ]
+        .join(' ')
+        .toLowerCase();
+}
+
+/**
+ * Every word has to match, in any field and in any order — so "login alp"
+ * finds the login card in project ALP, which a single-substring match would
+ * not. Nothing is ranked: the board has an order of its own and reordering it
+ * by relevance would move cards out from under the reader's cursor.
+ */
+export function matchesText(task: BoardTask, text: string): boolean {
+    const terms = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return true;
+
+    const haystack = haystackOf(task);
+    return terms.every((term) => haystack.includes(term));
 }
 
 function matchesDue(task: BoardTask, due: DueFilter): boolean {
@@ -239,6 +281,7 @@ function matchesDue(task: BoardTask, due: DueFilter): boolean {
 }
 
 export function matchesFilters(task: BoardTask, filters: BoardFilters): boolean {
+    if (!matchesText(task, filters.text)) return false;
     if (filters.assignee !== 'all' && assigneeKeyOf(task) !== filters.assignee) return false;
     if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
     if (filters.label === 'none' && labelsOf(task).length > 0) return false;
@@ -262,4 +305,45 @@ export function applyFilters(columns: BoardColumn[], filters: BoardFilters): Boa
 
 export function countTasks(columns: BoardColumn[]): number {
     return columns.reduce((total, column) => total + column.tasks.length, 0);
+}
+
+/** How a column's cards can be reordered in one go, from its `…` menu. */
+export const CARD_SORTS = ['due', 'priority', 'title', 'assignee'] as const;
+export type CardSort = (typeof CARD_SORTS)[number];
+
+/** Most urgent first, which is the order every one of these sorts reads in. */
+const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+
+/**
+ * Sorts an absent value last, by standing in a string that compares after any
+ * real one. A card with no due date is not a card due at the beginning of
+ * time, and sweeping the undated to the top would bury exactly the cards this
+ * sort is reached for.
+ */
+const orLast = (value: string | null | undefined): string => value || '\uffff';
+const rank = (priority: string): number => PRIORITY_RANK[priority] ?? PRIORITY_RANK.LOW;
+
+const COMPARE: Record<CardSort, (a: BoardTask, b: BoardTask) => number> = {
+    // Compared as date strings, the way `dueStateOf` above compares them: a
+    // `@db.Date` arrives serialised at UTC midnight, so the leading ten
+    // characters are the calendar day and the rest is noise.
+    due: (a, b) => orLast(a.due_date?.slice(0, 10)).localeCompare(orLast(b.due_date?.slice(0, 10))),
+    priority: (a, b) => rank(a.priority) - rank(b.priority),
+    title: (a, b) => a.title.localeCompare(b.title),
+    assignee: (a, b) =>
+        orLast(assigneeNameOf(a)).localeCompare(orLast(assigneeNameOf(b))),
+};
+
+/**
+ * A column's cards in the order a sort puts them, as a new array — the caller
+ * sends the resulting ids to the server, which stores the order rather than
+ * the rule. A board keeps a hand-made order the moment it is dragged, so a
+ * stored rule would fight the next drag; this is a one-off tidy, like sorting
+ * a spreadsheet column.
+ *
+ * Ties keep their current relative order (`Array.prototype.sort` is stable),
+ * so sorting by priority twice does not shuffle the cards that share one.
+ */
+export function sortCards(tasks: BoardTask[], by: CardSort): BoardTask[] {
+    return [...tasks].sort(COMPARE[by]);
 }

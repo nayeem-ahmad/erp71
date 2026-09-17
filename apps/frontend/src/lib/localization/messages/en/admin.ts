@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: 'General Settings',
-                    description: 'Platform name, support email, and maintenance mode.',
+                    description: 'Platform name, support email, maintenance mode, and the Try Demo switch.',
                 },
                 tenantFeatures: {
                     label: 'Tenant Features',
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: 'Maintenance Mode',
                 hint: 'When enabled, the API returns a 503 for all non-admin requests.',
                 activeWarning: 'Maintenance mode is ON — tenants cannot access the platform.',
+            },
+            demo: {
+                label: 'Try Demo',
+                hint: 'Shows the Try Demo button on the sign-in page and the marketing home page. It signs visitors straight into the shared demo workspace.',
+                offNotice: 'Try Demo is OFF — the buttons are hidden and demo sign-in is refused.',
             },
             saved: 'General settings saved.',
         },
