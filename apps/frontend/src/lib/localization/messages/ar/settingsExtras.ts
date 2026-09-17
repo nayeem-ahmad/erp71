@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "إيصالات الاستلام",
             SALES_ORDER: "أوامر البيع",
             SALES_RETURN: "مرتجعات المبيعات",
+            DELIVERY_CHALLAN: "أذون التسليم",
             PURCHASE_ORDER: "أوامر الشراء",
             PURCHASE_RETURN: "مرتجعات المشتريات",
             LIST_REPORT: "تقارير القوائم",

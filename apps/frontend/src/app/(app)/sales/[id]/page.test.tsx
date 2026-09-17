@@ -147,6 +147,34 @@ beforeEach(() => {
 });
 
 describe('SaleDetailPage — view mode', () => {
+    it('prints a delivery challan carrying the goods and the parties, but no money', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+
+        expect(write).toHaveBeenCalledTimes(1);
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Delivery Challan');
+        // Numbered off the sale so the rider's paper and the invoice match up.
+        expect(html).toContain('REF-9');
+        expect(html).toContain('Alice Smith');
+        expect(html).toContain('Gadget X');
+        expect(html).toContain('Handle with care');
+        // 1000 a unit, 3000 the sale — neither figure belongs on this document.
+        expect(html).not.toMatch(/৳|BDT|\$/);
+        expect(html).not.toMatch(/Unit Price|Subtotal|VAT|Payment/i);
+
+        open.mockRestore();
+    });
+
     it('shows loading state initially', () => {
         getApi().getSale.mockReturnValue(new Promise(() => {}));
         render(<SaleDetailPage />);
