@@ -185,6 +185,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "मनी रसीदें",
             SALES_ORDER: "बिक्री ऑर्डर",
             SALES_RETURN: "बिक्री वापसी",
+            DELIVERY_CHALLAN: "डिलीवरी चालान",
             PURCHASE_ORDER: "खरीद ऑर्डर",
             PURCHASE_RETURN: "खरीद वापसी",
             LIST_REPORT: "सूची रिपोर्ट",
