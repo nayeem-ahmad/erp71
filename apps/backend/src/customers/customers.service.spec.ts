@@ -772,6 +772,135 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('getDueAgingReport', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS);
+    const alice = { id: 'cust-1', name: 'Alice Corp', phone: '01700000001' };
+
+    const row = (type: string, amount: number, days: number, customer = alice) => ({
+      customer_id: customer.id,
+      type,
+      amount,
+      created_at: daysAgo(days),
+      customer,
+    });
+
+    // The bug: the report read CREDIT_SALE rows and nothing else, so a customer
+    // who had paid every taka still showed the whole year's credit sales as due.
+    it('drops a customer who has paid every credit sale off the report', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 40000, 300),
+        row('CREDIT_SALE', 60000, 120),
+        row('PAYMENT', 100000, 30),
+      ]);
+
+      await expect(service.getDueAgingReport('tenant-1')).resolves.toEqual([]);
+    });
+
+    it('reads every transaction type, not just credit sales', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+
+      await service.getDueAgingReport('tenant-1');
+
+      const where = db.customerCreditTransaction.findMany.mock.calls[0][0].where;
+      expect(where).toEqual({ tenant_id: 'tenant-1' });
+      expect(where.type).toBeUndefined();
+    });
+
+    it('ages what is left after a part-payment, in the old charge\'s bucket', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 10000, 120),
+        row('PAYMENT', 4000, 10),
+      ]);
+
+      const [result] = await service.getDueAgingReport('tenant-1');
+
+      expect(result.total).toBe(6000);
+      expect(result.bucket_90_plus).toBe(6000);
+      expect(result.bucket_0_30).toBe(0);
+    });
+
+    it('applies a payment to the oldest sale first', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 5000, 200),
+        row('CREDIT_SALE', 3000, 5),
+        row('PAYMENT', 5000, 1),
+      ]);
+
+      const [result] = await service.getDueAgingReport('tenant-1');
+
+      expect(result.bucket_90_plus).toBe(0);
+      expect(result.bucket_0_30).toBe(3000);
+      expect(result.total).toBe(3000);
+    });
+
+    it('counts a PAYOUT as a new charge, aged from the day it was paid out', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('PAYOUT', 2500, 45),
+      ]);
+
+      const [result] = await service.getDueAgingReport('tenant-1');
+
+      expect(result.bucket_31_60).toBe(2500);
+      expect(result.total).toBe(2500);
+    });
+
+    it('lets a sales-return ADJUSTMENT reduce the due it was raised against', async () => {
+      // sales-returns.service writes a NEGATIVE amount on an ADJUSTMENT row.
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 7000, 100),
+        row('ADJUSTMENT', -2000, 20),
+      ]);
+
+      const [result] = await service.getDueAgingReport('tenant-1');
+
+      expect(result.total).toBe(5000);
+      expect(result.bucket_90_plus).toBe(5000);
+    });
+
+    it('keeps each customer on its own FIFO queue', async () => {
+      const bob = { id: 'cust-2', name: 'Bob Traders', phone: '01700000002' };
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 1000, 200),
+        row('PAYMENT', 1000, 5),
+        row('CREDIT_SALE', 4000, 200, bob),
+      ]);
+
+      const results = await service.getDueAgingReport('tenant-1');
+
+      // Alice is square; Bob's payment is not hers to spend.
+      expect(results).toHaveLength(1);
+      expect(results[0].customer.id).toBe('cust-2');
+      expect(results[0].total).toBe(4000);
+    });
+
+    it('omits a customer who is in credit rather than showing a negative due', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 1000, 60),
+        row('PAYMENT', 2500, 5),
+      ]);
+
+      await expect(service.getDueAgingReport('tenant-1')).resolves.toEqual([]);
+    });
+
+    it('keeps the four buckets summing to the total it reports', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 12000, 365),
+        row('PAYMENT', 4000, 300),
+        row('CREDIT_SALE', 7000, 200),
+        row('CREDIT_SALE', 5500, 80),
+        row('PAYMENT', 9000, 70),
+        row('CREDIT_SALE', 2500, 20),
+      ]);
+
+      const [result] = await service.getDueAgingReport('tenant-1');
+
+      const summed = result.bucket_0_30 + result.bucket_31_60 + result.bucket_61_90 + result.bucket_90_plus;
+      expect(Math.round(summed * 100) / 100).toBe(result.total);
+      expect(result.total).toBe(14000);
+    });
+  });
+
   describe('ensureCustomerPaymentPostingSetup — Accounts Receivable dependency', () => {
       it('is provisioned by the default template', async () => {
           // Regression: the template had no 'Accounts Receivable' account, so

@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
+import { ageBalance, type AgingEntry } from '../accounting/aging.utils';
 import {
     CreateCustomerDto,
     UpdateCustomerDto,
@@ -815,49 +816,68 @@ export class CustomersService {
         });
     }
 
+    /**
+     * Who owes money, and how old each unpaid taka is.
+     *
+     * Aged from the SAME ledger that produces `due_balance`, not from credit
+     * sales alone. The original version read `type: 'CREDIT_SALE'` and nothing
+     * else, so every payment, payout and return adjustment was invisible to it
+     * and the report showed lifetime credit sales as though none had ever been
+     * settled. `ageBalance` applies each receipt to the oldest open charge, the
+     * way the shopkeeper does on paper, and ages only what survives.
+     *
+     * `ledgerDueDelta` is the single place that knows which transaction types
+     * raise a due and which settle one, so this report cannot disagree with the
+     * customer's own statement about what a row means.
+     */
     async getDueAgingReport(tenantId: string) {
         const now = new Date();
 
         const transactions = await this.db.customerCreditTransaction.findMany({
-            where: { tenant_id: tenantId, type: 'CREDIT_SALE' },
-            include: { customer: { select: { id: true, name: true, phone: true } } },
+            where: { tenant_id: tenantId },
+            select: {
+                customer_id: true,
+                type: true,
+                amount: true,
+                created_at: true,
+                customer: { select: { id: true, name: true, phone: true } },
+            },
             orderBy: { created_at: 'asc' },
         });
 
-        const customerDues: Record<string, {
+        const byCustomer = new Map<string, {
             customer: { id: string; name: string; phone: string };
-            bucket_0_30: number;
-            bucket_31_60: number;
-            bucket_61_90: number;
-            bucket_90_plus: number;
-            total: number;
-        }> = {};
+            entries: AgingEntry[];
+        }>();
 
         for (const tx of transactions) {
-            const cid = tx.customer_id;
-            if (!customerDues[cid]) {
-                customerDues[cid] = {
-                    customer: tx.customer as any,
-                    bucket_0_30: 0,
-                    bucket_31_60: 0,
-                    bucket_61_90: 0,
-                    bucket_90_plus: 0,
-                    total: 0,
-                };
+            let bucket = byCustomer.get(tx.customer_id);
+            if (!bucket) {
+                bucket = { customer: tx.customer as any, entries: [] };
+                byCustomer.set(tx.customer_id, bucket);
             }
-
-            const days = Math.floor((now.getTime() - tx.created_at.getTime()) / 86_400_000);
-            const amount = Number(tx.amount);
-
-            if (days <= 30) customerDues[cid].bucket_0_30 += amount;
-            else if (days <= 60) customerDues[cid].bucket_31_60 += amount;
-            else if (days <= 90) customerDues[cid].bucket_61_90 += amount;
-            else customerDues[cid].bucket_90_plus += amount;
-
-            customerDues[cid].total += amount;
+            bucket.entries.push({
+                date: tx.created_at,
+                delta: this.ledgerDueDelta(tx.type, Number(tx.amount)),
+            });
         }
 
-        return Object.values(customerDues).filter(d => d.total > 0);
+        const rows = [];
+        for (const { customer, entries } of byCustomer.values()) {
+            const aged = ageBalance(entries, now);
+            if (aged.outstanding <= 0) continue;
+
+            rows.push({
+                customer,
+                bucket_0_30: aged.buckets.current,
+                bucket_31_60: aged.buckets.overdue_31_60,
+                bucket_61_90: aged.buckets.overdue_61_90,
+                bucket_90_plus: aged.buckets.overdue_90_plus,
+                total: aged.outstanding,
+            });
+        }
+
+        return rows;
     }
 
     async importRows(
