@@ -181,6 +181,11 @@ export const storefrontMessages = {
                 loading: "Sedang dimuatkan tetapan…",
                 saveFailed: "Gagal menyimpan tetapan",
                 saved: "Tetapan berjaya disimpan.",
+                sections: {
+                    address: "Alamat kedai",
+                    homepage: "Halaman utama",
+                    images: "Logo & imej hero",
+                },
                 enable: {
                     title: "Aktifkan Storefront",
                     description: "Jadikan kedai anda boleh diakses secara awam pada URL slug anda",

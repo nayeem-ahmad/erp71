@@ -1,9 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ImageUp, Loader2, Trash2 } from 'lucide-react';
+import { ChevronDown, ImageUp, Loader2, Trash2 } from 'lucide-react';
 import ImageCropModal, { type CropRatioOption } from '@/components/ImageCropModal';
 import Button from '@/components/ui/compact/Button';
+import { Input } from '@/components/ui/Input';
 import { api } from '@/lib/api';
 
 /** Matches the hint text and the backend's own base64 ceiling. */
@@ -141,19 +142,23 @@ export default function StorefrontImageField({
         }
     };
 
+    // Deliberately smaller than the `max-w-md` this started at: the settings
+    // page now stands these two fields in one column beside the rest of the
+    // form, and a 448px-wide hero preview alone pushed the Save button a
+    // screenful down. 288px still shows the crop clearly enough to judge it.
     const previewClass =
         kind === 'hero'
-            ? 'aspect-video w-full max-w-md object-cover'
-            : 'h-20 w-auto max-w-[200px] object-contain';
+            ? 'aspect-video w-full max-w-[18rem] object-cover'
+            : 'h-16 w-auto max-w-[180px] object-contain';
 
     return (
         <div>
-            <span className="block text-sm font-semibold text-gray-700 mb-1.5">{labels.label}</span>
+            <span className="block text-xs font-medium text-gray-600 mb-1">{labels.label}</span>
 
             <div className="flex flex-wrap items-start gap-3">
                 <div
                     className={`relative flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 ${
-                        kind === 'hero' ? 'w-full max-w-md' : 'min-h-20 px-3'
+                        kind === 'hero' ? 'w-full max-w-[18rem]' : 'min-h-16 px-3'
                     }`}
                 >
                     {value ? (
@@ -161,10 +166,10 @@ export default function StorefrontImageField({
                     ) : (
                         <span
                             className={`flex items-center justify-center text-gray-300 ${
-                                kind === 'hero' ? 'aspect-video w-full' : 'h-20 w-20'
+                                kind === 'hero' ? 'aspect-video w-full' : 'h-16 w-16'
                             }`}
                         >
-                            <ImageUp className="w-7 h-7" aria-hidden="true" />
+                            <ImageUp className="w-6 h-6" aria-hidden="true" />
                         </span>
                     )}
                     {uploading && (
@@ -186,7 +191,7 @@ export default function StorefrontImageField({
                     <div className="flex items-center gap-2">
                         <Button
                             variant="secondary"
-                            size="md"
+                            size="sm"
                             icon={<ImageUp className="w-4 h-4" />}
                             onClick={() => fileRef.current?.click()}
                             disabled={uploading}
@@ -196,7 +201,7 @@ export default function StorefrontImageField({
                         {value && !uploading && (
                             <Button
                                 variant="ghost"
-                                size="md"
+                                size="sm"
                                 icon={<Trash2 className="w-4 h-4" />}
                                 onClick={() => {
                                     onChange('');
@@ -212,20 +217,43 @@ export default function StorefrontImageField({
                 </div>
             </div>
 
-            <label htmlFor={`${inputId}-url`} className="mt-3 block text-xs font-medium text-gray-500">
-                {labels.urlLabel}
-            </label>
-            <input
-                id={`${inputId}-url`}
-                type="url"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={labels.urlPlaceholder}
-                className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            {/* Folded away rather than dropped: uploading is what nearly every
+                shop does, and the escape hatch for an image hosted elsewhere
+                cost two rows of every settings screen to serve the few that
+                paste one. Rendered even while closed so it stays findable and
+                keeps its label. */}
+            <details className="group mt-2">
+                {/* `ChevronDown` rather than a sideways one: down/up reads the
+                    same in Arabic and Urdu, where a right-pointing chevron
+                    would have to be mirrored and then un-mirrored again by the
+                    open-state rotation. `display` is left alone on the summary
+                    — the touch target comes from padding, because a flex
+                    summary loses its native toggle marker handling. */}
+                <summary className="cursor-pointer list-none text-xs font-medium text-blue-600 hover:text-blue-700 max-md:py-2">
+                    <ChevronDown
+                        className="me-1 inline-block h-3 w-3 transition-transform group-open:rotate-180"
+                        aria-hidden="true"
+                    />
+                    {labels.urlLabel}
+                </summary>
+                <label htmlFor={`${inputId}-url`} className="sr-only">
+                    {labels.urlLabel}
+                </label>
+                <Input
+                    id={`${inputId}-url`}
+                    type="url"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={labels.urlPlaceholder}
+                    className="mt-1.5 w-full"
+                />
+            </details>
 
-            <p className="text-xs text-gray-400 mt-1">{labels.hint}</p>
-            <p className="text-xs text-gray-400 mt-1">{labels.optional}</p>
+            {/* One line, not two: the hint and the "Optional." that always
+                followed it read as a single sentence anyway. */}
+            <p className="text-xs text-gray-400 mt-1">
+                {labels.hint} {labels.optional}
+            </p>
 
             {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
 

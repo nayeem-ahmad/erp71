@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "Einstellungen werden geladen…",
             saveFailed: "Einstellungen konnten nicht gespeichert werden",
             saved: "Einstellungen erfolgreich gespeichert.",
+            sections: {
+                address: "Shop-Adresse",
+                homepage: "Startseite",
+                images: "Logo & Hero-Bild",
+            },
             enable: {
                 title: "Storefront aktivieren",
                 description: "Machen Sie Ihren Shop unter Ihrer Slug-URL öffentlich zugänglich",

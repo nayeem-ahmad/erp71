@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "جارٍ تحميل الإعدادات…",
             saveFailed: "تعذّر حفظ الإعدادات",
             saved: "تم حفظ الإعدادات بنجاح.",
+            sections: {
+                address: "عنوان المتجر",
+                homepage: "الصفحة الرئيسية",
+                images: "الشعار وصورة الغلاف",
+            },
             enable: {
                 title: "تفعيل المتجر",
                 description: "اجعل متجرك متاحًا للعموم على رابط المعرّف الخاص بك",

@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "ترتیبات لوڈ ہو رہی ہیں…",
             saveFailed: "ترتیبات محفوظ نہیں ہو سکیں",
             saved: "ترتیبات کامیابی سے محفوظ ہو گئیں۔",
+            sections: {
+                address: "اسٹور کا پتہ",
+                homepage: "ہوم پیج",
+                images: "لوگو اور ہیرو تصویر",
+            },
             enable: {
                 title: "دکان فعال کریں",
                 description: "اپنی دکان کو اپنے سلَگ URL پر عوامی طور پر قابلِ رسائی بنائیں",

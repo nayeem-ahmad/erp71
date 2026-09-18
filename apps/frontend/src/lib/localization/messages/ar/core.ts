@@ -398,7 +398,7 @@ export const coreMessages = {
             valuation: 'تقييم المخزون',
             orders: 'الطلبات',
             storefrontOrders: 'الطلبات الإلكترونية',
-            storefrontSettings: 'المتجر الإلكتروني',
+            storefrontSettings: 'إعدادات المتجر',
             storefrontPages: 'صفحات المتجر',
             storefrontMenu: 'قائمة المتجر',
             tenants: 'المنشآت',

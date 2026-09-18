@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "Chargement des paramètres…",
             saveFailed: "Échec de l'enregistrement des paramètres",
             saved: "Paramètres enregistrés avec succès.",
+            sections: {
+                address: "Adresse de la boutique",
+                homepage: "Page d’accueil",
+                images: "Logo et image principale",
+            },
             enable: {
                 title: "Activer la boutique",
                 description: "Rendez votre boutique accessible publiquement à l'adresse de votre slug",
