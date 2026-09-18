@@ -1,5 +1,5 @@
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
@@ -251,6 +251,7 @@ function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
 export function printDeliveryChallan(
     data: DeliveryChallanData,
     paperSize: PaperSize = 'A4',
+    preview?: PrintPreviewOptions,
 ): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
 
@@ -275,5 +276,6 @@ export function printDeliveryChallan(
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        preview,
     });
 }

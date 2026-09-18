@@ -344,6 +344,28 @@ export const salesMessages = {
             print: 'انوائس پرنٹ کریں',
             skip: 'نہیں، شکریہ',
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "پرنٹ کے اختیارات",
+            moreActions: "مزید اعمال",
+            printInvoice: "انوائس پرنٹ کریں",
+            otherDocuments: "دیگر دستاویزات",
+            posReceipt: "پی او ایس رسید",
+            mushak: "مشک 6.3",
+            openInvoicePage: "انوائس صفحہ کھولیں",
+            preview: {
+                heading: "{document} — {size}",
+                print: "پرنٹ",
+                close: "بند کریں",
+                skip: "اگلی بار پیش نظارہ چھوڑ دیں",
+                invoice: "انوائس",
+                challan: "ڈیلیوری چالان",
+                receipt: "پی او ایس رسید",
+            },
+            loadFailed: "پرنٹ کے لیے سیل لوڈ نہیں ہو سکی۔",
+            popupBlocked: "پرنٹ کرنے کے لیے اس سائٹ کے پاپ اپ کی اجازت دیں۔",
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: "ڈیلیوری چالان",

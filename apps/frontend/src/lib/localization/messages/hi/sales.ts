@@ -344,6 +344,28 @@ export const salesMessages = {
             print: "चालान प्रिंट करें",
             skip: "नहीं, धन्यवाद",
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "प्रिंट विकल्प",
+            moreActions: "अधिक क्रियाएँ",
+            printInvoice: "चालान प्रिंट करें",
+            otherDocuments: "अन्य दस्तावेज़",
+            posReceipt: "पीओएस रसीद",
+            mushak: "मुशक 6.3",
+            openInvoicePage: "चालान पेज खोलें",
+            preview: {
+                heading: "{document} — {size}",
+                print: "प्रिंट",
+                close: "बंद करें",
+                skip: "अगली बार पूर्वावलोकन छोड़ें",
+                invoice: "चालान",
+                challan: "डिलीवरी चालान",
+                receipt: "पीओएस रसीद",
+            },
+            loadFailed: "प्रिंट करने के लिए बिक्री लोड नहीं हो सकी।",
+            popupBlocked: "प्रिंट करने के लिए इस साइट के पॉप-अप की अनुमति दें।",
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: "डिलीवरी चालान",

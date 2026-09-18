@@ -344,6 +344,29 @@ export const salesMessages = {
             print: 'Print invoice',
             skip: 'No, thanks',
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: 'Print options',
+            moreActions: 'More actions',
+            printInvoice: 'Print Invoice',
+            otherDocuments: 'Other Documents',
+            posReceipt: 'POS Receipt',
+            mushak: 'Mushak 6.3',
+            openInvoicePage: 'Open invoice page',
+            preview: {
+                /* Toolbar shown over the document before it goes to the printer. */
+                heading: '{document} — {size}',
+                print: 'Print',
+                close: 'Close',
+                skip: 'Skip preview next time',
+                invoice: 'Invoice',
+                challan: 'Delivery Challan',
+                receipt: 'POS Receipt',
+            },
+            loadFailed: 'Could not load the sale to print.',
+            popupBlocked: 'Allow pop-ups for this site to print.',
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: 'Delivery Challan',
