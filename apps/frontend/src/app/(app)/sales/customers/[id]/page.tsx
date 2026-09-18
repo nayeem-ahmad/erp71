@@ -7,7 +7,7 @@ import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import {
     Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, UserCog,
     FolderTree, Map, ChevronLeft, ChevronRight, MessageSquare, Wallet,
-    Plus, Trash2, CheckCircle2, Send, ClipboardList, Sparkles, Loader2,
+    Plus, Trash2, CheckCircle2, Send, ClipboardList, Sparkles, Loader2, Ban,
 } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -16,6 +16,7 @@ import { routes } from '@/lib/routes';
 import { PageShell, Button, Select } from '@/components/ui';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import CrmActivityPanel from '@/components/crm/CrmActivityPanel';
+import WriteOffDebtModal from '@/components/customers/WriteOffDebtModal';
 import { toast } from '@/lib/toast';
 
 type Tab = 'history' | 'activities' | 'credit';
@@ -56,6 +57,7 @@ export default function CustomerProfile() {
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentNote, setPaymentNote] = useState('');
     const [savingPayment, setSavingPayment] = useState(false);
+    const [showWriteOff, setShowWriteOff] = useState(false);
 
     useEffect(() => {
         if (id) void loadCustomer();
@@ -372,15 +374,36 @@ export default function CustomerProfile() {
                                     </div>
                                 </div>
 
+                                {/* Only once there is something to show, so an
+                                    ordinary customer's card is unchanged. */}
+                                {Number(creditLedger?.written_off_total) > 0 && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                        <p className="text-xs font-semibold text-amber-800 mb-1">
+                                            {t.customers.profile.writeOff.writtenOffTotal}
+                                        </p>
+                                        <p className="text-xl font-bold text-amber-900">
+                                            {formatBDT(creditLedger.written_off_total)}
+                                        </p>
+                                    </div>
+                                )}
+
                                 {Number(creditLedger?.due_balance) > 0 && (
                                     <div>
                                         {!showPaymentForm ? (
-                                            <button
-                                                onClick={() => setShowPaymentForm(true)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
-                                            >
-                                                <CheckCircle2 className="w-4 h-4" /> {t.customers.profile.recordPayment}
-                                            </button>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button
+                                                    onClick={() => setShowPaymentForm(true)}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" /> {t.customers.profile.recordPayment}
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowWriteOff(true)}
+                                                    className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                                >
+                                                    <Ban className="w-4 h-4" /> {t.customers.profile.writeOff.action}
+                                                </button>
+                                            </div>
                                         ) : (
                                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
                                                 <h3 className="font-bold text-sm text-gray-700">{t.customers.profile.recordPayment}</h3>
@@ -463,6 +486,20 @@ export default function CustomerProfile() {
                 )}
 
             </div>
+
+            <WriteOffDebtModal
+                open={showWriteOff}
+                customerId={id as string}
+                customerName={customer?.name ?? ''}
+                dueBalance={Number(creditLedger?.due_balance ?? 0)}
+                onClose={() => setShowWriteOff(false)}
+                onSuccess={() => {
+                    // Both reload: the write-off moves due_balance, which the
+                    // header card above reads off `customer`, not the ledger.
+                    void loadCredit();
+                    void loadCustomer();
+                }}
+            />
         </PageShell>
     );
 }

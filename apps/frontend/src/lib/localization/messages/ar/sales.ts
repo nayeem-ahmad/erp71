@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: 'مدفوعات الزبائن', description: 'سجّل المدفوعات مقابل أرصدة الزبائن المستحقة.' },
                 customerLedger: { title: 'دفتر الزبون', description: 'الرصيد الجاري وسجل المعاملات لكل زبون.' },
                 dueAging: { title: 'أعمار الذمم', description: 'اعرف من عليه مبالغ مستحقة ومنذ متى.' },
+                badDebts: { title: 'الديون المعدومة', description: 'كل دين عميل تم شطبه، مع من قام بذلك وسببه.' },
                 quotes: { title: 'عروض الأسعار', description: 'جهّز التقديرات وتابع حالة كل عرض.' },
                 orders: { title: 'أوامر البيع', description: 'طلبات المعرض وطلبات المتجر الإلكتروني في مكان واحد.' },
                 delivery: { title: 'التسليم', description: 'جدولة عمليات التسليم الصادرة ومتابعتها.' },

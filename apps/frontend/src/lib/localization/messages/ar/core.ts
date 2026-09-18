@@ -316,6 +316,7 @@ export const coreMessages = {
             allSales: 'المبيعات',
             newSalesEntry: 'إدخال بيع جديد',
             dueAging: 'أعمار الذمم',
+            badDebts: 'الديون المعدومة',
             crmFollowUps: 'المتابعات',
             crmActivities: 'الأنشطة',
             projectsList: 'كل المشاريع',

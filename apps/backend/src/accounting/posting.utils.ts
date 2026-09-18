@@ -14,6 +14,7 @@ export type PostingEventType =
     | 'loan_disbursement'
     | 'loan_repayment'
     | 'customer_payment'
+    | 'bad_debt_write_off'
     | 'supplier_payment'
     | 'depreciation'
     | 'cash_transaction'
@@ -120,6 +121,9 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     loan_disbursement: VoucherType.JOURNAL,
     loan_repayment: VoucherType.JOURNAL,
     customer_payment: VoucherType.CASH_RECEIVE,
+    // Forgiving a receivable moves no cash — the whole point is that none
+    // ever arrived — so it is a journal voucher, not a cash-receive.
+    bad_debt_write_off: VoucherType.JOURNAL,
     // Paying a supplier is the common case, so cash OUT is the default here and
     // the 'receive' direction is the exception below — the mirror of
     // customer_payment, where money normally comes IN.
