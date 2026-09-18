@@ -372,7 +372,7 @@ export default function ProductSearch({
                 which is how this looked before the panel existed. Hidden in CSS
                 rather than skipped in JS so a rotation needs no re-render. */}
             {historyType && staged && (
-                <div className="hidden sm:block rounded border border-gray-200 bg-gray-50 px-2 py-1">
+                <div className="hidden sm:block rounded border border-gray-200 bg-white px-2 py-1">
                     <RateHistory
                         productId={staged.id}
                         type={historyType}
