@@ -224,11 +224,11 @@ export default function StorefrontImageField({
                 keeps its label. */}
             <details className="group mt-2">
                 {/* `ChevronDown` rather than a sideways one: down/up reads the
-                    same in Arabic and Urdu, where a right-pointing chevron
-                    would have to be mirrored and then un-mirrored again by the
-                    open-state rotation. `display` is left alone on the summary
-                    — the touch target comes from padding, because a flex
-                    summary loses its native toggle marker handling. */}
+                    same in Arabic and Urdu, where a horizontal chevron would
+                    have to be mirrored and then un-mirrored again by the
+                    open-state rotation. The summary keeps its default
+                    `display` — the touch target comes from padding, because a
+                    flex summary loses its native toggle marker handling. */}
                 <summary className="cursor-pointer list-none text-xs font-medium text-blue-600 hover:text-blue-700 max-md:py-2">
                     <ChevronDown
                         className="me-1 inline-block h-3 w-3 transition-transform group-open:rotate-180"
