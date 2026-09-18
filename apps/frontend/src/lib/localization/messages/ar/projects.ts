@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "أنواع المشاريع",
         typesHint: "تصنيفات لأعمالك — تركيب، صيانة، تجهيز.",
         columns: "أعمدة اللوحة",
-        columnsHint: "الأعمدة في كل لوحة مشروع. ويحدّد التصنيف ما يُعدّ منجزًا.",
+        columnsHint: "الأعمدة التي يبدأ بها أي مشروع جديد. أما المشروع الموجود بالفعل فيحتفظ بقائمته الخاصة — عدّلها من داخل المشروع نفسه. والفئة تحدد ما يُعد منجزًا.",
         category: "التصنيف",
         categories: {
             TODO: "للتنفيذ",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "إضافة عمود",
         mappedStatuses: "الحالات المربوطة",
         noMappings: "غير مربوط بأي مشروع على هذه اللوحة",
+        createStatus: "إنشاء",
+        createStatusHint: "أنشئ الحالة ”{column}“ في {project} واربطها بهذا العمود.",
         currentlyIn: "(حاليًا في {column})",
         loadFailed: "تعذّر تحميل الأعمدة.",
         deleteColumn: "حذف العمود",

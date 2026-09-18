@@ -86,6 +86,24 @@ export interface PrintDocumentOptions {
      */
     repeatHeader?: boolean;
     autoPrint?: boolean;
+    /**
+     * Show the document with a toolbar instead of printing straight away.
+     *
+     * The preview is the real print document, not a second rendering of it —
+     * the only difference is a `no-print` toolbar bar pinned to the top and a
+     * suppressed `print()` call. Anything that looks right here prints right,
+     * which is the whole reason it is not a separate screen.
+     */
+    preview?: PrintPreviewOptions;
+}
+
+export interface PrintPreviewOptions {
+    /** Toolbar heading — normally the document and its paper size. */
+    title: string;
+    printLabel: string;
+    closeLabel: string;
+    /** Wording of the opt-out checkbox; omitted to hide it entirely. */
+    skipLabel?: string;
 }
 
 /**
@@ -243,9 +261,11 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         ${pageCss(opts.paperSize)}
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         ${opts.styles ?? ''}
+        ${opts.preview ? previewCss() : ''}
     </style>
 </head>
 <body>
+${opts.preview ? previewToolbarHtml(opts.preview) : ''}
 <div class="p71-wrap">${content}</div>
 </body>
 </html>`;
@@ -265,8 +285,75 @@ export function openPrintWindow(opts: PrintDocumentOptions): Window | null {
     win.document.write(buildPrintDocument(opts));
     win.document.close();
 
+    // A previewed document waits for the operator to press Print; printing it
+    // on open would defeat the point of previewing it.
+    if (opts.preview) return win;
     if (opts.autoPrint !== false) printWhenReady(win);
     return win;
+}
+
+/** Message a preview window posts back when "skip next time" is ticked. */
+export const PRINT_PREVIEW_SKIP_MESSAGE = 'erp71:print-preview-skip';
+
+/**
+ * The preview toolbar, rendered into the print document itself.
+ *
+ * It is `no-print` and `position: fixed`, so it is on screen but never on
+ * paper. The buttons are wired with inline handlers rather than a script the
+ * opener injects, because the document is written through `document.write` and
+ * a popup blocker that permits the window still races an injected listener.
+ *
+ * The checkbox reports back through `postMessage` — the opener owns the
+ * preference, and a popup writing to the app's localStorage would be writing
+ * to a different origin's copy in some browsers.
+ */
+function previewToolbarHtml(preview: PrintPreviewOptions): string {
+    const skip = preview.skipLabel
+        ? `<label class="p71-pv-skip">
+               <input type="checkbox" onchange="try{window.opener&&window.opener.postMessage({type:'${PRINT_PREVIEW_SKIP_MESSAGE}',skip:this.checked},'*')}catch(e){}">
+               <span>${escapeAttr(preview.skipLabel)}</span>
+           </label>`
+        : '';
+
+    return `<div class="p71-pv no-print">
+        <span class="p71-pv-title">${escapeAttr(preview.title)}</span>
+        <span class="p71-pv-actions">
+            ${skip}
+            <button type="button" class="p71-pv-btn p71-pv-btn--ghost" onclick="window.close()">${escapeAttr(preview.closeLabel)}</button>
+            <button type="button" class="p71-pv-btn p71-pv-btn--primary" onclick="window.focus();window.print()">${escapeAttr(preview.printLabel)}</button>
+        </span>
+    </div>`;
+}
+
+/** Toolbar styling. Screen-only — `@media print` hides the bar outright. */
+function previewCss(): string {
+    return `
+        .p71-pv {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap;
+            padding: 8px 12px;
+            background: #ffffff; border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+        }
+        .p71-pv-title { font-weight: 700; color: #111827; }
+        .p71-pv-actions { display: flex; align-items: center; gap: 10px; }
+        .p71-pv-skip { display: flex; align-items: center; gap: 5px; color: #4b5563; font-size: 12px; cursor: pointer; }
+        .p71-pv-btn {
+            border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border: 1px solid transparent; min-height: 32px;
+        }
+        .p71-pv-btn--ghost { background: #fff; border-color: #d1d5db; color: #374151; }
+        .p71-pv-btn--ghost:hover { background: #f9fafb; }
+        .p71-pv-btn--primary { background: #2563eb; color: #fff; }
+        .p71-pv-btn--primary:hover { background: #1d4ed8; }
+        /* Clear the fixed bar so the top of the document is not hidden under it. */
+        body { padding-top: 52px; }
+        @media print {
+            .p71-pv { display: none !important; }
+            body { padding-top: 0; }
+        }`;
 }
 
 /**

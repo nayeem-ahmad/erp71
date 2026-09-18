@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "Cargando ajustes…",
             saveFailed: "No se pudieron guardar los ajustes",
             saved: "Ajustes guardados correctamente.",
+            sections: {
+                address: "Dirección de la tienda",
+                homepage: "Página de inicio",
+                images: "Logotipo e imagen principal",
+            },
             enable: {
                 title: "Activar la tienda",
                 description: "Haga que su tienda sea accesible públicamente en la URL de su slug",

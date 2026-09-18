@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Minus, Plus, History } from 'lucide-react';
+import { Trash2, Minus, Plus, History, RotateCcw } from 'lucide-react';
 import { LineItem } from '@/lib/hooks/useNewSaleCart';
 import RateHistoryModal from './RateHistoryModal';
 import { type RateHistoryType } from './RateHistory';
@@ -7,6 +7,7 @@ import CompoundUnitInput from '@/components/CompoundUnitInput';
 import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
 import WarehouseSelect from './WarehouseSelect';
 import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
+import { useColumnWidths } from './useColumnWidths';
 
 interface LineItemsTableProps {
     items: LineItem[];
@@ -56,6 +57,47 @@ interface LineItemsTableProps {
     warehouseLabel?: string;
 }
 
+/**
+ * A heading with a drag handle on its trailing edge. Same interaction and
+ * styling as the one in `DataTable`, so a column behaves the same way wherever
+ * the operator meets one; this table is hand-written rather than TanStack-
+ * driven, so it cannot share that implementation.
+ */
+function Th({
+    columns,
+    id,
+    className = '',
+    children,
+}: {
+    columns: ReturnType<typeof useColumnWidths>;
+    id: string;
+    className?: string;
+    children: React.ReactNode;
+}) {
+    const width = columns.widthOf(id);
+    const resizing = columns.resizingColumn === id;
+
+    return (
+        <th
+            className={`relative px-2 py-1.5 font-semibold ${className}`}
+            style={width ? { width, minWidth: width, maxWidth: width } : undefined}
+        >
+            {children}
+            <div
+                role="separator"
+                aria-label={`Resize ${typeof children === 'string' ? children : id} column`}
+                aria-orientation="vertical"
+                onMouseDown={(event) => columns.startResize(id, event)}
+                onDoubleClick={() => columns.resetColumn(id)}
+                title="Drag to resize · double-click to reset"
+                className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none transition-colors ${
+                    resizing ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-400'
+                }`}
+            />
+        </th>
+    );
+}
+
 export default function LineItemsTable({
     items,
     onUpdateItem,
@@ -79,9 +121,11 @@ export default function LineItemsTable({
     const priceFrozen = readOnly || readOnlyPrice;
     const showHistory = !!historyType && !priceFrozen;
     const showWarehouse = warehouses.length > 0;
-    // #, Name, Group, Price, Qty, Total and the remove button are always
-    // rendered; Avail, Disc % and Warehouse are the opt-in ones.
-    const columnCount = 7 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0) + (showWarehouse ? 1 : 0);
+    // #, Name, Price, Qty, Total and the remove button are always rendered;
+    // Avail, Disc % and Warehouse are the opt-in ones. The group used to have a
+    // column of its own and now rides under the product name.
+    const columnCount = 6 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0) + (showWarehouse ? 1 : 0);
+    const columns = useColumnWidths();
     // The line whose history modal is open, if any.
     const [historyFor, setHistoryFor] = useState<LineItem | null>(null);
 
@@ -108,23 +152,36 @@ export default function LineItemsTable({
     return (
         <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-auto">
-            <table className={`w-full text-sm ${showWarehouse ? 'min-w-[760px]' : 'min-w-[620px]'}`}>
+            <table className={`w-full text-sm ${showWarehouse ? 'min-w-[680px]' : 'min-w-[540px]'}`}>
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                        <th className="px-2 py-1.5 text-start font-semibold w-8">#</th>
-                        <th className="px-2 py-1.5 text-start font-semibold">Name</th>
-                        <th className="px-2 py-1.5 text-start font-semibold hidden md:table-cell">Group</th>
+                        <Th columns={columns} id="index" className="text-start w-8">#</Th>
+                        <Th columns={columns} id="name" className="text-start">Name</Th>
                         {showWarehouse && (
-                            <th className="px-2 py-1.5 text-start font-semibold">{warehouseLabel}</th>
+                            <Th columns={columns} id="warehouse" className="text-start">{warehouseLabel}</Th>
                         )}
                         {showAvailable && (
-                            <th className="px-2 py-1.5 text-end font-semibold hidden md:table-cell">{availableLabel}</th>
+                            <Th columns={columns} id="available" className="text-end hidden md:table-cell">
+                                {availableLabel}
+                            </Th>
                         )}
-                        <th className="px-2 py-1.5 text-end font-semibold">{priceLabel}</th>
-                        {showDiscount && <th className="px-2 py-1.5 text-end font-semibold">Disc %</th>}
-                        <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
-                        <th className="px-2 py-1.5 text-end font-semibold">Total</th>
-                        <th className="px-2 py-1.5 w-8"></th>
+                        <Th columns={columns} id="price" className="text-end">{priceLabel}</Th>
+                        {showDiscount && <Th columns={columns} id="discount" className="text-end">Disc %</Th>}
+                        <Th columns={columns} id="quantity" className="text-center">Qty</Th>
+                        <Th columns={columns} id="total" className="text-end">Total</Th>
+                        <th className="relative px-2 py-1.5 w-8">
+                            {columns.isCustomised && (
+                                <button
+                                    type="button"
+                                    onClick={columns.resetAll}
+                                    title="Reset column widths"
+                                    aria-label="Reset widths"
+                                    className="text-gray-400 hover:text-blue-600"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -139,10 +196,17 @@ export default function LineItemsTable({
                         items.map((item, index) => (
                                 <tr key={item.productId} className="border-b last:border-b-0 hover:bg-gray-50">
                                     <td className="px-2 py-1 text-gray-500">{index + 1}</td>
-                                    <td className="px-2 py-1 text-gray-900 font-medium">{item.name}</td>
-                                    <td className="px-2 py-1 text-gray-500 text-xs hidden md:table-cell">
-                                        {item.group}
-                                        {item.subgroup && ` → ${item.subgroup}`}
+                                    <td className="px-2 py-1">
+                                        <div className="text-gray-900 font-medium">{item.name}</div>
+                                        {/* The group used to be a column of its own, hidden below
+                                            `md` — so a phone never showed it at all. Under the name
+                                            it survives every width and frees a column. */}
+                                        {item.group && (
+                                            <div className="text-xs text-gray-500">
+                                                {item.group}
+                                                {item.subgroup && ` → ${item.subgroup}`}
+                                            </div>
+                                        )}
                                     </td>
                                     {showWarehouse && (
                                         <td className="px-2 py-1">
@@ -181,7 +245,8 @@ export default function LineItemsTable({
                                                     step="0.01"
                                                     value={item.price}
                                                     onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
-                                                    className="w-20 px-1.5 py-0.5 border rounded text-sm text-end"
+                                                    aria-label={`${priceLabel} — ${item.name}`}
+                                                    className="no-spinner w-28 px-1.5 py-0.5 border rounded text-sm text-end"
                                                 />
                                                 {showHistory && (
                                                     <button
@@ -208,7 +273,8 @@ export default function LineItemsTable({
                                                     max="100"
                                                     value={item.discount}
                                                     onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                                    className="w-14 px-1.5 py-0.5 border rounded text-sm text-end"
+                                                    aria-label={`Disc % — ${item.name}`}
+                                                    className="no-spinner w-[4.5rem] px-1.5 py-0.5 border rounded text-sm text-end"
                                                 />
                                             )}
                                         </td>
@@ -238,7 +304,8 @@ export default function LineItemsTable({
                                                     max={maxQuantityOf?.(item)}
                                                     value={item.quantity}
                                                     onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
-                                                    className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                                    aria-label={`Qty — ${item.name}`}
+                                                    className="no-spinner w-16 px-1.5 py-0.5 border rounded text-sm text-center"
                                                 />
                                                 <button
                                                     type="button"

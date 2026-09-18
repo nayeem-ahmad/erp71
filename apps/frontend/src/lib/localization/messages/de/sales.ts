@@ -344,6 +344,28 @@ export const salesMessages = {
             print: "Rechnung drucken",
             skip: "Nein, danke",
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "Druckoptionen",
+            moreActions: "Weitere Aktionen",
+            printInvoice: "Rechnung drucken",
+            otherDocuments: "Weitere Dokumente",
+            posReceipt: "Kassenbon",
+            mushak: "Mushak 6.3",
+            openInvoicePage: "Rechnungsseite öffnen",
+            preview: {
+                heading: "{document} — {size}",
+                print: "Drucken",
+                close: "Schließen",
+                skip: "Vorschau künftig überspringen",
+                invoice: "Rechnung",
+                challan: "Lieferschein",
+                receipt: "Kassenbon",
+            },
+            loadFailed: "Der Verkauf konnte zum Drucken nicht geladen werden.",
+            popupBlocked: "Erlauben Sie Pop-ups für diese Seite, um zu drucken.",
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: "Lieferschein",
