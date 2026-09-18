@@ -412,6 +412,7 @@ export const accountingMessages = {
             bulkApproved: '{count} baucar diluluskan',
             bulkRejected: '{count} baucar ditolak',
             bulkNoPending: 'Tiada baucar dipilih yang menunggu kelulusan.',
+            bulkLockedPeriod: '{count} dibiarkan — bulannya telah ditutup.',
             queueBadge: 'baucar menunggu kelulusan',
             noPermission: 'Anda tiada kebenaran untuk meluluskan baucar.',
             pendingNotice: 'Baucar ini menunggu kelulusan dan tidak dikira dalam laporan diluluskan sahaja.',

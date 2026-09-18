@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { referenceKey, resolveMovementReferences } from './movement-reference.util';
 import {
     GetInventoryValuationDto,
+    GetProductTransactionHistoryDto,
     GetReorderSuggestionsDto,
     GetShrinkageSummaryDto,
     GetStockAgingDto,
@@ -648,6 +651,221 @@ export class InventoryReportsService {
             },
             rows: groupedRows,
             detailRows,
+        };
+    }
+
+    /**
+     * The stock card for one product: every movement in and out, oldest first,
+     * with the quantity it opened on and the balance it stood at after each row.
+     *
+     * Three things this does not do, each on purpose:
+     *
+     * **The running balance is summed from `quantity_delta`, not read from
+     * `balance_after`.** That column records the balance at the moment the
+     * movement was *written*, and `applyInventoryMovement` accepts an
+     * `occurredAt` that backdates `created_at` — an import, a backdated sale.
+     * Ordering those rows by date and printing their stored balances produces a
+     * column that jumps around and reconciles with nothing. Summing in date
+     * order is self-consistent by construction.
+     *
+     * **A date window narrows the rows, never the arithmetic.** Everything that
+     * moved before `from` is summed into `openingQuantity`, so the card still
+     * closes where the stock actually stands rather than at the net of one
+     * month's activity.
+     *
+     * **Closing is compared against `ProductStock` and the mismatch is
+     * reported, not hidden.** They can legitimately differ — stock seeded
+     * straight into a warehouse row, or an import that wrote quantities without
+     * movements — and a card that quietly printed a balance its own warehouse
+     * disagrees with would be the worst possible answer.
+     */
+    async getProductTransactionHistory(
+        tenantId: string,
+        query: GetProductTransactionHistoryDto,
+        timezone: string,
+    ) {
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(Math.max(1, query.limit ?? 100), 500);
+        const skip = (page - 1) * limit;
+
+        const product = await this.db.product.findFirst({
+            // Deliberately not filtered on `deleted_at`: a product removed from
+            // the catalogue still has a history, and that history is exactly
+            // what someone reconciling last quarter's stock is looking for.
+            where: { id: query.productId, tenant_id: tenantId },
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                unit_type: true,
+                deleted_at: true,
+                brand: { select: { id: true, name: true } },
+                group: { select: { id: true, name: true } },
+                subgroup: { select: { id: true, name: true } },
+            },
+        });
+
+        if (!product) {
+            throw new NotFoundException('Product not found.');
+        }
+
+        let warehouse: { id: string; name: string; code: string; is_active: boolean; store: { id: string; name: string } | null } | null =
+            null;
+        if (query.warehouseId) {
+            warehouse = await this.db.warehouse.findFirst({
+                where: { id: query.warehouseId, tenant_id: tenantId },
+                select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    is_active: true,
+                    store: { select: { id: true, name: true } },
+                },
+            });
+
+            if (!warehouse) {
+                throw new NotFoundException('Warehouse not found.');
+            }
+        }
+
+        const scope = {
+            tenant_id: tenantId,
+            product_id: product.id,
+            ...(this.warehouseScope(query) ?? {}),
+        };
+
+        // Calendar days in the tenant's own zone. A Dhaka shop asking for
+        // "1 September" means their 1 September, and an opening balance cut at
+        // UTC midnight would pull six hours of the previous evening's sales into
+        // the wrong side of the line.
+        const dateWindow = createdAtRange(query.from, query.to, timezone);
+        const where = { ...scope, ...(dateWindow ? { created_at: dateWindow } : {}) };
+        const orderBy = [{ created_at: 'asc' as const }, { id: 'asc' as const }];
+
+        const [openingAggregate, inAggregate, outAggregate, total, stockAggregate] = await Promise.all([
+            // Everything before the window opened. Without a `from` there is
+            // nothing before the beginning, so the card opens at zero.
+            dateWindow?.gte
+                ? this.db.inventoryMovement.aggregate({
+                      where: { ...scope, created_at: { lt: dateWindow.gte } },
+                      _sum: { quantity_delta: true },
+                  })
+                : Promise.resolve({ _sum: { quantity_delta: 0 } }),
+            this.db.inventoryMovement.aggregate({
+                where: { ...where, quantity_delta: { gt: 0 } },
+                _sum: { quantity_delta: true },
+            }),
+            this.db.inventoryMovement.aggregate({
+                where: { ...where, quantity_delta: { lt: 0 } },
+                _sum: { quantity_delta: true },
+            }),
+            this.db.inventoryMovement.count({ where }),
+            this.db.productStock.aggregate({ where: scope, _sum: { quantity: true } }),
+        ]);
+
+        const openingQuantity = Number(openingAggregate._sum.quantity_delta ?? 0);
+        const totalIn = Number(inAggregate._sum.quantity_delta ?? 0);
+        const totalOut = Math.abs(Number(outAggregate._sum.quantity_delta ?? 0));
+
+        // The balance carried onto this page. Page 2 has to start where page 1
+        // finished, or every row below the fold is off by the first page's net.
+        // One column of ints for the rows already shown, rather than a second
+        // aggregate over a `skip` Prisma would have to re-order anyway.
+        const priorRows = skip
+            ? await this.db.inventoryMovement.findMany({
+                  where,
+                  orderBy,
+                  take: skip,
+                  select: { quantity_delta: true },
+              })
+            : [];
+        const pageOpeningQuantity = priorRows.reduce(
+            (balance, row) => balance + Number(row.quantity_delta ?? 0),
+            openingQuantity,
+        );
+
+        const movements = await this.db.inventoryMovement.findMany({
+            where,
+            orderBy,
+            skip,
+            take: limit,
+            include: { warehouse: { select: { id: true, name: true, code: true } } },
+        });
+
+        const references = await resolveMovementReferences(this.db, tenantId, movements);
+
+        let running = pageOpeningQuantity;
+        const rows = movements.map((movement) => {
+            const delta = Number(movement.quantity_delta ?? 0);
+            const balanceBefore = running;
+            running += delta;
+            const unitCost = movement.unit_cost === null || movement.unit_cost === undefined ? null : Number(movement.unit_cost);
+            const resolved = references.get(referenceKey(movement.reference_type, movement.reference_id));
+
+            return {
+                id: movement.id,
+                occurredAt: movement.created_at,
+                movementType: movement.movement_type,
+                direction: delta >= 0 ? ('IN' as const) : ('OUT' as const),
+                // Split into two columns rather than one signed number: an in/out
+                // card is read by scanning one side of it, and a minus sign in a
+                // single column is easy to miss on a printed page.
+                quantityIn: delta > 0 ? delta : 0,
+                quantityOut: delta < 0 ? -delta : 0,
+                quantityDelta: delta,
+                balanceBefore,
+                balanceAfter: running,
+                warehouse: movement.warehouse,
+                referenceType: movement.reference_type,
+                referenceId: movement.reference_id,
+                referenceNumber: resolved?.number ?? null,
+                referenceParty: resolved?.party ?? null,
+                unitCost,
+                // Signed like the quantity, so a column of these sums to the
+                // value the period moved rather than to the gross of both sides.
+                value: unitCost === null ? null : unitCost * delta,
+                note: movement.note,
+                /**
+                 * What the write path recorded at the time, kept beside the
+                 * computed balance rather than in place of it. They agree unless
+                 * a movement was backdated, and where they disagree that is
+                 * itself worth being able to see.
+                 */
+                recordedBalanceAfter: movement.balance_after ?? null,
+            };
+        });
+
+        const closingQuantity = openingQuantity + totalIn - totalOut;
+        const currentStockQuantity = Number(stockAggregate._sum.quantity ?? 0);
+
+        return {
+            product,
+            warehouse,
+            filters: { from: query.from ?? null, to: query.to ?? null, storeId: query.storeId ?? null },
+            summary: {
+                openingQuantity,
+                totalIn,
+                totalOut,
+                netChange: totalIn - totalOut,
+                closingQuantity,
+                currentStockQuantity,
+                movementCount: total,
+                /**
+                 * Whether the ledger explains the quantity the warehouse row
+                 * holds. Null rather than false when an upper date bound is set:
+                 * a card cut off at last month is *expected* to close below
+                 * today's stock, and flagging that as a discrepancy would cry
+                 * wolf on every historical read.
+                 */
+                matchesStockOnHand: query.to ? null : closingQuantity === currentStockQuantity,
+            },
+            pageOpeningQuantity,
+            rows,
+            // Nested rather than spread flat, because `rows` is not `items`:
+            // this report's array is a page of a card with two balances beside
+            // it, and flattening the counts into the envelope invites it being
+            // read as an ordinary paginated list.
+            pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
         };
     }
 }

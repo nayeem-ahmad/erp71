@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: '{count} vouchers approved',
             bulkRejected: '{count} vouchers rejected',
             bulkNoPending: 'None of the selected vouchers are awaiting approval.',
+            bulkLockedPeriod: '{count} left as they are — their month is closed.',
             queueBadge: 'vouchers awaiting approval',
             noPermission: 'You do not have permission to approve vouchers.',
             pendingNotice: 'This voucher is waiting for approval and is excluded from approved-only reports.',
