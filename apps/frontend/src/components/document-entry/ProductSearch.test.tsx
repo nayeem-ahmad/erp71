@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { api } from '@/lib/api';
 import ProductSearch from './ProductSearch';
-import { clearRateHistoryCache } from './RateHistory';
+import { clearRateHistoryCache, resetRateHistoryPartyOnly } from './RateHistory';
 
 jest.mock('@/lib/api', () => ({
     api: { searchProductsByQuantity: jest.fn(), getProductRateHistory: jest.fn() },
@@ -45,6 +45,7 @@ describe('ProductSearch entry bar', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         clearRateHistoryCache();
+        resetRateHistoryPartyOnly();
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([COFFEE]);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(HISTORY);
     });
@@ -117,10 +118,11 @@ describe('ProductSearch entry bar', () => {
         // The header carries the comparison basis: which product, whose rates.
         expect(panel).toHaveTextContent('Previous purchase rates');
         expect(panel).toHaveTextContent('Coffee Beans · Rahim Traders');
-        // The panel supplies the title, so the body must not repeat it.
-        expect(screen.getAllByText(/Previous purchase rates/i)).toHaveLength(1);
+        // The panel supplies the title, so its own body must not repeat it —
+        // the inline panel under the bar carries the only other copy.
+        expect(within(panel).getAllByText(/Previous purchase rates/i)).toHaveLength(1);
 
-        fireEvent.click(await screen.findByTitle('Use this rate'));
+        fireEvent.click(within(panel).getByTitle('Use this rate'));
 
         // Picking is a decision — the panel closes and the cost is adopted.
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -143,7 +145,8 @@ describe('ProductSearch entry bar', () => {
         await waitFor(() => expect(api.getProductRateHistory).toHaveBeenCalled());
         fireEvent.click(screen.getByLabelText('Previous rates'));
 
-        expect(screen.getByText('Rahim Traders')).toBeInTheDocument();
+        const panel = screen.getByRole('dialog');
+        expect(within(panel).getByText('Rahim Traders')).toBeInTheDocument();
         expect(screen.queryByText(/Loading previous rates/i)).not.toBeInTheDocument();
         // The warm cache answers the second reader — no repeat round trip.
         expect(api.getProductRateHistory).toHaveBeenCalledTimes(1);
@@ -168,5 +171,78 @@ describe('ProductSearch entry bar', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(screen.getByLabelText('Product')).not.toHaveAttribute('readOnly');
         expect(screen.getByLabelText('Unit Cost')).toBeDisabled();
+    });
+    it('shows the recent rates under the bar as soon as a product is picked', async () => {
+        render(
+            <ProductSearch
+                onProductSelect={jest.fn()}
+                priceLabel="Unit Cost"
+                historyType="purchase"
+                historyPartyId="sup-1"
+                historyPartyName="Rahim Traders"
+            />,
+        );
+
+        // Nothing staged yet — the bar carries no history of its own.
+        expect(screen.queryByTestId('inline-rate-history')).not.toBeInTheDocument();
+
+        await stageCoffee();
+
+        // No click on the icon: the rates are simply there, under the bar.
+        const inline = await screen.findByTestId('inline-rate-history');
+        expect(inline).toHaveTextContent('Rahim Traders');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('adopts a rate clicked in the inline panel', async () => {
+        render(
+            <ProductSearch
+                onProductSelect={jest.fn()}
+                priceLabel="Unit Cost"
+                historyType="purchase"
+                historyPartyId="sup-1"
+            />,
+        );
+        await stageCoffee();
+        await screen.findByTestId('inline-rate-history');
+
+        fireEvent.click(screen.getByTitle('Use this rate'));
+
+        expect(screen.getByLabelText('Unit Cost')).toHaveValue(1180);
+    });
+
+    it('takes the inline panel away with the product', async () => {
+        render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" historyType="purchase" />);
+        await stageCoffee();
+        await screen.findByTestId('inline-rate-history');
+
+        fireEvent.click(screen.getByLabelText('Clear product'));
+
+        expect(screen.queryByTestId('inline-rate-history')).not.toBeInTheDocument();
+    });
+
+    it('keeps the icon and its full panel alongside the inline rates', async () => {
+        render(
+            <ProductSearch
+                onProductSelect={jest.fn()}
+                priceLabel="Unit Cost"
+                historyType="purchase"
+                historyPartyId="sup-1"
+                historyPartyName="Rahim Traders"
+            />,
+        );
+        await stageCoffee();
+        await screen.findByTestId('inline-rate-history');
+
+        fireEvent.click(screen.getByLabelText('Previous rates'));
+
+        expect(await screen.findByRole('dialog')).toHaveTextContent('Previous purchase rates');
+    });
+
+    it('offers no inline rates when the document did not ask for history', async () => {
+        render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />);
+        await stageCoffee();
+
+        expect(screen.queryByTestId('inline-rate-history')).not.toBeInTheDocument();
     });
 });

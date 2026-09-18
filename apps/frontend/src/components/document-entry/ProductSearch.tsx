@@ -4,7 +4,7 @@ import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus, X, History } from 'lucide-react';
 import AnchoredDropdown from './AnchoredDropdown';
 import RateHistoryPopover from './RateHistoryPopover';
-import { useRateHistory, type RateHistoryType } from './RateHistory';
+import RateHistory, { useRateHistory, type RateHistoryType } from './RateHistory';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -360,6 +360,25 @@ export default function ProductSearch({
                     )}
                 </div>
             </div>
+
+            {/* The rates this item has traded at, under the bar the moment a
+                product is picked. The icon beside Add still opens the fuller
+                panel; this is the glance that answers most of the question
+                without one, while the price box is still in reach. */}
+            {historyType && staged && (
+                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1">
+                    <RateHistory
+                        productId={staged.id}
+                        type={historyType}
+                        partyId={historyPartyId}
+                        variant="inline"
+                        onPickRate={(rate) => {
+                            setStagedPrice(String(rate));
+                            requestAnimationFrame(() => priceRef.current?.select());
+                        }}
+                    />
+                </div>
+            )}
 
             {/* Stock line for the staged product — kept off the entry row so the
                 three inputs stay on one line at every width. */}

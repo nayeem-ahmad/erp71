@@ -589,6 +589,7 @@ function SaleDetailPageContent() {
             setWarehouseId={setWarehouseId}
             perLineWarehouse={perLineWarehouse}
             setPerLineWarehouse={setPerLineWarehouse}
+            showRateHistory
             actions={isEditMode ? editActions : viewActions}
         />
         {showCancelModal && (
