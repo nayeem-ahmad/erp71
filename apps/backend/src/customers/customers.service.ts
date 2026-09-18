@@ -11,6 +11,8 @@ import {
     UpdateCreditPaymentDto,
     ListCustomerCreditPaymentsQueryDto,
     CustomerPaymentDirectionDto,
+    WriteOffCustomerDebtDto,
+    ListCustomerWriteOffsQueryDto,
 } from './customer.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
@@ -30,6 +32,21 @@ const CUSTOMER_SORTABLE: SortableMap = {
     loyalty_points: (dir) => ({ loyalty_points: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
+
+/**
+ * Document-number prefixes per credit-transaction type. A write-off gets its own
+ * series rather than sharing the payment one: "CWO-00004" on a customer's
+ * statement has to be unmistakably not a receipt, because it is the row that
+ * says money stopped being expected rather than that it arrived.
+ */
+const CREDIT_TRANSACTION_PREFIXES = {
+    PAYMENT: 'CPY-',
+    PAYOUT: 'CPO-',
+    WRITE_OFF: 'CWO-',
+} as const;
+
+/** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
+const AMOUNT_EPSILON = 0.005;
 
 @Injectable()
 export class CustomersService {
@@ -119,6 +136,9 @@ export class CustomersService {
             case 'PAYOUT':
                 return amount;
             case 'PAYMENT':
+            // A write-off settles the due the same way a payment does; what
+            // differs is where the other leg lands (expense, not cash).
+            case 'WRITE_OFF':
                 return -amount;
             case 'ADJUSTMENT':
                 return amount;
@@ -135,7 +155,11 @@ export class CustomersService {
         return direction === CustomerPaymentDirectionDto.PAY ? 'PAYOUT' : 'PAYMENT';
     }
 
-    private async enrichPaymentsWithVouchers(tenantId: string, items: any[]) {
+    private async enrichPaymentsWithVouchers(
+        tenantId: string,
+        items: any[],
+        eventType: 'customer_payment' | 'bad_debt_write_off' = 'customer_payment',
+    ) {
         if (items.length === 0) return items;
 
         const events = await this.db.postingEvent.findMany({
@@ -143,7 +167,7 @@ export class CustomersService {
                 tenant_id: tenantId,
                 source_module: 'customers',
                 source_id: { in: items.map((item) => item.id) },
-                event_type: 'customer_payment',
+                event_type: eventType,
             },
             include: { voucher: { select: { id: true, voucher_number: true } } },
         });
@@ -181,9 +205,9 @@ export class CustomersService {
     private async generatePaymentNumber(
         tenantId: string,
         tx: any,
-        txType: 'PAYMENT' | 'PAYOUT',
+        txType: 'PAYMENT' | 'PAYOUT' | 'WRITE_OFF',
     ): Promise<string> {
-        const prefix = txType === 'PAYOUT' ? 'CPO-' : 'CPY-';
+        const prefix = CREDIT_TRANSACTION_PREFIXES[txType];
         const last = await tx.customerCreditTransaction.findFirst({
             where: {
                 tenant_id: tenantId,
@@ -543,7 +567,7 @@ export class CustomersService {
             opening_balance = priorTx ? Number(priorTx.balance_after) : 0;
         }
 
-        const [total, transactions] = await Promise.all([
+        const [total, transactions, writtenOff] = await Promise.all([
             this.db.customerCreditTransaction.count({ where }),
             this.db.customerCreditTransaction.findMany({
                 where,
@@ -551,6 +575,15 @@ export class CustomersService {
                 skip,
                 take: limit,
                 include: { creator: { select: { id: true, name: true } } },
+            }),
+            // Lifetime, not windowed: "we have forgiven ৳12,000 of this
+            // customer's debt" is the number that should decide whether to sell
+            // to them on credit again, and a date filter on the ledger below
+            // must not quietly change it. Derived rather than denormalized onto
+            // Customer so it cannot drift from the rows it sums.
+            this.db.customerCreditTransaction.aggregate({
+                where: { tenant_id: tenantId, customer_id: id, type: 'WRITE_OFF' },
+                _sum: { amount: true },
             }),
         ]);
 
@@ -573,6 +606,7 @@ export class CustomersService {
         return {
             customer: { id: customer.id, name: customer.name, phone: customer.phone },
             due_balance: Number(customer.due_balance),
+            written_off_total: Number(writtenOff._sum.amount ?? 0),
             opening_balance,
             closing_balance,
             credit_limit: customer.credit_limit ? Number(customer.credit_limit) : null,
@@ -814,6 +848,208 @@ export class CustomersService {
                 voucher_number: posting.voucherNumber ?? null,
             };
         });
+    }
+
+    /**
+     * Forgives a customer debt the shop has given up on collecting.
+     *
+     * Posts Dr Bad Debt Expense / Cr Accounts Receivable, tagged to the
+     * customer, and settles the same amount on the parallel credit ledger in
+     * the one transaction — AR is kept twice in this system, and a write-off
+     * that moved only the GL would leave the customer showing a due forever
+     * while `reconcile:balances` reported a diff that was not a bug.
+     *
+     * The sale's revenue is NOT reversed. The goods were delivered and the
+     * invoice was real; what failed is collection, so the loss is an expense.
+     * Reversing revenue instead would also restate a Mushak 6.3 that NBR
+     * already holds a copy of.
+     */
+    async writeOffDebt(
+        tenantId: string,
+        id: string,
+        userId: string,
+        dto: WriteOffCustomerDebtDto,
+        storeId?: string,
+    ) {
+        const customer = await this.db.customer.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true, due_balance: true, credit_enabled: true },
+        });
+        if (!customer) throw new NotFoundException('Customer not found');
+
+        if (dto.amount <= 0) throw new BadRequestException('Amount must be positive');
+
+        const currentDue = Number(customer.due_balance);
+        if (currentDue <= AMOUNT_EPSILON) {
+            throw new BadRequestException(
+                `${customer.name} owes nothing, so there is no debt to write off.`,
+            );
+        }
+        // Writing off more than is owed would conjure a credit balance out of
+        // nothing and overstate the expense. A partial write-off is ordinary —
+        // a customer who settles part of a debt leaves the rest to forgive —
+        // but it can never exceed what is on the ledger.
+        if (dto.amount > currentDue + AMOUNT_EPSILON) {
+            throw new BadRequestException(
+                `Cannot write off ৳${dto.amount.toFixed(2)}: ${customer.name} owes `
+                + `৳${currentDue.toFixed(2)}.`,
+            );
+        }
+
+        const balanceAfter = currentDue - dto.amount;
+        const writeOffDate = dto.date ? new Date(dto.date) : new Date();
+        // Default ON: the write-off drops due_balance, and assertCustomerCreditForSale
+        // gates credit sales on that figure — so doing nothing here would hand the
+        // customer their whole credit limit back the moment they failed to pay it.
+        const disableCredit = dto.disableCredit ?? true;
+
+        return this.db.$transaction(async (tx) => {
+            const payment_number = await this.generatePaymentNumber(tenantId, tx, 'WRITE_OFF');
+
+            const writeOff = await tx.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_id: id,
+                    type: 'WRITE_OFF',
+                    amount: dto.amount,
+                    balance_after: balanceAfter,
+                    payment_number,
+                    reference_type: 'BAD_DEBT',
+                    reference_id: dto.reason,
+                    notes: dto.notes,
+                    created_by: userId,
+                    created_at: writeOffDate,
+                },
+                include: {
+                    customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                    creator: { select: { id: true, name: true } },
+                },
+            });
+
+            await tx.customer.update({
+                where: { id },
+                data: {
+                    due_balance: balanceAfter,
+                    ...(disableCredit ? { credit_enabled: false } : {}),
+                },
+            });
+
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'bad_debt_write_off',
+                conditionKey: 'none',
+                sourceModule: 'customers',
+                sourceType: 'customer_write_off',
+                sourceId: writeOff.id,
+                amount: dto.amount,
+                description: `Bad debt written off — ${customer.name}`,
+                referenceNumber: payment_number,
+                date: writeOffDate,
+                storeId,
+                partyType: 'CUSTOMER',
+                partyId: id,
+            });
+
+            return {
+                ...writeOff,
+                reason: dto.reason,
+                credit_disabled: disableCredit,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
+        });
+    }
+
+    /**
+     * Undoes a write-off, putting the debt back on the customer's ledger.
+     *
+     * Deletes the voucher rather than posting a contra entry, which is what
+     * `deleteCreditPayment` does for a mistaken payment and what the fiscal
+     * lock inside `voidAutoPostedVoucher` is written to guard: a closed period
+     * refuses the reversal instead of silently reopening itself.
+     *
+     * This is also how a LATER RECOVERY is handled — reverse the write-off, then
+     * record the payment normally — because a recovery cannot post as an
+     * ordinary `customer_payment`: that rule credits Accounts Receivable, and
+     * after a write-off there is no receivable left to credit. Note the expense
+     * comes back out of the period the write-off was posted in, so a recovery
+     * that crosses a fiscal year needs the period reopened or a manual journal.
+     */
+    async reverseWriteOff(tenantId: string, writeOffId: string) {
+        const writeOff = await this.db.customerCreditTransaction.findFirst({
+            where: { id: writeOffId, tenant_id: tenantId, type: 'WRITE_OFF' },
+            select: { id: true, customer_id: true, amount: true },
+        });
+        if (!writeOff) throw new NotFoundException('Write-off not found');
+
+        return this.db.$transaction(async (tx) => {
+            const customer = await tx.customer.findFirst({
+                where: { id: writeOff.customer_id, tenant_id: tenantId },
+                select: { id: true, name: true, due_balance: true },
+            });
+            if (!customer) throw new NotFoundException('Customer not found');
+
+            await voidAutoPostedVoucher(tx, tenantId, 'bad_debt_write_off', writeOffId);
+
+            await tx.customerCreditTransaction.delete({ where: { id: writeOffId } });
+
+            const restoredDue = Number(customer.due_balance) + Number(writeOff.amount);
+            await tx.customer.update({
+                where: { id: customer.id },
+                data: { due_balance: restoredDue },
+            });
+
+            // `credit_enabled` is deliberately left as it is. The write-off may
+            // have turned it off, or an owner may have done so independently,
+            // and the two are indistinguishable from this row — so letting the
+            // customer buy on credit again stays a deliberate act on their
+            // record rather than a side effect of undoing a write-off.
+            return { reversed: true, id: writeOffId, due_balance: restoredDue };
+        });
+    }
+
+    /** Every debt this workspace has forgiven — the bad-debt register. */
+    async listWriteOffs(
+        tenantId: string,
+        query: ListCustomerWriteOffsQueryDto & { timezone: string },
+    ): Promise<PaginatedResult<any>> {
+        const page = query.page ?? 1;
+        const limit = Math.min(query.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where: any = { tenant_id: tenantId, type: 'WRITE_OFF' };
+        if (query.customerId) where.customer_id = query.customerId;
+        // The reason rides in reference_id beside reference_type 'BAD_DEBT'; see
+        // writeOffDebt. No column was added for it because the reason never
+        // steers a posting — it is a label on the row.
+        if (query.reason) where.reference_id = query.reason;
+
+        const created = createdAtRange(query.from, query.to, query.timezone);
+        if (created) where.created_at = created;
+
+        const [items, total] = await Promise.all([
+            this.db.customerCreditTransaction.findMany({
+                where,
+                include: {
+                    customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                    creator: { select: { id: true, name: true } },
+                },
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.db.customerCreditTransaction.count({ where }),
+        ]);
+
+        const enriched = await this.enrichPaymentsWithVouchers(tenantId, items, 'bad_debt_write_off');
+        return paginate(
+            enriched.map((item: any) => ({ ...item, reason: item.reference_id })),
+            total,
+            page,
+            limit,
+        );
     }
 
     /**

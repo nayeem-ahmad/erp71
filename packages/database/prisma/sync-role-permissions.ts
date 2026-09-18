@@ -229,6 +229,22 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.MANAGE_STOREFRONT_PAGES,
         ],
     },
+    {
+        // Forgiving a receivable. Its own group rather than joining anything
+        // holding MANAGE_CUSTOMER_CREDIT: every existing role already carries
+        // that permission, so the "holds none of its permissions" test would
+        // skip such a group forever and the grant would reach nobody — see this
+        // file's header.
+        //
+        // `ROLE_DEFAULT_PERMISSIONS` gives it to Manager (and Owner, who holds
+        // everything), matching where MANAGE_CUSTOMER_CREDIT already sits. The
+        // point of the separate permission is that an owner can take it back off
+        // a role without also stopping that role taking payments.
+        key: 'customer-write-off',
+        permissions: [
+            StorePermission.WRITE_OFF_CUSTOMER_DEBT,
+        ],
+    },
 ];
 
 export interface GroupResult {

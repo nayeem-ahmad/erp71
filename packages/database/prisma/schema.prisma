@@ -312,6 +312,12 @@ enum PostingRuleEventType {
   /// The platform's own operating spend — server bills, gateway charges,
   /// salaries. Same posting route and the same reason as `platform_billing`.
   platform_expense
+  /// A customer receivable the shop has given up on collecting. Dr Bad Debt
+  /// Expense / Cr Accounts Receivable, tagged to the customer so the write-off
+  /// shows on their subsidiary ledger. The sale's revenue stays recognised —
+  /// what failed is collection, not the sale — so this is an expense rather
+  /// than a reversal of Sales Revenue.
+  bad_debt_write_off
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,

@@ -97,6 +97,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'customers.service.ts:566', expectation: 'rule' },
     { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'customers.service.ts:669', expectation: 'rule' },
 
+    // ── bad debt ─────────────────────────────────────────────────────────────
+    // Unconditional: there is one way to forgive a receivable. The reason the
+    // shopkeeper gives for it rides on the transaction, not in the rule.
+    { eventType: 'bad_debt_write_off', conditionKey: 'none', conditionValue: null, emittedBy: 'customers.service.ts writeOffDebt', expectation: 'rule' },
+
     // ── supplier payments ────────────────────────────────────────────────────
     // Keyed on payment_direction rather than payment_mode because
     // Keyed on payment_direction rather than payment_mode because

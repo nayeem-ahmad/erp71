@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Règlements clients", description: "Enregistrez les règlements sur les soldes clients ouverts." },
                 customerLedger: { title: "Grand livre clients", description: "Solde courant et historique des opérations par client." },
                 dueAging: { title: "Balance âgée", description: "Voyez quels clients doivent de l'argent et depuis combien de temps." },
+                badDebts: { title: "Créances irrécouvrables", description: "Chaque créance client abandonnée, avec l'auteur et le motif." },
                 quotes: { title: "Devis clients", description: "Préparez des estimations et suivez le statut des devis." },
                 orders: { title: "Commandes clients", description: "Commandes en magasin et commandes de la boutique en ligne au même endroit." },
                 delivery: { title: "Livraison", description: "Planifiez et suivez les livraisons sortantes." },

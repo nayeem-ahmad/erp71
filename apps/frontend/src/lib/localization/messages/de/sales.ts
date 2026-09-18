@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Kundenzahlungen", description: "Zahlungen auf offene Kundensalden erfassen." },
                 customerLedger: { title: "Kundenkonto", description: "Laufender Saldo und Vorgangshistorie je Kunde." },
                 dueAging: { title: "Fälligkeiten", description: "Sehen, welche Kunden wie lange etwas schulden." },
+                badDebts: { title: "Forderungsverluste", description: "Jede abgeschriebene Kundenforderung, mit Bearbeiter und Grund." },
                 quotes: { title: "Angebote", description: "Kostenvoranschläge erstellen und ihren Status verfolgen." },
                 orders: { title: "Kundenaufträge", description: "Aufträge aus dem Laden und aus dem Onlineshop an einem Ort." },
                 delivery: { title: "Lieferung", description: "Ausgehende Lieferungen planen und verfolgen." },

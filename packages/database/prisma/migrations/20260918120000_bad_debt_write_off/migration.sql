@@ -1,0 +1,17 @@
+-- Writing off a customer receivable the shop has given up on collecting.
+--
+-- Dr Bad Debt Expense / Cr Accounts Receivable, tagged to the customer so the
+-- write-off shows on their subsidiary ledger. The sale's revenue stays
+-- recognised: what failed is collection, not the sale, so the loss is an
+-- expense rather than a reversal of Sales Revenue.
+--
+-- The 'Bad Debt Expense' account (510204) and the posting rule that names it
+-- are provisioned by DEFAULT_ACCOUNTING_TEMPLATE / DEFAULT_POSTING_RULES and
+-- carried to existing tenants by `npm run sync:accounting`, which runs on every
+-- container start. Neither belongs in this file: they are per-tenant rows, not
+-- schema.
+--
+-- The write-off transaction itself needs no table. It is a
+-- CustomerCreditTransaction with type 'WRITE_OFF', and that column is a plain
+-- String rather than an enum.
+ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'bad_debt_write_off';

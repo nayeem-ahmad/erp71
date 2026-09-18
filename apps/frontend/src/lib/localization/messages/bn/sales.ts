@@ -280,6 +280,7 @@ export const salesMessages = {
                     customerPayments: { title: "গ্রাহক পেমেন্ট", description: "বকেয়া বিলের পেমেন্ট রেকর্ড করুন।" },
                     customerLedger: { title: "গ্রাহক লেজার", description: "গ্রাহকের লেনদেনের ইতিহাস।" },
                     dueAging: { title: "বকেয়া বয়স", description: "কার কত দিন বকেয়া আছে দেখুন।" },
+                    badDebts: { title: "মওকুফকৃত বকেয়া", description: "মওকুফ করা প্রতিটি বকেয়া — কে, কেন করেছেন সহ।" },
                     quotes: { title: "বিক্রয় কোটেশন", description: "অনুমান ও কোট স্ট্যাটাস ট্র্যাক করুন।" },
                     orders: { title: "বিক্রয় অর্ডার", description: "অর্ডার ও ডেলিভারি পরিচালনা করুন।" },
                     delivery: { title: "ডেলিভারি", description: "ডেলিভারি শিডিউল ও ট্র্যাক করুন।" },

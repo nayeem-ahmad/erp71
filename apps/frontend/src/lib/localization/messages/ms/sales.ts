@@ -280,6 +280,7 @@ export const salesMessages = {
                     customerPayments: { title: "Bayaran Pelanggan", description: "Rekod bayaran baki tertunggak." },
                     customerLedger: { title: "Lejar Pelanggan", description: "Sejarah transaksi pelanggan." },
                     dueAging: { title: "Penuaan Hutang", description: "Lihat hutang mengikut umur." },
+                    badDebts: { title: "Hutang Lapuk", description: "Setiap hutang pelanggan yang dihapus kira, dengan siapa dan mengapa." },
                     quotes: { title: "Sebut Harga Jualan", description: "Anggaran dan status sebut harga." },
                     orders: { title: "Pesanan Jualan", description: "Urus pesanan dan penghantaran." },
                     delivery: { title: "Penghantaran", description: "Jadual dan jejak penghantaran." },

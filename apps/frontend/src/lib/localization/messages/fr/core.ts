@@ -316,6 +316,7 @@ export const coreMessages = {
             allSales: "Ventes",
             newSalesEntry: "Nouvelle saisie de vente",
             dueAging: "Balance âgée",
+            badDebts: "Créances irrécouvrables",
             crmFollowUps: "Relances",
             crmActivities: "Activités",
             projectsList: "Tous les projets",

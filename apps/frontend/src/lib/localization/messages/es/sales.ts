@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Cobros de clientes", description: "Registre cobros contra los saldos pendientes de clientes." },
                 customerLedger: { title: "Libro mayor de clientes", description: "Saldo continuo e historial de operaciones por cliente." },
                 dueAging: { title: "Antigüedad de deuda", description: "Vea qué clientes deben dinero y desde cuándo." },
+                badDebts: { title: "Deudas incobrables", description: "Cada deuda de cliente dada de baja, con quién y por qué." },
                 quotes: { title: "Presupuestos de venta", description: "Prepare estimaciones y siga el estado de los presupuestos." },
                 orders: { title: "Pedidos de venta", description: "Pedidos de tienda y de la tienda en línea en un mismo lugar." },
                 delivery: { title: "Entregas", description: "Planifique y siga las entregas salientes." },

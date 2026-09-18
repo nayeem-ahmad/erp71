@@ -51,6 +51,7 @@ describe('CustomersService', () => {
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
       },
       postingEvent: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -767,6 +768,233 @@ describe('CustomersService', () => {
       expect(db.customer.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ name: 'Corner Shop', owner_name: 'Rahim Mia' }),
+        }),
+      );
+    });
+  });
+
+  describe('writeOffDebt()', () => {
+    const { autoPostFromRules } = jest.requireMock('../accounting/posting.utils');
+
+    const owing = (due: number, extra: Record<string, unknown> = {}) => ({
+      id: 'c1',
+      name: 'Alice Corp',
+      due_balance: due,
+      credit_enabled: true,
+      ...extra,
+    });
+
+    beforeEach(() => {
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customerCreditTransaction.create.mockResolvedValue({
+        id: 'wo-1',
+        payment_number: 'CWO-00001',
+        type: 'WRITE_OFF',
+        amount: 3000,
+      });
+      autoPostFromRules.mockResolvedValue({ postingStatus: 'skipped' });
+    });
+
+    const dto = {
+      amount: 3000,
+      reason: 'UNTRACEABLE' as any,
+      notes: 'Shop closed, phone dead since March.',
+    };
+
+    it('settles the due on the ledger and posts the expense in one transaction', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(10_000));
+
+      const result = await service.writeOffDebt('tenant-1', 'c1', 'user-1', dto);
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'WRITE_OFF',
+            amount: 3000,
+            balance_after: 7000,
+            payment_number: 'CWO-00001',
+            reference_type: 'BAD_DEBT',
+            reference_id: 'UNTRACEABLE',
+            notes: 'Shop closed, phone dead since March.',
+          }),
+        }),
+      );
+      expect(autoPostFromRules).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'bad_debt_write_off',
+          conditionKey: 'none',
+          sourceModule: 'customers',
+          sourceId: 'wo-1',
+          amount: 3000,
+          partyType: 'CUSTOMER',
+          partyId: 'c1',
+        }),
+      );
+      expect(result.payment_number).toBe('CWO-00001');
+    });
+
+    it('uses its own CWO- series rather than the payment one', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(5000));
+
+      await service.writeOffDebt('tenant-1', 'c1', 'user-1', dto);
+
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            type: 'WRITE_OFF',
+            payment_number: { startsWith: 'CWO-' },
+          }),
+        }),
+      );
+    });
+
+    // Writing a debt off drops due_balance, and assertCustomerCreditForSale
+    // gates credit sales on that figure — so without this the customer gets
+    // their whole limit back the moment they fail to pay.
+    it('stops the customer buying on credit by default', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(3000));
+
+      await service.writeOffDebt('tenant-1', 'c1', 'user-1', dto);
+
+      expect(db.customer.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { due_balance: 0, credit_enabled: false },
+      });
+    });
+
+    it('leaves credit alone when the caller opts out', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(3000));
+
+      await service.writeOffDebt('tenant-1', 'c1', 'user-1', { ...dto, disableCredit: false });
+
+      expect(db.customer.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { due_balance: 0 },
+      });
+    });
+
+    it('writes off part of a debt, leaving the rest owing', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(10_000));
+
+      await service.writeOffDebt('tenant-1', 'c1', 'user-1', { ...dto, amount: 2500 });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 2500, balance_after: 7500 }),
+        }),
+      );
+    });
+
+    // Would conjure a credit balance out of nothing and overstate the expense.
+    it('refuses to write off more than is owed', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(1000));
+
+      await expect(
+        service.writeOffDebt('tenant-1', 'c1', 'user-1', { ...dto, amount: 5000 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the customer owes nothing at all', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(0));
+
+      await expect(service.writeOffDebt('tenant-1', 'c1', 'user-1', dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a non-positive amount', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(5000));
+
+      await expect(
+        service.writeOffDebt('tenant-1', 'c1', 'user-1', { ...dto, amount: 0 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('404s on a customer that is not this tenant\'s', async () => {
+      db.customer.findFirst.mockResolvedValue(null);
+
+      await expect(service.writeOffDebt('tenant-1', 'nope', 'user-1', dto)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    // Backdating lets a write-off land in the period it belongs to; the
+    // fiscal-period lock inside autoPostFromRules is what refuses a closed one.
+    it('posts on the given date and stamps the row with it', async () => {
+      db.customer.findFirst.mockResolvedValue(owing(5000));
+
+      await service.writeOffDebt('tenant-1', 'c1', 'user-1', { ...dto, date: '2026-06-30' });
+
+      const posted = autoPostFromRules.mock.calls.at(-1)[0];
+      expect(posted.date).toEqual(new Date('2026-06-30'));
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ created_at: new Date('2026-06-30') }),
+        }),
+      );
+    });
+  });
+
+  describe('reverseWriteOff()', () => {
+    const { voidAutoPostedVoucher } = jest.requireMock('../accounting/posting.utils');
+
+    beforeEach(() => {
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      voidAutoPostedVoucher.mockResolvedValue(undefined);
+    });
+
+    it('deletes the voucher, drops the row and puts the debt back', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({
+        id: 'wo-1',
+        customer_id: 'c1',
+        amount: 3000,
+      });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice Corp', due_balance: 7000 });
+
+      const result = await service.reverseWriteOff('tenant-1', 'wo-1');
+
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(
+        db,
+        'tenant-1',
+        'bad_debt_write_off',
+        'wo-1',
+      );
+      expect(db.customerCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'wo-1' } });
+      expect(db.customer.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { due_balance: 10_000 },
+      });
+      expect(result).toEqual({ reversed: true, id: 'wo-1', due_balance: 10_000 });
+    });
+
+    // Re-enabling credit stays a deliberate act on the customer's record: the
+    // write-off may have turned it off, or an owner may have done so
+    // independently, and this row cannot tell the two apart.
+    it('does not hand the customer their credit back', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({
+        id: 'wo-1',
+        customer_id: 'c1',
+        amount: 500,
+      });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice Corp', due_balance: 0 });
+
+      await service.reverseWriteOff('tenant-1', 'wo-1');
+
+      expect(db.customer.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { due_balance: 500 },
+      });
+    });
+
+    it('only ever finds WRITE_OFF rows, so a payment id cannot be reversed here', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+
+      await expect(service.reverseWriteOff('tenant-1', 'pay-1')).rejects.toThrow(NotFoundException);
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ type: 'WRITE_OFF' }),
         }),
       );
     });
