@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "परियोजना प्रकार",
         typesHint: "आपके कामों की श्रेणियाँ — स्थापना, सर्विसिंग, फ़िट-आउट।",
         columns: "बोर्ड कॉलम",
-        columnsHint: "हर परियोजना बोर्ड के कॉलम। श्रेणी तय करती है कि क्या पूर्ण माना जाए।",
+        columnsHint: "नया प्रोजेक्ट जिन कॉलम से शुरू होता है। पहले से मौजूद प्रोजेक्ट अपनी सूची रखता है — उसे प्रोजेक्ट में जाकर बदलें। श्रेणी तय करती है कि क्या पूर्ण माना जाए।",
         category: "श्रेणी",
         categories: {
             TODO: "करना है",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "कॉलम जोड़ें",
         mappedStatuses: "मैप की गई स्थितियाँ",
         noMappings: "इस बोर्ड की किसी परियोजना के लिए मैप नहीं",
+        createStatus: "बनाएँ",
+        createStatusHint: "{project} में “{column}” स्थिति बनाएँ और इसे इस कॉलम से जोड़ें।",
         currentlyIn: "(अभी {column} में)",
         loadFailed: "कॉलम लोड नहीं हो सके।",
         deleteColumn: "कॉलम हटाएँ",

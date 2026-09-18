@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: 'Loading settings…',
             saveFailed: 'Failed to save settings',
             saved: 'Settings saved successfully.',
+            sections: {
+                address: 'Store address',
+                homepage: 'Homepage',
+                images: 'Logo & hero image',
+            },
             enable: {
                 title: 'Enable Storefront',
                 description: 'Make your store publicly accessible at your slug URL',

@@ -1705,6 +1705,35 @@ export const api = {
         }),
     deleteCustomerCreditPayment: (paymentId: string) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, { method: 'DELETE' }),
+    writeOffCustomerDebt: (
+        id: string,
+        data: {
+            amount: number;
+            reason: string;
+            notes: string;
+            date?: string;
+            disableCredit?: boolean;
+        },
+    ) => fetchWithAuth(`/customers/${id}/credit/write-off`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getCustomerWriteOffs: (params?: {
+        customerId?: string;
+        reason?: string;
+        from?: string;
+        to?: string;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.reason) query.set('reason', params.reason);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchAllPages(`/customers/credit/write-offs${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    reverseCustomerWriteOff: (writeOffId: string) =>
+        fetchWithAuth(`/customers/credit/write-offs/${writeOffId}/reverse`, { method: 'POST' }),
     getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
     // CRM Interactions
     getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {

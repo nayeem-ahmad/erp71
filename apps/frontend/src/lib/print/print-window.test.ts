@@ -1,4 +1,4 @@
-import { buildPrintDocument, openPrintWindow } from './print-window';
+import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
 
 const base = {
     title: 'Invoice INV-001',
@@ -362,5 +362,66 @@ describe('a pinned footer that does not repeat', () => {
         });
 
         expect(html).not.toContain('p71-sheet');
+    });
+});
+
+describe('preview toolbar', () => {
+    const preview = {
+        title: 'Invoice — A4',
+        printLabel: 'Print',
+        closeLabel: 'Close',
+        skipLabel: 'Skip preview next time',
+    };
+
+    it('renders the toolbar above the document, and hides it from paper', () => {
+        const html = buildPrintDocument({ ...base, preview });
+
+        expect(html).toContain('Invoice &mdash; A4'.replace('&mdash;', '—'));
+        expect(html).toContain('>Print<');
+        expect(html).toContain('>Close<');
+        // On screen but never on paper — the bar must not print.
+        expect(html).toContain('.p71-pv { display: none !important; }');
+        expect(html.indexOf('p71-pv')).toBeLessThan(html.indexOf('<p>body</p>'));
+    });
+
+    it('omits the toolbar entirely when no preview is asked for', () => {
+        expect(buildPrintDocument(base)).not.toContain('p71-pv');
+    });
+
+    it('reports the skip choice back to the opener rather than writing storage', () => {
+        // The popup is a different document; it cannot be trusted to write the
+        // app's localStorage, so the opener owns the preference.
+        const html = buildPrintDocument({ ...base, preview });
+
+        expect(html).toContain(PRINT_PREVIEW_SKIP_MESSAGE);
+        expect(html).toContain('window.opener');
+        expect(html).not.toContain('localStorage');
+    });
+
+    it('drops the checkbox when no skip wording is given', () => {
+        const html = buildPrintDocument({
+            ...base,
+            preview: { ...preview, skipLabel: undefined },
+        });
+
+        expect(html).toContain('p71-pv');
+        // The class still appears in the stylesheet; what must be gone is the
+        // checkbox itself.
+        expect(html).not.toContain('<input type="checkbox"');
+        expect(html).not.toContain('Skip preview next time');
+    });
+
+    it('does not print on open, leaving the operator to press Print', () => {
+        const print = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print,
+            focus: jest.fn(),
+        } as unknown as Window);
+
+        openPrintWindow({ ...base, preview });
+
+        expect(print).not.toHaveBeenCalled();
+        open.mockRestore();
     });
 });

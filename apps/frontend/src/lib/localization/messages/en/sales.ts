@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: 'Customer Payments', description: 'Record payments against customer outstanding balances.' },
                 customerLedger: { title: 'Customer Ledger', description: 'Running balance and transaction history per customer.' },
                 dueAging: { title: 'Due Aging', description: 'See which customers owe money and for how long.' },
+                badDebts: { title: 'Bad Debts', description: 'Every customer debt written off, with who approved it and why.' },
                 quotes: { title: 'Sales Quotations', description: 'Prepare estimates and track quote status.' },
                 orders: { title: 'Sales Orders', description: 'In-store orders and online storefront orders in one place.' },
                 delivery: { title: 'Delivery', description: 'Schedule and track outbound deliveries.' },
@@ -342,6 +343,29 @@ export const salesMessages = {
             paperSize: 'Paper size',
             print: 'Print invoice',
             skip: 'No, thanks',
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: 'Print options',
+            moreActions: 'More actions',
+            printInvoice: 'Print Invoice',
+            otherDocuments: 'Other Documents',
+            posReceipt: 'POS Receipt',
+            mushak: 'Mushak 6.3',
+            openInvoicePage: 'Open invoice page',
+            preview: {
+                /* Toolbar shown over the document before it goes to the printer. */
+                heading: '{document} — {size}',
+                print: 'Print',
+                close: 'Close',
+                skip: 'Skip preview next time',
+                invoice: 'Invoice',
+                challan: 'Delivery Challan',
+                receipt: 'POS Receipt',
+            },
+            loadFailed: 'Could not load the sale to print.',
+            popupBlocked: 'Allow pop-ups for this site to print.',
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

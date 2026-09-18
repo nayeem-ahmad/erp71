@@ -280,6 +280,7 @@ export const salesMessages = {
                     customerPayments: { title: "গ্রাহক পেমেন্ট", description: "বকেয়া বিলের পেমেন্ট রেকর্ড করুন।" },
                     customerLedger: { title: "গ্রাহক লেজার", description: "গ্রাহকের লেনদেনের ইতিহাস।" },
                     dueAging: { title: "বকেয়া বয়স", description: "কার কত দিন বকেয়া আছে দেখুন।" },
+                    badDebts: { title: "মওকুফকৃত বকেয়া", description: "মওকুফ করা প্রতিটি বকেয়া — কে, কেন করেছেন সহ।" },
                     quotes: { title: "বিক্রয় কোটেশন", description: "অনুমান ও কোট স্ট্যাটাস ট্র্যাক করুন।" },
                     orders: { title: "বিক্রয় অর্ডার", description: "অর্ডার ও ডেলিভারি পরিচালনা করুন।" },
                     delivery: { title: "ডেলিভারি", description: "ডেলিভারি শিডিউল ও ট্র্যাক করুন।" },
@@ -342,6 +343,28 @@ export const salesMessages = {
                 paperSize: "কাগজের আকার",
                 print: "ইনভয়েস প্রিন্ট করুন",
                 skip: "না, ধন্যবাদ",
+            },
+            printMenu: {
+                /* The shared print split button: invoice sizes plus the other
+                   documents a sale can produce. */
+                trigger: "প্রিন্ট অপশন",
+                moreActions: "আরও অ্যাকশন",
+                printInvoice: "চালান প্রিন্ট",
+                otherDocuments: "অন্যান্য ডকুমেন্ট",
+                posReceipt: "পিওএস রসিদ",
+                mushak: "মুশক ৬.৩",
+                openInvoicePage: "চালান পেজ খুলুন",
+                preview: {
+                    heading: "{document} — {size}",
+                    print: "প্রিন্ট",
+                    close: "বন্ধ",
+                    skip: "পরেরবার প্রিভিউ বাদ দিন",
+                    invoice: "চালান",
+                    challan: "ডেলিভারি চালান",
+                    receipt: "পিওএস রসিদ",
+                },
+                loadFailed: "প্রিন্ট করার জন্য বিক্রয়টি লোড করা যায়নি।",
+                popupBlocked: "প্রিন্ট করতে এই সাইটের পপ-আপ অনুমতি দিন।",
             },
             challan: {
                 /* The delivery challan — quantities only, never prices. */

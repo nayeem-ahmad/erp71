@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Règlements clients", description: "Enregistrez les règlements sur les soldes clients ouverts." },
                 customerLedger: { title: "Grand livre clients", description: "Solde courant et historique des opérations par client." },
                 dueAging: { title: "Balance âgée", description: "Voyez quels clients doivent de l'argent et depuis combien de temps." },
+                badDebts: { title: "Créances irrécouvrables", description: "Chaque créance client abandonnée, avec l'auteur et le motif." },
                 quotes: { title: "Devis clients", description: "Préparez des estimations et suivez le statut des devis." },
                 orders: { title: "Commandes clients", description: "Commandes en magasin et commandes de la boutique en ligne au même endroit." },
                 delivery: { title: "Livraison", description: "Planifiez et suivez les livraisons sortantes." },
@@ -342,6 +343,28 @@ export const salesMessages = {
             paperSize: "Format de papier",
             print: "Imprimer la facture",
             skip: "Non, merci",
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "Options d'impression",
+            moreActions: "Plus d'actions",
+            printInvoice: "Imprimer la facture",
+            otherDocuments: "Autres documents",
+            posReceipt: "Ticket de caisse",
+            mushak: "Mushak 6.3",
+            openInvoicePage: "Ouvrir la page de facture",
+            preview: {
+                heading: "{document} — {size}",
+                print: "Imprimer",
+                close: "Fermer",
+                skip: "Ignorer l'aperçu la prochaine fois",
+                invoice: "Facture",
+                challan: "Bon de livraison",
+                receipt: "Ticket de caisse",
+            },
+            loadFailed: "Impossible de charger la vente à imprimer.",
+            popupBlocked: "Autorisez les fenêtres pop-up de ce site pour imprimer.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

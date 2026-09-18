@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
+import { ageBalance, emptyAgingBuckets, type AgingEntry } from './aging.utils';
 import {
     approvalVoucherFilter,
     initialApprovalStatus,
@@ -1037,26 +1038,35 @@ export class AccountingService {
             if (account.type === AccountType.LIABILITY) totalLiabilities = this.roundAmount(totalLiabilities + signed);
         }
 
-        // --- Aging: bucketed by voucher date, matching the AR/AP aging reports ---
+        // --- Aging: settlements applied oldest-first, matching the AR/AP reports ---
+        // Aged per account and then summed, which is exactly what getArAging and
+        // getApAging do, so the dashboard panel and the reports behind it cannot
+        // print different numbers for the same tenant on the same day.
         const receivableIds = new Set(receivableAccounts.map((a) => a.id));
-        const emptyBuckets = () => ({ current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 });
-        const arBuckets = emptyBuckets();
-        const apBuckets = emptyBuckets();
-        const dayMs = 24 * 60 * 60 * 1000;
-        const asOfMs = asOf.getTime();
+        const arBuckets = emptyAgingBuckets();
+        const apBuckets = emptyAgingBuckets();
 
+        const entriesByAccount = new Map<string, AgingEntry[]>();
         for (const entry of agingEntries) {
             const isReceivable = receivableIds.has(entry.account_id);
-            // Receivables age from the debit that raised them; payables from the credit.
-            const amount = Number((isReceivable ? entry.debit_amount : entry.credit_amount) ?? 0);
-            if (amount <= 0) continue;
+            const debit = Number(entry.debit_amount ?? 0);
+            const credit = Number(entry.credit_amount ?? 0);
+            // A receivable is raised by the debit and settled by the credit; a
+            // payable is the mirror of that.
+            const delta = isReceivable ? debit - credit : credit - debit;
 
-            const buckets = isReceivable ? arBuckets : apBuckets;
-            const ageDays = Math.floor((asOfMs - entry.voucher.date.getTime()) / dayMs);
-            if (ageDays <= 30) buckets.current = this.roundAmount(buckets.current + amount);
-            else if (ageDays <= 60) buckets.overdue_31_60 = this.roundAmount(buckets.overdue_31_60 + amount);
-            else if (ageDays <= 90) buckets.overdue_61_90 = this.roundAmount(buckets.overdue_61_90 + amount);
-            else buckets.overdue_90_plus = this.roundAmount(buckets.overdue_90_plus + amount);
+            const bucket = entriesByAccount.get(entry.account_id);
+            if (bucket) bucket.push({ date: entry.voucher.date, delta });
+            else entriesByAccount.set(entry.account_id, [{ date: entry.voucher.date, delta }]);
+        }
+
+        for (const [accountId, accountEntries] of entriesByAccount) {
+            const target = receivableIds.has(accountId) ? arBuckets : apBuckets;
+            const { buckets } = ageBalance(accountEntries, asOf);
+            target.current = this.roundAmount(target.current + buckets.current);
+            target.overdue_31_60 = this.roundAmount(target.overdue_31_60 + buckets.overdue_31_60);
+            target.overdue_61_90 = this.roundAmount(target.overdue_61_90 + buckets.overdue_61_90);
+            target.overdue_90_plus = this.roundAmount(target.overdue_90_plus + buckets.overdue_90_plus);
         }
 
         const sumBalances = (list: typeof accounts) =>
@@ -2376,7 +2386,6 @@ export class AccountingService {
     async getArAging(tenantId: string, query: ArAgingQueryDto) {
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
-        const asOfMs = asOfDate.getTime();
 
         const allAccounts = await this.db.account.findMany({
             where: { tenant_id: tenantId, type: AccountType.ASSET },
@@ -2408,29 +2417,27 @@ export class AccountingService {
             },
         });
 
-        const dayMs = 24 * 60 * 60 * 1000;
-
         const totals = { balance: 0, current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 };
         const accountResults = arAccounts.map((account) => {
             const accountEntries = entries.filter((e) => e.account_id === account.id);
             let totalDebit = 0;
             let totalCredit = 0;
-            const buckets = { current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 };
+            const agingEntries: AgingEntry[] = [];
 
             for (const entry of accountEntries) {
                 const debit = Number(entry.debit_amount ?? 0);
                 const credit = Number(entry.credit_amount ?? 0);
                 totalDebit += debit;
                 totalCredit += credit;
-
-                if (debit > 0) {
-                    const ageDays = Math.floor((asOfMs - entry.voucher.date.getTime()) / dayMs);
-                    if (ageDays <= 30) buckets.current = this.roundAmount(buckets.current + debit);
-                    else if (ageDays <= 60) buckets.overdue_31_60 = this.roundAmount(buckets.overdue_31_60 + debit);
-                    else if (ageDays <= 90) buckets.overdue_61_90 = this.roundAmount(buckets.overdue_61_90 + debit);
-                    else buckets.overdue_90_plus = this.roundAmount(buckets.overdue_90_plus + debit);
-                }
+                // A receivable is raised by the debit and settled by the credit,
+                // so one signed delta per line is all the ager needs.
+                agingEntries.push({ date: entry.voucher.date, delta: debit - credit });
             }
+
+            // This summed the GROSS debits before, so the buckets ignored every
+            // receipt and did not add up to the balance printed beside them.
+            // Receipts now settle the oldest invoice first.
+            const { buckets } = ageBalance(agingEntries, asOfDate);
 
             const signedBalance = this.calculateSignedBalance(AccountType.ASSET, totalDebit, totalCredit);
             const presented = this.presentBalance(AccountType.ASSET, signedBalance);
@@ -2463,7 +2470,6 @@ export class AccountingService {
     async getApAging(tenantId: string, query: ApAgingQueryDto) {
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
-        const asOfMs = asOfDate.getTime();
 
         const allAccounts = await this.db.account.findMany({
             where: { tenant_id: tenantId, type: AccountType.LIABILITY },
@@ -2495,29 +2501,27 @@ export class AccountingService {
             },
         });
 
-        const dayMs = 24 * 60 * 60 * 1000;
         const totals = { balance: 0, current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 };
 
         const accountResults = apAccounts.map((account) => {
             const accountEntries = entries.filter((e) => e.account_id === account.id);
             let totalDebit = 0;
             let totalCredit = 0;
-            const buckets = { current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 };
+            const agingEntries: AgingEntry[] = [];
 
             for (const entry of accountEntries) {
                 const debit = Number(entry.debit_amount ?? 0);
                 const credit = Number(entry.credit_amount ?? 0);
                 totalDebit += debit;
                 totalCredit += credit;
-
-                if (credit > 0) {
-                    const ageDays = Math.floor((asOfMs - entry.voucher.date.getTime()) / dayMs);
-                    if (ageDays <= 30) buckets.current = this.roundAmount(buckets.current + credit);
-                    else if (ageDays <= 60) buckets.overdue_31_60 = this.roundAmount(buckets.overdue_31_60 + credit);
-                    else if (ageDays <= 90) buckets.overdue_61_90 = this.roundAmount(buckets.overdue_61_90 + credit);
-                    else buckets.overdue_90_plus = this.roundAmount(buckets.overdue_90_plus + credit);
-                }
+                // The mirror of the receivable: a payable is raised by the
+                // credit and settled by the debit.
+                agingEntries.push({ date: entry.voucher.date, delta: credit - debit });
             }
+
+            // Same fix as the AR side — a payment now retires the oldest bill
+            // instead of leaving the whole bill in its original bucket forever.
+            const { buckets } = ageBalance(agingEntries, asOfDate);
 
             const signedBalance = this.calculateSignedBalance(AccountType.LIABILITY, totalDebit, totalCredit);
             const presented = this.presentBalance(AccountType.LIABILITY, signedBalance);

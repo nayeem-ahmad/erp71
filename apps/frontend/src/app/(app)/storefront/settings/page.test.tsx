@@ -90,19 +90,25 @@ describe('StorefrontSettingsPage', () => {
         });
     });
 
-    it('shows toggle button', async () => {
+    // `role="switch"`, not `role="button"`: the hand-rolled ToggleLeft/
+    // ToggleRight icon button this replaced announced nothing about its own
+    // on/off state.
+    it('shows the enable switch', async () => {
         render(<StorefrontSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /toggle storefront/i })).toBeInTheDocument();
+            expect(screen.getByRole('switch', { name: /toggle storefront/i })).toBeInTheDocument();
         });
     });
 
     it('toggles storefront enabled state on click', async () => {
         render(<StorefrontSettingsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /toggle storefront/i }));
-        fireEvent.click(screen.getByRole('button', { name: /toggle storefront/i }));
-        // Toggle should flip; no error expected
-        expect(document.body).toBeInTheDocument();
+        await waitFor(() => screen.getByRole('switch', { name: /toggle storefront/i }));
+        const toggle = screen.getByRole('switch', { name: /toggle storefront/i });
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+        fireEvent.click(toggle);
+
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
     });
 
     it('shows store slug label', async () => {

@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "ग्राहक भुगतान", description: "ग्राहकों के बकाया शेष के विरुद्ध भुगतान दर्ज करें।" },
                 customerLedger: { title: "ग्राहक खाता-बही", description: "प्रति ग्राहक चालू शेष और लेन-देन इतिहास।" },
                 dueAging: { title: "बकाया आयु", description: "देखें कौन-से ग्राहक कितने समय से पैसा देते हैं।" },
+                badDebts: { title: "डूबत ऋण", description: "बट्टे खाते डाला गया हर ग्राहक ऋण, किसने और क्यों सहित।" },
                 quotes: { title: "बिक्री कोटेशन", description: "अनुमान तैयार करें और कोट की स्थिति ट्रैक करें।" },
                 orders: { title: "बिक्री ऑर्डर", description: "स्टोर और ऑनलाइन स्टोरफ़्रंट ऑर्डर एक जगह।" },
                 delivery: { title: "डिलीवरी", description: "बाहर जाने वाली डिलीवरी निर्धारित करें और ट्रैक करें।" },
@@ -342,6 +343,28 @@ export const salesMessages = {
             paperSize: "कागज़ का आकार",
             print: "चालान प्रिंट करें",
             skip: "नहीं, धन्यवाद",
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "प्रिंट विकल्प",
+            moreActions: "अधिक क्रियाएँ",
+            printInvoice: "चालान प्रिंट करें",
+            otherDocuments: "अन्य दस्तावेज़",
+            posReceipt: "पीओएस रसीद",
+            mushak: "मुशक 6.3",
+            openInvoicePage: "चालान पेज खोलें",
+            preview: {
+                heading: "{document} — {size}",
+                print: "प्रिंट",
+                close: "बंद करें",
+                skip: "अगली बार पूर्वावलोकन छोड़ें",
+                invoice: "चालान",
+                challan: "डिलीवरी चालान",
+                receipt: "पीओएस रसीद",
+            },
+            loadFailed: "प्रिंट करने के लिए बिक्री लोड नहीं हो सकी।",
+            popupBlocked: "प्रिंट करने के लिए इस साइट के पॉप-अप की अनुमति दें।",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

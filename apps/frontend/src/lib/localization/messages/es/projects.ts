@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "Tipos de proyecto",
         typesHint: "Categorías para sus trabajos: instalación, mantenimiento, acondicionamiento.",
         columns: "Columnas del tablero",
-        columnsHint: "Las columnas de cada tablero de proyecto. La categoría decide qué cuenta como terminado.",
+        columnsHint: "Las columnas con las que empieza un proyecto nuevo. Un proyecto que ya existe conserva su propia lista: cámbiela en el propio proyecto. La categoría decide qué cuenta como terminado.",
         category: "Categoría",
         categories: {
             TODO: "Por hacer",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "Añadir columna",
         mappedStatuses: "Estados asignados",
         noMappings: "Sin asignar para ningún proyecto de este tablero",
+        createStatus: "Crear",
+        createStatusHint: "Crear el estado «{column}» en {project} y asignarlo a esta columna.",
         currentlyIn: "(actualmente en {column})",
         loadFailed: "No se pudieron cargar las columnas.",
         deleteColumn: "Eliminar columna",

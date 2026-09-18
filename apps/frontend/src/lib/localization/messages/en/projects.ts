@@ -659,7 +659,7 @@ export const projectsMessages = {
         types: 'Project types',
         typesHint: 'Categories for your jobs — installation, servicing, fit-out.',
         columns: 'Board columns',
-        columnsHint: 'The columns on every project board. The category decides what counts as finished.',
+        columnsHint: 'The columns a new project starts with. A project that already exists keeps its own list — change that on the project itself. The category decides what counts as finished.',
         category: 'Category',
         categories: {
             TODO: 'To do',
@@ -711,6 +711,8 @@ export const projectsMessages = {
         addColumn: 'Add column',
         mappedStatuses: 'Mapped statuses',
         noMappings: 'Not mapped for any project on this board',
+        createStatus: 'Create',
+        createStatusHint: 'Create the status “{column}” in {project} and map it to this column.',
         currentlyIn: '(currently in {column})',
         loadFailed: 'Could not load the columns.',
         deleteColumn: 'Delete column',

@@ -660,7 +660,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                     ? 'Platform Admin'
                                     : inRefereeMode
                                         ? t.referralPortal.workspace.title
-                                        : (activeTenant?.role || t.dashboardLayout.userFallbackRole)
+                                        // The role the member actually holds, not the
+                                        // coarse `UserRole` bucket it collapses into:
+                                        // every module role maps to CASHIER, so the
+                                        // enum shows "CASHIER" for a Sales User and a
+                                        // Project User alike and never changes when
+                                        // one is swapped for the other. `tenant_role`
+                                        // is null for an owner by design, whose bucket
+                                        // (OWNER) is the right label.
+                                        : (activeTenant?.tenant_role?.name
+                                            || activeTenant?.role
+                                            || t.dashboardLayout.userFallbackRole)
                             }
                             avatarUrl={user?.avatar_url}
                             canSwitchAccount={canSwitchAccount}

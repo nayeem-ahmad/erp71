@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: 'مدفوعات الزبائن', description: 'سجّل المدفوعات مقابل أرصدة الزبائن المستحقة.' },
                 customerLedger: { title: 'دفتر الزبون', description: 'الرصيد الجاري وسجل المعاملات لكل زبون.' },
                 dueAging: { title: 'أعمار الذمم', description: 'اعرف من عليه مبالغ مستحقة ومنذ متى.' },
+                badDebts: { title: 'الديون المعدومة', description: 'كل دين عميل تم شطبه، مع من قام بذلك وسببه.' },
                 quotes: { title: 'عروض الأسعار', description: 'جهّز التقديرات وتابع حالة كل عرض.' },
                 orders: { title: 'أوامر البيع', description: 'طلبات المعرض وطلبات المتجر الإلكتروني في مكان واحد.' },
                 delivery: { title: 'التسليم', description: 'جدولة عمليات التسليم الصادرة ومتابعتها.' },
@@ -342,6 +343,28 @@ export const salesMessages = {
             paperSize: 'حجم الورق',
             print: 'طباعة الفاتورة',
             skip: 'لا، شكرًا',
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "خيارات الطباعة",
+            moreActions: "إجراءات أخرى",
+            printInvoice: "طباعة الفاتورة",
+            otherDocuments: "مستندات أخرى",
+            posReceipt: "إيصال نقطة البيع",
+            mushak: "مشك ٦٫٣",
+            openInvoicePage: "فتح صفحة الفاتورة",
+            preview: {
+                heading: "{document} — {size}",
+                print: "طباعة",
+                close: "إغلاق",
+                skip: "تخطي المعاينة في المرة القادمة",
+                invoice: "فاتورة",
+                challan: "إذن تسليم",
+                receipt: "إيصال نقطة البيع",
+            },
+            loadFailed: "تعذر تحميل عملية البيع للطباعة.",
+            popupBlocked: "اسمح بالنوافذ المنبثقة لهذا الموقع للطباعة.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

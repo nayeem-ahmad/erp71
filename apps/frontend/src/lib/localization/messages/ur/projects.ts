@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "پروجیکٹ کی اقسام",
         typesHint: "آپ کے کاموں کے زمرے — تنصیب، مرمت، آرائش۔",
         columns: "بورڈ کے کالم",
-        columnsHint: "ہر پروجیکٹ بورڈ کے کالم۔ زمرہ طے کرتا ہے کہ کیا مکمل شمار ہوتا ہے۔",
+        columnsHint: "نیا پروجیکٹ جن کالموں سے شروع ہوتا ہے۔ پہلے سے موجود پروجیکٹ اپنی فہرست رکھتا ہے — اسے پروجیکٹ کے اندر سے بدلیں۔ زمرہ طے کرتا ہے کہ کیا مکمل شمار ہوگا۔",
         category: "زمرہ",
         categories: {
             TODO: "کرنا ہے",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "کالم شامل کریں",
         mappedStatuses: "منسلک حالتیں",
         noMappings: "اس بورڈ کے کسی پروجیکٹ سے منسلک نہیں",
+        createStatus: "بنائیں",
+        createStatusHint: "{project} میں ”{column}“ حالت بنائیں اور اسے اس کالم سے جوڑیں۔",
         currentlyIn: "(اس وقت {column} میں)",
         loadFailed: "کالم لوڈ نہیں ہو سکے۔",
         deleteColumn: "کالم حذف کریں",
