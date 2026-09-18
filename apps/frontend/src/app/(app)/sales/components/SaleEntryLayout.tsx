@@ -154,6 +154,8 @@ interface SaleEntryLayoutProps {
 
     /** Buttons for the bottom of the end-hand panel. */
     actions: ReactNode;
+    /** Document actions for the top strip — printing and the like. */
+    headerActions?: ReactNode;
     onSubmit?: (e: React.FormEvent) => void;
 }
 
@@ -201,6 +203,7 @@ export default function SaleEntryLayout({
     perLineWarehouse = false,
     setPerLineWarehouse,
     actions,
+    headerActions,
     onSubmit,
 }: SaleEntryLayoutProps) {
     // Only meaningful while a rate is still being decided, and the customer is
@@ -316,6 +319,7 @@ export default function SaleEntryLayout({
                 </>
             }
             actions={actions}
+            headerActions={headerActions}
         />
     );
 }

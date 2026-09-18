@@ -344,6 +344,28 @@ export const salesMessages = {
                 print: "ইনভয়েস প্রিন্ট করুন",
                 skip: "না, ধন্যবাদ",
             },
+            printMenu: {
+                /* The shared print split button: invoice sizes plus the other
+                   documents a sale can produce. */
+                trigger: "প্রিন্ট অপশন",
+                moreActions: "আরও অ্যাকশন",
+                printInvoice: "চালান প্রিন্ট",
+                otherDocuments: "অন্যান্য ডকুমেন্ট",
+                posReceipt: "পিওএস রসিদ",
+                mushak: "মুশক ৬.৩",
+                openInvoicePage: "চালান পেজ খুলুন",
+                preview: {
+                    heading: "{document} — {size}",
+                    print: "প্রিন্ট",
+                    close: "বন্ধ",
+                    skip: "পরেরবার প্রিভিউ বাদ দিন",
+                    invoice: "চালান",
+                    challan: "ডেলিভারি চালান",
+                    receipt: "পিওএস রসিদ",
+                },
+                loadFailed: "প্রিন্ট করার জন্য বিক্রয়টি লোড করা যায়নি।",
+                popupBlocked: "প্রিন্ট করতে এই সাইটের পপ-আপ অনুমতি দিন।",
+            },
             challan: {
                 /* The delivery challan — quantities only, never prices. */
                 action: "ডেলিভারি চালান",

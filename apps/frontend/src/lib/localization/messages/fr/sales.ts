@@ -344,6 +344,28 @@ export const salesMessages = {
             print: "Imprimer la facture",
             skip: "Non, merci",
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "Options d'impression",
+            moreActions: "Plus d'actions",
+            printInvoice: "Imprimer la facture",
+            otherDocuments: "Autres documents",
+            posReceipt: "Ticket de caisse",
+            mushak: "Mushak 6.3",
+            openInvoicePage: "Ouvrir la page de facture",
+            preview: {
+                heading: "{document} — {size}",
+                print: "Imprimer",
+                close: "Fermer",
+                skip: "Ignorer l'aperçu la prochaine fois",
+                invoice: "Facture",
+                challan: "Bon de livraison",
+                receipt: "Ticket de caisse",
+            },
+            loadFailed: "Impossible de charger la vente à imprimer.",
+            popupBlocked: "Autorisez les fenêtres pop-up de ce site pour imprimer.",
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: "Bon de livraison",

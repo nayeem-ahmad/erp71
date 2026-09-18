@@ -344,6 +344,28 @@ export const salesMessages = {
                 print: "Cetak invois",
                 skip: "Tidak, terima kasih",
             },
+            printMenu: {
+                /* The shared print split button: invoice sizes plus the other
+                   documents a sale can produce. */
+                trigger: "Pilihan cetak",
+                moreActions: "Tindakan lain",
+                printInvoice: "Cetak Invois",
+                otherDocuments: "Dokumen Lain",
+                posReceipt: "Resit POS",
+                mushak: "Mushak 6.3",
+                openInvoicePage: "Buka halaman invois",
+                preview: {
+                    heading: "{document} — {size}",
+                    print: "Cetak",
+                    close: "Tutup",
+                    skip: "Langkau pratonton lain kali",
+                    invoice: "Invois",
+                    challan: "Nota Penghantaran",
+                    receipt: "Resit POS",
+                },
+                loadFailed: "Jualan tidak dapat dimuatkan untuk dicetak.",
+                popupBlocked: "Benarkan pop-up untuk tapak ini bagi mencetak.",
+            },
             challan: {
                 /* The delivery challan — quantities only, never prices. */
                 action: "Nota Penghantaran",

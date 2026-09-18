@@ -30,13 +30,15 @@ jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'test-sale-1' }),
 }));
 
-jest.mock('lucide-react', () => ({
-    ArrowLeft: () => <span data-testid="icon-arrow-left" />,
-    Download: () => <span data-testid="icon-download" />,
-    FileCheck: () => <span data-testid="icon-file-check" />,
-    Printer: () => <span data-testid="icon-printer" />,
-    Truck: () => <span data-testid="icon-truck" />,
-    ChevronRight: () => <span data-testid="icon-chevron-right" />,
+// Any icon, not a fixed list: the shared print menu brings its own, and an
+// allowlist here fails as an undefined component the moment one is added.
+jest.mock('lucide-react', () => new Proxy({}, {
+    get: (_target, name: string) => {
+        if (name === '__esModule') return true;
+        const Icon = () => <span data-testid={`icon-${String(name).toLowerCase()}`} />;
+        Icon.displayName = String(name);
+        return Icon;
+    },
 }));
 
 // Mock window.print
@@ -153,14 +155,23 @@ describe('InvoicePage', () => {
         expect(screen.queryByText(/Mushak 6\.3\)/)).not.toBeInTheDocument();
     });
 
+    /**
+     * This page's actions now come from the shared print menu. Its panel is
+     * portalled, so it mounts a tick after the trigger is clicked.
+     */
+    const chooseFromPrintMenu = async (name: RegExp | string) => {
+        await waitFor(() => expect(screen.getByTitle('Print options')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+        fireEvent.click(await screen.findByRole('menuitem', { name }));
+    };
+
     it('links to the Mushak 6.3 tax invoice for the same sale', async () => {
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('link', { name: /Mushak 6\.3/ })).toHaveAttribute(
-                'href',
-                '/sales/test-sale-1/mushak',
-            );
-        });
+        await waitFor(() => expect(screen.getByTitle('Print options')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+
+        expect(await screen.findByRole('menuitem', { name: /Mushak 6\.3/ }))
+            .toHaveAttribute('href', '/sales/test-sale-1/mushak');
     });
 
     it('prefers the VAT stored with the sale over the catalogue rate', async () => {
@@ -237,21 +248,38 @@ describe('InvoicePage', () => {
         });
     });
 
-    it('shows Print and Download PDF buttons', async () => {
+    it('offers the print split button and its paper sizes', async () => {
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /^print$/i })).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
-        });
+        // The page's own Print and Download PDF buttons are gone: both did the
+        // same thing — `window.print()` on the screen layout — and the invoice
+        // now prints through the same document the rest of the app prints.
+        await waitFor(() => expect(screen.getByTitle('Print Invoice')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+
+        expect(await screen.findByRole('menuitem', { name: 'A4' })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'A5' })).toBeInTheDocument();
     });
 
-    it('calls window.print when Print button is clicked', async () => {
+    it('prints the invoice document when the split button is pressed', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /^print$/i })).toBeInTheDocument();
-        });
-        fireEvent.click(screen.getByRole('button', { name: /^print$/i }));
-        expect(mockPrint).toHaveBeenCalled();
+        await waitFor(() => expect(screen.getByTitle('Print Invoice')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+
+        await waitFor(() => expect(write).toHaveBeenCalled());
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('SALE-INV-001');
+        expect(html).toContain('Premium Widget');
+
+        open.mockRestore();
     });
 
     it('prints a delivery challan with the goods but none of the money', async () => {
@@ -265,12 +293,9 @@ describe('InvoicePage', () => {
         } as unknown as Window);
 
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /delivery challan/i })).toBeInTheDocument();
-        });
-        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+        await chooseFromPrintMenu(/delivery challan/i);
 
-        expect(write).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
         const html = write.mock.calls[0][0] as string;
         expect(html).toContain('Delivery Challan');
         expect(html).toContain('SALE-INV-001');
@@ -302,11 +327,9 @@ describe('InvoicePage', () => {
         } as unknown as Window);
 
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /delivery challan/i })).toBeInTheDocument();
-        });
-        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+        await chooseFromPrintMenu(/delivery challan/i);
 
+        await waitFor(() => expect(write).toHaveBeenCalled());
         const html = write.mock.calls[0][0] as string;
         expect(html).toContain('Premium Widget');
         expect(html).not.toContain('Deliver To');

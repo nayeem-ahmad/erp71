@@ -68,7 +68,10 @@ jest.mock('@/lib/sales-invoice-printer', () => ({
 
 jest.mock('next/link', () => ({
     __esModule: true,
-    default: ({ children, href }: any) => <a href={href}>{children}</a>,
+    // Forwards the rest of the props: the print menu puts `role="menuitem"` on
+    // its links, and a mock that keeps only `href` makes them unfindable by
+    // role even though the real Link renders them.
+    default: ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a>,
 }));
 
 const mockPush = jest.fn();
@@ -147,6 +150,16 @@ beforeEach(() => {
 });
 
 describe('SaleDetailPage — view mode', () => {
+    /**
+     * The sale's documents live behind the print split button in the top strip.
+     * The panel is portalled, so it mounts a tick after the click rather than
+     * synchronously with it.
+     */
+    const chooseFromPrintMenu = async (name: RegExp | string) => {
+        fireEvent.click(screen.getByTitle('Print options'));
+        fireEvent.click(await screen.findByRole('menuitem', { name }));
+    };
+
     it('prints a delivery challan carrying the goods and the parties, but no money', async () => {
         const write = jest.fn();
         const open = jest.spyOn(window, 'open').mockReturnValue({
@@ -158,7 +171,7 @@ describe('SaleDetailPage — view mode', () => {
         } as unknown as Window);
 
         await renderPage();
-        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+        await chooseFromPrintMenu(/delivery challan/i);
 
         expect(write).toHaveBeenCalledTimes(1);
         const html = write.mock.calls[0][0] as string;
@@ -187,13 +200,10 @@ describe('SaleDetailPage — view mode', () => {
         await renderPage();
         // Choosing A5 from the print menu prints the invoice and remembers the
         // choice; the challan that follows must go on the same paper, not A4.
-        fireEvent.click(screen.getByTitle('Choose paper size'));
-        // The menu is portalled, so it mounts a tick after the click rather
-        // than synchronously with it.
-        fireEvent.click(await screen.findByRole('menuitem', { name: 'A5' }));
+        await chooseFromPrintMenu('A5');
         open.mockClear();
 
-        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+        await chooseFromPrintMenu(/delivery challan/i);
 
         expect(open).toHaveBeenCalledWith('', '_blank', 'width=670,height=600');
 
@@ -212,7 +222,7 @@ describe('SaleDetailPage — view mode', () => {
         } as unknown as Window);
 
         await renderPage();
-        fireEvent.click(screen.getByRole('button', { name: /delivery challan/i }));
+        await chooseFromPrintMenu(/delivery challan/i);
 
         const html = write.mock.calls[0][0] as string;
         expect(html).toContain('Gadget X');
@@ -278,24 +288,37 @@ describe('SaleDetailPage — view mode', () => {
         expect(screen.queryByText('Adjustment')).not.toBeInTheDocument();
     });
 
-    it('renders the Invoice PDF link with the correct href', async () => {
+    it('keeps the on-screen invoice reachable from the print menu', async () => {
         await renderPage();
-        expect(screen.getByRole('link', { name: /invoice pdf/i })).toHaveAttribute(
-            'href',
-            '/sales/test-sale-1/invoice',
-        );
+        // The styled invoice page is no longer a button of its own — printing
+        // happens in place — but it stays one click away for anyone who wants
+        // to look at the document rather than put it on paper.
+        fireEvent.click(screen.getByTitle('Print options'));
+        expect(await screen.findByRole('menuitem', { name: /open invoice page/i }))
+            .toHaveAttribute('href', '/sales/test-sale-1/invoice');
+    });
+
+    it('offers the statutory Mushak form from the print menu', async () => {
+        await renderPage();
+        fireEvent.click(screen.getByTitle('Print options'));
+        expect(await screen.findByRole('menuitem', { name: /mushak/i }))
+            .toHaveAttribute('href', '/sales/test-sale-1/mushak');
     });
 
     it('prints a POS receipt built from the sale', async () => {
         const { printPOSReceipt } = require('@/lib/pos-receipt-printer');
         await renderPage();
 
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: /pos receipt/i }));
-        });
+        // Not wrapped in `act`: the menu has to paint between the two clicks,
+        // and a single act() block flushes them together with nothing rendered
+        // in between.
+        await chooseFromPrintMenu(/pos receipt/i);
+        await act(async () => { await Promise.resolve(); });
 
         expect(printPOSReceipt).toHaveBeenCalledWith(
             expect.objectContaining({ serialNumber: 'SALE-001', invoiceId: 'test-sale-1' }),
+            expect.anything(),
+            expect.anything(),
         );
     });
 

@@ -344,6 +344,28 @@ export const salesMessages = {
             print: 'طباعة الفاتورة',
             skip: 'لا، شكرًا',
         },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "خيارات الطباعة",
+            moreActions: "إجراءات أخرى",
+            printInvoice: "طباعة الفاتورة",
+            otherDocuments: "مستندات أخرى",
+            posReceipt: "إيصال نقطة البيع",
+            mushak: "مشك ٦٫٣",
+            openInvoicePage: "فتح صفحة الفاتورة",
+            preview: {
+                heading: "{document} — {size}",
+                print: "طباعة",
+                close: "إغلاق",
+                skip: "تخطي المعاينة في المرة القادمة",
+                invoice: "فاتورة",
+                challan: "إذن تسليم",
+                receipt: "إيصال نقطة البيع",
+            },
+            loadFailed: "تعذر تحميل عملية البيع للطباعة.",
+            popupBlocked: "اسمح بالنوافذ المنبثقة لهذا الموقع للطباعة.",
+        },
         challan: {
             /* The delivery challan — quantities only, never prices. */
             action: "إذن تسليم",
