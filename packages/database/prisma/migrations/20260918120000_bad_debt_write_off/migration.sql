@@ -15,3 +15,10 @@
 -- CustomerCreditTransaction with type 'WRITE_OFF', and that column is a plain
 -- String rather than an enum.
 ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'bad_debt_write_off';
+
+-- The permission that gates the write-off. `StorePermission` is a Postgres enum
+-- as well as a TypeScript const, and `seedDefaultTenantRoles` writes a
+-- TenantRolePermission row per granted permission at tenant creation — so a
+-- value present only in `packages/shared-types` makes every signup fail with
+-- "Invalid value for argument `permission`", not just the write-off route.
+ALTER TYPE "StorePermission" ADD VALUE IF NOT EXISTS 'WRITE_OFF_CUSTOMER_DEBT';

@@ -137,6 +137,11 @@ enum StorePermission {
   APPROVE_CRM_ACTIVITY
   VIEW_CUSTOMER_CREDIT
   MANAGE_CUSTOMER_CREDIT
+  /// Forgiving a receivable: the one AR action that destroys money with no
+  /// counterparty and no document from the other side. Separable from
+  /// MANAGE_CUSTOMER_CREDIT so an owner can take it off a role without also
+  /// stopping that role taking payments.
+  WRITE_OFF_CUSTOMER_DEBT
   VIEW_LEADS
   MANAGE_LEADS
   VIEW_LEAD_CONVERSATIONS
