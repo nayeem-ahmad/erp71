@@ -7,14 +7,23 @@ import {
     RecordCreditPaymentDto,
     UpdateCreditPaymentDto,
     ListCustomerCreditPaymentsQueryDto,
+    WriteOffCustomerDebtDto,
+    ListCustomerWriteOffsQueryDto,
 } from './customer.dto';
+import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportRowsDto } from '../common/import.dto';
 
+// `StorePermissionGuard` is class-wide but only the write-off routes name a
+// permission, so every other route behaves exactly as before — the guard is a
+// no-op without `@RequireStorePermission`. Same arrangement as
+// sales.controller.ts and its cancel route.
 @Controller('customers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class CustomersController {
     constructor(
@@ -167,6 +176,47 @@ export class CustomersController {
         @Body() dto: RecordCreditPaymentDto,
     ) {
         return this.customersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto, tenant.storeId);
+    }
+
+    /**
+     * Every debt this workspace has forgiven. Listed before the `:id` routes
+     * because 'credit' would otherwise be captured as a customer id.
+     */
+    @Get('credit/write-offs')
+    @RequireStorePermission(StorePermission.WRITE_OFF_CUSTOMER_DEBT)
+    async listWriteOffs(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ListCustomerWriteOffsQueryDto,
+    ) {
+        return this.customersService.listWriteOffs(tenant.tenantId, {
+            ...query,
+            timezone: tenant.timezone,
+        });
+    }
+
+    @Post('credit/write-offs/:writeOffId/reverse')
+    @RequireStorePermission(StorePermission.WRITE_OFF_CUSTOMER_DEBT)
+    async reverseWriteOff(
+        @Tenant() tenant: TenantContext,
+        @Param('writeOffId') writeOffId: string,
+    ) {
+        return this.customersService.reverseWriteOff(tenant.tenantId, writeOffId);
+    }
+
+    @Post(':id/credit/write-off')
+    @RequireStorePermission(StorePermission.WRITE_OFF_CUSTOMER_DEBT)
+    async writeOffDebt(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: WriteOffCustomerDebtDto,
+    ) {
+        return this.customersService.writeOffDebt(
+            tenant.tenantId,
+            id,
+            tenant.userId,
+            dto,
+            tenant.storeId,
+        );
     }
 
     @Get('reports/due-aging')

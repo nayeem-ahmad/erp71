@@ -26,17 +26,17 @@ the parameters of the entry.
 
 | Entry | Where | Approval state | Permission | Routing |
 |---|---|---|---|---|
-| Voucher | `schema.prisma:3605` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
-| Leave request | `schema.prisma:5470` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5509`, its own `approver_id`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4758`), anyone holding the permission |
-| Expense claim | `schema.prisma:5071` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
-| Warehouse transfer | `schema.prisma:1782` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
-| Product demand | `schema.prisma:1960` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single reviewer |
-| CRM activity | `schema.prisma:3235` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
-| Payroll run | `schema.prisma:5153` | `status`, `approved_by`, `approved_at` | `MANAGE_HR` | single approver |
-| Overtime record | `schema.prisma:5380` | `status` (`PENDING \| APPROVED \| REJECTED`), `approved_by`, `approved_at` | **none** — `JwtAuthGuard` only | single reviewer, who may approve *fewer* minutes than were recorded |
-| Stock take | `InventorySettings`, `schema.prisma:1754` | `discrepancy_approval_threshold`; `StockTakeSession.status` (`:1908`) | — | a threshold, hard-coded in shape |
-| Warranty claim | `schema.prisma:4312` | `status` includes `APPROVED`, but **no approver column** | **none** — `JwtAuthGuard` only | unrecorded — nobody is stored as having approved it |
-| Fund transfer | `schema.prisma:4280` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
+| Voucher | `schema.prisma:3616` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
+| Leave request | `schema.prisma:5481` | `status`, `approvals_given`, `LeaveRequestApproval[]` (`:5520`, its own `approver_id`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4769`), anyone holding the permission |
+| Expense claim | `schema.prisma:5082` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
+| Warehouse transfer | `schema.prisma:1793` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
+| Product demand | `schema.prisma:1971` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single reviewer |
+| CRM activity | `schema.prisma:3246` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
+| Payroll run | `schema.prisma:5164` | `status`, `approved_by`, `approved_at` | `MANAGE_HR` | single approver |
+| Overtime record | `schema.prisma:5391` | `status` (`PENDING \| APPROVED \| REJECTED`), `approved_by`, `approved_at` | **none** — `JwtAuthGuard` only | single reviewer, who may approve *fewer* minutes than were recorded |
+| Stock take | `InventorySettings`, `schema.prisma:1765` | `discrepancy_approval_threshold`; `StockTakeSession.status` (`:1919`) | — | a threshold, hard-coded in shape |
+| Warranty claim | `schema.prisma:4323` | `status` includes `APPROVED`, but **no approver column** | **none** — `JwtAuthGuard` only | unrecorded — nobody is stored as having approved it |
+| Fund transfer | `schema.prisma:4291` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
 
 Nine columns record who signed: seven `approved_by` (voucher, leave request,
 expense claim, warehouse transfer, CRM activity, payroll run, overtime record),
@@ -86,7 +86,7 @@ Three lessons from it that the generic engine must inherit, not relitigate:
 1. **Off by default, and off must be free.** No new query on the hot path for a
    tenant with no policy.
 2. **Never queue machine-generated documents behind a human by default.**
-   `auto_approve_system_vouchers` (`schema.prisma:3544`) exists because holding
+   `auto_approve_system_vouchers` (`schema.prisma:3555`) exists because holding
    back auto-posted vouchers stalls sales, purchases and payroll.
 3. **Pure util + spec, service on top.** `voucher-approval.util.ts`,
    `leave-policy.util.ts`, `posting-status.util.ts` are all pure functions with
@@ -100,13 +100,36 @@ call; over ৳500,000 it needs the owner."* Every one of the eleven is
 permission, N times", or, for three of them, "whoever is signed in". Authority
 does not vary with the entry.
 
+**The bad-debt write-off, added to `dev` on 2026-09-18, is what that costs.**
+`WRITE_OFF_CUSTOMER_DEBT` is a new permission guarding three endpoints in
+`customers.controller.ts:186,198,207` — and unlike `APPROVE_FUND_TRANSFER` it is
+properly enforced at every one. The schema comment introducing it says exactly
+why it deserved its own permission:
+
+> Forgiving a receivable: the one AR action that destroys money with no
+> counterparty and no document from the other side.
+
+It is the sharpest case in the codebase for routing on the entry, and it has no
+routing at all: **no approver column, no approval status, and no amount
+threshold anywhere in the module.** The permission is binary, so a shop that
+wants its counter staff to clear ৳50 of rounding must also let them forgive
+৳2,00,000 — and the only record of either is the write-off row itself.
+
+This is the pattern the plan exists to stop. Splitting the permission was the
+right call and is not the missing piece; a twelfth bespoke threshold column
+would not be either. What the write-off wants is one rule — *under ৳1,000 the
+manager, above it the owner* — expressed the same way as every other rule in the
+tenant, which is what §2 onwards is for. It is the cleanest Phase 4 adoption
+after fund transfers: recent, small, permission-guarded already, and with no
+legacy approval behaviour to preserve.
+
 Also missing, and needed for people-based routing:
 
 - **`Employee.manager_id`** — there is no reporting line on `Employee`
-  (`schema.prisma:4661`). `hiring_manager_id` on `JobPost` and `manager_id` on
+  (`schema.prisma:4672`). `hiring_manager_id` on `JobPost` and `manager_id` on
   `Project` are the only manager fields in the schema, and neither is a
   hierarchy.
-- **`Department.head_employee_id`** — `Department` (`schema.prisma:4631`) is a
+- **`Department.head_employee_id`** — `Department` (`schema.prisma:4642`) is a
   name and nothing else.
 
 ---
@@ -153,7 +176,7 @@ model ApprovalPolicy {
   allow_self_approval Boolean @default(false)
 
   /// Reports and lists default to approved-only. Generalises
-  /// `AccountingSettings.reports_approved_only` (schema.prisma:3547).
+  /// `AccountingSettings.reports_approved_only` (schema.prisma:3558).
   reports_approved_only Boolean @default(false)
 
   created_at DateTime  @default(now())
@@ -283,7 +306,7 @@ model ApprovalAction {
   /// APPROVED | REJECTED | DELEGATED | COMMENTED | AUTO_APPROVED | SUPERSEDED
   decision    String
   /// User id, not a relation — the rest of the schema records actors this way
-  /// (see the note at schema.prisma:1976) and a deleted user must not take the
+  /// (see the note at schema.prisma:1987) and a deleted user must not take the
   /// history with them.
   approver_id String?
   /// Snapshot of who they were at the time, for the same reason.
@@ -395,8 +418,8 @@ with `conditions: null` matching everything, which is how the catch-all row at
 
 | Type | Resolves to | Source |
 |---|---|---|
-| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4241`) — the existing matrix |
-| `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1249`) |
+| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4252`) — the existing matrix |
+| `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1260`) |
 | `USER` | one named user | `approver_ref` is the user id |
 | `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`** |
 | `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`** |
@@ -481,7 +504,7 @@ into `AttendanceRecord`.
 `ApprovalRequest` to answer "is this approved?"**
 
 `Voucher.approval_status` stays exactly where it is, means exactly what it
-means, and keeps its index (`schema.prisma:3646`). Every existing report, filter
+means, and keeps its index (`schema.prisma:3657`). Every existing report, filter
 and `approvalVoucherFilter()` call keeps working untouched. `ApprovalRequest`
 holds only the *process* — which step, who is waiting, what was decided and why.
 
@@ -548,7 +571,7 @@ purchase. Convert at fact-extraction time, store the original alongside as
 
 ### 6.4 Deleted approvers
 `approver_id` is a plain string, not a relation — matching how the schema
-already handles actors (`schema.prisma:1976`) — plus `approver_name` snapshotted
+already handles actors (`schema.prisma:1987`) — plus `approver_name` snapshotted
 on the action, so the history survives the user row.
 
 ### 6.5 Performance
@@ -600,7 +623,7 @@ replace it. This also means `StorePermissionGuard` needs no changes.
 | **1** | Engine, dark. 4 tables + migration, `ApprovalsModule`, `condition.util.ts` + `rule-match.util.ts` + resolver, all spec'd. Wired to nothing. | no behaviour change |
 | **2** | Voucher pilot. `require_voucher_approval` becomes an `ApprovalPolicy` row; "no rules" degenerates to today's behaviour (one step, anyone with `APPROVE_VOUCHER`). Back-fill migration. | amount-banded voucher approval |
 | **3** | UI. Unified `/approvals` queue (`PageShell` + `PageHeader`), generalised badge hook, policy editor with the test panel, per-entity deep links. | the feature becomes visible |
-| **4** | Adoption, one small PR each: purchase orders, expense claims, fund transfers, warehouse transfers, product demands, overtime records, warranty claims, sales discounts. | eleven bespoke flows become one |
+| **4** | Adoption, one small PR each: purchase orders, expense claims, fund transfers, **bad-debt write-offs**, warehouse transfers, product demands, overtime records, warranty claims, sales discounts. | eleven bespoke flows become one |
 | **5** | Delegation / out-of-office, SLA escalation, parallel + quorum steps, approve-from-notification on mobile. | the long tail |
 
 Phases 1 and 2 are the real work. Phase 4 is repetitive and cheap *because* of

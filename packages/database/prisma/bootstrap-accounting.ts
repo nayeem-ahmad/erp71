@@ -421,6 +421,22 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
+                    // A customer debt the shop has given up on. The sale was
+                    // real and its revenue stays recognised — what failed is
+                    // collection, so the loss belongs in expenses rather than
+                    // as a reversal of Sales Revenue.
+                    //
+                    // Deliberately NOT named with the word "receivable":
+                    // RECEIVABLE_ACCOUNT_PATTERN in accounting.service.ts
+                    // matches any asset account whose name contains it, so a
+                    // provision account named that way would be silently
+                    // counted as a receivable by the aging reports.
+                    {
+                        name: 'Bad Debt Expense',
+                        code: '510204',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
         ],
@@ -517,6 +533,14 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // mechanism the money-model / posting-contract guards can see.
     { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Accounts Receivable', priority: 10 },
     { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Accounts Receivable', credit_account: 'Cash in Hand', priority: 20 },
+
+    // ── Bad debt ─────────────────────────────────────────────────────────────
+    // Forgiving a customer's due. Unconditional: there is one way to write a
+    // receivable off, and the reason the shopkeeper gives for it belongs on the
+    // transaction rather than in the account it lands in. The mirror entry that
+    // reverses a write-off deletes this voucher rather than posting a second
+    // one, so it needs no rule of its own.
+    { event_type: 'bad_debt_write_off', condition_key: 'none', condition_value: null, debit_account: 'Bad Debt Expense', credit_account: 'Accounts Receivable', priority: 10 },
 
     // ── Loans ────────────────────────────────────────────────────────────────
     // Formerly ensureLoanPostingSetup. PAYABLE = we borrowed; RECEIVABLE = we lent.

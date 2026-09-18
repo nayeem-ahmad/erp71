@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Cobros de clientes", description: "Registre cobros contra los saldos pendientes de clientes." },
                 customerLedger: { title: "Libro mayor de clientes", description: "Saldo continuo e historial de operaciones por cliente." },
                 dueAging: { title: "Antigüedad de deuda", description: "Vea qué clientes deben dinero y desde cuándo." },
+                badDebts: { title: "Deudas incobrables", description: "Cada deuda de cliente dada de baja, con quién y por qué." },
                 quotes: { title: "Presupuestos de venta", description: "Prepare estimaciones y siga el estado de los presupuestos." },
                 orders: { title: "Pedidos de venta", description: "Pedidos de tienda y de la tienda en línea en un mismo lugar." },
                 delivery: { title: "Entregas", description: "Planifique y siga las entregas salientes." },
@@ -342,6 +343,28 @@ export const salesMessages = {
             paperSize: "Tamaño de papel",
             print: "Imprimir factura",
             skip: "No, gracias",
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "Opciones de impresión",
+            moreActions: "Más acciones",
+            printInvoice: "Imprimir factura",
+            otherDocuments: "Otros documentos",
+            posReceipt: "Recibo TPV",
+            mushak: "Mushak 6.3",
+            openInvoicePage: "Abrir página de factura",
+            preview: {
+                heading: "{document} — {size}",
+                print: "Imprimir",
+                close: "Cerrar",
+                skip: "Omitir vista previa la próxima vez",
+                invoice: "Factura",
+                challan: "Albarán de entrega",
+                receipt: "Recibo TPV",
+            },
+            loadFailed: "No se pudo cargar la venta para imprimir.",
+            popupBlocked: "Permita las ventanas emergentes de este sitio para imprimir.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

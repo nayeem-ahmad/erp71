@@ -216,6 +216,84 @@ export class RecordCreditPaymentDto {
     notes?: string;
 }
 
+/**
+ * Why a debt is being forgiven. Stored on the transaction rather than steering
+ * the posting: every reason lands in the same Bad Debt Expense account, and a
+ * shopkeeper who has to pick a reason writes a better note than one who does
+ * not.
+ */
+export enum BadDebtReasonDto {
+    /** Gone, moved away, phone dead — the ordinary case. */
+    UNTRACEABLE = 'UNTRACEABLE',
+    /** Traceable but refusing, and not worth pursuing. */
+    REFUSED = 'REFUSED',
+    /** Wound up, bankrupt, or the person has died. */
+    CLOSED_OR_DECEASED = 'CLOSED_OR_DECEASED',
+    /** Cost of chasing it exceeds what is owed. */
+    UNECONOMIC_TO_PURSUE = 'UNECONOMIC_TO_PURSUE',
+    /** Settled for less than the full amount; the shortfall is written off. */
+    SETTLED_SHORT = 'SETTLED_SHORT',
+    OTHER = 'OTHER',
+}
+
+export class WriteOffCustomerDebtDto {
+    /**
+     * How much of the due to forgive. Partial write-offs are ordinary — a
+     * customer who settles ৳7,000 of a ৳10,000 debt leaves ৳3,000 to write off.
+     */
+    @IsNumber()
+    @Min(0.01)
+    amount: number;
+
+    @IsEnum(BadDebtReasonDto)
+    reason: BadDebtReasonDto;
+
+    /**
+     * Required, unlike the note on a payment. A write-off is the one AR action
+     * with no document from the other side, so the person approving it later
+     * has nothing to read but this.
+     */
+    @IsString()
+    @MaxLength(500)
+    notes: string;
+
+    /**
+     * The date the debt is recognised as lost. Defaults to today. Backdating is
+     * allowed so a write-off can land in the period it belongs to, and is
+     * refused by the fiscal-period lock if that period is closed.
+     */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    /**
+     * Whether to stop this customer buying on credit. Defaults to true: writing
+     * a debt off drops `due_balance`, which would otherwise hand the customer
+     * their full credit limit back the moment they failed to pay it.
+     */
+    @IsOptional()
+    @IsBoolean()
+    disableCredit?: boolean;
+}
+
+export class ListCustomerWriteOffsQueryDto extends PaginationDto {
+    @IsOptional()
+    @IsUUID()
+    customerId?: string;
+
+    @IsOptional()
+    @IsEnum(BadDebtReasonDto)
+    reason?: BadDebtReasonDto;
+
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+}
+
 export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsNumber()

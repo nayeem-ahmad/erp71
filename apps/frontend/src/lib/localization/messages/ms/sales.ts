@@ -280,6 +280,7 @@ export const salesMessages = {
                     customerPayments: { title: "Bayaran Pelanggan", description: "Rekod bayaran baki tertunggak." },
                     customerLedger: { title: "Lejar Pelanggan", description: "Sejarah transaksi pelanggan." },
                     dueAging: { title: "Penuaan Hutang", description: "Lihat hutang mengikut umur." },
+                    badDebts: { title: "Hutang Lapuk", description: "Setiap hutang pelanggan yang dihapus kira, dengan siapa dan mengapa." },
                     quotes: { title: "Sebut Harga Jualan", description: "Anggaran dan status sebut harga." },
                     orders: { title: "Pesanan Jualan", description: "Urus pesanan dan penghantaran." },
                     delivery: { title: "Penghantaran", description: "Jadual dan jejak penghantaran." },
@@ -342,6 +343,28 @@ export const salesMessages = {
                 paperSize: "Saiz kertas",
                 print: "Cetak invois",
                 skip: "Tidak, terima kasih",
+            },
+            printMenu: {
+                /* The shared print split button: invoice sizes plus the other
+                   documents a sale can produce. */
+                trigger: "Pilihan cetak",
+                moreActions: "Tindakan lain",
+                printInvoice: "Cetak Invois",
+                otherDocuments: "Dokumen Lain",
+                posReceipt: "Resit POS",
+                mushak: "Mushak 6.3",
+                openInvoicePage: "Buka halaman invois",
+                preview: {
+                    heading: "{document} — {size}",
+                    print: "Cetak",
+                    close: "Tutup",
+                    skip: "Langkau pratonton lain kali",
+                    invoice: "Invois",
+                    challan: "Nota Penghantaran",
+                    receipt: "Resit POS",
+                },
+                loadFailed: "Jualan tidak dapat dimuatkan untuk dicetak.",
+                popupBlocked: "Benarkan pop-up untuk tapak ini bagi mencetak.",
             },
             challan: {
                 /* The delivery challan — quantities only, never prices. */

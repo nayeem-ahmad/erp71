@@ -97,6 +97,21 @@
 }
 
 @layer utilities {
+    /* The native number spinners sit *inside* the box and eat ~16px of it,
+       which clipped five-figure amounts in the document line table. Where a
+       field has its own stepper (the qty column's -/+) they were duplicated
+       as well. */
+    .no-spinner::-webkit-outer-spin-button,
+    .no-spinner::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
     .pb-safe {
         padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     }

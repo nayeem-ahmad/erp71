@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { Download, FileCheck, Printer, Truck } from 'lucide-react';
+
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
-import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
-import { usePrintHeader } from '@/lib/print/use-print-header';
+import SalePrintMenu from '../../components/SalePrintMenu';
+import { useSalePrinting } from '@/lib/hooks/useSalePrinting';
 
 interface InvoiceData {
     sale: {
@@ -67,7 +66,6 @@ export default function InvoicePage() {
     const [data, setData] = useState<InvoiceData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
 
     useEffect(() => {
         if (!params.id) return;
@@ -77,40 +75,28 @@ export default function InvoicePage() {
             .finally(() => setLoading(false));
     }, [params.id]);
 
-    const handlePrint = () => {
-        window.print();
-    };
-
     /**
-     * The rider's copy of the same sale. Printed through the challan printer
-     * rather than this page's own layout because the challan must show no
-     * prices at all, and hiding columns from an invoice is how a price ends up
-     * back on it the next time this page changes.
+     * This page already holds the whole sale, so printing does not go back to
+     * the server for it — it hands the print menu what it fetched.
      */
-    const handleChallanPrint = () => {
-        if (!data) return;
-        printDeliveryChallan({
-            challanNumber: data.sale.serial_number,
-            invoiceNumber: data.sale.serial_number,
-            date: formatDate(data.sale.created_at, locale),
-            companyName:
-                challanHeader.companyName
-                ?? data.tenant?.brand_business_name
-                ?? data.tenant?.name
-                ?? undefined,
-            headerConfig: challanHeader.headerConfig,
-            customerName: data.sale.customer?.name,
-            customerPhone: data.sale.customer?.phone ?? undefined,
-            deliveryAddress: data.sale.customer?.address ?? undefined,
-            items: data.sale.items.map((item) => ({
-                name: item.product?.name ?? t.shared.unknownProduct,
-                sku: item.product?.sku ?? undefined,
-                quantity: item.quantity,
-            })),
-            note: data.sale.note ?? undefined,
-            labels: t.sales.challan,
-        });
-    };
+    const resolvePrintable = useCallback(() => {
+        if (!data) return null;
+        return {
+            id: data.sale.id,
+            serial_number: data.sale.serial_number,
+            created_at: data.sale.created_at,
+            total_amount: data.sale.total_amount,
+            amount_paid: data.sale.amount_paid,
+            note: data.sale.note,
+            customer: data.sale.customer,
+            items: data.sale.items,
+            payments: data.sale.payments,
+        };
+    }, [data]);
+
+    const { paperSize, setPaperSize, printInvoice, printChallan, printReceipt } = useSalePrinting({
+        resolve: resolvePrintable,
+    });
 
     if (loading) {
         return (
@@ -201,42 +187,19 @@ export default function InvoicePage() {
                             t.sales.invoice.invoice,
                         )}
                         actions={
-                            <>
-                                {/* The statutory form, beside the shop's own
-                                    invoice. This page is the commercial
-                                    document and may look however the shop
-                                    likes; the 6.3 has a layout NBR prescribes,
-                                    which is why it is a separate screen. */}
-                                <Link
-                                    href={routes.sales.mushak(sale.id)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
-                                >
-                                    <FileCheck className="h-4 w-4" />
-                                    {t.sales.mushak.viewMushakInvoice}
-                                </Link>
-                                <button
-                                    onClick={handleChallanPrint}
-                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
-                                >
-                                    <Truck className="h-4 w-4" />
-                                    {t.sales.challan.action}
-                                </button>
-                                <button
-                                    onClick={handlePrint}
-                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
-                                >
-                                    <Printer className="h-4 w-4" />
-                                    Print
-                                </button>
-                                <button
-                                    onClick={handlePrint}
-                                    className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
-                                    style={{ backgroundColor: primaryColor }}
-                                >
-                                    <Download className="h-4 w-4" />
-                                    {t.sales.invoice.downloadPdf}
-                                </button>
-                            </>
+                            /* Everything this page used to offer as its own row
+                               of buttons — the 6.3, the challan, print and the
+                               PDF — now comes from the shared menu, so the list
+                               row, the sale screen and this page cannot drift
+                               apart in what they can produce. */
+                            <SalePrintMenu
+                                saleId={sale.id}
+                                paperSize={paperSize}
+                                onPaperSizeChange={setPaperSize}
+                                onPrintInvoice={(size) => void printInvoice(sale.id, size)}
+                                onPrintChallan={(size) => void printChallan(sale.id, size)}
+                                onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+                            />
                         }
                     />
                 </div>

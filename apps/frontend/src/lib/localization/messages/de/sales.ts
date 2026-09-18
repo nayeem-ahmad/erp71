@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: "Kundenzahlungen", description: "Zahlungen auf offene Kundensalden erfassen." },
                 customerLedger: { title: "Kundenkonto", description: "Laufender Saldo und Vorgangshistorie je Kunde." },
                 dueAging: { title: "Fälligkeiten", description: "Sehen, welche Kunden wie lange etwas schulden." },
+                badDebts: { title: "Forderungsverluste", description: "Jede abgeschriebene Kundenforderung, mit Bearbeiter und Grund." },
                 quotes: { title: "Angebote", description: "Kostenvoranschläge erstellen und ihren Status verfolgen." },
                 orders: { title: "Kundenaufträge", description: "Aufträge aus dem Laden und aus dem Onlineshop an einem Ort." },
                 delivery: { title: "Lieferung", description: "Ausgehende Lieferungen planen und verfolgen." },
@@ -342,6 +343,28 @@ export const salesMessages = {
             paperSize: "Papierformat",
             print: "Rechnung drucken",
             skip: "Nein, danke",
+        },
+        printMenu: {
+            /* The shared print split button: invoice sizes plus the other
+               documents a sale can produce. */
+            trigger: "Druckoptionen",
+            moreActions: "Weitere Aktionen",
+            printInvoice: "Rechnung drucken",
+            otherDocuments: "Weitere Dokumente",
+            posReceipt: "Kassenbon",
+            mushak: "Mushak 6.3",
+            openInvoicePage: "Rechnungsseite öffnen",
+            preview: {
+                heading: "{document} — {size}",
+                print: "Drucken",
+                close: "Schließen",
+                skip: "Vorschau künftig überspringen",
+                invoice: "Rechnung",
+                challan: "Lieferschein",
+                receipt: "Kassenbon",
+            },
+            loadFailed: "Der Verkauf konnte zum Drucken nicht geladen werden.",
+            popupBlocked: "Erlauben Sie Pop-ups für diese Seite, um zu drucken.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

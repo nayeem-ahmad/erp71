@@ -58,7 +58,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
         note: 'Capitalised charges Dr Goods in Transit; rebatable VAT, creditable AIT and financing costs Dr their own account and never reach inventory. A charge with no source account credits Accrued Import Charges instead of cash, so it reaches the ledger when recorded; paying it later posts a second voucher (legKey "payment") clearing that accrual.',
     },
     { model: 'SalaryPayment', postsVia: 'salary_payment' },
-    { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_SALE row mirrors the Sale, which posts' },
+    { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post customer_payment and WRITE_OFF rows post bad_debt_write_off (Dr Bad Debt Expense / Cr Accounts Receivable); a CREDIT_SALE row mirrors the Sale, which posts, and an ADJUSTMENT row mirrors the SalesReturn, which posts' },
     { model: 'SupplierCreditTransaction', postsVia: 'supplier_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_PURCHASE row mirrors the Purchase, which posts' },
 
     { model: 'FixedAsset', postsVia: 'asset_acquisition', note: 'acquisition posts Dr Fixed Assets / Cr <mode>; depreciation posts separately via AssetDepreciationEntry' },

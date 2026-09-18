@@ -1,6 +1,6 @@
 import { formatBDT } from './format';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
@@ -210,7 +210,11 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
     ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}`;
 }
 
-export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'): void {
+export function printSalesInvoice(
+    data: InvoiceData,
+    paperSize: PaperSize = 'A4',
+    preview?: PrintPreviewOptions,
+): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
 
     const headerContext: HeaderContext = {
@@ -234,5 +238,6 @@ export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        preview,
     });
 }
