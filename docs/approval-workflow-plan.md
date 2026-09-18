@@ -469,9 +469,11 @@ export interface ApprovalCompletedEvent {
 }
 ```
 
-Modules register a handler keyed by `entityType`; the accounting handler flips
-`Voucher.approval_status`, the purchasing handler releases the PO, the HR
-handler writes the leave days into `AttendanceRecord`.
+Modules register a handler keyed by `entityType`. The handler calls the module's
+own existing service method — `approveVoucher()`, not a raw update of
+`Voucher.approval_status` — so the module's invariants come with it; see §5.1.
+The purchasing handler releases the PO, the HR handler writes the leave days
+into `AttendanceRecord`.
 
 ### 5.1 The decision that makes this safe
 
@@ -485,6 +487,39 @@ holds only the *process* — which step, who is waiting, what was decided and wh
 
 Without this, adopting the engine would mean rewriting every accounting report
 in the same PR, and it would never ship.
+
+**But the write-back must go through the module, never straight at the column.**
+This is the sharp edge of the decision above, and `dev` has just demonstrated
+why. `approveVoucher()` now calls
+
+```ts
+await assertFiscalPeriodOpen(this.db, tenantId, existing.date, 'accept approvals');
+```
+
+immediately before it sets `approval_status = APPROVED` — one of the four doors
+into a closed month that were closed in `d3525ad`. An engine that owned the
+column and wrote `prisma.voucher.update({ data: { approval_status: 'APPROVED' } })`
+from its own generic service would be a fifth door: a voucher dated inside a
+locked period, un-approvable from the accounting screen, would approve happily
+from the unified `/approvals` queue.
+
+So each module registers a **commit hook** rather than surrendering its column:
+
+```ts
+this.approvals.register('VOUCHER', {
+  facts: voucherFacts,
+  onApproved: (id, userId) => this.accounting.approveVoucher(tenantId, id, userId),
+  onRejected: (id, userId, reason) => this.accounting.rejectVoucher(tenantId, id, userId, reason),
+});
+```
+
+The engine decides *whether* the chain is complete; the module decides *what
+approval means* and keeps its own invariants — the period lock, the
+already-approved guard, the audit stamp. The generic queue then inherits every
+guard the module grows later, for free, instead of drifting away from it. Any
+invariant living in the service and not in the column is one a column-writing
+engine would silently lose, and `assertFiscalPeriodOpen` now has nine call
+sites.
 
 ---
 

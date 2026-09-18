@@ -20,7 +20,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { PlatformWorkspaceService } from '../platform-workspace/platform-workspace.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { AccountCategory, AccountType, VoucherType } from '../accounting/accounting.constants';
-import { postMultiLeg, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { isFiscalPeriodLockedError, postMultiLeg, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import {
     BILLING_EVENT_POSTINGS,
     PLATFORM_ACCOUNTING_SOURCE_MODULE,
@@ -509,12 +509,25 @@ export class PlatformAccountingService {
         });
 
         const orphans = posted.filter((event) => !seenEventIds.has(event.source_id));
+        let reverted = 0;
         for (const orphan of orphans) {
-            await this.db.$transaction((tx) =>
-                voidAutoPostedVoucher(tx, tenantId, 'platform_billing', orphan.source_id),
-            );
+            try {
+                await this.db.$transaction((tx) =>
+                    voidAutoPostedVoucher(tx, tenantId, 'platform_billing', orphan.source_id),
+                );
+                reverted += 1;
+            } catch (error) {
+                // The voucher sits in a closed month. Leave it: a nightly sweep is
+                // the last thing that should reach back into filed books, and the
+                // alternative here is throwing out of the whole sync over one row.
+                // Reopening the period puts this orphan back in scope.
+                if (!isFiscalPeriodLockedError(error)) throw error;
+                this.logger.warn(
+                    `Platform billing sync: left orphaned voucher for event ${orphan.source_id} in place — its fiscal period is locked.`,
+                );
+            }
         }
-        return orphans.length;
+        return reverted;
     }
 
     /**

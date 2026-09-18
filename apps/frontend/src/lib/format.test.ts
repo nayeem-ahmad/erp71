@@ -1,4 +1,4 @@
-import { formatBDT, formatCurrency, formatDate, formatNumber } from './format';
+import { formatBDT, formatCalendarDate, formatCurrency, formatDate, formatNumber, setActiveTimeZone } from './format';
 
 describe('format helpers', () => {
     beforeEach(() => {
@@ -26,5 +26,27 @@ describe('format helpers', () => {
 
     it('supports future currencies without coupling them to language', () => {
         expect(formatCurrency(2500, { locale: 'ms', currency: 'MYR' })).toBe('RM 2,500.00');
+    });
+
+    describe('formatCalendarDate', () => {
+        afterEach(() => setActiveTimeZone(undefined));
+
+        it('renders a picked calendar date as the day that was picked', () => {
+            expect(formatCalendarDate('2026-03-01', 'en')).toBe('01/03/2026');
+            expect(formatCalendarDate('2026-03-01', 'bn')).toBe('০১/০৩/২০২৬');
+        });
+
+        it('does not move the date in a workspace west of Greenwich', () => {
+            setActiveTimeZone('America/Los_Angeles');
+            // `formatDate` reads the same string as UTC midnight and lands on the
+            // day before. A date-input bound has no time of day to convert.
+            expect(formatDate('2026-03-01', 'en')).toBe('28/02/2026');
+            expect(formatCalendarDate('2026-03-01', 'en')).toBe('01/03/2026');
+        });
+
+        it('falls back to instant formatting for anything that is not a bare date', () => {
+            expect(formatCalendarDate('2026-05-29T00:00:00.000Z', 'en')).toBe('29/05/2026');
+            expect(formatCalendarDate('', 'en')).toBe('\u2014');
+        });
     });
 });

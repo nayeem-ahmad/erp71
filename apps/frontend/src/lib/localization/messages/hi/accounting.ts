@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: "{count} वाउचर स्वीकृत",
             bulkRejected: "{count} वाउचर अस्वीकृत",
             bulkNoPending: "चयनित वाउचरों में से कोई स्वीकृति की प्रतीक्षा में नहीं है।",
+            bulkLockedPeriod: "{count} अपरिवर्तित छोड़े गए — इनका महीना बंद है।",
             queueBadge: "वाउचर स्वीकृति की प्रतीक्षा में",
             noPermission: "आपके पास वाउचर स्वीकृत करने की अनुमति नहीं है।",
             pendingNotice: "यह वाउचर स्वीकृति की प्रतीक्षा में है और केवल-स्वीकृत रिपोर्टों से बाहर है।",

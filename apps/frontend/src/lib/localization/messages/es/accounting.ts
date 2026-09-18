@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: "{count} asientos aprobados",
             bulkRejected: "{count} asientos rechazados",
             bulkNoPending: "Ninguno de los asientos seleccionados está pendiente de aprobación.",
+            bulkLockedPeriod: "{count} sin cambios: su mes está cerrado.",
             queueBadge: "asientos pendientes de aprobación",
             noPermission: "No tiene permiso para aprobar asientos.",
             pendingNotice: "Este asiento está pendiente de aprobación y queda fuera de los informes limitados a asientos aprobados.",

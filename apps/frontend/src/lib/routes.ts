@@ -163,6 +163,7 @@ export const routes = {
             shrinkage: '/inventory/reports/shrinkage',
             valuation: '/inventory/reports/valuation',
             stockOnHand: '/inventory/reports/stock-on-hand',
+            productTransactionHistory: '/inventory/reports/product-transaction-history',
         },
     },
 

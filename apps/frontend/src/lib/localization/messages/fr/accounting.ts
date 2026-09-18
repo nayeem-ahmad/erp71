@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: "{count} écritures approuvées",
             bulkRejected: "{count} écritures refusées",
             bulkNoPending: "Aucune des écritures sélectionnées n'attend d'approbation.",
+            bulkLockedPeriod: "{count} inchangées : leur mois est clôturé.",
             queueBadge: "écritures en attente d'approbation",
             noPermission: "Vous n'avez pas la permission d'approuver des écritures.",
             pendingNotice: "Cette écriture attend son approbation et est exclue des états limités aux écritures approuvées.",

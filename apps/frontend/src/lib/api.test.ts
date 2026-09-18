@@ -803,6 +803,39 @@ describe('api.updateInventoryReason', () => {
     });
 });
 
+describe('api.getProductTransactionHistory', () => {
+    it('always sends the product and appends the optional filters', async () => {
+        mockOk({ rows: [] });
+        await api.getProductTransactionHistory({
+            productId: 'p1',
+            warehouseId: 'wh1',
+            storeId: 'st1',
+            from: '2026-01-01',
+            to: '2026-06-01',
+            page: 2,
+            limit: 100,
+        });
+        const url = lastUrl();
+        expect(url).toContain('/inventory-reports/product-transaction-history');
+        expect(url).toContain('productId=p1');
+        expect(url).toContain('warehouseId=wh1');
+        expect(url).toContain('storeId=st1');
+        expect(url).toContain('from=2026-01-01');
+        expect(url).toContain('to=2026-06-01');
+        expect(url).toContain('page=2');
+        expect(url).toContain('limit=100');
+    });
+
+    it('sends the product alone when nothing else is filtered', async () => {
+        mockOk({ rows: [] });
+        await api.getProductTransactionHistory({ productId: 'p1' });
+        const url = lastUrl();
+        expect(url).toContain('productId=p1');
+        expect(url).not.toContain('warehouseId=');
+        expect(url).not.toContain('from=');
+    });
+});
+
 describe('api.getInventoryLedger', () => {
     it('fetches /inventory/ledger without params', async () => {
         mockOk({ data: [] });
