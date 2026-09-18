@@ -364,9 +364,15 @@ export default function ProductSearch({
             {/* The rates this item has traded at, under the bar the moment a
                 product is picked. The icon beside Add still opens the fuller
                 panel; this is the glance that answers most of the question
-                without one, while the price box is still in reach. */}
+                without one, while the price box is still in reach.
+
+                Desktop only. Each row is a ≥44px touch target, so five of them
+                push the line items table — the thing being worked in — off a
+                phone screen. Below `sm` the icon goes back to being the way in,
+                which is how this looked before the panel existed. Hidden in CSS
+                rather than skipped in JS so a rotation needs no re-render. */}
             {historyType && staged && (
-                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1">
+                <div className="hidden sm:block rounded border border-gray-200 bg-gray-50 px-2 py-1">
                     <RateHistory
                         productId={staged.id}
                         type={historyType}

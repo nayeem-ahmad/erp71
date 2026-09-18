@@ -239,6 +239,28 @@ describe('ProductSearch entry bar', () => {
         expect(await screen.findByRole('dialog')).toHaveTextContent('Previous purchase rates');
     });
 
+    it('keeps the inline rates off the phone, where the icon is still the way in', async () => {
+        render(
+            <ProductSearch
+                onProductSelect={jest.fn()}
+                priceLabel="Unit Cost"
+                historyType="purchase"
+                historyPartyId="sup-1"
+            />,
+        );
+        await stageCoffee();
+
+        // Hidden by CSS rather than skipped: five tappable rows push the line
+        // items table off a phone screen, but the breakpoint has to follow a
+        // rotation without a re-render, and the icon's panel still works.
+        // The breakpoint lives on the wrapper ProductSearch draws around the
+        // panel, since that carries the border and background too.
+        const wrapper = (await screen.findByTestId('inline-rate-history')).parentElement!;
+        expect(wrapper.className).toMatch(/(^|\s)hidden(\s|$)/);
+        expect(wrapper.className).toMatch(/sm:block/);
+        expect(screen.getByLabelText('Previous rates')).toBeEnabled();
+    });
+
     it('offers no inline rates when the document did not ask for history', async () => {
         render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />);
         await stageCoffee();
