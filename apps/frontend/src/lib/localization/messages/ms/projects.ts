@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: 'Jenis projek',
         typesHint: 'Kategori untuk kerja anda — pemasangan, servis, ubah suai.',
         columns: 'Lajur papan',
-        columnsHint: 'Lajur pada setiap papan projek. Kategori menentukan apa yang dikira selesai.',
+        columnsHint: 'Lajur yang menjadi permulaan bagi projek baharu. Projek yang sedia ada mengekalkan senarainya sendiri — ubahnya dalam projek itu. Kategori menentukan apa yang dikira selesai.',
         category: 'Kategori',
         categories: {
             TODO: 'Untuk dibuat',
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: 'Tambah lajur',
         mappedStatuses: 'Status dipetakan',
         noMappings: 'Tidak dipetakan untuk mana-mana projek pada papan ini',
+        createStatus: 'Cipta',
+        createStatusHint: 'Cipta status “{column}” dalam {project} dan petakannya ke lajur ini.',
         currentlyIn: '(kini dalam {column})',
         loadFailed: 'Lajur tidak dapat dimuatkan.',
         deleteColumn: 'Padam lajur',

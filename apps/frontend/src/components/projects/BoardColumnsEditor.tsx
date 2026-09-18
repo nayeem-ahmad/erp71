@@ -254,6 +254,44 @@ export default function BoardColumnsEditor({
         run(() => api.setBoardColumnStatuses(boardId, column.id, next));
     };
 
+    /**
+     * Gives a project the status this column needs, and binds it — the way out
+     * of the dead end this screen otherwise has.
+     *
+     * A board column and a project status are different things: the column is
+     * the board's lane, the status is what the task actually holds, and a drop
+     * writes the status. So a column can only take a project's cards once that
+     * project has a status bound to it. Adding the name in Project Setup does
+     * not do it — that list is the *template* new projects are seeded from, and
+     * a project that already exists keeps the copy it was seeded with. Until
+     * now the only way to close that gap was to open the project's own columns
+     * page and add the status by hand, with nothing here saying so.
+     */
+    const createStatusForColumn = (column: EditableColumn, project: BoardProject) =>
+        run(async () => {
+            const status = (await api.createProjectColumn(project.id, {
+                name: column.name,
+                // The column's own stage, so a card dropped here counts as
+                // finished exactly when the lane says it does.
+                category: column.category,
+            })) as ProjectStatus;
+
+            // Added to this project's list here rather than by re-reading it:
+            // `requested` deliberately fetches each project once, and the one
+            // row that changed is the one just created.
+            setStatusesByProject((prev) => ({
+                ...prev,
+                [project.id]: [...(prev[project.id] ?? []), status],
+            }));
+
+            // Wholesale, like every other write on this screen — the column's
+            // existing bindings plus the new one.
+            await api.setBoardColumnStatuses(boardId, column.id, [
+                ...column.bindings.map((binding) => binding.status_id),
+                status.id,
+            ]);
+        });
+
     const projectLabel = (projectId: string) => {
         const project = cardProjects[projectId] ?? projects.find((p) => p.id === projectId);
         return project ? projectLabelOf(project) : projectId;
@@ -406,6 +444,13 @@ export default function BoardColumnsEditor({
                                 <CollapsibleSection
                                     title={`${m.mappedStatuses} — ${column.name}`}
                                     count={column.bindings.length}
+                                    // A column bound to nothing is a lane that
+                                    // refuses every card dropped on it, and it
+                                    // is the reason most people open this
+                                    // screen at all — so it opens itself
+                                    // rather than hiding the fix one click
+                                    // further in.
+                                    defaultOpen={column.bindings.length === 0}
                                 >
                                     {column.bindings.length === 0 ? (
                                         <p className="text-xs text-gray-500">{m.noMappings}</p>
@@ -430,9 +475,31 @@ export default function BoardColumnsEditor({
                                                     (binding) =>
                                                         binding.status.project_id === project.id,
                                                 );
-                                                const options = statusesByProject[project.id] ?? [];
+                                                const loaded = statusesByProject[project.id];
+                                                const options = loaded ?? [];
+                                                // Offered only for a project that has nothing
+                                                // bound here *and* no status of its own by this
+                                                // column's name — i.e. exactly the case the
+                                                // select cannot fix, because there is nothing
+                                                // in it to pick. Held back until the project's
+                                                // statuses have actually arrived, or the offer
+                                                // would appear for a moment on every project
+                                                // and create a duplicate the server refuses.
+                                                const canCreate =
+                                                    !current &&
+                                                    loaded !== undefined &&
+                                                    !options.some(
+                                                        (status) =>
+                                                            status.name.trim().toLowerCase() ===
+                                                            column.name.trim().toLowerCase(),
+                                                    );
                                                 return (
-                                                    <label
+                                                    // A div, not a label: the button below is
+                                                    // inside this row, and a click on it would
+                                                    // otherwise also reach the select the label
+                                                    // names. The select carries its own
+                                                    // `aria-label`, so nothing is lost.
+                                                    <div
                                                         key={project.id}
                                                         className="flex min-h-touch items-center gap-2 text-xs text-gray-500"
                                                     >
@@ -473,7 +540,31 @@ export default function BoardColumnsEditor({
                                                                 );
                                                             })}
                                                         </Select>
-                                                    </label>
+
+                                                        {canCreate && (
+                                                            <Button
+                                                                variant="secondary"
+                                                                className="shrink-0"
+                                                                disabled={busy}
+                                                                title={m.createStatusHint
+                                                                    .replace('{column}', column.name)
+                                                                    .replace(
+                                                                        '{project}',
+                                                                        project.name,
+                                                                    )}
+                                                                aria-label={`${m.createStatus} — ${projectLabelOf(project)} — ${column.name}`}
+                                                                onClick={() =>
+                                                                    createStatusForColumn(
+                                                                        column,
+                                                                        project,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                                {m.createStatus}
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
