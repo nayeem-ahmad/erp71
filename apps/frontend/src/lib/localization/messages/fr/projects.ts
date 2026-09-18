@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "Types de projet",
         typesHint: "Catégories pour vos chantiers — installation, entretien, aménagement.",
         columns: "Colonnes de tableau",
-        columnsHint: "Les colonnes de chaque tableau de projet. La catégorie détermine ce qui compte comme terminé.",
+        columnsHint: "Les colonnes avec lesquelles démarre un nouveau projet. Un projet qui existe déjà garde sa propre liste — modifiez-la dans le projet lui-même. La catégorie décide de ce qui compte comme terminé.",
         category: "Catégorie",
         categories: {
             TODO: "À faire",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "Ajouter une colonne",
         mappedStatuses: "Statuts associés",
         noMappings: "Associée à aucun projet de ce tableau",
+        createStatus: "Créer",
+        createStatusHint: "Créer le statut « {column} » dans {project} et l'associer à cette colonne.",
         currentlyIn: "(actuellement dans {column})",
         loadFailed: "Impossible de charger les colonnes.",
         deleteColumn: "Supprimer la colonne",

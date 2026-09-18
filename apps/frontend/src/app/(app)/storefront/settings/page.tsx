@@ -1,10 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Settings, Globe, ToggleLeft, ToggleRight, Save, ExternalLink } from 'lucide-react';
+import { ExternalLink, Globe, Save } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
-import PageHeader from '@/components/ui/compact/PageHeader';
-import { Checkbox, PageShell } from '@/components/ui';
+import {
+    Alert,
+    Button,
+    Checkbox,
+    CompactSection,
+    Field,
+    Input,
+    PageHeader,
+    PageShell,
+    Switch,
+    Textarea,
+} from '@/components/ui';
 import StorefrontImageField, {
     type StorefrontImageFieldLabels,
 } from '@/components/storefront/StorefrontImageField';
@@ -13,10 +23,6 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 
 const isBrowser = Boolean(globalThis.window);
-
-const API_BASE = isBrowser
-    ? (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3000')
-    : '';
 
 interface StorefrontSettings {
     id: string;
@@ -121,9 +127,12 @@ export default function StorefrontSettingsPage() {
     });
 
     return (
-        <PageShell>
-            <div className="space-y-4">
-                {/* Header */}
+        <PageShell maxWidth="wide">
+            {/* The form wraps the header so Save can live in `PageHeader`
+                actions and still submit it. It used to sit at the very bottom
+                of a single ~1600px column, which meant scrolling the whole
+                page to commit a one-field change. */}
+            <form onSubmit={handleSave} className="space-y-4">
                 <PageHeader
                     title={m.title}
                     subtitle={m.description}
@@ -134,6 +143,25 @@ export default function StorefrontSettingsPage() {
                         [{ label: t.storefront.dashboard.orders.title, href: routes.storefront.root }],
                         m.title,
                     )}
+                    actions={
+                        loading ? null : (
+                            <>
+                                {saveSuccess && (
+                                    <span role="status" className="text-xs font-medium text-success-text">
+                                        {m.savedExclaim}
+                                    </span>
+                                )}
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    loading={saving}
+                                    icon={<Save className="w-4 h-4" />}
+                                >
+                                    {saving ? m.savingAlt : m.save}
+                                </Button>
+                            </>
+                        )
+                    }
                 />
 
                 {loading ? (
@@ -141,172 +169,160 @@ export default function StorefrontSettingsPage() {
                         <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
                     </div>
                 ) : (
-                    <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 space-y-6">
-                        {/* Enable / Disable toggle */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="font-semibold text-gray-900">{m.enable.title}</p>
-                                <p className="text-sm text-gray-500 mt-0.5">{m.enable.description}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setEnabled((v) => !v)}
-                                className="flex items-center space-x-2 rtl:space-x-reverse focus:outline-none"
-                                aria-label={m.enable.toggleAria}
-                            >
-                                {enabled ? (
-                                    <ToggleRight className="w-10 h-10 text-blue-600" />
-                                ) : (
-                                    <ToggleLeft className="w-10 h-10 text-gray-300" />
-                                )}
-                            </button>
-                        </div>
+                    <>
+                        {saveError && <Alert tone="danger">{saveError}</Alert>}
 
-                        <hr className="border-gray-100" />
-
-                        {/* Store Slug */}
-                        <div>
-                            <label htmlFor="store-slug" className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {m.slug.label}
-                            </label>
-                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                                <span className="text-sm text-gray-400 whitespace-nowrap">{m.slug.prefix}</span>
-                                <input
-                                    id="store-slug"
-                                    type="text"
-                                    value={slug}
-                                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 50))}
-                                    placeholder={m.slug.placeholder}
-                                    maxLength={50}
-                                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <p className="text-xs text-gray-400 mt-1">
-                                {m.slug.hint}
-                            </p>
-                        </div>
-
-                        {/* Public URL display */}
-                        {publicStoreUrl && (
-                            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between">
-                                <div className="flex items-center space-x-2 rtl:space-x-reverse min-w-0">
-                                    <Globe className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                                    <span className="text-sm font-medium text-blue-700 truncate">
-                                        {publicStoreUrl}
-                                    </span>
-                                </div>
-                                <a
-                                    href={publicStoreUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-shrink-0 ms-3 text-blue-600 hover:text-blue-800"
-                                    title={m.publicUrl.open}
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                            </div>
-                        )}
-
-                        {/* Banner Text */}
-                        <div>
-                            <label htmlFor="store-banner" className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {m.banner.label}
-                            </label>
-                            <textarea
-                                id="store-banner"
-                                value={banner}
-                                onChange={(e) => setBanner(e.target.value)}
-                                placeholder={m.banner.placeholder}
-                                rows={2}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">
-                                {m.banner.hint}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">{m.banner.optional}</p>
-                        </div>
-
-                        <div>
-                            <label htmlFor="store-hero-headline" className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {m.heroHeadline.label}
-                            </label>
-                            <input
-                                id="store-hero-headline"
-                                type="text"
-                                value={heroHeadline}
-                                onChange={(e) => setHeroHeadline(e.target.value)}
-                                placeholder={m.heroHeadline.placeholder}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">
-                                {m.heroHeadline.hint}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">{m.heroHeadline.optional}</p>
-                        </div>
-
-                        <StorefrontImageField
-                            kind="hero"
-                            value={heroImage}
-                            onChange={setHeroImage}
-                            inputId="store-hero-image"
-                            labels={imageLabels(m.heroImage)}
-                        />
-
-                        <div className="space-y-2">
-                            <StorefrontImageField
-                                kind="logo"
-                                value={logo}
-                                onChange={setLogo}
-                                inputId="store-logo"
-                                labels={imageLabels(m.logo)}
-                            />
-
-                            {/* Only offered once there is a logo: with nothing
-                                but a name to show, hiding it would leave the
-                                storefront header empty. */}
-                            {logo.trim() && (
-                                <div>
-                                    <label
-                                        htmlFor="store-logo-show-name"
-                                        className="flex items-center gap-2 text-sm text-gray-700"
-                                    >
-                                        <Checkbox
-                                            id="store-logo-show-name"
-                                            checked={logoShowName}
-                                            onChange={(e) => setLogoShowName(e.target.checked)}
+                        {/* Two columns from `lg` up: the three text sections
+                            stack on the left while the images — by far the
+                            tallest thing here — take the right, so the whole
+                            form fits one 1366×768 screen. */}
+                        <div className="grid items-start gap-3 lg:grid-cols-2">
+                            <div className="space-y-3">
+                                <CompactSection title={m.sections.address}>
+                                    {/* A `div`, not a `<label htmlFor>`: `Switch`
+                                        renders a `<button>`, which is not
+                                        labelable, so a `for` pointing at it
+                                        would promise a click target the browser
+                                        never wires up. The switch carries its
+                                        own `aria-label` instead. */}
+                                    <div className="flex min-h-touch items-center justify-between gap-4 pb-2">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">{m.enable.title}</p>
+                                            <p className="text-xs text-gray-500">{m.enable.description}</p>
+                                        </div>
+                                        <Switch
+                                            id="storefront-enabled"
+                                            checked={enabled}
+                                            onCheckedChange={setEnabled}
+                                            aria-label={m.enable.toggleAria}
                                         />
-                                        {m.logo.showName}
-                                    </label>
-                                    <p className="text-xs text-gray-400 mt-1 ms-6">{m.logo.showNameHint}</p>
+                                    </div>
+
+                                    <Field
+                                        label={m.slug.label}
+                                        htmlFor="store-slug"
+                                        hint={m.slug.hint}
+                                        className="border-t border-gray-100 pt-3"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="whitespace-nowrap text-xs text-gray-400">
+                                                {m.slug.prefix}
+                                            </span>
+                                            <Input
+                                                id="store-slug"
+                                                type="text"
+                                                value={slug}
+                                                onChange={(e) =>
+                                                    setSlug(
+                                                        e.target.value
+                                                            .toLowerCase()
+                                                            .replace(/[^a-z0-9-]/g, '')
+                                                            .slice(0, 50),
+                                                    )
+                                                }
+                                                placeholder={m.slug.placeholder}
+                                                maxLength={50}
+                                                className="flex-1"
+                                            />
+                                        </div>
+                                    </Field>
+
+                                    {/* One line where a 56px callout box used
+                                        to be — the address is worth showing,
+                                        not worth a panel. */}
+                                    {publicStoreUrl && (
+                                        <a
+                                            href={publicStoreUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={m.publicUrl.open}
+                                            className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+                                        >
+                                            <Globe className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                                            <span className="truncate">{publicStoreUrl}</span>
+                                            <ExternalLink className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+                                        </a>
+                                    )}
+                                </CompactSection>
+
+                                <CompactSection title={m.sections.homepage} className="space-y-3">
+                                    <Field
+                                        label={m.heroHeadline.label}
+                                        htmlFor="store-hero-headline"
+                                        hint={`${m.heroHeadline.hint} ${m.heroHeadline.optional}`}
+                                    >
+                                        <Input
+                                            id="store-hero-headline"
+                                            type="text"
+                                            value={heroHeadline}
+                                            onChange={(e) => setHeroHeadline(e.target.value)}
+                                            placeholder={m.heroHeadline.placeholder}
+                                            className="w-full"
+                                        />
+                                    </Field>
+
+                                    <Field
+                                        label={m.banner.label}
+                                        htmlFor="store-banner"
+                                        hint={`${m.banner.hint} ${m.banner.optional}`}
+                                    >
+                                        <Textarea
+                                            id="store-banner"
+                                            value={banner}
+                                            onChange={(e) => setBanner(e.target.value)}
+                                            placeholder={m.banner.placeholder}
+                                            rows={2}
+                                            className="w-full resize-none"
+                                        />
+                                    </Field>
+                                </CompactSection>
+                            </div>
+
+                            <CompactSection title={m.sections.images} className="space-y-3">
+                                <StorefrontImageField
+                                    kind="hero"
+                                    value={heroImage}
+                                    onChange={setHeroImage}
+                                    inputId="store-hero-image"
+                                    labels={imageLabels(m.heroImage)}
+                                />
+
+                                <div className="space-y-2 border-t border-gray-100 pt-3">
+                                    <StorefrontImageField
+                                        kind="logo"
+                                        value={logo}
+                                        onChange={setLogo}
+                                        inputId="store-logo"
+                                        labels={imageLabels(m.logo)}
+                                    />
+
+                                    {/* Only offered once there is a logo: with nothing
+                                        but a name to show, hiding it would leave the
+                                        storefront header empty. */}
+                                    {logo.trim() && (
+                                        <div>
+                                            <label
+                                                htmlFor="store-logo-show-name"
+                                                className="flex items-center gap-2 text-sm text-gray-700"
+                                            >
+                                                <Checkbox
+                                                    id="store-logo-show-name"
+                                                    checked={logoShowName}
+                                                    onChange={(e) => setLogoShowName(e.target.checked)}
+                                                />
+                                                {m.logo.showName}
+                                            </label>
+                                            <p className="text-xs text-gray-400 mt-1 ms-6">
+                                                {m.logo.showNameHint}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                            </CompactSection>
                         </div>
-
-                        {saveError && (
-                            <p className="text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">
-                                {saveError}
-                            </p>
-                        )}
-
-                        {saveSuccess && (
-                            <p className="text-emerald-700 text-sm bg-emerald-50 rounded-lg px-3 py-2">
-                                {m.savedExclaim}
-                            </p>
-                        )}
-
-                        <div className="flex justify-end">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="flex items-center space-x-2 rtl:space-x-reverse bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60"
-                            >
-                                <Save className="w-4 h-4" />
-                                <span>{saving ? m.savingAlt : m.save}</span>
-                            </button>
-                        </div>
-                    </form>
+                    </>
                 )}
-            </div>
+            </form>
         </PageShell>
     );
 }

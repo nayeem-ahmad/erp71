@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: 'প্রকল্পের ধরন',
         typesHint: 'আপনার কাজের বিভাগ — ইনস্টলেশন, সার্ভিসিং, ফিট-আউট।',
         columns: 'বোর্ড কলাম',
-        columnsHint: 'প্রতিটি প্রকল্প বোর্ডের কলাম। বিভাগ ঠিক করে কোনটি সম্পন্ন গণ্য হবে।',
+        columnsHint: 'নতুন প্রকল্প যে কলামগুলো নিয়ে শুরু হয়। আগে থেকে থাকা প্রকল্প তার নিজের তালিকা রাখে — সেটি প্রকল্পের ভেতর থেকেই বদলান। ক্যাটাগরি ঠিক করে কোনটি সম্পন্ন বলে গণ্য হবে।',
         category: 'বিভাগ',
         categories: {
             TODO: 'করণীয়',
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: 'কলাম যোগ',
         mappedStatuses: 'ম্যাপ করা অবস্থা',
         noMappings: 'এই বোর্ডের কোনো প্রকল্পের জন্য ম্যাপ করা নেই',
+        createStatus: 'তৈরি করুন',
+        createStatusHint: '{project}-এ “{column}” স্ট্যাটাস তৈরি করে এই কলামের সঙ্গে যুক্ত করুন।',
         currentlyIn: '(বর্তমানে {column}-এ আছে)',
         loadFailed: 'কলামগুলো লোড করা যায়নি।',
         deleteColumn: 'কলাম মুছুন',

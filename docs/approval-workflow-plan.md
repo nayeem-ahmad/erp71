@@ -419,7 +419,7 @@ with `conditions: null` matching everything, which is how the catch-all row at
 | Type | Resolves to | Source |
 |---|---|---|
 | `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4252`) — the existing matrix |
-| `TENANT_ROLE` | everyone with that tenant role | `TenantUser.role` (`schema.prisma:1260`) |
+| `TENANT_ROLE` | everyone holding that tenant role | `TenantUser.tenant_role_id` → `TenantRole`, **and** `TenantUser.roles[]` — *not* `TenantUser.role` (`schema.prisma:1260`); see below |
 | `USER` | one named user | `approver_ref` is the user id |
 | `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`** |
 | `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`** |
@@ -439,6 +439,33 @@ line is the missing piece in half the HR module — but they are only needed for
 the two derived types. `PERMISSION` and `TENANT_ROLE` cover the common
 Bangladeshi SME shape ("the owner signs anything over five lakh") with zero new
 data, so **Phase 2 can ship without touching `Employee` at all.**
+
+**`TENANT_ROLE` must resolve against `tenant_role_id` and `roles[]`, never
+against `TenantUser.role`.** The `role` column is a coarse `UserRole` enum
+(`@default(CASHIER)`) that **every module role collapses into**: a Sales User and
+a Project User both read `CASHIER`, and swapping one for the other does not
+change it. A rule written against `role` would therefore fail to distinguish the
+very people a tenant wants to distinguish. The member's actual role is
+`tenant_role_id` → `TenantRole`, and a member may hold **several** — `roles` is a
+`TenantUserRole[]` whose effective permissions are the union of all of them, so
+`TENANT_ROLE` matches if *any* held role matches, and `PERMISSION` must be
+evaluated against that same union.
+
+Two corollaries the resolver has to encode:
+
+- **An owner's `tenant_role` is null by design** — their coarse bucket `OWNER` is
+  the right label. So "the owner signs anything over five lakh", the single most
+  likely first rule any tenant writes, is the one case that *does* read `role`.
+  `TENANT_ROLE` therefore matches a named `TenantRole` **or** the `OWNER` bucket
+  when `tenant_role_id` is null, and the policy editor should offer "Owner" as a
+  first-class choice rather than a role name the tenant has to have created.
+- The owner fallback in §4.1, which rescues an empty eligible set, is resolved
+  the same way and is not affected by a tenant having no named roles at all.
+
+`dev` hit the display half of this on 2026-09-18 (`785cbcb`): the sidebar showed
+"CASHIER" for every non-owner because it read `role`. The engine would have hit
+the authorization half, which is worse — a rule that silently matches more people
+than the tenant meant.
 
 ### 4.1 The self-approval trap
 
