@@ -272,6 +272,19 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
+					// A customer debt the shop has given up on. The sale was real and
+					// its revenue stays recognised — what failed is collection, so the
+					// loss is an expense rather than a reversal of Sales Revenue.
+					//
+					// Deliberately NOT named with the word "receivable":
+					// RECEIVABLE_ACCOUNT_PATTERN in accounting.service.ts matches any
+					// asset account whose name contains it.
+					{
+						name: 'Bad Debt Expense',
+						code: '510204',
+						type: AccountType.EXPENSE,
+						category: AccountCategory.GENERAL,
+					},
 				],
 			},
 		],
@@ -337,6 +350,11 @@ const DEFAULT_POSTING_RULES = [
 	{ event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Due to Branches', priority: 20 },
 	{ event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Accounts Receivable', priority: 10 },
 	{ event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Accounts Receivable', credit_account: 'Cash in Hand', priority: 20 },
+	// Forgiving a customer's due. Unconditional: there is one way to write a
+	// receivable off, and the reason rides on the transaction rather than in
+	// the rule. Reversing a write-off deletes this voucher rather than
+	// posting a second one, so it needs no rule of its own.
+	{ event_type: 'bad_debt_write_off', condition_key: 'none', condition_value: null, debit_account: 'Bad Debt Expense', credit_account: 'Accounts Receivable', priority: 10 },
 	{ event_type: 'loan_disbursement', condition_key: 'loan_direction', condition_value: 'PAYABLE', debit_account: 'Cash in Hand', credit_account: 'Loans Payable', priority: 10 },
 	{ event_type: 'loan_disbursement', condition_key: 'loan_direction', condition_value: 'RECEIVABLE', debit_account: 'Loans Receivable', credit_account: 'Cash in Hand', priority: 20 },
 	{ event_type: 'loan_repayment', condition_key: 'loan_direction', condition_value: 'PAYABLE', debit_account: 'Loans Payable', credit_account: 'Cash in Hand', priority: 10 },

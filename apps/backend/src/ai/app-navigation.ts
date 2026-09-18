@@ -49,6 +49,7 @@ const APP_PAGES: AppPage[] = [
     { path: '/sales/customers', label: 'Customers', description: 'the customer list and customer profiles', modules: ['crm'] },
     { path: '/sales/customer-ledger', label: 'Customer Ledger', description: 'a customer\'s running account of sales and payments', modules: ['crm'] },
     { path: '/sales/customers/reports/due-aging', label: 'Receivables Aging', description: 'who owes money and how overdue it is', modules: ['crm'] },
+    { path: '/sales/customers/reports/bad-debts', label: 'Bad Debts', description: 'customer debts written off as uncollectable, and undoing a write-off', modules: ['crm'] },
     { path: '/crm/contacts', label: 'Contacts', description: 'the address book of people and the companies they work for', modules: ['crm'] },
     { path: '/crm/contacts/new', label: 'New Contact', description: 'add a contact by hand, or scan a business card to fill the form from a photo', modules: ['crm'] },
 

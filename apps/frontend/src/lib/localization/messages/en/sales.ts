@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: 'Customer Payments', description: 'Record payments against customer outstanding balances.' },
                 customerLedger: { title: 'Customer Ledger', description: 'Running balance and transaction history per customer.' },
                 dueAging: { title: 'Due Aging', description: 'See which customers owe money and for how long.' },
+                badDebts: { title: 'Bad Debts', description: 'Every customer debt written off, with who approved it and why.' },
                 quotes: { title: 'Sales Quotations', description: 'Prepare estimates and track quote status.' },
                 orders: { title: 'Sales Orders', description: 'In-store orders and online storefront orders in one place.' },
                 delivery: { title: 'Delivery', description: 'Schedule and track outbound deliveries.' },

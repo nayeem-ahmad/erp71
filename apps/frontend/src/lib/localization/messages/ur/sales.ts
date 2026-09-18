@@ -280,6 +280,7 @@ export const salesMessages = {
                 customerPayments: { title: 'گاہک کی ادائیگیاں', description: 'گاہک کے بقایا بیلنس کے مقابل ادائیگیاں درج کریں۔' },
                 customerLedger: { title: 'گاہک کھاتہ', description: 'ہر گاہک کا رواں بیلنس اور لین دین کی تاریخ۔' },
                 dueAging: { title: 'واجبات کی مدت', description: 'دیکھیں کن گاہکوں پر رقم واجب ہے اور کتنے عرصے سے۔' },
+                badDebts: { title: 'ڈوبے ہوئے قرض', description: 'بٹے کھاتے ڈالا گیا ہر گاہک قرض، کس نے اور کیوں سمیت۔' },
                 quotes: { title: 'سیلز کوٹیشنز', description: 'تخمینے تیار کریں اور کوٹیشن کی حیثیت پر نظر رکھیں۔' },
                 orders: { title: 'سیلز آرڈرز', description: 'دکان کے اور آن لائن اسٹور کے آرڈرز ایک ہی جگہ۔' },
                 delivery: { title: 'ترسیل', description: 'باہر جانے والی ترسیل کا شیڈول اور نگرانی کریں۔' },

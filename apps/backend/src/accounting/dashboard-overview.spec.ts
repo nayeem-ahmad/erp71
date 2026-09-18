@@ -114,19 +114,21 @@ describe('AccountingService — dashboard overview', () => {
         expect(result.books_health.trial_balance.difference).toBe(1_240);
     });
 
-    it('buckets receivables and payables by the age of the voucher', async () => {
+    it('ages what is still open, settling the oldest item first', async () => {
         const asOf = new Date('2026-03-31T23:59:59.999Z');
         const daysBefore = (days: number) => new Date(asOf.getTime() - days * 24 * 60 * 60 * 1000);
 
         db.voucherDetail.groupBy.mockResolvedValue([]);
         db.voucherDetail.findMany.mockResolvedValue([
-            // Receivables age from the debit that raised them…
+            // Receivables are raised by the debit…
             { account_id: 'ar', debit_amount: 10_000, credit_amount: 0, voucher: { date: daysBefore(5) } },
             { account_id: 'ar', debit_amount: 4_000, credit_amount: 0, voucher: { date: daysBefore(45) } },
             { account_id: 'ar', debit_amount: 2_500, credit_amount: 0, voucher: { date: daysBefore(120) } },
-            // …and the settlement credit is not itself an aged item.
+            // …and settled by the credit. This used to be skipped as "not itself
+            // an aged item", which left the buckets summing to 16,500 against a
+            // balance of 13,500 — the report contradicting the figure beside it.
             { account_id: 'ar', debit_amount: 0, credit_amount: 3_000, voucher: { date: daysBefore(2) } },
-            // …payables from the credit that raised them.
+            // …payables are the mirror: raised by the credit.
             { account_id: 'ap', debit_amount: 0, credit_amount: 7_000, voucher: { date: daysBefore(70) } },
         ]);
 
@@ -135,18 +137,48 @@ describe('AccountingService — dashboard overview', () => {
             to: '2026-03-31',
         });
 
+        // The 3,000 receipt clears the whole 120-day debt and 500 of the 45-day
+        // one, which is what the shopkeeper would do with it on paper.
         expect(result.aging.receivable).toEqual({
             current: 10_000,
-            overdue_31_60: 4_000,
+            overdue_31_60: 3_500,
             overdue_61_90: 0,
-            overdue_90_plus: 2_500,
+            overdue_90_plus: 0,
         });
+        // Nothing has been paid against the bill, so the payable ages in full.
         expect(result.aging.payable).toEqual({
             current: 0,
             overdue_31_60: 0,
             overdue_61_90: 7_000,
             overdue_90_plus: 0,
         });
+    });
+
+    it('keeps the aged receivable equal to the receivable balance', async () => {
+        // The invariant the old ager broke: buckets that do not add up to the
+        // balance are two different answers to the same question.
+        const asOf = new Date('2026-03-31T23:59:59.999Z');
+        const daysBefore = (days: number) => new Date(asOf.getTime() - days * 24 * 60 * 60 * 1000);
+
+        db.voucherDetail.groupBy
+            .mockResolvedValueOnce([sum('ar', 16_500, 3_000)])
+            .mockResolvedValueOnce([]);
+        db.voucherDetail.findMany.mockResolvedValue([
+            { account_id: 'ar', debit_amount: 10_000, credit_amount: 0, voucher: { date: daysBefore(5) } },
+            { account_id: 'ar', debit_amount: 4_000, credit_amount: 0, voucher: { date: daysBefore(45) } },
+            { account_id: 'ar', debit_amount: 2_500, credit_amount: 0, voucher: { date: daysBefore(120) } },
+            { account_id: 'ar', debit_amount: 0, credit_amount: 3_000, voucher: { date: daysBefore(2) } },
+        ]);
+
+        const result = await service.getAccountingDashboardOverview('tenant-1', {
+            from: '2026-03-01',
+            to: '2026-03-31',
+        });
+
+        const aged = result.aging.receivable;
+        const summed = aged.current + aged.overdue_31_60 + aged.overdue_61_90 + aged.overdue_90_plus;
+        expect(summed).toBe(result.position.accounts_receivable);
+        expect(summed).toBe(13_500);
     });
 
     it('counts everything the books-health strip surfaces', async () => {
