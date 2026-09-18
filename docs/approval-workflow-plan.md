@@ -447,9 +447,16 @@ a Project User both read `CASHIER`, and swapping one for the other does not
 change it. A rule written against `role` would therefore fail to distinguish the
 very people a tenant wants to distinguish. The member's actual role is
 `tenant_role_id` → `TenantRole`, and a member may hold **several** — `roles` is a
-`TenantUserRole[]` whose effective permissions are the union of all of them, so
-`TENANT_ROLE` matches if *any* held role matches, and `PERMISSION` must be
-evaluated against that same union.
+`TenantUserRole[]` whose effective permissions are the union of all of them — so
+`TENANT_ROLE` matches if *any* held role matches.
+
+`PERMISSION` needs no such join: `UserStorePermission` **is** that union, already
+materialized. `team/role-sync.util.ts` rewrites those rows for every affected
+member whenever a role changes, in the same transaction as the role set and the
+coarse enum, so a single indexed read of `UserStorePermission` answers "may this
+person approve here" across every role they hold. That is what keeps
+`PERMISSION` — the type most rules will use — free on the hot path, which is
+lesson 1 of §1.
 
 Two corollaries the resolver has to encode:
 
