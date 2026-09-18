@@ -398,7 +398,7 @@ export const coreMessages = {
             valuation: 'قیمت لگانا',
             orders: 'آرڈرز',
             storefrontOrders: 'آن لائن آرڈرز',
-            storefrontSettings: 'اسٹور',
+            storefrontSettings: 'دکان کی ترتیبات',
             storefrontPages: 'اسٹور صفحات',
             storefrontMenu: 'اسٹور مینو',
             tenants: 'ٹیننٹ',

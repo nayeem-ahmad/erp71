@@ -398,7 +398,7 @@ export const coreMessages = {
             valuation: "Bewertung",
             orders: "Bestellungen",
             storefrontOrders: "Onlinebestellungen",
-            storefrontSettings: "Onlineshop",
+            storefrontSettings: "Storefront-Einstellungen",
             storefrontPages: "Shop-Seiten",
             storefrontMenu: "Shop-Menü",
             tenants: "Mandanten",

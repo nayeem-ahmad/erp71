@@ -181,6 +181,11 @@ export const storefrontMessages = {
             loading: "सेटिंग्स लोड हो रही हैं…",
             saveFailed: "सेटिंग्स सहेजी नहीं जा सकीं",
             saved: "सेटिंग्स सफलतापूर्वक सहेजी गईं।",
+            sections: {
+                address: "स्टोर का पता",
+                homepage: "होमपेज",
+                images: "लोगो और हीरो छवि",
+            },
             enable: {
                 title: "स्टोरफ़्रंट चालू करें",
                 description: "अपने स्लग URL पर स्टोर को सार्वजनिक रूप से उपलब्ध कराएँ",

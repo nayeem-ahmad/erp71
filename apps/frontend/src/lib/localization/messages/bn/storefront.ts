@@ -181,6 +181,11 @@ export const storefrontMessages = {
                 loading: "সেটিংস লোড হচ্ছে…",
                 saveFailed: "সেটিংস সংরক্ষণ ব্যর্থ",
                 saved: "সেটিংস সফলভাবে সংরক্ষিত।",
+                sections: {
+                    address: "স্টোরের ঠিকানা",
+                    homepage: "হোমপেজ",
+                    images: "লোগো ও হিরো ছবি",
+                },
                 enable: {
                     title: "স্টোরফ্রন্ট সক্রিয় করুন",
                     description: "স্লাগ URL-এ আপনার স্টোর পাবলিকভাবে অ্যাক্সেসযোগ্য করুন",
