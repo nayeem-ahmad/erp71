@@ -12,11 +12,21 @@ describe('InventoryReportsService', () => {
             product: { findMany: jest.fn() },
             warehouseTransferItem: { findMany: jest.fn() },
             inventoryShrinkage: { findMany: jest.fn() },
-            inventoryMovement: { groupBy: jest.fn().mockResolvedValue([]) },
-            warehouse: { findMany: jest.fn().mockResolvedValue([]) },
+            inventoryMovement: {
+                groupBy: jest.fn().mockResolvedValue([]),
+                findMany: jest.fn().mockResolvedValue([]),
+                aggregate: jest.fn().mockResolvedValue({ _sum: { quantity_delta: 0 } }),
+                count: jest.fn().mockResolvedValue(0),
+            },
+            warehouse: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+            productStock: { aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }) },
             productPrice: { findMany: jest.fn().mockResolvedValue([]) },
+            sale: { findMany: jest.fn().mockResolvedValue([]) },
+            purchase: { findMany: jest.fn().mockResolvedValue([]) },
+            warehouseTransfer: { findMany: jest.fn().mockResolvedValue([]) },
             $queryRaw: jest.fn().mockResolvedValue([]),
         };
+        db.product.findFirst = jest.fn();
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [InventoryReportsService, { provide: DatabaseService, useValue: db }],
@@ -528,6 +538,228 @@ describe('InventoryReportsService', () => {
                     }),
                 }),
             );
+        });
+    });
+
+    describe('product transaction history', () => {
+        const PRODUCT = { id: 'prod-1', name: 'Rice 5kg', sku: 'RICE5', unit_type: 'pcs', deleted_at: null, brand: null, group: null, subgroup: null };
+
+        /**
+         * `created_at` values are only ever compared for order here, so the
+         * dates are spaced a day apart and nothing depends on the zone.
+         */
+        const movement = (over: Record<string, any>) => ({
+            id: 'm',
+            created_at: new Date('2026-03-02T04:00:00Z'),
+            movement_type: 'SALE',
+            reference_type: null,
+            reference_id: null,
+            quantity_delta: -1,
+            balance_after: null,
+            unit_cost: null,
+            note: null,
+            warehouse: { id: 'wh-1', name: 'Dhaka Main', code: 'WH-DHK' },
+            ...over,
+        });
+
+        beforeEach(() => {
+            db.product.findFirst.mockResolvedValue(PRODUCT);
+        });
+
+        it('opens at the balance before the window and runs a total down the page', async () => {
+            db.inventoryMovement.aggregate
+                // opening, then the in and out totals over the window
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 40 } })
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 25 } })
+                .mockResolvedValueOnce({ _sum: { quantity_delta: -15 } });
+            db.inventoryMovement.count.mockResolvedValue(3);
+            db.inventoryMovement.findMany.mockResolvedValue([
+                movement({ id: 'm1', movement_type: 'PURCHASE_RECEIPT', quantity_delta: 20 }),
+                movement({ id: 'm2', movement_type: 'SALE', quantity_delta: -15 }),
+                movement({ id: 'm3', movement_type: 'STOCK_FOUND', quantity_delta: 5 }),
+            ]);
+            db.productStock.aggregate.mockResolvedValue({ _sum: { quantity: 50 } });
+
+            const report = await service.getProductTransactionHistory(
+                'tenant-1',
+                { productId: 'prod-1', from: '2026-03-01' },
+                'Asia/Dhaka',
+            );
+
+            expect(report.summary.openingQuantity).toBe(40);
+            expect(report.pageOpeningQuantity).toBe(40);
+            expect(report.rows.map((row) => row.balanceAfter)).toEqual([60, 45, 50]);
+            expect(report.rows.map((row) => row.balanceBefore)).toEqual([40, 60, 45]);
+            expect(report.summary.closingQuantity).toBe(50);
+            expect(report.summary.totalIn).toBe(25);
+            expect(report.summary.totalOut).toBe(15);
+            expect(report.summary.netChange).toBe(10);
+        });
+
+        it('splits each movement into an in or an out column', async () => {
+            db.inventoryMovement.count.mockResolvedValue(2);
+            db.inventoryMovement.findMany.mockResolvedValue([
+                movement({ id: 'm1', quantity_delta: 12, unit_cost: 50 }),
+                movement({ id: 'm2', quantity_delta: -4, unit_cost: 50 }),
+            ]);
+
+            const report = await service.getProductTransactionHistory('tenant-1', { productId: 'prod-1' }, 'Asia/Dhaka');
+
+            expect(report.rows[0]).toMatchObject({ direction: 'IN', quantityIn: 12, quantityOut: 0, value: 600 });
+            expect(report.rows[1]).toMatchObject({ direction: 'OUT', quantityIn: 0, quantityOut: 4, value: -200 });
+        });
+
+        it('carries the previous pages balance onto the page it is asked for', async () => {
+            db.inventoryMovement.aggregate
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 0 } })
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 30 } })
+                .mockResolvedValueOnce({ _sum: { quantity_delta: -6 } });
+            db.inventoryMovement.count.mockResolvedValue(6);
+            db.inventoryMovement.findMany
+                // The skipped rows are read for their deltas alone …
+                .mockResolvedValueOnce([{ quantity_delta: 10 }, { quantity_delta: -4 }])
+                // … before the page itself.
+                .mockResolvedValueOnce([movement({ id: 'm3', quantity_delta: 7 })]);
+
+            const report = await service.getProductTransactionHistory(
+                'tenant-1',
+                { productId: 'prod-1', page: 2, limit: 2 },
+                'Asia/Dhaka',
+            );
+
+            expect(report.pageOpeningQuantity).toBe(6);
+            expect(report.rows[0].balanceAfter).toBe(13);
+            expect(report.pagination).toEqual({ page: 2, limit: 2, total: 6, pages: 3 });
+            expect(db.inventoryMovement.findMany).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({ take: 2, select: { quantity_delta: true } }),
+            );
+        });
+
+        it('reads nothing before the first row when no start date is given', async () => {
+            db.inventoryMovement.count.mockResolvedValue(0);
+
+            const report = await service.getProductTransactionHistory('tenant-1', { productId: 'prod-1' }, 'Asia/Dhaka');
+
+            expect(report.summary.openingQuantity).toBe(0);
+            // Only the two window totals — nothing was asked about the past.
+            expect(db.inventoryMovement.aggregate).toHaveBeenCalledTimes(2);
+        });
+
+        it('flags a ledger that does not explain the quantity the warehouse holds', async () => {
+            // No `from`, so nothing is read before the window: the two totals
+            // over it are the only aggregates.
+            db.inventoryMovement.aggregate
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 10 } })
+                .mockResolvedValueOnce({ _sum: { quantity_delta: 0 } });
+            db.inventoryMovement.count.mockResolvedValue(1);
+            db.productStock.aggregate.mockResolvedValue({ _sum: { quantity: 18 } });
+
+            const report = await service.getProductTransactionHistory('tenant-1', { productId: 'prod-1' }, 'Asia/Dhaka');
+
+            expect(report.summary.closingQuantity).toBe(10);
+            expect(report.summary.currentStockQuantity).toBe(18);
+            expect(report.summary.matchesStockOnHand).toBe(false);
+        });
+
+        it('withholds the stock comparison when the card is cut off in the past', async () => {
+            db.inventoryMovement.count.mockResolvedValue(0);
+            db.productStock.aggregate.mockResolvedValue({ _sum: { quantity: 18 } });
+
+            const report = await service.getProductTransactionHistory(
+                'tenant-1',
+                { productId: 'prod-1', to: '2026-03-31' },
+                'Asia/Dhaka',
+            );
+
+            expect(report.summary.matchesStockOnHand).toBeNull();
+        });
+
+        it('scopes every read to the product, the warehouse and the branch', async () => {
+            db.warehouse.findFirst.mockResolvedValue({
+                id: 'wh-1',
+                name: 'Dhaka Main',
+                code: 'WH-DHK',
+                is_active: true,
+                store: { id: 'store-1', name: 'Dhaka Branch' },
+            });
+            db.inventoryMovement.count.mockResolvedValue(0);
+
+            await service.getProductTransactionHistory(
+                'tenant-1',
+                { productId: 'prod-1', warehouseId: 'wh-1', storeId: 'store-1' },
+                'Asia/Dhaka',
+            );
+
+            expect(db.inventoryMovement.count).toHaveBeenCalledWith({
+                where: {
+                    tenant_id: 'tenant-1',
+                    product_id: 'prod-1',
+                    warehouse_id: 'wh-1',
+                    warehouse: { store_id: 'store-1' },
+                },
+            });
+            expect(db.productStock.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: 'tenant-1',
+                        product_id: 'prod-1',
+                        warehouse_id: 'wh-1',
+                        warehouse: { store_id: 'store-1' },
+                    },
+                }),
+            );
+        });
+
+        it('refuses a product or a warehouse that is not this tenants', async () => {
+            db.product.findFirst.mockResolvedValue(null);
+            await expect(
+                service.getProductTransactionHistory('tenant-1', { productId: 'prod-x' }, 'Asia/Dhaka'),
+            ).rejects.toThrow('Product not found.');
+
+            db.product.findFirst.mockResolvedValue(PRODUCT);
+            db.warehouse.findFirst.mockResolvedValue(null);
+            await expect(
+                service.getProductTransactionHistory('tenant-1', { productId: 'prod-1', warehouseId: 'wh-x' }, 'Asia/Dhaka'),
+            ).rejects.toThrow('Warehouse not found.');
+        });
+
+        it('resolves each reference to the document number and party behind it', async () => {
+            db.inventoryMovement.count.mockResolvedValue(2);
+            db.inventoryMovement.findMany.mockResolvedValue([
+                movement({ id: 'm1', movement_type: 'PURCHASE_RECEIPT', quantity_delta: 10, reference_type: 'PURCHASE', reference_id: 'pur-1' }),
+                movement({ id: 'm2', quantity_delta: -2, reference_type: 'SALE', reference_id: 'sale-1' }),
+            ]);
+            db.purchase.findMany.mockResolvedValue([
+                { id: 'pur-1', purchase_number: 'PUR-9', reference_number: 'BILL-77', supplier: { name: 'Rahim Traders' } },
+            ]);
+            db.sale.findMany.mockResolvedValue([
+                { id: 'sale-1', serial_number: 'S-100', reference_number: null, customer: { name: 'Karim' } },
+            ]);
+
+            const report = await service.getProductTransactionHistory('tenant-1', { productId: 'prod-1' }, 'Asia/Dhaka');
+
+            expect(report.rows[0]).toMatchObject({ referenceNumber: 'BILL-77', referenceParty: 'Rahim Traders' });
+            expect(report.rows[1]).toMatchObject({ referenceNumber: 'S-100', referenceParty: 'Karim' });
+            // Tenant-scoped rather than trusting the id stamped on the movement.
+            expect(db.sale.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: { in: ['sale-1'] }, tenant_id: 'tenant-1' } }),
+            );
+        });
+
+        it('leaves a reference type it has no loader for as the raw type', async () => {
+            db.inventoryMovement.count.mockResolvedValue(1);
+            db.inventoryMovement.findMany.mockResolvedValue([
+                movement({ id: 'm1', reference_type: 'SOMETHING_NEW', reference_id: 'x-1' }),
+            ]);
+
+            const report = await service.getProductTransactionHistory('tenant-1', { productId: 'prod-1' }, 'Asia/Dhaka');
+
+            expect(report.rows[0]).toMatchObject({
+                referenceType: 'SOMETHING_NEW',
+                referenceNumber: null,
+                referenceParty: null,
+            });
         });
     });
 });

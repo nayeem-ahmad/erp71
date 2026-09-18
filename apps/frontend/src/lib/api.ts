@@ -1352,6 +1352,31 @@ export const api = {
         if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
         return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * The stock card for one product: movements in and out of a warehouse in
+     * date order, with the quantity it opened on and a running balance.
+     * `productId` is required — a running balance over two products is a sum of
+     * unlike things.
+     */
+    getProductTransactionHistory: (params: {
+        productId: string;
+        warehouseId?: string;
+        storeId?: string;
+        from?: string;
+        to?: string;
+        page?: number;
+        limit?: number;
+    }) => {
+        const query = new URLSearchParams();
+        query.set('productId', params.productId);
+        if (params.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params.storeId) query.set('storeId', params.storeId);
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/inventory-reports/product-transaction-history?${query.toString()}`);
+    },
     getInventoryValuation: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);

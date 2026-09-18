@@ -10,6 +10,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     FolderTree,
+    History,
     Package,
     Settings,
     Tag,
@@ -39,6 +40,7 @@ const INVENTORY_HUB_SECTIONS: HubSectionConfig[] = [
         sectionKey: 'reports',
         links: [
             { href: routes.inventory.ledger, key: 'stockLedger', icon: BookOpen, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+            { href: routes.inventory.reports.productTransactionHistory, key: 'productTransactionHistory', icon: History, accent: 'bg-blue-50 text-blue-700 border-blue-100', advancedOnly: true },
             { href: routes.inventory.reports.reorder, key: 'reorderReport', icon: TrendingUp, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
             { href: routes.inventory.reports.shrinkage, key: 'shrinkageReport', icon: AlertTriangle, accent: 'bg-orange-50 text-orange-700 border-orange-100', advancedOnly: true },
             { href: routes.inventory.reports.valuation, key: 'valuation', icon: Calculator, accent: 'bg-purple-50 text-purple-700 border-purple-100', advancedOnly: true },

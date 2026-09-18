@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: "{count} Belege genehmigt",
             bulkRejected: "{count} Belege abgelehnt",
             bulkNoPending: "Keiner der ausgewählten Belege wartet auf Freigabe.",
+            bulkLockedPeriod: "{count} unverändert gelassen – ihr Monat ist abgeschlossen.",
             queueBadge: "Belege warten auf Freigabe",
             noPermission: "Sie haben keine Berechtigung, Belege zu genehmigen.",
             pendingNotice: "Dieser Beleg wartet auf Freigabe und bleibt aus Berichten mit „nur genehmigt“ ausgeschlossen.",

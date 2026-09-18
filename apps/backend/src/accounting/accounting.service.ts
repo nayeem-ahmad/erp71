@@ -1554,6 +1554,15 @@ export class AccountingService {
 
             this.validateVoucherTypeRules(dto, accounts);
 
+            // Both ends of the move are guarded. Editing a voucher that sits in a
+            // closed month rewrites filed figures; re-dating an open voucher into
+            // a closed month adds to them. Either way the closed period changes,
+            // so a lock on either side refuses the edit.
+            await assertFiscalPeriodOpen(tx, tenantId, existing.date, 'accept edits');
+            if (dto.date) {
+                await assertFiscalPeriodOpen(tx, tenantId, new Date(dto.date), 'accept edits');
+            }
+
             await tx.voucherDetail.deleteMany({ where: { voucher_id: id } });
             await this.syncVoucherAttachments(tx, tenantId, id, dto.attachments);
 
@@ -1600,6 +1609,7 @@ export class AccountingService {
         }
 
         await this.db.$transaction(async (tx) => {
+            await assertFiscalPeriodOpen(tx, tenantId, existing.date, 'accept deletions');
             await tx.voucherDetail.deleteMany({ where: { voucher_id: id } });
             await tx.voucher.delete({ where: { id } });
         });
@@ -1707,6 +1717,13 @@ export class AccountingService {
             throw new BadRequestException('Voucher is already approved.');
         }
 
+        // While approval is required a PENDING voucher is held out of the
+        // reports, so signing it off is what puts the money on the books. Doing
+        // that to a closed month moves figures already filed, which is exactly
+        // what the lock exists to stop - even though the voucher predates it.
+        // Rejecting stays allowed: it leaves the ledger as the close found it.
+        await assertFiscalPeriodOpen(this.db, tenantId, existing.date, 'accept approvals');
+
         const updated = await this.db.voucher.update({
             where: { id },
             data: {
@@ -1733,7 +1750,9 @@ export class AccountingService {
      *
      * Vouchers already in the target state are counted as `skipped` rather than
      * failing the request — a stale selection is the normal case when two people
-     * work the queue, and it should not lose the rest of the batch.
+     * work the queue, and it should not lose the rest of the batch. Vouchers
+     * dated into a closed month are held back the same way, under their own
+     * count: one of them must not cost the reviewer the other nineteen rows.
      */
     async bulkUpdateVoucherApproval(
         tenantId: string,
@@ -1748,13 +1767,29 @@ export class AccountingService {
         const ids = [...new Set(dto.ids)];
         const vouchers = await this.db.voucher.findMany({
             where: { tenant_id: tenantId, id: { in: ids } },
-            select: { id: true, approval_status: true },
+            select: { id: true, approval_status: true, date: true },
         });
 
         // Anything not returned belongs to another tenant, or does not exist.
         const found = new Set(vouchers.map((voucher) => voucher.id));
         const notFound = ids.filter((id) => !found.has(id));
-        const actionable = vouchers.filter((voucher) => voucher.approval_status !== targetStatus);
+        const pending = vouchers.filter((voucher) => voucher.approval_status !== targetStatus);
+
+        // Every locked period in one query, rather than the per-voucher guard the
+        // single-voucher path uses: a batch is up to 200 rows and this is the same
+        // question asked 200 times. Rejecting is left alone — see `approveVoucher`.
+        const lockedPeriods = action === 'approve' && pending.length > 0
+            ? await this.db.fiscalPeriod.findMany({
+                where: { tenant_id: tenantId, is_locked: true },
+                select: { start_date: true, end_date: true },
+            })
+            : [];
+
+        const inLockedPeriod = (date: Date) =>
+            lockedPeriods.some((period) => date >= period.start_date && date <= period.end_date);
+
+        const actionable = pending.filter((voucher) => !inLockedPeriod(voucher.date));
+        const lockedPeriod = pending.length - actionable.length;
 
         if (actionable.length > 0) {
             await this.db.voucher.updateMany({
@@ -1777,7 +1812,8 @@ export class AccountingService {
 
         return {
             updated: actionable.length,
-            skipped: vouchers.length - actionable.length,
+            skipped: vouchers.length - pending.length,
+            lockedPeriod,
             notFound: notFound.length,
         };
     }

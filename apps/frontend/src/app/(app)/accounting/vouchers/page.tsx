@@ -244,6 +244,14 @@ function AccountingVouchersListPageContent() {
                 (action === 'approve' ? t.vouchers.approval.bulkApproved : t.vouchers.approval.bulkRejected)
                     .replace('{count}', String(result?.updated ?? ids.length)),
             );
+            // Approving into a closed month is refused per voucher rather than
+            // failing the batch, so say which rows were left behind — otherwise
+            // "3 vouchers approved" out of 4 selected looks like a lost click.
+            if (result?.lockedPeriod > 0) {
+                toast.info(
+                    t.vouchers.approval.bulkLockedPeriod.replace('{count}', String(result.lockedPeriod)),
+                );
+            }
             notifyVoucherApprovalChanged();
             void loadVouchers();
         } catch (error) {

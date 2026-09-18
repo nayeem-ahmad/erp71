@@ -125,6 +125,40 @@ export function formatDate(
 }
 
 /**
+ * A `YYYY-MM-DD` the user picked, rendered as the day they picked.
+ *
+ * `formatDate` reads a string as an *instant*: `new Date('2026-03-01')` is UTC
+ * midnight, and rendering that in the workspace zone lands on 28 February for
+ * any shop west of Greenwich. A date-input bound is a calendar date, not an
+ * instant — there is no time of day to convert — so this formats the parts as
+ * given, in UTC, and no zone can move it.
+ *
+ * Use it for the bounds of a filter and for labels derived from them; keep
+ * `formatDate` for timestamps, which really are instants.
+ */
+export function formatCalendarDate(
+    value: string | null | undefined,
+    locale?: SupportedLocaleCode | string | null
+): string {
+    if (!value) return '—';
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (!match) return formatDate(value, locale);
+
+    const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    if (isNaN(parsed.getTime())) return '—';
+
+    const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
+
+    return parsed.toLocaleDateString(localeConfig.dateLocale, {
+        timeZone: 'UTC',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+/**
  * Date plus time of day, for timelines where "12/08/2026" twice in a row reads
  * as a bug rather than as two updates on the same day.
  */
