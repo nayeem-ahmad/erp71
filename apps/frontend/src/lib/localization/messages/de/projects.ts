@@ -655,7 +655,7 @@ export const projectsMessages = {
         types: "Projekttypen",
         typesHint: "Kategorien für Ihre Aufträge — Installation, Wartung, Ausbau.",
         columns: "Board-Spalten",
-        columnsHint: "Die Spalten auf jedem Projektboard. Die Kategorie entscheidet, was als fertig gilt.",
+        columnsHint: "Die Spalten, mit denen ein neues Projekt startet. Ein bereits bestehendes Projekt behält seine eigene Liste — die wird im Projekt selbst geändert. Die Kategorie entscheidet, was als erledigt gilt.",
         category: "Kategorie",
         categories: {
             TODO: "Zu erledigen",
@@ -707,6 +707,8 @@ export const projectsMessages = {
         addColumn: "Spalte hinzufügen",
         mappedStatuses: "Zugeordnete Status",
         noMappings: "Für kein Projekt auf diesem Board zugeordnet",
+        createStatus: "Anlegen",
+        createStatusHint: "Den Status „{column}“ in {project} anlegen und dieser Spalte zuordnen.",
         currentlyIn: "(derzeit in {column})",
         loadFailed: "Die Spalten konnten nicht geladen werden.",
         deleteColumn: "Spalte löschen",

@@ -17,6 +17,7 @@ jest.mock('@/lib/api', () => ({
         getProjects: jest.fn(),
         getProjectColumns: jest.fn(),
         createBoardColumn: jest.fn(),
+        createProjectColumn: jest.fn(),
         updateBoardColumn: jest.fn(),
         reorderBoardColumns: jest.fn(),
         deleteBoardColumn: jest.fn(),
@@ -86,6 +87,9 @@ describe('BoardSettingsPage', () => {
             ]);
         });
         (api.createBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
+        (api.createProjectColumn as jest.Mock)
+            .mockReset()
+            .mockResolvedValue({ id: 's-alpha-routine', name: 'Routine Tasks' });
         (api.updateBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
         (api.reorderBoardColumns as jest.Mock).mockReset().mockResolvedValue([]);
         (api.deleteBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
@@ -101,11 +105,12 @@ describe('BoardSettingsPage', () => {
      * first, exactly as a reader would.
      */
     const openMappings = async (columnName: string) => {
-        fireEvent.click(
-            await screen.findByRole('button', {
-                name: new RegExp(`Mapped statuses — ${columnName}`),
-            }),
-        );
+        const toggle = await screen.findByRole('button', {
+            name: new RegExp(`Mapped statuses — ${columnName}`),
+        });
+        // A column bound to nothing opens itself, so this clicks only when the
+        // section is actually shut — otherwise the helper would close it.
+        if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
     };
 
     it('lists every column and the board it belongs to', async () => {
@@ -126,11 +131,20 @@ describe('BoardSettingsPage', () => {
         expect(screen.getByText('BET · Backlog')).toBeInTheDocument();
     });
 
-    it('shows the empty-mappings hint for a column with no bindings', async () => {
+    it('opens an unmapped column’s section for itself, hint and all', async () => {
         render(<BoardSettingsPage />);
         await screen.findByLabelText('Column name — Done');
-        await openMappings('Done');
+
+        // "Done" binds nothing, so it refuses every card dropped on it — which
+        // is what people open this screen to fix. No click here on purpose.
+        expect(
+            screen.getByRole('button', { name: /Mapped statuses — Done/ }),
+        ).toHaveAttribute('aria-expanded', 'true');
         expect(screen.getByText(/not mapped for any project/i)).toBeInTheDocument();
+        // A column that is mapped stays folded away.
+        expect(
+            screen.getByRole('button', { name: /Mapped statuses — To Do/ }),
+        ).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('adds a column from the inline form', async () => {
@@ -386,5 +400,114 @@ describe('BoardSettingsPage', () => {
             expect(within(select).getByText('To Do (currently in To Do)')).toBeInTheDocument(),
         );
         expect(within(select).getByText('In Progress')).toBeInTheDocument();
+    });
+    /**
+     * The dead end this screen used to have. A board column is not a project
+     * status: a card's project needs a status of its own bound to the column
+     * before a drop can write anything. Adding the name in Project Setup does
+     * not give an existing project that status — that list only seeds *new*
+     * projects — so the select here had nothing to offer and every drop was
+     * refused with "map it in board settings", pointing at a screen that could
+     * not fix it.
+     */
+    describe('a column no project has a status for', () => {
+        const routineColumn = {
+            id: 'c3',
+            name: 'Routine Tasks',
+            category: 'TODO',
+            sort_order: 2,
+            wip_limit: null,
+            bindings: [],
+        };
+
+        beforeEach(() => {
+            (api.getBoardColumns as jest.Mock).mockResolvedValue([...baseColumns, routineColumn]);
+        });
+
+        it('offers to create the status in the project, and binds it in one go', async () => {
+            render(<BoardSettingsPage />);
+            await screen.findByLabelText('Column name — Routine Tasks');
+            await openMappings('Routine Tasks');
+
+            const create = await screen.findByRole('button', {
+                name: 'Create — ALP — Routine Tasks',
+            });
+            fireEvent.click(create);
+
+            // The status is created in the project, carrying the column's own
+            // stage so a card dropped here counts as finished when the lane says so.
+            await waitFor(() =>
+                expect(api.createProjectColumn).toHaveBeenCalledWith('p1', {
+                    name: 'Routine Tasks',
+                    category: 'TODO',
+                }),
+            );
+            // …and bound, or the column would still refuse the drop.
+            await waitFor(() =>
+                expect(api.setBoardColumnStatuses).toHaveBeenCalledWith('b1', 'c3', [
+                    's-alpha-routine',
+                ]),
+            );
+        });
+
+        it('keeps the column’s other bindings when it creates one', async () => {
+            (api.getBoardColumns as jest.Mock).mockResolvedValue([
+                ...baseColumns,
+                { ...routineColumn, bindings: [binding('b9', 's-beta-doing', 'Doing', 'p2')] },
+            ]);
+
+            render(<BoardSettingsPage />);
+            await screen.findByLabelText('Column name — Routine Tasks');
+            await openMappings('Routine Tasks');
+
+            fireEvent.click(
+                await screen.findByRole('button', { name: 'Create — ALP — Routine Tasks' }),
+            );
+
+            await waitFor(() =>
+                expect(api.setBoardColumnStatuses).toHaveBeenCalledWith('b1', 'c3', [
+                    's-beta-doing',
+                    's-alpha-routine',
+                ]),
+            );
+        });
+
+        it('does not offer it where the project already has a status by that name', async () => {
+            render(<BoardSettingsPage />);
+            await screen.findByDisplayValue('To Do');
+            await openMappings('To Do');
+
+            // ALP has a "To Do" status — it is in the select, mapped or not,
+            // so there is nothing to create.
+            await screen.findByLabelText('Mapped statuses — ALP — To Do');
+            expect(
+                screen.queryByRole('button', { name: 'Create — ALP — To Do' }),
+            ).not.toBeInTheDocument();
+        });
+
+        it('does not offer it before the project’s statuses have arrived', async () => {
+            // A project whose status list is still in flight looks exactly like
+            // a project with no matching status; offering it there would create
+            // a duplicate the server refuses.
+            (api.getProjectColumns as jest.Mock).mockImplementation(
+                (projectId: string) =>
+                    projectId === 'p1'
+                        ? new Promise(() => {})
+                        : Promise.resolve([{ id: 's-beta-todo', name: 'Backlog' }]),
+            );
+
+            render(<BoardSettingsPage />);
+            await screen.findByLabelText('Column name — Routine Tasks');
+            await openMappings('Routine Tasks');
+
+            // BET's list arrived and has no "Routine Tasks", so it is offered;
+            // ALP's has not, so it is not.
+            expect(
+                await screen.findByRole('button', { name: 'Create — BET — Routine Tasks' }),
+            ).toBeInTheDocument();
+            expect(
+                screen.queryByRole('button', { name: 'Create — ALP — Routine Tasks' }),
+            ).not.toBeInTheDocument();
+        });
     });
 });
