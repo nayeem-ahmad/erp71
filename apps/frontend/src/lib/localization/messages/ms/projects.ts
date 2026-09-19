@@ -533,6 +533,7 @@ export const projectsMessages = {
         columnTotal: 'j tinggal',
         addCard: 'Tambah kad',
         newCardPlaceholder: 'Apa yang perlu dibuat?',
+        assignCardTo: 'Tugaskan kad kepada',
         filters: {
             assignee: 'Penerima',
             priority: 'Keutamaan',

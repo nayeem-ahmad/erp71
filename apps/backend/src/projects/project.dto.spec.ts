@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { CreateProjectDto, CreateTaskDto, UpdateProjectDto, UpdateTaskDto } from './project.dto';
+import { CreateBoardCardDto } from './board.dto';
 
 const errorsFor = (payload: Record<string, unknown>) =>
     validateSync(plainToInstance(UpdateTaskDto, payload) as object).map((e) => e.property);
@@ -122,5 +123,43 @@ describe('UpdateProjectDto clearing', () => {
             plainToInstance(CreateProjectDto, { name: 'Rooftop solar', projectTypeId: '', startDate: '' }) as object,
         );
         expect(errors.map((e) => e.property)).toEqual([]);
+    });
+});
+
+/**
+ * The board composer sends both assignee columns on every card, so that the one
+ * the chosen holder does not fill arrives as `''` rather than being omitted —
+ * the same shape `assigneeColumns()` produces everywhere else in the module.
+ * Without the `@ValidateIf` spelling the empty sibling reaches `@IsUUID()` and
+ * 400s, which is exactly the bug the New Task dialog had.
+ */
+describe('CreateBoardCardDto assignees', () => {
+    const cardErrors = (payload: Record<string, unknown>) =>
+        validateSync(plainToInstance(CreateBoardCardDto, payload) as object).map((e) => e.property);
+
+    const base = { projectId: UUID, title: 'Write the changelog' };
+
+    it('takes a card with no assignee at all', () => {
+        expect(cardErrors(base)).toEqual([]);
+    });
+
+    it('takes a user assignee with the employee column left empty', () => {
+        expect(cardErrors({ ...base, assigneeId: UUID, assigneeEmployeeId: '' })).toEqual([]);
+    });
+
+    it('takes an employee assignee with the user column left empty', () => {
+        expect(cardErrors({ ...base, assigneeId: '', assigneeEmployeeId: UUID })).toEqual([]);
+    });
+
+    it('takes both columns empty, which is how the composer says "unassigned"', () => {
+        expect(cardErrors({ ...base, assigneeId: '', assigneeEmployeeId: '' })).toEqual([]);
+    });
+
+    // '' is the only non-UUID that means anything; garbage is still garbage.
+    it('still rejects a non-empty value that is not a UUID', () => {
+        expect(cardErrors({ ...base, assigneeId: 'not-a-uuid' })).toEqual(['assigneeId']);
+        expect(cardErrors({ ...base, assigneeEmployeeId: 'nope' })).toEqual([
+            'assigneeEmployeeId',
+        ]);
     });
 });

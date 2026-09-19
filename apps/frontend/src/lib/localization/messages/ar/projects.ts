@@ -533,6 +533,7 @@ export const projectsMessages = {
         columnTotal: "ساعة متبقية",
         addCard: "إضافة بطاقة",
         newCardPlaceholder: "ما الذي يجب إنجازه؟",
+        assignCardTo: "تعيين البطاقة إلى",
         filters: {
             assignee: "المسؤول",
             priority: "الأولوية",

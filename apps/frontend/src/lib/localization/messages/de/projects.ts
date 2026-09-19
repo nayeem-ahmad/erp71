@@ -533,6 +533,7 @@ export const projectsMessages = {
         columnTotal: "h übrig",
         addCard: "Karte hinzufügen",
         newCardPlaceholder: "Was ist zu tun?",
+        assignCardTo: "Karte zuweisen an",
         filters: {
             assignee: "Zuständig",
             priority: "Priorität",

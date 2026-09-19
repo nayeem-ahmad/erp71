@@ -5151,7 +5151,21 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     /** Compose a new task straight into a board column; returns the reloaded board. */
-    createBoardCard: (id: string, columnId: string, data: { projectId: string; title: string }) =>
+    /**
+     * Both assignee columns travel on every card: a task goes to a user or to
+     * an employee without a login, never both, so whichever one the chosen
+     * holder does not fill is sent as `''`. The DTO is spelled for that.
+     */
+    createBoardCard: (
+        id: string,
+        columnId: string,
+        data: {
+            projectId: string;
+            title: string;
+            assigneeId?: string;
+            assigneeEmployeeId?: string;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {
             method: 'POST',
             body: JSON.stringify(data),

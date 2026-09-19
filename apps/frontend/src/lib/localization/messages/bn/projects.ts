@@ -533,6 +533,7 @@ export const projectsMessages = {
         columnTotal: 'ঘণ্টা বাকি',
         addCard: 'কার্ড যোগ করুন',
         newCardPlaceholder: 'কী করতে হবে?',
+        assignCardTo: 'কার্ড দেওয়া হবে',
         filters: {
             assignee: 'দায়িত্বপ্রাপ্ত',
             priority: 'অগ্রাধিকার',

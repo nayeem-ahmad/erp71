@@ -50,6 +50,8 @@ jest.mock('@/lib/api', () => {
             moveBoardCards: jest.fn(),
             removeBoardCards: jest.fn(),
             setBoardColumnCardOrder: jest.fn(),
+            getMe: jest.fn(),
+            getProject: jest.fn(),
         },
     };
 });
@@ -108,6 +110,17 @@ describe('BoardPage', () => {
             unsorted: [],
         });
         (api.setBoardColumnCardOrder as jest.Mock).mockReset().mockResolvedValue({});
+        // Who is composing — a card with no filter set lands on them.
+        (api.getMe as jest.Mock).mockReset().mockResolvedValue({ id: 'me-1' });
+        // The project roster behind the composer's assignee picker, loaded
+        // lazily by `useProjectMeta` the first time the picker is opened.
+        (api.getProject as jest.Mock).mockReset().mockResolvedValue({
+            id: 'p1',
+            members: [
+                { user: { id: 'u-rafi', name: 'Rafi Hasan', email: 'rafi@erp71.com' } },
+                { employee: { id: 'e-sumaiya', name: 'Sumaiya Akter' } },
+            ],
+        });
     });
 
     /** Board settings, open on the tab this test needs. */
@@ -223,10 +236,11 @@ describe('BoardPage', () => {
             fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
             await waitFor(() =>
-                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c2', {
-                    projectId: 'p1',
-                    title: 'Write changelog',
-                }),
+                expect(api.createBoardCard).toHaveBeenCalledWith(
+                    'b1',
+                    'c2',
+                    expect.objectContaining({ projectId: 'p1', title: 'Write changelog' }),
+                ),
             );
             // The new card only exists server-side until the board is re-read.
             await waitFor(() => expect(api.getBoard).toHaveBeenCalledTimes(2));
@@ -241,10 +255,11 @@ describe('BoardPage', () => {
             fireEvent.keyDown(field, { key: 'Enter' });
 
             await waitFor(() =>
-                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c1', {
-                    projectId: 'p1',
-                    title: 'Rotate the keys',
-                }),
+                expect(api.createBoardCard).toHaveBeenCalledWith(
+                    'b1',
+                    'c1',
+                    expect.objectContaining({ projectId: 'p1', title: 'Rotate the keys' }),
+                ),
             );
             await waitFor(() => expect(field).toHaveValue(''));
             expect(screen.getByRole('textbox', { name: /add a card/i })).toBeInTheDocument();
@@ -262,11 +277,254 @@ describe('BoardPage', () => {
             fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
             await waitFor(() =>
-                expect(api.createBoardCard).toHaveBeenCalledWith('b1', 'c1', {
-                    projectId: 'p2',
-                    title: 'Draft the spec',
-                }),
+                expect(api.createBoardCard).toHaveBeenCalledWith(
+                    'b1',
+                    'c1',
+                    expect.objectContaining({ projectId: 'p2', title: 'Draft the spec' }),
+                ),
             );
+        });
+
+        /**
+         * The whole point of the pair: composing a run of cards while the board
+         * is filtered to somebody means those cards are for them. The filter
+         * wins over the signed-in user; an explicit pick in the composer wins
+         * over both.
+         */
+        describe('who the card lands on', () => {
+            /**
+             * Its own board: the assignee filter's options are built from
+             * whoever holds a card, so these tests need held cards — and the
+             * shared fixture's unheld `k1` is what several tests above read.
+             */
+            beforeEach(() => {
+                (api.getBoard as jest.Mock).mockResolvedValue({
+                    id: 'b1',
+                    name: 'Release 4',
+                    columns: [
+                        {
+                            id: 'c1',
+                            name: 'To Do',
+                            category: 'TODO',
+                            wip_limit: null,
+                            tasks: [
+                                {
+                                    ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }),
+                                    assignee: {
+                                        id: 'u-rafi',
+                                        name: 'Rafi Hasan',
+                                        email: 'rafi@erp71.com',
+                                    },
+                                },
+                                {
+                                    ...task('k2', 'Ship docs', { id: 'p1', code: 'ALP' }),
+                                    assigneeEmployee: { id: 'e-sumaiya', name: 'Sumaiya Akter' },
+                                },
+                            ],
+                        },
+                    ],
+                    unsorted: [],
+                });
+            });
+
+            /** Sets the board's assignee filter to the named option. */
+            const filterTo = (value: string) =>
+                fireEvent.change(screen.getByLabelText('Assignee'), { target: { value } });
+
+            /**
+             * Overrides the composer's assignee. Focus first, because that is
+             * what loads the project's roster — the options do not exist until
+             * somebody opens the picker.
+             */
+            const pickAssignee = async (value: string, label: string) => {
+                const select = screen.getByRole('combobox', { name: 'Assign card to' });
+                fireEvent.focus(select);
+                await within(select).findByRole('option', { name: label });
+                fireEvent.change(select, { target: { value } });
+            };
+
+            it('puts the card on the signed-in user when no filter is set', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({ assigneeId: 'me-1', assigneeEmployeeId: '' }),
+                    ),
+                );
+            });
+
+            it('puts it on the filtered user instead, so a filtered run is theirs', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('user:u-rafi');
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({
+                            assigneeId: 'u-rafi',
+                            assigneeEmployeeId: '',
+                        }),
+                    ),
+                );
+            });
+
+            it('carries an employee filter into the employee column', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('employee:e-sumaiya');
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({
+                            assigneeId: '',
+                            assigneeEmployeeId: 'e-sumaiya',
+                        }),
+                    ),
+                );
+            });
+
+            // Looking at nobody's work is a deliberate choice, not an accident
+            // for the composer to correct by handing the card to the composer.
+            it('leaves the card unheld when the board is filtered to unassigned', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('none');
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({ assigneeId: '', assigneeEmployeeId: '' }),
+                    ),
+                );
+            });
+
+            it('opens the picker on whoever the filter chose', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('user:u-rafi');
+                await openComposer(0);
+
+                await waitFor(() =>
+                    expect(screen.getByRole('combobox', { name: 'Assign card to' })).toHaveValue(
+                        'user:u-rafi',
+                    ),
+                );
+            });
+
+            /**
+             * The signed-in user need not hold a card on this board, so there
+             * may be no name for them anywhere on the page until the project's
+             * roster arrives. The picker still has to say who the card is going
+             * to rather than falling back to "Unassigned".
+             */
+            it('names the unfiltered default before the roster arrives', async () => {
+                // Never resolves: the roster is still in flight.
+                (api.getProject as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+                await openComposer(0);
+
+                const select = screen.getByRole('combobox', { name: 'Assign card to' });
+                await waitFor(() => expect(select).toHaveValue('user:me-1'));
+                expect(within(select).getByRole('option', { name: 'Me' })).toBeInTheDocument();
+            });
+
+            it('lets the composer override the filter for one card', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('user:u-rafi');
+                const field = await openComposer(0);
+                await pickAssignee('employee:e-sumaiya', 'Sumaiya Akter');
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({
+                            assigneeId: '',
+                            assigneeEmployeeId: 'e-sumaiya',
+                        }),
+                    ),
+                );
+            });
+
+            it('can hand a card to nobody even with a filter set', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                filterTo('user:u-rafi');
+                const field = await openComposer(0);
+                fireEvent.change(screen.getByRole('combobox', { name: 'Assign card to' }), {
+                    target: { value: '' },
+                });
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({ assigneeId: '', assigneeEmployeeId: '' }),
+                    ),
+                );
+            });
+
+            // A run of cards is the case this control exists for: the composer
+            // stays open after a save, and it must not silently reset to the
+            // filter's default once somebody has overridden it.
+            it('keeps an override across a run of cards', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                const field = await openComposer(0);
+                await pickAssignee('user:u-rafi', 'Rafi Hasan');
+                fireEvent.change(field, { target: { value: 'First' } });
+                fireEvent.keyDown(field, { key: 'Enter' });
+
+                await waitFor(() => expect(field).toHaveValue(''));
+                fireEvent.change(field, { target: { value: 'Second' } });
+                fireEvent.keyDown(field, { key: 'Enter' });
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenLastCalledWith(
+                        'b1',
+                        'c1',
+                        expect.objectContaining({
+                            title: 'Second',
+                            assigneeId: 'u-rafi',
+                        }),
+                    ),
+                );
+            });
         });
 
         it('sends nothing for a blank title', async () => {

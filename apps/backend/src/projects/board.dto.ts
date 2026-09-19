@@ -10,6 +10,7 @@ import {
     MaxLength,
     Min,
     MinLength,
+    ValidateIf,
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 
@@ -87,6 +88,22 @@ export class CreateBoardCardDto {
     @MinLength(1)
     @MaxLength(300)
     title!: string;
+
+    /**
+     * Who the card lands on. Both columns arrive on every request — a task goes
+     * to a user or to an employee without a login, never both — so whichever
+     * one the chosen holder does not fill comes through as `''`.
+     *
+     * `@ValidateIf` for the same reason `UpdateTaskDto` and `CreateTaskDto`
+     * carry it: `@IsOptional()` skips only null and undefined, so the empty
+     * sibling column would reach `@IsUUID()` and 400. That was the New Task
+     * dialog's bug; the composer sends the identical shape.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
+    assigneeId?: string;
+
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
+    assigneeEmployeeId?: string;
 }
 
 export class MoveBoardCardDto {

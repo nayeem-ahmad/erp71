@@ -21,6 +21,8 @@ import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
+import { useProjectMeta } from '@/components/projects/use-project-meta';
+import { defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
 import BoardColumnComposer from '@/components/projects/BoardColumnComposer';
 import BoardColumnHead from '@/components/projects/BoardColumnHead';
 import BoardSettingsModal from '@/components/projects/BoardSettingsModal';
@@ -171,6 +173,10 @@ export default function BoardPage() {
     // Which project a composed card belongs to. Held here rather than per
     // column so picking it once covers the whole board.
     const [composerProject, setComposerProject] = useState('');
+    /** Who is composing — a card lands on them when no filter says otherwise. */
+    const [userId, setUserId] = useState<string | null>(null);
+    /** The composer's assignee picker draws on the chosen project's roster. */
+    const projectMeta = useProjectMeta();
 
     /**
      * Shadow under each column, but only on a painted board: gray-50 on white
@@ -216,6 +222,31 @@ export default function BoardPage() {
         }
         return [...byId.values()];
     }, [boardTasks]);
+    /**
+     * Who a composed card lands on unless its picker says otherwise: whoever
+     * the board is filtered to, or the signed-in user when it is filtered to
+     * nobody in particular. Composing a run of cards while filtered to Rafi
+     * means those cards are for Rafi — and they would otherwise vanish from
+     * the view the moment they were created.
+     */
+    const composerAssignee = useMemo(
+        () => defaultAssigneeKeyFor(filters.assignee, userId),
+        [filters.assignee, userId],
+    );
+    /**
+     * A name for that default while the project's roster is still loading. A
+     * filtered board has one already — the filter's options are built from the
+     * cards. Otherwise the default is the signed-in user, who need not hold a
+     * card here and so may have no label anywhere on this page; "Me" is both
+     * true and the shortest thing to read.
+     */
+    const composerAssigneeLabel = useMemo(
+        () =>
+            assigneeOptions.find((option) => option.key === composerAssignee)?.label ??
+            t.projects.quickAdd.me,
+        [assigneeOptions, composerAssignee, t.projects.quickAdd.me],
+    );
+
     const filtered = hasActiveFilter(filters);
     const shown = countTasks(visibleColumns) + visibleUnsorted.length;
     const total = countTasks(columns) + unsorted.length;
@@ -264,6 +295,15 @@ export default function BoardPage() {
         api.getProjectLabels()
             .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
             .catch(() => setLabels([]));
+    }, []);
+
+    // Who is composing. A card composed on an unfiltered board lands on them,
+    // so this is read once rather than per card. A failure only means a
+    // composed card opens unassigned, which the picker can still correct.
+    useEffect(() => {
+        api.getMe()
+            .then((me: unknown) => setUserId((me as { id?: string } | null)?.id ?? null))
+            .catch(() => setUserId(null));
     }, []);
 
     // For the column composers. Also tenant-wide: a board can take a card from
@@ -940,6 +980,14 @@ export default function BoardPage() {
                                             projects={projects}
                                             projectId={composerProject}
                                             onProjectChange={setComposerProject}
+                                            defaultAssignee={composerAssignee}
+                                            defaultAssigneeLabel={composerAssigneeLabel}
+                                            assignees={
+                                                projectMeta.peek(composerProject)?.assignees ?? []
+                                            }
+                                            onAssigneeMenuOpen={() =>
+                                                void projectMeta.load(composerProject)
+                                            }
                                             onCreated={loadBoard}
                                         />
                                     </div>
