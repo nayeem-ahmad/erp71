@@ -54,6 +54,10 @@ export default function TimeTracker() {
     const [tags, setTags] = useState<HourLogTag[]>([]);
     const [projectId, setProjectId] = useState('');
     const [tasks, setTasks] = useState<CaptureTask[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(false);
+    /** The tracker logs *your* hours, so it opens on your tasks. */
+    const [onlyMine, setOnlyMine] = useState(true);
+    const [userId, setUserId] = useState<string | null>(null);
     /** A manual log the overlap guard refused, held while we ask whether to keep both. */
     const [pendingOverlap, setPendingOverlap] = useState<
         { message: string; retry: () => Promise<void> } | null
@@ -83,27 +87,48 @@ export default function TimeTracker() {
         api.getProjectTimeTags()
             .then((rows: unknown) => setTags(Array.isArray(rows) ? (rows as HourLogTag[]) : []))
             .catch(() => setTags([]));
+        // Who "mine" is. Nobody resolving it leaves the list unfiltered rather
+        // than empty — see the fetch below.
+        api.getMe()
+            .then((me: unknown) => setUserId((me as { id?: string })?.id ?? null))
+            .catch(() => setUserId(null));
         // `projects.length` is the "have we already" flag, not a trigger.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
 
+    // The task list: yours by default, across every project unless one is
+    // picked. Held until the panel is open for the same reason the project list
+    // is — this component is mounted on every page in the app.
+    //
+    // Deliberately not narrowed to open tasks: `statusCategory` matches one
+    // category exactly, so there is no single value for "TODO or IN_PROGRESS",
+    // and logging an afternoon against a task somebody already moved to Done is
+    // ordinary — the hours came before the move.
     useEffect(() => {
-        if (!projectId) {
-            setTasks([]);
-            return;
-        }
+        if (!visible) return;
+        // Asking for "my tasks" before we know who that is would send no filter
+        // at all and quietly list everyone's, so the fetch waits.
+        if (onlyMine && userId === null) return;
         let cancelled = false;
-        api.getProjectTasks({ projectId, limit: 200 })
+        setTasksLoading(true);
+        api.getProjectTasks({
+            limit: 200,
+            ...(projectId ? { projectId } : {}),
+            ...(onlyMine && userId ? { assigneeId: userId } : {}),
+        })
             .then((res) => {
                 if (!cancelled) setTasks((res?.items ?? []) as CaptureTask[]);
             })
             .catch(() => {
                 if (!cancelled) setTasks([]);
+            })
+            .finally(() => {
+                if (!cancelled) setTasksLoading(false);
             });
         return () => {
             cancelled = true;
         };
-    }, [projectId]);
+    }, [projectId, onlyMine, userId, visible]);
 
     // Resynced from the server on every refetch rather than counted from a
     // parsed timestamp against the device clock: a phone running two minutes
@@ -225,8 +250,15 @@ export default function TimeTracker() {
                         task: hl.captureTask,
                         selectProject: m.task.selectProject,
                         selectTask: hl.selectTask,
-                        selectProjectFirst: hl.selectProjectFirst,
-                        noTasks: hl.noTasks,
+                        allProjects: hl.allProjects,
+                        noTasks: hl.trackerNoTasks,
+                        noMatches: hl.trackerNoMatches,
+                        searchTasks: hl.searchTasks,
+                        loadingTasks: hl.loadingTasks,
+                        clearTask: hl.clearTask,
+                        mine: hl.scopeMine,
+                        everyone: hl.scopeEveryone,
+                        scope: hl.scope,
                         tags: hl.tags,
                         noTags: hl.noTags,
                         start: hl.start,
@@ -250,6 +282,9 @@ export default function TimeTracker() {
                     busy={busy}
                     projectId={projectId}
                     onProjectChange={setProjectId}
+                    tasksLoading={tasksLoading}
+                    onlyMine={onlyMine}
+                    onOnlyMineChange={setOnlyMine}
                     onStart={start}
                     onStop={stop}
                     onDiscard={discard}
