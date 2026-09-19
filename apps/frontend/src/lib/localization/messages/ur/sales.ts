@@ -344,6 +344,16 @@ export const salesMessages = {
             print: 'انوائس پرنٹ کریں',
             skip: 'نہیں، شکریہ',
         },
+        printSettings: {
+            action: 'پرنٹ سیٹنگز',
+            title: 'پرنٹ سیٹنگز',
+            subtitle: 'صرف اس ڈیوائس پر لاگو',
+            paperSizeLabel: 'کاغذ کا سائز',
+            paperSizeHint: 'اس براؤزر سے انوائس اور چالان اس سائز میں پرنٹ ہوں گے۔ دکان کا ڈیفالٹ سیٹنگز ← سیلز میں طے ہوتا ہے۔',
+            skipPreviewLabel: 'پرنٹ پیش نظارہ چھوڑیں',
+            skipPreviewHint: 'دستاویزات پہلے دکھانے کے بجائے سیدھا پرنٹر پر بھیجیں۔',
+            saved: 'پرنٹ سیٹنگز محفوظ ہو گئیں',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

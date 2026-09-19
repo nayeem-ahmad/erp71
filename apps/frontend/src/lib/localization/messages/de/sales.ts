@@ -344,6 +344,16 @@ export const salesMessages = {
             print: "Rechnung drucken",
             skip: "Nein, danke",
         },
+        printSettings: {
+            action: 'Druckeinstellungen',
+            title: 'Druckeinstellungen',
+            subtitle: 'Gilt nur für dieses Gerät',
+            paperSizeLabel: 'Papierformat',
+            paperSizeHint: 'Format, in dem Rechnungen und Lieferscheine aus diesem Browser gedruckt werden. Die Vorgabe für den Laden steht unter Einstellungen → Verkauf.',
+            skipPreviewLabel: 'Druckvorschau überspringen',
+            skipPreviewHint: 'Dokumente direkt an den Drucker senden, statt sie vorher anzuzeigen.',
+            saved: 'Druckeinstellungen gespeichert',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

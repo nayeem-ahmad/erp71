@@ -344,6 +344,16 @@ export const salesMessages = {
             print: "Imprimer la facture",
             skip: "Non, merci",
         },
+        printSettings: {
+            action: 'Paramètres d’impression',
+            title: 'Paramètres d’impression',
+            subtitle: 'S’applique à cet appareil uniquement',
+            paperSizeLabel: 'Format de papier',
+            paperSizeHint: 'Format d’impression des factures et bons de livraison depuis ce navigateur. La valeur par défaut de la boutique se règle dans Paramètres → Ventes.',
+            skipPreviewLabel: 'Ignorer l’aperçu avant impression',
+            skipPreviewHint: 'Envoyer les documents directement à l’imprimante au lieu de les afficher d’abord.',
+            saved: 'Paramètres d’impression enregistrés',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

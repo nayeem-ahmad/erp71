@@ -35,6 +35,7 @@ import {
     columnWidthClass,
     density,
     motionClass,
+    scrollClasses,
     staggerDelay,
     tintOf,
     type BoardView,
@@ -143,6 +144,8 @@ export default function BoardPage() {
     const { view } = boardView;
     const widthClass = columnWidthClass(view.columnWidth);
     const d = density(view);
+    // Where this board's height goes — the page's scroll, or each column's.
+    const sc = scrollClasses(view);
 
     const [board, setBoard] = useState<BoardSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
@@ -660,7 +663,7 @@ export default function BoardPage() {
     }
 
     return (
-        <PageShell>
+        <PageShell contentClassName={sc.shell}>
             {/* The background is painted here rather than on the column
                 scroller, so it runs behind the title and breadcrumb the way
                 Jira and Trello paint a board. The header is part of the board,
@@ -672,7 +675,7 @@ export default function BoardPage() {
                 flush inside one painted surface. */}
             <div
                 data-testid="board-canvas"
-                className={`space-y-4 ${boardCanvasClass(board)}`}
+                className={`space-y-4 ${sc.canvas} ${boardCanvasClass(board)}`}
                 style={boardCanvasStyle(board)}
             >
                 <div className={boardHeaderPlateClass(board)}>
@@ -738,9 +741,10 @@ export default function BoardPage() {
                 )}
 
                 {/* Columns scroll inside their own container so the page body
-                    never scrolls sideways on a phone. */}
-                <div className="overflow-x-auto pb-2">
-                    <div className="flex min-w-max gap-3">
+                    never scrolls sideways on a phone. Sideways always; whether
+                    they scroll downwards in here too is `sc` — see `SCROLL`. */}
+                <div className={`overflow-x-auto pb-2 ${sc.strip}`}>
+                    <div className={`flex min-w-max gap-3 ${sc.row}`}>
                     {unsorted.length > 0 && (
                         <div
                             className={`flex ${widthClass} flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${lift} ${motionClass(view, 'column')}`}
@@ -750,7 +754,7 @@ export default function BoardPage() {
                                 <p className="text-sm font-semibold text-amber-800">{m.unsorted}</p>
                                 <p className="text-xs text-gray-500">{m.unsortedHint}</p>
                             </div>
-                            <div className={`flex flex-1 flex-col ${d.columnGap} ${d.columnPad}`}>
+                            <div className={`flex flex-1 flex-col ${d.columnGap} ${d.columnPad} ${sc.list}`}>
                                 {visibleUnsorted.length === 0 && (
                                     <p className="rounded-md border border-dashed border-amber-200 px-1 py-4 text-center text-xs text-gray-400">
                                         {bm.noMatches}
@@ -879,49 +883,66 @@ export default function BoardPage() {
                                     </div>
                                 ) : null}
 
-                                <div className={`flex flex-1 flex-col ${d.columnGap} ${d.columnPad}`}>
-                                    {column.tasks.length === 0 && dropIndex === null && (
-                                        <p className="rounded-md border border-dashed border-gray-200 px-1 py-4 text-center text-xs text-gray-400">
-                                            {filtered ? bm.noMatches : bm.emptyColumn}
-                                        </p>
-                                    )}
-                                    {column.tasks.map((task, index) => (
-                                        <Fragment key={task.id}>
-                                            {dropIndex === index && <DropIndicator animate={view.animate} />}
-                                            <TaskCard
-                                                task={task}
-                                                view={view}
-                                                index={index}
-                                                selecting={selection.length > 0}
-                                                selected={selection.includes(task.id)}
-                                                onToggleSelected={() => toggleSelected(task.id)}
-                                                dragging={drag?.active === true && drag.taskId === task.id}
-                                                onPointerDownBody={(e) =>
-                                                    beginDrag(e, task, { fromHandle: false })
-                                                }
-                                                onPointerDownHandle={(e) =>
-                                                    beginDrag(e, task, { fromHandle: true })
-                                                }
-                                                onPointerMove={continueDrag}
-                                                onPointerUp={endDrag}
-                                                onPointerCancel={cancelDrag}
-                                                onOpen={() => setOpenTaskId(task.id)}
-                                                onRemove={() => removeCard(task.id)}
-                                            />
-                                        </Fragment>
-                                    ))}
-                                    {dropIndex === column.tasks.length && (
-                                        <DropIndicator animate={view.animate} />
-                                    )}
+                                <div className="flex min-h-0 flex-1 flex-col">
+                                    {/* The cards. In column-scroll mode this is
+                                        the box that scrolls, which is what keeps
+                                        the column's heading above it and the
+                                        composer below it in place; in page-scroll
+                                        mode it is a plain stack and the window
+                                        scrolls past it. */}
+                                    <div className={`flex flex-col ${d.columnGap} ${d.columnPad} ${sc.list}`}>
+                                        {column.tasks.length === 0 && dropIndex === null && (
+                                            <p className="rounded-md border border-dashed border-gray-200 px-1 py-4 text-center text-xs text-gray-400">
+                                                {filtered ? bm.noMatches : bm.emptyColumn}
+                                            </p>
+                                        )}
+                                        {column.tasks.map((task, index) => (
+                                            <Fragment key={task.id}>
+                                                {dropIndex === index && <DropIndicator animate={view.animate} />}
+                                                <TaskCard
+                                                    task={task}
+                                                    view={view}
+                                                    index={index}
+                                                    selecting={selection.length > 0}
+                                                    selected={selection.includes(task.id)}
+                                                    onToggleSelected={() => toggleSelected(task.id)}
+                                                    dragging={drag?.active === true && drag.taskId === task.id}
+                                                    onPointerDownBody={(e) =>
+                                                        beginDrag(e, task, { fromHandle: false })
+                                                    }
+                                                    onPointerDownHandle={(e) =>
+                                                        beginDrag(e, task, { fromHandle: true })
+                                                    }
+                                                    onPointerMove={continueDrag}
+                                                    onPointerUp={endDrag}
+                                                    onPointerCancel={cancelDrag}
+                                                    onOpen={() => setOpenTaskId(task.id)}
+                                                    onRemove={() => removeCard(task.id)}
+                                                />
+                                            </Fragment>
+                                        ))}
+                                        {dropIndex === column.tasks.length && (
+                                            <DropIndicator animate={view.animate} />
+                                        )}
+                                    </div>
 
-                                    <BoardCardComposer
-                                        boardId={boardId}
-                                        columnId={column.id}
-                                        projects={projects}
-                                        projectId={composerProject}
-                                        onProjectChange={setComposerProject}
-                                        onCreated={loadBoard}
-                                    />
+                                    {/* Outside the scroller on purpose: "Add a
+                                        card" is how a column grows, and a
+                                        control that scrolls away with the
+                                        fortieth card is one you have to go
+                                        looking for. `pt-0` because the list
+                                        above it already ends in the column's own
+                                        padding. */}
+                                    <div className={`${d.columnPad} pt-0`}>
+                                        <BoardCardComposer
+                                            boardId={boardId}
+                                            columnId={column.id}
+                                            projects={projects}
+                                            projectId={composerProject}
+                                            onProjectChange={setComposerProject}
+                                            onCreated={loadBoard}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -1026,7 +1047,7 @@ function DropIndicator({ animate }: { animate: boolean }) {
     return (
         <div
             aria-hidden
-            className={`flex items-center gap-1 ${animate ? 'motion-safe:animate-board-drop-in' : ''}`}
+            className={`flex shrink-0 items-center gap-1 ${animate ? 'motion-safe:animate-board-drop-in' : ''}`}
         >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
             <span className="h-0.5 flex-1 rounded-full bg-blue-600" />
@@ -1353,7 +1374,11 @@ function TaskCard({
             style={{ animationDelay: staggerDelay(view, index) }}
             // pan-y keeps the column scrollable by finger; the grip below opts
             // out of that so a touch drag can start there.
-            className={`group touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+            // `shrink-0` because the column's list is a flex column, and a
+            // bounded one in column-scroll mode: a flex item shrinks to fit its
+            // container before it will overflow it, so without this forty cards
+            // squeeze into one screen of column instead of scrolling inside it.
+            className={`group shrink-0 touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 selected ? 'border-blue-500 ring-1 ring-blue-300' : 'border-gray-200'
             } ${dragging ? 'opacity-40' : ''} ${motionClass(view, 'card')}`}
         >

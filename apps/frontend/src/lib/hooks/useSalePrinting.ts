@@ -34,7 +34,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
     // Its own template, so a shop can put a plainer letterhead on the copy a
     // rider carries than on the invoice the customer keeps.
     const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
-    const { paperSize, setPaperSize, skipPreview } = useSalePrintPrefs();
+    const { paperSize, setPaperSize, skipPreview, setSkipPreview } = useSalePrintPrefs();
 
     /** The row currently being fetched, so its trigger can show a spinner. */
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -89,7 +89,19 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         [withSale, ctx, skipPreview],
     );
 
-    return { paperSize, setPaperSize, busyId, printInvoice, printChallan, printReceipt };
+    // `skipPreview` is passed back out so a screen can offer it as a setting
+    // rather than leaving the preview popup's own checkbox as the only way to
+    // turn it off — one that is unreachable once it has been used.
+    return {
+        paperSize,
+        setPaperSize,
+        skipPreview,
+        setSkipPreview,
+        busyId,
+        printInvoice,
+        printChallan,
+        printReceipt,
+    };
 }
 
 /** Fetches the full sale — the list's `resolve`, where rows have no lines. */
