@@ -632,6 +632,27 @@ function imageCss(thermal: boolean): string {
     }`;
 }
 
+/**
+ * The declarations that make a footer band run past the page margin, written
+ * against whichever selector the surrounding media query needs.
+ *
+ * Shared so the printed page and the on-screen preview sheet bleed by exactly
+ * the same rules rather than two hand-kept copies that can drift apart.
+ */
+function bleedRules(scope: string, margin: number): string {
+    return `${scope} {
+            margin-left: -${margin}mm;
+            margin-right: -${margin}mm;
+            max-width: none;
+        }
+        /* The band reaches the paper edge, but its text should not sit in the
+           margin — only a full-width image is meant to run right to the edge. */
+        ${scope} .p71-ft-line { padding-left: ${margin}mm; padding-right: ${margin}mm; }
+        ${scope} .p71-ft-images { padding-left: ${margin}mm; padding-right: ${margin}mm; }
+        ${scope} .p71-ft-images--full { padding-left: 0; padding-right: 0; }
+        ${scope}--bleed-bottom { margin-bottom: -${margin}mm; }`;
+}
+
 /** Footer band rules — only emitted when the tenant designed a footer. */
 function footerCssBlock(resolved: PrintHeaderConfig, paperSize: PaperSize): string {
     const footer = resolved.footer;
@@ -657,22 +678,20 @@ function footerCssBlock(resolved: PrintHeaderConfig, paperSize: PaperSize): stri
         ${thermal ? 'text-align: center;' : ''}
     }
     ${bleed ? `
-    /* Bleeding is a print-only trick: the negative margins cancel the @page
-       margin, which exists only on paper. On screen there is no such margin to
-       cancel — applying them there just pushes the band off the viewport and
-       the browser crops both its edges. */
+    /* Bleeding cancels a page margin with an equal negative one. That needs a
+       real margin to cancel, which exists on paper (@page) and inside the
+       preview's paper-shaped sheet (its padding) — but nowhere else on screen,
+       where these rules would just push the band off the viewport and let the
+       browser crop both its edges.
+
+       Both media therefore get the same declarations, so the preview and the
+       printed page agree. The .p71-pv-sheet selector is the preview sheet in
+       print-window.ts; keep the two in step. */
     @media print {
-        .p71-ft {
-            margin-left: -${margin}mm;
-            margin-right: -${margin}mm;
-            max-width: none;
-        }
-        /* The band reaches the paper edge, but its text should not sit in the
-           margin — only a full-width image is meant to run right to the edge. */
-        .p71-ft .p71-ft-line { padding-left: ${margin}mm; padding-right: ${margin}mm; }
-        .p71-ft .p71-ft-images { padding-left: ${margin}mm; padding-right: ${margin}mm; }
-        .p71-ft .p71-ft-images--full { padding-left: 0; padding-right: 0; }
-        .p71-ft--bleed-bottom { margin-bottom: -${margin}mm; }
+        ${bleedRules('.p71-ft', margin)}
+    }
+    @media screen {
+        ${bleedRules('.p71-pv-sheet .p71-ft', margin)}
     }` : ''}
     .p71-ft-line { line-height: 1.35; }
     .p71-ft-images + .p71-ft-line { margin-top: ${Math.max(spacing - 1, 1)}mm; }`;
