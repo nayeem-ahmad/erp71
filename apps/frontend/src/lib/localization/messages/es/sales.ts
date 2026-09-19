@@ -344,6 +344,16 @@ export const salesMessages = {
             print: "Imprimir factura",
             skip: "No, gracias",
         },
+        printSettings: {
+            action: 'Ajustes de impresión',
+            title: 'Ajustes de impresión',
+            subtitle: 'Solo se aplica a este dispositivo',
+            paperSizeLabel: 'Tamaño de papel',
+            paperSizeHint: 'Tamaño con el que se imprimen facturas y albaranes desde este navegador. El valor por defecto de la tienda se configura en Ajustes → Ventas.',
+            skipPreviewLabel: 'Omitir la vista previa de impresión',
+            skipPreviewHint: 'Enviar los documentos directamente a la impresora en lugar de mostrarlos primero.',
+            saved: 'Ajustes de impresión guardados',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

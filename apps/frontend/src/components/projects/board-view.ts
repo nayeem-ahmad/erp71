@@ -25,6 +25,8 @@ export type BoardDensity = 'comfortable' | 'compact';
 export type BoardColumnWidth = 'narrow' | 'standard' | 'wide';
 /** Whether a column is tinted by the category its statuses belong to. */
 export type BoardColumnTint = 'none' | 'category';
+/** Whether the board's overflowing height is the page's to scroll, or each column's. */
+export type BoardScroll = 'page' | 'column';
 
 /** The optional parts of a card, each one hideable. The title is not on the list. */
 export type BoardCardField = 'cover' | 'labels' | 'project' | 'badges' | 'details' | 'assignee';
@@ -42,6 +44,8 @@ export interface BoardView {
     density: BoardDensity;
     columnWidth: BoardColumnWidth;
     columnTint: BoardColumnTint;
+    /** Where the board scrolls when it is taller than the window — see `SCROLL`. */
+    scroll: BoardScroll;
     /** Entrance and drag motion. Independent of `prefers-reduced-motion`, which wins regardless. */
     animate: boolean;
     fields: Record<BoardCardField, boolean>;
@@ -51,6 +55,7 @@ export const DEFAULT_BOARD_VIEW: BoardView = {
     density: 'comfortable',
     columnWidth: 'standard',
     columnTint: 'category',
+    scroll: 'page',
     animate: true,
     fields: {
         cover: true,
@@ -67,6 +72,7 @@ export const BOARD_VIEW_STORAGE_KEY = 'board-view';
 const DENSITIES: BoardDensity[] = ['comfortable', 'compact'];
 const WIDTHS: BoardColumnWidth[] = ['narrow', 'standard', 'wide'];
 const TINTS: BoardColumnTint[] = ['none', 'category'];
+const SCROLLS: BoardScroll[] = ['page', 'column'];
 
 function pick<T extends string>(allowed: T[], value: unknown, fallback: T): T {
     return typeof value === 'string' && (allowed as string[]).includes(value) ? (value as T) : fallback;
@@ -93,6 +99,7 @@ export function mergeBoardView(stored: unknown): BoardView {
         density: pick(DENSITIES, raw.density, DEFAULT_BOARD_VIEW.density),
         columnWidth: pick(WIDTHS, raw.columnWidth, DEFAULT_BOARD_VIEW.columnWidth),
         columnTint: pick(TINTS, raw.columnTint, DEFAULT_BOARD_VIEW.columnTint),
+        scroll: pick(SCROLLS, raw.scroll, DEFAULT_BOARD_VIEW.scroll),
         animate: typeof raw.animate === 'boolean' ? raw.animate : DEFAULT_BOARD_VIEW.animate,
         fields,
     };
@@ -103,6 +110,7 @@ export function isDefaultBoardView(view: BoardView): boolean {
         view.density === DEFAULT_BOARD_VIEW.density &&
         view.columnWidth === DEFAULT_BOARD_VIEW.columnWidth &&
         view.columnTint === DEFAULT_BOARD_VIEW.columnTint &&
+        view.scroll === DEFAULT_BOARD_VIEW.scroll &&
         view.animate === DEFAULT_BOARD_VIEW.animate &&
         CARD_FIELDS.every((field) => view.fields[field] === DEFAULT_BOARD_VIEW.fields[field])
     );
@@ -142,6 +150,59 @@ export const COLUMN_WIDTH_CLASS: Record<BoardColumnWidth, string> = {
 
 export function columnWidthClass(width: BoardColumnWidth): string {
     return COLUMN_WIDTH_CLASS[width] ?? COLUMN_WIDTH_CLASS.standard;
+}
+
+interface ScrollTokens {
+    /** What `PageShell` gives the box its children sit in. */
+    shell: string;
+    /** The board canvas — the header, the selection bar and the columns. */
+    canvas: string;
+    /** The strip the columns are laid out across. */
+    strip: string;
+    /** The row inside that strip, bounded so the columns it holds can be. */
+    row: string;
+    /** A column's cards — the box that actually scrolls. */
+    list: string;
+}
+
+/**
+ * Where a board taller than the window scrolls, as the classes that decide it.
+ *
+ * There are two honest answers and no right one. The page can take the height:
+ * the board is as tall as its longest column and the window scrolls, which is
+ * what this board has always done and what a short board wants — nothing is
+ * cropped and the browser's own scrollbar gets you there. Or each column can
+ * take its own: the board is exactly as tall as the window, the header and
+ * every column heading stay put, and a column scrolls inside its own frame,
+ * which is what a long board wants — at forty cards in Doing, page scrolling
+ * puts the headings off screen and you lose track of which lane you are in.
+ *
+ * `page` stays the default. It is what is already there, and a board that fits
+ * is better served by it than by a frame it never fills.
+ *
+ * The height is handed down a step at a time rather than declared once, which
+ * is why this is five classes and not one: `PageShell` is the app's vertical
+ * scroller, and a column can only be given a definite height if every box
+ * between it and the shell has one too.
+ *
+ * All of it is `md:` and up. A phone's board area is a few hundred pixels tall
+ * once the filters have wrapped above it, and a scroller nested in that shows
+ * three cards and two scrollbars — so below `md` the page scrolls either way,
+ * whatever is stored.
+ */
+export const SCROLL: Record<BoardScroll, ScrollTokens> = {
+    page: { shell: '', canvas: '', strip: '', row: '', list: '' },
+    column: {
+        shell: 'md:flex md:h-full md:flex-col',
+        canvas: 'md:flex md:min-h-0 md:flex-1 md:flex-col',
+        strip: 'md:min-h-0 md:flex-1',
+        row: 'md:h-full',
+        list: 'md:min-h-0 md:flex-1 md:overflow-y-auto',
+    },
+};
+
+export function scrollClasses(view: BoardView): ScrollTokens {
+    return SCROLL[view.scroll] ?? SCROLL.page;
 }
 
 interface DensityTokens {

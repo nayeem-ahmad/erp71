@@ -51,6 +51,24 @@ describe('BoardAppearanceControls', () => {
         );
     });
 
+    it('reports where the board should scroll', () => {
+        const props = controls();
+        render(<BoardAppearanceControls {...props} />);
+
+        // The default is the page, so the button that does something is the
+        // other one — and it is the one a reader has to be told about.
+        expect(screen.getByRole('button', { name: 'Whole page' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(
+            screen.getByText(/keeps the board header and every column heading in place/i),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Inside columns' }));
+        expect(props.set).toHaveBeenCalledWith('scroll', 'column');
+    });
+
     it('switches motion off through the switch', () => {
         const props = controls();
         render(<BoardAppearanceControls {...props} />);
