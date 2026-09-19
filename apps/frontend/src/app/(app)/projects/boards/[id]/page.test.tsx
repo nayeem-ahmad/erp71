@@ -429,6 +429,41 @@ describe('BoardPage', () => {
             expect(column().className).not.toContain(columnWidthClass('standard'));
         });
 
+        it('gives a column its own scroller when the viewer asked for one', async () => {
+            storeView({ scroll: 'column' });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const cards = () =>
+                document.querySelector(`[${COLUMN_ATTR}="c1"] [class*="overflow-y-auto"]`);
+            await waitFor(() => expect(cards()).not.toBeNull());
+
+            // The cards are in it and the composer is not: "Add a card" is how
+            // a column grows, and it must not scroll away with the fortieth.
+            expect(cards()).toHaveTextContent('Fix login');
+            expect(cards()).not.toHaveTextContent('Add a card');
+            expect(screen.getAllByRole('button', { name: 'Add a card' }).length).toBeGreaterThan(0);
+
+            // A card in a bounded flex column shrinks to fit before it will
+            // overflow, so without this the column squeezes forty cards into
+            // one screen instead of scrolling them. jsdom lays nothing out, so
+            // the class is all that can be asserted here — it was measured in
+            // a browser, and this is what keeps it from being tidied away.
+            expect(
+                screen.getByRole('button', { name: /open task: Fix login/i }).className,
+            ).toContain('shrink-0');
+        });
+
+        it('leaves the scrolling to the page unless it was asked not to', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            expect(
+                document.querySelector(`[${COLUMN_ATTR}="c1"] [class*="overflow-y-auto"]`),
+            ).toBeNull();
+        });
+
         it('takes a setting change without dropping the board or re-fetching it', async () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
