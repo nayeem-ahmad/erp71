@@ -41,7 +41,9 @@ beforeEach(() => {
         ],
         total: 2,
     });
-    (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { hours: 6.5 }, rows: [] });
+    (api.getProjectTimeReport as jest.Mock)
+        .mockResolvedValueOnce({ summary: { totalHours: 3.5 }, rows: [] })
+        .mockResolvedValueOnce({ summary: { totalHours: 12.5 }, rows: [] });
     (api.getProjects as jest.Mock).mockResolvedValue({ items: [{ id: 'p1', name: 'Till rollout' }], total: 1 });
     (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
 });
@@ -53,6 +55,17 @@ it('shows the four tiles built from the member\'s own rows', async () => {
     expect(screen.getByText('Hours Today')).toBeInTheDocument();
     expect(screen.getByText('Hours This Week')).toBeInTheDocument();
     expect(screen.getByText('Active Projects')).toBeInTheDocument();
+});
+
+it('renders today\'s and this week\'s hours from summary.totalHours, distinctly', async () => {
+    // The two calls resolve different totals (today: 3.5, week: 12.5) so this
+    // is coupled to the real field name, not just the tile titles above — a
+    // mock still shaped as `{ hours }` would render "0.0" for both and pass
+    // the titles-only test while failing this one.
+    render(<ProjectsDashboard {...identity} />);
+
+    expect(await screen.findByText('3.5')).toBeInTheDocument();
+    expect(screen.getByText('12.5')).toBeInTheDocument();
 });
 
 it('asks only for its own hours, whatever the record scope says', async () => {
@@ -76,7 +89,7 @@ it('lists the member\'s open tasks', async () => {
 it('renders an empty workload without crashing', async () => {
     (api.getProjectTasks as jest.Mock).mockResolvedValue({ items: [], total: 0 });
     (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
-    (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { hours: 0 }, rows: [] });
+    (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { totalHours: 0 }, rows: [] });
 
     render(<ProjectsDashboard {...identity} />);
 
@@ -89,4 +102,24 @@ it('survives an endpoint failing', async () => {
     render(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
+});
+
+it('clears the skeleton and shows the empty state when getMe fails', async () => {
+    // No id to fetch tiles for. The skeleton must still clear — otherwise the
+    // member stares at four pulsing tiles forever with no error and no retry.
+    (api.getMe as jest.Mock).mockRejectedValue(new Error('boom'));
+
+    render(<ProjectsDashboard {...identity} />);
+
+    expect(await screen.findByText('Nothing assigned yet')).toBeInTheDocument();
+    expect(api.getProjectTasks).not.toHaveBeenCalled();
+});
+
+it('clears the skeleton and shows the empty state when getMe resolves without an id', async () => {
+    (api.getMe as jest.Mock).mockResolvedValue({ name: 'Nayeem' });
+
+    render(<ProjectsDashboard {...identity} />);
+
+    expect(await screen.findByText('Nothing assigned yet')).toBeInTheDocument();
+    expect(api.getProjectTasks).not.toHaveBeenCalled();
 });

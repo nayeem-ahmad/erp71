@@ -581,6 +581,8 @@ export const NON_PROJECT_MODULE_READ_PERMISSIONS = [
   'VIEW_HR',
   'VIEW_LOANS',
   'VIEW_INVESTORS',
+  'VIEW_IMPORTS',
+  'VIEW_BLOG',
   'MANAGE_USERS',
 ] as const;
 

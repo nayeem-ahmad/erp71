@@ -81,7 +81,15 @@ export default function ProjectsDashboard({ greeting, tenantName }: Readonly<Das
         (async () => {
             const me = await api.getMe().catch(() => null);
             const userId = me?.id;
-            if (cancelled || !userId) return;
+            if (cancelled) return;
+            if (!userId) {
+                // getMe() failed or came back without an id: there is no one to
+                // fetch tiles for, but the skeleton must still clear — otherwise
+                // the member stares at four pulsing tiles forever with no error
+                // and no retry.
+                setLoading(false);
+                return;
+            }
 
             // Each tile fails on its own: one dead endpoint must not blank the page.
             const [taskPage, todayReport, weekReport, projectPage, timer] = await Promise.all([

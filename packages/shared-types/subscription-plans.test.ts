@@ -10,7 +10,7 @@ import {
     resolveDashboardVariant,
     resolvePlanRank,
 } from './subscription-plans';
-import { StorePermission } from './index';
+import { StorePermission, TENANT_ROLE_TEMPLATES } from './index';
 
 describe('subscription-plans helpers', () => {
     it('fills missing entitlements with defaults', () => {
@@ -194,6 +194,33 @@ describe('subscription-plans helpers', () => {
                 for (const permission of NON_PROJECT_MODULE_READ_PERMISSIONS) {
                     expect(StorePermission[permission as keyof typeof StorePermission]).toBe(permission);
                 }
+            });
+
+            it('closes the loop against the real role templates: only Projects roles land here', () => {
+                // NON_PROJECT_MODULE_READ_PERMISSIONS is a hand-maintained denylist.
+                // This test does not trust it — it unions every seeded role template
+                // with a Project User's permissions and checks the *outcome*, so a
+                // missing entry (like the VIEW_IMPORTS/VIEW_BLOG omission this test
+                // was added to catch) fails here even if no one thought to add a
+                // dedicated case for that module.
+                const features = normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
+
+                const wronglyProjects: string[] = [];
+                const wronglyNotRetail: string[] = [];
+
+                for (const template of TENANT_ROLE_TEMPLATES) {
+                    const union = Array.from(new Set([...template.permissions, ...PROJECT_USER]));
+                    const variant = resolveDashboardVariant('AUTO', features, union);
+
+                    if (template.module === 'Projects') {
+                        if (variant !== 'PROJECTS') wronglyNotRetail.push(template.key);
+                    } else {
+                        if (variant === 'PROJECTS') wronglyProjects.push(template.key);
+                    }
+                }
+
+                expect(wronglyProjects).toEqual([]);
+                expect(wronglyNotRetail).toEqual([]);
             });
         });
     });
