@@ -207,30 +207,60 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => expect(printSaleInvoice).toHaveBeenCalled());
     });
 
-    it('offers the other sale documents under the print menu', async () => {
+    it('prints the chalan from its own row icon, with no menu in between', async () => {
         const { printSaleChallan } = require('@/lib/sale-print-actions');
 
         render(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
-        fireEvent.click(screen.getAllByTitle('Print options')[0]);
-
-        const challan = await screen.findByRole('menuitem', { name: /delivery challan/i });
-        fireEvent.click(challan);
+        // The chalan used to be a menuitem behind the print split button. It is
+        // printed on every delivery, so one click is the whole requirement.
+        fireEvent.click(screen.getAllByRole('button', { name: /delivery challan/i })[0]);
 
         await waitFor(() => expect(printSaleChallan).toHaveBeenCalled());
     });
 
-    it('keeps the statutory and on-screen documents reachable from the print menu', async () => {
+    it('keeps the occasional documents reachable from the row overflow menu', async () => {
+        const { printSaleReceipt } = require('@/lib/sale-print-actions');
+
         render(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
-        fireEvent.click(screen.getAllByTitle('Print options')[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
 
         const mushak = await screen.findByRole('menuitem', { name: /mushak/i });
         expect(mushak).toHaveAttribute('href', '/sales/sale-1/mushak');
         expect(screen.getByRole('menuitem', { name: /open invoice page/i }))
             .toHaveAttribute('href', '/sales/sale-1/invoice');
+
+        fireEvent.click(screen.getByRole('menuitem', { name: /pos receipt/i }));
+        await waitFor(() => expect(printSaleReceipt).toHaveBeenCalled());
+    });
+
+    it('sets the paper size from the header rather than from a row', async () => {
+        const { printSaleInvoice } = require('@/lib/sale-print-actions');
+
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        // No row-level size picker any more — the row prints, the header
+        // decides how.
+        expect(screen.queryByTitle('Print options')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByRole('combobox'), {
+            target: { value: 'Thermal80' },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getAllByTitle('Print Invoice')[0]);
+
+        await waitFor(() => expect(printSaleInvoice).toHaveBeenCalled());
+        expect(printSaleInvoice.mock.calls.at(-1)?.[1]).toBe('Thermal80');
     });
 
     it('renders a duplicate action pointing the entry form at the sale', async () => {
@@ -238,7 +268,7 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         // Duplicate moved into the row overflow menu so the column could carry
-        // the print options without running past its width.
+        // the print actions without running past its width.
         fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
 
         const link = await screen.findByRole('menuitem', { name: /duplicate/i });

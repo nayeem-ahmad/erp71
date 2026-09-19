@@ -344,6 +344,16 @@ export const salesMessages = {
                 print: "Cetak invois",
                 skip: "Tidak, terima kasih",
             },
+            printSettings: {
+                action: 'Tetapan cetak',
+                title: 'Tetapan cetak',
+                subtitle: 'Hanya untuk peranti ini',
+                paperSizeLabel: 'Saiz kertas',
+                paperSizeHint: 'Saiz cetakan invois dan chalan dari pelayar ini. Lalai seluruh kedai ditetapkan di Tetapan → Jualan.',
+                skipPreviewLabel: 'Langkau pratonton cetak',
+                skipPreviewHint: 'Hantar dokumen terus ke pencetak tanpa memaparkannya dahulu.',
+                saved: 'Tetapan cetak disimpan',
+            },
             printMenu: {
                 /* The shared print split button: invoice sizes plus the other
                    documents a sale can produce. */

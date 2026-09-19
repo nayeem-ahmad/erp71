@@ -10,12 +10,14 @@ import {
     type BoardColumnTint,
     type BoardColumnWidth,
     type BoardDensity,
+    type BoardScroll,
 } from './board-view';
 import type { BoardViewControls } from './use-board-view';
 
 /**
  * The board's appearance controls — card size, column width, column colour,
- * motion and which fields a card shows.
+ * where a board taller than the window scrolls, motion and which fields a card
+ * shows.
  *
  * These used to be a popover of their own hanging off the board header, beside
  * a Background button and a Board settings link. Three entry points for "change
@@ -82,6 +84,23 @@ export default function BoardAppearanceControls({ view, set, toggleField, reset 
                 />
             </div>
 
+            {/* A row of its own rather than a fourth cell in the grid above.
+                Card size, column width and colour are all self-evident from
+                their two or three options; this one is not until you have read
+                what it does to the page, so it needs the line underneath. */}
+            <div className="border-t border-gray-100 pt-3">
+                <Segmented<BoardScroll>
+                    label={v.scroll}
+                    hint={v.scrollHint}
+                    value={view.scroll}
+                    onChange={(next) => set('scroll', next)}
+                    options={[
+                        { value: 'page', label: v.scrollPage },
+                        { value: 'column', label: v.scrollColumn },
+                    ]}
+                />
+            </div>
+
             <div className="flex items-start justify-between gap-3 border-t border-gray-100 pt-3">
                 <div className="min-w-0">
                     <p className="text-xs font-medium text-gray-600">{v.motion}</p>
@@ -120,18 +139,22 @@ export default function BoardAppearanceControls({ view, set, toggleField, reset 
  */
 function Segmented<T extends string>({
     label,
+    hint,
     value,
     options,
     onChange,
 }: {
     label: string;
+    /** A line under the label, for a choice whose options do not explain themselves. */
+    hint?: string;
     value: T;
     options: { value: T; label: string }[];
     onChange: (next: T) => void;
 }) {
     return (
         <div role="group" aria-label={label}>
-            <p className="mb-1.5 text-xs font-medium text-gray-600">{label}</p>
+            <p className={`text-xs font-medium text-gray-600 ${hint ? '' : 'mb-1.5'}`}>{label}</p>
+            {hint && <p className="mb-1.5 mt-0.5 text-xs text-gray-400">{hint}</p>}
             <div className="flex gap-1 rounded-md bg-gray-100 p-0.5">
                 {options.map((option) => {
                     const selected = option.value === value;

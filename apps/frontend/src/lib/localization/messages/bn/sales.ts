@@ -344,6 +344,16 @@ export const salesMessages = {
                 print: "ইনভয়েস প্রিন্ট করুন",
                 skip: "না, ধন্যবাদ",
             },
+            printSettings: {
+                action: 'প্রিন্ট সেটিংস',
+                title: 'প্রিন্ট সেটিংস',
+                subtitle: 'শুধু এই ডিভাইসের জন্য প্রযোজ্য',
+                paperSizeLabel: 'কাগজের আকার',
+                paperSizeHint: 'এই ব্রাউজার থেকে ইনভয়েস ও চালান যে আকারে প্রিন্ট হবে। দোকানের ডিফল্ট সেটিংস → সেলস-এ ঠিক করা হয়।',
+                skipPreviewLabel: 'প্রিন্ট প্রিভিউ বাদ দিন',
+                skipPreviewHint: 'আগে না দেখিয়ে সরাসরি প্রিন্টারে পাঠান।',
+                saved: 'প্রিন্ট সেটিংস সংরক্ষিত হয়েছে',
+            },
             printMenu: {
                 /* The shared print split button: invoice sizes plus the other
                    documents a sale can produce. */

@@ -344,6 +344,16 @@ export const salesMessages = {
             print: 'طباعة الفاتورة',
             skip: 'لا، شكرًا',
         },
+        printSettings: {
+            action: 'إعدادات الطباعة',
+            title: 'إعدادات الطباعة',
+            subtitle: 'تنطبق على هذا الجهاز فقط',
+            paperSizeLabel: 'حجم الورق',
+            paperSizeHint: 'الحجم الذي تُطبع به الفواتير وبيانات التسليم من هذا المتصفح. الإعداد الافتراضي للمتجر في الإعدادات ← المبيعات.',
+            skipPreviewLabel: 'تخطي معاينة الطباعة',
+            skipPreviewHint: 'أرسل المستندات إلى الطابعة مباشرةً بدلاً من عرضها أولاً.',
+            saved: 'تم حفظ إعدادات الطباعة',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

@@ -104,7 +104,7 @@ export default function SalesSettingsPage() {
                     <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
                         <h2 className="text-sm font-semibold text-gray-700">Print Settings</h2>
 
-                        <Field label="Default Paper Size" className="max-w-xs" hint="Used as the default when printing invoices from the New Sale page. Can be changed per-session.">
+                        <Field label="Default Paper Size" className="max-w-xs" hint="The shop-wide starting point for printed invoices and chalans. A counter can override it for its own printer under Print settings on the Sales list.">
                             <Select
                                 value={paperSize}
                                 onChange={(e) => setPaperSize(e.target.value as PaperSize)}

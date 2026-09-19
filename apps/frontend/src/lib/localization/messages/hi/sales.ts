@@ -344,6 +344,16 @@ export const salesMessages = {
             print: "चालान प्रिंट करें",
             skip: "नहीं, धन्यवाद",
         },
+        printSettings: {
+            action: 'प्रिंट सेटिंग्स',
+            title: 'प्रिंट सेटिंग्स',
+            subtitle: 'केवल इस डिवाइस पर लागू',
+            paperSizeLabel: 'कागज़ का आकार',
+            paperSizeHint: 'इस ब्राउज़र से इनवॉइस और चालान इस आकार में प्रिंट होंगे। दुकान का डिफ़ॉल्ट सेटिंग्स → सेल्स में तय होता है।',
+            skipPreviewLabel: 'प्रिंट पूर्वावलोकन छोड़ें',
+            skipPreviewHint: 'दस्तावेज़ पहले दिखाने के बजाय सीधे प्रिंटर पर भेजें।',
+            saved: 'प्रिंट सेटिंग्स सहेजी गईं',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */

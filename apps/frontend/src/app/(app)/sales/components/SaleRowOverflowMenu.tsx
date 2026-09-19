@@ -2,15 +2,25 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Ban, Copy, MoreHorizontal } from 'lucide-react';
+import { Ban, Copy, Eye, FileCheck, MoreHorizontal, Receipt } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { useI18n } from '@/lib/i18n';
+import { routes } from '@/lib/routes';
+import type { PaperSize } from '@/lib/sales-invoice-printer';
 
 interface SaleRowOverflowMenuProps {
     saleId: string;
     /** Cancel is hidden without the grant, and absent on an already-void entry. */
     onCancel?: () => void;
+    /** The size the occasional documents print at — the counter's remembered one. */
+    paperSize: PaperSize;
+    onPrintReceipt: (size: PaperSize) => void;
+    /**
+     * Mushak 6.3 is a statutory form with no shop-configurable layout — hide it
+     * where the document is not VAT-bearing.
+     */
+    showMushak?: boolean;
     /**
      * Accessible name for the trigger. Deliberately not "Actions": the table's
      * own column-header control already carries that name, and two buttons
@@ -26,11 +36,19 @@ interface SaleRowOverflowMenuProps {
  * already carries view, print, edit and delete; a sixth and seventh icon pushed
  * the column past its width on a laptop and started truncating the totals
  * beside it. Everything reachable here is also reachable from the sale itself.
+ *
+ * The till receipt, the Mushak 6.3 and the on-screen invoice page joined them
+ * when the row's print split button was unpacked into two plain icons. Invoice
+ * and chalan are printed on nearly every sale and earn their own icon; these
+ * three are occasional, so a menu is the right cost for them.
  */
 export default function SaleRowOverflowMenu({
     saleId,
     onCancel,
     label,
+    paperSize,
+    onPrintReceipt,
+    showMushak = true,
 }: SaleRowOverflowMenuProps) {
     const { t } = useI18n();
     const [open, setOpen] = useState(false);
@@ -71,6 +89,41 @@ export default function SaleRowOverflowMenu({
                     aria-label={label}
                     className="py-1"
                 >
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            setOpen(false);
+                            onPrintReceipt(paperSize);
+                        }}
+                        className={itemClass}
+                    >
+                        <Receipt className="h-4 w-4 text-gray-400" />
+                        {t.sales.printMenu.posReceipt}
+                    </button>
+                    {showMushak && (
+                        <Link
+                            href={routes.sales.mushak(saleId)}
+                            role="menuitem"
+                            onClick={() => setOpen(false)}
+                            className={itemClass}
+                        >
+                            <FileCheck className="h-4 w-4 text-gray-400" />
+                            {t.sales.printMenu.mushak}
+                        </Link>
+                    )}
+                    <Link
+                        href={routes.sales.invoice(saleId)}
+                        role="menuitem"
+                        onClick={() => setOpen(false)}
+                        className={itemClass}
+                    >
+                        <Eye className="h-4 w-4 text-gray-400" />
+                        {t.sales.printMenu.openInvoicePage}
+                    </Link>
+
+                    <div className="my-1 border-t" />
+
                     <Link
                         href={`/sales/new?duplicate=${saleId}`}
                         role="menuitem"
