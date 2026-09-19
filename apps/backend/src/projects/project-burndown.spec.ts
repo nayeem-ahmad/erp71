@@ -4,10 +4,12 @@ import { ProjectsService } from './projects.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { ProjectAccessService } from './project-access.service';
 import { DatabaseService } from '../database/database.service';
+import { OWNER, staff } from './project-access.test-support';
 
 describe('ProjectsService.burndown', () => {
     let service: ProjectsService;
     let db: any;
+    let access: any;
 
     const log = (taskId: string, hours: number, iso: string) => ({
         task_id: taskId,
@@ -33,12 +35,19 @@ describe('ProjectsService.burndown', () => {
             },
         };
 
+        access = {
+            relatedFilter: jest.fn(),
+            // The real one throws NotFound for a project the viewer cannot see;
+            // the visibility tests below re-stub it to do exactly that.
+            assertProjectVisible: jest.fn().mockResolvedValue({ id: 'project-1' }),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: ProjectSettingsService, useValue: {} },
-                { provide: ProjectAccessService, useValue: { relatedFilter: jest.fn() } },
+                { provide: ProjectAccessService, useValue: access },
             ],
         }).compile();
 
@@ -47,7 +56,7 @@ describe('ProjectsService.burndown', () => {
 
     afterEach(() => jest.useRealTimers());
 
-    const run = () => service.burndown('tenant-1', 'project-1');
+    const run = () => service.burndown(OWNER, 'project-1');
 
     it('is scoped to the tenant as well as the project', async () => {
         await run();
@@ -137,8 +146,38 @@ describe('ProjectsService.burndown', () => {
     });
 
     it('refuses a project in another tenant', async () => {
-        db.project.findFirst.mockResolvedValue(null);
+        access.assertProjectVisible.mockRejectedValue(new NotFoundException('Project not found'));
 
         await expect(run()).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    /**
+     * The chart hangs off a project, so it is exactly as visible as one. Before
+     * this, the route took a tenant id rather than a viewer and asked only
+     * `{ id, tenant_id }` — so anyone holding VIEW_PROJECTS could read the
+     * day-by-day remaining hours of a private project they were not a member of.
+     */
+    describe('visibility', () => {
+        it('asks whether this viewer may see the project at all', async () => {
+            const viewer = staff();
+
+            await service.burndown(viewer, 'project-1');
+
+            expect(access.assertProjectVisible).toHaveBeenCalledWith(viewer, 'project-1');
+        });
+
+        it('refuses a private project the viewer is not on', async () => {
+            access.assertProjectVisible.mockRejectedValue(new NotFoundException('Project not found'));
+
+            await expect(service.burndown(staff(), 'project-1')).rejects.toBeInstanceOf(NotFoundException);
+            // Nothing is read once the gate has refused.
+            expect(db.projectTaskRemainingLog.findMany).not.toHaveBeenCalled();
+        });
+
+        it('still serves a member the project they are on', async () => {
+            const { series } = await service.burndown(staff(), 'project-1');
+
+            expect(series.length).toBeGreaterThan(0);
+        });
     });
 });

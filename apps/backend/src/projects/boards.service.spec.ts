@@ -440,6 +440,43 @@ describe('BoardsService', () => {
             expect(tasks.create).not.toHaveBeenCalled();
         });
 
+        it('hands the composed assignee to the task it creates', async () => {
+            await service.createCard(owner, 'b1', 'c1', {
+                ...dto,
+                assigneeId: 'u9',
+                assigneeEmployeeId: '',
+            });
+
+            expect(tasks.create).toHaveBeenCalledWith(
+                owner,
+                expect.objectContaining({ assigneeId: 'u9', assigneeEmployeeId: '' }),
+            );
+        });
+
+        it('hands over an employee holder the same way', async () => {
+            await service.createCard(owner, 'b1', 'c1', {
+                ...dto,
+                assigneeId: '',
+                assigneeEmployeeId: 'e3',
+            });
+
+            expect(tasks.create).toHaveBeenCalledWith(
+                owner,
+                expect.objectContaining({ assigneeId: '', assigneeEmployeeId: 'e3' }),
+            );
+        });
+
+        // A card composed with nobody picked must not silently land on the
+        // person composing it — `tasks.create` reads '' as "no holder".
+        it('leaves the holder unset when the composer sent none', async () => {
+            await service.createCard(owner, 'b1', 'c1', dto);
+
+            expect(tasks.create).toHaveBeenCalledWith(
+                owner,
+                expect.objectContaining({ assigneeId: undefined, assigneeEmployeeId: undefined }),
+            );
+        });
+
         it('refuses a project the viewer cannot see, before anything is bound', async () => {
             db.project.findFirst.mockResolvedValue(null);
 

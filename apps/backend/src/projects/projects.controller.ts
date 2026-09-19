@@ -257,7 +257,7 @@ export class ProjectsController {
     @Get(':id/burndown')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     burndown(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.projects.burndown(tenant.tenantId, id);
+        return this.projects.burndown(tenant, id);
     }
 
     // ── Members ────────────────────────────────────────────────────────────
