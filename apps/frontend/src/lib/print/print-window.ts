@@ -113,8 +113,17 @@ export interface PrintPreviewOptions {
  * print the cap is irrelevant — the page is already the right measure — and a
  * bleeding footer has to escape it, so printing drops it. See the bleed rules
  * in `headerCss`, which are print-only for the same reason.
+ *
+ * The preview replaces this column with a paper-shaped sheet — see
+ * `previewSheetCss` — so there the cap is dropped on screen too.
  */
-function wrapCss(thermal: boolean, bleeds: boolean): string {
+function wrapCss(thermal: boolean, bleeds: boolean, sheet: boolean): string {
+    if (sheet) {
+        // The sheet is the measure, so the column must not also cap the width
+        // or a bleeding footer would be boxed in by it on screen.
+        return '.p71-wrap { width: 100%; margin: 0; }';
+    }
+
     const base = thermal
         ? '.p71-wrap { padding: 6px; }'
         : '.p71-wrap { max-width: 780px; margin: 0 auto; }';
@@ -122,6 +131,70 @@ function wrapCss(thermal: boolean, bleeds: boolean): string {
 
     return `${base}
         @media print { .p71-wrap { max-width: none; margin: 0; } }`;
+}
+
+/** The paper's width in mm — the sheet is drawn to it on screen. */
+const PAGE_WIDTH_MM: Record<PaperSize, number> = {
+    A4: 210,
+    A5: 148,
+    Letter: 216,
+    Thermal80: 80,
+    Thermal58: 58,
+};
+
+/**
+ * Draws the preview on a paper-shaped sheet instead of in the popup's own
+ * width.
+ *
+ * The preview's promise is that what you see is what prints. That only holds
+ * if the screen has the same geometry as the page, so the sheet takes the real
+ * paper width and the real `@page` margin as padding. That padding is the
+ * load-bearing part: the bleed rules cancel the page margin with equal
+ * negative margins, and on screen there was previously no margin to cancel —
+ * which is exactly why a bleeding footer looked inset in the preview but ran
+ * to the edge on paper. Give the sheet a real margin and the same rules work
+ * in both media.
+ *
+ * Screen-only. On paper the page box already is the sheet, so every rule here
+ * is switched off in print.
+ */
+function previewSheetCss(paperSize: PaperSize): string {
+    const margin = PAGE_MARGIN_MM[paperSize];
+    const width = PAGE_WIDTH_MM[paperSize];
+    const heightMm = PAGE_CONTENT_HEIGHT_MM[paperSize];
+
+    // A roll prints to an open-ended length and has no page bottom, so it gets
+    // the paper width but never a fixed height — a sheet would draw a bottom
+    // edge that does not exist.
+    const sheetHeight = heightMm ? `min-height: ${heightMm + margin * 2}mm;` : '';
+
+    return `
+        @media screen {
+            body { background: #9ca3af; }
+            .p71-pv-sheet {
+                width: ${width}mm;
+                ${sheetHeight}
+                box-sizing: border-box;
+                padding: ${margin}mm;
+                margin: 16px auto;
+                background: #fff;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+                overflow: hidden;
+            }
+        }
+        /* On paper the @page box is the sheet — the screen furniture would
+           otherwise add a second margin inside the real one. */
+        @media print {
+            .p71-pv-sheet {
+                width: auto;
+                min-height: 0;
+                padding: 0;
+                margin: 0;
+                background: none;
+                box-shadow: none;
+                overflow: visible;
+            }
+        }`;
 }
 
 /**
@@ -224,7 +297,8 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             color: #111;
             background: #fff;
         }
-        ${wrapCss(thermal, bleeds)}
+        ${wrapCss(thermal, bleeds, !!opts.preview)}
+        ${opts.preview ? previewSheetCss(opts.paperSize) : ''}
         .p71-doc { width: 100%; border-collapse: collapse; }
         .p71-doc > thead > tr > td,
         .p71-doc > tfoot > tr > td,
@@ -266,7 +340,9 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
 </head>
 <body>
 ${opts.preview ? previewToolbarHtml(opts.preview) : ''}
-<div class="p71-wrap">${content}</div>
+${opts.preview
+        ? `<div class="p71-pv-sheet"><div class="p71-wrap">${content}</div></div>`
+        : `<div class="p71-wrap">${content}</div>`}
 </body>
 </html>`;
 }
