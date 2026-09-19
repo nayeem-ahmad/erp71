@@ -4,11 +4,13 @@ import {
     isSelfServeSubscriptionPlan,
     mergeAddonFeatures,
     normalizePlanFeatures,
+    NON_PROJECT_MODULE_READ_PERMISSIONS,
     parsePlanFeatures,
     resolveAiCreditsMonthly,
     resolveDashboardVariant,
     resolvePlanRank,
 } from './subscription-plans';
+import { StorePermission } from './index';
 
 describe('subscription-plans helpers', () => {
     it('fills missing entitlements with defaults', () => {
@@ -152,6 +154,47 @@ describe('subscription-plans helpers', () => {
             const features = normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
             expect(resolveDashboardVariant('SOMETHING_ELSE', features, LEDGER)).toBe('RETAIL');
             expect(resolveDashboardVariant(null, features, LEDGER)).toBe('RETAIL');
+        });
+
+        describe('the projects-only member', () => {
+            const PROJECT_USER = ['VIEW_PROJECTS', 'MANAGE_PROJECT_TASKS', 'LOG_PROJECT_TIME', 'USE_TEAM_CHAT'];
+            const retail = () => normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
+
+            it('lands a projects-only member on the projects dashboard', () => {
+                expect(resolveDashboardVariant('AUTO', retail(), PROJECT_USER)).toBe('PROJECTS');
+            });
+
+            it('ignores the tenant preference, which cannot select this variant', () => {
+                // Earned by permissions, never chosen: a workspace must not be able to
+                // put everyone on one member's personal dashboard.
+                expect(resolveDashboardVariant('ACCOUNTING', retail(), PROJECT_USER)).toBe('PROJECTS');
+                expect(resolveDashboardVariant('RETAIL', retail(), PROJECT_USER)).toBe('PROJECTS');
+            });
+
+            it('drops back to the plan default when the member reads any other module', () => {
+                for (const extra of NON_PROJECT_MODULE_READ_PERMISSIONS) {
+                    expect(resolveDashboardVariant('AUTO', retail(), [...PROJECT_USER, extra])).toBe('RETAIL');
+                }
+            });
+
+            it('does not move an accounting-only tenant, which has no projects routes', () => {
+                const features = normalizePlanFeatures(
+                    { premiumAccounting: true, accountingOnly: true },
+                    'ACCOUNTING',
+                );
+                expect(resolveDashboardVariant('AUTO', features, PROJECT_USER)).toBe('ACCOUNTING');
+            });
+
+            it('leaves a member with no projects permission alone', () => {
+                expect(resolveDashboardVariant('AUTO', retail(), ['CREATE_SALE'])).toBe('RETAIL');
+                expect(resolveDashboardVariant('AUTO', retail(), [])).toBe('RETAIL');
+            });
+
+            it('lists only real permissions, so a rename breaks the build not the gate', () => {
+                for (const permission of NON_PROJECT_MODULE_READ_PERMISSIONS) {
+                    expect(StorePermission[permission as keyof typeof StorePermission]).toBe(permission);
+                }
+            });
         });
     });
 });
