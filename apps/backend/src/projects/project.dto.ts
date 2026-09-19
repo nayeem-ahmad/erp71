@@ -388,36 +388,46 @@ export class CreateTaskDto {
     @IsOptional() @IsString() @MaxLength(5000)
     description?: string;
 
-    @IsOptional() @IsUUID()
+    /**
+     * The links and dates below take `''` to mean "not set", the same spelling
+     * `UpdateTaskDto` and `CreateProjectDto` use. The New Task dialog builds its
+     * two assignee columns with the same `assigneeColumns()` helper an inline
+     * edit uses, which sends `''` for whichever column the chosen holder does
+     * not fill. `@IsOptional()` skips null and undefined only, so before this
+     * that empty sibling reached `@IsUUID()` and picking *anyone* 400'd with
+     * "assigneeEmployeeId must be a UUID". The service already normalises
+     * `'' -> null` on the way to the column.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     statusId?: string;
 
     @IsOptional() @IsEnum(ProjectPriorityDto)
     priority?: ProjectPriorityDto;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeId?: string;
 
     /** Alternative to assigneeId for a team member who has no login. */
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeEmployeeId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     milestoneId?: string;
 
     /** The story this task delivers part of. Must be in the same project. */
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     userStoryId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     sprintId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     parentTaskId?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     startDate?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     dueDate?: string;
 
     /** Replaces the whole label set. An empty array clears it. */
