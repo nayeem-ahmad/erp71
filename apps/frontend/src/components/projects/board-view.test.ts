@@ -8,6 +8,7 @@ import {
     mergeBoardView,
     motionClass,
     readStoredBoardView,
+    scrollClasses,
     staggerDelay,
     STAGGER_MAX_MS,
     tintOf,
@@ -39,13 +40,22 @@ describe('mergeBoardView', () => {
         expect(merged.density).toBe('compact');
         expect(merged.columnWidth).toBe('wide');
         expect(merged.columnTint).toBe(DEFAULT_BOARD_VIEW.columnTint);
+        // The board scrolled the page before this setting existed, and an
+        // entry written back then has to go on scrolling the page.
+        expect(merged.scroll).toBe('page');
     });
 
     it('drops a value outside the option list rather than passing it to a class lookup', () => {
-        const merged = mergeBoardView({ density: 'tiny', columnWidth: 7, animate: 'yes' });
+        const merged = mergeBoardView({
+            density: 'tiny',
+            columnWidth: 7,
+            animate: 'yes',
+            scroll: 'sideways',
+        });
         expect(merged.density).toBe(DEFAULT_BOARD_VIEW.density);
         expect(merged.columnWidth).toBe(DEFAULT_BOARD_VIEW.columnWidth);
         expect(merged.animate).toBe(DEFAULT_BOARD_VIEW.animate);
+        expect(merged.scroll).toBe(DEFAULT_BOARD_VIEW.scroll);
     });
 
     it('takes only the card fields it knows, and only booleans', () => {
@@ -91,6 +101,7 @@ describe('isDefaultBoardView', () => {
         expect(isDefaultBoardView(DEFAULT_BOARD_VIEW)).toBe(true);
         expect(isDefaultBoardView(withView({ columnWidth: 'wide' }))).toBe(false);
         expect(isDefaultBoardView(withView({ animate: false }))).toBe(false);
+        expect(isDefaultBoardView(withView({ scroll: 'column' }))).toBe(false);
         expect(isDefaultBoardView(withView({ fields: { cover: false } }))).toBe(false);
     });
 });
@@ -106,6 +117,28 @@ describe('class maps', () => {
         expect(density(withView({ density: 'compact' }))).not.toEqual(
             density(withView({ density: 'comfortable' })),
         );
+    });
+
+    it('leaves every box alone while the page is the thing that scrolls', () => {
+        expect(Object.values(scrollClasses(withView({ scroll: 'page' })))).toEqual([
+            '',
+            '',
+            '',
+            '',
+            '',
+        ]);
+    });
+
+    it('gives a column its own scroller, and only from a tablet up', () => {
+        const columnar = scrollClasses(withView({ scroll: 'column' }));
+
+        expect(columnar.list).toContain('md:overflow-y-auto');
+        // Every one of them, because a phone's board area is too short to nest
+        // a scroller in — see `SCROLL`. An unprefixed class here would crop a
+        // column on the screen that can least afford it.
+        for (const token of Object.values(columnar).join(' ').split(' ')) {
+            expect(token).toMatch(/^md:/);
+        }
     });
 
     it('tints a column by its category only when the setting asks for it', () => {
