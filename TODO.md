@@ -1423,6 +1423,14 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #685)** — 3 commits, 33 files, +736 / −89. Merge commit `25765c6d`, 2026-09-19 08:51 UTC, on top of `8178604c`, pinned to the tested head `035ed7c6`. Merged outside a session, as every release since #672 has been. **CI/CD Pipeline** run #1845 green on the push to `main` in 9m46s; **Deploy to VPS** run #44 green in 5m47s, its "Deploy via SSH" step 5m42s. Verified live: `{"status":"ok","db":"ok","commit":"25765c6d…","uptime":4,"latency_ms":2}`, then `Verified live commit: 25765c6d45ee490bdc3d23428d8ace27659b536f` and `app HTTP 200`. No migrations, `schema.prisma` untouched, `apps/backend/Dockerfile` unchanged — `db push` had nothing to apply, checked rather than assumed.
+
+  Shipped: the sales row's print split-button broken into an invoice icon and a chalan icon (#685's own commit), and a board column that can scroll inside itself or scroll the page (#684).
+
+  **The print change fixed a setting that could only be changed from a place you could no longer reach.** `skipPreview` was settable only from a checkbox inside the print preview popup — and once you had used it, the popup never appeared again, so the checkbox that turned it off was gone with it. Moving paper size and the preview opt-out into a per-device "Print settings" action in the list header gave that flag its first reachable UI. Worth naming as a shape: **a preference whose only control lives inside the thing it suppresses is a one-way door**, and it reads as a bug rather than a setting.
+
+  **The deploy gap held at 3 seconds** (Build finished 09:01:32, deploy fired 09:01:35). Six releases now: 3, 3, 3, 3, 4, 3. The #683 entry's correction stands — the figure is a 3–4 second range, not the constant the first four suggested — done 2026-09-19
+
 - [x] **Printing a chalan from the sales list took two clicks and a menu scan** — done 2026-09-19, reported as *"in sales list ui, the print has become complicated. for a print of invoice or chalan - we need direct icon (not via drop-down). paper-size or print settings type things may live somewhere else (please suggest)"*
 
   The row's print control was a split button holding six things: the invoice on its main half, and behind the chevron five paper sizes, the chalan, the till receipt, the Mushak 6.3 and a link to the invoice page. Grouping them kept the actions column narrow, but it charged the same price for the two documents printed on nearly every sale as for the ones printed a few times a year — and it made the paper size a per-row choice, re-picked on every print, when it is a property of the printer plugged into that counter.
