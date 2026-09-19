@@ -1423,6 +1423,12 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Printing a chalan from the sales list took two clicks and a menu scan** — done 2026-09-19, reported as *"in sales list ui, the print has become complicated. for a print of invoice or chalan - we need direct icon (not via drop-down). paper-size or print settings type things may live somewhere else (please suggest)"*
+
+  The row's print control was a split button holding six things: the invoice on its main half, and behind the chevron five paper sizes, the chalan, the till receipt, the Mushak 6.3 and a link to the invoice page. Grouping them kept the actions column narrow, but it charged the same price for the two documents printed on nearly every sale as for the ones printed a few times a year — and it made the paper size a per-row choice, re-picked on every print, when it is a property of the printer plugged into that counter.
+
+  Invoice and chalan now have an icon each (`SaleRowPrintButtons`), one click, no dropdown. The receipt, the Mushak and the invoice page moved into the row's existing kebab alongside Duplicate and Cancel. Paper size and the preview opt-out moved to a **Print settings** action in the sales list header (`PrintSettingsModal`), saved per device — which also gave `skipPreview` its first real UI: it was previously only settable from a checkbox inside the print preview popup, unreachable once used. Settings → Sales keeps the shop-wide default and now says the counter can override it. Hit-area count in the row is unchanged, so the column did not widen. `SalePrintMenu` stays as-is on the sale detail and invoice screens.
+
 - [x] **The board can scroll inside its columns instead of down the page** — asked for as *"in Board Settings, add option to allow scrolling within column vs scrolling the whole page"* — done 2026-09-19.
 
   A board grows down as well as across, and there are two honest answers to what should happen when it grows past the window. The page can take it: the board is as tall as its longest column and the window scrolls, which is what this board has always done and what a short board wants. Or each column can take its own: the board is exactly as tall as the window, the header and every column heading stay put, and a column scrolls inside its own frame — which is what a long board wants, because at forty cards in Doing, page scrolling puts the headings off screen and you lose track of which lane you are reading.

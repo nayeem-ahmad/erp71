@@ -344,6 +344,19 @@ export const salesMessages = {
             print: 'Print invoice',
             skip: 'No, thanks',
         },
+        printSettings: {
+            /* The per-device print preferences, opened from the sales list
+               header. Paper size used to be re-chosen from a dropdown on
+               every row; it is a setting, so it lives here. */
+            action: 'Print settings',
+            title: 'Print settings',
+            subtitle: 'Applies to this device only',
+            paperSizeLabel: 'Paper size',
+            paperSizeHint: 'The size invoices and chalans print at from this browser. Your shop-wide default is set in Settings → Sales.',
+            skipPreviewLabel: 'Skip print preview',
+            skipPreviewHint: 'Send documents straight to the printer instead of showing them first.',
+            saved: 'Print settings saved',
+        },
         printMenu: {
             /* The shared print split button: invoice sizes plus the other
                documents a sale can produce. */
