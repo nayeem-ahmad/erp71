@@ -1,5 +1,6 @@
 import {
     assigneeColumns,
+    defaultAssigneeKeyFor,
     assigneeKeyOf,
     assigneeLabelOf,
     defaultAssigneeFor,
@@ -24,6 +25,34 @@ describe('defaultAssigneeFor', () => {
 
     it('leaves it unheld when nobody is signed in yet', () => {
         expect(defaultAssigneeFor('me', null)).toEqual({});
+    });
+});
+
+/**
+ * The board composer's picker is a single select in the key space, so it needs
+ * the same rule answered as a key. The board's filter vocabulary differs from
+ * the Tasks page's, which is the part worth pinning.
+ */
+describe('defaultAssigneeKeyFor', () => {
+    it('falls back to the signed-in user when the board has no filter set', () => {
+        expect(defaultAssigneeKeyFor('all', 'u1')).toBe('user:u1');
+    });
+
+    it('lets the filtered person win, user or employee alike', () => {
+        expect(defaultAssigneeKeyFor('user:u2', 'u1')).toBe('user:u2');
+        expect(defaultAssigneeKeyFor('employee:e1', 'u1')).toBe('employee:e1');
+    });
+
+    // The board spells "unassigned" as `none`; the Tasks page spells it
+    // `unassigned`. Both have to mean nobody, or a filtered-to-nobody board
+    // would quietly hand every composed card to whoever is composing.
+    it('leaves it unheld for either spelling of unassigned', () => {
+        expect(defaultAssigneeKeyFor('none', 'u1')).toBe('');
+        expect(defaultAssigneeKeyFor('unassigned', 'u1')).toBe('');
+    });
+
+    it('leaves it unheld when nobody is signed in yet', () => {
+        expect(defaultAssigneeKeyFor('all', null)).toBe('');
     });
 });
 

@@ -425,3 +425,70 @@ describe('preview toolbar', () => {
         open.mockRestore();
     });
 });
+
+describe('preview sheet', () => {
+    const bleedCfg = {
+        footer: {
+            show: true,
+            bleed: true,
+            pinToPageBottom: true,
+            images: [{ url: 'https://cdn.test/strip.png', fullWidth: true }],
+        },
+    };
+    const previewOpts = { title: 'Invoice (A4)', printLabel: 'Print', closeLabel: 'Close' };
+
+    it('renders the preview on a paper-shaped sheet', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        // The sheet must actually wrap the content, not merely be styled —
+        // the CSS alone would leave the document rendering at popup width.
+        expect(html).toContain('<div class="p71-pv-sheet"><div class="p71-wrap">');
+        expect(html).toContain('width: 210mm');
+    });
+
+    it('does not wrap a non-preview document in a sheet', () => {
+        const html = buildPrintDocument(base);
+
+        expect(html).not.toContain('p71-pv-sheet');
+        expect(html).toContain('<div class="p71-wrap">');
+    });
+
+    it('gives the preview sheet the real page margin as padding', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        expect(html).toContain('padding: 15mm');
+    });
+
+    it('lets a bleeding footer escape the sheet on screen, not just in print', () => {
+        const html = buildPrintDocument({
+            ...base,
+            preview: previewOpts,
+            headerConfig: bleedCfg,
+        });
+
+        // The same negative margins that cancel the @page margin on paper must
+        // also cancel the sheet's padding on screen, or the preview shows a
+        // gap the printed page will not have.
+        expect(html).toContain('.p71-pv-sheet .p71-ft');
+    });
+
+    it('gives a roll the paper width but no fixed sheet height', () => {
+        const html = buildPrintDocument({
+            ...base,
+            paperSize: 'Thermal80',
+            preview: previewOpts,
+        });
+
+        // A roll prints to an open-ended length, so a fixed-height sheet would
+        // draw a page bottom that does not exist.
+        expect(html).toContain('width: 80mm');
+        expect(html).not.toContain('min-height: 297mm');
+    });
+
+    it('keeps the sheet out of the printed document', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        // The sheet is screen furniture; on paper the page box is the sheet.
+        expect(html).toMatch(/@media print \{[^}]*\.p71-pv-sheet[^}]*(box-shadow|margin|padding|width)\s*:\s*/);
+    });
+});

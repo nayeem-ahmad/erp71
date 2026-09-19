@@ -72,6 +72,7 @@ export default function DashboardSettingsPage() {
         RETAIL: copy.variantRetail,
         ACCOUNTING: copy.variantAccounting,
         CRM: copy.variantCrm,
+        PROJECTS: copy.variantProjects,
     };
     // Shows the resolved answer for the option currently selected, not the saved
     // one, so the consequence of a choice is visible before saving it.

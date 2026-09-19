@@ -35,6 +35,28 @@ export function defaultAssigneeFor(
 }
 
 /**
+ * The same rule as `defaultAssigneeFor`, answered as a key rather than as the
+ * two columns.
+ *
+ * The board composer needs a key because its picker is a single select in that
+ * key space, and it has to show the default as the selected option before any
+ * save happens. Expressed in terms of `defaultAssigneeFor` so the two cannot
+ * drift: one rule about who a new task lands on, in two shapes.
+ *
+ * The board's "no filter" value is `all`, the Tasks page's is `me` or
+ * `anyone`, and its "nobody" is `none` against the Tasks page's `unassigned` —
+ * all of which fall through correctly, the first three to the signed-in user
+ * and `none` to nobody.
+ */
+export function defaultAssigneeKeyFor(assignee: string, userId: string | null): string {
+    if (assignee === 'none') return '';
+    const columns = defaultAssigneeFor(assignee, userId);
+    if (columns.assigneeId) return `user:${columns.assigneeId}`;
+    if (columns.assigneeEmployeeId) return `employee:${columns.assigneeEmployeeId}`;
+    return '';
+}
+
+/**
  * Splits a key into the two columns a PATCH has to send.
  *
  * Both are always sent, and `''` rather than `undefined` clears one: PATCH

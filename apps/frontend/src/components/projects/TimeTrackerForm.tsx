@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ListPlus, Play, Square, Tag, Timer, Trash2 } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatElapsed, projectDotClass, type HourLogTag, type RunningTimer } from './hour-log-day';
 import { labelClass } from './board-tasks';
+import TaskPicker from './TaskPicker';
 
 export interface CaptureProject {
     id: string;
@@ -15,6 +16,8 @@ export interface CaptureProject {
 export interface CaptureTask {
     id: string;
     title: string;
+    /** Present when the list spans projects, so a row can say which one. */
+    project?: { id: string; code: string; name: string } | null;
 }
 
 export interface CaptureLabels {
@@ -23,8 +26,15 @@ export interface CaptureLabels {
     task: string;
     selectProject: string;
     selectTask: string;
-    selectProjectFirst: string;
+    allProjects: string;
     noTasks: string;
+    noMatches: string;
+    searchTasks: string;
+    loadingTasks: string;
+    clearTask: string;
+    mine: string;
+    everyone: string;
+    scope: string;
     tags: string;
     noTags: string;
     start: string;
@@ -61,9 +71,14 @@ interface Props {
     elapsed: number;
     /** Disabled while a start/stop/log is in flight, so a double press cannot double-write. */
     busy?: boolean;
-    /** Which project's tasks `tasks` currently holds; the parent loads them. */
+    /** Which project's tasks `tasks` currently holds; the parent loads them. '' is every project. */
     projectId: string;
     onProjectChange: (projectId: string) => void;
+    /** True while the parent is fetching `tasks`. */
+    tasksLoading?: boolean;
+    /** False widens the list from the signed-in user's tasks to everyone's. */
+    onlyMine: boolean;
+    onOnlyMineChange: (onlyMine: boolean) => void;
     onStart: (input: { taskId: string; note?: string; tagIds: string[] }) => void | Promise<void>;
     onStop: () => void | Promise<void>;
     onDiscard: () => void | Promise<void>;
@@ -107,6 +122,9 @@ export default function TimeTrackerForm({
     busy = false,
     projectId,
     onProjectChange,
+    tasksLoading = false,
+    onlyMine,
+    onOnlyMineChange,
     onStart,
     onStop,
     onDiscard,
@@ -241,33 +259,57 @@ export default function TimeTrackerForm({
                         aria-label={labels.project}
                         className="w-full"
                     >
-                        <option value="">{labels.selectProject}</option>
+                        {/* An empty project is every project rather than a
+                            prompt: the common case is starting a clock on
+                            whatever is on your plate, which is not a question
+                            about projects at all. */}
+                        <option value="">{labels.allProjects}</option>
                         {projects.map((project) => (
                             <option key={project.id} value={project.id}>
                                 {project.code} · {project.name}
                             </option>
                         ))}
                     </Select>
-                    <Select
+
+                    <TaskPicker
+                        labels={{
+                            task: labels.task,
+                            search: labels.searchTasks,
+                            noTasks: labels.noTasks,
+                            noMatches: labels.noMatches,
+                            clear: labels.clearTask,
+                            loading: labels.loadingTasks,
+                        }}
+                        tasks={tasks}
+                        loading={tasksLoading}
                         value={taskId}
-                        onChange={(e) => setTaskId(e.target.value)}
-                        disabled={!projectId || tasks.length === 0}
-                        aria-label={labels.task}
-                        className="w-full"
+                        onChange={setTaskId}
+                        // Codes only earn their width when the list spans
+                        // projects; inside one project every row would carry
+                        // the same one.
+                        showProject={!projectId}
+                    />
+
+                    {/* Yours by default — the tracker logs your hours, so
+                        anyone else's tasks are the exception. Still reachable,
+                        because covering a colleague's task is a real afternoon
+                        and reassigning it first would be a worse one. */}
+                    <div
+                        className="flex w-fit items-center rounded-md border border-gray-200"
+                        role="group"
+                        aria-label={labels.scope}
                     >
-                        <option value="">
-                            {!projectId
-                                ? labels.selectProjectFirst
-                                : tasks.length === 0
-                                  ? labels.noTasks
-                                  : labels.selectTask}
-                        </option>
-                        {tasks.map((task) => (
-                            <option key={task.id} value={task.id}>
-                                {task.title}
-                            </option>
-                        ))}
-                    </Select>
+                        <ScopeButton
+                            active={onlyMine}
+                            label={labels.mine}
+                            onClick={() => onOnlyMineChange(true)}
+                        />
+                        <ScopeButton
+                            active={!onlyMine}
+                            label={labels.everyone}
+                            onClick={() => onOnlyMineChange(false)}
+                        />
+                    </div>
                 </>
             )}
 
@@ -448,6 +490,29 @@ export default function TimeTrackerForm({
                 </div>
             </div>
         </div>
+    );
+}
+
+function ScopeButton({
+    active,
+    label,
+    onClick,
+}: {
+    active: boolean;
+    label: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            className={`flex min-h-touch items-center justify-center px-2.5 text-xs font-medium transition-colors first:rounded-s-md last:rounded-e-md md:min-h-0 md:py-1 ${
+                active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+        >
+            {label}
+        </button>
     );
 }
 

@@ -552,11 +552,39 @@ export const DASHBOARD_PREFERENCES = ['AUTO', 'RETAIL', 'ACCOUNTING', 'CRM'] as 
 export type DashboardPreference = (typeof DASHBOARD_PREFERENCES)[number];
 
 /** What the dashboard page actually renders once the preference is resolved. */
-export type DashboardVariant = 'RETAIL' | 'ACCOUNTING' | 'CRM';
+export type DashboardVariant = 'RETAIL' | 'ACCOUNTING' | 'CRM' | 'PROJECTS';
 
 export function isDashboardPreference(value: unknown): value is DashboardPreference {
   return typeof value === 'string' && (DASHBOARD_PREFERENCES as readonly string[]).includes(value);
 }
+
+/**
+ * Holding any of these means the member reads some module other than Projects,
+ * so the projects dashboard is not their landing page.
+ *
+ * A new module's read permission belongs in this list. Leaving it out does not
+ * fail loudly — it silently gives that module's users the projects dashboard.
+ *
+ * Deliberately module *read* markers rather than "every permission outside the
+ * Projects module": USE_TEAM_CHAT and SWITCH_STORES sit in half the role
+ * templates and say nothing about which dashboard fits. Names are exact —
+ * VIEW_PURCHASES and VIEW_INVENTORY do not exist.
+ */
+export const NON_PROJECT_MODULE_READ_PERMISSIONS = [
+  'VIEW_PRODUCT_CATALOG',
+  'CREATE_INVENTORY_MOVEMENTS',
+  'CREATE_SALE',
+  'CREATE_PURCHASE',
+  'VIEW_LEDGER',
+  'VIEW_LEADS',
+  'VIEW_CRM_INTERACTIONS',
+  'VIEW_HR',
+  'VIEW_LOANS',
+  'VIEW_INVESTORS',
+  'VIEW_IMPORTS',
+  'VIEW_BLOG',
+  'MANAGE_USERS',
+] as const;
 
 /**
  * Which dashboard a given user in a given tenant lands on, resolved from three
@@ -569,6 +597,11 @@ export function isDashboardPreference(value: unknown): value is DashboardPrefere
  * `CrmDashboardController` is the same story with `premiumCrm` + `VIEW_LEADS`.
  * In the other direction an `accountingOnly` tenant has no retail routes to fall
  * back to, so the plan stays the floor and the choice cannot escape it.
+ *
+ * One case inverts that order. A member who reads only Projects gets the
+ * projects dashboard before the plan is consulted at all, because the retail
+ * fallback would hand them a page of tiles they have no permission to load.
+ * That makes this function person-shaped, not only tenant-shaped.
  */
 export function resolveDashboardVariant(
   preference: string | null | undefined,
@@ -579,6 +612,17 @@ export function resolveDashboardVariant(
   // so neither a preference nor a missing permission can move it elsewhere.
   if (hasPlanEntitlement(features, 'accountingOnly')) {
     return 'ACCOUNTING';
+  }
+
+  // Earned by permissions, not chosen by the tenant: a member who reads only
+  // Projects lands there whatever the plan or preference says. Placed before
+  // the plan default so the narrowest role wins; placed after accountingOnly
+  // because such a workspace has no projects routes to land on.
+  const readsOnlyProjects =
+    permissions.includes('VIEW_PROJECTS')
+    && !NON_PROJECT_MODULE_READ_PERMISSIONS.some((entry) => permissions.includes(entry));
+  if (readsOnlyProjects) {
+    return 'PROJECTS';
   }
 
   // Accounting wins the plan default when a plan somehow carries both, because

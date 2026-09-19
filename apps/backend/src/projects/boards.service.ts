@@ -398,6 +398,11 @@ export class BoardsService {
             projectId: dto.projectId,
             title: dto.title,
             statusId,
+            // Passed straight through, `''` and all: `tasks.create` already
+            // normalises an empty string to null on both columns, so the
+            // composer's "unassigned" and a real holder take the same path.
+            assigneeId: dto.assigneeId,
+            assigneeEmployeeId: dto.assigneeEmployeeId,
         });
 
         // addTasks returns the reloaded board, which is exactly what the page
