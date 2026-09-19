@@ -1,4 +1,5 @@
 import { formatBDT } from './format';
+import { paymentMethodLabel } from './payment-method-label';
 import { openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
@@ -187,18 +188,6 @@ function formatRate(rate: number): string {
     return `${rounded}%`;
 }
 
-function formatPaymentMethod(method: string): string {
-    const map: Record<string, string> = {
-        CASH: 'Cash',
-        CARD: 'Credit Card',
-        BKASH: 'bKash',
-        BANK_TRANSFER: 'Bank Transfer',
-        MOBILE_PAYMENT: 'Mobile Payment',
-        OTHER: 'Other',
-    };
-    return map[method] ?? method;
-}
-
 /** A bilingual key/value row. Blank values are dropped, not printed empty. */
 function kvRow(bn: string, en: string, value: string | null | undefined): string {
     if (!value) return '';
@@ -247,7 +236,7 @@ export function buildMushakReceiptBody(data: MushakReceiptData, paperSize: Paper
 
     const paymentRows = (data.payments ?? []).map((p) => `
         <tr>
-            <td>${escHtml(formatPaymentMethod(p.method))}</td>
+            <td>${escHtml(paymentMethodLabel(p.method))}</td>
             <td>${formatBDT(p.amount)}</td>
         </tr>`).join('');
 
