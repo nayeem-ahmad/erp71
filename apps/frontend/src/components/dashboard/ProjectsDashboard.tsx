@@ -28,12 +28,10 @@ function windows() {
 /**
  * `getProjectTasks`/`getProjects` resolve `Paginated<T>` — `{ items, total, … }`,
  * per `fetchPaginated` in `@/lib/api` and every existing caller (e.g.
- * `TimeTracker.tsx`'s `res?.items`). `data` is read too, defensively: it is
- * what `fetchWithAuth`-shaped responses use elsewhere in this codebase, and it
- * costs nothing to accept both spellings of "the rows".
+ * `TimeTracker.tsx`'s `res?.items`).
  */
-function rows<T>(page: { items?: T[]; data?: T[] } | null | undefined): T[] {
-    return page?.items ?? page?.data ?? [];
+function rows<T>(page: { items?: T[] } | null | undefined): T[] {
+    return page?.items ?? [];
 }
 
 /**
@@ -46,7 +44,7 @@ function rows<T>(page: { items?: T[]; data?: T[] } | null | undefined): T[] {
  * `total` therefore also comes from what the page actually holds once Done is
  * dropped, not from the server's unfiltered count.
  */
-function openTasksFrom(page: { items?: OpenTask[]; data?: OpenTask[] } | null | undefined) {
+function openTasksFrom(page: { items?: OpenTask[] } | null | undefined) {
     const tasks = rows<OpenTask>(page).filter((task) => task.status?.category !== 'DONE');
     return { tasks, total: tasks.length };
 }

@@ -35,14 +35,14 @@ beforeEach(() => {
     jest.clearAllMocks();
     (api.getMe as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
     (api.getProjectTasks as jest.Mock).mockResolvedValue({
-        data: [
+        items: [
             { id: 'task-1', title: 'Wire the invoice printer', project: { id: 'p1', name: 'Till rollout' } },
             { id: 'task-2', title: 'Fix the chalan layout', project: { id: 'p1', name: 'Till rollout' } },
         ],
         total: 2,
     });
     (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { hours: 6.5 }, rows: [] });
-    (api.getProjects as jest.Mock).mockResolvedValue({ data: [{ id: 'p1', name: 'Till rollout' }], total: 1 });
+    (api.getProjects as jest.Mock).mockResolvedValue({ items: [{ id: 'p1', name: 'Till rollout' }], total: 1 });
     (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
 });
 
@@ -74,8 +74,8 @@ it('lists the member\'s open tasks', async () => {
 });
 
 it('renders an empty workload without crashing', async () => {
-    (api.getProjectTasks as jest.Mock).mockResolvedValue({ data: [], total: 0 });
-    (api.getProjects as jest.Mock).mockResolvedValue({ data: [], total: 0 });
+    (api.getProjectTasks as jest.Mock).mockResolvedValue({ items: [], total: 0 });
+    (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
     (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { hours: 0 }, rows: [] });
 
     render(<ProjectsDashboard {...identity} />);
