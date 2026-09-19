@@ -1423,6 +1423,18 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #687) — carries an access-control fix, and it is the one thing in the release that had to be got right** — 18 commits, 49 files, +3,047 / −267. Merge commit `736d8b09`, 2026-09-19 17:00 UTC, on top of `25765c6d`, pinned to the tested head `f2ada19b`. Merged outside a session, as every release since #672. **Deploy to VPS** run #45 green in 5m13s. Verified live: `{"status":"ok","db":"ok","commit":"736d8b09…","uptime":6,"latency_ms":2}`, then `Verified live commit: 736d8b092bac8d86b1b2c281c55f94a8c3ffbc42` and `app HTTP 200`. No migrations, `schema.prisma` untouched, `apps/backend/Dockerfile` unchanged — `db push` had nothing to apply, checked rather than assumed.
+
+  Shipped: the **projects-only member's dashboard variant** (design, plan, build, review fixes and the `/dashboard` mount — eight commits end to end), the time tracker's task list gaining filter and search, assigning a composed board card from the board's own filter, the New Task dialog able to assign to anyone, the shrinkage entry New Entry button (#686), and **`4f7625da`, the burndown access-control fix.**
+
+  **The security fix is the one worth reading.** `GET /projects/:id/burndown` took a *tenant id* where every sibling route takes a *viewer*, so it filtered on `{ id, tenant_id }` alone — and any holder of `VIEW_PROJECTS` could read the day-by-day remaining hours of a **PRIVATE project they were not a member of**. The fix routes it through `assertProject`, the chokepoint the rest of the service already uses.
+
+  Three things about the fix are worth keeping as a pattern:
+
+  1. **The bug was a parameter-type mismatch, not a missing check.** One route taking `tenantId` while its siblings take `viewer` is the whole defect; nothing looked unguarded, because the guard it had was the wrong one. A route that takes a different argument shape from every route around it is worth a second look on that ground alone.
+  2. **It returns NotFound rather than Forbidden**, deliberately, so a refusal cannot confirm the project exists. Forbidden would have closed the data leak and left an existence oracle.
+  3. **A doc comment defended the old behaviour and was half right.** It argued the totals stay whole rather than per-viewer — true, and about record scope, which is a *different axis* from visibility. The fix keeps the totals whole and changes only who may ask. A comment that correctly answers one question is not evidence about a question it never asked — done 2026-09-19
+
 - [x] **The print preview now shows the same page the printer produces, so a bleeding footer can be judged from the screen** — reported as "wanted to put the footer image at the bottom of the page and stretched end-to-end, but still having some space below and on the right side of the footer", from a screenshot of the print preview — done 2026-09-19.
 
   The footer settings were not at fault and neither was the printed output: a full-width, bleeding, bottom-pinned footer already reached all three paper edges on paper. The preview could not show it. `.p71-wrap` only dropped its 780px cap inside `@media print`, and the bleed rules in `footerCssBlock` were print-only too, so on screen the band was boxed into the content column — measured at a 250px inset each side while the same document printed with the strip overhanging the page box by 15mm. The preview's stated promise in `print-window.ts` is that "anything that looks right here prints right", and for this one setting it could not keep it; the gap on the right was an artifact of the preview, and only the gap *below* was a real setting left off.
