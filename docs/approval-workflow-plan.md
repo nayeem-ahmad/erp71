@@ -421,8 +421,8 @@ with `conditions: null` matching everything, which is how the catch-all row at
 | `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4252`) — the existing matrix |
 | `TENANT_ROLE` | everyone holding that tenant role | `TenantUser.tenant_role_id` → `TenantRole`, **and** `TenantUser.roles[]` — *not* `TenantUser.role` (`schema.prisma:1260`); see below |
 | `USER` | one named user | `approver_ref` is the user id |
-| `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`** |
-| `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`** |
+| `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`**; resolves to an `Employee`, see below |
+| `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`**; same |
 | `STORE_MANAGER` | manager of the entry's store | `UserStorePermission` + a manager permission |
 
 ```ts
@@ -473,6 +473,28 @@ Two corollaries the resolver has to encode:
 "CASHIER" for every non-owner because it read `role`. The engine would have hit
 the authorization half, which is worse — a rule that silently matches more people
 than the tenant meant.
+
+**An `Employee` is not necessarily a user, so the two derived types can resolve
+to somebody who cannot sign.** `Employee.user_id` is `String?` — nullable — so a
+person on the payroll may have no login at all, which is the normal case for
+shop-floor staff paid through HR but never given the app. `EMPLOYEE_MANAGER` and
+`DEPARTMENT_HEAD` both resolve to an `Employee`, while every approval in the
+system is performed by a *user*: `approved_by` holds a user id and
+`UserStorePermission` is keyed by one. So a chain routed to "the submitter's
+manager" can land on a manager with no account and stall there — the same
+dead-end shape as the self-approval deadlock in §4.1, and it must be handled the
+same way: detect it when the request is opened, not when someone eventually
+notices the entry has been sitting for a week.
+
+The codebase already treats the two as distinct rather than interchangeable. The
+projects module addresses an assignee by a `user:<id>` or `employee:<id>` key
+(`projects.service.ts:450,459`) precisely because an employee may have no user
+behind them. `resolveApprovers()` returns user ids, so both derived types must
+resolve `Employee → Employee.user_id` and treat a null as *unresolvable*: fall
+back to the next eligible approver or the owner, and refuse to save a rule whose
+only approver is an employee with no account. A policy editor that lets a tenant
+pick such a manager, and only fails at submission time, moves the error from
+configuration to operation — which is where it costs the most.
 
 ### 4.1 The self-approval trap
 
