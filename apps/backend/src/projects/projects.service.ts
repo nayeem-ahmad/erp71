@@ -165,9 +165,20 @@ export class ProjectsService {
      * no target, the chart carries the actual line alone — which still answers
      * "is this converging", just not "against what".
      *
-     * Whole, never per-viewer, for the reason `progress` above gives.
+     * Whole, never per-viewer, for the reason `progress` above gives — which is
+     * about *record scope*, not about visibility. The chart hangs off a project,
+     * so it is exactly as visible as one: `assertProject` first, and only then
+     * the whole project's totals. Taking a viewer rather than a tenant id is
+     * what makes that possible, and is why every other route on this service
+     * already passes `@Tenant() tenant` straight through.
      */
-    async burndown(tenantId: string, projectId: string) {
+    async burndown(viewer: ProjectViewer, projectId: string) {
+        await this.assertProject(viewer, projectId);
+
+        const tenantId = viewer.tenantId;
+        // `assertProjectVisible` returns the visibility fields it filters on
+        // rather than the dates, so the window still needs its own read. Safe
+        // to key on id alone now the gate above has passed.
         const project = await this.db.project.findFirst({
             where: { id: projectId, tenant_id: tenantId },
             select: { start_date: true, target_end_date: true },
