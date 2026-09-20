@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, File as FileIcon, FileText, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -55,6 +55,8 @@ import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
 import ChipPopover from '@/components/projects/ChipPopover';
+import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
+import { urlWithWidth } from '@/components/ui/markdown-bridge';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -1809,6 +1811,8 @@ interface Attachment {
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+/** Wide enough for a tile on a desktop grid, small enough not to ship the original. */
+const THUMBNAIL_WIDTH = 320;
 /** Matches the server's cap; checked here too so a 5 MB upload is not started. */
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -1885,6 +1889,8 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
     const [items, setItems] = useState<Attachment[]>([]);
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState(false);
+    /** Which attachment the preview is open on, or null for closed. */
+    const [previewAt, setPreviewAt] = useState<number | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -1962,32 +1968,73 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
             ) : items.length === 0 ? (
                 <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
             ) : (
-                <ul className="mt-2 divide-y divide-gray-200 text-sm">
-                    {items.map((item) => (
-                        <li key={item.id} className="flex items-center gap-2 py-1.5">
-                            <a
-                                href={item.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-w-0 flex-1 truncate text-blue-600 hover:underline"
-                            >
-                                {item.file_name}
-                            </a>
-                            <span className="shrink-0 text-xs text-gray-400">
-                                {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
-                            </span>
+                <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                    {items.map((item, at) => (
+                        <li key={item.id} className="group relative">
                             <button
                                 type="button"
-                                aria-label={`${m.deleteFile} ${item.file_name}`}
-                                className="max-md:min-h-touch px-2 text-red-600 disabled:opacity-40"
-                                disabled={busy}
-                                onClick={() => remove(item.id)}
+                                aria-label={`${m.preview} ${item.file_name}`}
+                                onClick={() => setPreviewAt(at)}
+                                className="block w-full overflow-hidden rounded-md border border-gray-200 hover:border-blue-600"
                             >
-                                <Trash2 className="h-4 w-4" />
+                                {item.mime_type?.startsWith('image/') ? (
+                                    /* The thumbnail is the file itself, asked for
+                                       small: a screenshot is recognisable long
+                                       before its name is. */
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={urlWithWidth(item.file_url, THUMBNAIL_WIDTH)}
+                                        alt={item.file_name}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
+                                        className="h-24 w-full bg-gray-50 object-cover"
+                                    />
+                                ) : (
+                                    <span className="flex h-24 w-full items-center justify-center bg-gray-50 text-gray-400">
+                                        {item.mime_type === 'application/pdf' ? (
+                                            <FileText className="h-8 w-8" aria-hidden />
+                                        ) : (
+                                            <FileIcon className="h-8 w-8" aria-hidden />
+                                        )}
+                                    </span>
+                                )}
                             </button>
+
+                            <div className="mt-1 flex items-start gap-1">
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-xs text-gray-700">
+                                        {item.file_name}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
+                                    </span>
+                                </span>
+                                <button
+                                    type="button"
+                                    aria-label={`${m.deleteFile} ${item.file_name}`}
+                                    className="max-md:min-h-touch shrink-0 px-1 text-red-600 disabled:opacity-40"
+                                    disabled={busy}
+                                    onClick={() => remove(item.id)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {previewAt !== null && (
+                <ImagePreviewModal
+                    items={items.map((item) => ({
+                        url: item.file_url,
+                        name: item.file_name,
+                        mimeType: item.mime_type,
+                    }))}
+                    index={previewAt}
+                    onIndexChange={setPreviewAt}
+                    onClose={() => setPreviewAt(null)}
+                />
             )}
         </section>
     );

@@ -1790,12 +1790,34 @@ describe('TaskDetailPanel attachments', () => {
         return f;
     };
 
+    /** The two kinds of attachment a tile draws differently. */
+    const twoFiles = () =>
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/one.png',
+                file_name: 'one.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-09-20T10:00:00Z',
+            },
+            {
+                id: 'a2',
+                file_url: 'https://cdn/two.pdf',
+                file_name: 'two.pdf',
+                mime_type: 'application/pdf',
+                file_size: 4096,
+                created_at: '2026-09-20T10:00:00Z',
+            },
+        ]);
+
     it('lists what is attached', async () => {
         getTaskAttachments.mockResolvedValue([
             {
                 id: 'a1',
                 file_url: 'https://cdn/plan.png',
                 file_name: 'plan.png',
+                mime_type: 'image/png',
                 file_size: 2048,
                 created_at: '2026-08-03T10:00:00Z',
             },
@@ -1803,8 +1825,61 @@ describe('TaskDetailPanel attachments', () => {
         panel();
         await openTab(/^Attachments/);
 
-        const link = await screen.findByRole('link', { name: 'plan.png' });
-        expect(link).toHaveAttribute('href', 'https://cdn/plan.png');
+        // A tile that opens the preview, rather than a link out to a tab.
+        expect(await screen.findByLabelText('Preview plan.png')).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'plan.png' })).not.toBeInTheDocument();
+    });
+
+    it('shows an image attachment as its own thumbnail', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByRole('img', { name: 'one.png' })).toHaveAttribute(
+            'src',
+            expect.stringContaining('https://cdn/one.png'),
+        );
+    });
+
+    it('shows a glyph rather than a thumbnail for a PDF', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByText('two.pdf')).toBeInTheDocument();
+        expect(screen.queryByRole('img', { name: 'two.pdf' })).not.toBeInTheDocument();
+    });
+
+    it('opens the preview modal instead of a new tab', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Preview one.png'));
+
+        expect(await screen.findByLabelText('Zoom in')).toBeInTheDocument();
+    });
+
+    it('opens the preview at the tile that was clicked', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Preview two.pdf'));
+
+        // The PDF, not the first attachment in the list.
+        expect(await screen.findByTitle('two.pdf')).toBeInTheDocument();
+    });
+
+    it('still removes an attachment from a tile', async () => {
+        twoFiles();
+        deleteTaskAttachment.mockResolvedValue({});
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment one.png'));
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
     });
 
     it('uploads a file', async () => {
