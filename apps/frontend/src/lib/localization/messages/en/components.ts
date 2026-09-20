@@ -228,6 +228,8 @@ export const componentsMessages = {
         bulletList: 'Bulleted list',
         numberedList: 'Numbered list',
         link: 'Link',
+        uploading: 'Uploading image…',
+        pasteImage: 'Paste an image to attach it.',
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

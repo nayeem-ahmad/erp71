@@ -50,6 +50,43 @@ describe('ModalShell', () => {
         expect(onBackdropClick).toHaveBeenCalledTimes(1);
     });
 
+    it('ignores a backdrop click when dismissOnBackdrop is false, but not Escape', () => {
+        // Forms holding typed work opt out: a stray click beside the panel used
+        // to throw away a half-written task. Escape is still deliberate.
+        const onBackdropClick = jest.fn();
+        render(
+            <ModalShell onBackdropClick={onBackdropClick} dismissOnBackdrop={false}>
+                <div>content</div>
+            </ModalShell>
+        );
+        fireEvent.click(screen.getByRole('presentation'));
+        expect(onBackdropClick).not.toHaveBeenCalled();
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(onBackdropClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not close when a press inside the panel is released on the backdrop', () => {
+        // Selecting a line of a description and overshooting the panel's edge
+        // fires `click` on the backdrop. Closing there loses the edit the drag
+        // was part of.
+        const onBackdropClick = jest.fn();
+        render(
+            <ModalShell onBackdropClick={onBackdropClick}>
+                <div>content</div>
+            </ModalShell>
+        );
+        const backdrop = screen.getByRole('presentation');
+        fireEvent.mouseDown(screen.getByRole('dialog'));
+        fireEvent.click(backdrop);
+        expect(onBackdropClick).not.toHaveBeenCalled();
+
+        // The next click, pressed on the backdrop, still closes it.
+        fireEvent.mouseDown(backdrop);
+        fireEvent.click(backdrop);
+        expect(onBackdropClick).toHaveBeenCalledTimes(1);
+    });
+
     it('calls onBackdropClick when Escape is pressed', () => {
         const onBackdropClick = jest.fn();
         render(

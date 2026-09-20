@@ -6,12 +6,20 @@ import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 
 /**
- * Markdown for model-generated answers (the AI chat panel).
+ * Markdown for model-generated answers (the AI chat panel) and for the text
+ * people write in the app — task descriptions, task comments.
  *
  * Safety: raw HTML in the source is never rendered — react-markdown ignores it
  * unless rehype-raw is added, and `skipHtml` makes that explicit. `img` is
- * disallowed as well, because the content is built partly from tenant-controlled
- * strings and an image would let that content make an outbound request.
+ * dropped by default for the same reason: chat answers are built partly from
+ * tenant-controlled strings, and an image in one would let that content make an
+ * outbound request from every reader's browser.
+ *
+ * `allowImages` lifts that for the surfaces where a colleague pasted the image
+ * themselves and expects to see it. It is opt-in per call site, not a default,
+ * and it stays a rendering decision: the source is still markdown, still
+ * HTML-free, and a `src` react-markdown considers unsafe is still neutralised
+ * before it reaches an element.
  *
  * Density: sized for the 380px chat panel, so headings are all one size and
  * tables scroll inside their own container rather than widening the bubble.
@@ -95,10 +103,36 @@ const baseComponents: Components = {
  * chat panel so the page they navigated to is visible (on mobile the panel is a
  * full-screen sheet that would otherwise cover it).
  */
-export default function Markdown({ content, onNavigate }: { content: string; onNavigate?: () => void }) {
+export default function Markdown({
+    content,
+    onNavigate,
+    allowImages = false,
+}: {
+    content: string;
+    onNavigate?: () => void;
+    /** See the note at the top of the file before turning this on. */
+    allowImages?: boolean;
+}) {
     const components = useMemo<Components>(
         () => ({
             ...baseComponents,
+            // Capped rather than full-bleed: a pasted screenshot is usually
+            // taller than the column it lands in, and a card's description is
+            // read for its text first. The full size is one tab away — a pasted
+            // image is an attachment like any other and is listed as one.
+            img: ({ node: _node, src, alt, ...props }) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={typeof src === 'string' ? src : undefined}
+                    alt={alt ?? ''}
+                    loading="lazy"
+                    // The asset host has no business knowing which task page a
+                    // reader had open.
+                    referrerPolicy="no-referrer"
+                    className="mt-2 max-h-80 max-w-full rounded-md border border-gray-200"
+                    {...props}
+                />
+            ),
             a: ({ node: _node, href, ...props }) =>
                 isInternalPath(href) ? (
                     // In-app deep link the assistant produced: client-side navigation,
@@ -119,7 +153,9 @@ export default function Markdown({ content, onNavigate }: { content: string; onN
             remarkPlugins={[remarkGfm]}
             components={components}
             skipHtml
-            disallowedElements={['img']}
+            // `unwrapDisallowed` keeps the alt text where the image was, so a
+            // dropped image still reads as something rather than as nothing.
+            disallowedElements={allowImages ? [] : ['img']}
             unwrapDisallowed
         >
             {content}
