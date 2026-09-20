@@ -1407,6 +1407,17 @@ export class AdminTenantsService {
         const balance = (await this.computeLedgerBalancesByTenant([tenantId])).get(tenantId) ?? 0;
         if (balance < 0) return;
 
+        // `activated_at` marks the first crossing into ACTIVE and is never
+        // cleared, so the two cases are updated separately: a workspace being
+        // activated for the first time gets the stamp, one returning from
+        // dunning keeps the date it already has. A single updateMany cannot
+        // express "set only if null" — see activation-state.util for why the
+        // distinction matters.
+        await this.db.tenantSubscription.updateMany({
+            where: { tenant_id: tenantId, status: 'PAST_DUE', activated_at: null },
+            data: { status: 'ACTIVE', past_due_since: null, last_reminder_at: null, activated_at: new Date() },
+        });
+
         await this.db.tenantSubscription.updateMany({
             where: { tenant_id: tenantId, status: 'PAST_DUE' },
             data: { status: 'ACTIVE', past_due_since: null, last_reminder_at: null },

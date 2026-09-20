@@ -272,6 +272,9 @@ describe('nav-resolver', () => {
 
         expect(hrefsUnder('Tenant Management')).toEqual([
             '/admin/tenants',
+            // The manual-activation queue sits next to the tenants it acts on,
+            // ahead of the ledger an approval posts into.
+            '/admin/activation-requests',
             '/admin/tenants/ledger',
             '/admin/tenants/reminders',
         ]);

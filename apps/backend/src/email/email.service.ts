@@ -5,6 +5,7 @@ import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-brea
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 import { formatEmailAddress, parseEmailAddress } from './address.util';
 import { formatZonedDate } from '../common/tenant-time.util';
+import { getPlatformAdminEmails } from '../auth/platform-admin.util';
 import {
     renderRefereeInviteEmail,
     resolveEmailLocale,
@@ -480,6 +481,153 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
 <p><strong>Message:</strong></p>
 <blockquote>${message.replace(/\n/g, '<br>')}</blockquote>`,
         });
+    }
+
+    // ── Manual activation ──────────────────────────────────────────────────────
+    //
+    // The window before a payment gateway is live: a workspace is provisioned
+    // unpaid, the owner sends money by bKash/Nagad, and the team verifies it by
+    // hand. These four mails are the whole conversation, so between them they
+    // have to answer "what happens now?" at every step — a customer who has paid
+    // and heard nothing will phone instead, which is the cost this avoids.
+
+    /**
+     * Sent at signup, in place of the bare welcome, when the workspace still
+     * needs activating. Names the turnaround so the wait has an edge to it.
+     */
+    async sendActivationPending(
+        to: string,
+        options: { name: string; tenantName: string; slaHours: number; supportPhone?: string | null },
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const phoneLine = options.supportPhone
+            ? `<p>In a hurry? Call us on <strong>${escapeHtml(options.supportPhone)}</strong>.</p>`
+            : '';
+
+        await this.send({
+            to,
+            subject: `Activating ${options.tenantName} on ERP71`,
+            html: `<h2>Welcome, ${escapeHtml(options.name || to)}!</h2>
+<p>Your workspace <strong>${escapeHtml(options.tenantName)}</strong> has been created and you can sign in now to set it up — add your store details, products and staff.</p>
+<p>Before the full workspace unlocks, we need to activate your subscription. You can pay right away and we will switch everything on within <strong>${options.slaHours} hours</strong>:</p>
+<p><a href="${frontendUrl}/billing">Activate your workspace</a></p>
+${phoneLine}
+<p>Our team will also reach out to help you get started.</p>`,
+        });
+    }
+
+    /** Confirms a submitted bKash/Nagad payment is queued for verification. */
+    async sendActivationPaymentReceived(
+        to: string,
+        options: { tenantName: string; transactionId: string; amount: number; slaHours: number },
+    ): Promise<void> {
+        await this.send({
+            to,
+            subject: `We received your payment details for ${options.tenantName}`,
+            html: `<h2>Thank you — we are checking your payment</h2>
+<p>We have your transaction <strong>${escapeHtml(options.transactionId)}</strong> for <strong>৳${options.amount.toFixed(2)}</strong>.</p>
+<p>Our team verifies payments by hand and will activate <strong>${escapeHtml(options.tenantName)}</strong> within <strong>${options.slaHours} hours</strong>. You will get an email the moment it is live.</p>
+<p>You can keep setting up your workspace in the meantime.</p>`,
+        });
+    }
+
+    /** The good news: the workspace is on. */
+    async sendWorkspaceActivated(to: string, tenantName: string): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        await this.send({
+            to,
+            subject: `${tenantName} is now active on ERP71`,
+            html: `<h2>Your workspace is live</h2>
+<p>We have confirmed your payment and activated <strong>${escapeHtml(tenantName)}</strong>. Every feature on your plan is now unlocked.</p>
+<p><a href="${frontendUrl}/dashboard">Open your workspace</a></p>
+<p>Thank you for choosing ERP71.</p>`,
+        });
+    }
+
+    /**
+     * A payment we could not find. Carries the admin's reason verbatim, because
+     * "rejected" with no reason sends the customer back to the same form with
+     * nothing to change.
+     */
+    async sendActivationRequestRejected(to: string, tenantName: string, reason: string): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const reasonBlock = reason.trim()
+            ? `<p><strong>Why:</strong> ${escapeHtml(reason.trim())}</p>`
+            : '';
+
+        await this.send({
+            to,
+            subject: `We could not verify your payment for ${tenantName}`,
+            html: `<h2>We could not confirm that payment</h2>
+<p>We checked the transaction you sent for <strong>${escapeHtml(tenantName)}</strong> and could not match it to a payment we received.</p>
+${reasonBlock}
+<p>Please check the transaction ID and <a href="${frontendUrl}/billing">submit it again</a>, or reply to this email and we will sort it out with you.</p>`,
+        });
+    }
+
+    /**
+     * Tells the platform team a workspace signed up. Without this the promise
+     * that "our team will activate your account" is one nothing keeps: there is
+     * no other trigger, and a dashboard someone remembers to check is not one.
+     */
+    async sendNewSignupAlert(options: {
+        tenantName: string;
+        ownerName: string;
+        ownerEmail: string;
+        ownerMobile?: string | null;
+        planName: string;
+        billingCycle: string;
+        referralCode?: string | null;
+    }): Promise<void> {
+        const recipients = getPlatformAdminEmails();
+        if (recipients.length === 0) return;
+
+        const { frontendUrl } = await this.getTransportConfig();
+        const row = (label: string, value: string) =>
+            `<tr><td style="padding:4px 12px 4px 0"><strong>${label}</strong></td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`;
+
+        await this.sendSystemAlert(
+            recipients,
+            `New signup: ${options.tenantName} (${options.planName})`,
+            `<h2>A new workspace needs activating</h2>
+<table>
+${row('Business', options.tenantName)}
+${row('Contact', options.ownerName || options.ownerEmail)}
+${row('Email', options.ownerEmail)}
+${row('Mobile', options.ownerMobile || '—')}
+${row('Plan', `${options.planName} (${options.billingCycle})`)}
+${options.referralCode ? row('Referral', options.referralCode) : ''}
+</table>
+<p><a href="${frontendUrl}/admin/tenants">Open Admin › Tenants</a></p>`,
+        );
+    }
+
+    /** Tells the platform team a tenant has submitted a payment to verify. */
+    async sendActivationRequestAlert(options: {
+        tenantName: string;
+        method: string;
+        transactionId: string;
+        senderNumber?: string | null;
+        amount: number;
+        reviewUrl?: string | null;
+    }): Promise<void> {
+        const recipients = getPlatformAdminEmails();
+        if (recipients.length === 0) return;
+
+        const link = options.reviewUrl
+            ? `<p><a href="${options.reviewUrl}">Review activation requests</a></p>`
+            : '';
+
+        await this.sendSystemAlert(
+            recipients,
+            `Payment to verify: ${options.tenantName} — ৳${options.amount.toFixed(2)}`,
+            `<h2>A workspace has submitted a payment</h2>
+<p><strong>${escapeHtml(options.tenantName)}</strong> says they sent <strong>৳${options.amount.toFixed(2)}</strong> by <strong>${escapeHtml(options.method)}</strong>.</p>
+<p>Transaction ID: <strong>${escapeHtml(options.transactionId)}</strong><br>
+From: ${escapeHtml(options.senderNumber || '—')}</p>
+<p>Check it against the merchant app before approving — approving posts the payment and activates the workspace.</p>
+${link}`,
+        );
     }
 
     /**
