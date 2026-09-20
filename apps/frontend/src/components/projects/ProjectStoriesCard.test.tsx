@@ -148,4 +148,38 @@ describe('ProjectStoriesCard', () => {
 
         expect(await screen.findByText(/tasks under it are kept/i)).toBeInTheDocument();
     });
+
+    /**
+     * How the cross-project backlog hands a row to the project that owns it:
+     * without this the link lands on a collapsed list and the story somebody
+     * clicked is one of forty identical rows.
+     */
+    describe('openStoryId', () => {
+        it('opens the story the link names, and loads its tasks', async () => {
+            renderCard({ stories: [story(), story({ id: 'story-2', reference: 4, title: 'Owner reads the day book' })], openStoryId: 'story-2' });
+
+            await waitFor(() => expect(getProjectStory).toHaveBeenCalledWith('story-2'));
+            expect(getProjectStory).not.toHaveBeenCalledWith('story-1');
+        });
+
+        it('leaves every row closed when the link names no story', async () => {
+            renderCard({ openStoryId: null });
+
+            // A closed row reads its counts from the list it was handed; only
+            // opening one costs a request.
+            await waitFor(() => expect(screen.getByText('1/4 tasks')).toBeInTheDocument());
+            expect(getProjectStory).not.toHaveBeenCalled();
+        });
+
+        it('does not fight a reader who collapses the story the link opened', async () => {
+            renderCard({ openStoryId: 'story-1' });
+
+            await screen.findByText('Wire the callback');
+            fireEvent.click(screen.getByRole('button', { name: /Shopper pays with bKash/ }));
+
+            await waitFor(() =>
+                expect(screen.queryByText('Wire the callback')).not.toBeInTheDocument(),
+            );
+        });
+    });
 });

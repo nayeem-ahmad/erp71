@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Plus } from 'lucide-react';
 import {
@@ -92,6 +92,9 @@ function assigneeLabel(task: Task): string {
 export default function ProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const projectId = params.id;
+    // Set by a link from the cross-project backlog, so the story that was
+    // clicked there is already open when the project page paints.
+    const openStoryId = useSearchParams().get('story');
     const { t, fmt } = useI18n();
     const m = t.projects;
 
@@ -271,6 +274,7 @@ export default function ProjectDetailPage() {
                     <ProjectStoriesCard
                         projectId={projectId}
                         stories={stories}
+                        openStoryId={openStoryId}
                         onStoriesChanged={loadStories}
                         onTasksChanged={load}
                         onOpenTask={setOpenTaskId}

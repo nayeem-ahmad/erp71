@@ -215,6 +215,15 @@ export class ListUserStoriesDto {
     @IsOptional() @IsEnum(UserStoryStatusDto)
     status?: UserStoryStatusDto;
 
+    /**
+     * Declared here as well as on the story itself so the cross-project backlog
+     * can narrow to what is urgent without pulling every story down and sifting
+     * it in the browser — the one filter the per-project card never needed,
+     * because forty stories fit on a screen and four hundred do not.
+     */
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
 }

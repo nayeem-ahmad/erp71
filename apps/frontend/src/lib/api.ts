@@ -4667,10 +4667,12 @@ export const api = {
 
     /**
      * User stories. `projectId` is optional on the list — omitted returns every
-     * story the caller can reach — but every screen that has a project passes
-     * one, because a backlog is read one project at a time.
+     * story the caller can reach, which is what the cross-project backlog at
+     * `/projects/stories` asks for; the card on a project page always passes one.
      */
-    getProjectStories: (params: { projectId?: string; status?: string; search?: string } = {}) => {
+    getProjectStories: (
+        params: { projectId?: string; status?: string; priority?: string; search?: string } = {},
+    ) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
             if (value) query.set(key, String(value));

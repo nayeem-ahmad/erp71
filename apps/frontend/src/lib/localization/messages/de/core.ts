@@ -321,6 +321,7 @@ export const coreMessages = {
             projectsList: "Alle Projekte",
             projectsBoards: "Boards",
             projectsTasks: "Aufgaben",
+            projectsStories: "User Storys",
             projectsSprints: "Sprints",
             projectsHourLogs: "Stundenerfassung",
             projectsHourLogReport: "Stundenbericht",

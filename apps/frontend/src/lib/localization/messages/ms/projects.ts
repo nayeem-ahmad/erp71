@@ -180,6 +180,24 @@ export const projectsMessages = {
         titleRequired: 'Beri cerita ini satu tajuk.',
     },
 
+    /**
+     * The cross-project backlog at /projects/stories. Its own block rather than
+     * more keys on `stories`, which belongs to the card on the project page —
+     * the same split `tasks` already makes against the per-project task table.
+     */
+    storyList: {
+        title: "Cerita pengguna",
+        subtitle: "Setiap cerita merentas semua projek",
+        empty: "Belum ada cerita pengguna. Buka projek untuk menulis yang pertama.",
+        emptyFiltered: "Tiada cerita sepadan dengan penapis ini.",
+        searchPlaceholder: "Cari tajuk cerita atau keperluannya",
+        allProjects: "Semua projek",
+        anyStatus: "Sebarang status",
+        anyPriority: "Sebarang keutamaan",
+        story: "Cerita",
+        openInProject: "Buka dalam projeknya",
+    },
+
     task: {
         title: 'Tugasan',
         newTask: 'Tugasan Baharu',

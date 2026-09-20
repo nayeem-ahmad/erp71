@@ -321,6 +321,7 @@ export const coreMessages = {
             projectsList: "सभी परियोजनाएँ",
             projectsBoards: "बोर्ड",
             projectsTasks: "कार्य",
+            projectsStories: "यूज़र स्टোरी",
             projectsSprints: "स्प्रिंट",
             projectsHourLogs: "घंटा लॉग",
             projectsHourLogReport: "घंटा लॉग रिपोर्ट",
