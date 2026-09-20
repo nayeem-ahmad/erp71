@@ -215,11 +215,41 @@ describe('mapDiziPayment', () => {
         expect(mapped?.direction).toBe('OUT');
     });
 
-    it('skips a non-positive amount with a warning', () => {
+    it('skips a zero amount with a warning', () => {
         const warnings: SyncWarning[] = [];
         const mapped = mapDiziPayment({ ...row, Amount: 0 }, 'CUSTOMER', 'DZ-', warnings);
         expect(mapped).toBeNull();
         expect(warnings[0].code).toBe('PAYMENT_AMOUNT_INVALID');
+    });
+
+    /**
+     * Dizi *does* fold refunds into the payment summaries as negatives — the
+     * live import found 6 of them in a 90-day window. Dropping those loses
+     * real money movement, so a negative is a direction flip, not a skip.
+     */
+    it('imports a negative customer payment as a refund going out', () => {
+        const warnings: SyncWarning[] = [];
+        const mapped = mapDiziPayment({ ...row, Amount: -4650 }, 'CUSTOMER', 'DZ-', warnings);
+
+        expect(mapped).not.toBeNull();
+        expect(mapped?.direction).toBe('OUT');
+        expect(mapped?.amount).toBe(4650);
+        expect(warnings).toHaveLength(0);
+    });
+
+    it('imports a negative supplier payment as a refund coming in', () => {
+        const warnings: SyncWarning[] = [];
+        const mapped = mapDiziPayment({ ...row, Amount: -500 }, 'SUPPLIER', 'DZ-', warnings);
+
+        expect(mapped).not.toBeNull();
+        expect(mapped?.direction).toBe('IN');
+        expect(mapped?.amount).toBe(500);
+        expect(warnings).toHaveLength(0);
+    });
+
+    it('notes the reversal so a refund is not mistaken for an ordinary payment', () => {
+        const mapped = mapDiziPayment({ ...row, Amount: -4650 }, 'CUSTOMER', 'DZ-', []);
+        expect(mapped?.note).toMatch(/refund/i);
     });
 });
 

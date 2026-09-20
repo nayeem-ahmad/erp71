@@ -206,10 +206,12 @@ export function mapDiziPurchase(
 }
 
 /**
- * Direction is fixed by which endpoint the row came from: the customer-payment
- * list is money in, the supplier-payment list is money out. Dizi does not fold
- * refunds into these summaries as negatives, so there is no per-row direction
- * to read. Returns null (with a warning) only when the amount is unusable.
+ * Direction starts from the endpoint the row came from — the customer-payment
+ * list is money in, the supplier-payment list is money out — and flips when the
+ * amount is negative, which is how Dizi records a refund against that party.
+ * Dropping those would lose real money movement, so the sign is read as
+ * direction and the magnitude becomes the amount. Returns null (with a
+ * warning) only when the amount is zero or unparseable.
  */
 export function mapDiziPayment(
     row: DiziPayment,
@@ -221,26 +223,37 @@ export function mapDiziPayment(
     const entity = party === 'CUSTOMER' ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
     const slip = (row.SlipNo || row.TransactionNo || externalId).toString();
 
-    const amount = toMoney(row.Amount);
-    if (amount <= 0) {
+    const signedAmount = toMoney(row.Amount);
+    if (signedAmount === 0) {
         warnings.push({
             entity,
             externalId,
             code: 'PAYMENT_AMOUNT_INVALID',
-            message: `Payment ${slip}: amount ${row.Amount ?? 'null'} is not a positive number — skipped`,
+            message: `Payment ${slip}: amount ${row.Amount ?? 'null'} is not a usable number — skipped`,
         });
         return null;
     }
 
+    // A negative row reverses the direction its endpoint implies: money paid
+    // back to a customer, or recovered from a supplier.
+    const isRefund = signedAmount < 0;
+    const amount = Math.abs(signedAmount);
+    const forward = party === 'CUSTOMER' ? 'IN' : 'OUT';
+    const reversed = party === 'CUSTOMER' ? 'OUT' : 'IN';
+
     const method = emptyToNull(row.MethodName);
-    const noteParts = [emptyToNull(row.Narration), method ? `via ${method}` : null].filter(Boolean);
+    const noteParts = [
+        emptyToNull(row.Narration),
+        method ? `via ${method}` : null,
+        isRefund ? 'refund (negative amount in Dizi)' : null,
+    ].filter(Boolean);
 
     return {
         externalId,
         paymentNumber: buildDocumentNumber(documentPrefix, slip),
         referenceNumber: emptyToNull(row.SlipNo ?? row.TransactionNo ?? null),
         externalPartyId: emptyToNull(row.TraderId),
-        direction: party === 'CUSTOMER' ? 'IN' : 'OUT',
+        direction: isRefund ? reversed : forward,
         amount,
         date: parseProviderDate(row.Date),
         method,
