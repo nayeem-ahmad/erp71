@@ -38,13 +38,25 @@ export class PlanFeaturesDto {
     premiumCrm!: boolean;
 
     @IsBoolean()
+    teamChat!: boolean;
+
+    @IsBoolean()
     multiStore!: boolean;
 
     @IsBoolean()
     apiAccess!: boolean;
 
     @IsBoolean()
+    urlShortener!: boolean;
+
+    @IsBoolean()
     accountingOnly!: boolean;
+
+    @IsBoolean()
+    accountingDashboard!: boolean;
+
+    @IsBoolean()
+    crmDashboard!: boolean;
 
     @IsBoolean()
     premiumAccountingAdvanced!: boolean;
@@ -60,6 +72,9 @@ export class PlanFeaturesDto {
 
     @IsBoolean()
     premiumAi!: boolean;
+
+    @IsBoolean()
+    premiumAiAnomaly!: boolean;
 
     @IsBoolean()
     premiumVoice!: boolean;
