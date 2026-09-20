@@ -228,6 +228,8 @@ export const componentsMessages = {
             bulletList: "বুলেট তালিকা",
             numberedList: "নম্বরযুক্ত তালিকা",
             link: "লিংক",
+            uploading: "ছবি আপলোড হচ্ছে…",
+            pasteImage: "ছবি সংযুক্ত করতে পেস্ট করুন।",
         },
         shareModal: {
             title: "{subject} শেয়ার করুন",
