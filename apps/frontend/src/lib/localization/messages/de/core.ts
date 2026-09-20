@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: "Navigation öffnen",
         closeNavigation: "Navigation schließen",
         resizeNavigation: "Größe des Navigationsbereichs ändern",
+        goToDashboard: "Zur Übersicht",
         searchPlaceholder: "Menü durchsuchen…",
         clearSearch: "Suche zurücksetzen",
         noSearchResults: "Keine Menüeinträge passen zu Ihrer Suche.",

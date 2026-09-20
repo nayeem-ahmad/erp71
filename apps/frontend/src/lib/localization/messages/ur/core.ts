@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: 'نیویگیشن کھولیں',
         closeNavigation: 'نیویگیشن بند کریں',
         resizeNavigation: 'نیویگیشن پینل کا سائز بدلیں',
+        goToDashboard: 'ڈیش بورڈ پر جائیں',
         searchPlaceholder: 'مینو تلاش کریں…',
         clearSearch: 'تلاش صاف کریں',
         noSearchResults: 'آپ کی تلاش سے کوئی مینو آئٹم نہیں ملا۔',

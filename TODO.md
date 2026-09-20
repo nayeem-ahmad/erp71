@@ -1440,6 +1440,14 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **The brand mark in the sidebar header is a link home** — done 2026-09-20. Asked as "when within application. clicking on ERP71 logo (top-left corner) should take to the dashboard".
+
+  The logo sat in a plain `div`, so the one thing every user reflexively clicks to get back to the start did nothing. It is a `Link` now, wrapping the mark and the workspace name together, with the hover background and rounding that say it is clickable and a `-mx-1` keeping the mark optically where it already was.
+
+  Where it goes depends on which shell the user is in, because "the dashboard" is not one page: `/dashboard` for a shop, `/admin` for a platform admin, `/referrals` for a referral partner, `/my` for an employee. Hard-coding `/dashboard` would have worked for the first three only by accident — `app/(app)/layout.tsx` bounces admins and partners off it after a render — and would have dropped an employee on a tenant dashboard they hold no permissions for.
+
+  **Verified:** six new cases in `Sidebar.test.tsx` (the default target, the collapsed rail, a tenant with its own logo and name, and the three portal modes); the `next/link` mock there now spreads the rest of its props, since it was dropping the `aria-label` the new assertions find the link by, and `UserRound` was added to the icon mock so employee mode renders at all. Nine locales gained `sidebar.goToDashboard` and the catalogue parity test passes. Full frontend suite 366 suites / 4,497 tests green, `tsc --noEmit` clean, lint clean on the changed files. **Not done: not clicked in a browser** — no dev server was run, so the hover target and the mobile drawer were not seen.
+
 - [x] **Task entry and the task card stopped closing on a stray click, and images now paste into descriptions and comments** — done 2026-09-20. Reported as "In task entry/edit, the modal goes away if user clicks outside it (should not happen). also, allow pasting image from the clipboard in description, comments."
 
   **The dismissal.** `ModalShell` closed on any click that reached its backdrop, which on the task card is a loss rather than an inconvenience: 4D made nearly every field on that card save on blur, so the click that closed it also abandoned whatever was half-typed. Two changes. `dismissOnBackdrop` (default true, so the other ~140 modals are untouched) is set false on the three task surfaces — `TaskDetailPanel`, and the New task dialogs on `/projects/tasks` and `/projects/[id]`; Escape and the Close/Cancel buttons still close all three, because reaching for Escape is deliberate in a way a stray click is not. Separately, and for every modal in the app, a click now only counts as a backdrop click if the *press* that produced it also landed on the backdrop — selecting a line of a description and overshooting the panel's edge fires `click` on the backdrop, and that was closing the card mid-drag.

@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: 'Open navigation',
         closeNavigation: 'Close navigation',
         resizeNavigation: 'Resize navigation panel',
+        goToDashboard: 'Go to dashboard',
         searchPlaceholder: 'Search menu…',
         clearSearch: 'Clear search',
         noSearchResults: 'No menu items match your search.',
