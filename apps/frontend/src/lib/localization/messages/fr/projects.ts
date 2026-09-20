@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "Impossible de charger les pièces jointes.",
         uploadFailed: "Impossible de joindre ce fichier",
         deleteFile: "Retirer la pièce jointe",
+        preview: "Aperçu",
         hint: "JPEG, PNG, WebP ou PDF, jusqu'à 5 Mo.",
         tooLarge: "Ce fichier dépasse 5 Mo.",
         unsupported: "Utilisez un fichier JPEG, PNG, WebP ou PDF.",

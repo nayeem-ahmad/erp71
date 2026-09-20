@@ -13,6 +13,7 @@ import {
     type BoardView,
 } from '@/components/projects/board-view';
 import { BOARD_BACKGROUND_CLASS } from '@/components/projects/board-background';
+import { boardFiltersKey } from '@/components/projects/board-filter-storage';
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'b1' }),
@@ -1171,5 +1172,115 @@ describe('BoardPage', () => {
         fireEvent.pointerUp(head, { pointerId: 3, pointerType: 'mouse', clientX: 2, clientY: 0 });
 
         expect(api.reorderBoardColumns).not.toHaveBeenCalled();
+    });
+    /**
+     * A filter picked on a board is picked again on the next visit. Someone
+     * who works one lane of a shared board sets the same two controls every
+     * time they open it, and re-picking them is the tax this removes.
+     */
+    describe('remembered filters', () => {
+        const boardWithAssignees = {
+            id: 'b1',
+            name: 'Release 4',
+            columns: [
+                {
+                    id: 'c1',
+                    name: 'To Do',
+                    category: 'TODO',
+                    wip_limit: null,
+                    tasks: [
+                        {
+                            ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }),
+                            assignee: { id: 'u-rafi', name: 'Rafi Hasan', email: 'rafi@erp71.com' },
+                        },
+                        {
+                            ...task('k2', 'Ship docs', { id: 'p1', code: 'ALP' }),
+                            assigneeEmployee: { id: 'e-sumaiya', name: 'Sumaiya Akter' },
+                        },
+                    ],
+                },
+            ],
+            unsorted: [],
+        };
+
+        beforeEach(() => {
+            localStorage.clear();
+            (api.getBoard as jest.Mock).mockResolvedValue(boardWithAssignees);
+        });
+        afterEach(() => localStorage.clear());
+
+        it('reopens the board on the filter the last visit left', async () => {
+            const first = render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            fireEvent.change(screen.getByLabelText('Assignee'), {
+                target: { value: 'user:u-rafi' },
+            });
+            // Rafi's card stays, Sumaiya's goes.
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+            first.unmount();
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            await waitFor(() =>
+                expect(screen.getByLabelText('Assignee')).toHaveValue('user:u-rafi'),
+            );
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+        });
+
+        it('reopens unfiltered once the filter is cleared', async () => {
+            const first = render(<BoardPage />);
+            await screen.findByText('Fix login');
+            fireEvent.change(screen.getByLabelText('Assignee'), {
+                target: { value: 'user:u-rafi' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: /Clear/ }));
+            first.unmount();
+
+            render(<BoardPage />);
+            expect(await screen.findByText('Ship docs')).toBeInTheDocument();
+        });
+
+        it('does not carry one board\u2019s filter onto another', async () => {
+            // The stored assignee is an id, and it means a different person —
+            // or nobody — on the next board.
+            localStorage.setItem(
+                boardFiltersKey('other-board'),
+                JSON.stringify({ assignee: 'user:u-rafi' }),
+            );
+
+            render(<BoardPage />);
+            expect(await screen.findByText('Ship docs')).toBeInTheDocument();
+            expect(screen.getByLabelText('Assignee')).toHaveValue('all');
+        });
+
+        it('ignores a remembered assignee who no longer holds a card here', async () => {
+            // Otherwise the board opens empty under a select showing
+            // "Assignee", and nothing on screen explains the missing cards.
+            localStorage.setItem(
+                boardFiltersKey('b1'),
+                JSON.stringify({ assignee: 'user:u-departed' }),
+            );
+
+            render(<BoardPage />);
+            expect(await screen.findByText('Fix login')).toBeInTheDocument();
+            expect(screen.getByText('Ship docs')).toBeInTheDocument();
+            expect(screen.getByLabelText('Assignee')).toHaveValue('all');
+        });
+
+        it('never restores the search box', async () => {
+            localStorage.setItem(
+                boardFiltersKey('b1'),
+                JSON.stringify({ priority: 'HIGH', text: 'login' }),
+            );
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            // The stored filter that *is* restorable still is — waited for,
+            // because the restore lands with the labels fetch rather than with
+            // the cards.
+            await waitFor(() => expect(screen.getByLabelText('Priority')).toHaveValue('HIGH'));
+            expect(screen.getByLabelText('Search cards')).toHaveValue('');
+        });
     });
 });

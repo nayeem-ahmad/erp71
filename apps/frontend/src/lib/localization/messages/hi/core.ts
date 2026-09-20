@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: "नेविगेशन खोलें",
         closeNavigation: "नेविगेशन बंद करें",
         resizeNavigation: "नेविगेशन पैनल का आकार बदलें",
+        goToDashboard: "डैशबोर्ड पर जाएँ",
         searchPlaceholder: "मेनू खोजें…",
         clearSearch: "खोज साफ़ करें",
         noSearchResults: "आपकी खोज से कोई मेनू आइटम मेल नहीं खाता।",

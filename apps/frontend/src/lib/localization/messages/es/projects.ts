@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "No se pudieron cargar los adjuntos.",
         uploadFailed: "No se pudo adjuntar ese archivo",
         deleteFile: "Quitar adjunto",
+        preview: "Vista previa",
         hint: "JPEG, PNG, WebP o PDF, hasta 5 MB.",
         tooLarge: "Ese archivo supera los 5 MB.",
         unsupported: "Use un archivo JPEG, PNG, WebP o PDF.",

@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: 'সংযুক্তি লোড করা যায়নি।',
         uploadFailed: 'ফাইলটি সংযুক্ত করা যায়নি',
         deleteFile: 'সংযুক্তি সরান',
+        preview: "প্রিভিউ",
         hint: 'JPEG, PNG, WebP বা PDF, সর্বোচ্চ ৫ এমবি।',
         tooLarge: 'ফাইলটি ৫ এমবির চেয়ে বড়।',
         unsupported: 'JPEG, PNG, WebP বা PDF ব্যবহার করুন।',

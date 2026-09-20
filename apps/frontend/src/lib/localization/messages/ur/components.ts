@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "گاہک کی واپسی کیسے درج کروں؟",
         },
     },
+    preview: {
+        title: "پیش منظر",
+        zoomIn: "بڑا کریں",
+        zoomOut: "چھوٹا کریں",
+        resetZoom: "زوم ری سیٹ کریں",
+        next: "اگلا",
+        previous: "پچھلا",
+        download: "ڈاؤن لوڈ",
+        openInNewTab: "نئے ٹیب میں کھولیں",
+        closePreview: "پیش منظر بند کریں",
+        noPreview: "اس فائل کا پیش منظر نہیں دکھایا جا سکتا۔",
+    },
+
     richText: {
         toolbar: "فارمیٹنگ",
         hint: "فارمیٹنگ: **بولڈ**، *ترچھا*، - فہرستیں اور [لنکس](url)۔",
@@ -229,6 +242,7 @@ export const componentsMessages = {
         numberedList: "عددی فہرست",
         link: "لنک",
         uploading: "تصویر اپ لوڈ ہو رہی ہے…",
+        resizeImage: "تصویر کا سائز تبدیل کریں",
         pasteImage: "تصویر منسلک کرنے کے لیے پیسٹ کریں۔",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: 'Lampiran tidak dapat dimuatkan.',
         uploadFailed: 'Fail itu tidak dapat dilampirkan',
         deleteFile: 'Buang lampiran',
+        preview: "Pratonton",
         hint: 'JPEG, PNG, WebP atau PDF, sehingga 5 MB.',
         tooLarge: 'Fail itu lebih besar daripada 5 MB.',
         unsupported: 'Gunakan JPEG, PNG, WebP atau PDF.',
