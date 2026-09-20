@@ -48,6 +48,15 @@ type Props = {
     draft?: { channelCode?: string; summary: string } | null;
     /** Called once the draft has been taken, so the caller can clear it. */
     onDraftConsumed?: () => void;
+    /**
+     * Fired after a write that changed this lead's activities — never on load.
+     * For a caller showing the same rows somewhere else: the activities list
+     * behind `CrmActivityDrawer` refreshes on it, so completing a call in the
+     * drawer moves the row in the table underneath. Reloading on close instead
+     * would swap the whole table for "Loading…" every time somebody had only
+     * looked.
+     */
+    onChanged?: () => void;
 };
 
 const emptyComplete = {
@@ -88,6 +97,7 @@ export default function CrmActivityPanel({
     targetLabel,
     draft,
     onDraftConsumed,
+    onChanged,
 }: Readonly<Props>) {
     const { t } = useI18n();
     const m = t.crm.activities;
@@ -183,6 +193,7 @@ export default function CrmActivityPanel({
             setShowNext(false);
             toast.success(m.toast.completed);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
         } finally {
@@ -195,6 +206,7 @@ export default function CrmActivityPanel({
             await api.cancelCrmActivity(id);
             toast.success(m.toast.cancelled);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
         }
@@ -216,6 +228,7 @@ export default function CrmActivityPanel({
         try {
             const saved = await api.setCrmActivityApproval(row.id, approved);
             setApproval(row.id, { is_approved: approved, approver: saved?.approver ?? null });
+            onChanged?.();
         } catch {
             setApproval(row.id, before);
             toast.error(approvalCopy.approvalFailed);
@@ -267,6 +280,7 @@ export default function CrmActivityPanel({
             setEditing(null);
             toast.success(m.toast.updated);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
         } finally {
@@ -432,7 +446,7 @@ export default function CrmActivityPanel({
                     targetLabel={targetLabel}
                     draft={composerDraft}
                     onClose={() => { setComposing(null); setComposerDraft(null); }}
-                    onSaved={load}
+                    onSaved={() => { void load(); onChanged?.(); }}
                 />
             )}
 

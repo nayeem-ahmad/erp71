@@ -89,6 +89,14 @@ export default {
                     from: { opacity: '0', transform: 'translateY(-4px) scale(0.98)' },
                     to: { opacity: '1', transform: 'none' },
                 },
+                // The ModalShell drawer arriving from the inline edge. The offset
+                // is a variable so RTL can flip it (`rtl:[--drawer-from:-100%]`)
+                // without a second animation competing for the same property —
+                // `translateX` is physical, per docs/rtl-guidelines.md.
+                'drawer-in': {
+                    from: { transform: 'translateX(var(--drawer-from, 100%))' },
+                    to: { transform: 'none' },
+                },
             },
             animation: {
                 'hero-float': 'hero-float 22s ease-in-out infinite',
@@ -100,6 +108,7 @@ export default {
                 'board-column-in': 'board-column-in 260ms ease-out both',
                 'board-drop-in': 'board-drop-in 140ms ease-out',
                 'board-menu-in': 'board-menu-in 120ms ease-out',
+                'drawer-in': 'drawer-in 200ms ease-out',
             },
             spacing: {
                 'safe-top': 'env(safe-area-inset-top, 0px)',
