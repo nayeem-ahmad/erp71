@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "گاہک کی واپسی کیسے درج کروں؟",
         },
     },
+    preview: {
+        title: "پیش منظر",
+        zoomIn: "بڑا کریں",
+        zoomOut: "چھوٹا کریں",
+        resetZoom: "زوم ری سیٹ کریں",
+        next: "اگلا",
+        previous: "پچھلا",
+        download: "ڈاؤن لوڈ",
+        openInNewTab: "نئے ٹیب میں کھولیں",
+        closePreview: "پیش منظر بند کریں",
+        noPreview: "اس فائل کا پیش منظر نہیں دکھایا جا سکتا۔",
+    },
+
     richText: {
         toolbar: "فارمیٹنگ",
         hint: "فارمیٹنگ: **بولڈ**، *ترچھا*، - فہرستیں اور [لنکس](url)۔",

@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "Comment enregistrer un retour client ?",
         },
     },
+    preview: {
+        title: "Aperçu",
+        zoomIn: "Zoom avant",
+        zoomOut: "Zoom arrière",
+        resetZoom: "Réinitialiser le zoom",
+        next: "Suivant",
+        previous: "Précédent",
+        download: "Télécharger",
+        openInNewTab: "Ouvrir dans un nouvel onglet",
+        closePreview: "Fermer l’aperçu",
+        noPreview: "Ce fichier ne peut pas être prévisualisé.",
+    },
+
     richText: {
         toolbar: "Mise en forme",
         hint: "Mise en forme : **gras**, *italique*, - listes et [liens](url).",

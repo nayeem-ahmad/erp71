@@ -218,6 +218,19 @@ export const componentsMessages = {
                 s5: "Bagaimana saya merekod pemulangan pelanggan?",
             },
         },
+        preview: {
+            title: "Pratonton",
+            zoomIn: "Zum masuk",
+            zoomOut: "Zum keluar",
+            resetZoom: "Set semula zum",
+            next: "Seterusnya",
+            previous: "Sebelumnya",
+            download: "Muat turun",
+            openInNewTab: "Buka dalam tab baharu",
+            closePreview: "Tutup pratonton",
+            noPreview: "Fail ini tidak boleh dipratonton.",
+        },
+
         richText: {
             toolbar: "Pemformatan",
             hint: "Pemformatan: **tebal**, *condong*, - senarai dan [pautan](url).",

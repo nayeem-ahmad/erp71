@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "Wie erfasse ich eine Kundenretoure?",
         },
     },
+    preview: {
+        title: "Vorschau",
+        zoomIn: "Vergrößern",
+        zoomOut: "Verkleinern",
+        resetZoom: "Zoom zurücksetzen",
+        next: "Weiter",
+        previous: "Zurück",
+        download: "Herunterladen",
+        openInNewTab: "In neuem Tab öffnen",
+        closePreview: "Vorschau schließen",
+        noPreview: "Diese Datei kann nicht in der Vorschau angezeigt werden.",
+    },
+
     richText: {
         toolbar: "Formatierung",
         hint: "Formatierung: **fett**, *kursiv*, - Listen und [Links](url).",

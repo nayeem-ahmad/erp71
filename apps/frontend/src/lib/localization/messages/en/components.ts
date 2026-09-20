@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: 'How do I record a customer return?',
         },
     },
+    preview: {
+        title: "Preview",
+        zoomIn: "Zoom in",
+        zoomOut: "Zoom out",
+        resetZoom: "Reset zoom",
+        next: "Next",
+        previous: "Previous",
+        download: "Download",
+        openInNewTab: "Open in a new tab",
+        closePreview: "Close preview",
+        noPreview: "This file cannot be previewed.",
+    },
+
     richText: {
         toolbar: 'Formatting',
         hint: 'Formatting: **bold**, *italic*, - lists and [links](url).',
