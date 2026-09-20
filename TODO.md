@@ -1454,6 +1454,22 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #694) — the largest release in this record, and its best entry is about a test double that agreed with the bug** — 10 commits, 55 files, +5,207 / −299. Merge commit `44aceea8`, 2026-09-20 18:12 UTC, on top of `a350ddde`, pinned to the tested head `3886af05`. Merged outside a session. **Deploy to VPS** run #49 green in 5m43s. Verified live: `{"status":"ok","db":"ok","commit":"44aceea8…","uptime":6,"latency_ms":1}`, then `Verified live commit: 44aceea8feeb473615e480cde2b680ab3f5af5d5` and `app HTTP 200`. No migrations, `schema.prisma` untouched, `apps/backend/Dockerfile` unchanged — `db push` had nothing to apply, checked rather than assumed.
+
+  Shipped: the task-image feature end to end — spec and plan (`7a191b36`, `83f30660`), a markdown bridge carrying image widths on the URL (`7b742e84`), a pasted image shown while it uploads and resizable afterwards (`a77209ac`), a preview modal with zoom, pan and paging (`df868af7`), attachment thumbnails that open that preview rather than a new tab (`d839ed5b`), and Cloudinary asked for a thumbnail instead of the original (`165ca4f0`). Plus `05f25fe2` (#693), the sidebar brand mark becoming a link home.
+
+  **`3886af05` is the one to read, and its own commit message says why: "two bugs that all 4,594 tests had missed, both invisible to jsdom."** Found by driving the editor in a real browser.
+
+  1. **The handle did nothing.** Calling `updateAttributes` on every `pointermove` puts a transaction through the editor, which re-renders the node view and drops the selection — so the handle unmounted *under the pointer* on the drag's first millimetre. The width is now held in local state while the pointer is down and written to the node once, on release.
+  2. **Fixed, it could still only shrink.** The clamp measured `wrapper.parentElement.offsetWidth`, and an inline node view is wrapped in a span that shrinks to fit the image — so the ceiling always equalled the width the image already had. It measures the editor's `.ProseMirror` content box now; an 80px drag takes the image 200px → 280px and the markdown to `?w=280`.
+  3. **The reason the suite was silent is the part worth keeping. The tests "stubbed every element to the same width and fired synthetic pointer events"** — and a stub that gives every element the same width *cannot fail* on a bug whose whole content is that two elements have different widths. The double encoded the same false assumption as the code, so the test and the defect agreed with each other. The stub now models the wrapper hugging the image, the way a browser lays it out.
+
+  This is the second time in three releases that the failure was **a test derived from the same belief as the code**: #689's specs hand-listed the constant they were supposed to be checking, and here the stub hand-set the geometry it was supposed to be measuring. Neither was a missing test; both were present, passing, and describing a world the code had left. **4,594 green tests are not evidence about geometry jsdom never computes** — the browser run was.
+
+  A third bug fell out of the same session: `urlWithWidth` on a `data:` URL appended `?w=` to the base64 payload, producing an image the browser could not decode. Every production image comes from Cloudinary so it could not bite today; `data:` and `blob:` URLs are returned untouched now. Worth noting as a fix made on reasoning rather than on a reproduction, and flagged as such.
+
+  **Build-job-finish → deploy-run-created: 18:21:50 → 18:21:53, three seconds.** Eleventh measurement, series 3, 3, 3, 3, 4, 3, 3, 3, 2, 2, 3 — the **2–4 second range** holds for a second consecutive sample — done 2026-09-20
+
 - [x] **The brand mark in the sidebar header is a link home** — done 2026-09-20. Asked as "when within application. clicking on ERP71 logo (top-left corner) should take to the dashboard".
 
   The logo sat in a plain `div`, so the one thing every user reflexively clicks to get back to the start did nothing. It is a `Link` now, wrapping the mark and the workspace name together, with the hover background and rounding that say it is clickable and a `-mx-1` keeping the mark optically where it already was.
