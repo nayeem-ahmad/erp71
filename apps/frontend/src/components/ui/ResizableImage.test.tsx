@@ -1,3 +1,4 @@
+import type React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ResizableImage } from './ResizableImage';
@@ -19,27 +20,45 @@ const props = (
     selected,
 });
 
-/** The column the image sits in, which the drag is clamped to. */
+/**
+ * The editor's content box, which the drag is clamped to.
+ *
+ * `.ProseMirror` rather than the node's own parent: an inline node view is
+ * wrapped in a span that shrinks to fit the image, so measuring the parent
+ * hands back the image's current width and it can never grow. That was a real
+ * bug, invisible to a test that stubbed every element to the same width.
+ */
 const stubContentWidth = (px: number) => {
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: px });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: px });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        // The wrapper hugs the image, as it does in a browser.
+        get(this: HTMLElement) {
+            return this.querySelector('img') ? 200 : px;
+        },
+    });
 };
+
+/** Renders inside a `.ProseMirror` box, the way the editor mounts it. */
+const inEditor = (ui: React.ReactElement) =>
+    render(<div className="ProseMirror">{ui}</div>);
 
 describe('ResizableImage', () => {
     beforeEach(() => stubContentWidth(800));
 
     it('shows no handle when the image is not selected', () => {
-        render(<ResizableImage {...props({}, jest.fn(), false)} />);
+        inEditor(<ResizableImage {...props({}, jest.fn(), false)} />);
         expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     });
 
     it('shows a handle when it is selected', () => {
-        render(<ResizableImage {...props()} />);
+        inEditor(<ResizableImage {...props()} />);
         expect(screen.getByRole('slider')).toBeInTheDocument();
     });
 
     it('writes the dragged width back to the node', () => {
         const updateAttributes = jest.fn();
-        render(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
+        inEditor(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
 
         const handle = screen.getByRole('slider');
         fireEvent.pointerDown(handle, { clientX: 400 });
@@ -52,7 +71,7 @@ describe('ResizableImage', () => {
 
     it('never goes below the minimum width', () => {
         const updateAttributes = jest.fn();
-        render(<ResizableImage {...props({ width: 100 }, updateAttributes)} />);
+        inEditor(<ResizableImage {...props({ width: 100 }, updateAttributes)} />);
 
         const handle = screen.getByRole('slider');
         fireEvent.pointerDown(handle, { clientX: 100 });
@@ -64,7 +83,7 @@ describe('ResizableImage', () => {
 
     it('never grows past the width of the column it sits in', () => {
         const updateAttributes = jest.fn();
-        render(<ResizableImage {...props({ width: 700 }, updateAttributes)} />);
+        inEditor(<ResizableImage {...props({ width: 700 }, updateAttributes)} />);
 
         const handle = screen.getByRole('slider');
         fireEvent.pointerDown(handle, { clientX: 700 });
@@ -75,18 +94,18 @@ describe('ResizableImage', () => {
     });
 
     it('offers no handle while the image is still uploading', () => {
-        render(<ResizableImage {...props({ src: 'blob:x', uploading: true })} />);
+        inEditor(<ResizableImage {...props({ src: 'blob:x', uploading: true })} />);
         expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     });
 
     it('says an upload is in flight', () => {
-        render(<ResizableImage {...props({ src: 'blob:x', uploading: true })} />);
+        inEditor(<ResizableImage {...props({ src: 'blob:x', uploading: true })} />);
         expect(screen.getByLabelText('Uploading image…')).toBeInTheDocument();
     });
 
     it('takes the keyboard as well as the pointer', () => {
         const updateAttributes = jest.fn();
-        render(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
+        inEditor(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
 
         fireEvent.keyDown(screen.getByRole('slider'), { key: 'ArrowLeft' });
 
@@ -94,7 +113,7 @@ describe('ResizableImage', () => {
     });
 
     it('renders the image itself', () => {
-        render(<ResizableImage {...props({ width: 420 })} />);
+        inEditor(<ResizableImage {...props({ width: 420 })} />);
         const image = screen.getByRole('img', { name: 'shot' });
         expect(image).toHaveAttribute('src', 'https://cdn/x.png');
         expect(image).toHaveStyle({ width: '420px' });

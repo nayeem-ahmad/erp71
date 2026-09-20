@@ -33,6 +33,17 @@ describe('image width on the URL', () => {
         expect(urlWithWidth('https://cdn/x.png?w=100', null)).toBe('https://cdn/x.png');
     });
 
+    it('leaves a data URL alone', () => {
+        // Everything after the comma is payload: a `?w=` glued onto base64 is
+        // an image the browser cannot decode.
+        const data = 'data:image/png;base64,iVBORw0KGgoAAA==';
+        expect(urlWithWidth(data, 200)).toBe(data);
+    });
+
+    it('leaves a blob URL alone', () => {
+        expect(urlWithWidth('blob:https://app/9f2c', 200)).toBe('blob:https://app/9f2c');
+    });
+
     it('leaves a relative URL usable', () => {
         expect(urlWithWidth('/uploads/x.png', 200)).toBe('/uploads/x.png?w=200');
     });

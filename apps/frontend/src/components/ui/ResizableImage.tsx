@@ -46,11 +46,30 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
     const { t } = useI18n();
     const m = t.components.richText;
     const wrapper = useRef<HTMLSpanElement>(null);
-    const [dragging, setDragging] = useState(false);
-    const { src, alt, width, uploading } = node.attrs as ImageAttrs;
+    /*
+     * The width while a drag is in flight, before it is written to the node.
+     *
+     * Not written on every pointermove: `updateAttributes` puts a transaction
+     * through the editor, which re-renders this node view and drops the
+     * selection — so the handle unmounts under the pointer and the drag dies
+     * on its first millimetre. The picture follows the pointer from here, and
+     * the node is told once, on release.
+     */
+    const [dragWidth, setDragWidth] = useState<number | null>(null);
+    const { src, alt, uploading } = node.attrs as ImageAttrs;
+    const width = dragWidth ?? (node.attrs as ImageAttrs).width;
+    const dragging = dragWidth !== null;
 
-    /** The column the image sits in — it may not grow past it. */
-    const maxWidth = () => wrapper.current?.parentElement?.offsetWidth ?? Number.MAX_SAFE_INTEGER;
+    /**
+     * The column the image sits in — it may not grow past it.
+     *
+     * Measured from the editor's own content box, not from the node's parent:
+     * an inline node view is wrapped in a span that shrinks to fit the image,
+     * so asking the parent gives back the image's current width and the
+     * ceiling pins it where it already is. Nothing can ever grow.
+     */
+    const maxWidth = () =>
+        wrapper.current?.closest('.ProseMirror')?.clientWidth ?? Number.MAX_SAFE_INTEGER;
 
     const clamp = (next: number) => Math.round(Math.min(Math.max(next, MIN_WIDTH), maxWidth()));
 
@@ -62,21 +81,28 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
         event.preventDefault();
         const startX = event.clientX;
         const startWidth = currentWidth();
-        setDragging(true);
 
         // In Arabic and Urdu the inline end is on the left, so dragging left
         // is what grows the image. `clientX` is physical and knows nothing
         // about that (docs/rtl-guidelines.md).
         const rtl = document.documentElement.dir === 'rtl';
 
+        // The last width the pointer asked for, so the release can commit it
+        // without waiting for a state update it will not see.
+        let latest = startWidth;
+
         const move = (e: globalThis.PointerEvent) => {
             const delta = (e.clientX - startX) * (rtl ? -1 : 1);
-            updateAttributes({ width: clamp(startWidth + delta) });
+            latest = clamp(startWidth + delta);
+            setDragWidth(latest);
         };
         const stop = () => {
-            setDragging(false);
+            setDragWidth(null);
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', stop);
+            // Once, at the end: this is the transaction that re-renders the
+            // node view, so it must not happen while the pointer is down.
+            if (latest !== startWidth) updateAttributes({ width: latest });
         };
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', stop);

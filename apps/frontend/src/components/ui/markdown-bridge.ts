@@ -60,6 +60,13 @@ export function widthFromUrl(url: string): number | null {
 }
 
 export function urlWithWidth(url: string, width: number | null): string {
+    // A `data:` or `blob:` URL has no query string to speak of: everything
+    // after the comma is payload, and a `?w=` glued to the end of base64 is an
+    // image the browser cannot decode. Neither is ever stored — the editor
+    // swaps a blob for the uploaded URL before serializing — so there is
+    // nothing to record a width against.
+    if (/^(data|blob):/i.test(url)) return url;
+
     const parsed = parse(url);
     if (!parsed) return url;
     if (width === null) parsed.searchParams.delete('w');
