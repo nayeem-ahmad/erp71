@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: 'فتح التنقل',
         closeNavigation: 'إغلاق التنقل',
         resizeNavigation: 'تغيير حجم لوحة التنقل',
+        goToDashboard: 'الانتقال إلى لوحة المعلومات',
         searchPlaceholder: 'ابحث في القائمة…',
         clearSearch: 'مسح البحث',
         noSearchResults: 'لا توجد عناصر قائمة مطابقة لبحثك.',
