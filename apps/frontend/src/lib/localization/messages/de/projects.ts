@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "Die Anhänge konnten nicht geladen werden.",
         uploadFailed: "Diese Datei konnte nicht angehängt werden",
         deleteFile: "Anhang entfernen",
+        preview: "Vorschau",
         hint: "JPEG, PNG, WebP oder PDF, bis 5 MB.",
         tooLarge: "Diese Datei ist größer als 5 MB.",
         unsupported: "Verwenden Sie JPEG, PNG, WebP oder PDF.",

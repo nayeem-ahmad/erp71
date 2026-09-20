@@ -144,3 +144,30 @@ describe('Markdown', () => {
         expect(container.innerHTML).not.toContain('node=');
     });
 });
+
+describe('Markdown images', () => {
+    it('sizes an image to the width on its URL', () => {
+        render(<Markdown content="![shot](https://cdn/x.png?w=420)" allowImages />);
+        expect(screen.getByRole('img', { name: 'shot' })).toHaveStyle({ width: '420px' });
+    });
+
+    it('leaves an image with no width to the column', () => {
+        render(<Markdown content="![shot](https://cdn/x.png)" allowImages />);
+        expect(screen.getByRole('img', { name: 'shot' })).not.toHaveStyle({ width: '420px' });
+    });
+
+    it('opens a preview when an image is clicked', () => {
+        render(<Markdown content="![shot](https://cdn/x.png)" allowImages />);
+
+        fireEvent.click(screen.getByRole('img', { name: 'shot' }));
+
+        expect(screen.getByLabelText('Zoom in')).toBeInTheDocument();
+    });
+
+    it('still drops images where they are not allowed', () => {
+        // Chat answers are built partly from tenant-controlled strings; an
+        // image in one would make an outbound request from every reader.
+        render(<Markdown content="![shot](https://cdn/x.png)" />);
+        expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+});

@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "كيف أسجّل مرتجع عميل؟",
         },
     },
+    preview: {
+        title: "معاينة",
+        zoomIn: "تكبير",
+        zoomOut: "تصغير",
+        resetZoom: "إعادة ضبط التكبير",
+        next: "التالي",
+        previous: "السابق",
+        download: "تنزيل",
+        openInNewTab: "فتح في علامة تبويب جديدة",
+        closePreview: "إغلاق المعاينة",
+        noPreview: "لا يمكن معاينة هذا الملف.",
+    },
+
     richText: {
         toolbar: "التنسيق",
         hint: "التنسيق: **عريض**، *مائل*، - قوائم و[روابط](url).",
@@ -229,6 +242,7 @@ export const componentsMessages = {
         numberedList: "قائمة مرقّمة",
         link: "رابط",
         uploading: "جارٍ رفع الصورة…",
+        resizeImage: "تغيير حجم الصورة",
         pasteImage: "الصق صورة لإرفاقها.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

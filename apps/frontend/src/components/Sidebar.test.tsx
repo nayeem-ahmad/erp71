@@ -5,8 +5,11 @@ import Sidebar from './Sidebar';
 import { useBranding } from '@/lib/branding';
 
 jest.mock('next/link', () => {
-    return ({ children, href, className, title }: { children: React.ReactNode; href: string; className?: string; title?: string }) => (
-        <a href={href} className={className} title={title}>{children}</a>
+    // Everything else on the props is spread through — the brand mark's
+    // `aria-label` is how its test finds it, and a mock that drops it would
+    // quietly make that assertion unreachable.
+    return ({ children, href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children: React.ReactNode; href: string }) => (
+        <a href={href} {...rest}>{children}</a>
     );
 });
 
@@ -21,6 +24,7 @@ jest.mock('lucide-react', () => {
         ShoppingCart: icon,
         Package: icon,
         Users: icon,
+        UserRound: icon,
         FileText: icon,
         ClipboardList: icon,
         ArrowLeftRight: icon,
@@ -167,6 +171,47 @@ describe('Sidebar — brand mark', () => {
 
         expect(screen.getByText('Karim Traders')).toBeInTheDocument();
         expect(screen.queryByText('ERP71')).not.toBeInTheDocument();
+    });
+
+    it('links the brand mark to the dashboard', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/dashboard');
+    });
+
+    it('keeps the brand mark a link once the tenant has its own logo and name', () => {
+        setBranding({ logoUrl: 'https://cdn.example.com/tenant-logo.png', businessName: 'Karim Traders' });
+        render(<Sidebar canAccessAccounting />);
+
+        const home = screen.getByRole('link', { name: 'Go to dashboard' });
+        expect(home).toHaveAttribute('href', '/dashboard');
+        expect(home).toContainElement(screen.getByText('Karim Traders'));
+    });
+
+    it('still links home when the sidebar is collapsed to the square mark', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        fireEvent.click(screen.getByTitle('Collapse sidebar'));
+
+        expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/dashboard');
+    });
+
+    it('sends the brand mark to the console in platform admin mode, not the shop dashboard', () => {
+        render(<Sidebar platformAdminMode />);
+
+        expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/admin');
+    });
+
+    it('sends the brand mark to the referral portal in referee mode', () => {
+        render(<Sidebar refereeMode />);
+
+        expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/referrals');
+    });
+
+    it('sends the brand mark to the employee portal in employee mode', () => {
+        render(<Sidebar employeeMode />);
+
+        expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/my');
     });
 });
 

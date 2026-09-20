@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "संलग्नक लोड नहीं हो सके।",
         uploadFailed: "वह फ़ाइल संलग्न नहीं हो सकी",
         deleteFile: "संलग्नक हटाएँ",
+        preview: "पूर्वावलोकन",
         hint: "JPEG, PNG, WebP या PDF, 5 MB तक।",
         tooLarge: "वह फ़ाइल 5 MB से बड़ी है।",
         unsupported: "JPEG, PNG, WebP या PDF उपयोग करें।",

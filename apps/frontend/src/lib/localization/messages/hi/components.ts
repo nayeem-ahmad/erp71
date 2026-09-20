@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "ग्राहक की वापसी कैसे दर्ज करूँ?",
         },
     },
+    preview: {
+        title: "पूर्वावलोकन",
+        zoomIn: "बड़ा करें",
+        zoomOut: "छोटा करें",
+        resetZoom: "ज़ूम रीसेट करें",
+        next: "अगला",
+        previous: "पिछला",
+        download: "डाउनलोड",
+        openInNewTab: "नए टैब में खोलें",
+        closePreview: "पूर्वावलोकन बंद करें",
+        noPreview: "इस फ़ाइल का पूर्वावलोकन नहीं किया जा सकता।",
+    },
+
     richText: {
         toolbar: "फ़ॉर्मैटिंग",
         hint: "फ़ॉर्मैटिंग: **बोल्ड**, *इटैलिक*, - सूचियाँ और [लिंक](url)।",
@@ -229,6 +242,7 @@ export const componentsMessages = {
         numberedList: "क्रमांकित सूची",
         link: "लिंक",
         uploading: "छवि अपलोड हो रही है…",
+        resizeImage: "छवि का आकार बदलें",
         pasteImage: "छवि संलग्न करने के लिए पेस्ट करें।",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
