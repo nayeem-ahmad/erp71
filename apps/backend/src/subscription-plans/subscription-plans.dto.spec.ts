@@ -1,27 +1,17 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { defaultPlanFeatures } from '@erp71/shared-types';
 import { UpdateSubscriptionPlanDto } from './subscription-plans.dto';
 
-const validFeatures = {
-    maxStores: 1,
-    maxUsers: 3,
-    maxSkus: 2000,
-    premiumAccounting: false,
-    premiumInventoryReports: false,
-    premiumCrm: false,
-    multiStore: false,
-    apiAccess: false,
-    accountingOnly: false,
-    premiumAccountingAdvanced: false,
-    premiumManufacturing: false,
-    premiumStorefront: false,
-    premiumBookPublishing: false,
-    premiumAi: false,
-    premiumVoice: false,
-    planRank: 1,
-    aiCreditsMonthly: 100,
-};
+/**
+ * Derived from the registry rather than hand-listed: the plan editor always
+ * posts every registered entitlement (normalizePlanFeatures starts from
+ * defaultPlanFeatures), so a key added to the registry but not to the DTO
+ * makes forbidNonWhitelisted reject every save. A hardcoded list here hid
+ * exactly that drift.
+ */
+const validFeatures = defaultPlanFeatures();
 
 describe('UpdateSubscriptionPlanDto', () => {
     it('accepts a valid subscription plan payload', async () => {
@@ -36,6 +26,40 @@ describe('UpdateSubscriptionPlanDto', () => {
 
         const errors = await validate(dto);
         expect(errors).toHaveLength(0);
+    });
+
+    it('accepts every entitlement the registry defines', async () => {
+        const dto = plainToInstance(UpdateSubscriptionPlanDto, {
+            name: 'Business',
+            monthly_price: 2499,
+            is_active: true,
+            features: validFeatures,
+        });
+
+        const errors = await validate(dto, {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        });
+        expect(errors).toHaveLength(0);
+    });
+
+    it('declares a field for every registry entitlement', async () => {
+        const dto = plainToInstance(UpdateSubscriptionPlanDto, {
+            name: 'Business',
+            monthly_price: 2499,
+            is_active: true,
+            features: validFeatures,
+        });
+
+        const errors = await validate(dto, {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        });
+        const missing = (errors[0]?.children ?? [])
+            .filter((child) => child.constraints?.whitelistValidation)
+            .map((child) => child.property);
+
+        expect(missing).toEqual([]);
     });
 
     it('rejects unknown feature properties', async () => {

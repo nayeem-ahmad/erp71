@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: 'Kelulusan tidak dapat dikemas kini.',
             approveActivity: 'Luluskan aktiviti ini',
             open: 'Buka',
+            viewActivities: 'Lihat aktiviti',
+            openRecord: 'Buka rekod penuh',
             columns: {
                 subject: 'Aktiviti',
                 kind: 'Tujuan / saluran',
