@@ -106,6 +106,8 @@ export const crmHrMessages = {
             approvalFailed: 'Could not update approval.',
             approveActivity: 'Approve this activity',
             open: 'Open',
+            viewActivities: 'View activities',
+            openRecord: 'Open full record',
             columns: {
                 subject: 'Activity',
                 kind: 'Purpose / channel',

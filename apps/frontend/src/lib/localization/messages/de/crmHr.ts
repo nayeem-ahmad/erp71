@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: 'Freigabe konnte nicht aktualisiert werden.',
             approveActivity: 'Diese Aktivität genehmigen',
             open: "Öffnen",
+            viewActivities: "Aktivitäten anzeigen",
+            openRecord: "Vollständigen Datensatz öffnen",
             columns: {
                 subject: "Aktivität",
                 kind: "Zweck / Kanal",

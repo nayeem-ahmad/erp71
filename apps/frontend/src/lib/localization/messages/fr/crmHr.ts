@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: "Impossible de mettre à jour l'approbation.",
             approveActivity: 'Approuver cette activité',
             open: "Ouvrir",
+            viewActivities: "Voir les activités",
+            openRecord: "Ouvrir la fiche complète",
             columns: {
                 subject: "Activité",
                 kind: "Objet / canal",
