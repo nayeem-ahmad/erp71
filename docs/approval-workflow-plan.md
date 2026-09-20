@@ -651,6 +651,27 @@ of a pure `matchRule` — it is the same function the runtime calls — and it i
 the difference between a feature tenants configure and one they ask support to
 configure for them.
 
+### 6.8 The save that 400s because the DTO does not know a key
+`main.ts:35` runs the global pipe as
+`new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`,
+so a body property no DTO declares rejects the **whole request**, not just that
+field. A rule carries a nested condition tree whose shape is recursive and
+whose operand keys come from each module's fact object, which is exactly what a
+flat DTO cannot whitelist: the condition blob needs a recursive
+`@ValidateNested` DTO or an explicit validator over a raw JSON column, not a
+hand-listed set of properties.
+
+This is not hypothetical. `PlanFeaturesDto` declared a hand-listed subset of the
+entitlement registry, so once a key was registered without being added there,
+**every** `PUT /admin/subscription-plans/:code` returned
+`property teamChat should not exist` — every plan, for as long as the drift
+existed, and both spec files hand-listed the same stale keys so the suite
+asserted a payload the real editor never sent.
+
+The lesson transfers directly to `register()`: a module that registers a fact
+the rule validator does not know about must fail the suite, not the tenant's
+save. Derive the fixtures from the registry rather than restating it.
+
 ---
 
 ## 7. Permissions

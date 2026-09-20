@@ -80,6 +80,9 @@ const item = (id: string, text: string, isDone = false, sortOrder = 0) => ({
     sort_order: sortOrder,
 });
 
+/** What a clipboard hands over when you paste a screenshot. */
+const screenshot = (name = 'shot.png') => new File(['binary'], name, { type: 'image/png' });
+
 const withChecklist = (items: ReturnType<typeof item>[]) => ({
     id: 't1',
     title: 'Wire the meter',
@@ -535,6 +538,45 @@ describe('TaskDetailPanel activity', () => {
         expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
     });
 
+    it('renders a comment as markdown, image and all', async () => {
+        // Shown as the literal `![…](…)` it would be the one part of a comment
+        // nobody can read.
+        getTaskComments.mockResolvedValue([
+            {
+                ...comment('c1', '2026-08-03T10:00:00Z'),
+                body: 'Same crash here:\n\n![shot.png](https://cdn/shot.png)',
+            },
+        ]);
+        panel();
+        await openTab(/^Comments/);
+
+        expect(await screen.findByAltText('shot.png')).toHaveAttribute(
+            'src',
+            'https://cdn/shot.png',
+        );
+    });
+
+    it('attaches an image pasted into the comment box', async () => {
+        addTaskAttachment.mockResolvedValue({
+            id: 'a1',
+            file_url: 'https://cdn/shot.png',
+            file_name: 'shot.png',
+        });
+        panel();
+        await openTab(/^Comments/);
+        const box = (await screen.findByLabelText('Add a comment…')) as HTMLTextAreaElement;
+
+        fireEvent.paste(box, { clipboardData: { files: [screenshot()] } });
+
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+        await waitFor(() => expect(box).toHaveValue('![shot.png](https://cdn/shot.png)'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+        await waitFor(() =>
+            expect(addTaskComment).toHaveBeenCalledWith('t1', '![shot.png](https://cdn/shot.png)'),
+        );
+    });
+
     it('offers edit and delete only on your own comment', async () => {
         getTaskComments.mockResolvedValue([
             comment('mine', '2026-08-03T10:00:00Z', 'user-me'),
@@ -810,6 +852,67 @@ describe('TaskDetailPanel description', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
 
         await waitFor(() => expect(editor).toHaveValue('**isolate** the board'));
+    });
+
+    /**
+     * A screenshot is half of what anyone wants to say about a bug. It goes
+     * through the attachment endpoint — a pasted image is an attachment that
+     * happens to be referenced from the text — and lands in the markdown as a
+     * link to wherever that put it.
+     */
+    it('attaches an image pasted into the description and links to it', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        addTaskAttachment.mockResolvedValue({
+            id: 'a1',
+            file_url: 'https://cdn/shot.png',
+            file_name: 'shot.png',
+        });
+        panel();
+        const editor = (await edit()) as HTMLTextAreaElement;
+
+        fireEvent.change(editor, { target: { value: 'See below' } });
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()] } });
+
+        await waitFor(() =>
+            expect(addTaskAttachment).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ mimeType: 'image/png', fileName: 'shot.png' }),
+            ),
+        );
+        await waitFor(() =>
+            expect(editor).toHaveValue('See below\n![shot.png](https://cdn/shot.png)'),
+        );
+    });
+
+    /**
+     * The text holds a placeholder until the upload lands. Saving on blur in
+     * between would store the placeholder and strand the image.
+     */
+    it('holds the save until a pasted image has landed', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        let land: (value: unknown) => void = () => {};
+        addTaskAttachment.mockImplementation(() => new Promise((resolve) => (land = resolve)));
+        panel();
+        const editor = (await edit()) as HTMLTextAreaElement;
+
+        fireEvent.change(editor, { target: { value: 'See below' } });
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()] } });
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+
+        leave(editor);
+        expect(updateProjectTask).not.toHaveBeenCalled();
+
+        await act(async () => {
+            land({ id: 'a1', file_url: 'https://cdn/shot.png', file_name: 'shot.png' });
+        });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                description: 'See below\n![shot.png](https://cdn/shot.png)',
+            }),
+        );
     });
 
     it('leaves the card open when Escape cancels the edit', async () => {

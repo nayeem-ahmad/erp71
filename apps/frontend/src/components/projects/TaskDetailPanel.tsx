@@ -10,7 +10,6 @@ import {
     Checkbox,
     Input,
     RichTextEditor,
-    Textarea,
     Field,
     StatusBadge,
 } from '@/components/ui';
@@ -1152,7 +1151,11 @@ export default function TaskDetailPanel({
         changeSprint,
     } = card;
     return (
-        <ModalShell onBackdropClick={close} size="2xl">
+        /* `dismissOnBackdrop={false}`: nearly every field on this card saves on
+           blur, so a click beside the panel used to close it mid-edit and the
+           half-typed description went with it. Escape and the two Close buttons
+           are still there for the times closing is what was meant. */
+        <ModalShell onBackdropClick={close} dismissOnBackdrop={false} size="2xl">
             <ModalHeader
                 title={
                     task ? (
@@ -1695,6 +1698,13 @@ function DescriptionSection({
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(description);
     const [saving, setSaving] = useState(false);
+    const uploadImage = useTaskImageUpload(taskId);
+
+    /* A pasted image sits in the text as a placeholder until its upload lands,
+       so blurring in between would save the placeholder. The commit waits, and
+       `pendingCommit` remembers that it was asked to. */
+    const uploading = useRef(false);
+    const pendingCommit = useRef(false);
 
     useEffect(() => setValue(description), [description]);
 
@@ -1735,7 +1745,7 @@ function DescriptionSection({
                     ) : (
                         <span className="block text-sm text-gray-700">
                             <Suspense fallback={<span className="whitespace-pre-wrap">{description}</span>}>
-                                <Markdown content={description} />
+                                <Markdown content={description} allowImages />
                             </Suspense>
                         </span>
                     )}
@@ -1752,6 +1762,10 @@ function DescriptionSection({
                 onBlur={(event) => {
                     // Focus moving to the toolbar is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    if (uploading.current) {
+                        pendingCommit.current = true;
+                        return;
+                    }
                     void commit();
                 }}
             >
@@ -1765,6 +1779,15 @@ function DescriptionSection({
                     placeholder={m.placeholder}
                     ariaLabel={m.title}
                     onSubmit={commit}
+                    uploadImage={uploadImage}
+                    onUploadingChange={(busy) => {
+                        uploading.current = busy;
+                        if (busy || !pendingCommit.current) return;
+                        // Blurred while it uploaded: save now, with the link the
+                        // upload put in place of the placeholder.
+                        pendingCommit.current = false;
+                        void commit();
+                    }}
                     onCancel={() => {
                         setValue(description);
                         setEditing(false);
@@ -1796,6 +1819,56 @@ const readAsDataUrl = (file: File) =>
         reader.onerror = () => reject(new Error('read failed'));
         reader.readAsDataURL(file);
     });
+
+/** The half of `ACCEPTED_TYPES` a clipboard can produce. */
+const ACCEPTED_IMAGE_TYPES = ACCEPTED_TYPES.filter((type) => type.startsWith('image/'));
+
+/**
+ * Keeps an image pasted into the description or a comment, and says where it
+ * landed so the editor can link to it.
+ *
+ * Through the attachment endpoint rather than anywhere new: a pasted screenshot
+ * *is* an attachment that happens to be referenced from the text, so it is
+ * listed with the rest, held to the same 5 MB cap, and swept up with the task
+ * when it goes. The alternative — a second upload path with no row behind it —
+ * is how you end up paying Cloudinary for files nothing can find.
+ *
+ * Reports its own failures: the editor hands back a null and takes the
+ * placeholder out of the text, and the reason has to come from whoever knows
+ * the limits.
+ */
+function useTaskImageUpload(taskId: string) {
+    const { t } = useI18n();
+    const m = t.projects.attachments;
+
+    return useCallback(
+        async (file: File) => {
+            // Checked before reading, as in the attachments list: no point
+            // turning 20 MB into base64 to be told no.
+            if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+                toast.error(m.unsupported);
+                return null;
+            }
+            if (file.size > MAX_BYTES) {
+                toast.error(m.tooLarge);
+                return null;
+            }
+            try {
+                const created = (await api.addTaskAttachment(taskId, {
+                    fileBase64: await readAsDataUrl(file),
+                    // A screenshot off the clipboard arrives nameless.
+                    fileName: file.name || 'pasted-image',
+                    mimeType: file.type,
+                })) as Attachment;
+                return { url: created.file_url, name: created.file_name };
+            } catch (error) {
+                toast.error(error instanceof Error ? error.message : m.uploadFailed);
+                return null;
+            }
+        },
+        [taskId, m],
+    );
+}
 
 /**
  * `ProjectAttachment` has had a model since Phase 1 and no API. This is the
@@ -1957,6 +2030,7 @@ function ActivitySection({
     const [editBody, setEditBody] = useState('');
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+    const uploadImage = useTaskImageUpload(taskId);
 
     /* One fetch, two tabs: `mergeFeed` already tags every entry with its kind,
        so each tab is a filter over the same feed rather than a second request.
@@ -2014,14 +2088,20 @@ function ActivitySection({
         }
     };
 
-    const submit = (e: React.FormEvent) => {
-        e.preventDefault();
+    /* Split from `submit` so Ctrl/⌘+Enter inside the editor and the Comment
+       button post the same way — the editor has no form event to hand over. */
+    const post = () => {
         const body = draft.trim();
         if (!body) return;
         return run(async () => {
             await api.addTaskComment(taskId, body);
             setDraft('');
         });
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        return post();
     };
 
     const commitEdit = (comment: FeedEntry & { kind: 'comment' }) => {
@@ -2059,12 +2139,21 @@ function ActivitySection({
                 system saw, not what anyone wants to say about it. */}
             {show !== 'activity' && (
                 <form onSubmit={submit} className="mt-2 space-y-2">
-                    <Textarea
+                    {/* The same editor the description uses, for the same
+                        reason: a screenshot is half of what anyone wants to say
+                        about a bug, and describing one in words is the long way
+                        round. `hideHint` because the formatting line is three
+                        times the height of the box it would sit under. */}
+                    <RichTextEditor
                         rows={2}
+                        hideHint
                         value={draft}
-                        aria-label={m.commentPlaceholder}
+                        disabled={saving}
+                        ariaLabel={m.commentPlaceholder}
                         placeholder={m.commentPlaceholder}
-                        onChange={(e) => setDraft(e.target.value)}
+                        onChange={setDraft}
+                        onSubmit={post}
+                        uploadImage={uploadImage}
                     />
                     <Button
                         type="submit"
@@ -2092,12 +2181,17 @@ function ActivitySection({
                                     </p>
                                     {editingId === entry.id ? (
                                         <div className="mt-1 space-y-2">
-                                            <Textarea
+                                            <RichTextEditor
                                                 rows={2}
+                                                hideHint
                                                 autoFocus
                                                 value={editBody}
-                                                aria-label={m.editComment}
-                                                onChange={(e) => setEditBody(e.target.value)}
+                                                disabled={saving}
+                                                ariaLabel={m.editComment}
+                                                onChange={setEditBody}
+                                                onSubmit={() => commitEdit(entry)}
+                                                onCancel={() => setEditingId(null)}
+                                                uploadImage={uploadImage}
                                             />
                                             <div className="flex gap-2">
                                                 <Button
@@ -2119,7 +2213,20 @@ function ActivitySection({
                                             </div>
                                         </div>
                                     ) : (
-                                        <p className="mt-0.5 whitespace-pre-wrap">{entry.body}</p>
+                                        /* Markdown, like the description: the
+                                           box writes it, and a pasted image is
+                                           a markdown image — rendered as the
+                                           literal `![…](…)` it would be the one
+                                           part of a comment nobody can read. */
+                                        <div className="mt-0.5">
+                                            <Suspense
+                                                fallback={
+                                                    <p className="whitespace-pre-wrap">{entry.body}</p>
+                                                }
+                                            >
+                                                <Markdown content={entry.body} allowImages />
+                                            </Suspense>
+                                        </div>
                                     )}
 
                                     {/* Only your own — an audit trail nobody

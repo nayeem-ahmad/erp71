@@ -228,6 +228,8 @@ export const componentsMessages = {
         bulletList: "बुलेट सूची",
         numberedList: "क्रमांकित सूची",
         link: "लिंक",
+        uploading: "छवि अपलोड हो रही है…",
+        pasteImage: "छवि संलग्न करने के लिए पेस्ट करें।",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

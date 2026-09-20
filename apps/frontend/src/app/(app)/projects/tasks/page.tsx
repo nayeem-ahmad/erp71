@@ -841,7 +841,11 @@ export default function TasksPage() {
             />
 
             {creating && (
-                <ModalShell onBackdropClick={() => setCreating(false)}>
+                /* Not dismissed by a click beside it: the form holds a
+                   title, a description and four pickers, and the only thing
+                   that ever closed it by accident was a mis-aimed click.
+                   Escape, Cancel and the header's X all still close it. */
+                <ModalShell onBackdropClick={() => setCreating(false)} dismissOnBackdrop={false}>
                     <form onSubmit={createTask}>
                         <ModalHeader title={m.task.newTask} onClose={() => setCreating(false)} />
                         <div className="space-y-3 p-3 md:p-4">

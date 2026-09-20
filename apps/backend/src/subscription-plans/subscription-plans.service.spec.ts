@@ -1,4 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { defaultPlanFeatures } from '@erp71/shared-types';
+import type { PlanFeaturesDto } from './subscription-plans.dto';
 import { SubscriptionPlansService } from './subscription-plans.service';
 
 describe('SubscriptionPlansService', () => {
@@ -25,25 +27,16 @@ describe('SubscriptionPlansService', () => {
         monthly_price: 499,
         yearly_price: 4990,
         is_active: true,
+        // Spread the registry defaults so a newly registered entitlement lands
+        // here automatically instead of leaving a stale hand-listed payload.
         features_json: {
+            ...defaultPlanFeatures(),
             maxStores: 1,
             maxUsers: 3,
             maxSkus: 2000,
-            premiumAccounting: false,
-            premiumInventoryReports: false,
-            premiumCrm: false,
-            multiStore: false,
-            apiAccess: false,
-            accountingOnly: false,
-            premiumAccountingAdvanced: false,
-            premiumManufacturing: false,
-            premiumStorefront: false,
-            premiumBookPublishing: false,
-            premiumAi: false,
-            premiumVoice: false,
             planRank: 1,
             aiCreditsMonthly: 100,
-        },
+        } as PlanFeaturesDto & Record<string, boolean | number>,
         marketing_features_json: ['POS terminal'],
         _count: { subscriptions: 4 },
     };

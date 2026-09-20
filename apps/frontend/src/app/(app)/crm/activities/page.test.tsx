@@ -1,5 +1,5 @@
 'use client';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ActivitiesPage from './page';
 import { tenantDateOnly } from '@/lib/created-range';
 
@@ -26,6 +26,9 @@ jest.mock('@/lib/api', () => ({
         searchCustomers: jest.fn(),
         createCrmActivity: jest.fn(),
         setCrmActivityApproval: jest.fn(),
+        cancelCrmActivity: jest.fn(),
+        completeCrmActivity: jest.fn(),
+        updateCrmActivity: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -519,5 +522,110 @@ describe('CrmActivitiesPage — only mine', () => {
         for (const call of api.getAllCrmActivities.mock.calls) {
             expect(call[0].mine).toBe(true);
         }
+    });
+});
+
+
+/**
+ * The per-lead drawer behind the clipboard action, which is `CrmActivityPanel`
+ * — the lead page's own timeline — slid in beside the list rather than
+ * replacing it.
+ */
+describe('CrmActivitiesPage — the lead timeline drawer', () => {
+    /** The panel's row shape, which is not the list's. */
+    const leadTimeline = {
+        id: 'act-9',
+        subject: 'Chase the signed quote',
+        status: 'PLANNED',
+        due_at: '2026-08-26T08:00:00.000Z',
+        completed_at: null,
+        summary: null,
+        outcome: null,
+        notes: null,
+        purpose: null,
+        channel: null,
+        assignee: null,
+        is_approved: false,
+        approver: null,
+    };
+
+    /** How many times the page — not the drawer's panel — asked for its list. */
+    const listCalls = () =>
+        api.getAllCrmActivities.mock.calls.filter((call: any[]) => !call[0]?.leadId).length;
+
+    const openDrawer = async () => {
+        render(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(screen.getByRole('button', { name: 'View activities' }));
+        const drawer = await screen.findByRole('dialog');
+        await within(drawer).findByText('Chase the signed quote');
+        return drawer;
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Two different answers for the two questions, so a row found inside the
+        // drawer cannot have leaked in from the table behind it.
+        api.getAllCrmActivities.mockImplementation((params: any) =>
+            Promise.resolve(params?.leadId === 'lead-1' ? [leadTimeline] : [activity]),
+        );
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getTeamMembers.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+        api.cancelCrmActivity.mockResolvedValue({});
+    });
+
+    it("shows the row's whole lead without leaving the list", async () => {
+        const drawer = await openDrawer();
+
+        expect(within(drawer).getByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
+        expect(api.getAllCrmActivities).toHaveBeenCalledWith({ leadId: 'lead-1' });
+        // The filters and the scroll position are the whole point of not
+        // navigating: the list is still underneath.
+        expect(screen.getByText('Call about pricing')).toBeInTheDocument();
+    });
+
+    it('keeps the way through to the full record', async () => {
+        const drawer = await openDrawer();
+
+        expect(within(drawer).getByRole('link', { name: /Open full record/ }))
+            .toHaveAttribute('href', '/crm/leads/lead-1');
+    });
+
+    /** The drawer is the lead page's panel, so it edits rather than only shows. */
+    it('carries the panel\'s own actions', async () => {
+        const drawer = await openDrawer();
+
+        expect(within(drawer).getByRole('button', { name: /Cancel activity/i })).toBeInTheDocument();
+        expect(within(drawer).getByRole('button', { name: /^Edit$/i })).toBeInTheDocument();
+        expect(within(drawer).getByRole('button', { name: /Complete/i })).toBeInTheDocument();
+    });
+
+    it('refreshes the list behind it once something in there is changed', async () => {
+        const drawer = await openDrawer();
+        const before = listCalls();
+
+        fireEvent.click(within(drawer).getByRole('button', { name: /Cancel activity/i }));
+
+        await waitFor(() => expect(api.cancelCrmActivity).toHaveBeenCalledWith('act-9'));
+        await waitFor(() => expect(listCalls()).toBeGreaterThan(before));
+    });
+
+    /**
+     * The counterpart, and the reason the refresh hangs off a write rather than
+     * off the drawer closing: a reload would swap the table for "Loading…"
+     * every time somebody had only looked.
+     */
+    it('leaves the list alone when the drawer was only read', async () => {
+        const drawer = await openDrawer();
+        const before = listCalls();
+
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(listCalls()).toBe(before);
     });
 });

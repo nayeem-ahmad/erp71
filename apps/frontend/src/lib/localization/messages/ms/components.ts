@@ -228,6 +228,8 @@ export const componentsMessages = {
             bulletList: "Senarai bullet",
             numberedList: "Senarai bernombor",
             link: "Pautan",
+            uploading: "Memuat naik imej…",
+            pasteImage: "Tampal imej untuk melampirkannya.",
         },
         shareModal: {
             title: "Kongsi {subject}",
