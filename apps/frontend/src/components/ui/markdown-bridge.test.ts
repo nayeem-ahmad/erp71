@@ -4,6 +4,7 @@ import {
     urlWithWidth,
     markdownToDoc,
     docToMarkdown,
+    sizedImageUrl,
 } from './markdown-bridge';
 
 describe('image width on the URL', () => {
@@ -118,5 +119,30 @@ describe('markdown round-trip', () => {
         const markdown = docToMarkdown(doc);
         expect(markdown).not.toContain('blob:');
         expect(markdown).toBe('Before');
+    });
+});
+
+describe('asking the asset host for a narrower copy', () => {
+    const cloudinary = 'https://res.cloudinary.com/demo/image/upload/v1/erp71/shot.png';
+
+    it('puts a width transform in the delivery path', () => {
+        expect(sizedImageUrl(cloudinary, 320)).toBe(
+            'https://res.cloudinary.com/demo/image/upload/w_320,c_limit,q_auto,f_auto/v1/erp71/shot.png',
+        );
+    });
+
+    it('does not stack a second transform on a URL that already has one', () => {
+        const once = sizedImageUrl(cloudinary, 320);
+        expect(sizedImageUrl(once, 320)).toBe(once);
+    });
+
+    it('leaves a URL from anywhere else alone', () => {
+        // Nothing to ask: an unknown host has no transform vocabulary, and a
+        // guess would produce a 404 where the full-size image worked.
+        expect(sizedImageUrl('https://cdn/x.png', 320)).toBe('https://cdn/x.png');
+    });
+
+    it('leaves the URL alone when no width is wanted', () => {
+        expect(sizedImageUrl(cloudinary, null)).toBe(cloudinary);
     });
 });

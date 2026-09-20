@@ -5,7 +5,7 @@ import Link from 'next/link';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ImagePreviewModal } from './ImagePreviewModal';
-import { widthFromUrl } from './markdown-bridge';
+import { sizedImageUrl, widthFromUrl } from './markdown-bridge';
 
 /**
  * Markdown for model-generated answers (the AI chat panel) and for the text
@@ -144,7 +144,9 @@ export default function Markdown({
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                            src={url}
+                            // Fetched at the size it will be drawn at, not
+                            // scaled down from the original after the fact.
+                            src={sizedImageUrl(url, width)}
                             alt={alt ?? ''}
                             loading="lazy"
                             // The asset host has no business knowing which task

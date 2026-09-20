@@ -68,6 +68,37 @@ export function urlWithWidth(url: string, width: number | null): string {
 }
 
 
+/**
+ * The same image, delivered no wider than `width`.
+ *
+ * `?w=` on its own is only a note to this app about how big to draw the
+ * picture — Cloudinary takes its transforms as a path segment, so a query
+ * parameter changes nothing about what crosses the wire. This turns that
+ * note into a real request, which is what keeps a 4 MB screenshot from being
+ * downloaded in full to fill a 160px tile.
+ *
+ * `c_limit` so an image already narrower than the cap is left alone rather
+ * than stretched; `q_auto,f_auto` to match what the upload itself asks for.
+ *
+ * Only Cloudinary, because only Cloudinary's vocabulary is known here. Any
+ * other host gets its URL back untouched: a guessed transform would turn a
+ * working image into a 404.
+ */
+const CLOUDINARY_DELIVERY = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/(?:image|video|raw)\/upload\/)(.*)$/;
+/** A path segment that is already a transform, e.g. `w_320,c_limit`. */
+const TRANSFORM_SEGMENT = /^[a-z]{1,3}_[^/]*\//;
+
+export function sizedImageUrl(url: string, width: number | null): string {
+    if (width === null) return url;
+    const match = CLOUDINARY_DELIVERY.exec(url);
+    if (!match) return url;
+
+    const [, delivery, rest] = match;
+    // Already asked for: re-wrapping would stack transforms on every render.
+    if (TRANSFORM_SEGMENT.test(rest)) return url;
+    return `${delivery}w_${Math.round(width)},c_limit,q_auto,f_auto/${rest}`;
+}
+
 /* ------------------------------------------------------------------ *
  * The document shape
  * ------------------------------------------------------------------ */

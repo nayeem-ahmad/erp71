@@ -56,7 +56,7 @@ import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
 import ChipPopover from '@/components/projects/ChipPopover';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
-import { urlWithWidth } from '@/components/ui/markdown-bridge';
+import { sizedImageUrl } from '@/components/ui/markdown-bridge';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -1983,7 +1983,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                                        before its name is. */
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img
-                                        src={urlWithWidth(item.file_url, THUMBNAIL_WIDTH)}
+                                        src={sizedImageUrl(item.file_url, THUMBNAIL_WIDTH)}
                                         alt={item.file_name}
                                         loading="lazy"
                                         referrerPolicy="no-referrer"
