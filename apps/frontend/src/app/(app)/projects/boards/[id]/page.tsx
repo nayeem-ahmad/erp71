@@ -75,6 +75,7 @@ import {
     type DueState,
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
+import { useBoardFilters } from '@/components/projects/use-board-filters';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -155,8 +156,12 @@ export default function BoardPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-    const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
     const [labels, setLabels] = useState<ProjectLabel[]>([]);
+    /**
+     * Both feed the remembered filters below, which cannot tell a label that
+     * was deleted from one that simply has not arrived yet.
+     */
+    const [labelsLoaded, setLabelsLoaded] = useState(false);
     const [drag, setDrag] = useState<DragState | null>(null);
     const [columnDrag, setColumnDrag] = useState<ColumnDragState | null>(null);
     const [adding, setAdding] = useState(false);
@@ -184,12 +189,37 @@ export default function BoardPage() {
      */
     const lift = boardColumnLiftClass(board);
 
+    const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
+
+    /**
+     * What the remembered filters are checked against. A stored filter is an
+     * id, and the person or label it names can be gone by the next visit —
+     * without these the board would open on zero cards under a filter its own
+     * controls could not show.
+     */
+    const filterOptionIds = useMemo(
+        () => ({
+            assignees: new Set(assigneeOptions.map((option) => option.key)),
+            labels: new Set(labels.map((label) => label.id)),
+        }),
+        [assigneeOptions, labels],
+    );
+    /**
+     * The filters this browser last left the board on. Restored only once both
+     * the cards and the tenant's labels are in, so a filter naming someone who
+     * has left can be told from one whose fetch has not landed yet.
+     */
+    const { filters, setFilters } = useBoardFilters(
+        boardId,
+        !loading && !loadError && labelsLoaded,
+        filterOptionIds,
+    );
+
     const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
     const visibleUnsorted = useMemo(
         () => unsorted.filter((task) => matchesFilters(task, filters)),
         [unsorted, filters],
     );
-    const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
 
     /** Every card on the board, columns and Unsorted alike. */
     const boardTasks = useMemo(
@@ -294,7 +324,11 @@ export default function BoardPage() {
     useEffect(() => {
         api.getProjectLabels()
             .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
-            .catch(() => setLabels([]));
+            .catch(() => setLabels([]))
+            // Either way the label filter now knows what exists — a failed
+            // fetch means no labels, which is a truthful (if lossy) answer and
+            // better than holding the other three filters back forever.
+            .finally(() => setLabelsLoaded(true));
     }, []);
 
     // Who is composing. A card composed on an unfiltered board lands on them,

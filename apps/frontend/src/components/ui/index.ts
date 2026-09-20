@@ -17,6 +17,8 @@ export type { PasswordRequirementsProps } from './PasswordRequirements';
 export { Alert } from './Alert';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
+export { ImagePreviewModal } from './ImagePreviewModal';
+export type { PreviewItem } from './ImagePreviewModal';
 // Markdown is deliberately not re-exported here: it pulls in react-markdown, and
 // a barrel export would drag that into every page importing from this module.
 // Import it lazily from '@/components/ui/Markdown' at the point of use.

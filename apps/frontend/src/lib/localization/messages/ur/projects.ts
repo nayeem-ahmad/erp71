@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "منسلکات لوڈ نہیں ہو سکے۔",
         uploadFailed: "وہ فائل منسلک نہیں ہو سکی",
         deleteFile: "منسلک ہٹائیں",
+        preview: "پیش منظر",
         hint: "JPEG، PNG، WebP یا PDF، 5 MB تک۔",
         tooLarge: "وہ فائل 5 MB سے بڑی ہے۔",
         unsupported: "JPEG، PNG، WebP یا PDF استعمال کریں۔",

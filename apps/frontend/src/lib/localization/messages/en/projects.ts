@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: 'Could not load the attachments.',
         uploadFailed: 'Could not attach that file',
         deleteFile: 'Remove attachment',
+        preview: "Preview",
         hint: 'JPEG, PNG, WebP or PDF, up to 5 MB.',
         tooLarge: 'That file is larger than 5 MB.',
         unsupported: 'Use a JPEG, PNG, WebP or PDF.',

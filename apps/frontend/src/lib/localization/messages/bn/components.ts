@@ -218,6 +218,19 @@ export const componentsMessages = {
                 s5: "গ্রাহকের ফেরত কীভাবে রেকর্ড করব?",
             },
         },
+        preview: {
+            title: "প্রিভিউ",
+            zoomIn: "বড় করুন",
+            zoomOut: "ছোট করুন",
+            resetZoom: "জুম রিসেট করুন",
+            next: "পরবর্তী",
+            previous: "পূর্ববর্তী",
+            download: "ডাউনলোড",
+            openInNewTab: "নতুন ট্যাবে খুলুন",
+            closePreview: "প্রিভিউ বন্ধ করুন",
+            noPreview: "এই ফাইলটির প্রিভিউ দেখানো যাচ্ছে না।",
+        },
+
         richText: {
             toolbar: "ফরম্যাটিং",
             hint: "ফরম্যাটিং: **বোল্ড**, *ইটালিক*, - তালিকা এবং [লিংক](url)।",
@@ -229,6 +242,7 @@ export const componentsMessages = {
             numberedList: "নম্বরযুক্ত তালিকা",
             link: "লিংক",
             uploading: "ছবি আপলোড হচ্ছে…",
+            resizeImage: "ছবির আকার পরিবর্তন করুন",
             pasteImage: "ছবি সংযুক্ত করতে পেস্ট করুন।",
         },
         shareModal: {

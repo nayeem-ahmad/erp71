@@ -218,6 +218,19 @@ export const componentsMessages = {
             s5: "¿Cómo registro una devolución de cliente?",
         },
     },
+    preview: {
+        title: "Vista previa",
+        zoomIn: "Acercar",
+        zoomOut: "Alejar",
+        resetZoom: "Restablecer zoom",
+        next: "Siguiente",
+        previous: "Anterior",
+        download: "Descargar",
+        openInNewTab: "Abrir en una pestaña nueva",
+        closePreview: "Cerrar vista previa",
+        noPreview: "Este archivo no se puede previsualizar.",
+    },
+
     richText: {
         toolbar: "Formato",
         hint: "Formato: **negrita**, *cursiva*, - listas y [enlaces](url).",
@@ -229,6 +242,7 @@ export const componentsMessages = {
         numberedList: "Lista numerada",
         link: "Enlace",
         uploading: "Subiendo imagen…",
+        resizeImage: "Cambiar tamaño de la imagen",
         pasteImage: "Pega una imagen para adjuntarla.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

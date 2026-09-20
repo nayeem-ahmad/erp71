@@ -312,6 +312,7 @@ export const projectsMessages = {
         loadFailed: "تعذّر تحميل المرفقات.",
         uploadFailed: "تعذّر إرفاق ذلك الملف",
         deleteFile: "إزالة المرفق",
+        preview: "معاينة",
         hint: "JPEG أو PNG أو WebP أو PDF، حتى 5 ميغابايت.",
         tooLarge: "حجم ذلك الملف يتجاوز 5 ميغابايت.",
         unsupported: "استخدم JPEG أو PNG أو WebP أو PDF.",

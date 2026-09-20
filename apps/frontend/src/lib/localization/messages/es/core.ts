@@ -283,6 +283,7 @@ export const coreMessages = {
         openNavigation: "Abrir la navegación",
         closeNavigation: "Cerrar la navegación",
         resizeNavigation: "Redimensionar el panel de navegación",
+        goToDashboard: "Ir al panel",
         searchPlaceholder: "Buscar en el menú…",
         clearSearch: "Borrar la búsqueda",
         noSearchResults: "Ningún elemento del menú coincide con tu búsqueda.",
