@@ -229,6 +229,7 @@ export const componentsMessages = {
         numberedList: "Liste numérotée",
         link: "Lien",
         uploading: "Téléversement de l’image…",
+        resizeImage: "Redimensionner l’image",
         pasteImage: "Collez une image pour la joindre.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

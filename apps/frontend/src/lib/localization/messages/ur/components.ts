@@ -229,6 +229,7 @@ export const componentsMessages = {
         numberedList: "عددی فہرست",
         link: "لنک",
         uploading: "تصویر اپ لوڈ ہو رہی ہے…",
+        resizeImage: "تصویر کا سائز تبدیل کریں",
         pasteImage: "تصویر منسلک کرنے کے لیے پیسٹ کریں۔",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

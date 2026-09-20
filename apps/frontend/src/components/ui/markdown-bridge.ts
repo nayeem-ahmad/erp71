@@ -1,13 +1,8 @@
-import { Schema, type Node } from 'prosemirror-model';
-import { schema as basicSchema } from 'prosemirror-schema-basic';
-import { addListNodes } from 'prosemirror-schema-list';
-import {
-    MarkdownParser,
-    MarkdownSerializer,
-    defaultMarkdownParser,
-    defaultMarkdownSerializer,
-} from 'prosemirror-markdown';
+import { getSchema } from '@tiptap/core';
+import type { Node } from 'prosemirror-model';
+import { MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
 import markdownit from 'markdown-it';
+import { contentExtensions } from './editor-extensions';
 
 /**
  * Markdown in, markdown out, with a ProseMirror document in between.
@@ -72,74 +67,22 @@ export function urlWithWidth(url: string, width: number | null): string {
     return format(parsed, url);
 }
 
+
 /* ------------------------------------------------------------------ *
  * The document shape
  * ------------------------------------------------------------------ */
 
 /**
- * Deliberately narrow — paragraphs, the marks the toolbar offers, lists and
- * images. Headings, blockquotes, code blocks and rules are left out because
- * the toolbar has never offered them, and a schema that admits a construct is
- * a schema whose round-trip has to be proved for it.
+ * Derived from the editor's own extensions rather than declared again here.
+ *
+ * TipTap and ProseMirror disagree about names — `bold` against `strong`,
+ * `bulletList` against `bullet_list` — and a parallel schema that got one of
+ * them wrong would not throw. It would quietly drop every bold word as the
+ * document crossed the boundary, which is the kind of bug that reaches
+ * production because nothing about it looks broken until someone's text is
+ * gone.
  */
-const listNodes = addListNodes(basicSchema.spec.nodes, 'paragraph block*', 'block');
-
-export const editorSchema = new Schema({
-    nodes: listNodes
-        .remove('heading')
-        .remove('blockquote')
-        .remove('horizontal_rule')
-        .remove('code_block')
-        .update('image', {
-            /*
-             * Inline, inside a paragraph — which is what an image in markdown
-             * is. It reads like a block because a pasted screenshot sits on a
-             * line of its own, and the serializer already writes it that way,
-             * but the token markdown-it emits is an inline one: declaring the
-             * node a block means the parser has nowhere to put it and drops
-             * the image entirely, leaving an empty paragraph behind.
-             */
-            inline: true,
-            group: 'inline',
-            draggable: true,
-            attrs: {
-                src: {},
-                alt: { default: null },
-                /** CSS pixels the author dragged to; null means natural size. */
-                width: { default: null },
-                /** True while the bytes are still going up. */
-                uploading: { default: false },
-                /** Identifies one in-flight paste, so its node can be found again. */
-                pasteId: { default: null },
-            },
-            parseDOM: [
-                {
-                    tag: 'img[src]',
-                    getAttrs: (dom: HTMLElement | string) => {
-                        if (typeof dom === 'string') return false;
-                        const src = dom.getAttribute('src') ?? '';
-                        return {
-                            src,
-                            alt: dom.getAttribute('alt') || null,
-                            width: widthFromUrl(src),
-                        };
-                    },
-                },
-            ],
-            toDOM: (node: Node) => [
-                'img',
-                {
-                    src: node.attrs.src,
-                    alt: node.attrs.alt ?? '',
-                    ...(node.attrs.width ? { width: String(node.attrs.width) } : {}),
-                },
-            ],
-        }),
-    marks: basicSchema.spec.marks.addToEnd('strike', {
-        parseDOM: [{ tag: 's' }, { tag: 'del' }, { style: 'text-decoration=line-through' }],
-        toDOM: () => ['s', 0],
-    }),
-});
+export const editorSchema = getSchema(contentExtensions);
 
 /* ------------------------------------------------------------------ *
  * Parsing and serializing
@@ -156,27 +99,33 @@ export const editorSchema = new Schema({
 const tokenizer = markdownit('commonmark', { html: false }).enable('strikethrough');
 
 /**
- * The default token table maps tokens onto nodes this schema does not have —
- * headings, blockquotes, code blocks, rules — and `MarkdownParser` resolves
- * every one of them up front, so inheriting them wholesale throws before a
- * single character is parsed. Dropped here rather than in the schema: the
- * schema says what a document may contain, this says what the parser may
- * produce, and they have to agree.
+ * Markdown tokens onto this schema's nodes and marks.
  *
- * A dropped construct is not an error. markdown-it still tokenizes `# Heading`
- * and the parser, finding no handler, keeps its text — which is what should
- * happen to something the toolbar cannot produce in the first place.
+ * Written out rather than spread from `defaultMarkdownParser.tokens`, which
+ * names nodes the way ProseMirror's own schema does and would map onto
+ * nothing here. A construct with no entry is not an error: markdown-it still
+ * tokenizes `# Heading` and the parser, finding no handler, keeps its text —
+ * which is what should happen to something the toolbar cannot produce.
  */
-const UNSUPPORTED_TOKENS = ['heading', 'blockquote', 'code_block', 'fence', 'hr'] as const;
-
-const inheritedTokens = Object.fromEntries(
-    Object.entries(defaultMarkdownParser.tokens).filter(
-        ([token]) => !UNSUPPORTED_TOKENS.includes(token as (typeof UNSUPPORTED_TOKENS)[number]),
-    ),
-);
-
 const parser = new MarkdownParser(editorSchema, tokenizer, {
-    ...inheritedTokens,
+    paragraph: { block: 'paragraph' },
+    bullet_list: { block: 'bulletList' },
+    ordered_list: { block: 'orderedList' },
+    list_item: { block: 'listItem' },
+    hardbreak: { node: 'hardBreak' },
+
+    em: { mark: 'italic' },
+    strong: { mark: 'bold' },
+    s: { mark: 'strike' },
+    code_inline: { mark: 'code', noCloseToken: true },
+    link: {
+        mark: 'link',
+        getAttrs: (token) => ({
+            href: token.attrGet('href'),
+            title: token.attrGet('title') || null,
+        }),
+    },
+
     image: {
         node: 'image',
         getAttrs: (token) => {
@@ -187,12 +136,40 @@ const parser = new MarkdownParser(editorSchema, tokenizer, {
             return { src, alt: token.content || null, width: widthFromUrl(src) };
         },
     },
-    s: { mark: 'strike' },
 });
 
 const serializer = new MarkdownSerializer(
     {
-        ...defaultMarkdownSerializer.nodes,
+        paragraph: (state, node) => {
+            state.renderInline(node);
+            state.closeBlock(node);
+        },
+        bulletList: (state, node) => {
+            state.renderList(node, '  ', () => '* ');
+        },
+        orderedList: (state, node) => {
+            const start = (node.attrs.start as number | undefined) ?? 1;
+            const maxWidth = String(start + node.childCount - 1).length;
+            const space = ' '.repeat(maxWidth + 2);
+            state.renderList(node, space, (i) => {
+                const label = String(start + i);
+                return `${label.padStart(maxWidth)}. `;
+            });
+        },
+        listItem: (state, node) => {
+            state.renderContent(node);
+        },
+        hardBreak: (state, node, parent, index) => {
+            for (let i = index + 1; i < parent.childCount; i += 1) {
+                if (parent.child(i).type !== node.type) {
+                    state.write('\\\n');
+                    return;
+                }
+            }
+        },
+        text: (state, node) => {
+            state.text(node.text ?? '');
+        },
         image: (state, node) => {
             // A paste still in flight is not part of the document yet: its src
             // is a blob URL that means nothing outside this tab, and the
@@ -201,12 +178,28 @@ const serializer = new MarkdownSerializer(
             if (node.attrs.uploading) return;
             const src = urlWithWidth(node.attrs.src, node.attrs.width ?? null);
             state.write(`![${state.esc(node.attrs.alt || '')}](${state.esc(src)})`);
-            state.closeBlock(node);
         },
     },
     {
-        ...defaultMarkdownSerializer.marks,
+        bold: { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true },
+        italic: { open: '*', close: '*', mixable: true, expelEnclosingWhitespace: true },
         strike: { open: '~~', close: '~~', mixable: true, expelEnclosingWhitespace: true },
+        code: {
+            open: '`',
+            close: '`',
+            escape: false,
+        },
+        link: {
+            open: '[',
+            close: (state, mark) => {
+                // `quote` is on the state at runtime but missing from the
+                // published types.
+                const quote = (state as unknown as { quote: (s: string) => string }).quote;
+                const title = mark.attrs.title ? ` ${quote.call(state, mark.attrs.title)}` : '';
+                return `](${state.esc(mark.attrs.href)}${title})`;
+            },
+            mixable: true,
+        },
     },
 );
 

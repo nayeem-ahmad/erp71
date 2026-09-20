@@ -115,6 +115,46 @@ if (typeof window !== 'undefined' && typeof (window as any).Blob !== 'undefined'
 }
 
 /**
+ * jsdom implements no object URLs. The rich text editor builds one for every
+ * pasted image so the picture is on screen while its bytes go up, so any
+ * component holding an editor needs these to exist.
+ *
+ * Counted rather than constant: a test that pastes two images has to be able
+ * to tell their previews apart.
+ */
+if (typeof URL !== 'undefined' && typeof URL.createObjectURL !== 'function') {
+    let objectUrls = 0;
+    URL.createObjectURL = () => `blob:jsdom/${(objectUrls += 1)}`;
+    URL.revokeObjectURL = () => {
+        // Nothing was allocated, so there is nothing to release.
+    };
+}
+
+/**
+ * ProseMirror measures the document to place a caret, and jsdom implements
+ * neither `getClientRects` nor `getBoundingClientRect` on a Range. Without
+ * them an insert lands at position 0 rather than where the user was typing,
+ * and deleting a node throws outright — so the rich text editor's tests would
+ * be asserting against a layout engine that is not there.
+ *
+ * Zeroed rather than faked: nothing under test depends on where an element
+ * actually is on screen, only on not crashing while asking.
+ */
+if (typeof Range !== 'undefined') {
+    if (typeof Range.prototype.getClientRects !== 'function') {
+        Range.prototype.getClientRects = () => ({
+            length: 0,
+            item: () => null,
+            [Symbol.iterator]: function* () {},
+        }) as unknown as DOMRectList;
+    }
+    if (typeof Range.prototype.getBoundingClientRect !== 'function') {
+        Range.prototype.getBoundingClientRect = () =>
+            ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }) as DOMRect;
+    }
+}
+
+/**
  * Web storage does not reset between tests the way component state does, so a
  * test that changes a remembered setting — a list's filters, a view toggle —
  * would otherwise seed every test after it in the same file. Cleared here

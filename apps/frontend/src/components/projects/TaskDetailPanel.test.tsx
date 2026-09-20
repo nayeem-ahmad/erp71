@@ -1,6 +1,34 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskDetailPanel from './TaskDetailPanel';
 
+/**
+ * Types into a `RichTextEditor`, which is a contenteditable rather than a
+ * textarea — `fireEvent.change` has no value setter to reach for.
+ *
+ * Goes through ProseMirror's own paste handling rather than poking at the
+ * DOM: that is the one path that produces a real document, and a document is
+ * what the editor serializes back to markdown.
+ */
+const typeInEditor = (editor: HTMLElement, text: string) => {
+    fireEvent.focus(editor);
+    // Over whatever is there, the way typing into a box you have selected
+    // would be — so this reads "the description is now X", not "X as well".
+    selectAll(editor);
+    fireEvent.paste(editor, {
+        clipboardData: {
+            files: [],
+            getData: (type: string) => (type === 'text/plain' ? text : ''),
+            types: ['text/plain'],
+        },
+    });
+};
+
+/** Ctrl+A, which is how a person selects an editor's whole contents. */
+const selectAll = (editor: HTMLElement) => {
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: 'a', ctrlKey: true });
+};
+
 jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
@@ -524,11 +552,11 @@ describe('TaskDetailPanel activity', () => {
         panel();
         await openTab(/^Comments/);
         const box = await screen.findByLabelText('Add a comment…');
-        fireEvent.change(box, { target: { value: '  Looks done  ' } });
+        typeInEditor(box, '  Looks done  ');
         fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
 
         await waitFor(() => expect(addTaskComment).toHaveBeenCalledWith('t1', 'Looks done'));
-        await waitFor(() => expect(box).toHaveValue(''));
+        await waitFor(() => expect(box).toHaveTextContent(''));
     });
 
     it('will not post an empty comment', async () => {
@@ -564,12 +592,12 @@ describe('TaskDetailPanel activity', () => {
         });
         panel();
         await openTab(/^Comments/);
-        const box = (await screen.findByLabelText('Add a comment…')) as HTMLTextAreaElement;
+        const box = await screen.findByLabelText('Add a comment…');
 
-        fireEvent.paste(box, { clipboardData: { files: [screenshot()] } });
+        fireEvent.paste(box, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
 
         await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
-        await waitFor(() => expect(box).toHaveValue('![shot.png](https://cdn/shot.png)'));
+        await waitFor(() => expect(box.querySelector('img')).toHaveAttribute('src', 'https://cdn/shot.png'));
 
         fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
         await waitFor(() =>
@@ -601,7 +629,7 @@ describe('TaskDetailPanel activity', () => {
         await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-        fireEvent.change(screen.getByLabelText('Edit comment'), { target: { value: 'Revised' } });
+        typeInEditor(screen.getByLabelText('Edit comment'), 'Revised');
         fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
 
         await waitFor(() => expect(updateTaskComment).toHaveBeenCalledWith('c1', 'Revised'));
@@ -757,9 +785,18 @@ describe('TaskDetailPanel description', () => {
         return screen.getByLabelText('Description');
     };
 
+    /**
+     * The whole editor — toolbar, input and hint — rather than the
+     * contenteditable alone. Blur is caught here because a toolbar button
+     * steals focus from the input, and committing on the input's own blur
+     * would save every time somebody reached for bold.
+     */
+    const editorShell = (editor: HTMLElement) =>
+        editor.closest('[data-rich-text-editor]') as HTMLElement;
+
     /** Focus leaving the whole editor, which is what commits. */
     const leave = (editor: HTMLElement) =>
-        fireEvent.blur(editor.closest('div[class]') as HTMLElement, { relatedTarget: null });
+        fireEvent.blur(editorShell(editor), { relatedTarget: null });
 
     it('offers to add one when the task has none', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
@@ -790,7 +827,7 @@ describe('TaskDetailPanel description', () => {
         panel();
         const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: '  Two circuits, one meter  ' } });
+        typeInEditor(editor, '  Two circuits, one meter  ');
         leave(editor);
 
         await waitFor(() =>
@@ -808,12 +845,11 @@ describe('TaskDetailPanel description', () => {
     it('does not save when focus merely moves to the toolbar', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'isolate the board' } });
-        const container = editor.closest('div[class]') as HTMLElement;
-        fireEvent.blur(container, {
-            relatedTarget: within(container).getByRole('button', { name: 'Bold' }),
+        typeInEditor(editor, 'isolate the board');
+        fireEvent.blur(editorShell(editor), {
+            relatedTarget: screen.getByRole('button', { name: 'Bold' }),
         });
 
         expect(updateProjectTask).not.toHaveBeenCalled();
@@ -824,7 +860,9 @@ describe('TaskDetailPanel description', () => {
         panel();
         const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: '' } });
+        selectAll(editor);
+        fireEvent.keyDown(editor, { key: 'Backspace' });
+        fireEvent.input(editor);
         leave(editor);
 
         await waitFor(() =>
@@ -845,13 +883,13 @@ describe('TaskDetailPanel description', () => {
     it('wraps the selection when a formatting button is used', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'isolate the board' } });
-        editor.setSelectionRange(0, 7);
+        typeInEditor(editor, 'isolate');
+        selectAll(editor);
         fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
 
-        await waitFor(() => expect(editor).toHaveValue('**isolate** the board'));
+        await waitFor(() => expect(editor.querySelector('strong')).toHaveTextContent('isolate'));
     });
 
     /**
@@ -868,11 +906,10 @@ describe('TaskDetailPanel description', () => {
             file_name: 'shot.png',
         });
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'See below' } });
-        editor.setSelectionRange(editor.value.length, editor.value.length);
-        fireEvent.paste(editor, { clipboardData: { files: [screenshot()] } });
+        typeInEditor(editor, 'See below');
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
 
         await waitFor(() =>
             expect(addTaskAttachment).toHaveBeenCalledWith(
@@ -881,7 +918,7 @@ describe('TaskDetailPanel description', () => {
             ),
         );
         await waitFor(() =>
-            expect(editor).toHaveValue('See below\n![shot.png](https://cdn/shot.png)'),
+            expect(editor.querySelector('img')).toHaveAttribute('src', 'https://cdn/shot.png'),
         );
     });
 
@@ -894,11 +931,10 @@ describe('TaskDetailPanel description', () => {
         let land: (value: unknown) => void = () => {};
         addTaskAttachment.mockImplementation(() => new Promise((resolve) => (land = resolve)));
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'See below' } });
-        editor.setSelectionRange(editor.value.length, editor.value.length);
-        fireEvent.paste(editor, { clipboardData: { files: [screenshot()] } });
+        typeInEditor(editor, 'See below');
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
         await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
 
         leave(editor);
@@ -910,7 +946,7 @@ describe('TaskDetailPanel description', () => {
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
-                description: 'See below\n![shot.png](https://cdn/shot.png)',
+                description: 'See below\n\n![shot.png](https://cdn/shot.png)',
             }),
         );
     });

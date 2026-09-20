@@ -229,6 +229,7 @@ export const componentsMessages = {
             numberedList: "Senarai bernombor",
             link: "Pautan",
             uploading: "Memuat naik imej…",
+            resizeImage: "Ubah saiz imej",
             pasteImage: "Tampal imej untuk melampirkannya.",
         },
         shareModal: {

@@ -229,6 +229,7 @@ export const componentsMessages = {
         numberedList: "قائمة مرقّمة",
         link: "رابط",
         uploading: "جارٍ رفع الصورة…",
+        resizeImage: "تغيير حجم الصورة",
         pasteImage: "الصق صورة لإرفاقها.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products

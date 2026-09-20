@@ -229,6 +229,7 @@ export const componentsMessages = {
             numberedList: "নম্বরযুক্ত তালিকা",
             link: "লিংক",
             uploading: "ছবি আপলোড হচ্ছে…",
+            resizeImage: "ছবির আকার পরিবর্তন করুন",
             pasteImage: "ছবি সংযুক্ত করতে পেস্ট করুন।",
         },
         shareModal: {

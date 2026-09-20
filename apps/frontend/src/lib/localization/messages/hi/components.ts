@@ -229,6 +229,7 @@ export const componentsMessages = {
         numberedList: "क्रमांकित सूची",
         link: "लिंक",
         uploading: "छवि अपलोड हो रही है…",
+        resizeImage: "छवि का आकार बदलें",
         pasteImage: "छवि संलग्न करने के लिए पेस्ट करें।",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
