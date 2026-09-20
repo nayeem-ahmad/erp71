@@ -82,6 +82,17 @@ type ModalShellProps = {
     variant?: ModalShellVariant;
     className?: string;
     onBackdropClick?: () => void;
+    /**
+     * Whether a click on the backdrop dismisses the modal. Escape closes it
+     * either way — reaching for Escape is deliberate in a way a stray click
+     * beside the panel is not.
+     *
+     * Set it false on anything holding typed work: a task being filed, a card
+     * being edited. Losing a half-written description to a mis-aimed click is
+     * the one dismissal nobody ever meant, and there is a Cancel button two
+     * inches away for the times they do.
+     */
+    dismissOnBackdrop?: boolean;
 };
 
 export default function ModalShell({
@@ -90,6 +101,7 @@ export default function ModalShell({
     variant = 'dialog',
     className = '',
     onBackdropClick,
+    dismissOnBackdrop = true,
 }: ModalShellProps) {
     const depth = useContext(ModalDepthContext) + 1;
     const entryRef = useRef<ShellEntry>({ depth });
@@ -125,10 +137,29 @@ export default function ModalShell({
      */
     const backdropClass = depth > 1 ? 'bg-black/20' : 'bg-black/50 backdrop-blur-sm';
 
+    /**
+     * Whether the press that produced the next click landed on the backdrop.
+     *
+     * A drag that starts inside the panel and releases past its edge — selecting
+     * a line of a description, overshooting a slider — fires `click` on the
+     * backdrop, and closing there threw away the edit the drag was part of. Only
+     * a press *and* a release on the backdrop counts as clicking outside.
+     *
+     * Starts true so a click synthesised without a press still dismisses.
+     */
+    const pressedBackdrop = useRef(true);
+
     return (
         <div
             className={`fixed inset-0 z-modal flex p-0 ${backdropClass} ${WRAPPER_CLASS[variant]}`}
-            onClick={onBackdropClick}
+            onMouseDown={(event) => {
+                pressedBackdrop.current = event.target === event.currentTarget;
+            }}
+            onClick={(event) => {
+                const outside = pressedBackdrop.current && event.target === event.currentTarget;
+                pressedBackdrop.current = true;
+                if (outside && dismissOnBackdrop) onBackdropClick?.();
+            }}
             role="presentation"
         >
             <div
