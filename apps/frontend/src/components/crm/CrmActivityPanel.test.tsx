@@ -368,6 +368,35 @@ describe('CrmActivityPanel — approving planned work', () => {
         expect(toggle).toHaveAttribute('aria-checked', 'false');
     });
 
+    /**
+     * What `CrmActivityDrawer` hangs the activities list's refresh on. It has to
+     * be a write rather than the drawer closing: a list that reloads because
+     * somebody looked swaps itself for "Loading…" for nothing.
+     */
+    it('reports a write to the caller, and stays quiet on a plain load', async () => {
+        const onChanged = jest.fn();
+        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        await screen.findByText('Chase the invoice');
+
+        expect(onChanged).not.toHaveBeenCalled();
+
+        fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
+
+        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not report a write the server refused', async () => {
+        const onChanged = jest.fn();
+        api.cancelCrmActivity.mockRejectedValue(new Error('nope'));
+        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        await screen.findByText('Chase the invoice');
+
+        fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
     it('shows the switch disabled to someone who cannot approve', async () => {
         render(<CrmActivityPanel leadId="l1" />);
         await screen.findByText('Chase the invoice');

@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: 'تعذّر تحديث الاعتماد.',
             approveActivity: 'اعتماد هذا النشاط',
             open: 'فتح',
+            viewActivities: 'عرض الأنشطة',
+            openRecord: 'فتح السجل كاملاً',
             columns: {
                 subject: 'النشاط',
                 kind: 'الغرض / القناة',
