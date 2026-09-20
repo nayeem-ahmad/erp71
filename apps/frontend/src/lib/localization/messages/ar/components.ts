@@ -228,6 +228,8 @@ export const componentsMessages = {
         bulletList: "قائمة نقطية",
         numberedList: "قائمة مرقّمة",
         link: "رابط",
+        uploading: "جارٍ رفع الصورة…",
+        pasteImage: "الصق صورة لإرفاقها.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the
