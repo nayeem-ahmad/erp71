@@ -91,6 +91,7 @@ export default function ProjectStoriesCard({
     onStoriesChanged,
     onTasksChanged,
     onOpenTask,
+    openStoryId,
 }: {
     projectId: string;
     /** The project's backlog, or null while it is still being read. */
@@ -101,6 +102,13 @@ export default function ProjectStoriesCard({
     onTasksChanged?: () => void | Promise<void>;
     /** Opens the shared task panel, which the page already owns. */
     onOpenTask?: (taskId: string) => void;
+    /**
+     * A story to arrive expanded, from `?story=<id>` — how the cross-project
+     * backlog hands a row over to the project that owns it. Only the *initial*
+     * state of that row: collapsing it afterwards is not fought, so the link
+     * opens a story rather than pinning one open.
+     */
+    openStoryId?: string | null;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -152,6 +160,7 @@ export default function ProjectStoriesCard({
                             key={story.id}
                             projectId={projectId}
                             story={story}
+                            initiallyOpen={story.id === openStoryId}
                             onEdit={() => setEditing(story)}
                             onDelete={() => setPendingDelete(story)}
                             onOpenTask={onOpenTask}
@@ -198,6 +207,7 @@ export default function ProjectStoriesCard({
 function StoryRow({
     projectId,
     story,
+    initiallyOpen = false,
     onEdit,
     onDelete,
     onOpenTask,
@@ -205,6 +215,8 @@ function StoryRow({
 }: {
     projectId: string;
     story: UserStory;
+    /** Seeds `open` only — see `openStoryId` on the card. */
+    initiallyOpen?: boolean;
     onEdit: () => void;
     onDelete: () => void;
     onOpenTask?: (taskId: string) => void;
@@ -213,7 +225,7 @@ function StoryRow({
     const { t, fmt } = useI18n();
     const m = t.projects;
 
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initiallyOpen);
     const [tasks, setTasks] = useState<StoryTask[] | null>(null);
     const [draft, setDraft] = useState('');
     const [saving, setSaving] = useState(false);
