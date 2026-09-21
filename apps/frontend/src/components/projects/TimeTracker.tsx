@@ -27,14 +27,17 @@ const errorText = (error: unknown, fallback: string): string =>
     error instanceof Error ? error.message : fallback;
 
 /**
- * The time tracker, floating over whatever page is open.
+ * The time tracker: the form behind the clock.
  *
- * It is mounted by the app shell rather than by the hour log, which is the
- * whole point: a clock you start and then navigate away from used to leave the
- * only screen that showed it running, and people lost afternoons that way. A
- * running clock now follows you — it cannot be dismissed while it counts, only
- * collapsed to its header, and it can be dragged wherever it is least in the
- * way. With nothing running it is hidden until someone opens it.
+ * The clock itself lives in the header (`TimerChip`), which is what keeps a
+ * running timer visible from page to page — a clock you start and navigate
+ * away from used to leave the only screen showing it, and people lost
+ * afternoons that way. This panel is what the chip opens: choosing a task,
+ * writing a note, attaching tags, and logging time by hand, none of which fits
+ * in a header.
+ *
+ * So it is shown on request and hidden otherwise, running or not. It can still
+ * be dragged wherever it is least in the way and collapsed to its header.
  */
 export default function TimeTracker() {
     const { t } = useI18n();
@@ -64,7 +67,12 @@ export default function TimeTracker() {
     >(null);
 
     const running = Boolean(timer);
-    const visible = running || open;
+    // Open only. A running clock used to force this panel on screen, because it
+    // was the only thing that could keep one visible across pages — the header
+    // chip does that now, in a fixed place that covers nothing. So the panel is
+    // what you open to write a note, pick tags, switch task or log time by
+    // hand, and it stays out of the way the rest of the time.
+    const visible = open;
 
     useEffect(() => {
         load();
@@ -204,10 +212,10 @@ export default function TimeTracker() {
                 title={hl.tracker}
                 collapsed={collapsed}
                 onToggleCollapse={() => setCollapsed((value) => !value)}
-                // No way to dismiss a running clock: out of sight is how an
-                // afternoon gets lost. Collapsing it is the way to get it out of
-                // the way without forgetting it.
-                onClose={running ? undefined : () => setOpen(false)}
+                // Dismissable even while a clock runs: the header chip keeps it
+                // visible, so closing this panel no longer risks the lost
+                // afternoon that used to make dismissing it dangerous.
+                onClose={() => setOpen(false)}
                 labels={{
                     move: hl.trackerMove,
                     collapse: hl.trackerCollapse,

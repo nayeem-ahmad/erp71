@@ -388,6 +388,9 @@ export const projectsMessages = {
     },
 
     timer: {
+        open: 'টাইম ট্র্যাকার',
+        openTracker: 'ট্র্যাকার খুলুন',
+        noTask: 'কোনো কাজ নেই',
         start: 'শুরু',
         stop: 'থামান',
         elsewhere: 'অন্য একটি কাজে টাইমার চলছে',

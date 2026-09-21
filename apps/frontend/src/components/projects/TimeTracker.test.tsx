@@ -130,33 +130,49 @@ describe('The floating time tracker', () => {
         expect(api.getProjects).not.toHaveBeenCalled();
     });
 
-    it('shows itself on whatever page is open the moment a clock is running', async () => {
+    it('stays out of the way while a clock runs — the header chip carries it', async () => {
         const { api } = jest.requireMock('@/lib/api');
         api.getProjectTimer.mockResolvedValue(runningTimer());
+        render(<TimeTracker />);
+
+        await waitFor(() => expect(api.getProjectTimer).toHaveBeenCalled());
+        // A running clock used to force this panel open, because nothing else
+        // could keep one visible across pages. TimerChip does that now, in the
+        // header, without covering the page.
+        expect(screen.queryByRole('region', { name: 'Time tracker' })).not.toBeInTheDocument();
+    });
+
+    it('shows the running clock once opened, for the note and tags behind it', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getProjectTimer.mockResolvedValue(runningTimer());
+        openTracker();
         render(<TimeTracker />);
 
         expect(await screen.findByRole('region', { name: 'Time tracker' })).toBeInTheDocument();
         expect(screen.getByRole('timer')).toHaveTextContent('1:04:09');
     });
 
-    /** "Always visible while it counts" is the whole point of moving it here. */
-    it('offers no way to dismiss a running clock — only to fold it away', async () => {
+    /**
+     * The old rule was that a running clock could not be dismissed, because
+     * this panel was the only thing showing it. The header chip holds it now,
+     * so closing the panel loses nothing.
+     */
+    it('can be dismissed even while a clock runs, since the chip still shows it', async () => {
         const { api } = jest.requireMock('@/lib/api');
         api.getProjectTimer.mockResolvedValue(runningTimer());
+        openTracker();
         render(<TimeTracker />);
 
         await screen.findByRole('region', { name: 'Time tracker' });
-        expect(
-            screen.queryByRole('button', { name: 'Hide the time tracker' }),
-        ).not.toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: 'Collapse the time tracker' }),
-        ).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Hide the time tracker' }));
+
+        expect(useProjectTimerStore.getState().open).toBe(false);
     });
 
     it('keeps the clock and its stop button in view once folded away', async () => {
         const { api } = jest.requireMock('@/lib/api');
         api.getProjectTimer.mockResolvedValue(runningTimer());
+        openTracker();
         render(<TimeTracker />);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Collapse the time tracker' }));
@@ -434,6 +450,7 @@ describe('The floating time tracker', () => {
         it('shows the running task and a stop button instead of start', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue(runningTimer());
+            openTracker();
             render(<TimeTracker />);
 
             expect(await screen.findByRole('button', { name: /Stop/ })).toBeInTheDocument();
@@ -444,6 +461,7 @@ describe('The floating time tracker', () => {
         it('logs the sitting even when the clock barely ran', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue(runningTimer({ elapsed_seconds: 10 }));
+            openTracker();
             render(<TimeTracker />);
 
             fireEvent.click(await screen.findByRole('button', { name: /Stop/ }));
@@ -458,6 +476,7 @@ describe('The floating time tracker', () => {
         it('tells the page under it to refetch the hours a stop just wrote', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue(runningTimer());
+            openTracker();
             render(<TimeTracker />);
 
             fireEvent.click(await screen.findByRole('button', { name: /Stop/ }));
@@ -468,6 +487,7 @@ describe('The floating time tracker', () => {
         it('corrects a running clock’s start to the time the work actually began', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue(runningTimer({ elapsed_seconds: 600 }));
+            openTracker();
             render(<TimeTracker />);
 
             const field = await screen.findByLabelText('Started at');
@@ -483,6 +503,7 @@ describe('The floating time tracker', () => {
         it('throws a misclick away without logging it', async () => {
             const { api } = jest.requireMock('@/lib/api');
             api.getProjectTimer.mockResolvedValue(runningTimer({ elapsed_seconds: 4 }));
+            openTracker();
             render(<TimeTracker />);
 
             fireEvent.click(await screen.findByRole('button', { name: 'Discard this timer' }));

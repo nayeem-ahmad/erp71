@@ -388,6 +388,9 @@ export const projectsMessages = {
     },
 
     timer: {
+        open: "متتبّع الوقت",
+        openTracker: "فتح المتتبّع",
+        noTask: "بلا مهمة",
         start: "بدء",
         stop: "إيقاف",
         elsewhere: "هناك مؤقّت يعمل بالفعل على مهمة أخرى",

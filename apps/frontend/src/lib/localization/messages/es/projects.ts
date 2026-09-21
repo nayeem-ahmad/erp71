@@ -388,6 +388,9 @@ export const projectsMessages = {
     },
 
     timer: {
+        open: "Registro de tiempo",
+        openTracker: "abrir el registro",
+        noTask: "Sin tarea",
         start: "Iniciar",
         stop: "Detener",
         elsewhere: "Ya hay un temporizador en otra tarea",
