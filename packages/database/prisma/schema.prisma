@@ -1018,6 +1018,8 @@ model Tenant {
   storefrontPages            StorefrontPage[]
   storefrontMenuLinks        StorefrontMenuLink[]
   boards                     Board[]
+  boardSlugHistory           BoardSlugHistory[]
+  projectCodeHistory         ProjectCodeHistory[]
   boardColumns               BoardColumn[]
   boardColumnStatuses        BoardColumnStatus[]
   boardTasks                 BoardTask[]
@@ -6911,6 +6913,8 @@ model Project {
   taskActivities ProjectTaskActivity[]
   taskStatuses   ProjectTaskStatus[]
 
+  codeHistory ProjectCodeHistory[]
+
   @@unique([tenant_id, code])
   @@index([tenant_id, status, deleted_at])
   @@index([tenant_id, visibility, deleted_at])
@@ -7088,6 +7092,10 @@ model ProjectTask {
   id                   String             @id @default(uuid())
   tenant_id            String
   project_id           String
+  /// 1-based within a project, like ProjectUserStory.reference. The displayed
+  /// key is `<project.code>-<reference>`, composed at read time so it follows
+  /// the project's current code rather than freezing a copy of it.
+  reference            Int
   milestone_id         String?
   /// The story this task delivers a piece of. Independent of `parent_task_id`:
   /// a task can be a subtask of another task *and* belong to a story, and a
@@ -7147,6 +7155,7 @@ model ProjectTask {
   attachments    ProjectAttachment[]
   boardCards     BoardTask[]
 
+  @@unique([project_id, reference])
   @@index([tenant_id, project_id, deleted_at])
   @@index([tenant_id, sprint_id])
   @@index([tenant_id, user_story_id])
@@ -7239,6 +7248,11 @@ model Board {
   id          String    @id @default(uuid())
   tenant_id   String
   name        String
+  /// The board's readable URL key. Derived from the name at creation and then
+  /// edited deliberately — it does not follow a rename, because churning a URL
+  /// on every typo fix is worse than a slug that has drifted from the name.
+  /// Past slugs live in BoardSlugHistory and keep resolving.
+  slug        String
   description String?
   created_by  String?
   created_at  DateTime  @default(now())
@@ -7264,13 +7278,36 @@ model Board {
   tenant  Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   creator User?  @relation("BoardCreator", fields: [created_by], references: [id])
 
-  columns BoardColumn[]
-  cards   BoardTask[]
+  columns     BoardColumn[]
+  cards       BoardTask[]
+  slugHistory BoardSlugHistory[]
 
   /// Names are deliberately not unique: a unique (tenant_id, name) would let a
   /// soft-deleted board hold its name hostage against a new one.
+  @@unique([tenant_id, slug])
   @@index([tenant_id, deleted_at])
   @@map("boards")
+}
+
+/// Every slug a board has ever answered to.
+///
+/// A link pasted into a chat three months ago has to keep working, and a broken
+/// one of these is never reported — the person finds nothing and gives up. The
+/// unique spans history as well as live slugs, so a slug freed by a rename
+/// cannot be claimed by another board and silently steal its links.
+model BoardSlugHistory {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  board_id   String
+  slug       String
+  created_at DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  board  Board  @relation(fields: [board_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, slug])
+  @@index([board_id])
+  @@map("board_slug_history")
 }
 
 model BoardColumn {
@@ -8273,4 +8310,25 @@ model ChatAttachment {
 
   @@index([message_id])
   @@map("chat_attachments")
+}
+
+/// Every code a project has ever answered to.
+///
+/// A task's key is composed from its project's code, so editing a code would
+/// invalidate every `PRJ-0002-14` ever pasted anywhere. This keeps the old key
+/// resolving, and redirecting to the new one — the same guarantee
+/// BoardSlugHistory gives a renamed board.
+model ProjectCodeHistory {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  project_id String
+  code       String
+  created_at DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, code])
+  @@index([project_id])
+  @@map("project_code_history")
 }
