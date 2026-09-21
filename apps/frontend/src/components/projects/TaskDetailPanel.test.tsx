@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskDetailPanel from './TaskDetailPanel';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 
 /**
  * Types into a `RichTextEditor`, which is a contenteditable rather than a
@@ -1138,6 +1139,12 @@ describe('TaskDetailPanel assignee', () => {
 });
 
 describe('TaskDetailPanel timer', () => {
+    // The timer store is a module singleton, so a case that leaves a clock
+    // running would hand it to the next one.
+    beforeEach(() => {
+        useProjectTimerStore.setState({ timer: null, loaded: false, busy: false });
+    });
+
     /**
      * The clock belongs with the figures it moves. It used to sit in its own
      * right-aligned row above the description, which put a control over the
@@ -1169,7 +1176,11 @@ describe('TaskDetailPanel timer', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: /start/i }));
 
-        await waitFor(() => expect(startProjectTimer).toHaveBeenCalledWith({ taskId: 't1' }));
+        // tagIds comes from the shared start(), which the hour log's restart
+        // button uses too — one shape for every caller.
+        await waitFor(() =>
+            expect(startProjectTimer).toHaveBeenCalledWith({ taskId: 't1', tagIds: [] }),
+        );
     });
 
     it('offers to stop the clock it is already running', async () => {
@@ -1179,6 +1190,51 @@ describe('TaskDetailPanel timer', () => {
         fireEvent.click(await screen.findByRole('button', { name: /stop/i }));
 
         await waitFor(() => expect(stopProjectTimer).toHaveBeenCalled());
+    });
+
+    /**
+     * The button used to keep its own copy of what was running and never tell
+     * the shared store, so the floating tracker — which renders only when the
+     * store holds a timer — stayed invisible after starting from a task card.
+     * Asserting the API call alone is what let that ship, so these assert the
+     * store instead.
+     */
+    it('puts the started timer in the shared store, so the tracker can show it', async () => {
+        useProjectTimerStore.setState({ timer: null, loaded: true });
+        getProjectTimer.mockResolvedValue(null);
+        panel();
+
+        getProjectTimer.mockResolvedValue({ id: 'tm1', task: { id: 't1' }, elapsed_seconds: 0 });
+        fireEvent.click(await screen.findByRole('button', { name: /start/i }));
+
+        await waitFor(() =>
+            expect(useProjectTimerStore.getState().timer?.task?.id).toBe('t1'),
+        );
+    });
+
+    it('clears the shared store when the clock is stopped', async () => {
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 't1' }, elapsed_seconds: 12 } as never,
+            loaded: true,
+        });
+        getProjectTimer.mockResolvedValue({ id: 'tm1', task: { id: 't1' }, elapsed_seconds: 12 });
+        panel();
+
+        getProjectTimer.mockResolvedValue(null);
+        fireEvent.click(await screen.findByRole('button', { name: /stop/i }));
+
+        await waitFor(() => expect(useProjectTimerStore.getState().timer).toBeNull());
+    });
+
+    it('reads what is running from the store rather than polling on its own', async () => {
+        // A timer already running on this task, known only to the store.
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 't1' }, elapsed_seconds: 30 } as never,
+            loaded: true,
+        });
+        panel();
+
+        expect(await screen.findByRole('button', { name: /stop/i })).toBeInTheDocument();
     });
 });
 

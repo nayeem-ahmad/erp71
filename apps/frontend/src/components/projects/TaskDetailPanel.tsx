@@ -59,6 +59,8 @@ import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
 import { sizedImageUrl } from '@/components/ui/markdown-bridge';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
+import { useProjectTimerActions } from './use-project-timer';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
@@ -1528,42 +1530,27 @@ function TimerButton({
     const { t } = useI18n();
     const m = t.projects;
 
-    const [runningOn, setRunningOn] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-    const [failed, setFailed] = useState(false);
-
-    const read = useCallback(async () => {
-        try {
-            const timer = await api.getProjectTimer();
-            const on = (timer as { task?: { id?: string } } | null)?.task?.id ?? null;
-            setRunningOn(on);
-            setFailed(false);
-        } catch {
-            // A card whose timer state cannot be read still opens; the button
-            // simply does not offer to start something it cannot reason about.
-            setFailed(true);
-        }
-    }, []);
+    // The one running clock lives in the store, not here. A private copy was
+    // what kept the floating tracker hidden after starting from a task card:
+    // the POST succeeded, this button flipped to "Stop", and the store — which
+    // is the only thing the tracker renders from — never heard about it.
+    const timer = useProjectTimerStore((state) => state.timer);
+    const loaded = useProjectTimerStore((state) => state.loaded);
+    const busy = useProjectTimerStore((state) => state.busy);
+    const { load, start, stop } = useProjectTimerActions();
 
     useEffect(() => {
-        void read();
-    }, [read]);
+        // The layout's tracker loads this too, but a task card can be opened on
+        // a route where the tracker is gated off, so it asks once itself.
+        if (!loaded) load();
+    }, [loaded, load]);
 
     const run = async (action: () => Promise<unknown>) => {
-        setBusy(true);
-        try {
-            await action();
-            await read();
-            await onChanged();
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
-        } finally {
-            setBusy(false);
-        }
+        await action();
+        await onChanged();
     };
 
-    if (failed) return null;
-
+    const runningOn = timer?.task?.id ?? null;
     const mine = runningOn === taskId;
     const elsewhere = runningOn != null && !mine;
 
@@ -1574,11 +1561,7 @@ function TimerButton({
             className={`max-md:min-h-touch${full ? ' mt-2 w-full justify-center' : ''}`}
             disabled={busy || elsewhere}
             title={elsewhere ? m.timer.elsewhere : undefined}
-            onClick={() =>
-                run(() =>
-                    mine ? api.stopProjectTimer() : api.startProjectTimer({ taskId }),
-                )
-            }
+            onClick={() => run(() => (mine ? stop() : start({ taskId, tagIds: [] })))}
         >
             {mine ? (
                 <>
