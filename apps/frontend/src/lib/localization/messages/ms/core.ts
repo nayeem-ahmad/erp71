@@ -323,6 +323,7 @@ export const coreMessages = {
             projectsList: "Semua Projek",
             projectsBoards: "Papan",
             projectsTasks: "Tugasan",
+            projectsStories: "Cerita pengguna",
             projectsSprints: "Sprint",
             projectsHourLogs: "Log Jam",
             projectsHourLogReport: "Laporan Log Jam",

@@ -52,6 +52,7 @@ export class ProjectStoriesService {
             tenant_id: tenantId,
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.status ? { status: query.status } : {}),
+            ...(query.priority ? { priority: query.priority } : {}),
             // A soft-deleted project keeps its rows; its stories must not keep
             // showing up in a cross-project list.
             project: { deleted_at: null },
@@ -71,7 +72,15 @@ export class ProjectStoriesService {
 
         const stories = await this.db.projectUserStory.findMany({
             where: where as never,
-            orderBy: [{ sort_order: 'asc' }, { reference: 'asc' }],
+            // Within one project, `sort_order` is the backlog order somebody
+            // arranged and `reference` breaks the ties. Across projects that
+            // pair is meaningless on its own — it interleaves every project's
+            // US-1, then every project's US-2 — so the cross-project list is
+            // grouped by project first and each project's backlog order is
+            // preserved inside its group.
+            orderBy: query.projectId
+                ? [{ sort_order: 'asc' }, { reference: 'asc' }]
+                : [{ project: { code: 'asc' } }, { sort_order: 'asc' }, { reference: 'asc' }],
             include: STORY_INCLUDE,
         });
 
