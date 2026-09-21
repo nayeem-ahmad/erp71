@@ -38,9 +38,9 @@ export default function FeedbackWidget() {
                             feedbackEnabled={feedback}
                             capturePage
                             onCancel={() => setOpen(false)}
-                            onCreated={(threadId) => {
+                            onCreated={(created) => {
                                 setOpen(false);
-                                router.push(`${routes.support}?thread=${threadId}`);
+                                router.push(`${routes.support}?thread=${created.id}`);
                             }}
                         />
                     </div>

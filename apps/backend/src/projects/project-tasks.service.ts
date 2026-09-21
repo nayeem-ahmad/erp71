@@ -315,12 +315,15 @@ export class ProjectTasksService {
                 description: dto.description?.trim() || null,
                 status_id: statusId,
                 priority: (dto.priority ?? 'MEDIUM') as never,
-                assignee_id: dto.assigneeId ?? null,
-                assignee_employee_id: dto.assigneeEmployeeId ?? null,
-                milestone_id: dto.milestoneId ?? null,
-                user_story_id: dto.userStoryId ?? null,
-                sprint_id: dto.sprintId ?? null,
-                parent_task_id: dto.parentTaskId ?? null,
+                // `|| null`, not `?? null`: the dialog sends `''` for a link the
+                // user left empty, and an empty string is not a UUID a FK column
+                // will take.
+                assignee_id: dto.assigneeId || null,
+                assignee_employee_id: dto.assigneeEmployeeId || null,
+                milestone_id: dto.milestoneId || null,
+                user_story_id: dto.userStoryId || null,
+                sprint_id: dto.sprintId || null,
+                parent_task_id: dto.parentTaskId || null,
                 start_date: dto.startDate ? new Date(dto.startDate) : null,
                 due_date: dto.dueDate ? new Date(dto.dueDate) : null,
                 cover_color: (dto.coverColor ?? null) as never,
@@ -349,7 +352,7 @@ export class ProjectTasksService {
                 tenantId,
                 taskId: task.id,
                 projectId: dto.projectId,
-                sprintId: dto.sprintId ?? null,
+                sprintId: dto.sprintId || null,
                 previousHours: null,
                 newHours: opening,
                 source: RemainingSource.TASK_CREATED,
@@ -699,6 +702,40 @@ export class ProjectTasksService {
             data: { deleted_at: new Date() },
         });
         return { success: true };
+    }
+
+    /**
+     * "Delete selected" on the Tasks page, in one round trip.
+     *
+     * The page used to fire one `DELETE /project-tasks/:id` per selected row.
+     * With the platform's default throttle at 20 requests a minute per address
+     * — and not raised in production — a selection past twenty rows spent the
+     * whole budget and the rest came back `429`, which the page reported as
+     * "could not be deleted": a half-finished delete dressed up as a failure.
+     *
+     * Invisible and already-deleted ids are *skipped*, not raised: unlike the
+     * single-task route there is no one task the caller asked for, and failing
+     * the whole batch over one row somebody else deleted a second earlier would
+     * throw away the rest of the work. The count of each comes back so the page
+     * can say what actually happened.
+     */
+    async bulkRemove(viewer: ProjectViewer, taskIds: string[]) {
+        // Deduped so the counts below describe tasks rather than list entries: a
+        // repeated id is one delete, and `requested - deleted` must not report a
+        // skip that never existed.
+        const ids = [...new Set(taskIds)];
+
+        const where = ProjectAccessService.merge(
+            { id: { in: ids }, tenant_id: viewer.tenantId, deleted_at: null },
+            await this.access.taskFilter(viewer),
+        );
+
+        const { count } = await this.db.projectTask.updateMany({
+            where: where as never,
+            data: { deleted_at: new Date() },
+        });
+
+        return { success: true, deleted: count, skipped: ids.length - count };
     }
 
     async remainingHistory(viewer: ProjectViewer, taskId: string) {

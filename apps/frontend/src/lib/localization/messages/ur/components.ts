@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "بھیج دیا گیا",
         successDescription: "ہم اسی گفتگو میں جواب دیں گے۔",
         defaultError: "کچھ غلط ہو گیا۔ براہِ کرم دوبارہ کوشش کریں۔",
+        createdToast: "ٹکٹ #{number} بن گیا۔",
     },
     supportPage: {
         title: "سپورٹ",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "حل شدہ",
         replyPlaceholder: "پیغام لکھیں… (بھیجنے کے لیے Enter)",
         createTitle: "نئی گفتگو",
+        ticketLabel: "ٹکٹ #{number}",
+        resolvedNotice: "سپورٹ نے ٹکٹ #{number} کو حل شدہ قرار دیا۔",
+        reopenedNotice: "ٹکٹ #{number} دوبارہ کھولا گیا۔",
+        replyNotice: "ٹکٹ #{number} پر نیا جواب۔",
+        searchPlaceholder: "گفتگو تلاش کریں…",
+        allStatuses: "تمام سٹیٹس",
+        statusOpen: "کھلا",
+        statusResolved: "حل شدہ",
+        allTypes: "تمام اقسام",
+        noMatches: "ان فلٹرز سے کوئی گفتگو نہیں ملی۔",
+        clearFilters: "فلٹرز صاف کریں",
+        count: "{count, plural, one {# گفتگو} other {# گفتگوئیں}}",
+        replyPlaceholderMobile: "پیغام لکھیں…",
     },
     voiceNavWidget: {
         startAria: "صوتی نیویگیشن — صفحے کا نام بولیں",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "گاہک کی واپسی کیسے درج کروں؟",
         },
     },
+    preview: {
+        title: "پیش منظر",
+        zoomIn: "بڑا کریں",
+        zoomOut: "چھوٹا کریں",
+        resetZoom: "زوم ری سیٹ کریں",
+        next: "اگلا",
+        previous: "پچھلا",
+        download: "ڈاؤن لوڈ",
+        openInNewTab: "نئے ٹیب میں کھولیں",
+        closePreview: "پیش منظر بند کریں",
+        noPreview: "اس فائل کا پیش منظر نہیں دکھایا جا سکتا۔",
+    },
+
     richText: {
         toolbar: "فارمیٹنگ",
         hint: "فارمیٹنگ: **بولڈ**، *ترچھا*، - فہرستیں اور [لنکس](url)۔",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "نکاتی فہرست",
         numberedList: "عددی فہرست",
         link: "لنک",
+        uploading: "تصویر اپ لوڈ ہو رہی ہے…",
+        resizeImage: "تصویر کا سائز تبدیل کریں",
+        pasteImage: "تصویر منسلک کرنے کے لیے پیسٹ کریں۔",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

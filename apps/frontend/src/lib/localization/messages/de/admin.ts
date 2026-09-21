@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: "Allgemeine Einstellungen",
-                    description: "Plattformname, Support-E-Mail und Wartungsmodus.",
+                    description: "Plattformname, Support-E-Mail, Wartungsmodus und der Demo-Schalter.",
                 },
                 tenantFeatures: {
                     label: "Mandantenfunktionen",
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: "Wartungsmodus",
                 hint: "Ist er aktiv, liefert die API für alle Nicht-Admin-Anfragen einen 503 zurück.",
                 activeWarning: "Der Wartungsmodus ist AN — Mandanten können nicht auf die Plattform zugreifen.",
+            },
+            demo: {
+                label: "Demo testen",
+                hint: "Zeigt die Demo-Schaltfläche auf der Anmeldeseite und der Marketing-Startseite. Besucher werden direkt im gemeinsamen Demo-Workspace angemeldet.",
+                offNotice: "Demo testen ist AUS — die Schaltflächen sind ausgeblendet und die Demo-Anmeldung wird abgelehnt.",
             },
             saved: "Allgemeine Einstellungen gespeichert.",
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: "Posteingang",
         subtitle: "Support und Feedback von Ladeninhabern · {total} Konversationen",
         loadFailed: "Die Konversationen konnten nicht geladen werden",
-        searchPlaceholder: "Nach Betreff suchen…",
+        searchPlaceholder: "Nach Ticketnummer oder Betreff suchen…",
         loading: "Konversationen werden geladen…",
         noThreads: "Keine Konversationen gefunden.",
         allStatuses: "Alle Status",
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: "Alle Benutzer",
         unknownUser: "Unbekannter Benutzer",
         startedBy: "Gestartet von {user}",
+        ticketLabel: "Ticket #{number}",
         types: {
             support: "Hilfe",
             bug: "Fehler",

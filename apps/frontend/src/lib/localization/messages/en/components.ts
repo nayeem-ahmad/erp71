@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: 'Sent',
         successDescription: 'We will reply in this conversation.',
         defaultError: 'Something went wrong. Please try again.',
+        createdToast: 'Ticket #{number} created.',
     },
     supportPage: {
         title: 'Support',
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: 'Resolved',
         replyPlaceholder: 'Type a message… (Enter to send)',
         createTitle: 'New conversation',
+        ticketLabel: 'Ticket #{number}',
+        resolvedNotice: 'Support marked ticket #{number} as resolved.',
+        reopenedNotice: 'Ticket #{number} was reopened.',
+        replyNotice: 'New reply on ticket #{number}.',
+        searchPlaceholder: 'Search conversations…',
+        allStatuses: 'All statuses',
+        statusOpen: 'Open',
+        statusResolved: 'Resolved',
+        allTypes: 'All types',
+        noMatches: 'No conversations match these filters.',
+        clearFilters: 'Clear filters',
+        count: '{count, plural, one {# conversation} other {# conversations}}',
+        replyPlaceholderMobile: 'Type a message…',
     },
     voiceNavWidget: {
         startAria: 'Voice navigation — speak a page name',
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: 'How do I record a customer return?',
         },
     },
+    preview: {
+        title: "Preview",
+        zoomIn: "Zoom in",
+        zoomOut: "Zoom out",
+        resetZoom: "Reset zoom",
+        next: "Next",
+        previous: "Previous",
+        download: "Download",
+        openInNewTab: "Open in a new tab",
+        closePreview: "Close preview",
+        noPreview: "This file cannot be previewed.",
+    },
+
     richText: {
         toolbar: 'Formatting',
         hint: 'Formatting: **bold**, *italic*, - lists and [links](url).',
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: 'Bulleted list',
         numberedList: 'Numbered list',
         link: 'Link',
+        uploading: 'Uploading image…',
+        resizeImage: 'Resize image',
+        pasteImage: 'Paste an image to attach it.',
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

@@ -44,3 +44,20 @@ export function threadCategoryWhere(category?: string, kind?: string): Record<st
     }
     return {};
 }
+
+/**
+ * The ticket number an admin typed into the inbox search box, or `null` when
+ * what they typed is not one.
+ *
+ * Accepts `1042`, `#1042` and surrounding spaces, because a shop owner reading
+ * their ticket number down the phone is as likely to include the hash as not.
+ * Rejects anything else — including a number too large to be a real ticket —
+ * so the caller can fall back to a plain subject search rather than send
+ * Postgres an out-of-range `int4` comparison and get a 500.
+ */
+export function parseTicketNumberQuery(search: string): number | null {
+    const match = /^#?\s*(\d{1,9})$/.exec(search.trim());
+    if (!match) return null;
+    const value = Number(match[1]);
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+}

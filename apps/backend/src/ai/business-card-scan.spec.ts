@@ -13,6 +13,7 @@ import { ProductsService } from '../products/products.service';
 describe('AiService.scanBusinessCard', () => {
     let service: AiService;
     let db: any;
+    let platformSettings: { getRawValue: jest.Mock };
     let fetchMock: jest.Mock;
 
     const TENANT = 'tenant-1';
@@ -29,7 +30,20 @@ describe('AiService.scanBusinessCard', () => {
         });
     };
 
-    const sentPayload = () => JSON.parse(fetchMock.mock.calls[0][1].body);
+    /**
+     * OpenRouter's 404 for a model with no image-capable endpoint — the whole
+     * reason the scanner cannot simply trust the configured model.
+     */
+    const rejectAsTextOnly = () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: { message: 'No endpoints found that support image input' } }),
+    });
+
+    const sentPayload = (call = 0) => JSON.parse(fetchMock.mock.calls[call][1].body);
+
+    /** The model on each request that went out, in order. */
+    const modelsTried = () => fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).model);
 
     beforeEach(async () => {
         db = {
@@ -47,7 +61,7 @@ describe('AiService.scanBusinessCard', () => {
             tenant: { findUnique: jest.fn().mockResolvedValue({ ai_credits_bonus: 0 }) },
         };
 
-        const platformSettings = { getRawValue: jest.fn().mockResolvedValue(null) };
+        platformSettings = { getRawValue: jest.fn().mockResolvedValue(null) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -147,5 +161,91 @@ describe('AiService.scanBusinessCard', () => {
         await expect(service.scanBusinessCard(TENANT, { imageBase64: '   ' })).rejects.toBeInstanceOf(
             BadRequestException,
         );
+    });
+
+    it('uses the configured vision model over the platform default', async () => {
+        platformSettings.getRawValue.mockImplementation(async (_group: string, key: string) =>
+            key === 'vision_model' ? 'google/gemini-2.5-flash' : null,
+        );
+        respondWith('{"name":"Rafiq Islam"}');
+
+        await service.scanBusinessCard(TENANT, { imageBase64: PIXEL });
+
+        expect(sentPayload().model).toBe('google/gemini-2.5-flash');
+    });
+
+    /**
+     * The reported bug: a text-only `default_model` — a defensible choice on
+     * price, and one the admin dropdown offers — turned every scan into
+     * "AI service error: No endpoints found that support image input".
+     */
+    describe('when the configured model cannot read images', () => {
+        beforeEach(() => {
+            platformSettings.getRawValue.mockImplementation(async (_group: string, key: string) =>
+                key === 'vision_model' ? 'qwen/qwen3.7-plus' : null,
+            );
+        });
+
+        it('retries the scan on a vision-capable model and returns the card', async () => {
+            fetchMock.mockResolvedValueOnce(rejectAsTextOnly()).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    choices: [{ message: { content: '{"name":"Rafiq Islam"}' } }],
+                    usage: { prompt_tokens: 900, completion_tokens: 60, total_tokens: 960 },
+                }),
+            });
+
+            await expect(service.scanBusinessCard(TENANT, { imageBase64: PIXEL })).resolves.toEqual({
+                name: 'Rafiq Islam',
+            });
+            expect(modelsTried()).toEqual(['qwen/qwen3.7-plus', 'anthropic/claude-haiku-4.5']);
+            // The image has to travel with the retry, or it reads a blank card.
+            expect(sentPayload(1).messages[1].content[1].image_url.url).toContain(PIXEL);
+        });
+
+        it('bills the model that actually ran, not the one configured', async () => {
+            fetchMock.mockResolvedValueOnce(rejectAsTextOnly()).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    choices: [{ message: { content: '{"name":"Rafiq Islam"}' } }],
+                    usage: { prompt_tokens: 900, completion_tokens: 60, total_tokens: 960 },
+                }),
+            });
+
+            await service.scanBusinessCard(TENANT, { imageBase64: PIXEL });
+
+            expect(db.aiUsageLog.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ model: 'anthropic/claude-haiku-4.5' }),
+                }),
+            );
+        });
+
+        // The rejection is a property of the model, not of the moment — three
+        // attempts at it only spend the backoff before the same failure.
+        it('does not retry the rejected model before falling back', async () => {
+            fetchMock.mockResolvedValueOnce(rejectAsTextOnly()).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    choices: [{ message: { content: '{"name":"Rafiq Islam"}' } }],
+                    usage: { prompt_tokens: 900, completion_tokens: 60, total_tokens: 960 },
+                }),
+            });
+
+            await service.scanBusinessCard(TENANT, { imageBase64: PIXEL });
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('explains the misconfiguration when the fallback is refused too', async () => {
+            fetchMock.mockResolvedValue(rejectAsTextOnly());
+
+            await expect(service.scanBusinessCard(TENANT, { imageBase64: PIXEL })).rejects.toThrow(
+                /qwen\/qwen3\.7-plus.*cannot read images/s,
+            );
+        });
     });
 });

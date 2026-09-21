@@ -5,7 +5,9 @@ import MarketingNav from '@/components/marketing/MarketingNav';
 import BlogSubscribeBand from '@/components/blog/BlogSubscribeBand';
 import FeaturedPost from '@/components/blog/FeaturedPost';
 import PostCard from '@/components/blog/PostCard';
-import { fetchCategories, fetchPosts, siteOrigin } from '@/lib/blog/api';
+import BlogLanguageSwitch from '@/components/blog/BlogLanguageSwitch';
+import { categoryName, fetchCategories, fetchPosts, siteOrigin } from '@/lib/blog/api';
+import { blogHref, blogStrings, resolveBlogLocale } from '@/lib/blog/locale';
 
 /**
  * The blog index — a server component, which is the whole point of it.
@@ -26,33 +28,60 @@ export const revalidate = 300;
 
 const PAGE_SIZE = 12;
 
-export const metadata: Metadata = {
-    title: 'Blog — ERP71',
-    description: 'Guides, product updates and notes on running a shop in Bangladesh.',
-    alternates: {
-        canonical: `${siteOrigin()}/blog`,
-        types: { 'application/rss+xml': `${siteOrigin()}/blog/rss.xml` },
-    },
-    openGraph: {
-        type: 'website',
-        title: 'The ERP71 blog',
-        description: 'Practical writing for shop owners — stock, cash, staff and the software in between.',
-        url: `${siteOrigin()}/blog`,
-    },
-};
+/**
+ * Metadata is generated rather than static because the title, description and
+ * canonical all move with `?lang`. `alternates.languages` is what stops the two
+ * versions competing: without it a crawler sees near-duplicate pages at two
+ * URLs and picks one, which is usually not the one the reader wanted.
+ */
+export async function generateMetadata({
+    searchParams,
+}: {
+    searchParams: Promise<{ lang?: string }>;
+}): Promise<Metadata> {
+    const { lang } = await searchParams;
+    const locale = resolveBlogLocale(lang);
+    const t = blogStrings(locale);
+    const origin = siteOrigin();
+
+    return {
+        title: `${t.blogTitle} — ERP71`,
+        description: t.blogTagline,
+        alternates: {
+            canonical: `${origin}${blogHref('/blog', locale)}`,
+            languages: {
+                en: `${origin}/blog`,
+                bn: `${origin}/blog?lang=bn`,
+            },
+            types: { 'application/rss+xml': `${origin}/blog/rss.xml` },
+        },
+        openGraph: {
+            type: 'website',
+            title: t.blogTitle,
+            description: t.blogTagline,
+            url: `${origin}${blogHref('/blog', locale)}`,
+            locale: locale === 'bn' ? 'bn_BD' : 'en_US',
+        },
+    };
+}
 
 export default async function BlogIndexPage({
     searchParams,
 }: {
-    searchParams: Promise<{ page?: string }>;
+    searchParams: Promise<{ page?: string; lang?: string }>;
 }) {
-    const { page: pageParam } = await searchParams;
+    const { page: pageParam, lang } = await searchParams;
     const page = Math.max(parseInt(pageParam ?? '1', 10) || 1, 1);
+    const locale = resolveBlogLocale(lang);
+    const t = blogStrings(locale);
 
     const [list, categories] = await Promise.all([
-        fetchPosts({ page, limit: PAGE_SIZE }),
+        fetchPosts({ locale, page, limit: PAGE_SIZE }),
         fetchCategories(),
     ]);
+
+    /** This page's own URL, minus the language, for the switch to rewrite. */
+    const selfPath = page === 1 ? '/blog' : `/blog?page=${page}`;
 
     const lastPage = Math.max(Math.ceil(list.total / PAGE_SIZE), 1);
 
@@ -69,26 +98,29 @@ export default async function BlogIndexPage({
 
             <main className="mx-auto max-w-5xl px-6 pb-16 pt-28">
                 <header>
-                    <h1 className="text-5xl font-black leading-none tracking-tighter text-gray-900 md:text-6xl">
-                        The ERP71 blog
-                    </h1>
+                    <div className="flex items-start justify-between gap-4">
+                        <h1 className="text-5xl font-black leading-none tracking-tighter text-gray-900 md:text-6xl">
+                            {t.blogTitle}
+                        </h1>
+                        <BlogLanguageSwitch path={selfPath} locale={locale} />
+                    </div>
                     <p className="mt-6 max-w-2xl text-lg leading-relaxed text-gray-600">
-                        Practical writing for shop owners — stock, cash, staff and the software in between.
+                        {t.blogTagline}
                     </p>
                 </header>
 
                 {categories.length > 0 && (
-                    <nav className="mt-6 flex flex-wrap gap-2" aria-label="Categories">
+                    <nav className="mt-6 flex flex-wrap gap-2" aria-label={t.categories}>
                         <span className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
-                            All posts
+                            {t.allPosts}
                         </span>
                         {categories.map((category) => (
                             <Link
                                 key={category.id}
-                                href={`/blog/category/${category.slug}`}
+                                href={blogHref(`/blog/category/${category.slug}`, locale)}
                                 className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-blue-600 hover:text-blue-600"
                             >
-                                {category.name_en}
+                                {categoryName(category, locale)}
                             </Link>
                         ))}
                     </nav>
@@ -96,12 +128,12 @@ export default async function BlogIndexPage({
 
                 {lead && (
                     <div className="mt-10 border-t border-gray-100 pt-10">
-                        <FeaturedPost post={lead} />
+                        <FeaturedPost post={lead} locale={locale} />
                     </div>
                 )}
 
                 {list.rows.length === 0 && (
-                    <p className="mt-12 text-base text-gray-500">No posts yet. Check back soon.</p>
+                    <p className="mt-12 text-base text-gray-500">{t.noPosts}</p>
                 )}
 
                 {rest.length > 0 && (
@@ -111,42 +143,45 @@ export default async function BlogIndexPage({
                                 so they get the neutral heading rather than a second
                                 "page N" the reader has to reconcile. */}
                             <h2 className="text-lg font-bold tracking-tight text-gray-900">
-                                {lead ? 'Latest posts' : 'More posts'}
+                                {lead ? t.latestPosts : t.morePosts}
                             </h2>
                             <Link
                                 href="/blog/rss.xml"
                                 className="text-xs font-semibold text-blue-600 hover:underline"
                             >
-                                RSS feed →
+                                {t.rssFeed}
                             </Link>
                         </div>
 
                         <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
                             {rest.map((post) => (
-                                <PostCard key={post.id} post={post} />
+                                <PostCard key={post.id} post={post} locale={locale} />
                             ))}
                         </div>
                     </section>
                 )}
 
                 {lastPage > 1 && (
-                    <nav className="mt-12 flex items-center justify-between border-t border-gray-100 pt-6" aria-label="Pagination">
+                    <nav className="mt-12 flex items-center justify-between border-t border-gray-100 pt-6" aria-label={t.pageOf(page, lastPage)}>
                         {page > 1 ? (
                             <Link
-                                href={page === 2 ? '/blog' : `/blog?page=${page - 1}`}
+                                href={blogHref(page === 2 ? '/blog' : `/blog?page=${page - 1}`, locale)}
                                 className="text-sm font-medium text-blue-600 hover:underline"
                             >
-                                ← Newer
+                                {t.newer}
                             </Link>
                         ) : (
                             <span />
                         )}
                         <span className="text-xs text-gray-500">
-                            Page {page} of {lastPage}
+                            {t.pageOf(page, lastPage)}
                         </span>
                         {page < lastPage ? (
-                            <Link href={`/blog?page=${page + 1}`} className="text-sm font-medium text-blue-600 hover:underline">
-                                Older →
+                            <Link
+                                href={blogHref(`/blog?page=${page + 1}`, locale)}
+                                className="text-sm font-medium text-blue-600 hover:underline"
+                            >
+                                {t.older}
                             </Link>
                         ) : (
                             <span />

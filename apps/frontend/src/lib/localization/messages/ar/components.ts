@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "تم الإرسال",
         successDescription: "سنرد في هذه المحادثة.",
         defaultError: "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
+        createdToast: "تم إنشاء التذكرة #{number}.",
     },
     supportPage: {
         title: "الدعم",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "تم الحل",
         replyPlaceholder: "اكتب رسالة… (Enter للإرسال)",
         createTitle: "محادثة جديدة",
+        ticketLabel: "التذكرة #{number}",
+        resolvedNotice: "حدَّد الدعم التذكرة #{number} كمحلولة.",
+        reopenedNotice: "أُعيد فتح التذكرة #{number}.",
+        replyNotice: "رد جديد على التذكرة #{number}.",
+        searchPlaceholder: "ابحث في المحادثات…",
+        allStatuses: "كل الحالات",
+        statusOpen: "مفتوحة",
+        statusResolved: "تم الحل",
+        allTypes: "كل الأنواع",
+        noMatches: "لا توجد محادثات تطابق هذه المرشحات.",
+        clearFilters: "مسح المرشحات",
+        count: "{count, plural, one {# محادثة} other {# محادثات}}",
+        replyPlaceholderMobile: "اكتب رسالة…",
     },
     voiceNavWidget: {
         startAria: "التنقل الصوتي — انطق اسم صفحة",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "كيف أسجّل مرتجع عميل؟",
         },
     },
+    preview: {
+        title: "معاينة",
+        zoomIn: "تكبير",
+        zoomOut: "تصغير",
+        resetZoom: "إعادة ضبط التكبير",
+        next: "التالي",
+        previous: "السابق",
+        download: "تنزيل",
+        openInNewTab: "فتح في علامة تبويب جديدة",
+        closePreview: "إغلاق المعاينة",
+        noPreview: "لا يمكن معاينة هذا الملف.",
+    },
+
     richText: {
         toolbar: "التنسيق",
         hint: "التنسيق: **عريض**، *مائل*، - قوائم و[روابط](url).",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "قائمة نقطية",
         numberedList: "قائمة مرقّمة",
         link: "رابط",
+        uploading: "جارٍ رفع الصورة…",
+        resizeImage: "تغيير حجم الصورة",
+        pasteImage: "الصق صورة لإرفاقها.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

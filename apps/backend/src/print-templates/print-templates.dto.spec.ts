@@ -54,8 +54,31 @@ describe('CreatePrintTemplateDto', () => {
         ).toHaveLength(0);
     });
 
+    it('accepts a v3 config placing the title and bleeding the footer', async () => {
+        expect(
+            await parse({
+                ...base,
+                version: 3,
+                logo: { heightMm: 16, showOnThermal: true, fullWidth: true },
+                title: {
+                    ...base.title,
+                    position: 'above-center',
+                    offsetXMm: -4,
+                    offsetYMm: 2,
+                },
+                footer: { ...footer, pinToPageBottom: true, bleed: true },
+            }),
+        ).toHaveLength(0);
+    });
+
     it('rejects a version the renderer does not know', async () => {
-        expect((await parse({ ...base, version: 3 })).length).toBeGreaterThan(0);
+        expect((await parse({ ...base, version: 4 })).length).toBeGreaterThan(0);
+    });
+
+    it('rejects a title position outside the known slots', async () => {
+        expect(
+            (await parse({ ...base, title: { ...base.title, position: 'middle-middle' } })).length,
+        ).toBeGreaterThan(0);
     });
 
     describe('images', () => {
@@ -90,6 +113,31 @@ describe('CreatePrintTemplateDto', () => {
             expect(
                 (await parse({ ...base, footer: { ...footer, lines: [{ text: 'x', fontFamily: 'comic' }] } })).length,
             ).toBeGreaterThan(0);
+        });
+    });
+
+    describe('document type assignment', () => {
+        const parseDocTypes = (doc_types: string[]) =>
+            validate(
+                plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', doc_types, config: base }),
+                { whitelist: true, forbidNonWhitelisted: true },
+            );
+
+        /*
+         * The boundary a tenant actually hits: assigning a letterhead to the
+         * delivery challan in Settings → Print Templates. Drop the enum member
+         * and this save starts 400ing.
+         */
+        it('accepts a template assigned to the delivery challan', async () => {
+            expect(await parseDocTypes(['DELIVERY_CHALLAN'])).toHaveLength(0);
+        });
+
+        it('accepts the challan alongside the invoice on one template', async () => {
+            expect(await parseDocTypes(['SALES_INVOICE', 'DELIVERY_CHALLAN'])).toHaveLength(0);
+        });
+
+        it('rejects a document type the renderer has no printer for', async () => {
+            expect((await parseDocTypes(['DELIVERY_NOTE'])).length).toBeGreaterThan(0);
         });
     });
 

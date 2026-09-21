@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "Envoyé",
         successDescription: "Nous répondrons dans cette conversation.",
         defaultError: "Une erreur est survenue. Veuillez réessayer.",
+        createdToast: "Ticket #{number} créé.",
     },
     supportPage: {
         title: "Assistance",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "Résolu",
         replyPlaceholder: "Saisissez un message… (Entrée pour envoyer)",
         createTitle: "Nouvelle conversation",
+        ticketLabel: "Ticket #{number}",
+        resolvedNotice: "Le support a marqué le ticket #{number} comme résolu.",
+        reopenedNotice: "Le ticket #{number} a été réouvert.",
+        replyNotice: "Nouvelle réponse sur le ticket #{number}.",
+        searchPlaceholder: "Rechercher des conversations…",
+        allStatuses: "Tous les statuts",
+        statusOpen: "Ouvert",
+        statusResolved: "Résolu",
+        allTypes: "Tous les types",
+        noMatches: "Aucune conversation ne correspond à ces filtres.",
+        clearFilters: "Effacer les filtres",
+        count: "{count, plural, one {# conversation} other {# conversations}}",
+        replyPlaceholderMobile: "Saisissez un message…",
     },
     voiceNavWidget: {
         startAria: "Navigation vocale — dites un nom de page",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "Comment enregistrer un retour client ?",
         },
     },
+    preview: {
+        title: "Aperçu",
+        zoomIn: "Zoom avant",
+        zoomOut: "Zoom arrière",
+        resetZoom: "Réinitialiser le zoom",
+        next: "Suivant",
+        previous: "Précédent",
+        download: "Télécharger",
+        openInNewTab: "Ouvrir dans un nouvel onglet",
+        closePreview: "Fermer l’aperçu",
+        noPreview: "Ce fichier ne peut pas être prévisualisé.",
+    },
+
     richText: {
         toolbar: "Mise en forme",
         hint: "Mise en forme : **gras**, *italique*, - listes et [liens](url).",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "Liste à puces",
         numberedList: "Liste numérotée",
         link: "Lien",
+        uploading: "Téléversement de l’image…",
+        resizeImage: "Redimensionner l’image",
+        pasteImage: "Collez une image pour la joindre.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

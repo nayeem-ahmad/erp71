@@ -217,11 +217,13 @@ export function ImageListEditor({ images, onChange, onUpload, uploading }: Image
                             value={image.heightMm}
                             min={3}
                             max={60}
+                            disabled={!!image.fullWidth}
                             onChange={(heightMm) => patchImage(index, { heightMm })}
                         />
                         <Field label={fields.align}>
                             <Select
                                 value={image.align ?? 'left'}
+                                disabled={!!image.fullWidth}
                                 onChange={(e) => patchImage(index, { align: e.target.value as TemplateImage['align'] })}
                             >
                                 {ALIGNS.map((align) => (
@@ -237,6 +239,12 @@ export function ImageListEditor({ images, onChange, onUpload, uploading }: Image
                             />
                         </Field>
                     </div>
+
+                    <CheckboxRow
+                        label={fields.imageFullWidth}
+                        checked={!!image.fullWidth}
+                        onChange={(fullWidth) => patchImage(index, { fullWidth })}
+                    />
 
                     <CheckboxRow
                         label={fields.imageShowOnThermal}
@@ -313,16 +321,25 @@ export function CheckboxRow({
     label,
     checked,
     onChange,
+    disabled,
     className = '',
 }: {
     label: string;
     checked: boolean;
     onChange: (checked: boolean) => void;
+    /** Greyed out when the setting it controls has no effect on its own. */
+    disabled?: boolean;
     className?: string;
 }) {
     return (
-        <label className={`flex cursor-pointer items-center gap-2 ${className}`}>
-            <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <label
+            className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${className}`}
+        >
+            <Checkbox
+                checked={checked}
+                disabled={disabled}
+                onChange={(e) => onChange(e.target.checked)}
+            />
             <span className="text-xs text-gray-700">{label}</span>
         </label>
     );
@@ -333,12 +350,15 @@ export function NumberField({
     value,
     min,
     max,
+    disabled,
     onChange,
 }: {
     label: string;
     value: number;
     min: number;
     max: number;
+    /** Greyed out when another control has taken over the value it sets. */
+    disabled?: boolean;
     onChange: (value: number) => void;
 }) {
     return (
@@ -347,6 +367,7 @@ export function NumberField({
                 type="number"
                 min={min}
                 max={max}
+                disabled={disabled}
                 value={value}
                 onChange={(e) => {
                     const next = Number(e.target.value);

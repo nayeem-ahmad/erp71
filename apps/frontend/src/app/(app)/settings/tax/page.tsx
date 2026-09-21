@@ -7,7 +7,7 @@ import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
-import { Alert, Button, Field, Input, PageShell } from '@/components/ui';
+import { Alert, Button, Checkbox, Field, Input, PageShell, Textarea } from '@/components/ui';
 
 export default function TaxSettingsPage() {
     const { t } = useI18n();
@@ -15,6 +15,17 @@ export default function TaxSettingsPage() {
     const [vatRate, setVatRate] = useState('');
     const [vatRegNo, setVatRegNo] = useState('');
     const [businessTin, setBusinessTin] = useState('');
+    // The Mushak issuer block. Kept on this screen rather than its own: a shop
+    // filling in its BIN is the same shop deciding who signs its চালানপত্র, and
+    // splitting the two leaves half-configured workspaces printing documents
+    // NBR will not accept.
+    const [mushakEnabled, setMushakEnabled] = useState(false);
+    const [mushakPosReceipt, setMushakPosReceipt] = useState(false);
+    const [issueAddress, setIssueAddress] = useState('');
+    const [officerName, setOfficerName] = useState('');
+    const [officerDesignation, setOfficerDesignation] = useState('');
+    const [economicActivity, setEconomicActivity] = useState('');
+    const [missing, setMissing] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -25,6 +36,13 @@ export default function TaxSettingsPage() {
                 setVatRate(d?.default_vat_rate != null ? String(d.default_vat_rate) : '');
                 setVatRegNo(d?.vat_registration_no ?? '');
                 setBusinessTin(d?.business_tin ?? '');
+                setMushakEnabled(d?.mushak_enabled ?? false);
+                setMushakPosReceipt(d?.mushak_pos_receipt ?? false);
+                setIssueAddress(d?.mushak_issue_address ?? '');
+                setOfficerName(d?.mushak_officer_name ?? '');
+                setOfficerDesignation(d?.mushak_officer_designation ?? '');
+                setEconomicActivity(d?.mushak_economic_activity ?? '');
+                setMissing(d?.mushak_readiness?.missing ?? []);
             })
             .catch(() => setError(m.loadFailed))
             .finally(() => setLoading(false));
@@ -39,15 +57,25 @@ export default function TaxSettingsPage() {
                 setError(m.vatRateInvalid);
                 return;
             }
-            await fetchWithAuth('/tenants/tax-settings', {
+            const saved = await fetchWithAuth('/tenants/tax-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     default_vat_rate: rate,
                     vat_registration_no: vatRegNo || null,
                     business_tin: businessTin || null,
+                    mushak_enabled: mushakEnabled,
+                    mushak_pos_receipt: mushakEnabled && mushakPosReceipt,
+                    mushak_issue_address: issueAddress || null,
+                    mushak_officer_name: officerName || null,
+                    mushak_officer_designation: officerDesignation || null,
+                    mushak_economic_activity: economicActivity || null,
                 }),
             });
+            // Re-read rather than re-deriving here: the same check runs on the
+            // document endpoints, so the list shown is the one that will
+            // actually block a 6.3.
+            setMissing(saved?.mushak_readiness?.missing ?? []);
             toast.success(m.savedSuccess);
         } catch (e: any) {
             setError(e.message ?? m.saveFailed);
@@ -121,6 +149,86 @@ export default function TaxSettingsPage() {
                             {saving ? m.saving : m.saveButton}
                         </Button>
                     </div>
+                </div>
+            )}
+
+            {!loading && (
+                <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
+                    <div>
+                        <h2 className="text-sm font-semibold text-gray-800">{m.mushak.title}</h2>
+                        <p className="mt-1 text-xs text-gray-500">{m.mushak.body}</p>
+                    </div>
+
+                    <Field label={m.mushak.enable.label} hint={m.mushak.enable.hint}>
+                        <Checkbox
+                            checked={mushakEnabled}
+                            onChange={e => setMushakEnabled(e.target.checked)}
+                        />
+                    </Field>
+
+                    {/* A sub-option of the above: a workspace with no BIN must not
+                        print something that looks like a tax invoice, so this is
+                        unreachable until Mushak itself is on. */}
+                    {mushakEnabled && (
+                        <div className="ms-6 border-s border-gray-200 ps-4">
+                            <Field label={m.mushak.posReceipt.label} hint={m.mushak.posReceipt.hint}>
+                                <Checkbox
+                                    checked={mushakPosReceipt}
+                                    onChange={e => setMushakPosReceipt(e.target.checked)}
+                                />
+                            </Field>
+                        </div>
+                    )}
+
+                    <Field label={m.mushak.issueAddress.label} hint={m.mushak.issueAddress.hint} className="max-w-xl">
+                        <Textarea
+                            rows={2}
+                            value={issueAddress}
+                            onChange={e => setIssueAddress(e.target.value)}
+                            placeholder={m.mushak.issueAddress.placeholder}
+                        />
+                    </Field>
+
+                    <div className="grid gap-4 md:grid-cols-2 max-w-xl">
+                        <Field label={m.mushak.officerName.label} hint={m.mushak.officerName.hint}>
+                            <Input
+                                type="text"
+                                value={officerName}
+                                onChange={e => setOfficerName(e.target.value)}
+                                placeholder={m.mushak.officerName.placeholder}
+                            />
+                        </Field>
+                        <Field label={m.mushak.officerDesignation.label} hint={m.mushak.officerDesignation.hint}>
+                            <Input
+                                type="text"
+                                value={officerDesignation}
+                                onChange={e => setOfficerDesignation(e.target.value)}
+                                placeholder={m.mushak.officerDesignation.placeholder}
+                            />
+                        </Field>
+                    </div>
+
+                    <Field
+                        label={m.mushak.economicActivity.label}
+                        hint={m.mushak.economicActivity.hint}
+                        className="max-w-sm"
+                    >
+                        <Input
+                            type="text"
+                            value={economicActivity}
+                            onChange={e => setEconomicActivity(e.target.value)}
+                            placeholder={m.mushak.economicActivity.placeholder}
+                        />
+                    </Field>
+
+                    {missing.length > 0 ? (
+                        <Alert tone="warning">
+                            {m.mushak.incomplete}{' '}
+                            <span className="font-mono">{missing.join(', ')}</span>
+                        </Alert>
+                    ) : (
+                        <Alert tone="success">{m.mushak.ready}</Alert>
+                    )}
                 </div>
             )}
 

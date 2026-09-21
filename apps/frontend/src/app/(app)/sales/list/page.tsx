@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Copy, Eye, Edit2, FileText, Search, Trash2, Ban } from 'lucide-react';
+import { Receipt, Eye, Edit2, FileText, Printer, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -19,6 +19,10 @@ import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
+import SaleRowPrintButtons from '../components/SaleRowPrintButtons';
+import SaleRowOverflowMenu from '../components/SaleRowOverflowMenu';
+import PrintSettingsModal from '../components/PrintSettingsModal';
+import { useSalePrinting, fetchPrintableSale } from '@/lib/hooks/useSalePrinting';
 
 interface Sale {
     id: string;
@@ -58,6 +62,24 @@ export default function SalesPage() {
     // bypasses the guard server-side and may hold no grant rows at all.
     const { permissions, role } = useTenantPlanFeatures();
     const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
+
+    // A list row carries no line items, so each document is printed from a
+    // freshly fetched sale rather than from the row — an invoice built off the
+    // row alone would come out with no goods on it.
+    const {
+        paperSize,
+        setPaperSize,
+        skipPreview,
+        setSkipPreview,
+        busyId,
+        printInvoice,
+        printChallan,
+        printReceipt,
+    } = useSalePrinting({ resolve: fetchPrintableSale });
+
+    // Paper size and the preview opt-out are settings, not per-row choices, so
+    // they are set once from the header rather than re-picked on every print.
+    const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -232,61 +254,73 @@ export default function SalesPage() {
             columnHelper.display({
                 id: 'actions',
                 header: t.sales.columns.actions,
-                cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                        <Link
-                            href={`/sales/${info.row.original.id}`}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.common.view}
-                        >
-                            <Eye className="w-4 h-4" />
-                        </Link>
-                        <Link
-                            href={`/sales/new?duplicate=${info.row.original.id}`}
-                            className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.common.duplicate}
-                        >
-                            <Copy className="w-4 h-4" />
-                        </Link>
-                        {/* A cancelled entry has had every impact reversed, so the
-                            API refuses to edit it — don't offer the door. */}
-                        {info.row.original.status !== 'CANCELLED' && (
+                cell: (info) => {
+                    const sale = info.row.original;
+                    // A cancelled entry has had every impact reversed, so the
+                    // API refuses to edit or re-cancel it — don't offer the door.
+                    const isCancelled = sale.status === 'CANCELLED';
+                    return (
+                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
                             <Link
-                                href={`/sales/${info.row.original.id}?edit=true`}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.edit}
+                                href={`/sales/${sale.id}`}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                                title={t.common.view}
                             >
-                                <Edit2 className="w-4 h-4" />
+                                <Eye className="w-4 h-4" />
                             </Link>
-                        )}
-                        {canCancel && info.row.original.status !== 'CANCELLED' && (
+                            {/* One click each, straight from the row. Both used
+                                to sit behind a split button with the paper
+                                sizes and the rarer documents, which made the
+                                chalan — printed on every delivery — a menu
+                                scan. Cancelled sales keep both icons: the
+                                column width stays put, and a void sale's
+                                paperwork is still sometimes reprinted for
+                                the file. */}
+                            <SaleRowPrintButtons
+                                paperSize={paperSize}
+                                onPrintInvoice={(size) => void printInvoice(sale.id, size)}
+                                onPrintChallan={(size) => void printChallan(sale.id, size)}
+                                busy={busyId === sale.id}
+                            />
+                            {!isCancelled && (
+                                <Link
+                                    href={`/sales/${sale.id}?edit=true`}
+                                    className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                                    title={t.common.edit}
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                </Link>
+                            )}
                             <button
                                 type="button"
-                                onClick={() => setCancelTarget(info.row.original)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                title={t.entryCancellation.action}
+                                onClick={() => handleDelete(sale)}
+                                disabled={deletingId === sale.id}
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
+                                title={t.common.delete}
                             >
-                                <Ban className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                             </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => handleDelete(info.row.original)}
-                            disabled={deletingId === info.row.original.id}
-                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
-                            title={t.common.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                ),
+                            <SaleRowOverflowMenu
+                                saleId={sale.id}
+                                label={t.sales.printMenu.moreActions}
+                                paperSize={paperSize}
+                                onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+                                onCancel={
+                                    canCancel && !isCancelled
+                                        ? () => setCancelTarget(sale)
+                                        : undefined
+                                }
+                            />
+                        </div>
+                    );
+                },
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 150,
+                size: 200,
             }),
         ],
-        [t, locale, handleDelete, deletingId, canCancel],
+        [t, locale, handleDelete, deletingId, canCancel, paperSize, busyId, printInvoice, printChallan, printReceipt],
     );
 
     // Was a client-side preset over the whole downloaded set; with server
@@ -315,13 +349,23 @@ export default function SalesPage() {
                         'sales',
                     )}
                     actions={
-                        <Link
-                            href={routes.sales.new}
-                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
-                        >
-                            <FileText className="w-4 h-4 me-2" />
-                            {t.sidebar.items.newSalesEntry}
-                        </Link>
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setPrintSettingsOpen(true)}
+                                className="flex items-center rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                            >
+                                <Printer className="w-4 h-4 me-2" />
+                                {t.sales.printSettings.action}
+                            </button>
+                            <Link
+                                href={routes.sales.new}
+                                className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
+                            >
+                                <FileText className="w-4 h-4 me-2" />
+                                {t.sidebar.items.newSalesEntry}
+                            </Link>
+                        </>
                     }
                 />
 
@@ -361,6 +405,19 @@ export default function SalesPage() {
                     showSearch={false}
                     serverPagination={serverPagination}
                 />
+
+                {printSettingsOpen && (
+                    <PrintSettingsModal
+                        paperSize={paperSize}
+                        skipPreview={skipPreview}
+                        onSave={(next) => {
+                            setPaperSize(next.paperSize);
+                            setSkipPreview(next.skipPreview);
+                            toast.success(t.sales.printSettings.saved);
+                        }}
+                        onClose={() => setPrintSettingsOpen(false)}
+                    />
+                )}
 
                 {cancelTarget && (
                     <CancelEntryModal

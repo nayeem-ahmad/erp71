@@ -34,6 +34,12 @@ interface WarehouseColumn {
     id: string;
     name: string;
     code: string;
+    /**
+     * False for a warehouse that has been closed but still holds stock. It keeps
+     * its column — the units are still the shop's — and says so in the header
+     * rather than disappearing along with everything it holds.
+     */
+    is_active: boolean;
     quantity: number;
     stockValue: number;
 }
@@ -52,6 +58,11 @@ export default function StockOnHandPage() {
     const { t } = useI18n();
     const [rows, setRows] = useState<StockOnHandRow[]>([]);
     const [warehouseColumns, setWarehouseColumns] = useState<WarehouseColumn[]>([]);
+    // The warehouses the report itself has columns for, as of the last read that
+    // was not narrowed to one. Wider than the active list below, because a
+    // closed warehouse still holding stock stays in the report — and a column
+    // nobody can filter down to is a column half missing.
+    const [reportedWarehouseIds, setReportedWarehouseIds] = useState<string[]>([]);
     const [summary, setSummary] = useState<StockOnHandSummary | null>(null);
     const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -65,6 +76,10 @@ export default function StockOnHandPage() {
     const [brandId, setBrandId] = useState('');
     const [includeZeroStock, setIncludeZeroStock] = useState(false);
     const [loading, setLoading] = useState(true);
+    // A failed read used to leave the table empty and silent, which reads
+    // exactly like "this shop holds no stock" — the one answer the report must
+    // never give by accident.
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         void Promise.all([loadReport(), loadFilters()]);
@@ -88,8 +103,16 @@ export default function StockOnHandPage() {
             setSummary(data.summary);
             setWarehouseColumns(data.warehouses);
             setRows(data.rows);
+            // Only an unfiltered read says which warehouses there are to choose
+            // from: narrowing to one returns one column, which is not a list.
+            if (!warehouseId) setReportedWarehouseIds(data.warehouses.map((warehouse: WarehouseColumn) => warehouse.id));
+            setError(null);
         } catch (error) {
             console.error('Failed to load stock on hand report', error);
+            setSummary(null);
+            setRows([]);
+            setWarehouseColumns([]);
+            setError(error instanceof Error ? error.message : String(error));
         } finally {
             setLoading(false);
         }
@@ -105,7 +128,11 @@ export default function StockOnHandPage() {
                 api.getBrands(),
             ]);
             setStores(storeData);
-            setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
+            // Kept whole rather than narrowed to the active ones here: which
+            // warehouses this report can speak for is the report's answer (see
+            // `visibleWarehouses`), and the full list is also what names the
+            // branch behind each column.
+            setWarehouses(warehouseData);
             setGroups(groupData);
             setSubgroups(subgroupData);
             setBrands(brandData);
@@ -119,9 +146,19 @@ export default function StockOnHandPage() {
     // get from `useWarehouses`. The branch select clears `warehouseId` on the way
     // past: the two filters are AND-ed server-side, so a warehouse left over from
     // another branch would report nothing at all.
+    //
+    // A closed warehouse is offered only while the report still counts it, which
+    // is exactly while it still holds something. Unlike the entry screens, this
+    // one is not choosing where to post stock — it is choosing which of its own
+    // columns to look at.
     const visibleWarehouses = useMemo(
-        () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
-        [warehouses, storeId],
+        () =>
+            warehouses.filter(
+                (warehouse: any) =>
+                    (!storeId || warehouse.store_id === storeId) &&
+                    (warehouse.is_active || reportedWarehouseIds.includes(warehouse.id)),
+            ),
+        [warehouses, storeId, reportedWarehouseIds],
     );
 
     const filteredSubgroups = useMemo(
@@ -141,16 +178,24 @@ export default function StockOnHandPage() {
         }));
 
         // One quantity column per warehouse, in the order the backend returned
-        // them (default warehouse first, then alphabetical). Beyond the first
-        // two they collapse on mobile so the table still fits at 360px.
-        const perWarehouse = labelled.map((warehouse, index) =>
-            columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
+        // them (default warehouse first, then alphabetical, closed ones last).
+        // Beyond the first two they collapse on mobile so the table still fits
+        // at 360px.
+        const perWarehouse = labelled.map((warehouse, index) => {
+            const label = warehouseLabel(warehouse, labelled);
+            return columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
                 id: `warehouse:${warehouse.id}`,
-                header: warehouseLabel(warehouse, labelled),
+                // A plain string rather than a styled node, because this header
+                // is also what the CSV, Excel and PDF exports print — a closed
+                // warehouse has to say so there too. Tested with `=== false`
+                // rather than for truthiness: a frontend deployed ahead of the
+                // backend gets a payload without the flag at all, and marking
+                // every warehouse closed would be worse than marking none.
+                header: warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label,
                 size: 110,
                 meta: { hideOnMobile: index > 1 },
-            }),
-        );
+            });
+        });
 
         return [
             columnHelper.accessor((row) => row.product.name, { id: 'product', header: strings.columns.product, size: 220 }),
@@ -201,6 +246,15 @@ export default function StockOnHandPage() {
 
     const strings = t.inventoryReports.stockOnHand;
 
+    // Stock is counted per warehouse, so a scope with none of them has nothing
+    // to report on — a different answer from "these shelves are bare", and the
+    // one a shop that has not set a warehouse up needs to read.
+    const emptyMessage = error
+        ? strings.loadErrorEmpty
+        : warehouseColumns.length === 0
+            ? strings.noWarehouses
+            : strings.emptyMessage;
+
     return (
         <PageShell>
             <PageHeader
@@ -232,6 +286,14 @@ export default function StockOnHandPage() {
                     <div className="text-2xl font-bold text-gray-900 mt-2">{warehouseColumns.length}</div>
                 </div>
             </div>
+
+            {/* A read that failed is not an empty shop. Saying which is the
+                difference between "you hold nothing" and "we could not ask". */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                    {formatMessage(strings.loadError, { message: error })}
+                </div>
+            )}
 
             {/* Stock with no cost on file is valued at zero, so the totals above
                 understate reality. Saying so beats letting the number pass as
@@ -308,7 +370,7 @@ export default function StockOnHandPage() {
                 data={rows}
                 title={strings.title}
                 isLoading={loading}
-                emptyMessage={strings.emptyMessage}
+                emptyMessage={emptyMessage}
                 emptyIcon={<Warehouse className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={strings.searchPlaceholder}
             />

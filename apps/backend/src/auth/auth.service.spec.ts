@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -22,10 +22,21 @@ import { CURRENT_TERMS_VERSION, StorePermission } from '@erp71/shared-types';
  * which strips implementations globally, and every sign-in path issues a refresh
  * token before it can return an auth payload.
  */
+const issuedTokens: Array<{ userId: string; options: Record<string, unknown> }> = [];
+
 const refreshTokens = {
-    issue: async () => ({ token: 'refresh-token', expiresAt: new Date('2026-09-26T00:00:00Z') }),
-    rotate: async () => ({ userId: 'user-1', token: 'refresh-token', expiresAt: new Date('2026-09-26T00:00:00Z') }),
+    issue: async (userId: string, _meta?: unknown, options: Record<string, unknown> = {}) => {
+        issuedTokens.push({ userId, options });
+        return { token: 'refresh-token', expiresAt: new Date('2026-09-26T00:00:00Z'), familyId: 'family-1' };
+    },
+    rotate: async () => ({
+        userId: 'user-1',
+        token: 'refresh-token',
+        expiresAt: new Date('2026-09-26T00:00:00Z'),
+        familyId: 'family-1',
+    }),
     revoke: async () => {},
+    revokeFamily: async () => {},
     revokeAllForUser: async () => {},
 };
 
@@ -227,6 +238,54 @@ describe('AuthService', () => {
         service = module.get(AuthService);
         // Stub sendVerificationEmail to avoid it competing for db.user.findUnique mock calls
         jest.spyOn(service, 'sendVerificationEmail').mockResolvedValue(undefined);
+        issuedTokens.length = 0;
+    });
+
+    /**
+     * "Remember me" is a session-lifetime choice now, not a storage one: the
+     * frontend keeps the tokens where every tab can read them either way, and
+     * what the checkbox changes is how long the refresh token lives.
+     */
+    describe('"Remember me"', () => {
+        const signIn = async (dto: Record<string, unknown>) => {
+            db.user.findUnique
+                .mockResolvedValueOnce({
+                    id: 'user-1',
+                    email: 'owner@example.com',
+                    passwordHash: 'hashed',
+                    email_verified_at: new Date(),
+                    totp_secret: null,
+                })
+                .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            return service.login(dto as any);
+        };
+
+        it('carries a ticked box to the token issuer', async () => {
+            await signIn({ identifier: 'owner@example.com', password: 'Dhaka-Shop-2026', remember_me: true });
+
+            expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: true });
+        });
+
+        it('carries an unticked box, which is the default the form posts', async () => {
+            await signIn({ identifier: 'owner@example.com', password: 'Dhaka-Shop-2026', remember_me: false });
+
+            expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: false });
+        });
+
+        it('says nothing when a client does not ask, so the issuer keeps its default', async () => {
+            await signIn({ identifier: 'owner@example.com', password: 'Dhaka-Shop-2026' });
+
+            expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: undefined });
+        });
+
+        it('carries the choice through the second factor, which is one sign-in', async () => {
+            db.user.findUnique.mockResolvedValue(makeUserWithAccess('store-1', 'tenant-1'));
+
+            await service.completeTwoFactorLogin('user-1', {}, { rememberMe: true });
+
+            expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: true });
+        });
     });
 
     it('signs up a new tenant-backed user', async () => {
@@ -933,6 +992,35 @@ describe('AuthService', () => {
             db.user.findUnique.mockResolvedValueOnce(null);
 
             await expect(service.demoLogin()).rejects.toBeInstanceOf(ServiceUnavailableException);
+        });
+
+        it('refuses when the platform admin has switched the demo off', async () => {
+            platformSettings.getRawValue.mockResolvedValue('false');
+
+            await expect(service.demoLogin()).rejects.toBeInstanceOf(ForbiddenException);
+            // Refused before the account is even looked for: the switch is the
+            // answer whether or not the demo workspace was ever seeded.
+            expect(db.user.findUnique).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('isDemoLoginEnabled', () => {
+        it('is on when the setting has never been touched', async () => {
+            platformSettings.getRawValue.mockResolvedValue(null);
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(true);
+        });
+
+        it('is off only for an explicit false', async () => {
+            platformSettings.getRawValue.mockResolvedValue('false');
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(false);
+        });
+
+        it('stays on when the settings read fails — a transient settings error should not take the demo down', async () => {
+            platformSettings.getRawValue.mockRejectedValue(new Error('db down'));
+
+            await expect(service.isDemoLoginEnabled()).resolves.toBe(true);
         });
     });
 

@@ -30,11 +30,15 @@ jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'test-sale-1' }),
 }));
 
-jest.mock('lucide-react', () => ({
-    ArrowLeft: () => <span data-testid="icon-arrow-left" />,
-    Download: () => <span data-testid="icon-download" />,
-    Printer: () => <span data-testid="icon-printer" />,
-    ChevronRight: () => <span data-testid="icon-chevron-right" />,
+// Any icon, not a fixed list: the shared print menu brings its own, and an
+// allowlist here fails as an undefined component the moment one is added.
+jest.mock('lucide-react', () => new Proxy({}, {
+    get: (_target, name: string) => {
+        if (name === '__esModule') return true;
+        const Icon = () => <span data-testid={`icon-${String(name).toLowerCase()}`} />;
+        Icon.displayName = String(name);
+        return Icon;
+    },
 }));
 
 // Mock window.print
@@ -140,10 +144,62 @@ describe('InvoicePage', () => {
         });
     });
 
+    // The label no longer claims to be a Mushak 6.3: that is a gazetted form
+    // with its own prescribed layout, now rendered at /sales/[id]/mushak. This
+    // page is the shop's own commercial invoice and links across to it.
     it('shows VAT Invoice label when there is VAT', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByText('VAT Invoice (Mushak 6.3)')).toBeInTheDocument();
+            expect(screen.getByText('VAT Invoice')).toBeInTheDocument();
+        });
+        expect(screen.queryByText(/Mushak 6\.3\)/)).not.toBeInTheDocument();
+    });
+
+    /**
+     * This page's actions now come from the shared print menu. Its panel is
+     * portalled, so it mounts a tick after the trigger is clicked.
+     */
+    const chooseFromPrintMenu = async (name: RegExp | string) => {
+        await waitFor(() => expect(screen.getByTitle('Print options')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+        fireEvent.click(await screen.findByRole('menuitem', { name }));
+    };
+
+    it('links to the Mushak 6.3 tax invoice for the same sale', async () => {
+        render(<InvoicePage />);
+        await waitFor(() => expect(screen.getByTitle('Print options')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+
+        expect(await screen.findByRole('menuitem', { name: /Mushak 6\.3/ }))
+            .toHaveAttribute('href', '/sales/test-sale-1/mushak');
+    });
+
+    it('prefers the VAT stored with the sale over the catalogue rate', async () => {
+        // The point of the snapshot: an invoice the customer already holds must
+        // not change when the product's rate is edited afterwards.
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: {
+                ...mockInvoiceData.sale,
+                total_amount: '1150',
+                amount_paid: '1150',
+                items: [
+                    {
+                        id: 'item-1',
+                        quantity: 1,
+                        price_at_sale: '1150',
+                        vat_rate: '15.00',
+                        // Since raised, the catalogue moved to 5%. The invoice
+                        // must still show the 150 that was charged.
+                        product: { name: 'Premium Widget', sku: 'PW-001', vat_rate: 5 },
+                    },
+                ],
+            },
+        });
+
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText(/15% \/ .*150/)).toBeInTheDocument();
         });
     });
 
@@ -157,7 +213,7 @@ describe('InvoicePage', () => {
     it('shows NBR compliance footer when VAT is present', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByText('NBR VAT Compliance (Mushak 6.3)')).toBeInTheDocument();
+            expect(screen.getByText('NBR VAT Compliance')).toBeInTheDocument();
             expect(screen.getByText(/Supplier BIN: BIN-12345678/)).toBeInTheDocument();
         });
     });
@@ -192,21 +248,95 @@ describe('InvoicePage', () => {
         });
     });
 
-    it('shows Print and Download PDF buttons', async () => {
+    it('offers the print split button and its paper sizes', async () => {
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /^print$/i })).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
-        });
+        // The page's own Print and Download PDF buttons are gone: both did the
+        // same thing — `window.print()` on the screen layout — and the invoice
+        // now prints through the same document the rest of the app prints.
+        await waitFor(() => expect(screen.getByTitle('Print Invoice')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print options'));
+
+        expect(await screen.findByRole('menuitem', { name: 'A4' })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'A5' })).toBeInTheDocument();
     });
 
-    it('calls window.print when Print button is clicked', async () => {
+    it('prints the invoice document when the split button is pressed', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
         render(<InvoicePage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /^print$/i })).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTitle('Print Invoice')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+
+        await waitFor(() => expect(write).toHaveBeenCalled());
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('SALE-INV-001');
+        expect(html).toContain('Premium Widget');
+
+        open.mockRestore();
+    });
+
+    it('prints a delivery challan with the goods but none of the money', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await chooseFromPrintMenu(/delivery challan/i);
+
+        await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Delivery Challan');
+        expect(html).toContain('SALE-INV-001');
+        // Every product on the invoice rides along, with its SKU...
+        expect(html).toContain('Premium Widget');
+        expect(html).toContain('Basic Widget');
+        expect(html).toContain('PW-001');
+        expect(html).toContain('Mohammed Rahman');
+        expect(html).toContain('123 Dhaka Road');
+        // ...and not one of its prices does.
+        expect(html).not.toMatch(/৳|BDT|\$/);
+        expect(html).not.toMatch(/Unit Price|Subtotal|VAT|Payment/i);
+
+        open.mockRestore();
+    });
+
+    it('prints a challan for a walk-in sale, which has no customer to address', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: { ...mockInvoiceData.sale, customer: null },
         });
-        fireEvent.click(screen.getByRole('button', { name: /^print$/i }));
-        expect(mockPrint).toHaveBeenCalled();
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await chooseFromPrintMenu(/delivery challan/i);
+
+        await waitFor(() => expect(write).toHaveBeenCalled());
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain('Premium Widget');
+        expect(html).not.toContain('Deliver To');
+        // Somebody still signs for the goods.
+        expect(html).toContain('Received By');
+
+        open.mockRestore();
     });
 
     it('renders COMPLETED status badge', async () => {

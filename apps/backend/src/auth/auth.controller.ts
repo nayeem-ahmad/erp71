@@ -118,6 +118,18 @@ export class AuthController {
         await this.authService.logout(req.user.userId, extractRequestMeta(req));
     }
 
+    /**
+     * Whether the platform admin has left "Try Demo" switched on. Read by the
+     * sign-in page and the marketing hero before they render the button, for
+     * the same reason as `/auth/google/config`: the switch lives in platform
+     * settings, so it has to be readable without a session and without
+     * rebuilding the frontend.
+     */
+    @Get('demo/config')
+    async demoConfig() {
+        return { enabled: await this.authService.isDemoLoginEnabled() };
+    }
+
     @Throttle({ default: { ttl: 60_000, limit: 10 } })
     @Post('demo')
     async demoLogin() {
@@ -235,8 +247,15 @@ export class AuthController {
     @Throttle({ default: { ttl: 60_000, limit: 60 } })
     @ThrottleAccount({ ttl: 60_000, limit: 10 })
     @Post('2fa/verify')
-    async totpVerify(@Body() body: { userId: string; code: string }, @Request() req) {
+    async totpVerify(
+        @Body() body: { userId: string; code: string; remember_me?: boolean },
+        @Request() req,
+    ) {
         await this.totpService.verifyTotpForLogin(body.userId, body.code);
-        return this.authService.completeTwoFactorLogin(body.userId, extractRequestMeta(req));
+        // The login form collected "Remember me" before it knew a second factor
+        // was wanted, so the choice rides along on this leg too.
+        return this.authService.completeTwoFactorLogin(body.userId, extractRequestMeta(req), {
+            rememberMe: body.remember_me,
+        });
     }
 }

@@ -1,6 +1,7 @@
 import { formatBDT } from './format';
+import { paymentMethodLabel } from './payment-method-label';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
@@ -16,6 +17,12 @@ export interface InvoiceItem {
 export interface InvoicePayment {
     method: string;
     amount: number;
+    /**
+     * The instrument behind the payment — "CHQ-889001 · City Bank". Printed
+     * beside the method so the invoice says which cheque settled it, which is
+     * the whole point of having recorded one.
+     */
+    reference?: string;
 }
 
 export interface InvoiceData {
@@ -50,22 +57,14 @@ function esc(str: string): string {
         .replaceAll('"', '&quot;');
 }
 
-function paymentLabel(method: string): string {
-    const map: Record<string, string> = {
-        CASH: 'Cash',
-        CARD: 'Credit Card',
-        BKASH: 'bKash',
-        NAGAD: 'Nagad',
-        BANK_TRANSFER: 'Bank Transfer',
-        MOBILE_PAYMENT: 'Mobile Payment',
-        OTHER: 'Other',
-    };
-    return map[method] ?? method;
-}
-
 function buildStyles(isThermal: boolean): string {
     return `
         body { font-family: ${isThermal ? "'Courier New', Courier, monospace" : 'Arial, Helvetica, sans-serif'}; }
+
+        /* Breathing room around the content. Stated here rather than on @page
+           so it adds to the page margin instead of replacing it — a roll gets
+           none, where padding would only waste paper. */
+        .invoice-body { ${isThermal ? 'padding:0;' : 'padding:6mm 4mm;'} }
 
         /* Meta grid */
         .meta-grid { ${isThermal ? 'margin:4px 0;' : 'display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;'} }
@@ -84,6 +83,14 @@ function buildStyles(isThermal: boolean): string {
             border-bottom:${isThermal ? '1px solid #000' : '2px solid #e5e7eb'};
             padding:${isThermal ? '3px 0' : '8px 10px'}; text-align:left;
         }
+        /* Each header follows the alignment of its own column. A number pushed
+           to one edge under a label sitting at the other reads as two unrelated
+           columns, which is what made the table look misaligned — the fix is
+           matching alignment, not rules drawn between the columns. */
+        .items-table thead th.item-qty   { text-align:center; }
+        .items-table thead th.item-price { text-align:right; }
+        .items-table thead th.item-disc  { text-align:right; }
+        .items-table thead th.item-total { text-align:right; }
         .items-table tbody td {
             padding:${isThermal ? '2px 0' : '7px 10px'};
             vertical-align:top;
@@ -94,6 +101,10 @@ function buildStyles(isThermal: boolean): string {
         .item-qty   { width:${isThermal ? '10%' : '8%'}; text-align:center; }
         .item-price { width:${isThermal ? '18%' : '16%'}; text-align:right; }
         .item-disc  { width:${isThermal ? '15%' : '18%'}; text-align:right; color:#ef4444; }
+        /* The em-dash means "no discount". In red it reads as a deducted
+           amount, so the placeholder takes the body colour and only a real
+           discount stays marked. */
+        .item-disc--empty { color:inherit; }
         .item-total { width:${isThermal ? '17%' : '18%'}; text-align:right; font-weight:bold; }
         .sku        { font-size:9px; color:#888; }
 
@@ -103,11 +114,14 @@ function buildStyles(isThermal: boolean): string {
         .totals-table td { padding:${isThermal ? '2px 0' : '5px 10px'}; font-size:${isThermal ? '10px' : '13px'}; }
         .totals-table td:last-child { text-align:right; font-weight:bold; }
         .totals-table .neg td:last-child { color:#ef4444; }
+        /* The total carries its weight through size and boldness rather than an
+           accent colour — on paper a lone blue row reads as decoration, and the
+           rule above it matches the document's other dividers. */
         .grand-total td {
             font-size:${isThermal ? '13px' : '15px'}; font-weight:bold;
-            border-top:2px solid ${isThermal ? '#000' : '#1d4ed8'};
+            border-top:2px solid ${isThermal ? '#000' : '#e5e7eb'};
             padding-top:${isThermal ? '4px' : '8px'};
-            color:${isThermal ? '#000' : '#1d4ed8'};
+            color:${isThermal ? '#000' : '#111827'};
         }
 
         /* Payments */
@@ -115,6 +129,7 @@ function buildStyles(isThermal: boolean): string {
         .payments-section h3 { font-size:${isThermal ? '10px' : '11px'}; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:${isThermal ? '#444' : '#6b7280'}; margin-bottom:5px; }
         .payments-table { width:100%; border-collapse:collapse; }
         .pay-label  { font-size:${isThermal ? '10px' : '13px'}; color:#444; padding:${isThermal ? '2px 0' : '3px 0'}; }
+        .pay-ref    { font-size:${isThermal ? '9px' : '11px'}; color:#777; }
         .pay-amount { text-align:right; font-weight:bold; font-size:${isThermal ? '10px' : '13px'}; padding:${isThermal ? '2px 0' : '3px 0'}; }
 
         /* Note */
@@ -136,16 +151,19 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
             <td class="item-name">${esc(item.name)}${item.sku ? `<br><span class="sku">${esc(item.sku)}</span>` : ''}</td>
             <td class="item-qty">${item.quantity}</td>
             <td class="item-price">${formatBDT(item.unitPrice)}</td>
-            <td class="item-disc">${item.discount ? formatBDT(item.discount) : '—'}</td>
+            <td class="${item.discount ? 'item-disc' : 'item-disc item-disc--empty'}">${item.discount ? formatBDT(item.discount) : '—'}</td>
             <td class="item-total">${formatBDT(lineTotal)}</td>
         </tr>`;
     }).join('');
 
     const paymentRows = data.payments.map((p) =>
-        `<tr><td class="pay-label">${esc(paymentLabel(p.method))}</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
+        `<tr><td class="pay-label">${esc(paymentMethodLabel(p.method))}${
+            p.reference ? `<br><span class="pay-ref">${esc(p.reference)}</span>` : ''
+        }</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
     ).join('');
 
     return `
+    <div class="invoice-body">
     <div class="meta-grid">
         ${data.customerName ? `
         <div class="meta-block">
@@ -198,10 +216,15 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
         <table class="payments-table">${paymentRows}</table>
     </div>
 
-    ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}`;
+    ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}
+    </div>`;
 }
 
-export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'): void {
+export function printSalesInvoice(
+    data: InvoiceData,
+    paperSize: PaperSize = 'A4',
+    preview?: PrintPreviewOptions,
+): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
 
     const headerContext: HeaderContext = {
@@ -225,5 +248,6 @@ export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        preview,
     });
 }

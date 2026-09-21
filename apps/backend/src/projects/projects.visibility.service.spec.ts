@@ -112,7 +112,45 @@ describe('ProjectsService — visibility', () => {
                     data: expect.objectContaining({ visibility: 'PUBLIC' }),
                 }),
             );
-            expect(db.projectMember.upsert).not.toHaveBeenCalled();
+        });
+
+        /**
+         * The roster is the only thing the task Assignee picker offers, and this
+         * used to run for private projects alone — so the *default* project was
+         * one whose tasks could not be given to anybody, which is exactly how it
+         * read in production.
+         */
+        it('puts the manager and the creator on the team of a public project too', async () => {
+            db.project.create.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: 'user-manager' }),
+            );
+
+            await service.create(OWNER, {
+                name: 'Reroof the shop',
+                managerId: 'user-manager',
+            } as never);
+
+            const seeded = db.projectMember.upsert.mock.calls.map((call: any[]) => [
+                call[0].create.user_id,
+                call[0].create.role,
+            ]);
+            expect(seeded).toEqual([
+                ['user-manager', 'MANAGER'],
+                [OWNER.userId, 'MEMBER'],
+            ]);
+        });
+
+        it('writes one row when the manager is also the creator', async () => {
+            db.project.create.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: OWNER.userId }),
+            );
+
+            await service.create(OWNER, { name: 'Reroof the shop' } as never);
+
+            // The manager entry is written first, so the person who is both
+            // keeps MANAGER rather than being recorded as a plain member.
+            expect(db.projectMember.upsert).toHaveBeenCalledTimes(1);
+            expect(db.projectMember.upsert.mock.calls[0][0].create.role).toBe('MANAGER');
         });
 
         it('puts the manager and the creator on the team when it starts private', async () => {
@@ -157,6 +195,40 @@ describe('ProjectsService — visibility', () => {
             db.project.update.mockResolvedValue(project({ visibility: 'PRIVATE' }));
 
             await service.update(OWNER, 'project-1', { name: 'Renamed' } as never);
+
+            expect(db.projectMember.upsert).not.toHaveBeenCalled();
+        });
+
+        /**
+         * Handing the project to somebody has to put them on its team whatever
+         * its visibility — otherwise "change the manager" leaves a manager who
+         * cannot be given a task on their own project.
+         */
+        it('puts a newly appointed manager on the team of a public project', async () => {
+            db.project.findFirst.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: 'user-old' }),
+            );
+            db.project.update.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: 'user-new' }),
+            );
+
+            await service.update(OWNER, 'project-1', { managerId: 'user-new' } as never);
+
+            expect(db.projectMember.upsert).toHaveBeenCalledTimes(1);
+            expect(db.projectMember.upsert.mock.calls[0][0].create).toEqual(
+                expect.objectContaining({ user_id: 'user-new', role: 'MANAGER' }),
+            );
+        });
+
+        it('does not re-seed when the manager is unchanged', async () => {
+            db.project.findFirst.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: 'user-1' }),
+            );
+            db.project.update.mockResolvedValue(
+                project({ visibility: 'PUBLIC', manager_id: 'user-1' }),
+            );
+
+            await service.update(OWNER, 'project-1', { managerId: 'user-1' } as never);
 
             expect(db.projectMember.upsert).not.toHaveBeenCalled();
         });

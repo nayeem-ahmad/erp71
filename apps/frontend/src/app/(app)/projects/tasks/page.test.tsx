@@ -34,6 +34,7 @@ jest.mock('@/lib/api', () => ({
         createProjectTask: jest.fn(),
         updateProjectTask: jest.fn(),
         deleteProjectTask: jest.fn(),
+        bulkDeleteProjectTasks: jest.fn(),
         importProjectTasks: jest.fn(),
     },
 }));
@@ -98,6 +99,7 @@ beforeEach(() => {
     api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-new' });
     api.updateProjectTask.mockReset().mockResolvedValue({ id: 't1' });
     api.deleteProjectTask.mockReset().mockResolvedValue({ success: true });
+    api.bulkDeleteProjectTasks.mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
     api.importProjectTasks.mockReset().mockResolvedValue({
         created: 0, updated: 0, skipped: 0, errors: [],
     });
@@ -452,7 +454,11 @@ describe('Tasks page', () => {
             const dialog = await screen.findByRole('dialog');
             fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
-            await waitFor(() => expect(api.deleteProjectTask).toHaveBeenCalledWith('t1'));
+            // One request for the whole selection, not one per row: fanning out
+            // over `deleteProjectTask` burns the 20-per-minute rate limit and a
+            // real selection comes back 429 on everything past the twentieth.
+            await waitFor(() => expect(api.bulkDeleteProjectTasks).toHaveBeenCalledWith(['t1']));
+            expect(api.deleteProjectTask).not.toHaveBeenCalled();
         });
     });
     /**
@@ -684,6 +690,124 @@ describe('Tasks page inline row editing', () => {
                 assigneeEmployeeId: 'emp-3',
             }),
         );
+    });
+
+    /**
+     * The inline picker is a native `<select>`, so a roster that arrives after
+     * the popup has opened does not repaint it. These say what it offers when
+     * there is nothing to offer, rather than leaving it silently blank.
+     */
+    it('says a project has no team rather than offering an empty list', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getProject.mockResolvedValue({ id: 'p1', members: [] });
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        const cell = () => screen.getAllByTestId('row-assignee')[0];
+        fireEvent.focus(cell());
+
+        await waitFor(() =>
+            expect(
+                within(cell()).getByText("No one is on this project's team yet."),
+            ).toBeInTheDocument(),
+        );
+    });
+
+    it('says so when the roster could not be read at all', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getProject.mockRejectedValue(new Error('403'));
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+
+        const cell = () => screen.getAllByTestId('row-assignee')[0];
+        fireEvent.focus(cell());
+
+        await waitFor(() =>
+            expect(
+                within(cell()).getByText("Could not read this project's team."),
+            ).toBeInTheDocument(),
+        );
+    });
+});
+
+describe('Tasks page new-task assignee', () => {
+    /** The filter bar carries an "Assignee" control too, so scope to the modal. */
+    const modal = () => within(screen.getByRole('dialog'));
+
+    /** One project in the fixture, so the modal opens with it already chosen. */
+    const openModal = async () => {
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+        await screen.findByRole('dialog');
+    };
+
+    /**
+     * The roster used to load on the picker's `onFocus`, which fires in the same
+     * gesture that opens a native select's popup — so the popup was painted
+     * before the names arrived and the first open showed nobody. Whether you saw
+     * a team depended on your connection, which is what made a global bug look
+     * like a per-user one.
+     */
+    it('fetches the roster when the project is chosen, before the picker is touched', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        render(<TasksPage />);
+        await screen.findByText('Wire the meter');
+        api.getProject.mockClear();
+
+        fireEvent.click(screen.getByRole('button', { name: /new task/i }));
+        await screen.findByRole('dialog');
+
+        // Nothing has focused or clicked the Assignee select — choosing the
+        // project is enough, which is the whole point.
+        await waitFor(() => expect(api.getProject).toHaveBeenCalledWith('p1'));
+    });
+
+    it('offers the roster in the picker', async () => {
+        await openModal();
+
+        await waitFor(() =>
+            expect(
+                within(modal().getByLabelText('Assignee')).getByRole('option', { name: 'Karim' }),
+            ).toBeInTheDocument(),
+        );
+    });
+
+    it('explains an empty team under the field instead of leaving it blank', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getProject.mockResolvedValue({ id: 'p1', members: [] });
+        await openModal();
+
+        expect(
+            await modal().findByText("No one is on this project's team yet."),
+        ).toBeInTheDocument();
+        expect(modal().getByRole('link', { name: 'Add team members' })).toHaveAttribute(
+            'href',
+            '/projects/p1',
+        );
+    });
+
+    it('distinguishes a roster that failed to read from an empty one', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        api.getProject.mockRejectedValue(new Error('403'));
+        await openModal();
+
+        expect(
+            await modal().findByText("Could not read this project's team."),
+        ).toBeInTheDocument();
+    });
+
+    it('says nothing when there is somebody to pick', async () => {
+        await openModal();
+        await waitFor(() =>
+            expect(
+                within(modal().getByLabelText('Assignee')).getByRole('option', { name: 'Karim' }),
+            ).toBeInTheDocument(),
+        );
+
+        expect(
+            modal().queryByText("No one is on this project's team yet."),
+        ).not.toBeInTheDocument();
     });
 });
 

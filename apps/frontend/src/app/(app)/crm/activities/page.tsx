@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CalendarPlus, Eye, PhoneCall, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, ClipboardList, Eye, PhoneCall, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { hasPermission, isOwner } from '@/lib/permissions';
-import { getWorkspaceItem } from '@/lib/session-store';
+import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
 import { routes } from '@/lib/routes';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
@@ -34,6 +33,7 @@ import {
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatDate } from '@/lib/format';
 import CrmActivityComposer from '@/components/crm/CrmActivityComposer';
+import CrmActivityDrawer from '@/components/crm/CrmActivityDrawer';
 
 interface CrmActivityRow {
     id: string;
@@ -56,6 +56,40 @@ interface ActivitySummary {
     dueToday: number;
     overdue: number;
     total: number;
+}
+
+/**
+ * The lead or customer a row hangs off, in the shape both the link column and
+ * the drawer want. Held separately from the row it came from because the
+ * drawer outlives it: a write inside reloads the list, and the row object the
+ * drawer was opened from is gone by the time it closes.
+ */
+type ActivityTarget = {
+    leadId?: string;
+    customerId?: string;
+    name: string;
+    phone: string | null;
+    href: string;
+};
+
+function targetOf(row: CrmActivityRow): ActivityTarget | null {
+    if (row.lead) {
+        return {
+            leadId: row.lead.id,
+            name: row.lead.name,
+            phone: row.lead.mobile,
+            href: `${routes.crm.leads}/${row.lead.id}`,
+        };
+    }
+    if (row.customer) {
+        return {
+            customerId: row.customer.id,
+            name: row.customer.name,
+            phone: row.customer.phone,
+            href: `${routes.sales.customers}/${row.customer.id}`,
+        };
+    }
+    return null;
 }
 
 const statusTone: Record<string, StatusBadgeTone> = {
@@ -127,10 +161,14 @@ export default function CrmActivitiesPage() {
     // first: the composer asks which lead or customer it is against.
     const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
 
+    // The row's whole lead read in place, rather than by leaving for the lead
+    // page and coming back to a list that has forgotten where it was.
+    const [viewing, setViewing] = useState<ActivityTarget | null>(null);
+
     // Everyone sees who has been signed off; only a reviewer can change it. The
     // switch is rendered disabled rather than hidden for the rest, so a rep can
     // tell "nobody has approved this yet" from "you cannot see the approvals".
-    const [canApprove, setCanApprove] = useState(false);
+    const canApprove = useCanApproveCrmActivity();
     const { options: memberOptions } = useTeamMemberOptions(m.filters.me);
 
     /**
@@ -200,16 +238,6 @@ export default function CrmActivitiesPage() {
         api.getCrmActivitySummary({ mine: mineOnly || undefined }).then(setSummary).catch(() => null);
     }, [mineOnly, scopeReady]);
 
-    useEffect(() => {
-        api.getMe()
-            .then((me) => {
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
-                    ?? me?.tenants?.[0];
-                setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_CRM_ACTIVITY'));
-            })
-            .catch(() => setCanApprove(false));
-    }, []);
-
     /**
      * Flipped in place, not reloaded: the list is filtered and a reload would
      * pull the row out from under the cursor mid-review. The optimistic write is
@@ -245,15 +273,10 @@ export default function CrmActivitiesPage() {
             id: 'target',
             header: m.columns.target,
             cell: (info) => {
-                const row = info.row.original;
-                const href = row.lead
-                    ? `${routes.crm.leads}/${row.lead.id}`
-                    : row.customer
-                        ? `${routes.sales.customers}/${row.customer.id}`
-                        : null;
-                if (!href) return <span className="text-gray-400">—</span>;
+                const target = targetOf(info.row.original);
+                if (!target) return <span className="text-gray-400">—</span>;
                 return (
-                    <Link href={href} className="text-blue-600 hover:underline">
+                    <Link href={target.href} className="text-blue-600 hover:underline">
                         {info.getValue()}
                     </Link>
                 );
@@ -307,17 +330,31 @@ export default function CrmActivitiesPage() {
             id: 'actions',
             header: '',
             cell: (info) => {
-                const row = info.row.original;
-                const href = row.lead
-                    ? `${routes.crm.leads}/${row.lead.id}`
-                    : row.customer
-                        ? `${routes.sales.customers}/${row.customer.id}`
-                        : null;
-                if (!href) return null;
+                const target = targetOf(info.row.original);
+                if (!target) return null;
                 return (
-                    <Link href={href} aria-label={m.open} className="inline-flex min-h-touch items-center text-gray-400 hover:text-blue-600">
-                        <Eye className="h-4 w-4" />
-                    </Link>
+                    <div className="flex items-center gap-1">
+                        {/* Ahead of the link, because it is the cheaper of the
+                            two: read the lead's timeline here, and leave for
+                            its page only when the answer is not in it. */}
+                        <button
+                            type="button"
+                            onClick={() => setViewing(target)}
+                            aria-label={m.viewActivities}
+                            title={m.viewActivities}
+                            className="inline-flex min-h-touch items-center text-gray-400 hover:text-blue-600"
+                        >
+                            <ClipboardList className="h-4 w-4" />
+                        </button>
+                        <Link
+                            href={target.href}
+                            aria-label={m.open}
+                            title={m.open}
+                            className="inline-flex min-h-touch items-center text-gray-400 hover:text-blue-600"
+                        >
+                            <Eye className="h-4 w-4" />
+                        </Link>
+                    </div>
                 );
             },
         }),
@@ -461,6 +498,20 @@ export default function CrmActivitiesPage() {
                     mode={composing}
                     onClose={() => setComposing(null)}
                     onSaved={() => { void load(); loadSummary(); }}
+                />
+            )}
+
+            {viewing && (
+                <CrmActivityDrawer
+                    leadId={viewing.leadId}
+                    customerId={viewing.customerId}
+                    name={viewing.name}
+                    phone={viewing.phone}
+                    href={viewing.href}
+                    onClose={() => setViewing(null)}
+                    // Only on a write, so merely looking never swaps the table
+                    // behind the drawer for "Loading…".
+                    onChanged={() => { void load(); loadSummary(); }}
                 />
             )}
         </PageShell>

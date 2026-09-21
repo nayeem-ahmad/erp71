@@ -10,6 +10,8 @@ import {
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { paymentRecordData } from './payment-record-data';
+import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
@@ -24,6 +26,11 @@ import {
     assertCustomerCreditForSale,
     creditDueAmount,
 } from '../customers/customer-credit.utils';
+import {
+    assertSessionForPosSale,
+    findOpenSessionForUser,
+    requiresCashierSession,
+} from '../cashier-sessions/active-session.util';
 
 /**
  * Columns the sales list may sort on. An allowlist rather than passing the
@@ -65,6 +72,7 @@ export class SalesService {
 
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            const session = await this.resolveCashierSession(tx, tenantId, userId, dto);
 
             // 1. Generate Serial Number (Simplified for v0.1)
             const serialNumber = `SL-${Date.now()}`;
@@ -79,7 +87,8 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    counter_id: dto.counterId ?? null,
+                    counter_id: session.counterId,
+                    session_id: session.sessionId,
                     customer_id: dto.customerId,
                     serial_number: serialNumber,
                     reference_number: referenceNumber,
@@ -87,17 +96,17 @@ export class SalesService {
                     sales_order_id: source.salesOrderId,
                     warehouse_id: prep.warehouses.entryWarehouseId,
                     total_amount: prep.computedTotal,
+                    // Contained in `total_amount`, not added to it — see the
+                    // column comments on Sale.
+                    vat_amount: prep.tax.vat_amount,
+                    sd_amount: prep.tax.sd_amount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'COMPLETED',
                     note: dto.note,
                     created_by: userId,
                     payments: dto.payments ? {
-                        create: dto.payments.map(p => ({
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                            account_id: p.accountId || null
-                        }))
+                        create: dto.payments.map(paymentRecordData)
                     } : undefined
                 },
             });
@@ -115,6 +124,41 @@ export class SalesService {
         }
 
         return result;
+    }
+
+    /**
+     * The shift this sale belongs to, and the till it was rung on.
+     *
+     * Both are read from the seller's own open session rather than taken from
+     * the request. The browser used to be the authority on the till — POS read
+     * a `counter_id` out of localStorage — which put the wrong counter on a
+     * sale whenever a session was opened on one device and sales were rung on
+     * another, and no counter at all on the second cashier to share a machine.
+     * What the client sent is still honoured when no session is open, so a
+     * tenant that tags counters without running shifts keeps working exactly
+     * as before.
+     */
+    private async resolveCashierSession(
+        tx: any,
+        tenantId: string,
+        userId: string,
+        dto: CreateSaleDto,
+        options: { enforce?: boolean } = {},
+    ): Promise<{ sessionId: string | null; counterId: string | null }> {
+        const isPosSale = dto.source === 'POS';
+        const enforce = options.enforce !== false;
+
+        const [session, required] = await Promise.all([
+            findOpenSessionForUser(tx, tenantId, userId),
+            enforce && isPosSale ? requiresCashierSession(tx, tenantId) : Promise.resolve(false),
+        ]);
+
+        assertSessionForPosSale(session, required, isPosSale);
+
+        return {
+            sessionId: session?.id ?? null,
+            counterId: session?.counter_id ?? dto.counterId ?? null,
+        };
     }
 
     /**
@@ -270,6 +314,22 @@ export class SalesService {
             );
         }
 
+        // VAT and supplementary duty for the Mushak 6.3, worked out against
+        // `computedTotal` — the amount actually billed — so an invoice-level
+        // discount or a loyalty redemption reduces the declared value of the
+        // supply instead of leaving the business declaring tax it never
+        // collected. See `snapshotSaleTax` for why this is stored, not derived.
+        const tax = await snapshotSaleTax(
+            tx,
+            tenantId,
+            dto.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                priceAtSale: item.priceAtSale,
+            })),
+            computedTotal,
+        );
+
         return {
             warehouses,
             productById,
@@ -279,6 +339,7 @@ export class SalesService {
             loyaltyPreview,
             balanceDue,
             creditCustomerDueBalance,
+            tax,
         };
     }
 
@@ -304,12 +365,16 @@ export class SalesService {
             loyaltyPreview,
             balanceDue,
             creditCustomerDueBalance,
+            tax,
         } = prep;
 
         // 3. Process Items and update stock
-        for (const item of dto.items) {
+        for (const [index, item] of dto.items.entries()) {
             const product = productById.get(item.productId);
             const unitCostAtSale = costByProductId.get(item.productId) ?? null;
+            // Positional, not keyed by product: one sale may bill the same
+            // product on two lines at two prices, and each carries its own tax.
+            const lineTax = tax.lines[index];
 
             // Where this line actually draws from: its own warehouse if the
             // entry named one, otherwise the sale's.
@@ -323,6 +388,14 @@ export class SalesService {
                     quantity: item.quantity,
                     price_at_sale: item.priceAtSale,
                     unit_cost_at_sale: unitCostAtSale,
+                    // The rates in force right now and what they came to, kept
+                    // so a Mushak 6.3 reprints identically after the catalogue
+                    // moves on. `price_at_sale` is tax-inclusive, so these are
+                    // the amounts inside it.
+                    vat_rate: lineTax?.vat_rate ?? 0,
+                    sd_rate: lineTax?.sd_rate ?? 0,
+                    vat_amount: lineTax?.vat_amount ?? 0,
+                    sd_amount: lineTax?.sd_amount ?? 0,
                     // Only a genuine override is stored. Copying the resolved
                     // warehouse onto every line would make a later change of
                     // the sale's warehouse look like fifty deliberate overrides.
@@ -547,12 +620,29 @@ export class SalesService {
             // marked CONVERTED here: a parked draft posts nothing, so the quote
             // is still live until the draft is finalised.
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            const draftSession = await this.resolveCashierSession(tx, tenantId, userId, dto, { enforce: false });
+
+            // A draft is not a tax invoice — nothing is posted and no 6.3 may
+            // be issued against it — but the entry screen still shows a VAT
+            // line, so the same figures are parked with it. finalizeDraft()
+            // recomputes them against what is actually posted.
+            const draftTax = await snapshotSaleTax(
+                tx,
+                tenantId,
+                dto.items.map((item) => ({
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    priceAtSale: item.priceAtSale,
+                })),
+                dto.totalAmount,
+            );
 
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    counter_id: dto.counterId ?? null,
+                    counter_id: draftSession.counterId,
+                    session_id: draftSession.sessionId,
                     customer_id: dto.customerId,
                     serial_number: `SL-${Date.now()}`,
                     reference_number: referenceNumber,
@@ -561,28 +651,31 @@ export class SalesService {
                     // Held as chosen rather than resolved — see the check above.
                     warehouse_id: dto.warehouseId ?? null,
                     total_amount: dto.totalAmount,
+                    vat_amount: draftTax.vat_amount,
+                    sd_amount: draftTax.sd_amount,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'DRAFT',
                     note: dto.note,
                     created_by: userId,
                     payments: dto.payments ? {
-                        create: dto.payments.map((p) => ({
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                            account_id: p.accountId || null,
-                        })),
+                        create: dto.payments.map(paymentRecordData),
                     } : undefined,
                 },
             });
 
-            for (const item of dto.items) {
+            for (const [index, item] of dto.items.entries()) {
+                const lineTax = draftTax.lines[index];
                 await tx.saleItem.create({
                     data: {
                         sale_id: sale.id,
                         product_id: item.productId,
                         quantity: item.quantity,
                         price_at_sale: item.priceAtSale,
+                        vat_rate: lineTax?.vat_rate ?? 0,
+                        sd_rate: lineTax?.sd_rate ?? 0,
+                        vat_amount: lineTax?.vat_amount ?? 0,
+                        sd_amount: lineTax?.sd_amount ?? 0,
                         warehouse_id: item.warehouseId ?? null,
                     },
                 });
@@ -630,6 +723,13 @@ export class SalesService {
                 paymentMethod: p.payment_method,
                 amount: Number(p.amount),
                 accountId: p.account_id ?? undefined,
+                // The cheque the draft was parked with is the cheque the sale
+                // is posted with; only an explicit `dto.payments` replaces it.
+                bankName: p.bank_name ?? undefined,
+                bankBranch: p.bank_branch ?? undefined,
+                bankAccountNumber: p.bank_account_number ?? undefined,
+                referenceNo: p.reference_no ?? undefined,
+                instrumentDate: p.instrument_date?.toISOString().slice(0, 10),
             }));
 
             if (items.length === 0) {
@@ -669,6 +769,9 @@ export class SalesService {
 
             // Validate everything before a single row changes.
             const prep = await this.prepareSale(tx, tenantId, saleDto);
+            const finalizeSession = await this.resolveCashierSession(tx, tenantId, userId, saleDto, {
+                enforce: false,
+            });
 
             // Replace the parked lines and payments with what is being posted.
             // applySalePostings recreates the items (with unit cost attached).
@@ -676,12 +779,7 @@ export class SalesService {
             await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
             for (const p of payments) {
                 await tx.paymentRecord.create({
-                    data: {
-                        sale_id: id,
-                        payment_method: p.paymentMethod,
-                        amount: p.amount,
-                        account_id: p.accountId || null,
-                    },
+                    data: { sale_id: id, ...paymentRecordData(p) },
                 });
             }
 
@@ -691,12 +789,21 @@ export class SalesService {
                     customer_id: saleDto.customerId ?? null,
                     status: 'COMPLETED',
                     total_amount: prep.computedTotal,
+                    // Recomputed by prepareSale against what is actually being
+                    // posted, which may differ from what was parked.
+                    vat_amount: prep.tax.vat_amount,
+                    sd_amount: prep.tax.sd_amount,
                     amount_paid: amountPaid,
                     note: saleDto.note ?? null,
                     // The resolved id, not the parked one: a draft may have been
                     // saved with no warehouse at all, and the posted sale must
                     // record the one its stock actually left.
                     warehouse_id: prep.warehouses.entryWarehouseId,
+                    // Re-stamped rather than inherited: the money arrives now,
+                    // so the sale belongs to the shift finalising it, which is
+                    // often not the one that parked it.
+                    session_id: finalizeSession.sessionId,
+                    counter_id: finalizeSession.counterId,
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                 },
             });
@@ -903,6 +1010,11 @@ export class SalesService {
             // to another warehouse.
             let postedWarehouseId: string | undefined;
 
+            // Restated alongside the lines, for the same reason the lines are
+            // rewritten: an edited invoice declares the tax on what it now
+            // bills, not on what it used to.
+            let editedTax: SaleTaxSnapshot | undefined;
+
             // 1. If items are being replaced, reverse old stock and apply new
             if (dto.items) {
                 // The warehouse the sale is *moving to*, plus any line overrides
@@ -950,9 +1062,26 @@ export class SalesService {
                     productIds: dto.items.map((i) => i.productId),
                 });
 
+                // The total the edit settles on, which is what the tax has to
+                // be worked out against. An explicit `totalAmount` carries the
+                // entry form's adjustments; without one the lines are the total.
+                const editedTotal = dto.totalAmount
+                    ?? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0);
+                editedTax = await snapshotSaleTax(
+                    tx,
+                    tenantId,
+                    dto.items.map((item) => ({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        priceAtSale: item.priceAtSale,
+                    })),
+                    editedTotal,
+                );
+
                 // Create new items and decrement stock
-                for (const item of dto.items) {
+                for (const [index, item] of dto.items.entries()) {
                     const unitCostAtSale = editCostMap.get(item.productId) ?? null;
+                    const lineTax = editedTax.lines[index];
 
                     await tx.saleItem.create({
                         data: {
@@ -961,6 +1090,10 @@ export class SalesService {
                             quantity: item.quantity,
                             price_at_sale: item.priceAtSale,
                             unit_cost_at_sale: unitCostAtSale,
+                            vat_rate: lineTax?.vat_rate ?? 0,
+                            sd_rate: lineTax?.sd_rate ?? 0,
+                            vat_amount: lineTax?.vat_amount ?? 0,
+                            sd_amount: lineTax?.sd_amount ?? 0,
                             warehouse_id: item.warehouseId ?? null,
                         },
                     });
@@ -989,11 +1122,7 @@ export class SalesService {
                 await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
                 for (const p of dto.payments) {
                     await tx.paymentRecord.create({
-                        data: {
-                            sale_id: id,
-                            payment_method: p.paymentMethod,
-                            amount: p.amount,
-                        },
+                        data: { sale_id: id, ...paymentRecordData(p) },
                     });
                 }
             }
@@ -1046,8 +1175,18 @@ export class SalesService {
                     ...(dto.customerId !== undefined && { customer_id: dto.customerId || null }),
                     ...(dto.status && { status: dto.status }),
                     ...(dto.note !== undefined && { note: dto.note }),
+                    ...(dto.mushakDestination !== undefined && {
+                        mushak_destination: dto.mushakDestination.trim() || null,
+                    }),
+                    ...(dto.mushakVehicleNo !== undefined && {
+                        mushak_vehicle_no: dto.mushakVehicleNo.trim() || null,
+                    }),
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                     ...(totalAmount !== undefined && { total_amount: totalAmount }),
+                    ...(editedTax !== undefined && {
+                        vat_amount: editedTax.vat_amount,
+                        sd_amount: editedTax.sd_amount,
+                    }),
                     ...(amountPaid !== undefined && { amount_paid: amountPaid }),
                     ...(postedWarehouseId !== undefined && { warehouse_id: postedWarehouseId }),
                 },

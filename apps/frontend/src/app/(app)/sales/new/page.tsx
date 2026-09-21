@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
-import { Printer, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -19,14 +18,13 @@ import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import {
     printSalesInvoice,
-    PAPER_SIZES,
-    paperSizeLabel,
     type InvoiceData,
     type PaperSize,
 } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
-import { useDismissOnClickOutside } from '@/lib/click-outside';
+import { paymentInstrumentSummary } from '@/lib/payment-instrument';
+import PaperSizeMenu from '../components/PaperSizeMenu';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
@@ -65,10 +63,8 @@ function NewSalePageContent() {
     const [submitting, setSubmitting] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
-    const [showPaperMenu, setShowPaperMenu] = useState(false);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
-    const printMenuRef = useRef<HTMLDivElement>(null);
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
     // Set once a sale is posted, which is also when the screen is wiped for the
     // next customer — so the invoice is snapshotted here rather than re-read off
@@ -182,12 +178,6 @@ function NewSalePageContent() {
         if (source) router.replace(routes.sales.new);
     };
 
-    const isInsidePrintMenu = useCallback(
-        (target: Node) => !!printMenuRef.current?.contains(target),
-        [],
-    );
-    useDismissOnClickOutside(showPaperMenu, isInsidePrintMenu, () => setShowPaperMenu(false));
-
     const vatRate = salesSettings?.tenant?.default_vat_rate || 0;
     const totals = useMemo(
         () => computeSaleTotals(items, adjustments, vatRate),
@@ -233,7 +223,7 @@ function NewSalePageContent() {
             unitPrice: item.price,
             discount: item.discount || 0,
         })),
-        payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+        payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
         discountAmount: totals.discount > 0 ? totals.discount : undefined,
         // Rounded because a flat discount derives its percentage from the
@@ -252,7 +242,6 @@ function NewSalePageContent() {
 
     const handlePrint = (size?: PaperSize) => {
         const selectedSize = size ?? paperSize;
-        setShowPaperMenu(false);
         printSalesInvoice(buildInvoiceData(), selectedSize);
     };
 
@@ -358,6 +347,12 @@ function NewSalePageContent() {
             paymentMethod: p.method,
             amount: p.amount,
             accountId: p.accountId,
+            // The cheque / transfer details typed against this tender, if any.
+            bankName: p.bankName,
+            bankBranch: p.bankBranch,
+            bankAccountNumber: p.bankAccountNumber,
+            referenceNo: p.referenceNo,
+            instrumentDate: p.instrumentDate,
         })),
         ...(isDraft ? { isDraft: true } : {}),
     });
@@ -534,41 +529,12 @@ function NewSalePageContent() {
                         {savingDraft ? 'Saving…' : 'Save Draft'}
                     </button>
                     {/* Print button with paper-size dropdown */}
-                    <div className="relative" ref={printMenuRef}>
-                        <div className="flex items-center border rounded overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => handlePrint()}
-                                className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
-                            >
-                                <Printer className="w-4 h-4" />
-                                {paperSize}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowPaperMenu((v) => !v)}
-                                className="px-1.5 py-2 border-s text-gray-500 hover:bg-gray-50"
-                                title="Choose paper size"
-                            >
-                                <ChevronDown className="w-4 h-4" />
-                            </button>
-                        </div>
-                        {showPaperMenu && (
-                            <div className="absolute end-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                                {PAPER_SIZES.map((size) => (
-                                    <button
-                                        key={size}
-                                        type="button"
-                                        onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                        className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
-                                    >
-                                        {paperSizeLabel(size)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <PaperSizeMenu
+                        paperSize={paperSize}
+                        onPaperSizeChange={setPaperSize}
+                        onPrint={(size) => handlePrint(size)}
+                        label="Paper Size"
+                    />
                     <button
                         type="submit"
                         disabled={submitting || savingDraft || items.length === 0}

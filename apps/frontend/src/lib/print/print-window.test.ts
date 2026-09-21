@@ -1,4 +1,4 @@
-import { buildPrintDocument, openPrintWindow } from './print-window';
+import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
 
 const base = {
     title: 'Invoice INV-001',
@@ -245,5 +245,250 @@ describe('buildPrintDocument — tenant footer', () => {
         expect(html).toContain('<tfoot>');
         // tfoot before tbody — the ordering every browser repeats correctly.
         expect(html.indexOf('<tfoot>')).toBeLessThan(html.indexOf('<tbody>'));
+    });
+});
+
+describe('a footer pinned to the page bottom', () => {
+    const footer = {
+        show: true,
+        lines: [{ text: 'Bank: Sonali 123' }],
+        images: [],
+        rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+        spacingMm: 4,
+        repeatOnEveryPage: true,
+        pinToPageBottom: true,
+    };
+    const pinned = { ...base, headerConfig: { footer } };
+
+    it('stretches the document table to a full page so the tfoot is pushed down', () => {
+        const html = buildPrintDocument(pinned);
+
+        expect(html).toContain('p71-doc--pinned');
+        // A4 is 297mm tall less its two 15mm margins.
+        expect(html).toContain('.p71-doc--pinned { height: 267mm; }');
+        expect(html).toContain('<tfoot>');
+    });
+
+    it('uses each paper size\'s own printable height', () => {
+        expect(buildPrintDocument({ ...pinned, paperSize: 'A5' }))
+            .toContain('.p71-doc--pinned { height: 190mm; }');
+    });
+
+    it('does not pin on a roll, which prints to an open-ended length', () => {
+        expect(buildPrintDocument({ ...pinned, paperSize: 'Thermal80' })).not.toContain('p71-doc--pinned');
+    });
+
+    it('does not pin a footer that does not repeat — there is no tfoot', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, repeatOnEveryPage: false } },
+        });
+
+        expect(html).not.toContain('p71-doc--pinned');
+    });
+
+    it('drops the centred column so a bleeding footer can reach the paper edge', () => {
+        const html = buildPrintDocument({ ...base, headerConfig: { footer: { ...footer, bleed: true } } });
+
+        // Print-only: on screen there is no @page margin to escape, and the
+        // band would just overflow the viewport and be cropped.
+        expect(html).toContain('@media print { .p71-wrap { max-width: none; margin: 0; } }');
+        expect(html).toContain('max-width: 780px');
+    });
+
+    it('keeps the centred column when nothing bleeds', () => {
+        const html = buildPrintDocument(pinned);
+
+        expect(html).toContain('max-width: 780px');
+        expect(html).not.toContain('@media print { .p71-wrap');
+    });
+});
+
+describe('a pinned footer that does not repeat', () => {
+    // The reported bug: pinToPageBottom was silently ignored unless
+    // repeatOnEveryPage was also on, so a short invoice printed its footer in
+    // the middle of the sheet. The two settings are independent.
+    const footer = {
+        show: true,
+        lines: [{ text: 'Bank: Sonali 123' }],
+        images: [],
+        rule: { show: true, thicknessPx: 1, color: '#d1d5db' },
+        spacingMm: 4,
+        repeatOnEveryPage: false,
+        pinToPageBottom: true,
+    };
+    const opts = { ...base, headerConfig: { footer } };
+
+    it('uses a page-tall flex column rather than a repeating tfoot', () => {
+        const html = buildPrintDocument(opts);
+
+        expect(html).toContain('p71-sheet');
+        expect(html).toContain('min-height: 267mm');
+        // A <tfoot> repeats on every page by default, which is wrong for a
+        // footer meant to print once.
+        expect(html).not.toContain('<tfoot>');
+    });
+
+    it('keeps the footer out of the table when a repeating header needs one', () => {
+        const html = buildPrintDocument({ ...opts, repeatHeader: true, headerHtml: '<div>hd</div>' });
+
+        expect(html).toContain('<thead>');
+        expect(html).not.toContain('<tfoot>');
+        // The footer must be a sibling of the table: a cell cannot be pushed to
+        // the sheet's bottom by the flex column around it. Compared inside
+        // <body>, since the class name also appears earlier in the stylesheet.
+        const body = html.slice(html.indexOf('<body>'));
+        expect(body.indexOf('</table>')).toBeLessThan(body.indexOf('class="p71-ft'));
+    });
+
+    it('still repeats the footer in a tfoot when that is what was asked for', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, repeatOnEveryPage: true } },
+        });
+
+        expect(html).toContain('<tfoot>');
+        expect(html).toContain('p71-doc--pinned');
+    });
+
+    it('does not pin on a roll, which has no page bottom', () => {
+        expect(buildPrintDocument({ ...opts, paperSize: 'Thermal80' })).not.toContain('p71-sheet');
+    });
+
+    it('leaves an unpinned footer flowing under the content', () => {
+        const html = buildPrintDocument({
+            ...base,
+            headerConfig: { footer: { ...footer, pinToPageBottom: false } },
+        });
+
+        expect(html).not.toContain('p71-sheet');
+    });
+});
+
+describe('preview toolbar', () => {
+    const preview = {
+        title: 'Invoice — A4',
+        printLabel: 'Print',
+        closeLabel: 'Close',
+        skipLabel: 'Skip preview next time',
+    };
+
+    it('renders the toolbar above the document, and hides it from paper', () => {
+        const html = buildPrintDocument({ ...base, preview });
+
+        expect(html).toContain('Invoice &mdash; A4'.replace('&mdash;', '—'));
+        expect(html).toContain('>Print<');
+        expect(html).toContain('>Close<');
+        // On screen but never on paper — the bar must not print.
+        expect(html).toContain('.p71-pv { display: none !important; }');
+        expect(html.indexOf('p71-pv')).toBeLessThan(html.indexOf('<p>body</p>'));
+    });
+
+    it('omits the toolbar entirely when no preview is asked for', () => {
+        expect(buildPrintDocument(base)).not.toContain('p71-pv');
+    });
+
+    it('reports the skip choice back to the opener rather than writing storage', () => {
+        // The popup is a different document; it cannot be trusted to write the
+        // app's localStorage, so the opener owns the preference.
+        const html = buildPrintDocument({ ...base, preview });
+
+        expect(html).toContain(PRINT_PREVIEW_SKIP_MESSAGE);
+        expect(html).toContain('window.opener');
+        expect(html).not.toContain('localStorage');
+    });
+
+    it('drops the checkbox when no skip wording is given', () => {
+        const html = buildPrintDocument({
+            ...base,
+            preview: { ...preview, skipLabel: undefined },
+        });
+
+        expect(html).toContain('p71-pv');
+        // The class still appears in the stylesheet; what must be gone is the
+        // checkbox itself.
+        expect(html).not.toContain('<input type="checkbox"');
+        expect(html).not.toContain('Skip preview next time');
+    });
+
+    it('does not print on open, leaving the operator to press Print', () => {
+        const print = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print,
+            focus: jest.fn(),
+        } as unknown as Window);
+
+        openPrintWindow({ ...base, preview });
+
+        expect(print).not.toHaveBeenCalled();
+        open.mockRestore();
+    });
+});
+
+describe('preview sheet', () => {
+    const bleedCfg = {
+        footer: {
+            show: true,
+            bleed: true,
+            pinToPageBottom: true,
+            images: [{ url: 'https://cdn.test/strip.png', fullWidth: true }],
+        },
+    };
+    const previewOpts = { title: 'Invoice (A4)', printLabel: 'Print', closeLabel: 'Close' };
+
+    it('renders the preview on a paper-shaped sheet', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        // The sheet must actually wrap the content, not merely be styled —
+        // the CSS alone would leave the document rendering at popup width.
+        expect(html).toContain('<div class="p71-pv-sheet"><div class="p71-wrap">');
+        expect(html).toContain('width: 210mm');
+    });
+
+    it('does not wrap a non-preview document in a sheet', () => {
+        const html = buildPrintDocument(base);
+
+        expect(html).not.toContain('p71-pv-sheet');
+        expect(html).toContain('<div class="p71-wrap">');
+    });
+
+    it('gives the preview sheet the real page margin as padding', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        expect(html).toContain('padding: 15mm');
+    });
+
+    it('lets a bleeding footer escape the sheet on screen, not just in print', () => {
+        const html = buildPrintDocument({
+            ...base,
+            preview: previewOpts,
+            headerConfig: bleedCfg,
+        });
+
+        // The same negative margins that cancel the @page margin on paper must
+        // also cancel the sheet's padding on screen, or the preview shows a
+        // gap the printed page will not have.
+        expect(html).toContain('.p71-pv-sheet .p71-ft');
+    });
+
+    it('gives a roll the paper width but no fixed sheet height', () => {
+        const html = buildPrintDocument({
+            ...base,
+            paperSize: 'Thermal80',
+            preview: previewOpts,
+        });
+
+        // A roll prints to an open-ended length, so a fixed-height sheet would
+        // draw a page bottom that does not exist.
+        expect(html).toContain('width: 80mm');
+        expect(html).not.toContain('min-height: 297mm');
+    });
+
+    it('keeps the sheet out of the printed document', () => {
+        const html = buildPrintDocument({ ...base, preview: previewOpts });
+
+        // The sheet is screen furniture; on paper the page box is the sheet.
+        expect(html).toMatch(/@media print \{[^}]*\.p71-pv-sheet[^}]*(box-shadow|margin|padding|width)\s*:\s*/);
     });
 });

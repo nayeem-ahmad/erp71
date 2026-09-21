@@ -1,17 +1,28 @@
 'use client';
 
-import { useMemo, type ElementType, type JSX } from 'react';
+import { useMemo, useState, type ElementType, type JSX } from 'react';
 import Link from 'next/link';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ImagePreviewModal } from './ImagePreviewModal';
+import { sizedImageUrl, widthFromUrl } from './markdown-bridge';
 
 /**
- * Markdown for model-generated answers (the AI chat panel).
+ * Markdown for model-generated answers (the AI chat panel) and for the text
+ * people write in the app — task descriptions, task comments.
  *
  * Safety: raw HTML in the source is never rendered — react-markdown ignores it
  * unless rehype-raw is added, and `skipHtml` makes that explicit. `img` is
- * disallowed as well, because the content is built partly from tenant-controlled
- * strings and an image would let that content make an outbound request.
+ * dropped by default for the same reason: chat answers are built partly from
+ * tenant-controlled strings, and an image in one would let that content make an
+ * outbound request from every reader's browser.
+ *
+ * `allowImages` lifts that for the surfaces where a colleague pasted the image
+ * themselves and expects to see it. It is opt-in per call site, not a default,
+ * and it stays a rendering decision: the source is still markdown, still
+ * HTML-free, and a `src` react-markdown considers unsafe is still neutralised
+ * before it reaches an element. Clicking one opens it in a preview over the
+ * page, which shows the same already-vetted `src` and fetches nothing new.
  *
  * Density: sized for the 380px chat panel, so headings are all one size and
  * tables scroll inside their own container rather than widening the bubble.
@@ -95,10 +106,59 @@ const baseComponents: Components = {
  * chat panel so the page they navigated to is visible (on mobile the panel is a
  * full-screen sheet that would otherwise cover it).
  */
-export default function Markdown({ content, onNavigate }: { content: string; onNavigate?: () => void }) {
+export default function Markdown({
+    content,
+    onNavigate,
+    allowImages = false,
+}: {
+    content: string;
+    onNavigate?: () => void;
+    /** See the note at the top of the file before turning this on. */
+    allowImages?: boolean;
+}) {
+    /** The image a reader clicked, shown over the page, or null for none. */
+    const [preview, setPreview] = useState<{ url: string; name: string; mimeType: string } | null>(
+        null,
+    );
+
     const components = useMemo<Components>(
         () => ({
             ...baseComponents,
+            /*
+             * At the width its author dragged it to, capped to the column it
+             * sits in. A pasted screenshot is usually taller than that column
+             * and a description is read for its text first, so the full size
+             * is a click away rather than in the way — and that click opens a
+             * preview over the page instead of throwing the reader into
+             * another browser tab.
+             */
+            img: ({ src, alt, ...props }) => {
+                const url = typeof src === 'string' ? src : undefined;
+                if (!url) return null;
+                const width = widthFromUrl(url);
+                return (
+                    <button
+                        type="button"
+                        className="mt-2 block max-w-full"
+                        onClick={() => setPreview({ url, name: alt || 'image', mimeType: 'image/*' })}
+                    >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            // Fetched at the size it will be drawn at, not
+                            // scaled down from the original after the fact.
+                            src={sizedImageUrl(url, width)}
+                            alt={alt ?? ''}
+                            loading="lazy"
+                            // The asset host has no business knowing which task
+                            // page a reader had open.
+                            referrerPolicy="no-referrer"
+                            style={width ? { width: `${width}px` } : undefined}
+                            className="max-h-80 max-w-full rounded-md border border-gray-200"
+                            {...props}
+                        />
+                    </button>
+                );
+            },
             a: ({ node: _node, href, ...props }) =>
                 isInternalPath(href) ? (
                     // In-app deep link the assistant produced: client-side navigation,
@@ -115,14 +175,30 @@ export default function Markdown({ content, onNavigate }: { content: string; onN
     );
 
     return (
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={components}
-            skipHtml
-            disallowedElements={['img']}
-            unwrapDisallowed
-        >
-            {content}
-        </ReactMarkdown>
+        <>
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={components}
+                skipHtml
+                // `unwrapDisallowed` keeps the alt text where the image was, so
+                // a dropped image still reads as something rather than nothing.
+                disallowedElements={allowImages ? [] : ['img']}
+                unwrapDisallowed
+            >
+                {content}
+            </ReactMarkdown>
+
+            {preview && (
+                <ImagePreviewModal
+                    items={[preview]}
+                    index={0}
+                    onIndexChange={() => {
+                        // One image at a time here — the description's images
+                        // are not a gallery the way a task's attachments are.
+                    }}
+                    onClose={() => setPreview(null)}
+                />
+            )}
+        </>
     );
 }

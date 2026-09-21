@@ -85,6 +85,12 @@ export const StorePermission = {
   APPROVE_CRM_ACTIVITY: "APPROVE_CRM_ACTIVITY",
   VIEW_CUSTOMER_CREDIT: "VIEW_CUSTOMER_CREDIT",
   MANAGE_CUSTOMER_CREDIT: "MANAGE_CUSTOMER_CREDIT",
+  // Forgiving a receivable is the one AR action that destroys money with no
+  // counterparty and no document from the other side, so it is separable from
+  // MANAGE_CUSTOMER_CREDIT rather than bundled into it: it is granted
+  // alongside it by default, and an owner can take it off a role without also
+  // stopping that role taking payments.
+  WRITE_OFF_CUSTOMER_DEBT: "WRITE_OFF_CUSTOMER_DEBT",
   VIEW_LEADS: "VIEW_LEADS",
   MANAGE_LEADS: "MANAGE_LEADS",
   VIEW_LEAD_CONVERSATIONS: "VIEW_LEAD_CONVERSATIONS",
@@ -176,6 +182,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.APPROVE_CRM_ACTIVITY,
     StorePermission.VIEW_CUSTOMER_CREDIT,
     StorePermission.MANAGE_CUSTOMER_CREDIT,
+    StorePermission.WRITE_OFF_CUSTOMER_DEBT,
     StorePermission.VIEW_LEADS,
     StorePermission.MANAGE_LEADS,
     StorePermission.VIEW_LEAD_CONVERSATIONS,
@@ -462,6 +469,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.CREATE_QUOTATION,
       StorePermission.VIEW_CUSTOMER_CREDIT,
       StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.WRITE_OFF_CUSTOMER_DEBT,
       StorePermission.MANAGE_COUNTERS,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
@@ -615,6 +623,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.APPROVE_FUND_TRANSFER,
       StorePermission.VIEW_CUSTOMER_CREDIT,
       StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.WRITE_OFF_CUSTOMER_DEBT,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
       ...CHAT,
@@ -942,6 +951,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.APPROVE_CRM_ACTIVITY]: "Approve planned CRM activities",
   [StorePermission.VIEW_CUSTOMER_CREDIT]: "View customer credit",
   [StorePermission.MANAGE_CUSTOMER_CREDIT]: "Manage customer credit",
+  [StorePermission.WRITE_OFF_CUSTOMER_DEBT]: "Write off customer bad debt",
   [StorePermission.VIEW_LEADS]: "View leads",
   [StorePermission.MANAGE_LEADS]: "Manage leads",
   [StorePermission.VIEW_LEAD_CONVERSATIONS]: "View lead conversations",
@@ -1037,6 +1047,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.APPROVE_CRM_ACTIVITY,
       StorePermission.VIEW_CUSTOMER_CREDIT,
       StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.WRITE_OFF_CUSTOMER_DEBT,
       StorePermission.VIEW_LEADS,
       StorePermission.MANAGE_LEADS,
       StorePermission.VIEW_LEAD_CONVERSATIONS,
@@ -1939,3 +1950,4 @@ export * from './terms';
 export * from './password-policy';
 export * from './board-background';
 export * from './placeholder-email';
+export * from './mushak';

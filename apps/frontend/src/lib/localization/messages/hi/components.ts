@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "भेज दिया गया",
         successDescription: "हम इसी बातचीत में उत्तर देंगे।",
         defaultError: "कुछ गड़बड़ हो गई। कृपया फिर कोशिश करें।",
+        createdToast: "टिकट #{number} बन गया।",
     },
     supportPage: {
         title: "सहायता",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "हल हो गया",
         replyPlaceholder: "संदेश लिखें… (भेजने के लिए Enter)",
         createTitle: "नई बातचीत",
+        ticketLabel: "टिकट #{number}",
+        resolvedNotice: "सहायता टीम ने टिकट #{number} को हल कर दिया।",
+        reopenedNotice: "टिकट #{number} फिर से खोला गया।",
+        replyNotice: "टिकट #{number} पर नया उत्तर।",
+        searchPlaceholder: "बातचीत खोजें…",
+        allStatuses: "सभी स्टेटस",
+        statusOpen: "खुला",
+        statusResolved: "हल हो गया",
+        allTypes: "सभी प्रकार",
+        noMatches: "इन फ़िल्टर से कोई बातचीत मेल नहीं खाती।",
+        clearFilters: "फ़िल्टर हटाएँ",
+        count: "{count, plural, one {# बातचीत} other {# बातचीत}}",
+        replyPlaceholderMobile: "संदेश लिखें…",
     },
     voiceNavWidget: {
         startAria: "वॉइस नेविगेशन — पेज का नाम बोलें",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "ग्राहक की वापसी कैसे दर्ज करूँ?",
         },
     },
+    preview: {
+        title: "पूर्वावलोकन",
+        zoomIn: "बड़ा करें",
+        zoomOut: "छोटा करें",
+        resetZoom: "ज़ूम रीसेट करें",
+        next: "अगला",
+        previous: "पिछला",
+        download: "डाउनलोड",
+        openInNewTab: "नए टैब में खोलें",
+        closePreview: "पूर्वावलोकन बंद करें",
+        noPreview: "इस फ़ाइल का पूर्वावलोकन नहीं किया जा सकता।",
+    },
+
     richText: {
         toolbar: "फ़ॉर्मैटिंग",
         hint: "फ़ॉर्मैटिंग: **बोल्ड**, *इटैलिक*, - सूचियाँ और [लिंक](url)।",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "बुलेट सूची",
         numberedList: "क्रमांकित सूची",
         link: "लिंक",
+        uploading: "छवि अपलोड हो रही है…",
+        resizeImage: "छवि का आकार बदलें",
+        pasteImage: "छवि संलग्न करने के लिए पेस्ट करें।",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

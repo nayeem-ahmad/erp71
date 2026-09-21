@@ -1,12 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
-import { isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
+import { checkMushakIssuer, isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { isValidTimeZone } from '../common/tenant-time.util';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
+import { UpdateTaxSettingsDto } from './tax-settings.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import {
     PASSWORD_POLICY_SELECT,
@@ -112,32 +113,66 @@ export class TenantsService {
         });
     }
 
+    /**
+     * The tax block, including everything an NBR Mushak 6.x document needs on
+     * its face. Kept as one settings screen rather than two: a shop filling in
+     * its BIN is the same shop filling in who signs its চালানপত্র, and
+     * splitting them leaves half-configured workspaces printing invalid
+     * invoices.
+     */
+    private static readonly TAX_SETTING_FIELDS = {
+        default_vat_rate: true,
+        vat_registration_no: true,
+        business_tin: true,
+        mushak_enabled: true,
+        mushak_pos_receipt: true,
+        mushak_issue_address: true,
+        mushak_officer_name: true,
+        mushak_officer_designation: true,
+        mushak_economic_activity: true,
+    } as const;
+
     async getTaxSettings(tenantId: string) {
-        return this.db.tenant.findUnique({
+        const tenant = await this.db.tenant.findUnique({
             where: { id: tenantId },
-            select: {
-                default_vat_rate: true,
-                vat_registration_no: true,
-                business_tin: true,
-            },
+            select: TenantsService.TAX_SETTING_FIELDS,
         });
+        if (!tenant) return null;
+
+        // The same readiness check the document endpoints run, so the settings
+        // form can show what is still missing before anyone tries to print.
+        return { ...tenant, mushak_readiness: checkMushakIssuer(tenant) };
     }
 
-    async updateTaxSettings(tenantId: string, dto: { default_vat_rate?: number | null; vat_registration_no?: string | null; business_tin?: string | null }) {
-        const data: Record<string, number | string | null> = {};
+    async updateTaxSettings(tenantId: string, dto: UpdateTaxSettingsDto) {
+        const data: Record<string, number | string | boolean | null> = {};
         if (dto.default_vat_rate !== undefined) data.default_vat_rate = dto.default_vat_rate;
         if (dto.vat_registration_no !== undefined) data.vat_registration_no = dto.vat_registration_no || null;
         if (dto.business_tin !== undefined) data.business_tin = dto.business_tin || null;
+        if (dto.mushak_enabled !== undefined) data.mushak_enabled = dto.mushak_enabled;
+        if (dto.mushak_pos_receipt !== undefined) data.mushak_pos_receipt = dto.mushak_pos_receipt;
+        // The POS format is a sub-option of issuing Mushak documents at all, so
+        // switching Mushak off clears it here rather than leaving a stranded
+        // true that would resurrect the 6.3 counter format if Mushak were ever
+        // re-enabled. Enforced on the server because the checkbox that hides it
+        // is only a convenience.
+        if (dto.mushak_enabled === false) data.mushak_pos_receipt = false;
+        if (dto.mushak_issue_address !== undefined) data.mushak_issue_address = dto.mushak_issue_address?.trim() || null;
+        if (dto.mushak_officer_name !== undefined) data.mushak_officer_name = dto.mushak_officer_name?.trim() || null;
+        if (dto.mushak_officer_designation !== undefined) {
+            data.mushak_officer_designation = dto.mushak_officer_designation?.trim() || null;
+        }
+        if (dto.mushak_economic_activity !== undefined) {
+            data.mushak_economic_activity = dto.mushak_economic_activity?.trim() || null;
+        }
 
-        return this.db.tenant.update({
+        const tenant = await this.db.tenant.update({
             where: { id: tenantId },
             data,
-            select: {
-                default_vat_rate: true,
-                vat_registration_no: true,
-                business_tin: true,
-            },
+            select: TenantsService.TAX_SETTING_FIELDS,
         });
+
+        return { ...tenant, mushak_readiness: checkMushakIssuer(tenant) };
     }
 
     async updateBranding(tenantId: string, dto: UpdateBrandingDto) {

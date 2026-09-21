@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 const toBoolean = ({ value }: { value: unknown }) => {
@@ -179,4 +179,74 @@ export class GetShrinkageSummaryDto {
     @IsOptional()
     @IsString()
     to?: string;
+
+    /**
+     * Which side of the count to report. Defaults to LOSS — this is the
+     * shrinkage report, and stock found over the book is a gain, so summing the
+     * two would net a theft against a miscount and report neither honestly.
+     * FOUND asks the same question of the surpluses.
+     */
+    @IsOptional()
+    @IsIn(['LOSS', 'FOUND'])
+    direction?: 'LOSS' | 'FOUND';
+}
+
+/**
+ * The stock card for one product: every movement in and out of a warehouse, in
+ * date order, with an opening quantity before the first row and a running
+ * balance on each one.
+ *
+ * `productId` is required and the others are not, because the running balance
+ * is only meaningful over a single product — a card that mixed two SKUs would
+ * be adding cartons of soap to bags of rice. The warehouse is optional so the
+ * same card can be read tenant-wide, where the balance is the total across
+ * every warehouse in scope.
+ */
+export class GetProductTransactionHistoryDto {
+    @IsUUID()
+    productId!: string;
+
+    /**
+     * Narrows the card to one warehouse. Left out, the card spans every
+     * warehouse in scope and each row says which one it moved.
+     */
+    @IsOptional()
+    @IsUUID()
+    warehouseId?: string;
+
+    /**
+     * Narrows the report to one branch: only that branch's warehouses count
+     * toward it. Combines with `warehouseId` rather than overriding it — a
+     * warehouse outside the named branch matches neither filter and reports
+     * nothing.
+     */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    /**
+     * Inclusive `YYYY-MM-DD` bounds in the tenant's own zone. Everything that
+     * moved before `from` is summed into the opening quantity rather than
+     * dropped — that is what makes a windowed card still balance.
+     */
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    page?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(500)
+    limit?: number;
 }

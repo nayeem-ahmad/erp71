@@ -1,6 +1,34 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskDetailPanel from './TaskDetailPanel';
 
+/**
+ * Types into a `RichTextEditor`, which is a contenteditable rather than a
+ * textarea — `fireEvent.change` has no value setter to reach for.
+ *
+ * Goes through ProseMirror's own paste handling rather than poking at the
+ * DOM: that is the one path that produces a real document, and a document is
+ * what the editor serializes back to markdown.
+ */
+const typeInEditor = (editor: HTMLElement, text: string) => {
+    fireEvent.focus(editor);
+    // Over whatever is there, the way typing into a box you have selected
+    // would be — so this reads "the description is now X", not "X as well".
+    selectAll(editor);
+    fireEvent.paste(editor, {
+        clipboardData: {
+            files: [],
+            getData: (type: string) => (type === 'text/plain' ? text : ''),
+            types: ['text/plain'],
+        },
+    });
+};
+
+/** Ctrl+A, which is how a person selects an editor's whole contents. */
+const selectAll = (editor: HTMLElement) => {
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: 'a', ctrlKey: true });
+};
+
 jest.mock('@/lib/toast', () => ({
     toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
@@ -28,6 +56,9 @@ const getProject = jest.fn();
 const getProjectStories = jest.fn();
 const getSprints = jest.fn();
 const logProjectTime = jest.fn();
+const getProjectTimer = jest.fn();
+const startProjectTimer = jest.fn();
+const stopProjectTimer = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -57,6 +88,12 @@ jest.mock('@/lib/api', () => ({
         getProjectStories: (...args: unknown[]) => getProjectStories(...args),
         getSprints: (...args: unknown[]) => getSprints(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
+        // Left unmocked the timer read threw, `TimerButton` caught it and
+        // rendered nothing — so every assertion about the clock passed against
+        // an absent button. Mocked to "no timer running" so it actually renders.
+        getProjectTimer: (...args: unknown[]) => getProjectTimer(...args),
+        startProjectTimer: (...args: unknown[]) => startProjectTimer(...args),
+        stopProjectTimer: (...args: unknown[]) => stopProjectTimer(...args),
         deleteProjectTimeEntry: jest.fn().mockResolvedValue({}),
     },
 }));
@@ -70,6 +107,9 @@ const item = (id: string, text: string, isDone = false, sortOrder = 0) => ({
     is_done: isDone,
     sort_order: sortOrder,
 });
+
+/** What a clipboard hands over when you paste a screenshot. */
+const screenshot = (name = 'shot.png') => new File(['binary'], name, { type: 'image/png' });
 
 const withChecklist = (items: ReturnType<typeof item>[]) => ({
     id: 't1',
@@ -104,6 +144,9 @@ beforeEach(() => {
         getProjectStories,
         getSprints,
         logProjectTime,
+        getProjectTimer,
+        startProjectTimer,
+        stopProjectTimer,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
@@ -117,6 +160,8 @@ beforeEach(() => {
     getProjectStories.mockResolvedValue([]);
     getSprints.mockResolvedValue([]);
     getTaskAttachments.mockResolvedValue([]);
+    // No timer running, so the button offers Start.
+    getProjectTimer.mockResolvedValue(null);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -507,11 +552,11 @@ describe('TaskDetailPanel activity', () => {
         panel();
         await openTab(/^Comments/);
         const box = await screen.findByLabelText('Add a comment…');
-        fireEvent.change(box, { target: { value: '  Looks done  ' } });
+        typeInEditor(box, '  Looks done  ');
         fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
 
         await waitFor(() => expect(addTaskComment).toHaveBeenCalledWith('t1', 'Looks done'));
-        await waitFor(() => expect(box).toHaveValue(''));
+        await waitFor(() => expect(box).toHaveTextContent(''));
     });
 
     it('will not post an empty comment', async () => {
@@ -519,6 +564,45 @@ describe('TaskDetailPanel activity', () => {
         await openTab(/^Comments/);
         await screen.findByLabelText('Add a comment…');
         expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
+    });
+
+    it('renders a comment as markdown, image and all', async () => {
+        // Shown as the literal `![…](…)` it would be the one part of a comment
+        // nobody can read.
+        getTaskComments.mockResolvedValue([
+            {
+                ...comment('c1', '2026-08-03T10:00:00Z'),
+                body: 'Same crash here:\n\n![shot.png](https://cdn/shot.png)',
+            },
+        ]);
+        panel();
+        await openTab(/^Comments/);
+
+        expect(await screen.findByAltText('shot.png')).toHaveAttribute(
+            'src',
+            'https://cdn/shot.png',
+        );
+    });
+
+    it('attaches an image pasted into the comment box', async () => {
+        addTaskAttachment.mockResolvedValue({
+            id: 'a1',
+            file_url: 'https://cdn/shot.png',
+            file_name: 'shot.png',
+        });
+        panel();
+        await openTab(/^Comments/);
+        const box = await screen.findByLabelText('Add a comment…');
+
+        fireEvent.paste(box, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
+
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+        await waitFor(() => expect(box.querySelector('img')).toHaveAttribute('src', 'https://cdn/shot.png'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+        await waitFor(() =>
+            expect(addTaskComment).toHaveBeenCalledWith('t1', '![shot.png](https://cdn/shot.png)'),
+        );
     });
 
     it('offers edit and delete only on your own comment', async () => {
@@ -545,7 +629,7 @@ describe('TaskDetailPanel activity', () => {
         await openTab(/^Comments/);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-        fireEvent.change(screen.getByLabelText('Edit comment'), { target: { value: 'Revised' } });
+        typeInEditor(screen.getByLabelText('Edit comment'), 'Revised');
         fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
 
         await waitFor(() => expect(updateTaskComment).toHaveBeenCalledWith('c1', 'Revised'));
@@ -701,9 +785,18 @@ describe('TaskDetailPanel description', () => {
         return screen.getByLabelText('Description');
     };
 
+    /**
+     * The whole editor — toolbar, input and hint — rather than the
+     * contenteditable alone. Blur is caught here because a toolbar button
+     * steals focus from the input, and committing on the input's own blur
+     * would save every time somebody reached for bold.
+     */
+    const editorShell = (editor: HTMLElement) =>
+        editor.closest('[data-rich-text-editor]') as HTMLElement;
+
     /** Focus leaving the whole editor, which is what commits. */
     const leave = (editor: HTMLElement) =>
-        fireEvent.blur(editor.closest('div[class]') as HTMLElement, { relatedTarget: null });
+        fireEvent.blur(editorShell(editor), { relatedTarget: null });
 
     it('offers to add one when the task has none', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
@@ -734,7 +827,7 @@ describe('TaskDetailPanel description', () => {
         panel();
         const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: '  Two circuits, one meter  ' } });
+        typeInEditor(editor, '  Two circuits, one meter  ');
         leave(editor);
 
         await waitFor(() =>
@@ -752,12 +845,11 @@ describe('TaskDetailPanel description', () => {
     it('does not save when focus merely moves to the toolbar', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'isolate the board' } });
-        const container = editor.closest('div[class]') as HTMLElement;
-        fireEvent.blur(container, {
-            relatedTarget: within(container).getByRole('button', { name: 'Bold' }),
+        typeInEditor(editor, 'isolate the board');
+        fireEvent.blur(editorShell(editor), {
+            relatedTarget: screen.getByRole('button', { name: 'Bold' }),
         });
 
         expect(updateProjectTask).not.toHaveBeenCalled();
@@ -768,7 +860,9 @@ describe('TaskDetailPanel description', () => {
         panel();
         const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: '' } });
+        selectAll(editor);
+        fireEvent.keyDown(editor, { key: 'Backspace' });
+        fireEvent.input(editor);
         leave(editor);
 
         await waitFor(() =>
@@ -789,13 +883,72 @@ describe('TaskDetailPanel description', () => {
     it('wraps the selection when a formatting button is used', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         panel();
-        const editor = (await edit()) as HTMLTextAreaElement;
+        const editor = await edit();
 
-        fireEvent.change(editor, { target: { value: 'isolate the board' } });
-        editor.setSelectionRange(0, 7);
+        typeInEditor(editor, 'isolate');
+        selectAll(editor);
         fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
 
-        await waitFor(() => expect(editor).toHaveValue('**isolate** the board'));
+        await waitFor(() => expect(editor.querySelector('strong')).toHaveTextContent('isolate'));
+    });
+
+    /**
+     * A screenshot is half of what anyone wants to say about a bug. It goes
+     * through the attachment endpoint — a pasted image is an attachment that
+     * happens to be referenced from the text — and lands in the markdown as a
+     * link to wherever that put it.
+     */
+    it('attaches an image pasted into the description and links to it', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        addTaskAttachment.mockResolvedValue({
+            id: 'a1',
+            file_url: 'https://cdn/shot.png',
+            file_name: 'shot.png',
+        });
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'See below');
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
+
+        await waitFor(() =>
+            expect(addTaskAttachment).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ mimeType: 'image/png', fileName: 'shot.png' }),
+            ),
+        );
+        await waitFor(() =>
+            expect(editor.querySelector('img')).toHaveAttribute('src', 'https://cdn/shot.png'),
+        );
+    });
+
+    /**
+     * The text holds a placeholder until the upload lands. Saving on blur in
+     * between would store the placeholder and strand the image.
+     */
+    it('holds the save until a pasted image has landed', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        let land: (value: unknown) => void = () => {};
+        addTaskAttachment.mockImplementation(() => new Promise((resolve) => (land = resolve)));
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'See below');
+        fireEvent.paste(editor, { clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] } });
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+
+        leave(editor);
+        expect(updateProjectTask).not.toHaveBeenCalled();
+
+        await act(async () => {
+            land({ id: 'a1', file_url: 'https://cdn/shot.png', file_name: 'shot.png' });
+        });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                description: 'See below\n\n![shot.png](https://cdn/shot.png)',
+            }),
+        );
     });
 
     it('leaves the card open when Escape cancels the edit', async () => {
@@ -931,6 +1084,101 @@ describe('TaskDetailPanel assignee', () => {
 
         expect(await chip()).toBeInTheDocument();
         expect(screen.getByText('Pull the cable')).toBeInTheDocument();
+    });
+
+    /**
+     * The three ways this list comes up short used to look identical: a project
+     * with nobody on it, a read that failed, and a roster that simply has people
+     * in it. That is what "some users cannot change the assignee" turned out to
+     * be — the picker never said which.
+     */
+    describe('when there is nobody to offer', () => {
+        it('says the project has no team, and points at where to fix it', async () => {
+            getProject.mockResolvedValue({ id: 'project-1', members: [] });
+            panel();
+
+            fireEvent.click(await chip());
+            expect(
+                await screen.findByText("No one is on this project's team yet."),
+            ).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'Add team members' })).toHaveAttribute(
+                'href',
+                '/projects/project-1',
+            );
+        });
+
+        it('distinguishes a roster that failed to read from one that is empty', async () => {
+            getProject.mockRejectedValue(new Error('nope'));
+            panel();
+
+            fireEvent.click(await chip());
+            expect(
+                await screen.findByText("Could not read this project's team."),
+            ).toBeInTheDocument();
+            // Not "nobody is on this project" — that would send someone to a
+            // team page that already lists the person they were looking for.
+            expect(
+                screen.queryByText("No one is on this project's team yet."),
+            ).not.toBeInTheDocument();
+        });
+
+        it('says nothing at all once there is somebody to pick', async () => {
+            roster();
+            panel();
+
+            await picker();
+            expect(
+                screen.queryByText("No one is on this project's team yet."),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.queryByText("Could not read this project's team."),
+            ).not.toBeInTheDocument();
+        });
+    });
+});
+
+describe('TaskDetailPanel timer', () => {
+    /**
+     * The clock belongs with the figures it moves. It used to sit in its own
+     * right-aligned row above the description, which put a control over the
+     * hours at the top of the reading column and spent a row of height doing it.
+     */
+    it('sits with the hours it affects, not above the description', async () => {
+        panel();
+
+        const timer = await screen.findByRole('button', { name: /start/i });
+
+        // The block holding the three figures is the timer's own container now.
+        // Asserted through `Logged (h)` rather than a class or a testid: the
+        // grouping is the thing being pinned, and the label is what a reader
+        // sees grouping them.
+        // Metric tile -> the three-across grid -> the block that also holds the
+        // timer, which is the grouping this test exists to pin.
+        const hours = screen.getByText('Logged (h)').closest('div')!.parentElement!.parentElement!;
+
+        expect(hours).toContainElement(timer);
+        expect(hours).toContainElement(screen.getByText('Remaining (h)'));
+
+        // And it is no longer the first thing in the description column.
+        const description = screen.getByRole('button', { name: 'Description' });
+        expect(description.parentElement).not.toContainElement(timer);
+    });
+
+    it('starts the timer for this task', async () => {
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: /start/i }));
+
+        await waitFor(() => expect(startProjectTimer).toHaveBeenCalledWith({ taskId: 't1' }));
+    });
+
+    it('offers to stop the clock it is already running', async () => {
+        getProjectTimer.mockResolvedValue({ task: { id: 't1' } });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: /stop/i }));
+
+        await waitFor(() => expect(stopProjectTimer).toHaveBeenCalled());
     });
 });
 
@@ -1542,12 +1790,34 @@ describe('TaskDetailPanel attachments', () => {
         return f;
     };
 
+    /** The two kinds of attachment a tile draws differently. */
+    const twoFiles = () =>
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/one.png',
+                file_name: 'one.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-09-20T10:00:00Z',
+            },
+            {
+                id: 'a2',
+                file_url: 'https://cdn/two.pdf',
+                file_name: 'two.pdf',
+                mime_type: 'application/pdf',
+                file_size: 4096,
+                created_at: '2026-09-20T10:00:00Z',
+            },
+        ]);
+
     it('lists what is attached', async () => {
         getTaskAttachments.mockResolvedValue([
             {
                 id: 'a1',
                 file_url: 'https://cdn/plan.png',
                 file_name: 'plan.png',
+                mime_type: 'image/png',
                 file_size: 2048,
                 created_at: '2026-08-03T10:00:00Z',
             },
@@ -1555,8 +1825,61 @@ describe('TaskDetailPanel attachments', () => {
         panel();
         await openTab(/^Attachments/);
 
-        const link = await screen.findByRole('link', { name: 'plan.png' });
-        expect(link).toHaveAttribute('href', 'https://cdn/plan.png');
+        // A tile that opens the preview, rather than a link out to a tab.
+        expect(await screen.findByLabelText('Preview plan.png')).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'plan.png' })).not.toBeInTheDocument();
+    });
+
+    it('shows an image attachment as its own thumbnail', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByRole('img', { name: 'one.png' })).toHaveAttribute(
+            'src',
+            expect.stringContaining('https://cdn/one.png'),
+        );
+    });
+
+    it('shows a glyph rather than a thumbnail for a PDF', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByText('two.pdf')).toBeInTheDocument();
+        expect(screen.queryByRole('img', { name: 'two.pdf' })).not.toBeInTheDocument();
+    });
+
+    it('opens the preview modal instead of a new tab', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Preview one.png'));
+
+        expect(await screen.findByLabelText('Zoom in')).toBeInTheDocument();
+    });
+
+    it('opens the preview at the tile that was clicked', async () => {
+        twoFiles();
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Preview two.pdf'));
+
+        // The PDF, not the first attachment in the list.
+        expect(await screen.findByTitle('two.pdf')).toBeInTheDocument();
+    });
+
+    it('still removes an attachment from a tile', async () => {
+        twoFiles();
+        deleteTaskAttachment.mockResolvedValue({});
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment one.png'));
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
     });
 
     it('uploads a file', async () => {

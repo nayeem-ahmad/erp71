@@ -1,10 +1,12 @@
 import {
     CARD_ATTR,
     COLUMN_ATTR,
+    columnAtPoint,
     DRAG_THRESHOLD_PX,
     movedFar,
     resolveDropTarget,
     toFullIndex,
+    withColumnMoved,
 } from './board-drag';
 import type { BoardColumn, BoardTask } from './board-tasks';
 
@@ -162,5 +164,55 @@ describe('toFullIndex', () => {
 
     it('appends when the column is unknown rather than throwing', () => {
         expect(toFullIndex(undefined, [], 0, 'x')).toBe(0);
+    });
+});
+
+describe('columnAtPoint', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('reads the column id off whatever is under the pointer', () => {
+        const columnEl = buildColumn('c2', ['a']);
+        document.body.appendChild(columnEl);
+        // A card inside the column, not the column itself: a column dragged
+        // over another lands on its cards, which is why `closest` is used.
+        document.elementFromPoint = jest
+            .fn()
+            .mockReturnValue(columnEl.querySelector(`[${CARD_ATTR}="a"]`));
+
+        expect(columnAtPoint({ x: 0, y: 0 }, document)).toBe('c2');
+    });
+
+    it('is null over the page chrome, so a drag released there is a no-op', () => {
+        document.elementFromPoint = jest.fn().mockReturnValue(document.body);
+
+        expect(columnAtPoint({ x: 0, y: 0 }, document)).toBeNull();
+    });
+});
+
+describe('withColumnMoved', () => {
+    const ids = ['a', 'b', 'c', 'd'];
+
+    it('moves a column rightwards into the slot it was dropped on', () => {
+        expect(withColumnMoved(ids, 'a', 'c')).toEqual(['b', 'c', 'a', 'd']);
+    });
+
+    it('moves a column leftwards into the slot it was dropped on', () => {
+        expect(withColumnMoved(ids, 'd', 'b')).toEqual(['a', 'd', 'b', 'c']);
+    });
+
+    it('swaps neighbours in both directions', () => {
+        expect(withColumnMoved(ids, 'a', 'b')).toEqual(['b', 'a', 'c', 'd']);
+        expect(withColumnMoved(ids, 'b', 'a')).toEqual(['b', 'a', 'c', 'd']);
+    });
+
+    it('leaves the order alone when a column is dropped on itself', () => {
+        expect(withColumnMoved(ids, 'b', 'b')).toEqual(ids);
+    });
+
+    it('leaves the order alone for an id that is not on the board', () => {
+        expect(withColumnMoved(ids, 'a', 'gone')).toEqual(ids);
+        expect(withColumnMoved(ids, 'gone', 'a')).toEqual(ids);
     });
 });

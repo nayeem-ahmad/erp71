@@ -86,6 +86,28 @@ describe('Markdown', () => {
     });
 
     /**
+     * The opt-in, for the surfaces where a colleague pasted the image
+     * themselves: a task description, a task comment.
+     */
+    it('renders a markdown image when the caller allows images', () => {
+        render(<Markdown content={'![shot.png](https://cdn/shot.png)'} allowImages />);
+
+        const image = screen.getByAltText('shot.png');
+        expect(image).toHaveAttribute('src', 'https://cdn/shot.png');
+        // The asset host has no business knowing which page the reader was on.
+        expect(image).toHaveAttribute('referrerpolicy', 'no-referrer');
+    });
+
+    it('still refuses raw HTML with images allowed', () => {
+        const { container } = render(
+            <Markdown content={'<img src="x" onerror="alert(1)">'} allowImages />,
+        );
+
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.innerHTML).not.toContain('onerror');
+    });
+
+    /**
      * A path the assistant links to is an in-app route, so it must navigate in
      * the same tab (a client-side link), not open a new one like a web citation.
      */
@@ -120,5 +142,32 @@ describe('Markdown', () => {
         const { container } = render(<Markdown content={'**hi** and `code`\n\n- one'} />);
 
         expect(container.innerHTML).not.toContain('node=');
+    });
+});
+
+describe('Markdown images', () => {
+    it('sizes an image to the width on its URL', () => {
+        render(<Markdown content="![shot](https://cdn/x.png?w=420)" allowImages />);
+        expect(screen.getByRole('img', { name: 'shot' })).toHaveStyle({ width: '420px' });
+    });
+
+    it('leaves an image with no width to the column', () => {
+        render(<Markdown content="![shot](https://cdn/x.png)" allowImages />);
+        expect(screen.getByRole('img', { name: 'shot' })).not.toHaveStyle({ width: '420px' });
+    });
+
+    it('opens a preview when an image is clicked', () => {
+        render(<Markdown content="![shot](https://cdn/x.png)" allowImages />);
+
+        fireEvent.click(screen.getByRole('img', { name: 'shot' }));
+
+        expect(screen.getByLabelText('Zoom in')).toBeInTheDocument();
+    });
+
+    it('still drops images where they are not allowed', () => {
+        // Chat answers are built partly from tenant-controlled strings; an
+        // image in one would make an outbound request from every reader.
+        render(<Markdown content="![shot](https://cdn/x.png)" />);
+        expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
 });

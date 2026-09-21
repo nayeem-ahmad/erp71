@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "Gesendet",
         successDescription: "Wir antworten in dieser Konversation.",
         defaultError: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+        createdToast: "Ticket #{number} erstellt.",
     },
     supportPage: {
         title: "Support",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "Gelöst",
         replyPlaceholder: "Nachricht eingeben… (Enter zum Senden)",
         createTitle: "Neue Konversation",
+        ticketLabel: "Ticket #{number}",
+        resolvedNotice: "Der Support hat Ticket #{number} als gelöst markiert.",
+        reopenedNotice: "Ticket #{number} wurde wieder geöffnet.",
+        replyNotice: "Neue Antwort zu Ticket #{number}.",
+        searchPlaceholder: "Konversationen suchen…",
+        allStatuses: "Alle Status",
+        statusOpen: "Offen",
+        statusResolved: "Gelöst",
+        allTypes: "Alle Typen",
+        noMatches: "Keine Konversation entspricht diesen Filtern.",
+        clearFilters: "Filter zurücksetzen",
+        count: "{count, plural, one {# Konversation} other {# Konversationen}}",
+        replyPlaceholderMobile: "Nachricht eingeben…",
     },
     voiceNavWidget: {
         startAria: "Sprachnavigation — Seitennamen sprechen",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "Wie erfasse ich eine Kundenretoure?",
         },
     },
+    preview: {
+        title: "Vorschau",
+        zoomIn: "Vergrößern",
+        zoomOut: "Verkleinern",
+        resetZoom: "Zoom zurücksetzen",
+        next: "Weiter",
+        previous: "Zurück",
+        download: "Herunterladen",
+        openInNewTab: "In neuem Tab öffnen",
+        closePreview: "Vorschau schließen",
+        noPreview: "Diese Datei kann nicht in der Vorschau angezeigt werden.",
+    },
+
     richText: {
         toolbar: "Formatierung",
         hint: "Formatierung: **fett**, *kursiv*, - Listen und [Links](url).",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "Aufzählungsliste",
         numberedList: "Nummerierte Liste",
         link: "Link",
+        uploading: "Bild wird hochgeladen…",
+        resizeImage: "Bildgröße ändern",
+        pasteImage: "Fügen Sie ein Bild ein, um es anzuhängen.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

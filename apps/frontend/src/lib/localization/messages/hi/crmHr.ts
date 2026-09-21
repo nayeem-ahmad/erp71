@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: 'अनुमोदन अपडेट नहीं हो सका।',
             approveActivity: 'इस गतिविधि को अनुमोदित करें',
             open: "खोलें",
+            viewActivities: "गतिविधियाँ देखें",
+            openRecord: "पूरा रिकॉर्ड खोलें",
             columns: {
                 subject: "गतिविधि",
                 kind: "उद्देश्य / चैनल",

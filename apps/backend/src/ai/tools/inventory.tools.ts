@@ -154,8 +154,8 @@ export const INVENTORY_TOOLS: ChatTool[] = [
         modules: ['inventory'],
         description:
             'The stock ledger: every recorded change in quantity with its reason (SALE, PURCHASE_RECEIPT, TRANSFER_IN, ' +
-            'TRANSFER_OUT, SHRINKAGE, and so on), newest first. Use for "why did stock drop", "where did these units go", ' +
-            '"what happened to this product". Resolve the product id with resolve_entity first.',
+            'TRANSFER_OUT, SHRINKAGE, STOCK_FOUND, and so on), newest first. Use for "why did stock drop", ' +
+            '"where did these units go", "what happened to this product". Resolve the product id with resolve_entity first.',
         parameters: {
             type: 'object',
             properties: {
@@ -165,7 +165,7 @@ export const INVENTORY_TOOLS: ChatTool[] = [
                 productId: { type: 'string', description: 'Restrict to one product by id, from resolve_entity.' },
                 movementType: {
                     type: 'string',
-                    description: 'Restrict to one movement reason, e.g. SALE, PURCHASE_RECEIPT, SHRINKAGE, TRANSFER_OUT.',
+                    description: 'Restrict to one movement reason, e.g. SALE, PURCHASE_RECEIPT, SHRINKAGE, STOCK_FOUND, TRANSFER_OUT.',
                 },
             },
         },

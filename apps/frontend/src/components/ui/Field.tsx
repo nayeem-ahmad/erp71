@@ -6,7 +6,8 @@ export type FieldProps = {
     label: ReactNode;
     required?: boolean;
     error?: string;
-    hint?: string;
+    /** `ReactNode`, not `string`: a hint that points somewhere needs a link. */
+    hint?: ReactNode;
     htmlFor?: string;
     className?: string;
     children: ReactNode;

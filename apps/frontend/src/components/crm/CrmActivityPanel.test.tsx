@@ -8,6 +8,7 @@ jest.mock('@/lib/api', () => ({
         completeCrmActivity: jest.fn(),
         cancelCrmActivity: jest.fn(),
         updateCrmActivity: jest.fn(),
+        setCrmActivityApproval: jest.fn(),
         getLeadTaxonomy: jest.fn(),
         getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
         getTeamMembers: jest.fn(),
@@ -18,6 +19,8 @@ jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() 
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { api } = require('@/lib/api');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { toast } = require('@/lib/toast');
 
 const CHANNELS = [{ id: 'ch-call', code: 'CALL', name: 'Call', sort_order: 1, is_system: true, is_active: true }];
 const PURPOSES = [{ id: 'p-col', code: 'COLLECTION', name: 'Collection', sort_order: 1, is_system: true, is_active: true }];
@@ -34,6 +37,8 @@ const planned = {
     purpose: { id: 'p-col', name: 'Collection', icon: '💰' },
     channel: null,
     assignee: null,
+    is_approved: false,
+    approver: null,
 };
 
 const logged = {
@@ -46,7 +51,11 @@ const logged = {
     summary: 'Sent the catalogue',
     purpose: null,
     channel: { id: 'ch-call', name: 'Call', icon: '📞' },
+    // A call logged as already made lands approved: there is nothing left to hold back.
+    is_approved: true,
 };
+
+const RIFAT = { id: 'user-2', name: 'Rifat', email: 'rifat@example.com' };
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -265,5 +274,143 @@ describe('CrmActivityPanel — naming an assignee on new work', () => {
         expect(api.completeCrmActivity.mock.calls[0][1].next).toEqual(
             expect.objectContaining({ subject: 'Call again', assigned_to: 'user-2' }),
         );
+    });
+});
+
+/**
+ * The reviewer's sign-off, on the lead's own page — the same switch the Activities
+ * list carries, so approving a lead's next call does not mean leaving the lead to
+ * hunt for it in the tenant-wide list.
+ */
+describe('CrmActivityPanel — approving planned work', () => {
+    const asReviewer = () =>
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['APPROVE_CRM_ACTIVITY'] }],
+        });
+
+    /** Disabled until `/auth/me` has said this member may approve. */
+    const enabledSwitch = () =>
+        waitFor(() => {
+            const el = screen.getByRole('switch', { name: 'Approve this activity' });
+            expect(el).not.toBeDisabled();
+            return el;
+        });
+
+    beforeEach(() => {
+        window.sessionStorage.clear();
+        api.setCrmActivityApproval.mockResolvedValue({
+            ...planned,
+            is_approved: true,
+            approver: { id: 'user-1', name: 'Nayeem', email: 'nayeem@example.com' },
+        });
+    });
+
+    it('approves a planned activity in place', async () => {
+        asReviewer();
+        render(<CrmActivityPanel leadId="l1" />);
+        const toggle = await enabledSwitch();
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+        const loadsBefore = api.getAllCrmActivities.mock.calls.length;
+        fireEvent.click(toggle);
+
+        await waitFor(() => expect(api.setCrmActivityApproval).toHaveBeenCalledWith('a1', true));
+        expect(api.setCrmActivityApproval).toHaveBeenCalledTimes(1);
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+        // Not reloaded: a reload swaps the whole panel for "Loading…" and pulls
+        // the switch out from under the reviewer's finger.
+        expect(api.getAllCrmActivities.mock.calls.length).toBe(loadsBefore);
+    });
+
+    it('names the reviewer once the server has stamped the approval', async () => {
+        asReviewer();
+        render(<CrmActivityPanel leadId="l1" />);
+        fireEvent.click(await enabledSwitch());
+
+        expect(await screen.findByText(/Nayeem/)).toBeInTheDocument();
+    });
+
+    // Printed rather than left to a tooltip: a phone has no hover.
+    it('names who approved an activity that arrives approved', async () => {
+        api.getAllCrmActivities.mockResolvedValue([{ ...planned, is_approved: true, approver: RIFAT }, logged]);
+        render(<CrmActivityPanel leadId="l1" />);
+
+        expect(await screen.findByText(/Rifat/)).toBeInTheDocument();
+    });
+
+    it('withdraws an approval, and stops naming the reviewer', async () => {
+        asReviewer();
+        api.getAllCrmActivities.mockResolvedValue([{ ...planned, is_approved: true, approver: RIFAT }, logged]);
+        api.setCrmActivityApproval.mockResolvedValue({ ...planned, is_approved: false, approver: null });
+        render(<CrmActivityPanel leadId="l1" />);
+        const toggle = await enabledSwitch();
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+        fireEvent.click(toggle);
+
+        await waitFor(() => expect(api.setCrmActivityApproval).toHaveBeenCalledWith('a1', false));
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+        expect(screen.queryByText(/Rifat/)).not.toBeInTheDocument();
+    });
+
+    // A switch left on after the server refused is the failure that matters: the
+    // reviewer walks away believing they signed the call off.
+    it('puts the switch back and says so when the server refuses', async () => {
+        asReviewer();
+        api.setCrmActivityApproval.mockRejectedValue(new Error('nope'));
+        render(<CrmActivityPanel leadId="l1" />);
+        const toggle = await enabledSwitch();
+
+        fireEvent.click(toggle);
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not update approval.'));
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+    });
+
+    /**
+     * What `CrmActivityDrawer` hangs the activities list's refresh on. It has to
+     * be a write rather than the drawer closing: a list that reloads because
+     * somebody looked swaps itself for "Loading…" for nothing.
+     */
+    it('reports a write to the caller, and stays quiet on a plain load', async () => {
+        const onChanged = jest.fn();
+        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        await screen.findByText('Chase the invoice');
+
+        expect(onChanged).not.toHaveBeenCalled();
+
+        fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
+
+        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not report a write the server refused', async () => {
+        const onChanged = jest.fn();
+        api.cancelCrmActivity.mockRejectedValue(new Error('nope'));
+        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        await screen.findByText('Chase the invoice');
+
+        fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it('shows the switch disabled to someone who cannot approve', async () => {
+        render(<CrmActivityPanel leadId="l1" />);
+        await screen.findByText('Chase the invoice');
+
+        expect(screen.getByRole('switch', { name: 'Approve this activity' })).toBeDisabled();
+    });
+
+    // Only a plan can be approved; a switch on a call already made would offer a
+    // decision that changes nothing.
+    it('offers the switch on planned work only, not on history', async () => {
+        asReviewer();
+        render(<CrmActivityPanel leadId="l1" />);
+        await screen.findByText('Sent the catalogue');
+
+        expect(screen.getAllByRole('switch')).toHaveLength(1);
     });
 });

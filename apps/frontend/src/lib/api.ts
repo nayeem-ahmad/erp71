@@ -16,11 +16,13 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
-import { handleExpiredSession } from './session-expiry';
+import { readSseFrames, type SseFrame } from './sse';
+import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
     getAccessToken,
     getRefreshToken,
     getWorkspaceItem,
+    hasStoredSession,
     isAccessTokenNearExpiry,
     updateCredentials,
 } from './session-store';
@@ -190,10 +192,54 @@ async function renewalBackoffFrom(response: Response): Promise<number> {
     return RENEWAL_BACKOFF_MS;
 }
 
+/**
+ * Name of the cross-tab lock every renewal queues behind.
+ *
+ * `renewalInFlight` only de-dupes within one tab. Every tab shares one refresh
+ * token and it is good for a single exchange, so two of them renewing at once is
+ * two uses of the same token — which is exactly what the backend's replay
+ * detection exists to catch, and it ends the session it fires on. The lock makes
+ * them take turns; the loser then finds the winner's token already in storage
+ * and skips its own exchange entirely.
+ */
+const RENEWAL_LOCK = 'erp71:session-renewal';
+
+/**
+ * Run `exchange` with the cross-tab renewal lock held.
+ *
+ * Falls back to running it directly where the Web Locks API is missing — Safari
+ * before 15.4, and any non-secure origin. That is what this did before the lock
+ * existed, so the fallback is no worse than the status quo and not worth
+ * refusing to renew over.
+ */
+async function withRenewalLock(exchange: () => Promise<RenewalOutcome>): Promise<RenewalOutcome> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (!locks?.request) return exchange();
+    return (await locks.request(RENEWAL_LOCK, exchange)) as RenewalOutcome;
+}
+
 async function performRenewal(): Promise<RenewalOutcome> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return 'rejected';
 
+    return withRenewalLock(async () => {
+        // Re-read inside the lock. Whoever held it before us may have renewed
+        // already, in which case the token we queued with is spent — presenting
+        // it is the replay — and theirs is in shared storage, which is what the
+        // caller's retry picks up.
+        const current = getRefreshToken();
+        if (!current) return 'rejected';
+        if (current !== refreshToken) return 'renewed';
+        // Likewise for a backoff the winner just started: the server refused
+        // *this* session moments ago, so asking again now learns nothing.
+        if (Date.now() < renewalBlockedUntil) return 'unavailable';
+
+        return exchangeRefreshToken(current);
+    });
+}
+
+/** The exchange itself. Only ever called with the renewal lock held. */
+async function exchangeRefreshToken(refreshToken: string): Promise<RenewalOutcome> {
     let response: Response;
     try {
         response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -348,12 +394,29 @@ async function renewIfNearExpiry(): Promise<void> {
     if (isAccessTokenNearExpiry()) await renewSession();
 }
 
+/**
+ * What an authenticated call does in a browser holding no session at all.
+ *
+ * Sending it anyway produces a 401, and every 401 out of these helpers is read
+ * as "your session ended" — which is how opening the app in a signed-out browser
+ * came to announce an expiry that never happened, and to run the teardown that
+ * goes with one over shared localStorage. Answering here keeps that story
+ * straight and saves the round trip.
+ */
+function signedOutError(): ApiError {
+    handleMissingSession();
+    return new ApiError('You are not signed in.', 401, 'NOT_AUTHENTICATED');
+}
+
 export async function fetchBlobWithAuth(
     endpoint: string,
     options: RequestInit = {},
     isRetry = false,
 ): Promise<{ blob: Blob; filename: string }> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -435,7 +498,10 @@ async function isInvalidTenant(response: Response): Promise<boolean> {
 }
 
 async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<any> {
-    if (!isRetry) await renewIfNearExpiry();
+    if (!isRetry) {
+        if (!hasStoredSession()) throw signedOutError();
+        await renewIfNearExpiry();
+    }
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -511,6 +577,118 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     const json = await requestWithAuth(endpoint, options);
     // Backend wraps all responses in { data: T } — unwrap transparently
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
+}
+
+/** A frame from an authenticated event stream, already split and parsed. */
+export type StreamHandlers = {
+    onFrame: (frame: SseFrame) => void;
+    /** Called with `true` once frames are flowing, `false` when the stream drops. */
+    onConnected?: (connected: boolean) => void;
+};
+
+/** Backoff between reconnects, in ms — each step, then holding at the last. */
+const STREAM_RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+
+/**
+ * How long a connection has to have lasted before the backoff is forgiven. A
+ * server or proxy that accepts the request and drops it straight away would
+ * otherwise be retried once a second forever, since "connected" on its own says
+ * nothing about whether the stream works.
+ */
+const STREAM_HEALTHY_MS = 10_000;
+
+/**
+ * Holds an authenticated Server-Sent Events stream open, reconnecting for as
+ * long as the caller wants it.
+ *
+ * Lives here rather than in a component because the session plumbing does: the
+ * bearer token, the tenant header and the API base are all module state in this
+ * file, and an `EventSource` cannot carry the first two anyway (it sends no
+ * headers), which is why this reads the body with `fetch` instead.
+ *
+ * Errors are deliberately quiet. Every caller re-reads the same data over
+ * ordinary requests as a fallback, so a stream that cannot be established is a
+ * screen that updates a little later — not a screen that shows an error. The
+ * returned function stops the stream and the reconnecting.
+ */
+export function openAuthedStream(endpoint: string, handlers: StreamHandlers): () => void {
+    const controller = new AbortController();
+    let stopped = false;
+    let attempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRetry = () => {
+        if (stopped) return;
+        const wait = STREAM_RETRY_MS[Math.min(attempt, STREAM_RETRY_MS.length - 1)];
+        attempt += 1;
+        retryTimer = setTimeout(() => void connect(), wait);
+    };
+
+    const connect = async () => {
+        if (stopped) return;
+        if (!hasStoredSession()) {
+            scheduleRetry();
+            return;
+        }
+        try {
+            await renewIfNearExpiry();
+            const headers = new Headers({ Accept: 'text/event-stream' });
+            const token = getAccessToken();
+            if (token) headers.set('Authorization', `Bearer ${token}`);
+            const tenantId = resolveTenantHeader();
+            if (tenantId) headers.set('x-tenant-id', tenantId);
+
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers,
+                signal: controller.signal,
+                cache: 'no-store',
+            });
+            if (!response.ok || !response.body) {
+                // A 401 here is not treated as the end of the session: the
+                // fallback requests go through `requestWithAuth`, which renews
+                // or signs out on its own terms. Streams only ever retry.
+                handlers.onConnected?.(false);
+                scheduleRetry();
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            const openedAt = Date.now();
+            let buffer = '';
+            // Connected: the server opens with a frame of its own, but say so
+            // now so the caller can relax its poll even if that frame is late.
+            handlers.onConnected?.(true);
+
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const { frames, rest } = readSseFrames(buffer);
+                buffer = rest;
+                for (const frame of frames) handlers.onFrame(frame);
+            }
+
+            // The server caps how long one connection lives, so a clean end is
+            // routine rather than a failure — a stream that lasted reconnects
+            // from the top of the backoff instead of being treated as an error.
+            if (Date.now() - openedAt >= STREAM_HEALTHY_MS) attempt = 0;
+            handlers.onConnected?.(false);
+            scheduleRetry();
+        } catch {
+            if (stopped) return;
+            handlers.onConnected?.(false);
+            scheduleRetry();
+        }
+    };
+
+    void connect();
+
+    return () => {
+        stopped = true;
+        if (retryTimer) clearTimeout(retryTimer);
+        controller.abort();
+    };
 }
 
 /**
@@ -874,6 +1052,15 @@ function dashboardWindowFetcher(path: string) {
     };
 }
 
+/** Account row returned by the payment-method account picker (no balances). */
+export interface PaymentMethodAccount {
+    id: string;
+    name: string;
+    code: string | null;
+    type: string;
+    category: string;
+}
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -1035,12 +1222,14 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; from?: string; to?: string }) => {
+    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.sourceWarehouseId) query.set('sourceWarehouseId', params.sourceWarehouseId);
         if (params?.destinationWarehouseId) query.set('destinationWarehouseId', params.destinationWarehouseId);
         if (params?.productId) query.set('productId', params.productId);
+        // Explicit undefined check: `false` is a real filter (intra-branch only).
+        if (params?.isCrossBranch !== undefined) query.set('isCrossBranch', String(params.isCrossBranch));
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
@@ -1053,6 +1242,14 @@ export const api = {
     }),
     sendWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/send`, {
         method: 'POST',
+    }),
+    approveWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/approve`, {
+        method: 'POST',
+    }),
+    rejectWarehouseTransfer: (id: string, data: { reason?: string }) => fetchWithAuth(`/warehouse-transfers/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
     }),
     receiveWarehouseTransfer: (id: string, data: any) => fetchWithAuth(`/warehouse-transfers/${id}/receive`, {
         method: 'POST',
@@ -1105,8 +1302,12 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getInventoryShrinkage: (params?: CreatedRangeParams) =>
-        fetchWithAuth(withCreatedRange('/inventory-shrinkage', params)),
+    /** Omit `direction` for the whole adjustment log; 'LOSS' or 'FOUND' narrows it to one side. */
+    getInventoryShrinkage: (params?: CreatedRangeParams & { direction?: 'LOSS' | 'FOUND' }) => {
+        const endpoint = withCreatedRange('/inventory-shrinkage', params);
+        if (!params?.direction) return fetchWithAuth(endpoint);
+        return fetchWithAuth(`${endpoint}${endpoint.includes('?') ? '&' : '?'}direction=${params.direction}`);
+    },
     getInventoryShrinkageRecord: (id: string) => fetchWithAuth(`/inventory-shrinkage/${id}`),
     createInventoryShrinkage: (data: any) => fetchWithAuth('/inventory-shrinkage', {
         method: 'POST',
@@ -1150,6 +1351,31 @@ export const api = {
         if (params?.brandId) query.set('brandId', params.brandId);
         if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
         return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /**
+     * The stock card for one product: movements in and out of a warehouse in
+     * date order, with the quantity it opened on and a running balance.
+     * `productId` is required — a running balance over two products is a sum of
+     * unlike things.
+     */
+    getProductTransactionHistory: (params: {
+        productId: string;
+        warehouseId?: string;
+        storeId?: string;
+        from?: string;
+        to?: string;
+        page?: number;
+        limit?: number;
+    }) => {
+        const query = new URLSearchParams();
+        query.set('productId', params.productId);
+        if (params.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params.storeId) query.set('storeId', params.storeId);
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/inventory-reports/product-transaction-history?${query.toString()}`);
     },
     getInventoryValuation: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
@@ -1243,8 +1469,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/consolidated${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
+    getShrinkageSummary: (params?: { storeId?: string; warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string; direction?: 'LOSS' | 'FOUND' }) => {
         const query = new URLSearchParams();
+        if (params?.direction) query.set('direction', params.direction);
         if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
         if (params?.reasonId) query.set('reasonId', params.reasonId);
@@ -1478,6 +1705,35 @@ export const api = {
         }),
     deleteCustomerCreditPayment: (paymentId: string) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, { method: 'DELETE' }),
+    writeOffCustomerDebt: (
+        id: string,
+        data: {
+            amount: number;
+            reason: string;
+            notes: string;
+            date?: string;
+            disableCredit?: boolean;
+        },
+    ) => fetchWithAuth(`/customers/${id}/credit/write-off`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getCustomerWriteOffs: (params?: {
+        customerId?: string;
+        reason?: string;
+        from?: string;
+        to?: string;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.reason) query.set('reason', params.reason);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchAllPages(`/customers/credit/write-offs${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    reverseCustomerWriteOff: (writeOffId: string) =>
+        fetchWithAuth(`/customers/credit/write-offs/${writeOffId}/reverse`, { method: 'POST' }),
     getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
     // CRM Interactions
     getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {
@@ -2658,6 +2914,32 @@ export const api = {
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
+
+    // ── NBR Mushak 6.x ──────────────────────────────────────────────────
+    // Routes are named after the forms because that is how they are asked
+    // for: "print the 6.3", "pull the 6.2 for this month".
+    getMushakForms: () => fetchWithAuth('/mushak/forms'),
+    /** মূসক-৬.৩ · কর চালানপত্র — the tax invoice for one sale. */
+    getMushakTaxInvoice: (saleId: string) => fetchWithAuth(`/mushak/6.3/${saleId}`),
+    /** মূসক-৬.৭ · ক্রেডিট নোট — the credit note for one sales return. */
+    getMushakCreditNote: (returnId: string) => fetchWithAuth(`/mushak/6.7/${returnId}`),
+    /** মূসক-৬.২ · বিক্রয় হিসাব পুস্তক — the sales book for a tax period. */
+    getMushakSalesBook: (params: { from?: string; to?: string; storeId?: string; taxableOnly?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        if (params.taxableOnly) query.set('taxableOnly', 'true');
+        return fetchWithAuth(`/mushak/6.2?${query.toString()}`);
+    },
+    /** মূসক-৬.১০ · supplies over two lakh taka to unregistered buyers. */
+    getMushakLargeSupplyStatement: (params: { from?: string; to?: string; storeId?: string }) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.storeId) query.set('storeId', params.storeId);
+        return fetchWithAuth(`/mushak/6.10?${query.toString()}`);
+    },
     getDiscountCodes: () => fetchAllPages('/discount-codes'),
     createDiscountCode: (data: any) => fetchWithAuth('/discount-codes', {
         method: 'POST',
@@ -2707,6 +2989,10 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
+    /** Takings, payment-method breakdown and expected cash for one shift. */
+    getCashierSessionSummary: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/summary`),
+    /** Every till open in a store right now, each with its own summary. */
+    getOpenCashierSessionsByStore: (storeId: string) => fetchWithAuth(`/cashier-sessions/store/${storeId}/open`),
     // POS Counters
     getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
     getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),
@@ -2721,13 +3007,30 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCounter: (id: string) => fetchWithAuth(`/counters/${id}`, { method: 'DELETE' }),
+    // Whether the platform admin has left "Try Demo" on. Runtime-configured
+    // rather than a NEXT_PUBLIC_ build arg, for the same reason as the Google
+    // and Firebase configs: flipping the switch is a settings save, not a
+    // frontend rebuild.
+    getDemoConfig: () => fetch(`${API_BASE}/auth/demo/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load demo config');
+        return body && 'data' in body ? body.data : body;
+    }),
     demoLogin: () => fetch(`${API_BASE}/auth/demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
+        // An `ApiError` rather than a bare `Error`: a demo the platform admin
+        // switched off comes back as `DEMO_DISABLED`, which the pages word for a
+        // visitor instead of repeating the backend's sentence.
         if (!res.ok) {
-            throw new Error(body?.message || body?.error?.message || 'Demo account not available');
+            throw new ApiError(
+                body?.error?.message || body?.message || 'Demo account not available',
+                res.status,
+                readErrorCode(body),
+                readRetryAfter(body),
+            );
         }
         return body && 'data' in body ? body.data : body;
     }),
@@ -2750,9 +3053,9 @@ export const api = {
         }
         return body && 'data' in body ? body.data : body;
     }),
-    verify2FALogin: (userId: string, code: string) => fetch(`${API_BASE}/auth/2fa/verify`, {
+    verify2FALogin: (userId: string, code: string, rememberMe = false) => fetch(`${API_BASE}/auth/2fa/verify`, {
         method: 'POST',
-        body: JSON.stringify({ userId, code }),
+        body: JSON.stringify({ userId, code, remember_me: rememberMe }),
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
@@ -2773,7 +3076,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string }) =>
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/google`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -2794,7 +3097,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load mobile sign-in config');
         return body && 'data' in body ? body.data : body;
     }),
-    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string }) =>
+    mobileSignIn: (data: { idToken: string; email?: string; name?: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; acceptedTermsVersion?: string; remember_me?: boolean }) =>
         fetch(`${API_BASE}/auth/mobile`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -3501,7 +3804,13 @@ export const api = {
     mergeFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/merge`, { method: 'POST' }),
     rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
-    getSupportThreads: () => fetchWithAuth('/support/threads'),
+    getSupportThreads: (params?: { search?: string; status?: string; category?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.category) query.set('category', params.category);
+        return fetchWithAuth(`/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     createSupportThread: (data: {
         category?: 'support' | 'bug' | 'feature' | 'general';
         subject?: string;
@@ -3513,6 +3822,11 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * Live thread changes for this workspace. Each frame is a nudge to re-read
+     * a thread, never the thread itself — see `openAuthedStream`.
+     */
+    openSupportStream: (handlers: StreamHandlers) => openAuthedStream('/support/stream', handlers),
     getSupportMessages: (threadId: string) => fetchWithAuth(`/support/threads/${threadId}/messages`),
     sendSupportMessage: (threadId: string, body: string) =>
         fetchWithAuth(`/support/threads/${threadId}/messages`, {
@@ -4529,6 +4843,10 @@ export const api = {
         const q = type ? `?type=${type}` : '';
         return fetchWithAuth(`/payment-methods${q}`);
     },
+    // Separate from getAccounts(): that one hits the accounting module, which is
+    // entitlement-gated, so it 403s on plans that still get payment methods.
+    getPaymentMethodAccounts: (): Promise<PaymentMethodAccount[]> =>
+        fetchWithAuth('/payment-methods/accounts'),
     createPaymentMethod: (data: any) => fetchWithAuth('/payment-methods', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -4835,7 +5153,21 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     /** Compose a new task straight into a board column; returns the reloaded board. */
-    createBoardCard: (id: string, columnId: string, data: { projectId: string; title: string }) =>
+    /**
+     * Both assignee columns travel on every card: a task goes to a user or to
+     * an employee without a login, never both, so whichever one the chosen
+     * holder does not fill is sent as `''`. The DTO is spelled for that.
+     */
+    createBoardCard: (
+        id: string,
+        columnId: string,
+        data: {
+            projectId: string;
+            title: string;
+            assigneeId?: string;
+            assigneeEmployeeId?: string;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -4849,6 +5181,31 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** Several cards into one column at once — the column menu and the selection bar. */
+    moveBoardCards: (id: string, data: { taskIds: string[]; columnId: string }) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/move`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Several cards off the board at once. The tasks themselves are untouched. */
+    removeBoardCards: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/cards/remove`, {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * One column's cards, top to bottom, as a sort left them. The rule stays in
+     * the browser; only the result is stored, so the next drag is not fighting
+     * a sort order the board would keep reapplying.
+     */
+    setBoardColumnCardOrder: (id: string, columnId: string, taskIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getBoardColumns: (id: string) => fetchWithAuth(`/projects/boards/${id}/columns`),
     createBoardColumn: (id: string, data: { name: string; category: string; wipLimit?: number }) =>
         fetchWithAuth(`/projects/boards/${id}/columns`, {
@@ -4860,6 +5217,13 @@ export const api = {
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The whole column order, left to right — see `ReorderBoardColumnsDto`. */
+    reorderBoardColumns: (id: string, columnIds: string[]) =>
+        fetchWithAuth(`/projects/boards/${id}/columns/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ columnIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteBoardColumn: (id: string, columnId: string) =>
@@ -4903,6 +5267,22 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`, { method: 'DELETE' }),
+    /**
+     * Delete a whole selection in one request.
+     *
+     * One call, not one `deleteProjectTask` per row: the API's default throttle
+     * is 20 requests a minute per address, so a fan-out over a real selection
+     * came back as `429 Too Many Requests` on everything past the twentieth.
+     *
+     * Ids the caller cannot delete (gone already, or in a project they cannot
+     * open) are skipped rather than failing the batch — `skipped` says how many.
+     */
+    bulkDeleteProjectTasks: (ids: string[]): Promise<{ deleted: number; skipped: number }> =>
+        fetchWithAuth('/project-tasks/bulk-delete', {
+            method: 'POST',
+            body: JSON.stringify({ ids }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     addTaskChecklistItem: (taskId: string, data: { text: string }) =>
         fetchWithAuth(`/project-tasks/${taskId}/checklist`, {
             method: 'POST',

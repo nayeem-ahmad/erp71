@@ -31,6 +31,10 @@ function LoginPageContent() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [googleAvailable, setGoogleAvailable] = useState(false);
     const [mobileAvailable, setMobileAvailable] = useState(false);
+    // Null until the backend has answered. Rendering nothing in the meantime —
+    // the same thing the Google and mobile buttons do — so a platform that
+    // switched the demo off never flashes a button that would be refused.
+    const [demoAvailable, setDemoAvailable] = useState<boolean | null>(null);
     const [twoFactorUserId, setTwoFactorUserId] = useState<string | null>(null);
     const [twoFactorCode, setTwoFactorCode] = useState('');
     const router = useRouter();
@@ -81,11 +85,32 @@ function LoginPageContent() {
         return redirectTo;
     };
 
-    // Auto-trigger demo login when ?demo=1 is present in the URL
+    // Ask whether the platform admin has left "Try Demo" on, then auto-start the
+    // demo if `?demo=1` brought the visitor here. The auto-start waits for the
+    // answer so a switched-off demo is not attempted at all.
     useEffect(() => {
-        if (searchParams.get('demo') === '1') {
-            handleDemoLogin();
-        }
+        let cancelled = false;
+
+        (async () => {
+            let enabled = false;
+            try {
+                const config = await api.getDemoConfig();
+                enabled = config?.enabled !== false;
+            } catch {
+                // An unreachable config endpoint leaves the button off rather
+                // than offering a demo that may not be there.
+                enabled = false;
+            }
+            if (cancelled) return;
+            setDemoAvailable(enabled);
+            if (enabled && searchParams.get('demo') === '1') {
+                void handleDemoLogin();
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -95,12 +120,12 @@ function LoginPageContent() {
         setError(null);
 
         try {
-            const loginRes = await api.login({ identifier, password });
+            const loginRes = await api.login({ identifier, password, remember_me: rememberMe });
             if (loginRes?.requires_2fa && loginRes?.user_id) {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
+            const { redirectTo } = await storeAuthResponse(loginRes, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: unknown) {
             setError(describeAuthError(err));
@@ -115,8 +140,8 @@ function LoginPageContent() {
         setIsLoading(true);
         setError(null);
         try {
-            const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
-            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe, { workspaceSlug });
+            const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode, rememberMe);
+            const { redirectTo } = await storeAuthResponse(loginRes, { workspaceSlug });
             router.push(resolveDestination(redirectTo));
         } catch (err: unknown) {
             setError(describeAuthError(err));
@@ -143,13 +168,14 @@ function LoginPageContent() {
             const authRes = await api.googleSignIn({
                 credential,
                 acceptedTermsVersion: CURRENT_TERMS_VERSION,
+                remember_me: rememberMe,
             });
             if (authRes?.requires_2fa && authRes?.user_id) {
                 // Google proved the identity; the authenticator app still has to.
                 setTwoFactorUserId(authRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
+            const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
             // A first-time Google account has no workspace yet — the wizard
             // collects the organization details a password signup asks for upfront.
             router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
@@ -169,7 +195,7 @@ function LoginPageContent() {
             setTwoFactorUserId(authRes.user_id);
             return;
         }
-        const { redirectTo } = await storeAuthResponse(authRes, rememberMe, { workspaceSlug });
+        const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
         router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
     };
 
@@ -179,11 +205,18 @@ function LoginPageContent() {
 
         try {
             const auth = await api.demoLogin();
-            await storeAuthResponse(auth, true); // demo always persists
+            await storeAuthResponse(auth);
             localStorage.removeItem('onboarding_complete');
             router.push('/dashboard/onboarding');
-        } catch (err: any) {
-            setError(err.message || t.auth.login.demoFailed);
+        } catch (err: unknown) {
+            // The admin can switch the demo off while this page is open, so the
+            // button has to survive being refused: say so, and stop offering it.
+            if (err instanceof ApiError && err.code === 'DEMO_DISABLED') {
+                setDemoAvailable(false);
+                setError(t.auth.login.demoDisabled);
+            } else {
+                setError((err instanceof Error && err.message) || t.auth.login.demoFailed);
+            }
         } finally {
             setIsDemoLoading(false);
         }
@@ -308,12 +341,16 @@ function LoginPageContent() {
                     </form>
                     )}
 
-                    {/* Divider */}
+                    {/* Divider — only when an alternative sign-in actually follows.
+                        With Google and mobile unconfigured and the demo switched
+                        off, there is nothing below it to separate. */}
+                    {(googleAvailable || mobileAvailable || demoAvailable) && (
                     <div className="my-6 flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />
                         <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{t.auth.login.dividerOr}</span>
                         <div className="flex-1 h-px bg-gray-200" />
                     </div>
+                    )}
 
                     {/* Both render nothing unless the backend is configured for them. */}
                     {!twoFactorUserId && (
@@ -333,6 +370,7 @@ function LoginPageContent() {
                         <div className={mobileAvailable ? 'mb-3' : ''}>
                             <MobileSignInPanel
                                 onSuccess={handleMobileAuth}
+                                rememberMe={rememberMe}
                                 onError={setError}
                                 onAvailabilityChange={setMobileAvailable}
                                 // An unrecognised number is signed up rather than
@@ -360,25 +398,30 @@ function LoginPageContent() {
                         </p>
                     )}
 
-                    {/* Try Demo button */}
-                    <button
-                        type="button"
-                        onClick={handleDemoLogin}
-                        disabled={!hydrated || isLoading || isDemoLoading || isGoogleLoading}
-                        className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isDemoLoading ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                            <>
-                                <PlayCircle className="w-5 h-5 text-blue-500" />
-                                <span>{t.auth.login.demo}</span>
-                            </>
-                        )}
-                    </button>
-                    <p className="mt-2 text-center text-xs text-gray-400">
-                        {t.auth.login.demoDescription}
-                    </p>
+                    {/* Try Demo — hidden entirely when the platform admin has
+                        switched the demo off, and until the backend has said. */}
+                    {demoAvailable && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={handleDemoLogin}
+                                disabled={!hydrated || isLoading || isDemoLoading || isGoogleLoading}
+                                className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isDemoLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <>
+                                        <PlayCircle className="w-5 h-5 text-blue-500" />
+                                        <span>{t.auth.login.demo}</span>
+                                    </>
+                                )}
+                            </button>
+                            <p className="mt-2 text-center text-xs text-gray-400">
+                                {t.auth.login.demoDescription}
+                            </p>
+                        </>
+                    )}
 
                     <div className="mt-6 text-center text-sm text-gray-500">
                         {t.auth.login.noAccount} <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">{t.auth.login.signUpForFree}</Link>

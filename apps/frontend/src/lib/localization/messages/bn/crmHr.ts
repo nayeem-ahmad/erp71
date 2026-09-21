@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: "অনুমোদন হালনাগাদ করা যায়নি।",
             approveActivity: "এই কার্যক্রম অনুমোদন করুন",
             open: "খুলুন",
+            viewActivities: "কার্যক্রম দেখুন",
+            openRecord: "সম্পূর্ণ রেকর্ড খুলুন",
             columns: {
                 subject: "কার্যক্রম",
                 kind: "উদ্দেশ্য / চ্যানেল",

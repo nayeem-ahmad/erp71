@@ -411,6 +411,20 @@ export default function Sidebar({
         planFeatures,
     ]);
 
+    /**
+     * Where the brand mark sends you. Each shell mode has its own landing page,
+     * so the logo lands a platform admin, a referral partner or an employee on
+     * the home screen they actually hold — `/dashboard` is the shop's, and the
+     * layout only bounces the other three straight back out of it.
+     */
+    const homeHref = employeeMode
+        ? routes.employeePortal.root
+        : refereeMode
+            ? routes.referralsPortal.root
+            : platformAdminMode
+                ? routes.admin.root
+                : routes.home;
+
     const normalizedSearchQuery = normalizeNavSearchQuery(searchQuery);
     const isSearching = normalizedSearchQuery.length > 0;
     const displayModules = useMemo(
@@ -706,7 +720,14 @@ export default function Sidebar({
             >
                 {/* Logo — height matches app header (layout.tsx) */}
                 <div className={`flex items-center ${compactNav ? 'min-h-[3.25rem]' : 'h-14'} border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
-                    <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3 rtl:space-x-reverse'}`}>
+                    {/* The mark is the way home, the way every app's logo is. The
+                        negative margin keeps it optically where it sat before the
+                        hover target grew around it. */}
+                    <Link
+                        href={homeHref}
+                        aria-label={t.sidebar.goToDashboard}
+                        className={`-mx-1 flex items-center min-w-0 rounded-xl px-1 py-1 transition-colors hover:bg-gray-50 ${collapsed ? '' : 'flex-1 space-x-3 rtl:space-x-reverse'}`}
+                    >
                         {logoUrl ? (
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -726,7 +747,7 @@ export default function Sidebar({
                                 {businessName || BRAND_NAME}
                             </span>
                         )}
-                    </div>
+                    </Link>
                     {onClose && isOpen ? (
                         <button
                             type="button"

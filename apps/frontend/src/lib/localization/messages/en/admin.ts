@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: 'General Settings',
-                    description: 'Platform name, support email, and maintenance mode.',
+                    description: 'Platform name, support email, maintenance mode, and the Try Demo switch.',
                 },
                 tenantFeatures: {
                     label: 'Tenant Features',
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: 'Maintenance Mode',
                 hint: 'When enabled, the API returns a 503 for all non-admin requests.',
                 activeWarning: 'Maintenance mode is ON — tenants cannot access the platform.',
+            },
+            demo: {
+                label: 'Try Demo',
+                hint: 'Shows the Try Demo button on the sign-in page and the marketing home page. It signs visitors straight into the shared demo workspace.',
+                offNotice: 'Try Demo is OFF — the buttons are hidden and demo sign-in is refused.',
             },
             saved: 'General settings saved.',
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: 'Inbox',
         subtitle: 'Support and feedback from shop owners · {total} threads',
         loadFailed: 'Failed to load threads',
-        searchPlaceholder: 'Search by subject…',
+        searchPlaceholder: 'Search by ticket # or subject…',
         loading: 'Loading threads…',
         noThreads: 'No threads found.',
         allStatuses: 'All statuses',
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: 'All users',
         unknownUser: 'Unknown user',
         startedBy: 'Started by {user}',
+        ticketLabel: 'Ticket #{number}',
         types: {
             support: 'Help',
             bug: 'Bug',

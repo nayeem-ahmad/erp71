@@ -80,6 +80,11 @@ describe('SalesService', () => {
       salesSettings: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      cashierSession: {
+        // No shift open by default: that is what a back-office invoice and
+        // the overwhelming majority of tenants look like.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       saleItem: {
         create: jest.fn(),
         deleteMany: jest.fn(),
@@ -194,6 +199,63 @@ describe('SalesService', () => {
   });
 
   describe('create() — Story 10.3: Atomic Sale Transaction', () => {
+    it('snapshots the VAT the invoice carried onto the sale and its lines', async () => {
+      // The Mushak 6.3 has to reprint identically years later, so what a line
+      // was taxed at is stored with it rather than re-read from the catalogue.
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1150 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1150,
+        amountPaid: 1150,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+      });
+
+      // Prices are tax-inclusive, so the 150 sits *inside* the 1150 and no
+      // total moves — which is why this needed no accounting change.
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 1150, vat_amount: 150, sd_amount: 0 }),
+        }),
+      );
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ vat_rate: 15, vat_amount: 150, sd_rate: 0, sd_amount: 0 }),
+      });
+    });
+
+    it('declares VAT on what was billed, not on the undiscounted lines', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1000,
+        amountPaid: 1000,
+        discountAmount: 150,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+      });
+
+      // 1000 billed at 15% inclusive is 130.43 of output VAT, not the 150 the
+      // list price would have carried. Declaring the larger figure would hand
+      // NBR tax the business never collected.
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 1000, vat_amount: 130.43 }),
+        }),
+      );
+    });
+
     it('should create a sale and atomically decrement stock', async () => {
       const sale = { id: 'sale-1', total_amount: 30 };
       tx.sale.create.mockResolvedValue(sale);
@@ -214,6 +276,13 @@ describe('SalesService', () => {
           quantity: 2,
           price_at_sale: 15,
           unit_cost_at_sale: null,
+          // Zero because this workspace configures no VAT rate. The line still
+          // carries the snapshot columns, which is what lets a Mushak 6.3
+          // reprint from what was stored instead of from today's catalogue.
+          vat_rate: 0,
+          sd_rate: 0,
+          vat_amount: 0,
+          sd_amount: 0,
           // Null, not 'wh-1': only a line that overrode the sale stores one.
           warehouse_id: null,
         },
@@ -353,6 +422,102 @@ describe('SalesService', () => {
     });
   });
 
+  describe('create() — the cashier session a sale belongs to', () => {
+    const posDto = {
+      storeId: 'store-1',
+      totalAmount: 100,
+      amountPaid: 100,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      source: 'POS',
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 0, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 0 });
+    });
+
+    it('stamps the seller\'s open shift onto the sale', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        counter_id: 'counter-1',
+        store_id: 'store-1',
+      });
+
+      await service.create('tenant-1', 'user-1', posDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ session_id: 'sess-1', counter_id: 'counter-1' }),
+        }),
+      );
+    });
+
+    it('takes the till from the shift, not from what the browser sent', async () => {
+      // The stale localStorage case: this cashier opened their shift on
+      // counter 2, and the tab they are selling from remembers counter 9.
+      tx.cashierSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        counter_id: 'counter-2',
+        store_id: 'store-1',
+      });
+
+      await service.create('tenant-1', 'user-1', { ...posDto, counterId: 'counter-9' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ counter_id: 'counter-2' }),
+        }),
+      );
+    });
+
+    it('still honours a counter sent without a shift, so counter-only tenants are unchanged', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', { ...posDto, counterId: 'counter-9' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ counter_id: 'counter-9', session_id: null }),
+        }),
+      );
+    });
+
+    it('refuses a counter sale with no shift open when the tenant requires one', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+      tx.salesSettings.findUnique.mockResolvedValue({ require_cashier_session: true });
+
+      await expect(service.create('tenant-1', 'user-1', posDto)).rejects.toThrow(
+        'Open a cashier session before selling at the counter.',
+      );
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('does not apply that requirement to a back-office invoice', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+      tx.salesSettings.findUnique.mockResolvedValue({ require_cashier_session: true });
+
+      const { source, ...backOffice } = posDto;
+      await expect(service.create('tenant-1', 'user-1', backOffice)).resolves.toBeDefined();
+    });
+
+    it('leaves the sale unattached when the tenant runs no shifts at all', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', posDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ session_id: null, counter_id: null }),
+        }),
+      );
+    });
+  });
+
   describe('create() — drafts', () => {
     const draftDto = {
       storeId: 'store-1',
@@ -391,7 +556,17 @@ describe('SalesService', () => {
         }),
       );
       expect(tx.saleItem.create).toHaveBeenCalledWith({
-        data: { sale_id: 'draft-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15, warehouse_id: null },
+        data: {
+          sale_id: 'draft-1',
+          product_id: 'prod-1',
+          quantity: 2,
+          price_at_sale: 15,
+          vat_rate: 0,
+          sd_rate: 0,
+          vat_amount: 0,
+          sd_amount: 0,
+          warehouse_id: null,
+        },
       });
       expect(applyInventoryMovement).not.toHaveBeenCalled();
       expect(autoPostFromRules).not.toHaveBeenCalled();
@@ -443,7 +618,7 @@ describe('SalesService', () => {
       expect(tx.saleItem.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
       expect(tx.paymentRecord.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
       expect(tx.paymentRecord.create).toHaveBeenCalledWith({
-        data: { sale_id: 'draft-1', payment_method: 'Cash', amount: 30, account_id: null },
+        data: expect.objectContaining({ sale_id: 'draft-1', payment_method: 'Cash', amount: 30, account_id: null }),
       });
 
       expect(applyInventoryMovement).toHaveBeenCalledWith(
@@ -480,6 +655,34 @@ describe('SalesService', () => {
           data: expect.objectContaining({ total_amount: 15, amount_paid: 15 }),
         }),
       );
+    });
+
+    it('posts the cheque the draft was parked with', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        ...draftRow,
+        payments: [{
+          payment_method: 'Bank',
+          amount: 30,
+          account_id: null,
+          bank_name: 'City Bank',
+          bank_branch: 'Gulshan',
+          bank_account_number: '1234567890',
+          reference_no: 'CHQ-889001',
+          instrument_date: new Date(Date.UTC(2026, 8, 25)),
+        }],
+      });
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          bank_name: 'City Bank',
+          bank_branch: 'Gulshan',
+          bank_account_number: '1234567890',
+          reference_no: 'CHQ-889001',
+          instrument_date: new Date(Date.UTC(2026, 8, 25)),
+        }),
+      });
     });
 
     it('refuses to finalize a sale that is not a draft', async () => {
@@ -622,9 +825,79 @@ describe('SalesService', () => {
         data: expect.objectContaining({
           payments: {
             create: [
-              { payment_method: 'CASH', amount: 60, account_id: null },
-              { payment_method: 'BKASH', amount: 40, account_id: null },
+              expect.objectContaining({ payment_method: 'CASH', amount: 60, account_id: null }),
+              expect.objectContaining({ payment_method: 'BKASH', amount: 40, account_id: null }),
             ],
+          },
+        }),
+      });
+    });
+
+    it('stores the cheque details taken with a bank payment', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-cheque' });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+        payments: [{
+          paymentMethod: 'Bank',
+          amount: 100,
+          bankName: 'City Bank',
+          bankBranch: 'Gulshan',
+          bankAccountNumber: '1234567890',
+          referenceNo: 'CHQ-889001',
+          instrumentDate: '2026-09-25',
+        }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          payments: {
+            create: [{
+              payment_method: 'Bank',
+              amount: 100,
+              account_id: null,
+              bank_name: 'City Bank',
+              bank_branch: 'Gulshan',
+              bank_account_number: '1234567890',
+              reference_no: 'CHQ-889001',
+              // A post-dated cheque keeps the day written on it: the sale is
+              // today's, the instrument is the 25th.
+              instrument_date: new Date(Date.UTC(2026, 8, 25)),
+            }],
+          },
+        }),
+      });
+    });
+
+    it('stores a cash payment with no instrument details attached', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-cash' });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 20,
+        amountPaid: 20,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 20 }],
+        payments: [{ paymentMethod: 'Cash', amount: 20 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          payments: {
+            create: [{
+              payment_method: 'Cash',
+              amount: 20,
+              account_id: null,
+              bank_name: null,
+              bank_branch: null,
+              bank_account_number: null,
+              reference_no: null,
+              instrument_date: null,
+            }],
           },
         }),
       });
@@ -927,6 +1200,43 @@ describe('SalesService', () => {
 
       const updateArg = tx.sale.update.mock.calls[0][0];
       expect(updateArg.data).not.toHaveProperty('sale_date');
+    });
+
+    it('rewrites the cheque details when payments are edited', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+      tx.paymentRecord.create.mockResolvedValue({});
+
+      await service.update('tenant-1', 's1', {
+        payments: [{
+          paymentMethod: 'Bank',
+          amount: 100,
+          // Dropped before this went through paymentRecordData: the update path
+          // wrote only the method and the amount, so editing a sale erased the
+          // ledger account the payment had been posted against.
+          accountId: 'acct-1',
+          bankName: 'Dutch-Bangla Bank',
+          referenceNo: 'CHQ-100200',
+          instrumentDate: '2026-10-01',
+        }],
+      });
+
+      expect(tx.paymentRecord.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 's1' } });
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: {
+          sale_id: 's1',
+          payment_method: 'Bank',
+          amount: 100,
+          account_id: 'acct-1',
+          bank_name: 'Dutch-Bangla Bank',
+          bank_branch: null,
+          bank_account_number: null,
+          reference_no: 'CHQ-100200',
+          instrument_date: new Date(Date.UTC(2026, 9, 1)),
+        },
+      });
     });
 
     it('honours an explicit totalAmount over the sum of the lines', async () => {

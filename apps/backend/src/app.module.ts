@@ -54,6 +54,7 @@ import { StockTakesModule } from './stock-takes/stock-takes.module';
 import { ProductDemandsModule } from './product-demands/product-demands.module';
 import { InventoryReportsModule } from './inventory-reports/inventory-reports.module';
 import { SalesReportsModule } from './sales-reports/sales-reports.module';
+import { MushakModule } from './mushak/mushak.module';
 import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
@@ -66,6 +67,7 @@ import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { StorefrontPagesModule } from './storefront-pages/storefront-pages.module';
+import { StorefrontEnquiriesModule } from './storefront-enquiries/storefront-enquiries.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
@@ -193,6 +195,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         ProductDemandsModule,
         InventoryReportsModule,
         SalesReportsModule,
+        MushakModule,
         PurchaseReportsModule,
         BillingModule,
         AdminTenantsModule,
@@ -205,6 +208,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         ApiKeysModule,
         StorefrontModule,
         StorefrontPagesModule,
+        StorefrontEnquiriesModule,
         TenantsModule,
         DeliveryModule,
         ManufacturingModule,

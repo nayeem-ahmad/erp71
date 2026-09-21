@@ -56,8 +56,8 @@ const mockReport = {
         uncostedQuantity: 0,
     },
     warehouses: [
-        { id: 'wh-1', name: 'Dhaka Main', code: 'WH-DHK', quantity: 30, stockValue: 16350 },
-        { id: 'wh-2', name: 'Chattogram', code: 'WH-CTG', quantity: 20, stockValue: 10900 },
+        { id: 'wh-1', name: 'Dhaka Main', code: 'WH-DHK', is_active: true, quantity: 30, stockValue: 16350 },
+        { id: 'wh-2', name: 'Chattogram', code: 'WH-CTG', is_active: true, quantity: 20, stockValue: 10900 },
     ],
     rows: [
         {
@@ -133,10 +133,61 @@ describe('StockOnHandPage', () => {
         expect(screen.getByText('Products In Stock')).toBeInTheDocument();
     });
 
-    it('lists only active warehouses in the filter', async () => {
+    it('leaves a closed warehouse out of the filter once the report stops counting it', async () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(screen.getByText('Dhaka Main')).toBeInTheDocument());
+        // wh-3 is closed and holds nothing, so it has no column in mockReport.
         expect(screen.queryByText('Closed Depot')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Closing a warehouse stops new documents posting into it; it does not empty
+     * its shelves. While the report still has a column for one, the picker has
+     * to be able to reach it — a column nobody can filter down to is a column
+     * half missing.
+     */
+    it('offers a closed warehouse that still holds stock, and says it is closed', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue({
+            ...mockReport,
+            warehouses: [
+                ...mockReport.warehouses,
+                { id: 'wh-3', name: 'Closed Depot', code: 'WH-CLS', is_active: false, quantity: 12, stockValue: 0 },
+            ],
+        });
+
+        render(<StockOnHandPage />);
+
+        await waitFor(() => expect(screen.getByTestId('column-headers')).toHaveTextContent('Closed Depot (closed)'));
+        expect(screen.getByRole('option', { name: 'Closed Depot' })).toBeInTheDocument();
+    });
+
+    /**
+     * A read that failed is not an empty shop, and the two used to look
+     * identical: the error went to the console and the table just said there was
+     * no stock.
+     */
+    it('says the report could not be loaded rather than showing it as empty', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockRejectedValue(new Error('Request failed'));
+
+        render(<StockOnHandPage />);
+
+        await waitFor(() => expect(screen.getByText(/Stock on hand could not be loaded: Request failed/)).toBeInTheDocument());
+        expect(screen.getByTestId('empty-message')).toHaveTextContent('Stock on hand could not be loaded');
+    });
+
+    it('says there is no warehouse to report on rather than blaming the filters', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue({
+            summary: { totalQuantity: 0, totalStockValue: 0, productCount: 0, uncostedProductCount: 0, uncostedQuantity: 0 },
+            warehouses: [],
+            rows: [],
+        });
+
+        render(<StockOnHandPage />);
+
+        await waitFor(() => expect(screen.getByTestId('empty-message')).toHaveTextContent('No warehouses to report on'));
     });
 
     it('refetches scoped to the selected warehouse', async () => {

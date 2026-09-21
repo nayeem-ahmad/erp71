@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Pencil, X, Copy, Download, Check, Trash2, ChevronDown, Ban } from 'lucide-react';
+import { Save, Pencil, X, Copy, Check, Trash2, Ban } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate, formatDateTime, toDatetimeLocal } from '@/lib/format';
-import { printPOSReceipt } from '@/lib/pos-receipt-printer';
-import { printSalesInvoice, PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
-import { usePrintHeader } from '@/lib/print/use-print-header';
+import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
@@ -18,11 +15,12 @@ import SaleEntryLayout, {
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
-import { useDismissOnClickOutside } from '@/lib/click-outside';
+import SalePrintMenu from '../components/SalePrintMenu';
 import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
+import { useSalePrinting } from '@/lib/hooks/useSalePrinting';
 
 const SALE_STATUSES = ['COMPLETED', 'REFUNDED', 'PARTIAL_REFUND'];
 
@@ -64,10 +62,7 @@ function SaleDetailPageContent() {
     const [status, setStatus] = useState('');
     const [saleDate, setSaleDate] = useState('');
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
-    const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [showCancelModal, setShowCancelModal] = useState(false);
-    const [showPaperMenu, setShowPaperMenu] = useState(false);
-    const printMenuRef = useRef<HTMLDivElement>(null);
 
     // Cancelling reverses stock, balances and the ledger, so the action is
     // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
@@ -79,12 +74,6 @@ function SaleDetailPageContent() {
     const isDraft = sale?.status === 'DRAFT';
     const isCancelled = sale?.status === 'CANCELLED';
     const saleId = params.id as string;
-
-    const isInsidePrintMenu = useCallback(
-        (target: Node) => !!printMenuRef.current?.contains(target),
-        [],
-    );
-    useDismissOnClickOutside(showPaperMenu, isInsidePrintMenu, () => setShowPaperMenu(false));
 
     const loadSale = useCallback(async (id: string) => {
         try {
@@ -134,6 +123,13 @@ function SaleDetailPageContent() {
             payments: (sale.payments || []).map((p: any) => ({
                 method: p.payment_method,
                 amount: parseFloat(p.amount),
+                bankName: p.bank_name ?? undefined,
+                bankBranch: p.bank_branch ?? undefined,
+                bankAccountNumber: p.bank_account_number ?? undefined,
+                referenceNo: p.reference_no ?? undefined,
+                // Date-only for the form's date box; the column is a DATE, so
+                // the first ten characters are the whole of it.
+                instrumentDate: p.instrument_date ? String(p.instrument_date).slice(0, 10) : undefined,
             })),
         });
 
@@ -191,6 +187,12 @@ function SaleDetailPageContent() {
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
                     amount: p.amount,
+                    accountId: p.accountId,
+                    bankName: p.bankName,
+                    bankBranch: p.bankBranch,
+                    bankAccountNumber: p.bankAccountNumber,
+                    referenceNo: p.referenceNo,
+                    instrumentDate: p.instrumentDate,
                 })),
             });
             await loadSale(sale.id);
@@ -246,58 +248,39 @@ function SaleDetailPageContent() {
         toast.success(t.entryCancellation.saleCancelled);
     };
 
-    const printHeader = usePrintHeader('SALES_INVOICE');
 
-    const handlePOSPrint = async () => {
-        if (!sale) return;
-        await printPOSReceipt({
-            invoiceId: sale.id,
-            serialNumber: sale.serial_number,
-            storeName: printHeader.companyName,
-            headerConfig: printHeader.headerConfig,
-            date: formatDateTime(sale.sale_date ?? sale.created_at, locale),
-            customerName: sale.customer?.name,
+    /**
+     * What the print menu prints: the sale as it is on screen, not as it was
+     * fetched. An operator who has corrected a line and not yet saved expects
+     * the copy in their hand to match what they are looking at.
+     */
+    const resolvePrintable = useCallback(() => {
+        if (!sale) return null;
+        return {
+            id: sale.id,
+            serial_number: sale.serial_number,
+            reference_number: sale.reference_number,
+            created_at: sale.created_at,
+            sale_date: sale.sale_date ?? saleDate,
+            total_amount: String(totals.total),
+            amount_paid: sale.amount_paid,
+            note: description || sale.note,
+            customer: customer
+                ? { name: customer.name, phone: customer.phone, address: customer.address }
+                : null,
             items: items.map((i) => ({
                 name: i.name,
                 quantity: i.quantity,
-                unitPrice: i.price,
+                price: i.price,
+                discount: i.discount || 0,
             })),
-            payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
-            subtotal: totals.subtotal,
-            tax: 0,
-            total: totals.total,
-            amountPaid: parseFloat(sale.amount_paid),
-            note: sale.note,
-        });
-    };
+            payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
+        };
+    }, [sale, saleDate, totals.total, description, customer, items, payments]);
 
-    const handlePrint = (size?: PaperSize) => {
-        if (!sale) return;
-        const selectedSize = size ?? paperSize;
-        setShowPaperMenu(false);
-        printSalesInvoice(
-            {
-                referenceNumber: sale.reference_number || sale.serial_number,
-                date: formatDate(sale.sale_date ?? sale.created_at, locale),
-                companyName: printHeader.companyName,
-                headerConfig: printHeader.headerConfig,
-                customerName: customer?.name,
-                customerPhone: customer?.phone,
-                items: items.map((i) => ({
-                    name: i.name,
-                    quantity: i.quantity,
-                    unitPrice: i.price,
-                    discount: i.discount || 0,
-                })),
-                payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
-                subtotal: totals.subtotal,
-                rounding: totals.rounding || undefined,
-                total: totals.total,
-                note: description || undefined,
-            },
-            selectedSize,
-        );
-    };
+    const { paperSize, setPaperSize, printInvoice, printChallan, printReceipt } = useSalePrinting({
+        resolve: resolvePrintable,
+    });
 
     if (loading) {
         return (
@@ -403,6 +386,23 @@ function SaleDetailPageContent() {
         </Link>
     );
 
+    /**
+     * Printing lives up in the meta strip, level with the number and date it
+     * produces a copy of. The bottom bar keeps the decisions that change the
+     * document — save, delete, cancel, complete — which is what it was crowded
+     * out of when six print buttons shared it.
+     */
+    const headerActions = (
+        <SalePrintMenu
+            saleId={sale.id}
+            paperSize={paperSize}
+            onPaperSizeChange={setPaperSize}
+            onPrintInvoice={(size) => void printInvoice(sale.id, size)}
+            onPrintChallan={(size) => void printChallan(sale.id, size)}
+            onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+        />
+    );
+
     const viewActions = (
         <>
             <Link
@@ -420,56 +420,6 @@ function SaleDetailPageContent() {
                 <Trash2 className="w-4 h-4" />
                 {deleting ? t.sales.detail.deleting : t.common.delete}
             </button>
-            <button
-                type="button"
-                onClick={handlePOSPrint}
-                className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
-            >
-                <Printer className="w-4 h-4" />
-                {t.sales.detail.posReceipt}
-            </button>
-            <div className="relative" ref={printMenuRef}>
-                <div className="flex items-center border rounded overflow-hidden">
-                    <button
-                        type="button"
-                        onClick={() => handlePrint()}
-                        className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
-                    >
-                        <Printer className="w-4 h-4" />
-                        {paperSize}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setShowPaperMenu((v) => !v)}
-                        className="px-1.5 py-2 border-s text-gray-500 hover:bg-gray-50"
-                        title="Choose paper size"
-                    >
-                        <ChevronDown className="w-4 h-4" />
-                    </button>
-                </div>
-                {showPaperMenu && (
-                    <div className="absolute end-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                        <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                        {PAPER_SIZES.map((size) => (
-                            <button
-                                key={size}
-                                type="button"
-                                onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                className={`w-full text-start px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
-                            >
-                                {paperSizeLabel(size)}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-            <Link
-                href={`/sales/${sale.id}/invoice`}
-                className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
-            >
-                <Download className="w-4 h-4" />
-                {t.sales.detail.invoicePdf}
-            </Link>
             {duplicateAction}
             {isDraft && (
                 <button
@@ -573,7 +523,9 @@ function SaleDetailPageContent() {
             setWarehouseId={setWarehouseId}
             perLineWarehouse={perLineWarehouse}
             setPerLineWarehouse={setPerLineWarehouse}
+            showRateHistory
             actions={isEditMode ? editActions : viewActions}
+            headerActions={headerActions}
         />
         {showCancelModal && (
             <CancelEntryModal

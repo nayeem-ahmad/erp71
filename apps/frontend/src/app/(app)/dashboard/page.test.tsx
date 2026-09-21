@@ -47,6 +47,10 @@ jest.mock('@/lib/api', () => ({
         getSalesByProduct: jest.fn(),
         getSalesByCustomer: jest.fn(),
         getAccountingDashboardOverview: jest.fn(),
+        getProjectTasks: jest.fn(),
+        getProjectTimeReport: jest.fn(),
+        getProjects: jest.fn(),
+        getProjectTimer: jest.fn(),
     },
 }));
 
@@ -343,5 +347,34 @@ describe('DashboardPage — variant selection', () => {
 
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
+    });
+
+    it('renders the projects dashboard for a member who reads only Projects', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue({
+            id: 'user-1',
+            name: 'Nayeem',
+            tenants: [{
+                id: 't1',
+                name: 'Acme',
+                permissions: ['VIEW_PROJECTS', 'MANAGE_PROJECT_TASKS', 'LOG_PROJECT_TIME'],
+                subscription: { plan: { code: 'STANDARD', features_json: { premiumAccounting: true } } },
+            }],
+        });
+        // Real shapes, not the plan's sketch: `fetchPaginated` resolves
+        // `{ items, total, … }` (see `getProjectTasks`/`getProjects` in
+        // `@/lib/api`), and the time report's summary key is `totalHours`.
+        (api.getProjectTasks as jest.Mock).mockResolvedValue({ items: [], total: 0 });
+        (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { totalHours: 0 }, rows: [] });
+        (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
+        (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
+
+        render(<DashboardPage />);
+
+        expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
+        expect(screen.getByText('Hours This Week')).toBeInTheDocument();
+
+        // Not the retail dashboard, and none of its endpoints are touched.
+        expect(api.getProducts).not.toHaveBeenCalled();
+        expect(api.getSalesList).not.toHaveBeenCalled();
     });
 });

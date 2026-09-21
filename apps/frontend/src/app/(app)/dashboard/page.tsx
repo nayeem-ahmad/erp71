@@ -8,6 +8,7 @@ import { extractTenantPlan } from '@/lib/nav-visibility';
 import { tenantDashboardVariant } from '@/lib/plan-entitlements';
 import AccountingDashboard from '@/components/dashboard/AccountingDashboard';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
+import ProjectsDashboard from '@/components/dashboard/ProjectsDashboard';
 import RetailDashboard from '@/components/dashboard/RetailDashboard';
 import PageShell from '@/components/ui/compact/PageShell';
 import { getWorkspaceItem } from '@/lib/session-store';
@@ -95,5 +96,6 @@ export default function DashboardPage() {
 
     if (resolved.variant === 'ACCOUNTING') return <AccountingDashboard {...identity} />;
     if (resolved.variant === 'CRM') return <CrmDashboard {...identity} />;
+    if (resolved.variant === 'PROJECTS') return <ProjectsDashboard {...identity} />;
     return <RetailDashboard {...identity} />;
 }

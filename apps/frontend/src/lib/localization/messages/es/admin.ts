@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: "Ajustes generales",
-                    description: "Nombre de la plataforma, correo de soporte y modo mantenimiento.",
+                    description: "Nombre de la plataforma, correo de soporte, modo mantenimiento y el interruptor de la demo.",
                 },
                 tenantFeatures: {
                     label: "Funciones de los espacios",
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: "Modo mantenimiento",
                 hint: "Cuando está activado, la API devuelve un 503 para todas las peticiones que no sean de administración.",
                 activeWarning: "El modo mantenimiento está ACTIVADO: los espacios no pueden acceder a la plataforma.",
+            },
+            demo: {
+                label: "Probar demo",
+                hint: "Muestra el botón de demo en la página de inicio de sesión y en la portada de marketing. Inicia la sesión de los visitantes directamente en el espacio de demo compartido.",
+                offNotice: "Probar demo está DESACTIVADO: los botones se ocultan y el acceso a la demo se rechaza.",
             },
             saved: "Ajustes generales guardados.",
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: "Bandeja de entrada",
         subtitle: "Soporte y comentarios de los comerciantes · {total} conversaciones",
         loadFailed: "No se pudieron cargar las conversaciones",
-        searchPlaceholder: "Buscar por asunto…",
+        searchPlaceholder: "Buscar por n.º de ticket o asunto…",
         loading: "Cargando conversaciones…",
         noThreads: "No se encontraron conversaciones.",
         allStatuses: "Todos los estados",
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: "Todos los usuarios",
         unknownUser: "Usuario desconocido",
         startedBy: "Iniciado por {user}",
+        ticketLabel: "Ticket #{number}",
         types: {
             support: "Ayuda",
             bug: "Error",

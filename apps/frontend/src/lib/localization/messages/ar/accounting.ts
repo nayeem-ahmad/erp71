@@ -529,6 +529,7 @@ export const accountingMessages = {
             bulkApproved: 'تم اعتماد {count} قيدًا',
             bulkRejected: 'تم رفض {count} قيدًا',
             bulkNoPending: 'لا شيء من القيود المحددة في انتظار الاعتماد.',
+            bulkLockedPeriod: 'تم ترك {count} دون تغيير — الشهر الخاص بها مُقفل.',
             queueBadge: 'قيود في انتظار الاعتماد',
             noPermission: 'ليست لديك صلاحية اعتماد القيود.',
             pendingNotice: 'هذا القيد في انتظار الاعتماد ومستبعد من التقارير التي تحتسب المعتمد فقط.',

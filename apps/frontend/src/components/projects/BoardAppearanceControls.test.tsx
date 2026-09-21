@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
-import BoardViewMenu from './BoardViewMenu';
+import BoardAppearanceControls from './BoardAppearanceControls';
 import { useBoardView } from './use-board-view';
 import { BOARD_VIEW_STORAGE_KEY, DEFAULT_BOARD_VIEW, type BoardView } from './board-view';
 
@@ -17,21 +17,16 @@ const controls = (view: Partial<BoardView> = {}) => ({
     reset: jest.fn(),
 });
 
-const open = () => fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-
-describe('BoardViewMenu', () => {
-    it('keeps the panel shut until it is asked for', () => {
-        render(<BoardViewMenu {...controls()} />);
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-        open();
-        expect(screen.getByRole('dialog', { name: 'Appearance' })).toBeInTheDocument();
-    });
-
+/**
+ * These controls used to be the body of a popover hanging off the board header
+ * (`BoardViewMenu`). They are a section of the board settings panel now, so the
+ * tests that were about the popover — opening it, Escape, click-outside — went
+ * with it; everything here is about the controls themselves, unchanged.
+ */
+describe('BoardAppearanceControls', () => {
     it('reports the setting that was picked, not the one that was showing', () => {
         const props = controls();
-        render(<BoardViewMenu {...props} />);
-        open();
+        render(<BoardAppearanceControls {...props} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Compact' }));
         expect(props.set).toHaveBeenCalledWith('density', 'compact');
@@ -44,8 +39,7 @@ describe('BoardViewMenu', () => {
     });
 
     it('marks the current choice, so the panel reads as the board looks', () => {
-        render(<BoardViewMenu {...controls({ density: 'compact' })} />);
-        open();
+        render(<BoardAppearanceControls {...controls({ density: 'compact' })} />);
 
         expect(screen.getByRole('button', { name: 'Compact' })).toHaveAttribute(
             'aria-pressed',
@@ -57,10 +51,27 @@ describe('BoardViewMenu', () => {
         );
     });
 
+    it('reports where the board should scroll', () => {
+        const props = controls();
+        render(<BoardAppearanceControls {...props} />);
+
+        // The default is the page, so the button that does something is the
+        // other one — and it is the one a reader has to be told about.
+        expect(screen.getByRole('button', { name: 'Whole page' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(
+            screen.getByText(/keeps the board header and every column heading in place/i),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Inside columns' }));
+        expect(props.set).toHaveBeenCalledWith('scroll', 'column');
+    });
+
     it('switches motion off through the switch', () => {
         const props = controls();
-        render(<BoardViewMenu {...props} />);
-        open();
+        render(<BoardAppearanceControls {...props} />);
 
         fireEvent.click(screen.getByRole('switch', { name: 'Motion' }));
         expect(props.set).toHaveBeenCalledWith('animate', false);
@@ -68,8 +79,7 @@ describe('BoardViewMenu', () => {
 
     it('toggles one card field without touching the others', () => {
         const props = controls();
-        render(<BoardViewMenu {...props} />);
-        open();
+        render(<BoardAppearanceControls {...props} />);
 
         fireEvent.click(screen.getByRole('checkbox', { name: 'Labels' }));
         expect(props.toggleField).toHaveBeenCalledWith('labels');
@@ -77,54 +87,30 @@ describe('BoardViewMenu', () => {
     });
 
     it('offers Reset only once there is something to undo', () => {
-        const { unmount } = render(<BoardViewMenu {...controls()} />);
-        open();
+        const { unmount } = render(<BoardAppearanceControls {...controls()} />);
         expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
         unmount();
 
         const props = controls({ columnWidth: 'wide' });
-        render(<BoardViewMenu {...props} />);
-        open();
+        render(<BoardAppearanceControls {...props} />);
         fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
         expect(props.reset).toHaveBeenCalled();
     });
 
-    it('closes on Escape and hands focus back to the trigger', () => {
-        render(<BoardViewMenu {...controls()} />);
-        open();
-
-        fireEvent.keyDown(document, { key: 'Escape' });
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Appearance' })).toHaveFocus();
-    });
-
-    it('closes when the pointer lands outside it', () => {
-        render(
-            <div>
-                <BoardViewMenu {...controls()} />
-                <p>the board</p>
-            </div>,
-        );
-        open();
-
-        fireEvent.mouseDown(screen.getByText('the board'));
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
 });
 
-describe('BoardViewMenu on the real preference store', () => {
-    // The menu and `useBoardView` wired together, which is the only place the
-    // round trip through storage can be seen: the menu alone never writes, and
-    // the hook alone never has a control to click.
+describe('BoardAppearanceControls on the real preference store', () => {
+    // The controls and `useBoardView` wired together, which is the only place
+    // the round trip through storage can be seen: the controls alone never
+    // write, and the hook alone never has a control to click.
     function Harness() {
-        return <BoardViewMenu {...useBoardView()} />;
+        return <BoardAppearanceControls {...useBoardView()} />;
     }
 
     beforeEach(() => localStorage.clear());
 
     it('remembers a choice for the next visit', () => {
         render(<Harness />);
-        open();
         fireEvent.click(screen.getByRole('button', { name: 'Compact' }));
 
         expect(JSON.parse(localStorage.getItem(BOARD_VIEW_STORAGE_KEY) ?? '{}')).toEqual({
@@ -133,14 +119,13 @@ describe('BoardViewMenu on the real preference store', () => {
         });
     });
 
-    it('opens on what was stored last time', () => {
+    it('shows what was stored last time', () => {
         localStorage.setItem(
             BOARD_VIEW_STORAGE_KEY,
             JSON.stringify({ ...DEFAULT_BOARD_VIEW, columnWidth: 'narrow' }),
         );
 
         render(<Harness />);
-        open();
         expect(screen.getByRole('button', { name: 'Narrow' })).toHaveAttribute(
             'aria-pressed',
             'true',
@@ -149,7 +134,6 @@ describe('BoardViewMenu on the real preference store', () => {
 
     it('puts every setting back with Reset', () => {
         render(<Harness />);
-        open();
         fireEvent.click(screen.getByRole('button', { name: 'Wide' }));
         fireEvent.click(screen.getByRole('checkbox', { name: 'Cover' }));
 

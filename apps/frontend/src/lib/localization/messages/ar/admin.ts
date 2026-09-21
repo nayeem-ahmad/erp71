@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: 'الإعدادات العامة',
-                    description: 'اسم المنصة وبريد الدعم ووضع الصيانة.',
+                    description: 'اسم المنصة وبريد الدعم ووضع الصيانة ومفتاح التجربة.',
                 },
                 tenantFeatures: {
                     label: 'ميزات المنشآت',
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: 'وضع الصيانة',
                 hint: 'عند تفعيله، يُرجع الـ API رمز 503 لكل الطلبات غير الإدارية.',
                 activeWarning: 'وضع الصيانة مفعّل — لا تستطيع المنشآت الوصول إلى المنصة.',
+            },
+            demo: {
+                label: 'تجربة العرض التجريبي',
+                hint: 'يعرض زر التجربة في صفحة تسجيل الدخول وفي الصفحة التسويقية الرئيسية، ويسجّل الزائر مباشرة في مساحة العمل التجريبية المشتركة.',
+                offNotice: 'التجربة متوقفة — الأزرار مخفية وتسجيل الدخول التجريبي مرفوض.',
             },
             saved: 'تم حفظ الإعدادات العامة.',
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: 'صندوق الوارد',
         subtitle: 'الدعم والملاحظات من أصحاب المتاجر · {total} محادثة',
         loadFailed: 'تعذّر تحميل المحادثات',
-        searchPlaceholder: 'ابحث بالموضوع…',
+        searchPlaceholder: 'ابحث برقم التذكرة أو الموضوع…',
         loading: 'جارٍ تحميل المحادثات…',
         noThreads: 'لم يُعثر على محادثات.',
         allStatuses: 'كل الحالات',
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: 'كل المستخدمين',
         unknownUser: 'مستخدم غير معروف',
         startedBy: 'بدأها {user}',
+        ticketLabel: 'التذكرة #{number}',
         types: {
             support: 'مساعدة',
             bug: 'خلل',

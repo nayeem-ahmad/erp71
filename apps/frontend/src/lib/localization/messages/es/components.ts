@@ -75,6 +75,7 @@ export const componentsMessages = {
         successTitle: "Enviado",
         successDescription: "Le responderemos en esta conversación.",
         defaultError: "Algo salió mal. Inténtelo de nuevo.",
+        createdToast: "Ticket #{number} creado.",
     },
     supportPage: {
         title: "Soporte",
@@ -86,6 +87,19 @@ export const componentsMessages = {
         resolved: "Resuelto",
         replyPlaceholder: "Escriba un mensaje… (Intro para enviar)",
         createTitle: "Nueva conversación",
+        ticketLabel: "Ticket #{number}",
+        resolvedNotice: "Soporte marcó el ticket #{number} como resuelto.",
+        reopenedNotice: "El ticket #{number} se reabrió.",
+        replyNotice: "Nueva respuesta en el ticket #{number}.",
+        searchPlaceholder: "Buscar conversaciones…",
+        allStatuses: "Todos los estados",
+        statusOpen: "Abierta",
+        statusResolved: "Resuelta",
+        allTypes: "Todos los tipos",
+        noMatches: "Ninguna conversación coincide con estos filtros.",
+        clearFilters: "Borrar filtros",
+        count: "{count, plural, one {# conversación} other {# conversaciones}}",
+        replyPlaceholderMobile: "Escriba un mensaje…",
     },
     voiceNavWidget: {
         startAria: "Navegación por voz: diga el nombre de una página",
@@ -204,6 +218,19 @@ export const componentsMessages = {
             s5: "¿Cómo registro una devolución de cliente?",
         },
     },
+    preview: {
+        title: "Vista previa",
+        zoomIn: "Acercar",
+        zoomOut: "Alejar",
+        resetZoom: "Restablecer zoom",
+        next: "Siguiente",
+        previous: "Anterior",
+        download: "Descargar",
+        openInNewTab: "Abrir en una pestaña nueva",
+        closePreview: "Cerrar vista previa",
+        noPreview: "Este archivo no se puede previsualizar.",
+    },
+
     richText: {
         toolbar: "Formato",
         hint: "Formato: **negrita**, *cursiva*, - listas y [enlaces](url).",
@@ -214,6 +241,9 @@ export const componentsMessages = {
         bulletList: "Lista con viñetas",
         numberedList: "Lista numerada",
         link: "Enlace",
+        uploading: "Subiendo imagen…",
+        resizeImage: "Cambiar tamaño de la imagen",
+        pasteImage: "Pega una imagen para adjuntarla.",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

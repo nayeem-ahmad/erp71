@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: "सामान्य सेटिंग्स",
-                    description: "प्लेटफ़ॉर्म नाम, सहायता ईमेल और रखरखाव मोड।",
+                    description: "प्लेटफ़ॉर्म नाम, सहायता ईमेल, रखरखाव मोड और डेमो स्विच।",
                 },
                 tenantFeatures: {
                     label: "टेनेंट सुविधाएँ",
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: "रखरखाव मोड",
                 hint: "सक्षम होने पर API सभी गैर-एडमिन अनुरोधों के लिए 503 लौटाता है।",
                 activeWarning: "रखरखाव मोड चालू है — टेनेंट प्लेटफ़ॉर्म तक नहीं पहुँच सकते।",
+            },
+            demo: {
+                label: "डेमो आज़माएँ",
+                hint: "साइन इन पेज और मार्केटिंग होम पेज पर डेमो बटन दिखाता है। यह विज़िटर को सीधे साझा डेमो वर्कस्पेस में साइन इन कराता है।",
+                offNotice: "डेमो आज़माएँ बंद है — बटन छिपे रहेंगे और डेमो साइन इन अस्वीकार होगा।",
             },
             saved: "सामान्य सेटिंग्स सहेजी गईं।",
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: "इनबॉक्स",
         subtitle: "दुकान मालिकों से सहायता और प्रतिक्रिया · {total} थ्रेड",
         loadFailed: "थ्रेड लोड नहीं हो सके",
-        searchPlaceholder: "विषय से खोजें…",
+        searchPlaceholder: "टिकट नंबर या विषय से खोजें…",
         loading: "थ्रेड लोड हो रहे हैं…",
         noThreads: "कोई थ्रेड नहीं मिला।",
         allStatuses: "सभी स्थितियाँ",
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: "सभी उपयोगकर्ता",
         unknownUser: "अज्ञात उपयोगकर्ता",
         startedBy: "{user} द्वारा शुरू किया गया",
+        ticketLabel: "टिकट #{number}",
         types: {
             support: "मदद",
             bug: "बग",

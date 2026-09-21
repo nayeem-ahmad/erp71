@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
+    ArrayNotEmpty,
     IsArray,
     IsBoolean,
     IsDateString,
@@ -364,6 +366,27 @@ export class ListTasksDto {
     sortDir?: string;
 }
 
+/**
+ * The Tasks page's "delete selected" action.
+ *
+ * One request for the whole selection rather than a `DELETE /project-tasks/:id`
+ * per row: the platform's default throttle is 20 requests a minute per address
+ * (`THROTTLE_LIMIT`, see app.module.ts) and is not raised in production, so a
+ * selection of any real size used to spend the caller's whole budget and come
+ * back as `429 Too Many Requests` on everything past the twentieth — a partial
+ * delete reported as a failure.
+ *
+ * Capped at the same 200 as a task page's `limit`: a selection cannot hold more
+ * rows than one page of the list it was made on.
+ */
+export class BulkDeleteTasksDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
+}
+
 export class CreateTaskDto {
     @IsUUID()
     projectId!: string;
@@ -374,36 +397,46 @@ export class CreateTaskDto {
     @IsOptional() @IsString() @MaxLength(5000)
     description?: string;
 
-    @IsOptional() @IsUUID()
+    /**
+     * The links and dates below take `''` to mean "not set", the same spelling
+     * `UpdateTaskDto` and `CreateProjectDto` use. The New Task dialog builds its
+     * two assignee columns with the same `assigneeColumns()` helper an inline
+     * edit uses, which sends `''` for whichever column the chosen holder does
+     * not fill. `@IsOptional()` skips null and undefined only, so before this
+     * that empty sibling reached `@IsUUID()` and picking *anyone* 400'd with
+     * "assigneeEmployeeId must be a UUID". The service already normalises
+     * `'' -> null` on the way to the column.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     statusId?: string;
 
     @IsOptional() @IsEnum(ProjectPriorityDto)
     priority?: ProjectPriorityDto;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeId?: string;
 
     /** Alternative to assigneeId for a team member who has no login. */
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeEmployeeId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     milestoneId?: string;
 
     /** The story this task delivers part of. Must be in the same project. */
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     userStoryId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     sprintId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     parentTaskId?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     startDate?: string;
 
-    @IsOptional() @IsDateString()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     dueDate?: string;
 
     /** Replaces the whole label set. An empty array clears it. */

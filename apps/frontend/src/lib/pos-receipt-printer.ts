@@ -1,7 +1,9 @@
 import * as QRCode from 'qrcode';
+
 import { formatBDT } from './format';
+import { paymentMethodLabel } from './payment-method-label';
 import { openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export interface ReceiptItem {
     name: string;
@@ -86,6 +88,7 @@ const RECEIPT_STYLES = `
 export async function printPOSReceipt(
     data: ReceiptData,
     paperSize: PaperSize = 'Thermal80',
+    preview?: PrintPreviewOptions,
 ): Promise<void> {
     const qrDataUrl = await QRCode.toDataURL(data.invoiceId, {
         width: 140,
@@ -104,7 +107,7 @@ export async function printPOSReceipt(
 
     const paymentRows = data.payments.map(p => `
         <tr>
-            <td class="pay-method">${escHtml(formatPaymentMethod(p.method))}</td>
+            <td class="pay-method">${escHtml(paymentMethodLabel(p.method))}</td>
             <td class="pay-amount">${formatBDT(p.amount)}</td>
         </tr>
     `).join('');
@@ -180,6 +183,7 @@ export async function printPOSReceipt(
         bodyHtml,
         footerHtml: '<div class="footer">*** Thank you for your purchase! ***</div>',
         styles: RECEIPT_STYLES,
+        preview,
     });
 }
 
@@ -191,14 +195,3 @@ function escHtml(str: string): string {
         .replaceAll('"', '&quot;');
 }
 
-function formatPaymentMethod(method: string): string {
-    const map: Record<string, string> = {
-        CASH: 'Cash',
-        CARD: 'Credit Card',
-        BKASH: 'bKash',
-        BANK_TRANSFER: 'Bank Transfer',
-        MOBILE_PAYMENT: 'Mobile Payment',
-        OTHER: 'Other',
-    };
-    return map[method] ?? method;
-}

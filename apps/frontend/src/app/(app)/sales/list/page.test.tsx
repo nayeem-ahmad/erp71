@@ -15,11 +15,16 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SalesListPage from './page';
 
 jest.mock('next/link', () => {
-    const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
+    // Forwards the rest of the props: the row menus put `role="menuitem"` on
+    // their links, and a mock that keeps only `href` makes them unfindable by
+    // role even though the real Link renders them.
+    const MockLink = ({ children, href, ...rest }: any) => (
+        <a href={href} {...rest}>{children}</a>
+    );
     MockLink.displayName = 'Link';
     return MockLink;
 });
@@ -33,7 +38,28 @@ jest.mock('@/lib/api', () => ({
         // CANCEL_ENTRY → the action is hidden, which is the default here.
         getMe: jest.fn().mockResolvedValue({ tenants: [] }),
         cancelSale: jest.fn(),
+        // Printing a row fetches the full sale, because the list payload
+        // carries no line items.
+        getSale: jest.fn().mockResolvedValue({
+            id: 'sale-1',
+            serial_number: 'SL-00001',
+            created_at: '2026-03-20T10:00:00.000Z',
+            total_amount: '55.00',
+            amount_paid: '55.00',
+            items: [{ quantity: 1, price_at_sale: '55.00', product: { name: 'Widget' } }],
+            payments: [{ payment_method: 'CASH', amount: '55.00' }],
+            customer: { name: 'Alice Smith' },
+        }),
     },
+}));
+
+// The printers open a popup and write a document into it; the assertions here
+// are about which document was asked for, not what it renders.
+jest.mock('@/lib/sale-print-actions', () => ({
+    ...jest.requireActual('@/lib/sale-print-actions'),
+    printSaleInvoice: jest.fn(),
+    printSaleChallan: jest.fn(),
+    printSaleReceipt: jest.fn(),
 }));
 
 // DataTable hides hideOnMobile columns (Created) when matchMedia reports a
@@ -162,14 +188,91 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
+    it('prints the invoice from the row instead of opening the invoice page', async () => {
+        const { api } = require('@/lib/api');
+        const { printSaleInvoice } = require('@/lib/sale-print-actions');
+
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        // The old behaviour was a link to /sales/:id/invoice. Printing in place
+        // is the whole point of the change, so the link must be gone.
+        const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'));
+        expect(hrefs).not.toContain('/sales/sale-1/invoice');
+
+        fireEvent.click(screen.getAllByTitle('Print Invoice')[0]);
+
+        // A row carries no line items, so the sale is fetched before printing.
+        await waitFor(() => expect(api.getSale).toHaveBeenCalledWith('sale-1'));
+        await waitFor(() => expect(printSaleInvoice).toHaveBeenCalled());
+    });
+
+    it('prints the chalan from its own row icon, with no menu in between', async () => {
+        const { printSaleChallan } = require('@/lib/sale-print-actions');
+
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        // The chalan used to be a menuitem behind the print split button. It is
+        // printed on every delivery, so one click is the whole requirement.
+        fireEvent.click(screen.getAllByRole('button', { name: /delivery challan/i })[0]);
+
+        await waitFor(() => expect(printSaleChallan).toHaveBeenCalled());
+    });
+
+    it('keeps the occasional documents reachable from the row overflow menu', async () => {
+        const { printSaleReceipt } = require('@/lib/sale-print-actions');
+
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+
+        const mushak = await screen.findByRole('menuitem', { name: /mushak/i });
+        expect(mushak).toHaveAttribute('href', '/sales/sale-1/mushak');
+        expect(screen.getByRole('menuitem', { name: /open invoice page/i }))
+            .toHaveAttribute('href', '/sales/sale-1/invoice');
+
+        fireEvent.click(screen.getByRole('menuitem', { name: /pos receipt/i }));
+        await waitFor(() => expect(printSaleReceipt).toHaveBeenCalled());
+    });
+
+    it('sets the paper size from the header rather than from a row', async () => {
+        const { printSaleInvoice } = require('@/lib/sale-print-actions');
+
+        render(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        // No row-level size picker any more — the row prints, the header
+        // decides how.
+        expect(screen.queryByTitle('Print options')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByRole('combobox'), {
+            target: { value: 'Thermal80' },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getAllByTitle('Print Invoice')[0]);
+
+        await waitFor(() => expect(printSaleInvoice).toHaveBeenCalled());
+        expect(printSaleInvoice.mock.calls.at(-1)?.[1]).toBe('Thermal80');
+    });
+
     it('renders a duplicate action pointing the entry form at the sale', async () => {
         render(<SalesListPage />);
-        await waitFor(() => {
-            const link = screen.getAllByRole('link').find(
-                (l) => l.getAttribute('href') === '/sales/new?duplicate=sale-1',
-            );
-            expect(link).toBeDefined();
-        });
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        // Duplicate moved into the row overflow menu so the column could carry
+        // the print actions without running past its width.
+        fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+
+        const link = await screen.findByRole('menuitem', { name: /duplicate/i });
+        expect(link).toHaveAttribute('href', '/sales/new?duplicate=sale-1');
     });
 
     it('shows empty state when no sales exist', async () => {
@@ -226,6 +329,38 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     describe('cancelling an entry', () => {
+        /**
+         * Cancel moved into the row overflow menu when the print options took
+         * its place in the column, so reaching it means opening the kebab
+         * first. Returns the menu item, or null when the row does not offer it.
+         */
+        const openRowMenu = async () => {
+            const triggers = await screen.findAllByRole('button', { name: 'More actions' });
+            fireEvent.click(triggers[0]);
+            return screen.queryByRole('menuitem', { name: /cancel entry/i });
+        };
+
+        /**
+         * The permission grants arrive from /auth/me after the first paint, so
+         * the row must be given a chance to re-render with Cancel in it before
+         * the menu is opened — clicking the trigger twice would just toggle the
+         * panel shut again.
+         */
+        const openRowMenuWithCancel = async () => {
+            // /auth/me settles after the first paint, and the panel renders
+            // from whatever `canCancel` was when it opened. Flushing the
+            // microtask queue lets the grants land before the menu opens —
+            // clicking the trigger again would only toggle the panel shut.
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            });
+
+            const item = await openRowMenu();
+            expect(item).not.toBeNull();
+            return item!;
+        };
+
         const asTenantAdmin = () => {
             const { api } = require('@/lib/api');
             api.getMe.mockResolvedValue({
@@ -237,7 +372,7 @@ describe('SalesListPage — Sales Transaction List', () => {
             render(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
-            expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
+            expect(await openRowMenu()).toBeNull();
         });
 
         it('shows it to the workspace owner, who bypasses permission checks server-side', async () => {
@@ -245,10 +380,9 @@ describe('SalesListPage — Sales Transaction List', () => {
             api.getMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }] });
 
             render(<SalesListPage />);
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
-            await waitFor(() =>
-                expect(screen.getAllByRole('button', { name: /cancel entry/i }).length).toBeGreaterThan(0),
-            );
+            await openRowMenuWithCancel();
         });
 
         it('collects a note and posts it with the cancellation', async () => {
@@ -257,8 +391,8 @@ describe('SalesListPage — Sales Transaction List', () => {
             api.cancelSale.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
 
             render(<SalesListPage />);
-            const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
-            fireEvent.click(actions[0]);
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+            fireEvent.click(await openRowMenuWithCancel());
 
             fireEvent.change(screen.getByLabelText(/reason for cancelling/i), {
                 target: { value: 'Duplicate of SL-00002' },
@@ -278,8 +412,8 @@ describe('SalesListPage — Sales Transaction List', () => {
             asTenantAdmin();
 
             render(<SalesListPage />);
-            const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
-            fireEvent.click(actions[0]);
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+            fireEvent.click(await openRowMenuWithCancel());
 
             const dialog = screen.getByRole('dialog');
             fireEvent.click(within(dialog).getByRole('button', { name: /cancel entry/i }));
@@ -304,7 +438,7 @@ describe('SalesListPage — Sales Transaction List', () => {
             render(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
-            expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
+            expect(await openRowMenu()).toBeNull();
             expect(screen.queryByRole('link', { name: /^edit$/i })).toBeNull();
         });
     });

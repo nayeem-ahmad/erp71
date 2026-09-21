@@ -24,6 +24,10 @@ import {
     CreateBoardColumnDto,
     CreateBoardDto,
     MoveBoardCardDto,
+    MoveBoardCardsDto,
+    OrderBoardColumnCardsDto,
+    RemoveBoardCardsDto,
+    ReorderBoardColumnsDto,
     SetBoardBackgroundImageDto,
     SetBoardColumnStatusesDto,
     UpdateBoardColumnDto,
@@ -151,6 +155,47 @@ export class BoardsController {
         return this.boards.moveCard(tenant, id, taskId, dto);
     }
 
+    /**
+     * Several cards into one column — the column menu's "move all cards to" and
+     * the selection bar. MANAGE_PROJECTS, the same as the single-card drop it
+     * repeats: doing a thing in bulk is not a different permission.
+     */
+    @Post(':id/cards/move')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    moveCards(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: MoveBoardCardsDto,
+    ) {
+        return this.boards.moveCards(tenant, id, dto);
+    }
+
+    @Post(':id/cards/remove')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    removeCards(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: RemoveBoardCardsDto,
+    ) {
+        return this.boards.removeCards(tenant, id, dto.taskIds);
+    }
+
+    /**
+     * One column's card order, as "sort cards" leaves it. Ordering cards is
+     * moving cards, so it takes MANAGE_PROJECTS rather than the settings
+     * permission the column's own shape takes.
+     */
+    @Put(':id/columns/:columnId/cards/order')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    orderColumnCards(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('columnId') columnId: string,
+        @Body() dto: OrderBoardColumnCardsDto,
+    ) {
+        return this.boards.orderCards(tenant, id, columnId, dto.taskIds);
+    }
+
     @Get(':id/columns')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     listColumns(@Tenant() tenant: TenantContext, @Param('id') id: string) {
@@ -165,6 +210,21 @@ export class BoardsController {
         @Body() dto: CreateBoardColumnDto,
     ) {
         return this.columns.createColumn(tenant.tenantId, id, dto);
+    }
+
+    /**
+     * Declared above `:id/columns/:columnId` so "order" is read as the literal
+     * it is rather than as a column id — the two patterns are different HTTP
+     * methods today, but the next PUT on a column would make that accidental.
+     */
+    @Put(':id/columns/order')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    reorderColumns(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ReorderBoardColumnsDto,
+    ) {
+        return this.columns.reorderColumns(tenant.tenantId, id, dto.columnIds);
     }
 
     @Patch(':id/columns/:columnId')

@@ -182,6 +182,35 @@ describe('PrintTemplatesService', () => {
             expect(result.template_id).toBe('default');
         });
 
+        /*
+         * A shop usually wants a plainer letterhead on the challan the rider
+         * carries than on the invoice the customer keeps, which is the whole
+         * reason DELIVERY_CHALLAN is its own assignable type rather than
+         * riding on SALES_INVOICE.
+         */
+        it('gives the delivery challan its own template, not the invoice one', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'default', is_default: true }),
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+                template({ id: 'challan', is_default: false, doc_types: ['DELIVERY_CHALLAN'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.DELIVERY_CHALLAN);
+
+            expect(result.template_id).toBe('challan');
+        });
+
+        it('falls back to the tenant default when no challan template is assigned', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'default', is_default: true }),
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.DELIVERY_CHALLAN);
+
+            expect(result.template_id).toBe('default');
+        });
+
         it('derives a config from branding when no template exists', async () => {
             db.printTemplate.findMany.mockResolvedValue([]);
             db.tenant.findUnique.mockResolvedValue({

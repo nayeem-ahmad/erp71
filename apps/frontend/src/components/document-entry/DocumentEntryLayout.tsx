@@ -13,6 +13,18 @@ interface DocumentEntryLayoutProps {
     banner?: ReactNode;
     /** Meta row rendered beside the title — normally a DocumentMetaBar. */
     metaBar: ReactNode;
+    /**
+     * Document-level actions pinned to the right of the top strip — printing,
+     * and whatever else produces a copy of this document rather than changing
+     * it. Optional: a screen that has none leaves the strip as it was.
+     *
+     * They sit up here rather than in the action bar because they belong to the
+     * document identified alongside them, and because the bottom bar is for the
+     * decisions that change it (save, delete, cancel) — mixing "make a copy of
+     * this" into that row is what made the sale screen's button bar wrap onto
+     * three lines.
+     */
+    headerActions?: ReactNode;
     /** Counterparty picker (customer or supplier), top-left of the work area. */
     partyPicker?: ReactNode;
     /** Product search, source-document lookup, or whatever feeds the lines. */
@@ -45,6 +57,7 @@ export default function DocumentEntryLayout({
     backLabel = 'Back',
     banner,
     metaBar,
+    headerActions,
     partyPicker,
     picker,
     table,
@@ -70,6 +83,14 @@ export default function DocumentEntryLayout({
                 </div>
                 <div className="h-5 w-px bg-gray-200 hidden sm:block" />
                 {metaBar}
+                {headerActions && (
+                    /* `ms-auto` rather than `justify-between` on the strip: the
+                       meta fields wrap at narrow widths, and pushing from the
+                       end keeps the actions on the same line as the last field
+                       they fit beside instead of stranding them on a row of
+                       their own. */
+                    <div className="flex items-center gap-2 ms-auto">{headerActions}</div>
+                )}
             </div>
 
             {banner && <div className="px-4 pt-2 flex-shrink-0">{banner}</div>}

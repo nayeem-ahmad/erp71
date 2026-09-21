@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
@@ -34,12 +34,90 @@ export interface RateHistoryData {
  */
 const cache = new Map<string, RateHistoryData>();
 
+/**
+ * Requests still in the air, keyed the same way. The entry bar now shows the
+ * rates inline *and* keeps the icon's panel, so two or three readers ask for
+ * the same product in the same tick; without this they would each miss the
+ * result cache — which is only written when a response lands — and fire their
+ * own request.
+ *
+ * The promise is deliberately not aborted when a reader unmounts: another
+ * reader is usually still waiting on it, and the answer is worth caching even
+ * if nobody is.
+ */
+const inFlight = new Map<string, Promise<RateHistoryData>>();
+
 const cacheKey = (productId: string, type: RateHistoryType, partyId?: string) =>
     `${type}:${productId}:${partyId ?? ''}`;
 
 /** Exposed for tests, which would otherwise leak answers between cases. */
 export function clearRateHistoryCache() {
     cache.clear();
+    inFlight.clear();
+}
+
+/** One request per product+party, however many panels are reading it. */
+function fetchRateHistory(
+    key: string,
+    productId: string,
+    type: RateHistoryType,
+    partyId?: string,
+): Promise<RateHistoryData> {
+    const pending = inFlight.get(key);
+    if (pending) return pending;
+
+    const request = api.getProductRateHistory(productId, { type, partyId })
+        .then((result: RateHistoryData) => {
+            cache.set(key, result);
+            return result;
+        })
+        .finally(() => {
+            inFlight.delete(key);
+        });
+
+    inFlight.set(key, request);
+    return request;
+}
+
+/**
+ * "This customer only" is one preference, not one per panel. An operator who
+ * ticks it on the entry bar means it for the line they open next as well, so
+ * the flag lives beside the cache rather than in any one component's state.
+ *
+ * Deliberately not persisted: it narrows what is shown to a party that is only
+ * selected on the document in front of you, so carrying it into tomorrow's
+ * session would hide rows for reasons no longer on screen.
+ */
+let partyOnly = false;
+const partyOnlyListeners = new Set<() => void>();
+
+function subscribePartyOnly(listener: () => void) {
+    partyOnlyListeners.add(listener);
+    return () => partyOnlyListeners.delete(listener);
+}
+
+function setPartyOnly(next: boolean) {
+    if (partyOnly === next) return;
+    partyOnly = next;
+    partyOnlyListeners.forEach((listener) => listener());
+}
+
+/** Exposed for tests, which would otherwise leak the flag between cases. */
+export function resetRateHistoryPartyOnly() {
+    setPartyOnly(false);
+}
+
+/**
+ * The shared "this party only" flag. Every history surface reads it, so ticking
+ * the box on one narrows them all.
+ */
+export function useRateHistoryPartyOnly(): [boolean, (next: boolean) => void] {
+    const value = useSyncExternalStore(
+        subscribePartyOnly,
+        () => partyOnly,
+        () => false,
+    );
+    return [value, setPartyOnly];
 }
 
 export function useRateHistory(
@@ -64,28 +142,29 @@ export function useRateHistory(
             return;
         }
 
-        const controller = new AbortController();
+        // Not an AbortController: the request is shared, so one panel closing
+        // must not cancel it out from under another. Drop the answer instead.
+        let live = true;
         setData(null);
         setLoading(true);
 
-        api.getProductRateHistory(productId, { type, partyId }, { signal: controller.signal })
-            .then((result: RateHistoryData) => {
-                if (controller.signal.aborted) return;
-                cache.set(key, result);
+        fetchRateHistory(key, productId, type, partyId)
+            .then((result) => {
+                if (!live) return;
                 setData(result);
             })
             .catch((error: unknown) => {
-                if (controller.signal.aborted) return;
+                if (!live) return;
                 // A missing rate hint is not worth a toast — the operator can
                 // still type the rate. Log it and render the empty state.
                 console.error('Failed to load rate history', error);
                 setData(null);
             })
             .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
+                if (live) setLoading(false);
             });
 
-        return () => controller.abort();
+        return () => { live = false; };
     }, [productId, type, partyId, key]);
 
     return { data, loading };
@@ -103,6 +182,20 @@ interface RateHistoryProps {
      * and printing it twice reads as a rendering bug.
      */
     hideHeading?: boolean;
+    /**
+     * `inline` is the always-on panel under the entry bar: one flat list of the
+     * most recent lines, no section headings, capped so it cannot push the line
+     * items table off the screen. `sections` is the fuller popover/modal list.
+     */
+    variant?: 'sections' | 'inline';
+}
+
+/** How many rows the inline panel under the entry bar shows. */
+const INLINE_ROW_LIMIT = 5;
+
+/** Most recent first — the inline panel merges two sorted lists into one. */
+function byDateDesc(a: RateHistoryRow, b: RateHistoryRow) {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
 }
 
 const LABELS = {
@@ -112,6 +205,9 @@ const LABELS = {
         thisParty: 'This customer',
         others: 'Other customers',
         empty: 'No previous sales of this item.',
+        emptyForParty: 'No previous sales of this item to this customer.',
+        partyOnly: 'This customer only',
+        noParty: 'Select a customer to narrow the list',
         docHref: (id: string) => routes.sales.detail(id),
     },
     purchase: {
@@ -120,6 +216,9 @@ const LABELS = {
         thisParty: 'This supplier',
         others: 'Other suppliers',
         empty: 'No previous purchases of this item.',
+        emptyForParty: 'No previous purchases of this item from this supplier.',
+        partyOnly: 'This supplier only',
+        noParty: 'Select a supplier to narrow the list',
         docHref: (id: string) => routes.purchases.purchaseDetail(id),
     },
 } as const;
@@ -139,7 +238,7 @@ function RateRow({
 
     return (
         <li className="flex items-center gap-2 py-0.5">
-            <span className="flex-1 min-w-0 truncate text-gray-700">
+            <span className="flex-1 min-w-0 truncate text-gray-700" data-testid="rate-history-party">
                 {row.partyName || <span className="text-gray-400">{labels.partyless}</span>}
             </span>
             {onPickRate ? (
@@ -181,9 +280,38 @@ export default function RateHistory({
     partyId,
     onPickRate,
     hideHeading = false,
+    variant = 'sections',
 }: RateHistoryProps) {
     const { data, loading } = useRateHistory(productId, type, partyId);
+    const [partyOnlyChecked, setPartyOnlyChecked] = useRateHistoryPartyOnly();
     const labels = LABELS[type];
+    const checkboxId = useId();
+    const inline = variant === 'inline';
+
+    // Narrowing is only meaningful once there is a party to narrow to.
+    const canNarrow = !!partyId;
+    const narrowed = canNarrow && partyOnlyChecked;
+
+    const forParty = data?.forParty ?? [];
+    const recent = data?.recent ?? [];
+
+    const checkbox = (
+        <label
+            htmlFor={checkboxId}
+            className={`flex items-center gap-1 ${canNarrow ? 'text-gray-500 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+            title={canNarrow ? undefined : labels.noParty}
+        >
+            <input
+                id={checkboxId}
+                type="checkbox"
+                checked={narrowed}
+                disabled={!canNarrow}
+                onChange={(e) => setPartyOnlyChecked(e.target.checked)}
+                className="h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
+            />
+            {labels.partyOnly}
+        </label>
+    );
 
     if (loading) {
         return (
@@ -193,16 +321,22 @@ export default function RateHistory({
         );
     }
 
-    const forParty = data?.forParty ?? [];
-    const recent = data?.recent ?? [];
-
+    // Nothing has ever traded — there is no list to narrow, so the checkbox
+    // would be a control over an empty set.
     if (forParty.length === 0 && recent.length === 0) {
         return <div className="text-[11px] text-gray-400 py-1">{labels.empty}</div>;
     }
 
-    return (
-        <div className="text-[11px] leading-relaxed">
-            <div className="flex flex-wrap items-baseline gap-x-2 text-gray-500">
+    /* The inline panel answers "what does this item go out at" — one flat list
+       across every party, newest first, cut to the few rows that fit under the
+       entry bar without pushing the line items table down. Ticking the box
+       turns it into "what does *this* party pay". */
+    const merged = [...forParty, ...recent].sort(byDateDesc);
+    const inlineRows = (narrowed ? forParty : merged).slice(0, INLINE_ROW_LIMIT);
+
+    const heading = (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-gray-500">
+            <div className="flex flex-wrap items-baseline gap-x-2">
                 {!hideHeading && (
                     <span className="font-semibold uppercase tracking-wide">{labels.heading}</span>
                 )}
@@ -215,6 +349,43 @@ export default function RateHistory({
                     </span>
                 )}
             </div>
+            {checkbox}
+        </div>
+    );
+
+    if (inline) {
+        return (
+            <div className="text-[11px] leading-relaxed" data-testid="inline-rate-history">
+                {heading}
+                {inlineRows.length === 0 ? (
+                    <div className="text-gray-400 py-1">{labels.emptyForParty}</div>
+                ) : (
+                    <ul>
+                        {inlineRows.map((row) => (
+                            <RateRow
+                                key={`${row.documentId}-${row.rate}`}
+                                row={row}
+                                labels={labels}
+                                onPickRate={onPickRate}
+                            />
+                        ))}
+                    </ul>
+                )}
+            </div>
+        );
+    }
+
+    // The sectioned list keeps the selected party at the top, where "what did I
+    // quote them last time" is read first; narrowing simply drops the rest.
+    const others = narrowed ? [] : recent;
+
+    return (
+        <div className="text-[11px] leading-relaxed">
+            {heading}
+
+            {narrowed && forParty.length === 0 && (
+                <div className="text-gray-400 py-1">{labels.emptyForParty}</div>
+            )}
 
             {forParty.length > 0 && (
                 <>
@@ -229,11 +400,11 @@ export default function RateHistory({
                 </>
             )}
 
-            {recent.length > 0 && (
+            {others.length > 0 && (
                 <>
                     {forParty.length > 0 && <div className="mt-1 text-gray-400">{labels.others}</div>}
                     <ul>
-                        {recent.map((row) => (
+                        {others.map((row) => (
                             <RateRow key={`${row.documentId}-${row.rate}`} row={row} labels={labels} onPickRate={onPickRate} />
                         ))}
                     </ul>

@@ -4,6 +4,7 @@ import TimeTracker from './TimeTracker';
 
 jest.mock('@/lib/api', () => ({
     api: {
+        getMe: jest.fn(),
         getProjects: jest.fn(),
         getProjectTasks: jest.fn(),
         getProjectTimeTags: jest.fn(),
@@ -74,6 +75,13 @@ const givePanelABox = (box: { left: number; top: number; width: number; height: 
 
 const openTracker = () => useProjectTimerStore.setState({ open: true });
 
+/** Open the task picker and choose a task by its title. */
+const pickTask = async (title: string) => {
+    const box = await screen.findByLabelText('Task to log against');
+    fireEvent.focus(box);
+    fireEvent.click(await screen.findByRole('option', { name: new RegExp(title) }));
+};
+
 beforeEach(() => {
     const { api } = jest.requireMock('@/lib/api');
     toastError.mockReset();
@@ -87,11 +95,18 @@ beforeEach(() => {
         revision: 0,
     });
     useScreen(true);
+    api.getMe.mockReset().mockResolvedValue({ id: 'u1' });
     api.getProjects.mockReset().mockResolvedValue({
         items: [{ id: 'p1', code: 'PRJ-0001', name: 'Fitout' }],
     });
     api.getProjectTasks.mockReset().mockResolvedValue({
-        items: [{ id: 't1', title: 'Wire the meter' }],
+        items: [
+            {
+                id: 't1',
+                title: 'Wire the meter',
+                project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
+            },
+        ],
     });
     api.getProjectTimeTags.mockReset().mockResolvedValue([]);
     api.getProjectTimer.mockReset().mockResolvedValue(null);
@@ -228,20 +243,185 @@ describe('The floating time tracker', () => {
         });
     });
 
+    describe('the task list', () => {
+        /**
+         * The tracker logs *your* hours, so the list it offers is your work.
+         * It used to be every task in whichever project you picked, which on a
+         * real project is hundreds of other people's rows.
+         */
+        it('asks only for the signed-in user’s tasks', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            openTracker();
+            render(<TimeTracker />);
+
+            await waitFor(() =>
+                expect(api.getProjectTasks).toHaveBeenCalledWith(
+                    expect.objectContaining({ assigneeId: 'u1' }),
+                ),
+            );
+        });
+
+        /** Without a project the list is everything on your plate, not nothing. */
+        it('spans every project until one is picked', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            openTracker();
+            render(<TimeTracker />);
+
+            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
+            expect(api.getProjectTasks).toHaveBeenCalledWith(
+                expect.not.objectContaining({ projectId: expect.anything() }),
+            );
+            // And the rows say which project they came from, since the codes
+            // are the only thing telling two "Wire the meter"s apart.
+            fireEvent.focus(await screen.findByLabelText('Task to log against'));
+            expect(await screen.findByText('PRJ-0001')).toBeInTheDocument();
+        });
+
+        it('narrows to one project once one is chosen', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            openTracker();
+            render(<TimeTracker />);
+
+            // Once the option is actually on the select — changing it before
+            // the list lands is a no-op React discards.
+            await screen.findByRole('option', { name: 'PRJ-0001 · Fitout' });
+            fireEvent.change(screen.getByLabelText('Project to log against'), {
+                target: { value: 'p1' },
+            });
+
+            await waitFor(() =>
+                expect(api.getProjectTasks).toHaveBeenCalledWith(
+                    expect.objectContaining({ projectId: 'p1', assigneeId: 'u1' }),
+                ),
+            );
+        });
+
+        /** Covering a colleague's task should not mean reassigning it first. */
+        it('widens to everyone’s tasks on request', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            openTracker();
+            render(<TimeTracker />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Everyone' }));
+
+            await waitFor(() =>
+                expect(api.getProjectTasks).toHaveBeenCalledWith(
+                    expect.not.objectContaining({ assigneeId: expect.anything() }),
+                ),
+            );
+        });
+
+        /**
+         * Waiting on the user id rather than firing an unfiltered request and
+         * narrowing it: the unfiltered one is every task in the tenant.
+         */
+        it('does not ask for “my tasks” before it knows who that is', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            let resolveMe: (value: unknown) => void = () => {};
+            api.getMe.mockReturnValue(
+                new Promise((resolve) => {
+                    resolveMe = resolve;
+                }),
+            );
+            openTracker();
+            render(<TimeTracker />);
+
+            await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
+            expect(api.getProjectTasks).not.toHaveBeenCalled();
+
+            resolveMe({ id: 'u1' });
+            await waitFor(() =>
+                expect(api.getProjectTasks).toHaveBeenCalledWith(
+                    expect.objectContaining({ assigneeId: 'u1' }),
+                ),
+            );
+        });
+
+        it('filters the list as you type, over titles and project codes', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            api.getProjectTasks.mockResolvedValue({
+                items: [
+                    {
+                        id: 't1',
+                        title: 'Wire the meter',
+                        project: { id: 'p1', code: 'PRJ-0001', name: 'Fitout' },
+                    },
+                    {
+                        id: 't2',
+                        title: 'Paint the hall',
+                        project: { id: 'p2', code: 'PRJ-0002', name: 'Rewire' },
+                    },
+                ],
+            });
+            openTracker();
+            render(<TimeTracker />);
+
+            const box = await screen.findByLabelText('Task to log against');
+            fireEvent.focus(box);
+            expect(await screen.findByRole('option', { name: /Paint the hall/ })).toBeInTheDocument();
+
+            fireEvent.change(box, { target: { value: 'paint' } });
+            expect(screen.getByRole('option', { name: /Paint the hall/ })).toBeInTheDocument();
+            expect(screen.queryByRole('option', { name: /Wire the meter/ })).not.toBeInTheDocument();
+
+            // The code finds it too, for anyone who thinks in project numbers.
+            fireEvent.change(box, { target: { value: 'PRJ-0001' } });
+            expect(screen.getByRole('option', { name: /Wire the meter/ })).toBeInTheDocument();
+            expect(screen.queryByRole('option', { name: /Paint the hall/ })).not.toBeInTheDocument();
+        });
+
+        it('says so when a search matches nothing, rather than showing an empty box', async () => {
+            openTracker();
+            render(<TimeTracker />);
+
+            const box = await screen.findByLabelText('Task to log against');
+            fireEvent.focus(box);
+            // Once there is a list to search — "nothing matched" and "nothing
+            // loaded yet" are different sentences.
+            await screen.findByRole('option', { name: /Wire the meter/ });
+            fireEvent.change(box, { target: { value: 'zzz' } });
+
+            expect(screen.getByText('No tasks match that search.')).toBeInTheDocument();
+        });
+
+        it('tells you when nothing is assigned to you at all', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            api.getProjectTasks.mockResolvedValue({ items: [] });
+            openTracker();
+            render(<TimeTracker />);
+
+            fireEvent.focus(await screen.findByLabelText('Task to log against'));
+
+            expect(await screen.findByText('No tasks assigned to you.')).toBeInTheDocument();
+        });
+
+        it('picks with the keyboard, for anyone not reaching for a mouse', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            openTracker();
+            render(<TimeTracker />);
+
+            const box = await screen.findByLabelText('Task to log against');
+            fireEvent.focus(box);
+            await screen.findByRole('option', { name: /Wire the meter/ });
+            fireEvent.keyDown(box, { key: 'ArrowDown' });
+            fireEvent.keyDown(box, { key: 'Enter' });
+            fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+            await waitFor(() =>
+                expect(api.startProjectTimer).toHaveBeenCalledWith(
+                    expect.objectContaining({ taskId: 't1' }),
+                ),
+            );
+        });
+    });
+
     describe('the running clock', () => {
         it('starts a timer on the task the panel is pointed at', async () => {
             const { api } = jest.requireMock('@/lib/api');
             openTracker();
             render(<TimeTracker />);
 
-            await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Project to log against'), {
-                target: { value: 'p1' },
-            });
-            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Task to log against'), {
-                target: { value: 't1' },
-            });
+            await pickTask('Wire the meter');
             fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
             await waitFor(() =>
@@ -313,15 +493,9 @@ describe('The floating time tracker', () => {
     });
 
     describe('hours typed after the fact', () => {
-        const fillManualEntry = async (api: Record<string, jest.Mock>) => {
+        const fillManualEntry = async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Enter hours by hand' }));
-            fireEvent.change(screen.getByLabelText('Project to log against'), {
-                target: { value: 'p1' },
-            });
-            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText('Task to log against'), {
-                target: { value: 't1' },
-            });
+            await pickTask('Wire the meter');
         };
 
         it('asks before keeping two entries over the same minutes', async () => {
@@ -334,7 +508,7 @@ describe('The floating time tracker', () => {
             await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
 
             // A span plus a task is all a log needs.
-            await fillManualEntry(api);
+            await fillManualEntry();
             fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '13:45' } });
             fireEvent.change(screen.getByLabelText('End time'), { target: { value: '18:08' } });
             fireEvent.click(screen.getByRole('button', { name: /Log hours/ }));
@@ -356,7 +530,7 @@ describe('The floating time tracker', () => {
             render(<TimeTracker />);
             await waitFor(() => expect(api.getProjects).toHaveBeenCalled());
 
-            await fillManualEntry(api);
+            await fillManualEntry();
             fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '2' } });
             fireEvent.click(screen.getByRole('button', { name: /Log hours/ }));
 

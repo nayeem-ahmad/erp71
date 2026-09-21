@@ -14,6 +14,7 @@ export type PostingEventType =
     | 'loan_disbursement'
     | 'loan_repayment'
     | 'customer_payment'
+    | 'bad_debt_write_off'
     | 'supplier_payment'
     | 'depreciation'
     | 'cash_transaction'
@@ -120,6 +121,9 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     loan_disbursement: VoucherType.JOURNAL,
     loan_repayment: VoucherType.JOURNAL,
     customer_payment: VoucherType.CASH_RECEIVE,
+    // Forgiving a receivable moves no cash — the whole point is that none
+    // ever arrived — so it is a journal voucher, not a cash-receive.
+    bad_debt_write_off: VoucherType.JOURNAL,
     // Paying a supplier is the common case, so cash OUT is the default here and
     // the 'receive' direction is the exception below — the mirror of
     // customer_payment, where money normally comes IN.
@@ -231,10 +235,25 @@ function resolveVoucherAttribution(input: AutoPostInput): string {
 }
 
 /**
- * Rejects a posting dated into a locked fiscal period.
+ * Marks every error thrown because a fiscal period is closed, so callers that
+ * have to carry on regardless (a machine reconciliation sweep, say) can tell
+ * "this month is shut" apart from a genuine failure.
+ */
+export const FISCAL_PERIOD_LOCKED_CODE = 'FISCAL_PERIOD_LOCKED';
+
+export function isFiscalPeriodLockedError(error: unknown): boolean {
+    return error instanceof Error && error.message.startsWith(`${FISCAL_PERIOD_LOCKED_CODE}:`);
+}
+
+/**
+ * Rejects a write dated into a locked fiscal period.
  *
  * `is_locked` was previously written by the lock/unlock endpoints and read by
  * nothing, so locking a period did nothing at all.
+ *
+ * `action` names what was refused, because closing a month has to stop more
+ * than new postings: editing, deleting, reversing and approving all change what
+ * a closed month reports, and each says so in its own words.
  *
  * A date with no covering FiscalPeriod row is allowed - most tenants never create
  * periods, and absence must not block posting.
@@ -243,6 +262,7 @@ export async function assertFiscalPeriodOpen(
     tx: Prisma.TransactionClient,
     tenantId: string,
     date: Date,
+    action = 'accept new postings',
 ): Promise<void> {
     const period = await tx.fiscalPeriod.findFirst({
         where: {
@@ -255,7 +275,7 @@ export async function assertFiscalPeriodOpen(
 
     if (period?.is_locked) {
         throw new BadRequestException(
-            `FISCAL_PERIOD_LOCKED: ${period.period_label} is locked and cannot accept new postings.`,
+            `${FISCAL_PERIOD_LOCKED_CODE}: ${period.period_label} is locked and cannot ${action}.`,
         );
     }
 }
@@ -687,6 +707,11 @@ export async function postMultiLeg(input: MultiLegInput): Promise<AutoPostResult
  * Remove auto-posted voucher + posting event so the source can be reposted or
  * deleted. Pass `legKey` to target a specific leg when the source posted more
  * than one (e.g. a credit sale's `paid` down-payment leg).
+ *
+ * Refuses when the voucher being taken back sits in a locked period: cancelling
+ * a sale from a closed month would otherwise delete its voucher straight out of
+ * books someone has already filed on. The guard reads the *voucher's* date, not
+ * today's - it is the ledger entry's own period that is being changed.
  */
 export async function voidAutoPostedVoucher(
     tx: Prisma.TransactionClient,
@@ -703,11 +728,19 @@ export async function voidAutoPostedVoucher(
                 idempotency_key: idempotencyKey,
             },
         },
+        include: { voucher: { select: { date: true } } },
     });
 
     if (!event) return;
 
     if (event.voucher_id) {
+        // The relation is nullable in the type even though a voucher_id implies
+        // a row. An event that never reached the ledger has neither, and dropping
+        // that changes nothing a closed month reports - so it stays removable.
+        if (event.voucher) {
+            await assertFiscalPeriodOpen(tx, tenantId, event.voucher.date, 'accept reversals');
+        }
+
         await tx.voucherDetail.deleteMany({ where: { voucher_id: event.voucher_id } });
         await tx.voucher.delete({ where: { id: event.voucher_id } });
     }

@@ -713,7 +713,7 @@ export const adminMessages = {
                     },
                     general: {
                         label: 'Tetapan Umum',
-                        description: 'Nama platform, e-mel sokongan, dan mod penyelenggaraan.',
+                        description: 'Nama platform, e-mel sokongan, mod penyelenggaraan, dan suis Cuba Demo.',
                     },
                     tenantFeatures: {
                         label: 'Ciri Penyewa',
@@ -820,6 +820,11 @@ export const adminMessages = {
                     label: 'Mod Penyelenggaraan',
                     hint: 'Apabila diaktifkan, API mengembalikan 503 untuk semua permintaan bukan pentadbir.',
                     activeWarning: 'Mod penyelenggaraan AKTIF — penyewa tidak dapat mengakses platform.',
+                },
+                demo: {
+                    label: 'Cuba Demo',
+                    hint: 'Memaparkan butang Cuba Demo pada halaman log masuk dan halaman utama pemasaran. Ia melog masuk pelawat terus ke ruang kerja demo yang dikongsi.',
+                    offNotice: 'Cuba Demo DIMATIKAN — butang disembunyikan dan log masuk demo ditolak.',
                 },
                 saved: 'Tetapan am disimpan.',
             },
@@ -1046,7 +1051,7 @@ export const adminMessages = {
             title: "Peti masuk",
             subtitle: "Sokongan dan maklum balas daripada pemilik kedai · {total} utas",
             loadFailed: "Gagal memuatkan utas",
-            searchPlaceholder: "Cari mengikut subjek…",
+            searchPlaceholder: "Cari ikut nombor tiket atau subjek…",
             loading: "Memuatkan utas…",
             noThreads: "Tiada utas ditemui.",
             allStatuses: "Semua status",
@@ -1056,6 +1061,7 @@ export const adminMessages = {
             allUsers: "Semua pengguna",
             unknownUser: "Pengguna tidak diketahui",
             startedBy: "Dimulakan oleh {user}",
+            ticketLabel: "Tiket #{number}",
             types: {
                 support: "Bantuan",
                 bug: "Pepijat",

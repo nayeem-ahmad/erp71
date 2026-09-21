@@ -4,6 +4,7 @@ import {
     isCategoryEnabled,
     isFeedbackCategory,
     isKnockCategory,
+    parseTicketNumberQuery,
     threadCategoryWhere,
 } from './support.util';
 
@@ -78,6 +79,28 @@ describe('support.util', () => {
 
         it('returns an empty where when unfiltered', () => {
             expect(threadCategoryWhere()).toEqual({});
+        });
+    });
+
+    describe('parseTicketNumberQuery', () => {
+        it('reads a bare number and a hashed one', () => {
+            expect(parseTicketNumberQuery('1042')).toBe(1042);
+            expect(parseTicketNumberQuery('#1042')).toBe(1042);
+            expect(parseTicketNumberQuery('  # 1042 ')).toBe(1042);
+        });
+
+        it('is null for anything that is not a ticket number', () => {
+            expect(parseTicketNumberQuery('printer')).toBeNull();
+            expect(parseTicketNumberQuery('order 1042')).toBeNull();
+            expect(parseTicketNumberQuery('')).toBeNull();
+            expect(parseTicketNumberQuery('0')).toBeNull();
+            expect(parseTicketNumberQuery('-3')).toBeNull();
+        });
+
+        it('is null for a number too big to be an int4 ticket id', () => {
+            // Postgres would raise "out of range" on the comparison rather than
+            // simply not matching, so this has to fall back to a text search.
+            expect(parseTicketNumberQuery('99999999999')).toBeNull();
         });
     });
 });

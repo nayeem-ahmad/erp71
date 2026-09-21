@@ -423,7 +423,9 @@ export default function ProjectDetailPage() {
             </section>
 
             {creating && (
-                <ModalShell onBackdropClick={() => setCreating(false)}>
+                /* Same as the task list's: a form with typed work in it
+                   is not something a stray click should throw away. */
+                <ModalShell onBackdropClick={() => setCreating(false)} dismissOnBackdrop={false}>
                     <form onSubmit={createTask}>
                         <ModalHeader title={m.task.newTask} onClose={() => setCreating(false)} />
                         <div className="space-y-3 p-4">

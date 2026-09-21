@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
+import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
 import { Payment } from '@/lib/hooks/useNewSaleCart';
 import { canKeepDue, creditDueAmount, availableCustomerCredit } from '@/lib/customer-credit';
 
@@ -11,232 +11,41 @@ interface PaymentSectionProps {
     readOnly?: boolean;
 }
 
-interface DefinedMethod {
-    id: string;
-    name: string;
-    type: string;
-    account_id?: string;
-    is_active: boolean;
-    sort_order?: number;
-    show_on_entry: boolean;
-}
-
-// Backend classifies a payment for accounting by substring-matching the method
-// string (bank/card/wallet/credit → "bank", else "cash"). Keep the submitted
-// `method` canonical so accounting posting stays correct regardless of the
-// friendly name the tenant gave a defined method.
-// Keyed by the `type` values actually stored on PaymentMethod, which are the
-// backend PaymentMethodType enum values ('Cash' | 'Mobile Wallet' | 'Card' |
-// 'Bank'). Legacy uppercase keys are kept so rows written before the settings
-// form was aligned to the enum still classify correctly.
-const TYPE_TO_CANONICAL: Record<string, string> = {
-    'Cash': 'Cash',
-    'Mobile Wallet': 'Mobile Wallet',
-    'Card': 'Card',
-    'Bank': 'Bank',
-    CASH: 'Cash',
-    MOBILE_WALLET: 'Mobile Wallet',
-    CARD: 'Card',
-    BANK: 'Bank',
-};
-
-const GENERIC_METHODS = [
-    { name: 'Cash', type: 'Cash' },
-    { name: 'Mobile Wallet', type: 'Mobile Wallet' },
-    { name: 'Card', type: 'Card' },
-    { name: 'Bank', type: 'Bank' },
-];
-
-const canonicalFor = (type: string) => TYPE_TO_CANONICAL[type] ?? 'Cash';
-
-type PickMethod = { key: string; name: string; type: string; account_id?: string; inactive?: boolean };
-
-const toPick = (m: DefinedMethod): PickMethod => ({
-    key: m.id,
-    name: m.name,
-    type: m.type,
-    account_id: m.account_id,
-    inactive: !m.is_active,
-});
-
-const genericPicks: PickMethod[] = GENERIC_METHODS.map((m) => ({
-    key: `generic-${m.type}`,
-    name: m.name,
-    type: m.type,
-}));
-
-function paymentsToAmounts(methods: PickMethod[], payments: Payment[]): Record<string, number> {
-    const next: Record<string, number> = {};
-    for (const p of payments) {
-        // Prefer the exact defined method (name + classification). A payment
-        // reloaded from a saved sale carries only the canonical method string,
-        // so fall back to the first method of that classification — otherwise
-        // an amount taken via "bKash" would come back blank on the edit form.
-        const match =
-            methods.find((m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method)
-            ?? methods.find((m) => canonicalFor(m.type) === p.method);
-        if (match) next[match.key] = (next[match.key] || 0) + p.amount;
-    }
-    return next;
-}
-
-function amountsToPayments(methods: PickMethod[], amounts: Record<string, number>): Payment[] {
-    return methods
-        .filter((m) => (amounts[m.key] || 0) > 0)
-        .map((m) => ({
-            method: canonicalFor(m.type),
-            label: m.name,
-            accountId: m.account_id,
-            amount: amounts[m.key],
-        }));
-}
-
+/**
+ * The sale screen's tender strip: the shared entry-payment component plus the
+ * one rule that is specific to selling — an unpaid balance is only allowed
+ * inside the customer's credit limit. The method list, the canonical
+ * classification sent to the backend and the generic fallback all live in
+ * `@/components/document-entry/PaymentSection`, which purchase entry uses too.
+ *
+ * Sale entry is the screen that takes cheques, so it is the one that turns the
+ * instrument panel on: a shop handed a cheque needs to record the bank, the
+ * account, the number and the date on it. `PaymentRecord` has columns for all
+ * of them; the purchase side has nowhere to put them yet, which is why the
+ * shared component keeps the panel opt-in rather than always-on.
+ */
 export default function PaymentSection({ payments, total, customer, onPaymentChange, readOnly = false }: PaymentSectionProps) {
-    const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
-    const [amounts, setAmounts] = useState<Record<string, number>>({});
-    const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
-
-    useEffect(() => {
-        // Read-only renders the recorded payments verbatim — no picker to fill.
-        if (readOnly) return;
-        api.getPaymentMethods()
-            .then((data) => setDefinedMethods(data ?? []))
-            .catch((err) => console.error('Failed to load payment methods', err));
-    }, [readOnly]);
-
-    const activeSorted = useMemo(
-        () => definedMethods
-            .filter((m) => m.is_active)
-            .slice()
-            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map(toPick),
-        [definedMethods],
-    );
-    const defaultVisible = useMemo(
-        () => definedMethods
-            .filter((m) => m.is_active && m.show_on_entry)
-            .slice()
-            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map(toPick),
-        [definedMethods],
-    );
-    // Fall back to generic methods whenever there are no *usable* (active) methods —
-    // not only when zero are defined — so an all-inactive tenant can still take payment.
-    const hasUsableMethods = activeSorted.length > 0;
-    const visibleMethods = useMemo(() => {
-        if (!hasUsableMethods) return genericPicks; // no active methods → generic fallback
-        const base = defaultVisible;
-        const extra = activeSorted.filter((m) => added.includes(m.key) && !base.some((b) => b.key === m.key));
-        return [...base, ...extra];
-    }, [hasUsableMethods, defaultVisible, activeSorted, added]);
-    const addableMethods = useMemo(
-        () => activeSorted.filter((m) => !visibleMethods.some((v) => v.key === m.key)),
-        [activeSorted, visibleMethods],
-    );
-    const allMethods = useMemo(() => (hasUsableMethods ? activeSorted : genericPicks), [hasUsableMethods, activeSorted]);
-
-    const emitPayments = useCallback(
-        (nextAmounts: Record<string, number>) => {
-            onPaymentChange(amountsToPayments(allMethods, nextAmounts));
-        },
-        [allMethods, onPaymentChange],
-    );
-
-    // Reconcile local amount inputs when payments reset (e.g. after checkout) or methods load.
-    useEffect(() => {
-        setAmounts(paymentsToAmounts(allMethods, payments));
-    }, [payments, allMethods]);
-
-    const updateAmount = (key: string, value: number) => {
-        const nextAmounts = { ...amounts, [key]: value };
-        setAmounts(nextAmounts);
-        emitPayments(nextAmounts);
-    };
-
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const balance = total - totalPaid;
     const creditDue = creditDueAmount(total, totalPaid);
     const keepDueCheck = canKeepDue(customer, creditDue);
-    const paymentValid = Math.abs(balance) < 0.01 || keepDueCheck.allowed;
     const availableCredit = availableCustomerCredit(customer);
 
-    const renderMethodRow = (m: PickMethod) => (
-        <div key={m.key} className="flex items-center gap-2">
-            <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={m.name}>
-                {m.name}
-                {m.inactive ? <span className="text-gray-400 font-normal text-xs ms-1">(inactive)</span> : null}
-            </span>
-            <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amounts[m.key] || ''}
-                onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                aria-label={`${m.name} amount`}
-                className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
-            />
-        </div>
-    );
-
     return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payment</h3>
-                <span
-                    className={`text-xs font-semibold ${
-                        paymentValid ? 'text-green-600' : balance > 0 ? 'text-red-600' : 'text-amber-600'
-                    }`}
-                >
-                    {Math.abs(balance) < 0.01
-                        ? '✓ Settled'
-                        : balance > 0
-                            ? keepDueCheck.allowed
-                                ? `Keeping due ৳${creditDue.toFixed(2)}`
-                                : `Due ৳${creditDue.toFixed(2)}`
-                            : `Overpaid ৳${Math.abs(balance).toFixed(2)}`}
-                </span>
-            </div>
-
-            {balance > 0.01 && customer && availableCredit != null && (
-                <p className="text-[11px] text-gray-500">
-                    Available credit: ৳{availableCredit.toFixed(2)}
-                </p>
-            )}
-            {balance > 0.01 && !keepDueCheck.allowed && keepDueCheck.reason && (
-                <p className="text-[11px] text-red-600">{keepDueCheck.reason}</p>
-            )}
-
-            <div className="space-y-1.5 rounded border p-2">
-                {!readOnly && visibleMethods.map(renderMethodRow)}
-                {readOnly && payments.length === 0 && (
-                    <p className="text-sm text-gray-400">No payments recorded.</p>
-                )}
-                {readOnly && payments.map((p, i) => (
-                    <div key={`${p.label || p.method}-${i}`} className="flex items-center gap-2">
-                        <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700">
-                            {p.label || p.method}
-                        </span>
-                        <span className="text-sm text-gray-900">৳{p.amount.toFixed(2)}</span>
-                    </div>
-                ))}
-            </div>
-
-            {!readOnly && addableMethods.length > 0 && (
-                <div>
-                    <select
-                        aria-label="Add payment method"
-                        value=""
-                        onChange={(e) => { if (e.target.value) setAdded((a) => [...a, e.target.value]); }}
-                        className="w-full px-2 py-1.5 border rounded text-sm text-gray-600"
-                    >
-                        <option value="">+ Add method…</option>
-                        {addableMethods.map((m) => (
-                            <option key={m.key} value={m.key}>{m.name}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-        </div>
+        <DocumentPaymentSection
+            payments={payments}
+            total={total}
+            onPaymentChange={onPaymentChange}
+            readOnly={readOnly}
+            captureInstrument
+            blockedReason={keepDueCheck.allowed ? undefined : keepDueCheck.reason}
+            hint={
+                balance > 0.01 && customer && availableCredit != null ? (
+                    <p className="text-[11px] text-gray-500">
+                        Available credit: {formatBDT(availableCredit)}
+                    </p>
+                ) : null
+            }
+        />
     );
 }

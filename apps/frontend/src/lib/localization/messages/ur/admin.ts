@@ -713,7 +713,7 @@ export const adminMessages = {
                 },
                 general: {
                     label: 'عمومی ترتیبات',
-                    description: 'پلیٹ فارم کا نام، سپورٹ ای میل اور مینٹیننس موڈ۔',
+                    description: 'پلیٹ فارم کا نام، سپورٹ ای میل، مینٹیننس موڈ اور ڈیمو سوئچ۔',
                 },
                 tenantFeatures: {
                     label: 'ٹیننٹ کی خصوصیات',
@@ -827,6 +827,11 @@ export const adminMessages = {
                 label: 'مینٹیننس موڈ',
                 hint: 'فعال ہونے پر اے پی آئی تمام غیر ایڈمن درخواستوں کے لیے 503 لوٹاتا ہے۔',
                 activeWarning: 'مینٹیننس موڈ آن ہے — ٹیننٹ پلیٹ فارم تک رسائی نہیں کر سکتے۔',
+            },
+            demo: {
+                label: 'ڈیمو آزمائیں',
+                hint: 'سائن اِن صفحے اور مارکیٹنگ ہوم پیج پر ڈیمو بٹن دکھاتا ہے۔ یہ وزیٹر کو براہِ راست مشترکہ ڈیمو ورک اسپیس میں سائن اِن کر دیتا ہے۔',
+                offNotice: 'ڈیمو آزمائیں بند ہے — بٹن چھپے رہیں گے اور ڈیمو سائن اِن مسترد ہوگا۔',
             },
             saved: 'عمومی ترتیبات محفوظ ہو گئیں۔',
         },
@@ -1053,7 +1058,7 @@ export const adminMessages = {
         title: 'اِن باکس',
         subtitle: 'دکان کے مالکان کی سپورٹ اور فیڈ بیک · {total} گفتگو',
         loadFailed: 'گفتگو لوڈ نہیں ہو سکی',
-        searchPlaceholder: 'موضوع سے تلاش کریں…',
+        searchPlaceholder: 'ٹکٹ نمبر یا موضوع سے تلاش کریں…',
         loading: 'گفتگو لوڈ ہو رہی ہے…',
         noThreads: 'کوئی گفتگو نہیں ملی۔',
         allStatuses: 'تمام حیثیتیں',
@@ -1063,6 +1068,7 @@ export const adminMessages = {
         allUsers: 'تمام صارفین',
         unknownUser: 'نامعلوم صارف',
         startedBy: '{user} نے شروع کیا',
+        ticketLabel: 'ٹکٹ #{number}',
         types: {
             support: 'مدد',
             bug: 'بگ',

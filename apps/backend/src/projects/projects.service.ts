@@ -165,9 +165,20 @@ export class ProjectsService {
      * no target, the chart carries the actual line alone — which still answers
      * "is this converging", just not "against what".
      *
-     * Whole, never per-viewer, for the reason `progress` above gives.
+     * Whole, never per-viewer, for the reason `progress` above gives — which is
+     * about *record scope*, not about visibility. The chart hangs off a project,
+     * so it is exactly as visible as one: `assertProject` first, and only then
+     * the whole project's totals. Taking a viewer rather than a tenant id is
+     * what makes that possible, and is why every other route on this service
+     * already passes `@Tenant() tenant` straight through.
      */
-    async burndown(tenantId: string, projectId: string) {
+    async burndown(viewer: ProjectViewer, projectId: string) {
+        await this.assertProject(viewer, projectId);
+
+        const tenantId = viewer.tenantId;
+        // `assertProjectVisible` returns the visibility fields it filters on
+        // rather than the dates, so the window still needs its own read. Safe
+        // to key on id alone now the gate above has passed.
         const project = await this.db.project.findFirst({
             where: { id: projectId, tenant_id: tenantId },
             select: { start_date: true, target_end_date: true },
@@ -316,16 +327,15 @@ export class ProjectsService {
                 // rather than a permanently empty board.
                 await this.settings.seedProjectColumns(tenantId, project.id);
 
-                // A private project starts with its manager and its creator on
-                // the team, so the members panel is a truthful answer to "who
-                // can see this" from the first render rather than a blank list
-                // beside a project two people can already open.
-                if (project.visibility === 'PRIVATE') {
-                    await this.access.seedPrivateMembers(tenantId, project.id, [
-                        project.manager_id,
-                        userId,
-                    ]);
-                }
+                // Every project starts with its manager and its creator on the
+                // team — not only a private one, which is all this used to do.
+                // The roster is what the task Assignee picker offers, so a
+                // project seeded with nobody is a project whose tasks cannot be
+                // given to anybody, which is how it read in production.
+                await this.access.seedCoreMembers(tenantId, project.id, [
+                    { userId: project.manager_id, role: 'MANAGER' },
+                    { userId, role: 'MEMBER' },
+                ]);
                 return project;
             } catch (error: unknown) {
                 const code = (error as { code?: string })?.code;
@@ -371,10 +381,20 @@ export class ProjectsService {
         // the outgoing one, who may still be mid-handover, and the incoming one
         // if this same call reassigned it.
         if (updated.visibility === 'PRIVATE' && existing.visibility !== 'PRIVATE') {
-            await this.access.seedPrivateMembers(tenantId, id, [
-                updated.manager_id,
-                existing.manager_id,
-                viewer.userId,
+            await this.access.seedCoreMembers(tenantId, id, [
+                { userId: updated.manager_id, role: 'MANAGER' },
+                { userId: existing.manager_id, role: 'MANAGER' },
+                { userId: viewer.userId, role: 'MEMBER' },
+            ]);
+        }
+
+        // Handing the project to somebody puts them on its team, whatever its
+        // visibility. Without this, "change the manager" leaves a manager who
+        // cannot be given a task on their own project — the same empty-roster
+        // bug as create, reached by a different route.
+        if (dto.managerId !== undefined && updated.manager_id !== existing.manager_id) {
+            await this.access.seedCoreMembers(tenantId, id, [
+                { userId: updated.manager_id, role: 'MANAGER' },
             ]);
         }
         return updated;

@@ -198,6 +198,24 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         ],
     },
     {
+        // Inventory > Transfers. `WarehouseTransfersController` was open to every
+        // authenticated member until cross-branch approval shipped — the two
+        // permissions existed in the matrix and were enforced by nothing — so
+        // without this backfill gating it would take transfers away from every
+        // manager and stock clerk in every tenant that predates the guard.
+        //
+        // Both in one group because they ship together and no existing role holds
+        // either. `ROLE_DEFAULT_PERMISSIONS` decides who gets what, and it gives
+        // the coarse Manager the create half only: approving a branch's stock out
+        // of another branch is a separate job, held by Owner and by the Inventory
+        // Manager template role.
+        key: 'goods-transfers',
+        permissions: [
+            StorePermission.CREATE_GOODS_TRANSFER,
+            StorePermission.APPROVE_GOODS_TRANSFER,
+        ],
+    },
+    {
         // Storefront pages and the shop's header menu. Its own group rather than
         // joining `blog`: that group has already reconciled onto every existing
         // role, so a permission added to it now would be skipped forever and
@@ -209,6 +227,22 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         key: 'storefront-pages',
         permissions: [
             StorePermission.MANAGE_STOREFRONT_PAGES,
+        ],
+    },
+    {
+        // Forgiving a receivable. Its own group rather than joining anything
+        // holding MANAGE_CUSTOMER_CREDIT: every existing role already carries
+        // that permission, so the "holds none of its permissions" test would
+        // skip such a group forever and the grant would reach nobody — see this
+        // file's header.
+        //
+        // `ROLE_DEFAULT_PERMISSIONS` gives it to Manager (and Owner, who holds
+        // everything), matching where MANAGE_CUSTOMER_CREDIT already sits. The
+        // point of the separate permission is that an owner can take it back off
+        // a role without also stopping that role taking payments.
+        key: 'customer-write-off',
+        permissions: [
+            StorePermission.WRITE_OFF_CUSTOMER_DEBT,
         ],
     },
 ];

@@ -146,13 +146,21 @@ export function clearSidebarLayoutState(): void {
     removeStorage('sidebar-width');
 }
 
+/**
+ * Park a freshly-issued session in the browser and work out where to send the
+ * user next.
+ *
+ * Takes no "Remember me": it is not a storage decision any more. The choice goes
+ * out with the sign-in request and comes back priced into the refresh token's
+ * lifetime, because putting the tokens somewhere a second tab could not see them
+ * is what made opening one look like being signed out.
+ */
 export async function storeAuthResponse(
     res: any,
-    rememberMe = false,
     options: StoreAuthOptions = {},
 ): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
-    setCredentials(data, rememberMe);
+    setCredentials(data);
     // Fresh login → start from a collapsed, default-width sidebar.
     clearSidebarLayoutState();
 

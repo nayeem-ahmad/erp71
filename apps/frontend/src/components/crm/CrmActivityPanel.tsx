@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, Pencil, PhoneCall, X } from 'lucide-react';
-import { Button, Field, Input, Select, Textarea } from '@/components/ui';
+import { Button, Field, Input, Select, Switch, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import CrmActivityComposer from './CrmActivityComposer';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 
@@ -24,6 +25,8 @@ export type CrmActivity = {
     purpose: { id: string; name: string; icon: string | null } | null;
     channel: { id: string; name: string; icon: string | null } | null;
     assignee: { id: string; name: string | null; email: string } | null;
+    is_approved: boolean;
+    approver: { id: string; name: string | null; email: string } | null;
 };
 
 type Props = {
@@ -45,6 +48,15 @@ type Props = {
     draft?: { channelCode?: string; summary: string } | null;
     /** Called once the draft has been taken, so the caller can clear it. */
     onDraftConsumed?: () => void;
+    /**
+     * Fired after a write that changed this lead's activities — never on load.
+     * For a caller showing the same rows somewhere else: the activities list
+     * behind `CrmActivityDrawer` refreshes on it, so completing a call in the
+     * drawer moves the row in the table underneath. Reloading on close instead
+     * would swap the whole table for "Loading…" every time somebody had only
+     * looked.
+     */
+    onChanged?: () => void;
 };
 
 const emptyComplete = {
@@ -85,9 +97,12 @@ export default function CrmActivityPanel({
     targetLabel,
     draft,
     onDraftConsumed,
+    onChanged,
 }: Readonly<Props>) {
     const { t } = useI18n();
     const m = t.crm.activities;
+    // The sign-off copy is the Activities list's, so both places read alike.
+    const approvalCopy = t.crm.activitiesPage;
 
     const { options: channels } = useLeadTaxonomy('channels');
     const { options: purposes } = useLeadTaxonomy('purposes');
@@ -110,6 +125,10 @@ export default function CrmActivityPanel({
     const [edit, setEdit] = useState(emptyEdit);
 
     const { options: memberOptions, currentUserId } = useTeamMemberOptions(m.fields.me);
+
+    // Disabled rather than hidden for everyone else, so a rep can still see
+    // whether their plan has been signed off.
+    const canApprove = useCanApproveCrmActivity();
 
     const editAssigneeId = useId();
     const nextSubjectId = useId();
@@ -174,6 +193,7 @@ export default function CrmActivityPanel({
             setShowNext(false);
             toast.success(m.toast.completed);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
         } finally {
@@ -186,8 +206,32 @@ export default function CrmActivityPanel({
             await api.cancelCrmActivity(id);
             toast.success(m.toast.cancelled);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
+        }
+    };
+
+    const setApproval = (id: string, approval: Pick<CrmActivity, 'is_approved' | 'approver'>) =>
+        setRows((current) => current.map((row) => (row.id === id ? { ...row, ...approval } : row)));
+
+    /**
+     * Flipped in place rather than reloaded: `load` swaps the whole panel for
+     * "Loading…", which would pull the switch out from under the reviewer. The
+     * reviewer's name comes from the server's stamp once it lands, and a refused
+     * write puts the row back, so the switch never shows a sign-off that did not
+     * happen.
+     */
+    const toggleApproval = async (row: CrmActivity, approved: boolean) => {
+        const before = { is_approved: row.is_approved, approver: row.approver };
+        setApproval(row.id, { is_approved: approved, approver: null });
+        try {
+            const saved = await api.setCrmActivityApproval(row.id, approved);
+            setApproval(row.id, { is_approved: approved, approver: saved?.approver ?? null });
+            onChanged?.();
+        } catch {
+            setApproval(row.id, before);
+            toast.error(approvalCopy.approvalFailed);
         }
     };
 
@@ -236,6 +280,7 @@ export default function CrmActivityPanel({
             setEditing(null);
             toast.success(m.toast.updated);
             await load();
+            onChanged?.();
         } catch {
             toast.error(m.toast.failed);
         } finally {
@@ -279,47 +324,71 @@ export default function CrmActivityPanel({
                                 return (
                                     <div
                                         key={row.id}
-                                        className={`flex items-start gap-3 rounded-lg border bg-white p-3 ${overdue ? 'border-red-200' : 'border-gray-100'}`}
+                                        className={`rounded-lg border bg-white p-3 ${overdue ? 'border-red-200' : 'border-gray-100'}`}
                                     >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="mb-0.5 flex items-center gap-2">
-                                                {row.purpose && (
-                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                                        {row.purpose.icon ? `${row.purpose.icon} ` : ''}{row.purpose.name}
-                                                    </span>
-                                                )}
-                                                {overdue && (
-                                                    <span className="flex items-center gap-1 text-xs font-medium text-red-600">
-                                                        <AlertCircle className="h-3.5 w-3.5" /> {m.overdue}
-                                                    </span>
-                                                )}
+                                        <div className="flex items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="mb-0.5 flex items-center gap-2">
+                                                    {row.purpose && (
+                                                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                                            {row.purpose.icon ? `${row.purpose.icon} ` : ''}{row.purpose.name}
+                                                        </span>
+                                                    )}
+                                                    {overdue && (
+                                                        <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+                                                            <AlertCircle className="h-3.5 w-3.5" /> {m.overdue}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm font-medium text-gray-800">{row.subject}</p>
+                                                <p className="mt-0.5 text-xs text-gray-400">
+                                                    {row.due_at ? `${m.due} ${formatDateTime(row.due_at)}` : m.noDate}
+                                                    {row.assignee ? ` · ${row.assignee.name || row.assignee.email}` : ''}
+                                                </p>
+                                                {row.notes && <p className="text-xs text-gray-400">{row.notes}</p>}
                                             </div>
-                                            <p className="text-sm font-medium text-gray-800">{row.subject}</p>
-                                            <p className="mt-0.5 text-xs text-gray-400">
-                                                {row.due_at ? `${m.due} ${formatDateTime(row.due_at)}` : m.noDate}
-                                                {row.assignee ? ` · ${row.assignee.name || row.assignee.email}` : ''}
-                                            </p>
-                                            {row.notes && <p className="text-xs text-gray-400">{row.notes}</p>}
+                                            <div className="flex flex-shrink-0 gap-1">
+                                                <Button size="sm" onClick={() => openComplete(row)} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                                                    {m.complete}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    onClick={() => openEdit(row)}
+                                                    aria-label={m.edit}
+                                                    icon={<Pencil className="w-3.5 h-3.5" />}
+                                                />
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    onClick={() => cancel(row.id)}
+                                                    aria-label={m.cancelActivity}
+                                                    icon={<X className="w-3.5 h-3.5" />}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="flex flex-shrink-0 gap-1">
-                                            <Button size="sm" onClick={() => openComplete(row)} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-                                                {m.complete}
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() => openEdit(row)}
-                                                aria-label={m.edit}
-                                                icon={<Pencil className="w-3.5 h-3.5" />}
+                                        {/* Below the whole row rather than inside the text column,
+                                            which the buttons squeeze too narrow on a phone to fit a
+                                            reviewer's name. The label lifts the switch to a full
+                                            touch target; `w-fit` keeps a tap on the empty card beside
+                                            it from flipping it. Advisory only — Complete stays open
+                                            on unapproved work. */}
+                                        <label className="flex w-fit min-h-touch items-center gap-2 text-xs text-gray-600">
+                                            <Switch
+                                                checked={row.is_approved}
+                                                onCheckedChange={(next) => { void toggleApproval(row, next); }}
+                                                disabled={!canApprove}
+                                                aria-label={approvalCopy.approveActivity}
                                             />
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() => cancel(row.id)}
-                                                aria-label={m.cancelActivity}
-                                                icon={<X className="w-3.5 h-3.5" />}
-                                            />
-                                        </div>
+                                            <span>
+                                                {approvalCopy.columns.approved}
+                                                {row.is_approved && row.approver && (
+                                                    <span className="text-gray-400">
+                                                        {` · ${row.approver.name || row.approver.email}`}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </label>
                                     </div>
                                 );
                             })
@@ -377,7 +446,7 @@ export default function CrmActivityPanel({
                     targetLabel={targetLabel}
                     draft={composerDraft}
                     onClose={() => { setComposing(null); setComposerDraft(null); }}
-                    onSaved={load}
+                    onSaved={() => { void load(); onChanged?.(); }}
                 />
             )}
 

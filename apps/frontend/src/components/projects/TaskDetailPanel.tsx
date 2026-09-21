@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, File as FileIcon, FileText, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -10,7 +10,6 @@ import {
     Checkbox,
     Input,
     RichTextEditor,
-    Textarea,
     Field,
     StatusBadge,
 } from '@/components/ui';
@@ -56,6 +55,8 @@ import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
 import ChipPopover from '@/components/projects/ChipPopover';
+import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
+import { sizedImageUrl } from '@/components/ui/markdown-bridge';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -231,6 +232,7 @@ export function TaskCardBody({
     canSaveWork,
     allLabels,
     members,
+    membersFailed,
     stories,
     sprints,
     localeInfo,
@@ -258,6 +260,8 @@ export function TaskCardBody({
     canSaveWork: boolean;
     allLabels: ProjectLabel[];
     members: ProjectMemberRow[];
+    /** The roster read failed, rather than coming back with nobody on it. */
+    membersFailed: boolean;
     stories: StoryOption[];
     sprints: SprintOption[];
     localeInfo: ReturnType<typeof useI18n>['localeInfo'];
@@ -355,7 +359,9 @@ export function TaskCardBody({
                         <AssigneeField
                             task={task}
                             taskId={taskId}
+                            projectId={task.project?.id}
                             members={members}
+                            membersFailed={membersFailed}
                             onSaved={apply}
                             onWanted={onMembersWanted}
                         />
@@ -436,17 +442,29 @@ export function TaskCardBody({
                         logged is the sum of the time entries and remaining is
                         set by the form in the main column, which records why
                         it moved. */}
-                    <div className="grid grid-cols-3 gap-2">
-                        <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
-                        <Metric
-                            label={m.task.logged}
-                            value={`${num(task.logged_hours)}h`}
-                        />
-                        <Metric
-                            label={m.task.remaining}
-                            value={`${num(task.remaining_hours)}h`}
-                            highlight
-                        />
+                    <div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <EstimateField task={task} taskId={taskId} onSaved={apply} compact />
+                            <Metric
+                                label={m.task.logged}
+                                value={`${num(task.logged_hours)}h`}
+                            />
+                            <Metric
+                                label={m.task.remaining}
+                                value={`${num(task.remaining_hours)}h`}
+                                highlight
+                            />
+                        </div>
+
+                        {/* The clock, under the three figures it moves. It used
+                            to lead the reading column on the grounds of being
+                            reachable without scrolling — which it still is here,
+                            and now it sits with the numbers it changes rather
+                            than above a description it has nothing to do with.
+                            Full width because the button carries a word, not
+                            just an icon, and a third of this column would clip
+                            it in the longer locales. */}
+                        <TimerButton taskId={taskId} onChanged={refresh} full />
                     </div>
 
                     {/* The shape of those three figures over time, at a glance.
@@ -492,15 +510,6 @@ export function TaskCardBody({
             </aside>
 
             <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
-                {/* Lifted out of the work row below and put first, so the clock is
-                    reachable without scrolling. It stays in the body rather than
-                    moving to the header: the modal and the page have two different
-                    headers, and a button in both would be two copies to keep in
-                    step. */}
-                <div className="flex items-center justify-end">
-                    <TimerButton taskId={taskId} onChanged={refresh} />
-                </div>
-
                 <DescriptionSection
                     description={task.description ?? ''}
                     taskId={taskId}
@@ -840,16 +849,28 @@ export function useTaskCard(
      * before this runs — it only needs the list to offer somebody else.
      */
     const [membersWanted, setMembersWanted] = useState(false);
+    /**
+     * The read failed, as opposed to returning a project nobody is on. These
+     * were one state until people reported the picker as broken: a private
+     * project 404s for a non-member, a missing `VIEW_PROJECTS` 403s, and a
+     * member holding two stores with neither selected 400s — all three drew the
+     * same empty list as a project with no team.
+     */
+    const [membersFailed, setMembersFailed] = useState(false);
     useEffect(() => {
         if (!projectId || !membersWanted) return;
         let live = true;
         api.getProject(projectId)
             .then((result: unknown) => {
                 const rows = (result as { members?: ProjectMemberRow[] } | null)?.members;
-                if (live) setMembers(Array.isArray(rows) ? rows : []);
+                if (!live) return;
+                setMembers(Array.isArray(rows) ? rows : []);
+                setMembersFailed(false);
             })
             .catch(() => {
-                if (live) setMembers([]);
+                if (!live) return;
+                setMembers([]);
+                setMembersFailed(true);
             });
         return () => {
             live = false;
@@ -1080,7 +1101,7 @@ export function useTaskCard(
     return {
         task, statuses, history, busy, timeForm, setTimeForm,
         hours, canSaveWork, hoursLeftAfter,
-        allLabels, members, stories, sprints, localeInfo,
+        allLabels, members, membersFailed, stories, sprints, localeInfo,
         apply, refresh, markChanged, close,
         changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
@@ -1114,6 +1135,7 @@ export default function TaskDetailPanel({
         canSaveWork,
         allLabels,
         members,
+        membersFailed,
         stories,
         localeInfo,
         apply,
@@ -1131,7 +1153,11 @@ export default function TaskDetailPanel({
         changeSprint,
     } = card;
     return (
-        <ModalShell onBackdropClick={close} size="2xl">
+        /* `dismissOnBackdrop={false}`: nearly every field on this card saves on
+           blur, so a click beside the panel used to close it mid-edit and the
+           half-typed description went with it. Escape and the two Close buttons
+           are still there for the times closing is what was meant. */
+        <ModalShell onBackdropClick={close} dismissOnBackdrop={false} size="2xl">
             <ModalHeader
                 title={
                     task ? (
@@ -1171,6 +1197,7 @@ export default function TaskDetailPanel({
                         canSaveWork={canSaveWork}
                         allLabels={allLabels}
                         members={members}
+                        membersFailed={membersFailed}
                         stories={stories}
                         localeInfo={localeInfo}
                         apply={apply}
@@ -1211,13 +1238,18 @@ export default function TaskDetailPanel({
 function AssigneeField({
     task,
     taskId,
+    projectId,
     members,
+    membersFailed,
     onSaved,
     onWanted,
 }: {
     task: Task;
     taskId: string;
+    /** For the link out to the team, where an empty roster is filled in. */
+    projectId?: string;
     members: ProjectMemberRow[];
+    membersFailed: boolean;
     onSaved: (updated: unknown) => Promise<unknown>;
     /** Fires when the picker is first touched, so the roster loads then. */
     onWanted: () => void;
@@ -1227,6 +1259,27 @@ function AssigneeField({
     const [saving, setSaving] = useState(false);
 
     const options = useMemo(() => assigneeOptionsFor(members, task), [members, task]);
+
+    /**
+     * Why the list is short, when it is. Three states used to look identical —
+     * the roster still loading, a project nobody is on, and a read that failed —
+     * and the picker said nothing about any of them.
+     */
+    const note = membersFailed ? (
+        m.task.assigneeLoadFailed
+    ) : members.length > 0 ? null : projectId ? (
+        <>
+            {m.task.assigneeNoTeam}{' '}
+            <Link
+                href={routes.projects.detail(projectId)}
+                className="font-medium text-blue-600 hover:underline"
+            >
+                {m.task.assigneeAddTeam}
+            </Link>
+        </>
+    ) : (
+        m.task.assigneeNoTeam
+    );
 
     const change = async (value: string) => {
         setSaving(true);
@@ -1260,6 +1313,7 @@ function AssigneeField({
             onOpen={onWanted}
             onPick={change}
             emptyLabel={m.task.unassigned}
+            note={note}
             filterable
         />
     );
@@ -1461,7 +1515,16 @@ function EstimateField({
  * rather than hidden, because silently doing nothing is how you end up with two
  * people certain they had a timer going.
  */
-function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => Promise<void> }) {
+function TimerButton({
+    taskId,
+    onChanged,
+    full = false,
+}: {
+    taskId: string;
+    onChanged: () => Promise<void>;
+    /** Fill the column, for the narrow sidebar the button now lives in. */
+    full?: boolean;
+}) {
     const { t } = useI18n();
     const m = t.projects;
 
@@ -1508,7 +1571,7 @@ function TimerButton({ taskId, onChanged }: { taskId: string; onChanged: () => P
         <Button
             type="button"
             variant={mine ? 'secondary' : 'ghost'}
-            className="max-md:min-h-touch"
+            className={`max-md:min-h-touch${full ? ' mt-2 w-full justify-center' : ''}`}
             disabled={busy || elsewhere}
             title={elsewhere ? m.timer.elsewhere : undefined}
             onClick={() =>
@@ -1637,6 +1700,13 @@ function DescriptionSection({
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(description);
     const [saving, setSaving] = useState(false);
+    const uploadImage = useTaskImageUpload(taskId);
+
+    /* A pasted image sits in the text as a placeholder until its upload lands,
+       so blurring in between would save the placeholder. The commit waits, and
+       `pendingCommit` remembers that it was asked to. */
+    const uploading = useRef(false);
+    const pendingCommit = useRef(false);
 
     useEffect(() => setValue(description), [description]);
 
@@ -1670,14 +1740,14 @@ function DescriptionSection({
                     // nothing to click and a filled one ran into the checklist
                     // below it. `min-h` keeps the shape whether or not there
                     // is anything in it.
-                    className="mt-2 min-h-[6rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
+                    className="mt-2 min-h-[10rem] w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-start hover:border-gray-300 hover:bg-gray-100"
                 >
                     {description === '' ? (
                         <span className="text-sm text-gray-500">{m.add}</span>
                     ) : (
                         <span className="block text-sm text-gray-700">
                             <Suspense fallback={<span className="whitespace-pre-wrap">{description}</span>}>
-                                <Markdown content={description} />
+                                <Markdown content={description} allowImages />
                             </Suspense>
                         </span>
                     )}
@@ -1694,12 +1764,16 @@ function DescriptionSection({
                 onBlur={(event) => {
                     // Focus moving to the toolbar is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    if (uploading.current) {
+                        pendingCommit.current = true;
+                        return;
+                    }
                     void commit();
                 }}
             >
                 <RichTextEditor
                     autoFocus
-                    rows={6}
+                    rows={10}
                     value={value}
                     onChange={setValue}
                     disabled={saving}
@@ -1707,6 +1781,15 @@ function DescriptionSection({
                     placeholder={m.placeholder}
                     ariaLabel={m.title}
                     onSubmit={commit}
+                    uploadImage={uploadImage}
+                    onUploadingChange={(busy) => {
+                        uploading.current = busy;
+                        if (busy || !pendingCommit.current) return;
+                        // Blurred while it uploaded: save now, with the link the
+                        // upload put in place of the placeholder.
+                        pendingCommit.current = false;
+                        void commit();
+                    }}
                     onCancel={() => {
                         setValue(description);
                         setEditing(false);
@@ -1728,6 +1811,8 @@ interface Attachment {
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+/** Wide enough for a tile on a desktop grid, small enough not to ship the original. */
+const THUMBNAIL_WIDTH = 320;
 /** Matches the server's cap; checked here too so a 5 MB upload is not started. */
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -1738,6 +1823,56 @@ const readAsDataUrl = (file: File) =>
         reader.onerror = () => reject(new Error('read failed'));
         reader.readAsDataURL(file);
     });
+
+/** The half of `ACCEPTED_TYPES` a clipboard can produce. */
+const ACCEPTED_IMAGE_TYPES = ACCEPTED_TYPES.filter((type) => type.startsWith('image/'));
+
+/**
+ * Keeps an image pasted into the description or a comment, and says where it
+ * landed so the editor can link to it.
+ *
+ * Through the attachment endpoint rather than anywhere new: a pasted screenshot
+ * *is* an attachment that happens to be referenced from the text, so it is
+ * listed with the rest, held to the same 5 MB cap, and swept up with the task
+ * when it goes. The alternative — a second upload path with no row behind it —
+ * is how you end up paying Cloudinary for files nothing can find.
+ *
+ * Reports its own failures: the editor hands back a null and takes the
+ * placeholder out of the text, and the reason has to come from whoever knows
+ * the limits.
+ */
+function useTaskImageUpload(taskId: string) {
+    const { t } = useI18n();
+    const m = t.projects.attachments;
+
+    return useCallback(
+        async (file: File) => {
+            // Checked before reading, as in the attachments list: no point
+            // turning 20 MB into base64 to be told no.
+            if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+                toast.error(m.unsupported);
+                return null;
+            }
+            if (file.size > MAX_BYTES) {
+                toast.error(m.tooLarge);
+                return null;
+            }
+            try {
+                const created = (await api.addTaskAttachment(taskId, {
+                    fileBase64: await readAsDataUrl(file),
+                    // A screenshot off the clipboard arrives nameless.
+                    fileName: file.name || 'pasted-image',
+                    mimeType: file.type,
+                })) as Attachment;
+                return { url: created.file_url, name: created.file_name };
+            } catch (error) {
+                toast.error(error instanceof Error ? error.message : m.uploadFailed);
+                return null;
+            }
+        },
+        [taskId, m],
+    );
+}
 
 /**
  * `ProjectAttachment` has had a model since Phase 1 and no API. This is the
@@ -1754,6 +1889,8 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
     const [items, setItems] = useState<Attachment[]>([]);
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState(false);
+    /** Which attachment the preview is open on, or null for closed. */
+    const [previewAt, setPreviewAt] = useState<number | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -1831,32 +1968,73 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
             ) : items.length === 0 ? (
                 <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
             ) : (
-                <ul className="mt-2 divide-y divide-gray-200 text-sm">
-                    {items.map((item) => (
-                        <li key={item.id} className="flex items-center gap-2 py-1.5">
-                            <a
-                                href={item.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-w-0 flex-1 truncate text-blue-600 hover:underline"
-                            >
-                                {item.file_name}
-                            </a>
-                            <span className="shrink-0 text-xs text-gray-400">
-                                {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
-                            </span>
+                <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                    {items.map((item, at) => (
+                        <li key={item.id} className="group relative">
                             <button
                                 type="button"
-                                aria-label={`${m.deleteFile} ${item.file_name}`}
-                                className="max-md:min-h-touch px-2 text-red-600 disabled:opacity-40"
-                                disabled={busy}
-                                onClick={() => remove(item.id)}
+                                aria-label={`${m.preview} ${item.file_name}`}
+                                onClick={() => setPreviewAt(at)}
+                                className="block w-full overflow-hidden rounded-md border border-gray-200 hover:border-blue-600"
                             >
-                                <Trash2 className="h-4 w-4" />
+                                {item.mime_type?.startsWith('image/') ? (
+                                    /* The thumbnail is the file itself, asked for
+                                       small: a screenshot is recognisable long
+                                       before its name is. */
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={sizedImageUrl(item.file_url, THUMBNAIL_WIDTH)}
+                                        alt={item.file_name}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
+                                        className="h-24 w-full bg-gray-50 object-cover"
+                                    />
+                                ) : (
+                                    <span className="flex h-24 w-full items-center justify-center bg-gray-50 text-gray-400">
+                                        {item.mime_type === 'application/pdf' ? (
+                                            <FileText className="h-8 w-8" aria-hidden />
+                                        ) : (
+                                            <FileIcon className="h-8 w-8" aria-hidden />
+                                        )}
+                                    </span>
+                                )}
                             </button>
+
+                            <div className="mt-1 flex items-start gap-1">
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-xs text-gray-700">
+                                        {item.file_name}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
+                                    </span>
+                                </span>
+                                <button
+                                    type="button"
+                                    aria-label={`${m.deleteFile} ${item.file_name}`}
+                                    className="max-md:min-h-touch shrink-0 px-1 text-red-600 disabled:opacity-40"
+                                    disabled={busy}
+                                    onClick={() => remove(item.id)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {previewAt !== null && (
+                <ImagePreviewModal
+                    items={items.map((item) => ({
+                        url: item.file_url,
+                        name: item.file_name,
+                        mimeType: item.mime_type,
+                    }))}
+                    index={previewAt}
+                    onIndexChange={setPreviewAt}
+                    onClose={() => setPreviewAt(null)}
+                />
             )}
         </section>
     );
@@ -1899,6 +2077,7 @@ function ActivitySection({
     const [editBody, setEditBody] = useState('');
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+    const uploadImage = useTaskImageUpload(taskId);
 
     /* One fetch, two tabs: `mergeFeed` already tags every entry with its kind,
        so each tab is a filter over the same feed rather than a second request.
@@ -1956,14 +2135,20 @@ function ActivitySection({
         }
     };
 
-    const submit = (e: React.FormEvent) => {
-        e.preventDefault();
+    /* Split from `submit` so Ctrl/⌘+Enter inside the editor and the Comment
+       button post the same way — the editor has no form event to hand over. */
+    const post = () => {
         const body = draft.trim();
         if (!body) return;
         return run(async () => {
             await api.addTaskComment(taskId, body);
             setDraft('');
         });
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        return post();
     };
 
     const commitEdit = (comment: FeedEntry & { kind: 'comment' }) => {
@@ -2001,12 +2186,21 @@ function ActivitySection({
                 system saw, not what anyone wants to say about it. */}
             {show !== 'activity' && (
                 <form onSubmit={submit} className="mt-2 space-y-2">
-                    <Textarea
+                    {/* The same editor the description uses, for the same
+                        reason: a screenshot is half of what anyone wants to say
+                        about a bug, and describing one in words is the long way
+                        round. `hideHint` because the formatting line is three
+                        times the height of the box it would sit under. */}
+                    <RichTextEditor
                         rows={2}
+                        hideHint
                         value={draft}
-                        aria-label={m.commentPlaceholder}
+                        disabled={saving}
+                        ariaLabel={m.commentPlaceholder}
                         placeholder={m.commentPlaceholder}
-                        onChange={(e) => setDraft(e.target.value)}
+                        onChange={setDraft}
+                        onSubmit={post}
+                        uploadImage={uploadImage}
                     />
                     <Button
                         type="submit"
@@ -2034,12 +2228,17 @@ function ActivitySection({
                                     </p>
                                     {editingId === entry.id ? (
                                         <div className="mt-1 space-y-2">
-                                            <Textarea
+                                            <RichTextEditor
                                                 rows={2}
+                                                hideHint
                                                 autoFocus
                                                 value={editBody}
-                                                aria-label={m.editComment}
-                                                onChange={(e) => setEditBody(e.target.value)}
+                                                disabled={saving}
+                                                ariaLabel={m.editComment}
+                                                onChange={setEditBody}
+                                                onSubmit={() => commitEdit(entry)}
+                                                onCancel={() => setEditingId(null)}
+                                                uploadImage={uploadImage}
                                             />
                                             <div className="flex gap-2">
                                                 <Button
@@ -2061,7 +2260,20 @@ function ActivitySection({
                                             </div>
                                         </div>
                                     ) : (
-                                        <p className="mt-0.5 whitespace-pre-wrap">{entry.body}</p>
+                                        /* Markdown, like the description: the
+                                           box writes it, and a pasted image is
+                                           a markdown image — rendered as the
+                                           literal `![…](…)` it would be the one
+                                           part of a comment nobody can read. */
+                                        <div className="mt-0.5">
+                                            <Suspense
+                                                fallback={
+                                                    <p className="whitespace-pre-wrap">{entry.body}</p>
+                                                }
+                                            >
+                                                <Markdown content={entry.body} allowImages />
+                                            </Suspense>
+                                        </div>
                                     )}
 
                                     {/* Only your own — an audit trail nobody

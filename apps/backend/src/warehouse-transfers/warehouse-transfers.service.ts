@@ -1,10 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
-import { CreateWarehouseTransferDto, ListWarehouseTransfersQueryDto, ReceiveWarehouseTransferDto } from './warehouse-transfer.dto';
+import {
+    CreateWarehouseTransferDto,
+    ListWarehouseTransfersQueryDto,
+    ReceiveWarehouseTransferDto,
+    RejectWarehouseTransferDto,
+} from './warehouse-transfer.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { VoucherAttribution } from '../accounting/accounting.constants';
+
+/**
+ * A transfer parked for approval, and a transfer whose approval was refused.
+ * Named rather than inlined because five places have to agree on them: creation,
+ * send, approve, reject and receive.
+ */
+export const TRANSFER_PENDING_APPROVAL = 'PENDING_APPROVAL';
+export const TRANSFER_REJECTED = 'REJECTED';
 
 @Injectable()
 export class WarehouseTransfersService {
@@ -21,7 +34,27 @@ export class WarehouseTransfersService {
 
             const count = await tx.warehouseTransfer.count({ where: { tenant_id: tenantId } });
             const transferNumber = `TRF-${String(count + 1).padStart(5, '0')}`;
-            const status = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
+
+            // Cross-branch is derived from the two warehouses, never taken from the
+            // request: a client-settable flag would let the caller opt out of the
+            // approval step below, which is the whole control.
+            //
+            // Both the stored columns and the approval flag come from one
+            // `branchColumns` call: if they were derived separately a pair with
+            // an unknown branch could be stored `is_cross_branch: false` while
+            // still being held for approval, and the row would contradict the
+            // control that produced it.
+            const branch = branchColumns(sourceWarehouse, destinationWarehouse);
+            const requiresApproval = branch.is_cross_branch;
+
+            // A cross-branch transfer asked for straight away still cannot move
+            // stock — it parks at PENDING_APPROVAL instead of SENT. Refusing the
+            // request outright would be worse: the caller did nothing wrong, and
+            // the lines they typed are exactly what the approver needs to see.
+            const requestedStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
+            const status = requestedStatus === 'SENT' && requiresApproval
+                ? TRANSFER_PENDING_APPROVAL
+                : requestedStatus;
 
             const transfer = await tx.warehouseTransfer.create({
                 data: {
@@ -29,7 +62,8 @@ export class WarehouseTransfersService {
                     transfer_number: transferNumber,
                     source_warehouse_id: dto.sourceWarehouseId,
                     destination_warehouse_id: dto.destinationWarehouseId,
-                    ...branchColumns(sourceWarehouse, destinationWarehouse),
+                    ...branch,
+                    requires_approval: requiresApproval,
                     status,
                     notes: dto.notes,
                     sent_at: status === 'SENT' ? new Date() : null,
@@ -93,6 +127,7 @@ export class WarehouseTransfersService {
                 ...(query?.sourceWarehouseId ? { source_warehouse_id: query.sourceWarehouseId } : {}),
                 ...(query?.destinationWarehouseId ? { destination_warehouse_id: query.destinationWarehouseId } : {}),
                 ...(query?.productId ? { items: { some: { product_id: query.productId } } } : {}),
+                ...(query?.isCrossBranch !== undefined ? { is_cross_branch: query.isCrossBranch } : {}),
                 ...buildTransferDateRange(query?.from, query?.to, query?.timezone),
             },
             include: this.transferInclude(),
@@ -113,6 +148,11 @@ export class WarehouseTransfersService {
         return transfer;
     }
 
+    /**
+     * DRAFT → SENT, or DRAFT → PENDING_APPROVAL when the transfer crosses
+     * branches. The split is the point of the approval step: a branch may raise
+     * a request for another branch's stock, but it may not help itself to it.
+     */
     async send(tenantId: string, id: string) {
         return this.db.$transaction(async (tx) => {
             const transfer = await tx.warehouseTransfer.findFirst({
@@ -128,43 +168,150 @@ export class WarehouseTransfersService {
                 throw new BadRequestException('Only draft transfers can be sent.');
             }
 
-            for (const item of transfer.items) {
-                await applyInventoryMovement(tx, {
-                    tenantId,
-                    productId: item.product_id,
-                    warehouseId: transfer.source_warehouse_id,
-                    quantityDelta: -item.quantity_sent,
-                    movementType: 'TRANSFER_OUT',
-                    referenceType: 'WAREHOUSE_TRANSFER',
-                    referenceId: transfer.id,
-                    note: item.note || undefined,
+            if (transfer.requires_approval) {
+                await tx.warehouseTransfer.update({
+                    where: { id },
+                    data: { status: TRANSFER_PENDING_APPROVAL },
                 });
+
+                // No stock moved and nothing posted, so there is no posting status
+                // to report — the shape below stays consistent with the dispatched
+                // case rather than making the caller handle two response shapes.
+                return {
+                    ...(await tx.warehouseTransfer.findFirst({
+                        where: { id, tenant_id: tenantId },
+                        include: this.transferInclude(),
+                    })),
+                    posting_status: null,
+                    voucher_id: null,
+                    voucher_number: null,
+                    voucher_type: null,
+                };
             }
 
-            const posting = await this.postTransfer(tx, tenantId, transfer);
+            return this.dispatch(tx, tenantId, transfer);
+        });
+    }
+
+    /**
+     * PENDING_APPROVAL → SENT. This is the moment the stock actually leaves the
+     * source warehouse, which is why the whole approval step exists.
+     *
+     * The approver may be the person who raised it. Identity is deliberately not
+     * the control — APPROVE_GOODS_TRANSFER is (see the controller) — because the
+     * owner of a two-branch shop is both, and refusing self-approval would
+     * deadlock exactly the tenant this product is built for.
+     */
+    async approve(tenantId: string, id: string, userId: string) {
+        return this.db.$transaction(async (tx) => {
+            const transfer = await this.findPendingForDecision(tx, tenantId, id);
+
+            await tx.warehouseTransfer.update({
+                where: { id },
+                data: { approved_by: userId, approval_date: new Date() },
+            });
+
+            return this.dispatch(tx, tenantId, transfer);
+        });
+    }
+
+    /**
+     * PENDING_APPROVAL → REJECTED, which is terminal: no stock ever moved, so
+     * there is nothing to reverse, and re-raising is a new transfer with the
+     * approver's reason to work from.
+     */
+    async reject(tenantId: string, id: string, userId: string, dto: RejectWarehouseTransferDto) {
+        return this.db.$transaction(async (tx) => {
+            await this.findPendingForDecision(tx, tenantId, id);
 
             await tx.warehouseTransfer.update({
                 where: { id },
                 data: {
-                    status: 'SENT',
-                    sent_at: new Date(),
-                    // Backfilled rather than assumed set: a draft raised before
-                    // `create` started writing these columns carries nulls and a
-                    // `false` flag. `postTransfer` derives the scope from the
-                    // warehouses either way, so this only brings the stored row
-                    // into line with what was actually posted — which is what
-                    // the `is_cross_branch` index has to be able to answer.
-                    ...branchColumns(transfer.sourceWarehouse, transfer.destinationWarehouse),
+                    status: TRANSFER_REJECTED,
+                    rejected_by: userId,
+                    rejected_at: new Date(),
+                    rejection_reason: dto.reason?.trim() || null,
                 },
             });
 
-            const sentTransfer = await tx.warehouseTransfer.findFirst({
+            return tx.warehouseTransfer.findFirst({
                 where: { id, tenant_id: tenantId },
                 include: this.transferInclude(),
             });
-
-            return { ...sentTransfer, ...posting };
         });
+    }
+
+    /**
+     * Moves the stock out of the source and records the transfer as SENT.
+     *
+     * Shared by `send` and `approve` so the two paths into SENT cannot drift:
+     * an intra-branch transfer and an approved cross-branch one must deplete the
+     * source identically, and only the accounting attribution differs.
+     */
+    private async dispatch(tx: any, tenantId: string, transfer: any) {
+        for (const item of transfer.items) {
+            await applyInventoryMovement(tx, {
+                tenantId,
+                productId: item.product_id,
+                warehouseId: transfer.source_warehouse_id,
+                quantityDelta: -item.quantity_sent,
+                movementType: 'TRANSFER_OUT',
+                referenceType: 'WAREHOUSE_TRANSFER',
+                referenceId: transfer.id,
+                note: item.note || undefined,
+            });
+        }
+
+        // Posts nothing by design: there is no `fund_movement` rule for either
+        // scope, because under periodic inventory moving your own stock between
+        // your own warehouses is not an economic event. The call stays so the
+        // scope is declared and `POSTING_CONTRACT` can keep asserting the skip —
+        // see posting-contract.ts and bootstrap-accounting.ts.
+        //
+        // `postTransfer` is shared with `create`, so the three ways a transfer
+        // can reach SENT — saved straight to it, sent from a draft, or approved
+        // after being held — post identically. It derives the scope from the
+        // warehouses rather than reading `is_cross_branch`, which matters most
+        // here: an approval can land long after the row was written, and the
+        // warehouses are the only thing that can still answer which branches
+        // the stock actually moved between.
+        const posting = await this.postTransfer(tx, tenantId, transfer);
+
+        await tx.warehouseTransfer.update({
+            where: { id: transfer.id },
+            data: {
+                status: 'SENT',
+                sent_at: new Date(),
+                // Backfilled for drafts raised before `create` wrote these
+                // columns, so the stored row records what was actually posted.
+                ...branchColumns(transfer.sourceWarehouse, transfer.destinationWarehouse),
+            },
+        });
+
+        const sentTransfer = await tx.warehouseTransfer.findFirst({
+            where: { id: transfer.id, tenant_id: tenantId },
+            include: this.transferInclude(),
+        });
+
+        return { ...sentTransfer, ...posting };
+    }
+
+    /** The transfer an approve/reject may act on, or the reason it may not. */
+    private async findPendingForDecision(tx: any, tenantId: string, id: string) {
+        const transfer = await tx.warehouseTransfer.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: this.transferInclude(),
+        });
+
+        if (!transfer) {
+            throw new NotFoundException('Warehouse transfer not found.');
+        }
+
+        if (transfer.status !== TRANSFER_PENDING_APPROVAL) {
+            throw new BadRequestException('Only transfers awaiting approval can be approved or rejected.');
+        }
+
+        return transfer;
     }
 
     async receive(tenantId: string, id: string, dto: ReceiveWarehouseTransferDto) {

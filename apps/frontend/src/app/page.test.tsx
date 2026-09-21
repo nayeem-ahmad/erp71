@@ -15,10 +15,12 @@ jest.mock('next/navigation', () => ({
 }));
 
 const getSubscriptionPlans = jest.fn();
+const getDemoConfig = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
         getSubscriptionPlans: (...args: unknown[]) => getSubscriptionPlans(...args),
+        getDemoConfig: (...args: unknown[]) => getDemoConfig(...args),
     },
 }));
 
@@ -26,6 +28,10 @@ import HomePage from './HomeClient';
 
 beforeEach(() => {
     getSubscriptionPlans.mockReset();
+    // The hero's Try Demo link follows the platform admin's switch; on unless a
+    // test says otherwise.
+    getDemoConfig.mockReset();
+    getDemoConfig.mockResolvedValue({ enabled: true });
     // Mirrors production: three plans, PREMIUM omitted while it is coming soon.
     getSubscriptionPlans.mockResolvedValue([
         { code: 'BASIC', name: 'Starter', description: 'Live starter tagline', monthly_price: 299, yearly_price: 2990, setup_fee: 0 },
@@ -50,6 +56,21 @@ describe('HomePage', () => {
         render(<HomePage />);
         expect(screen.getByText('Run your business.')).toBeInTheDocument();
         expect(screen.getByText('Grow with confidence.')).toBeInTheDocument();
+    });
+
+    it('offers Try Demo in the hero while the platform admin leaves it on', async () => {
+        render(<HomePage />);
+        expect(await screen.findByRole('link', { name: /try demo/i })).toHaveAttribute('href', '/demo');
+    });
+
+    it('drops the hero Try Demo link once the platform admin switches it off', async () => {
+        getDemoConfig.mockResolvedValue({ enabled: false });
+        render(<HomePage />);
+
+        await waitFor(() => expect(getDemoConfig).toHaveBeenCalled());
+        expect(screen.queryByRole('link', { name: /try demo/i })).not.toBeInTheDocument();
+        // The signup CTA beside it is untouched — only the demo goes away.
+        expect(screen.getAllByRole('link', { name: /get started/i }).length).toBeGreaterThan(0);
     });
 
     it('renders the dashboard preview as a real screenshot', () => {

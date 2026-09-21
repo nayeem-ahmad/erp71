@@ -1162,8 +1162,15 @@ export class ExternalSyncService {
 
             // A credit transaction cannot exist without its party, so an
             // unresolved id is a skip rather than a partial write.
+            //
+            // A dry run writes no masters, so `partyMap` is empty however
+            // healthy the data is — every payment would "fail" this lookup and
+            // bury the run's real findings under thousands of false skips. A
+            // row carrying no party id at all is still unresolvable in any
+            // run, so that case keeps its warning.
             const partyId = mapped.externalPartyId ? partyMap.get(mapped.externalPartyId) : undefined;
-            if (!partyId) {
+            const unresolvable = !mapped.externalPartyId || !dryRun;
+            if (!partyId && unresolvable) {
                 tally.skipped++;
                 warnings.push({
                     entity,
@@ -1178,6 +1185,8 @@ export class ExternalSyncService {
                 paymentMap.has(mapped.externalId) ? tally.updated++ : tally.created++;
                 continue;
             }
+
+            if (!partyId) continue;
 
             try {
                 const created = await this.writePayment(connection, party, mapped, partyId, paymentMap, warnings);

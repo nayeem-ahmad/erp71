@@ -5,11 +5,16 @@
  * conflating them is what let a refresh in one tab drop the user into a
  * different shop:
  *
- *  - **Credentials** (`access_token`, `refresh_token`) follow the "Remember me"
- *    choice — localStorage when it was checked (survives a browser restart and
- *    is shared by every tab), sessionStorage when it was not (dies with the
- *    tab). Whichever backend wins, the other is cleared, so a leftover token
- *    from an earlier sign-in can never outrank the current one.
+ *  - **Credentials** (`access_token`, `refresh_token`) are always in
+ *    localStorage, so every tab of the app shares one session. They used to
+ *    follow the "Remember me" choice into sessionStorage when it was unchecked,
+ *    which is the default — and sessionStorage belongs to one tab, so opening
+ *    the app in a second tab showed a login screen, and a browser that *does*
+ *    copy it (Chrome duplicating a tab, or restoring a window) handed two
+ *    independent tabs the same rotating refresh token, which the backend then
+ *    read as a replay. "Remember me" now decides how long the session lasts
+ *    instead, which is what its label says; the backend sizes the refresh
+ *    token's lifetime from it.
  *  - **The workspace** (`tenant_id`, `store_id`, `subscription_plan_code`,
  *    `active_context`) is always **per tab**. Someone who owns three shops can
  *    keep one open in each tab; entering a shop in one tab no longer rewrites
@@ -147,14 +152,44 @@ export function clearLastTenantId(): void {
 /* Credentials                                                                */
 /* -------------------------------------------------------------------------- */
 
+let legacyCredentialsAdopted = false;
+
 /**
- * Tab-local first. A "Remember me" token in localStorage is the fallback, which
- * is what makes a newly-opened tab signed in; a token this tab wrote for itself
- * always wins over one another tab left behind.
+ * Carry a session that predates this change out of sessionStorage.
+ *
+ * A tab that was signed in before the deploy has its only copy of the tokens in
+ * sessionStorage, where nothing reads them any more. Without this, shipping the
+ * change would sign every open tab out. Runs at most once per tab.
+ *
+ * Adopts only when localStorage has nothing: if it does, a sign-in has happened
+ * since, and the newer one wins. Either way this tab's stale copy goes — it is
+ * inert now, and a spent refresh token left lying around is the exact thing that
+ * gets a session revoked if it is ever presented.
+ */
+function adoptLegacyCredentials(): void {
+    if (legacyCredentialsAdopted || !hasWindow()) return;
+    legacyCredentialsAdopted = true;
+
+    if (sessionStorage.getItem(ACCESS_TOKEN_KEY) === null) return;
+
+    if (localStorage.getItem(ACCESS_TOKEN_KEY) === null) {
+        for (const key of CREDENTIAL_KEYS) {
+            const value = sessionStorage.getItem(key);
+            if (value !== null) localStorage.setItem(key, value);
+        }
+    }
+
+    for (const key of CREDENTIAL_KEYS) sessionStorage.removeItem(key);
+}
+
+/**
+ * One session per browser, not per tab. See the note at the top of the file for
+ * why this is not the "Remember me" switch it used to be.
  */
 function readCredential(key: string): string | null {
     if (!hasWindow()) return null;
-    return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+    adoptLegacyCredentials();
+    return localStorage.getItem(key);
 }
 
 export function getAccessToken(): string | null {
@@ -173,47 +208,53 @@ export interface AuthTokens {
 }
 
 /**
- * Write a freshly-issued set of credentials, clearing the backend we are not
- * using. That second half matters: reads fall back from sessionStorage to
- * localStorage, so a remembered token left over from a previous account would
- * otherwise keep answering for a session signed in without "Remember me".
+ * Write a freshly-issued set of credentials.
+ *
+ * Clears both backends first: a partial write — a new access token beside the
+ * previous refresh token — is a session that renews into someone else's, and
+ * the sessionStorage sweep retires the pre-change home of these keys for good.
  */
-export function setCredentials(tokens: AuthTokens, rememberMe = false): void {
+export function setCredentials(tokens: AuthTokens): void {
     if (!hasWindow()) return;
 
-    const target = rememberMe ? localStorage : sessionStorage;
-    const other = rememberMe ? sessionStorage : localStorage;
+    // Nothing left to migrate once this tab has written its own credentials.
+    legacyCredentialsAdopted = true;
 
-    for (const key of CREDENTIAL_KEYS) {
-        target.removeItem(key);
-        other.removeItem(key);
-    }
-
-    target.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-    if (tokens.refresh_token) target.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
-    if (tokens.expires_in) {
-        target.setItem(ACCESS_EXPIRY_KEY, String(Date.now() + tokens.expires_in * 1000));
-    }
-}
-
-/**
- * Replace the tokens after a silent renewal, staying in whichever backend the
- * session already occupies — a renewal must not quietly upgrade a
- * "Remember me: no" session into one that outlives the tab.
- */
-export function updateCredentials(tokens: AuthTokens): void {
-    if (!hasWindow()) return;
-
-    const inSession = sessionStorage.getItem(ACCESS_TOKEN_KEY) !== null;
-    setCredentials(tokens, !inSession);
-}
-
-export function clearCredentials(): void {
-    if (!hasWindow()) return;
     for (const key of CREDENTIAL_KEYS) {
         localStorage.removeItem(key);
         sessionStorage.removeItem(key);
     }
+
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+    if (tokens.refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+    if (tokens.expires_in) {
+        localStorage.setItem(ACCESS_EXPIRY_KEY, String(Date.now() + tokens.expires_in * 1000));
+    }
+}
+
+/**
+ * Replace the tokens after a silent renewal.
+ *
+ * Identical to a sign-in now that there is one place for them to go. Kept as its
+ * own name because the call sites read better for it, and because a renewal
+ * writing to the wrong place used to be a real failure mode.
+ */
+export function updateCredentials(tokens: AuthTokens): void {
+    setCredentials(tokens);
+}
+
+export function clearCredentials(): void {
+    if (!hasWindow()) return;
+    legacyCredentialsAdopted = true;
+    for (const key of CREDENTIAL_KEYS) {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+    }
+}
+
+/** True when this browser holds something to authenticate or renew with. */
+export function hasStoredSession(): boolean {
+    return getAccessToken() !== null || getRefreshToken() !== null;
 }
 
 /**
@@ -237,4 +278,5 @@ export function isAccessTokenNearExpiry(withinMs = 60_000): boolean {
 /** Test-only: forget that this tab already bootstrapped its workspace. */
 export function resetWorkspaceBootstrapForTests(): void {
     bootstrapped = false;
+    legacyCredentialsAdopted = false;
 }

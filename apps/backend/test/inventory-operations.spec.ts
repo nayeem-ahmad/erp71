@@ -38,6 +38,7 @@ describe('Inventory Operations (e2e)', () => {
     let signupPayload: any;
     let userId: string;
     let shrinkageReasonId: string;
+    let foundReasonId: string;
 
     const bodyOf = (response: any) => response.body?.data ?? response.body;
 
@@ -140,6 +141,17 @@ describe('Inventory Operations (e2e)', () => {
                 },
             });
             shrinkageReasonId = createdShrinkageReason.id;
+
+            const createdFoundReason = await db.inventoryReason.create({
+                data: {
+                    tenant_id: tenantId,
+                    type: 'FOUND',
+                    code: 'MISCOUNTED',
+                    label: 'Miscount',
+                    is_active: true,
+                },
+            });
+            foundReasonId = createdFoundReason.id;
 
             await db.inventoryReason.create({
                 data: {
@@ -352,6 +364,85 @@ describe('Inventory Operations (e2e)', () => {
                 where: { product_id: productId, warehouse_id: sourceWarehouseId },
             });
             expect(stockAfter!.quantity).toBe(quantityBefore - 3);
+        });
+
+        it('should reject an entry with no note', async () => {
+            const res = await request(app.getHttpServer())
+                .post('/inventory-shrinkage')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    warehouseId: sourceWarehouseId,
+                    reasonId: shrinkageReasonId,
+                    notes: '   ',
+                    items: [{ productId, quantity: 1 }],
+                });
+
+            expect(res.status).toBe(400);
+        });
+
+        it('should reject an entry with no reason', async () => {
+            const res = await request(app.getHttpServer())
+                .post('/inventory-shrinkage')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    warehouseId: sourceWarehouseId,
+                    notes: 'Damaged in storage',
+                    items: [{ productId, quantity: 1 }],
+                });
+
+            expect(res.status).toBe(400);
+        });
+
+        it('should add stock back when extra quantity is found', async () => {
+            const stockBefore = await db.productStock.findFirst({
+                where: { product_id: productId, warehouse_id: sourceWarehouseId },
+            });
+            const quantityBefore = stockBefore!.quantity;
+
+            const res = await request(app.getHttpServer())
+                .post('/inventory-shrinkage')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    direction: 'FOUND',
+                    warehouseId: sourceWarehouseId,
+                    reasonId: foundReasonId,
+                    notes: 'Two cartons behind the rack, counted with Rahim',
+                    items: [{ productId, quantity: 2 }],
+                });
+
+            const found = bodyOf(res);
+
+            expect(res.status).toBe(201);
+            expect(found.direction).toBe('FOUND');
+            expect(found.reference_number).toMatch(/^FND-\d{5}$/);
+
+            const stockAfter = await db.productStock.findFirst({
+                where: { product_id: productId, warehouse_id: sourceWarehouseId },
+            });
+            expect(stockAfter!.quantity).toBe(quantityBefore + 2);
+        });
+
+        it('should refuse a shrinkage reason on a found entry', async () => {
+            const res = await request(app.getHttpServer())
+                .post('/inventory-shrinkage')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    direction: 'FOUND',
+                    warehouseId: sourceWarehouseId,
+                    reasonId: shrinkageReasonId,
+                    notes: 'Reason belongs to the other direction',
+                    items: [{ productId, quantity: 1 }],
+                });
+
+            expect(res.status).toBe(400);
         });
 
         it('should list all shrinkage records for the tenant', async () => {

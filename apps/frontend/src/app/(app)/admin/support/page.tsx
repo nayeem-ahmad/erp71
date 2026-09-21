@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import { MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2, Sparkles, SlidersHorizontal } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { StatusBadge } from '@/components/ui';
+import { Select, StatusBadge } from '@/components/ui';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
@@ -14,6 +15,7 @@ type ThreadUser = { id: string; name: string; email: string };
 
 type Thread = {
     id: string;
+    ticketNumber: number;
     subject: string;
     status: string;
     category: string;
@@ -42,6 +44,7 @@ type Message = {
 export default function AdminSupportPage() {
     const { t } = useI18n();
     const m = t.admin.support;
+    const isMdUp = useIsMdUp();
 
     const [threads, setThreads] = useState<Thread[]>([]);
     const [total, setTotal] = useState(0);
@@ -54,10 +57,13 @@ export default function AdminSupportPage() {
     const [userOptions, setUserOptions] = useState<UserOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    /** Phone-only disclosure — the four dropdowns cost a third of the screen above the inbox. */
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [threadInfo, setThreadInfo] = useState<{
+        ticketNumber?: number;
         subject: string;
         status: string;
         tenant: string;
@@ -234,6 +240,19 @@ export default function AdminSupportPage() {
         setError('');
     };
 
+    /**
+     * Phone-only: the conversation is the whole screen there, so leaving it has
+     * to put the inbox back. On `md` and up both panes are on screen at once and
+     * the control that calls this is hidden.
+     */
+    const closeThread = () => {
+        setActiveThreadId(null);
+        setMessages([]);
+        setThreadInfo(null);
+        setReplyBody('');
+        scrolledForRef.current = null;
+    };
+
     const sendReply = async () => {
         if (!activeThreadId || !replyBody.trim()) return;
         setSending(true);
@@ -267,6 +286,15 @@ export default function AdminSupportPage() {
         }
     };
 
+    /**
+     * One pane at a time on a phone: the inbox until a thread is picked, the
+     * conversation after. The two-up layout below `md` used to give the fixed
+     * 20rem list every pixel of a 360px viewport and leave the conversation
+     * nothing to render into.
+     */
+    const viewingThread = Boolean(activeThreadId);
+    const activeFilterCount = [statusFilter, categoryFilter, tenantFilter, userFilter].filter(Boolean).length;
+
     return (
         <div className="h-full flex flex-col overflow-hidden bg-canvas">
             <PageHeader
@@ -278,12 +306,20 @@ export default function AdminSupportPage() {
                     m.title,
                     'admin',
                 )}
-                className="shrink-0 px-3 md:px-4 pt-3 md:pt-4"
+                /* An open conversation owns the phone screen — the thread header
+                   below carries the title and the way back, so the page header
+                   would only be pushing the messages down. */
+                className={`shrink-0 px-3 md:px-4 pt-3 md:pt-4 ${viewingThread ? 'max-md:hidden' : ''}`}
             />
 
-            <div className="flex-1 flex overflow-hidden p-3 md:p-4 gap-4 min-h-0">
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden p-3 md:p-4 gap-3 md:gap-4 min-h-0">
                 {/* Thread list */}
-                <div className="w-80 shrink-0 flex flex-col gap-3 overflow-hidden">
+                <div
+                    data-testid="thread-list-pane"
+                    className={`min-h-0 w-full flex-col gap-3 overflow-hidden md:w-80 md:shrink-0 ${
+                        viewingThread ? 'hidden md:flex' : 'flex'
+                    }`}
+                >
                     {error && (
                         <div className="rounded-md border border-danger bg-danger-light px-3 py-2 text-xs font-semibold text-danger-text">
                             {error}
@@ -291,61 +327,70 @@ export default function AdminSupportPage() {
                     )}
 
                     <div className="flex flex-col gap-2">
-                        <label className="flex items-center gap-2 rounded-md border border-gray-100 bg-white px-3 py-2">
-                            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <input
-                                value={search}
-                                onChange={(e) => handleSearch(e.target.value)}
-                                placeholder={m.searchPlaceholder}
-                                className="w-full bg-transparent outline-none text-sm"
-                            />
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => handleStatusFilter(e.target.value)}
-                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                        <div className="flex items-center gap-2">
+                            {/* Hand-rolled rather than the `Input` primitive because of the
+                                leading icon, so it copies the primitive's box to sit level
+                                with the `Select`s below it. */}
+                            <label className="flex flex-1 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 focus-within:border-primary/40 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 max-md:py-0">
+                                <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                    placeholder={m.searchPlaceholder}
+                                    className="w-full min-w-0 self-stretch bg-transparent outline-none text-sm placeholder:text-gray-400 max-md:min-h-touch"
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setFiltersOpen((open) => !open)}
+                                aria-expanded={filtersOpen}
+                                aria-label={t.common.dataTable.filters}
+                                className={`md:hidden shrink-0 inline-flex items-center justify-center gap-1 rounded-md border px-3 text-xs font-semibold min-h-touch min-w-touch ${
+                                    activeFilterCount > 0
+                                        ? 'border-primary-border bg-primary-light text-primary'
+                                        : 'border-gray-200 bg-gray-50 text-gray-500'
+                                }`}
                             >
+                                <SlidersHorizontal className="w-3.5 h-3.5" />
+                                {activeFilterCount > 0 ? activeFilterCount : null}
+                            </button>
+                        </div>
+                        {/* Collapsed by default on a phone; always on from `md` up. A
+                            narrowed inbox is easy to mistake for an empty one, so the
+                            toggle above counts what is hiding behind it. */}
+                        <div
+                            data-testid="thread-filters"
+                            className={`grid grid-cols-2 gap-2 ${filtersOpen ? '' : 'max-md:hidden'}`}
+                        >
+                            <Select value={statusFilter} onChange={(e) => handleStatusFilter(e.target.value)}>
                                 <option value="">{m.allStatuses}</option>
                                 <option value="open">{m.statusOpen}</option>
                                 <option value="resolved">{m.statusResolved}</option>
-                            </select>
-                            <select
-                                value={categoryFilter}
-                                onChange={(e) => handleCategoryFilter(e.target.value)}
-                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
-                            >
+                            </Select>
+                            <Select value={categoryFilter} onChange={(e) => handleCategoryFilter(e.target.value)}>
                                 <option value="">{m.allTypes}</option>
                                 <option value="support">{m.types.support}</option>
                                 <option value="feedback">{m.kindFeedback}</option>
                                 <option value="bug">{m.types.bug}</option>
                                 <option value="feature">{m.types.feature}</option>
                                 <option value="general">{m.types.general}</option>
-                            </select>
-                            <select
-                                value={tenantFilter}
-                                onChange={(e) => handleTenantFilter(e.target.value)}
-                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
-                            >
+                            </Select>
+                            <Select value={tenantFilter} onChange={(e) => handleTenantFilter(e.target.value)}>
                                 <option value="">{m.allTenants}</option>
                                 {tenantOptions.map((tenantOption) => (
                                     <option key={tenantOption.id} value={tenantOption.id}>
                                         {tenantOption.name} ({tenantOption.threadCount})
                                     </option>
                                 ))}
-                            </select>
-                            <select
-                                value={userFilter}
-                                onChange={(e) => handleUserFilter(e.target.value)}
-                                className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
-                            >
+                            </Select>
+                            <Select value={userFilter} onChange={(e) => handleUserFilter(e.target.value)}>
                                 <option value="">{m.allUsers}</option>
                                 {userOptions.map((userOption) => (
                                     <option key={userOption.id} value={userOption.id}>
                                         {userOption.name} ({userOption.threadCount})
                                     </option>
                                 ))}
-                            </select>
+                            </Select>
                         </div>
                     </div>
 
@@ -362,17 +407,22 @@ export default function AdminSupportPage() {
                                     key={thread.id}
                                     type="button"
                                     onClick={() => selectThread(thread.id)}
-                                    className={`w-full text-start px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
+                                    className={`w-full text-start px-3 md:px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-s-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
+                                        <p className="flex min-w-0 items-baseline gap-1.5">
+                                            <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gray-500">
+                                                #{thread.ticketNumber}
+                                            </span>
+                                            <span className="truncate text-sm font-bold text-gray-900">{thread.subject}</span>
+                                        </p>
                                         <StatusBadge tone={thread.status === 'resolved' ? 'success' : 'warning'} className="shrink-0 text-[9px]">
                                             {thread.status}
                                         </StatusBadge>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
                                         <p className="text-xs text-gray-500 font-semibold truncate">{thread.tenant}</p>
-                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
                                             {categoryLabel(thread.category)}
                                         </span>
                                     </div>
@@ -392,7 +442,12 @@ export default function AdminSupportPage() {
                 </div>
 
                 {/* Message area */}
-                <div className="flex-1 flex flex-col overflow-hidden rounded-lg border border-gray-100 bg-white min-w-0">
+                <div
+                    data-testid="conversation-pane"
+                    className={`flex-1 flex-col overflow-hidden rounded-lg border border-gray-100 bg-white min-w-0 min-h-0 ${
+                        viewingThread ? 'flex' : 'hidden md:flex'
+                    }`}
+                >
                     {!activeThreadId ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-gray-400">
                             <MessageSquare className="w-8 h-8 text-gray-200" />
@@ -401,24 +456,39 @@ export default function AdminSupportPage() {
                     ) : (
                         <>
                             {/* Thread header */}
-                            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
-                                <div className="min-w-0">
-                                    <p className="font-bold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
-                                    {threadInfo?.tenant && (
-                                        <p className="text-xs text-gray-500 font-semibold">{threadInfo.tenant}</p>
-                                    )}
-                                    <p className="text-[11px] text-gray-500 truncate">
-                                        {formatMessage(m.startedBy, {
-                                            user: threadInfo?.createdBy
-                                                ? `${threadInfo.createdBy.name} (${threadInfo.createdBy.email})`
-                                                : m.unknownUser,
-                                        })}
-                                    </p>
-                                    {threadInfo?.page && (
-                                        <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
-                                    )}
+                            <div className="px-3 md:px-5 py-2.5 md:py-3 border-b border-gray-100 flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
+                                <div className="flex items-start gap-1.5 min-w-0">
+                                    <button
+                                        type="button"
+                                        onClick={closeThread}
+                                        aria-label={t.common.back}
+                                        className="md:hidden shrink-0 -ms-2 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-50 min-h-touch min-w-touch"
+                                    >
+                                        <ArrowLeft className="w-4 h-4 rtl:rotate-180" />
+                                    </button>
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                        {threadInfo?.ticketNumber && (
+                                            <p className="text-[11px] font-semibold tabular-nums text-gray-500">
+                                                {formatMessage(m.ticketLabel, { number: threadInfo.ticketNumber })}
+                                            </p>
+                                        )}
+                                        {threadInfo?.tenant && (
+                                            <p className="text-xs text-gray-500 font-semibold truncate">{threadInfo.tenant}</p>
+                                        )}
+                                        <p className="text-[11px] text-gray-500 truncate">
+                                            {formatMessage(m.startedBy, {
+                                                user: threadInfo?.createdBy
+                                                    ? `${threadInfo.createdBy.name} (${threadInfo.createdBy.email})`
+                                                    : m.unknownUser,
+                                            })}
+                                        </p>
+                                        {threadInfo?.page && (
+                                            <p className="text-[10px] text-gray-400 truncate">{threadInfo.page}</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-2 shrink-0 max-md:ms-9">
                                 {threadInfo?.feedbackId && (
                                     <button
                                         type="button"
@@ -451,7 +521,7 @@ export default function AdminSupportPage() {
                             </div>
 
                             {/* Messages */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
                                 {loadingMessages ? (
                                     <div className="flex justify-center pt-8">
                                         <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
@@ -463,11 +533,11 @@ export default function AdminSupportPage() {
                                         const isAdmin = msg.senderRole === 'admin';
                                         return (
                                             <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isAdmin ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                                <div className={`max-w-[85%] md:max-w-[75%] rounded-lg px-3 md:px-4 py-2.5 ${isAdmin ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'}`}>
                                                     <p className={`text-[10px] font-bold mb-1 ${isAdmin ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isAdmin ? m.you : m.owner}
                                                     </p>
-                                                    <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
                                                     <p className={`text-[10px] mt-1 ${isAdmin ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
@@ -480,26 +550,31 @@ export default function AdminSupportPage() {
                             </div>
 
                             {/* Reply input */}
-                            <div className="px-4 py-3 border-t border-gray-100">
+                            <div className="px-3 md:px-4 py-3 border-t border-gray-100">
                                 <div className="flex items-end gap-2">
                                     <textarea
                                         value={replyBody}
                                         onChange={(e) => setReplyBody(e.target.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                            /* Enter sends at a keyboard, where Shift+Enter is
+                                               the newline. On a phone the soft keyboard's Enter
+                                               is the only newline there is, so it stays one and
+                                               the Send button does the sending. */
+                                            if (isMdUp && e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
                                                 void sendReply();
                                             }
                                         }}
                                         placeholder={m.replyPlaceholder}
                                         rows={2}
-                                        className="flex-1 resize-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:bg-white"
+                                        className="flex-1 min-w-0 resize-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:bg-white"
                                     />
                                     <button
                                         type="button"
                                         onClick={sendReply}
                                         disabled={sending || !replyBody.trim()}
-                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-primary text-white hover:bg-primary-hover disabled:opacity-40"
+                                        aria-label={m.reply}
+                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-primary text-white hover:bg-primary-hover disabled:opacity-40 max-md:min-h-touch max-md:min-w-touch"
                                     >
                                         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                     </button>

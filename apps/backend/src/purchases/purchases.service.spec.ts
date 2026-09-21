@@ -69,6 +69,18 @@ describe('PurchasesService', () => {
             },
             supplierCreditTransaction: {
                 create: jest.fn(),
+                // `nextSupplierPaymentNumber` reads the last SPY- row; null
+                // means "none yet", so the first counter payment is SPY-00001.
+                findFirst: jest.fn().mockResolvedValue(null),
+            },
+            supplierPaymentAllocation: {
+                create: jest.fn(),
+                delete: jest.fn(),
+            },
+            paymentMethod: {
+                // No tenant-configured GL account for the method, so the
+                // supplier_payment rule's own credit account stands.
+                findFirst: jest.fn().mockResolvedValue(null),
             },
             purchase: {
                 count: jest.fn(),
@@ -380,6 +392,154 @@ describe('PurchasesService', () => {
         });
     });
 
+    describe('paying at the counter', () => {
+        const cashBill = async (payments: any[], supplierId: string | null = 'sup-1') => {
+            db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+            db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 200 });
+            tx.supplierCreditTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'txn-1', ...data }));
+            tx.purchase.count.mockResolvedValue(0);
+            tx.purchase.create.mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-00001', total_amount: 1000 });
+            tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+
+            return service.create('tenant-1', 'user-1', {
+                storeId: 'store-1',
+                supplierId: supplierId ?? undefined,
+                items: [{ productId: 'prod-1', quantity: 10, unitCost: 100 }],
+                payments,
+            });
+        };
+
+        it('books the bill in full and takes the cash straight back off the account', async () => {
+            await cashBill([{ paymentMethod: 'Cash', amount: 400 }]);
+
+            // The bill lands part-paid rather than waiting for a separate
+            // supplier payment to catch up with it.
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ total_amount: 1000, paid_amount: 400, payment_status: 'PARTIAL' }),
+            });
+
+            // Two ledger lines, not one net line: the supplier's own books show
+            // the invoice and the payment separately, and a net line cannot be
+            // reconciled against them. 200 owed before → 1200 → 800.
+            expect(tx.supplierCreditTransaction.create).toHaveBeenNthCalledWith(1, {
+                data: expect.objectContaining({ type: 'CREDIT_PURCHASE', amount: 1000, balance_after: 1200 }),
+            });
+            expect(tx.supplierCreditTransaction.create).toHaveBeenNthCalledWith(2, {
+                data: expect.objectContaining({
+                    type: 'PAYMENT',
+                    amount: 400,
+                    balance_after: 800,
+                    payment_number: 'SPY-00001',
+                    reference_type: 'PURCHASE',
+                    reference_id: 'purchase-1',
+                }),
+            });
+            expect(tx.supplier.update).toHaveBeenCalledWith({
+                where: { id: 'sup-1' },
+                data: { due_balance: 800 },
+            });
+
+            // `paid_amount` is read back from allocations everywhere else, so an
+            // entry payment has to leave one behind.
+            expect(tx.supplierPaymentAllocation.create).toHaveBeenCalledWith({
+                data: {
+                    tenant_id: 'tenant-1',
+                    transaction_id: 'txn-1',
+                    purchase_id: 'purchase-1',
+                    amount: 400,
+                },
+            });
+        });
+
+        it('posts the bill and the cash as two legs, so the payable is raised and then debited', async () => {
+            await cashBill([{ paymentMethod: 'Cash', amount: 1000 }]);
+
+            // The bill's own leg stays keyless, so it remains the purchase's
+            // primary posting event and the two vouchers cannot collide on one
+            // idempotency key.
+            const [billLeg] = (autoPostFromRules as jest.Mock).mock.calls[0];
+            expect(billLeg).toMatchObject({ eventType: 'purchase', conditionValue: 'credit', amount: 1000 });
+            expect(billLeg.legKey).toBeUndefined();
+            // Through supplier_payment, the only rule that ever debits Purchase
+            // Payable — a bill paid at the counter must not be the one kind of
+            // payment that leaves the liability standing.
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'pay',
+                sourceModule: 'purchases',
+                sourceType: 'purchase',
+                sourceId: 'purchase-1',
+                legKey: 'paid',
+                amount: 1000,
+            }));
+        });
+
+        it('sends the cash leg to the account the tenant configured for that method', async () => {
+            tx.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acct-bkash' });
+
+            await cashBill([{ paymentMethod: 'Mobile Wallet', amount: 250 }]);
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'supplier_payment',
+                overrideCreditAccountId: 'acct-bkash',
+            }));
+        });
+
+        it('leaves a bill with no tender exactly as it was before counter payment existed', async () => {
+            await cashBill([]);
+
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
+            });
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledTimes(1);
+            expect(tx.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+            expect(autoPostFromRules).toHaveBeenCalledTimes(1);
+        });
+
+        it('ignores a method the user left blank rather than booking a zero payment', async () => {
+            await cashBill([{ paymentMethod: 'Cash', amount: 0 }]);
+
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
+            });
+            expect(tx.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+        });
+
+        it('adds up every tender on the bill', async () => {
+            await cashBill([
+                { paymentMethod: 'Cash', amount: 600 },
+                { paymentMethod: 'Mobile Wallet', amount: 400 },
+            ]);
+
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ paid_amount: 1000, payment_status: 'PAID' }),
+            });
+        });
+
+        it('refuses to pay more than the bill, which would leave an advance this screen cannot record', async () => {
+            await expect(
+                cashBill([{ paymentMethod: 'Cash', amount: 1200 }]),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            expect(tx.purchase.create).not.toHaveBeenCalled();
+        });
+
+        it('records a cash buy with no supplier on the bill itself — there is no account to post it to', async () => {
+            await cashBill([{ paymentMethod: 'Cash', amount: 1000 }], null);
+
+            expect(tx.purchase.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ paid_amount: 1000, payment_status: 'PAID' }),
+            });
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'supplier_payment',
+                amount: 1000,
+            }));
+        });
+    });
+
     describe('cancel', () => {
         const activePurchase = (overrides: Record<string, unknown> = {}) => ({
             id: 'purchase-1',
@@ -387,6 +547,7 @@ describe('PurchasesService', () => {
             purchase_number: 'PUR-00001',
             supplier_id: 'sup-1',
             total_amount: 1400,
+            paid_amount: 0,
             status: 'RECORDED',
             items: [{ id: 'line-1', jobCosts: [] }],
             returns: [],
@@ -504,7 +665,23 @@ describe('PurchasesService', () => {
 
         it.each([
             ['returns', { returns: [{ id: 'ret-1' }] }],
-            ['allocated supplier payments', { paymentAllocations: [{ id: 'alloc-1' }] }],
+            ['allocated supplier payments', {
+                paymentAllocations: [{
+                    id: 'alloc-1',
+                    amount: 500,
+                    // A payment recorded on the supplier-payments screen and
+                    // applied here afterwards: no reference back to this bill,
+                    // so cancelling must not presume to take it back.
+                    transaction: {
+                        id: 'txn-1',
+                        type: 'PAYMENT',
+                        amount: 500,
+                        payment_number: 'SPY-00001',
+                        reference_type: null,
+                        reference_id: null,
+                    },
+                }],
+            }],
             ['an import shipment', { importShipment: { id: 'ship-1' } }],
             ['production job costs', { items: [{ id: 'line-1', jobCosts: [{ id: 'cost-1' }] }] }],
         ])('refuses a purchase that has %s against it', async (_label, overrides) => {
@@ -515,6 +692,101 @@ describe('PurchasesService', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
             expect(tx.purchase.update).not.toHaveBeenCalled();
             expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+        });
+
+        it('takes back the payment the entry itself recorded, so a cash bill stays cancellable', async () => {
+            // A 1400 bill settled with 400 at the counter, leaving 1000 owed —
+            // which is all this supplier's balance is.
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({
+                paid_amount: 400,
+                paymentAllocations: [{
+                    id: 'alloc-1',
+                    amount: 400,
+                    transaction: {
+                        id: 'txn-1',
+                        type: 'PAYMENT',
+                        amount: 400,
+                        payment_number: 'SPY-00003',
+                        reference_type: 'PURCHASE',
+                        reference_id: 'purchase-1',
+                    },
+                }],
+            }));
+            tx.supplier.findFirst.mockResolvedValue({ due_balance: 1000 });
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error');
+
+            // Two reversing lines, in the order the entry wrote them: the bill
+            // off the account (1000 → −400), then the cash back on (−400 → 0).
+            // Together they undo exactly what create did to this balance.
+            expect(tx.supplierCreditTransaction.create).toHaveBeenNthCalledWith(1, {
+                data: expect.objectContaining({ type: 'ADJUSTMENT', amount: -1400, balance_after: -400 }),
+            });
+            expect(tx.supplierCreditTransaction.create).toHaveBeenNthCalledWith(2, {
+                data: expect.objectContaining({ type: 'ADJUSTMENT', amount: 400, balance_after: 0 }),
+            });
+            expect(tx.supplier.update).toHaveBeenCalledWith({
+                where: { id: 'sup-1' },
+                data: { due_balance: 0 },
+            });
+
+            // The allocation goes with the payment — it is what `paid_amount`
+            // is read back from — and both vouchers come out.
+            expect(tx.supplierPaymentAllocation.delete).toHaveBeenCalledWith({ where: { id: 'alloc-1' } });
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+            expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
+            }));
+        });
+
+        it('refuses when its own payment has been part-moved onto another bill', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({
+                paid_amount: 500,
+                paymentAllocations: [{
+                    id: 'alloc-1',
+                    // Half of a 1000 payment; the rest now sits on another
+                    // bill, so where that money went is no longer this
+                    // method's call to make.
+                    amount: 500,
+                    transaction: {
+                        id: 'txn-1',
+                        type: 'PAYMENT',
+                        amount: 1000,
+                        payment_number: 'SPY-00003',
+                        reference_type: 'PURCHASE',
+                        reference_id: 'purchase-1',
+                    },
+                }],
+            }));
+
+            await expect(
+                service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error'),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(tx.purchase.update).not.toHaveBeenCalled();
+        });
+
+        it('voids the cash leg of a supplier-less bill, which has no ledger row to reverse', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ supplier_id: null, paid_amount: 1400 }));
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error');
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+            expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
+            }));
+        });
+
+        it('leaves an unpaid bill\'s posting alone — there is no cash leg to void', async () => {
+            tx.purchase.findFirst.mockResolvedValue(activePurchase({ supplier_id: null }));
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error');
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledTimes(1);
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
         });
 
         it('404s an unknown purchase', async () => {

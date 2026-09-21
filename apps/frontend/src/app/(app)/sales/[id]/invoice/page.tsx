@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Download, Printer } from 'lucide-react';
+
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
+import SalePrintMenu from '../../components/SalePrintMenu';
+import { useSalePrinting } from '@/lib/hooks/useSalePrinting';
 
 interface InvoiceData {
     sale: {
@@ -30,6 +32,11 @@ interface InvoiceData {
             id: string;
             quantity: number;
             price_at_sale: string;
+            /**
+             * The rate this line was posted at, snapshotted at the time; null
+             * on a row written before that column existed.
+             */
+            vat_rate: string | null;
             product: {
                 name: string;
                 sku: string | null;
@@ -68,9 +75,28 @@ export default function InvoicePage() {
             .finally(() => setLoading(false));
     }, [params.id]);
 
-    const handlePrint = () => {
-        window.print();
-    };
+    /**
+     * This page already holds the whole sale, so printing does not go back to
+     * the server for it — it hands the print menu what it fetched.
+     */
+    const resolvePrintable = useCallback(() => {
+        if (!data) return null;
+        return {
+            id: data.sale.id,
+            serial_number: data.sale.serial_number,
+            created_at: data.sale.created_at,
+            total_amount: data.sale.total_amount,
+            amount_paid: data.sale.amount_paid,
+            note: data.sale.note,
+            customer: data.sale.customer,
+            items: data.sale.items,
+            payments: data.sale.payments,
+        };
+    }, [data]);
+
+    const { paperSize, setPaperSize, printInvoice, printChallan, printReceipt } = useSalePrinting({
+        resolve: resolvePrintable,
+    });
 
     if (loading) {
         return (
@@ -92,15 +118,28 @@ export default function InvoicePage() {
     const businessName = tenant?.brand_business_name || tenant?.name || t.shared.business;
     const primaryColor = tenant?.brand_primary_color || '#1d4ed8';
 
-    // Calculate line totals and VAT
+    // The RATE comes from the snapshot taken when the sale was posted, so
+    // editing a product's VAT later cannot restate an invoice the customer
+    // already holds. The amounts are still derived from the line totals shown
+    // here rather than read off the stored columns, because those account for
+    // an invoice-level discount that this page has no row for — see the
+    // adjustment-breakdown item in TODO.md. For an undiscounted sale, which is
+    // almost all of them, the two are the same figure.
+    //
+    // The document that must foot exactly is the Mushak 6.3, and it does: it
+    // spreads the reduction over its lines before taxing them.
     const defaultVatRate = tenant?.default_vat_rate ?? 0;
     const lineItems = sale.items.map(item => {
         const unitPrice = parseFloat(item.price_at_sale);
         const qty = item.quantity;
-        const vatRate = item.product?.vat_rate ?? defaultVatRate;
         const lineTotal = unitPrice * qty;
+
+        const vatRate = item.vat_rate != null
+            ? parseFloat(item.vat_rate)
+            : (item.product?.vat_rate ?? defaultVatRate);
         const vatAmount = vatRate > 0 ? lineTotal * (vatRate / (100 + vatRate)) : 0;
         const baseAmount = lineTotal - vatAmount;
+
         return {
             ...item,
             unitPrice,
@@ -148,23 +187,19 @@ export default function InvoicePage() {
                             t.sales.invoice.invoice,
                         )}
                         actions={
-                            <>
-                                <button
-                                    onClick={handlePrint}
-                                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
-                                >
-                                    <Printer className="h-4 w-4" />
-                                    Print
-                                </button>
-                                <button
-                                    onClick={handlePrint}
-                                    className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
-                                    style={{ backgroundColor: primaryColor }}
-                                >
-                                    <Download className="h-4 w-4" />
-                                    {t.sales.invoice.downloadPdf}
-                                </button>
-                            </>
+                            /* Everything this page used to offer as its own row
+                               of buttons — the 6.3, the challan, print and the
+                               PDF — now comes from the shared menu, so the list
+                               row, the sale screen and this page cannot drift
+                               apart in what they can produce. */
+                            <SalePrintMenu
+                                saleId={sale.id}
+                                paperSize={paperSize}
+                                onPaperSizeChange={setPaperSize}
+                                onPrintInvoice={(size) => void printInvoice(sale.id, size)}
+                                onPrintChallan={(size) => void printChallan(sale.id, size)}
+                                onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+                            />
                         }
                     />
                 </div>

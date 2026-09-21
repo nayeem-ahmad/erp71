@@ -102,6 +102,8 @@ export const crmHrMessages = {
             approvalFailed: 'منظوری اپ ڈیٹ نہیں ہو سکی۔',
             approveActivity: 'اس سرگرمی کی منظوری دیں',
             open: 'کھولیں',
+            viewActivities: 'سرگرمیاں دیکھیں',
+            openRecord: 'مکمل ریکارڈ کھولیں',
             columns: {
                 subject: 'سرگرمی',
                 kind: 'مقصد / چینل',
