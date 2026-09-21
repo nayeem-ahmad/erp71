@@ -79,11 +79,18 @@ export function mapDiziCustomer(row: DiziTrader, claimedCodes: Set<string>): Map
         address: emptyToNull(row.Location),
         // Dizi exposes no credit limit on the trader row.
         creditLimit: null,
-        // Dizi gives only the party's *current* net balance, not a pre-history
-        // opening figure. It is used as an opening balance only when posting is
-        // off (the default) and the tenant is not replaying documents — see the
-        // note in external-sync.service.ts.
-        previousDue: toMoney(row.Balance),
+        // Deliberately zero, where Express sends a real `previous_due`.
+        //
+        // Dizi's `Balance` is the party's *current* net position, which already
+        // includes every sale and payment this import is about to replay.
+        // `applyOpeningBalance` hard-sets `due_balance` to what it is given and
+        // the replayed documents then move it again, so carrying this over
+        // leaves roughly double the true debt. Letting the balance build from
+        // the documents is correct for a full-history import, and is the reason
+        // a Dizi connection wants `history_start_date` at the beginning of its
+        // data rather than a rolling window — a party whose debt predates the
+        // window would otherwise come out short.
+        previousDue: 0,
         externalUpdatedAt: parseTimestamp(row.UpdatedOn),
     };
 }
@@ -100,7 +107,9 @@ export function mapDiziSupplier(row: DiziTrader, claimedNames: Set<string>): Map
         phone: emptyToNull(row.ContactNo),
         email: emptyToNull(row.Email),
         address: emptyToNull(row.Location),
-        previousDue: toMoney(row.Balance),
+        // Zero for the same reason as the customer above: Dizi's Balance is a
+        // current figure, and the replayed purchases and payments rebuild it.
+        previousDue: 0,
         externalUpdatedAt: parseTimestamp(row.UpdatedOn),
     };
 }
