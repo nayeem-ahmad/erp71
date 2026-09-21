@@ -3,6 +3,7 @@ import {
     Controller,
     Delete,
     Get,
+    NotFoundException,
     Param,
     Patch,
     Post,
@@ -88,6 +89,18 @@ export class ProjectTasksController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     bulkRemove(@Tenant() tenant: TenantContext, @Body() dto: BulkDeleteTasksDto) {
         return this.tasks.bulkRemove(tenant, dto.ids);
+    }
+
+    /**
+     * Before `@Get(':id')`, for the same reason the import route is: Nest
+     * matches in declaration order and would otherwise read "resolve" as an id.
+     */
+    @Get('resolve/:key')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    async resolveTask(@Tenant() tenant: TenantContext, @Param('key') key: string) {
+        const found = await this.tasks.resolveTaskKey(tenant.tenantId, key);
+        if (!found) throw new NotFoundException('Task not found');
+        return { id: found.taskId, currentKey: found.currentKey, moved: found.moved };
     }
 
     @Get(':id')
