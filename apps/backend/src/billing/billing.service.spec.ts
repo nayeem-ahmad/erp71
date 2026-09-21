@@ -997,6 +997,61 @@ describe('BillingService', () => {
         );
     });
 
+    // --- Manual confirmation ---------------------------------------------------
+
+    describe('confirmCheckout with no gateway behind it', () => {
+        const useManualProvider = () => {
+            process.env.BILLING_PROVIDER = 'MANUAL';
+            delete process.env.SSL_WIRELESS_STORE_ID;
+            delete process.env.SSL_WIRELESS_STORE_PASSWORD;
+        };
+        const originalNodeEnv = process.env.NODE_ENV;
+
+        afterEach(() => {
+            (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
+            delete process.env.BILLING_ALLOW_MANUAL_CONFIRM;
+        });
+
+        it('refuses in production, where it would hand out a paid plan for nothing', async () => {
+            useManualProvider();
+            (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+
+            await expect(
+                service.confirmCheckout(tenantCtx(), { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any),
+            ).rejects.toMatchObject({ response: { code: 'MANUAL_CONFIRM_DISABLED' } });
+            expect(db.tenantSubscription.upsert).not.toHaveBeenCalled();
+        });
+
+        it('stays open in development, where the manual provider is the sandbox', async () => {
+            useManualProvider();
+            (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
+
+            await expect(
+                service.confirmCheckout(tenantCtx(), { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any),
+            ).resolves.toMatchObject({ subscription: { status: 'ACTIVE' } });
+        });
+
+        it('can be re-opened in production for a staging box with no gateway credentials', async () => {
+            useManualProvider();
+            (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+            process.env.BILLING_ALLOW_MANUAL_CONFIRM = 'true';
+
+            await expect(
+                service.confirmCheckout(tenantCtx(), { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any),
+            ).resolves.toMatchObject({ subscription: { status: 'ACTIVE' } });
+        });
+
+        it('leaves a real gateway confirmation alone in production', async () => {
+            // SSL Wireless is configured, so this is reconciling a session the
+            // gateway already took money for — not a self-serve grant.
+            (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+
+            await expect(
+                service.confirmCheckout(tenantCtx(), { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any),
+            ).resolves.toMatchObject({ subscription: { status: 'ACTIVE' } });
+        });
+    });
+
     // --- Referral discount and commission --------------------------------------
 
     describe('referral discount at checkout', () => {

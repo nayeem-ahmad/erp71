@@ -186,6 +186,10 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     },
     { model: 'SubscriptionPlan', exempt: 'Platform plan catalog.' },
     { model: 'TenantSubscription', exempt: 'Platform subscription record.' },
+    // An unverified claim that money was sent, not the money itself. Approving one
+    // writes the BillingEvent above, and that row is what reaches the platform
+    // books — which is the whole reason this is a separate table.
+    { model: 'ActivationRequest', exempt: 'Tenant-submitted payment claim awaiting manual verification; the manual_payment BillingEvent an approval writes is the money event.' },
     { model: 'AddonModule', exempt: 'Platform add-on catalog.' },
     { model: 'SmsPackage', exempt: 'Platform SMS-credit catalog.' },
     { model: 'Referee', exempt: 'Referral-program config (rates).' },

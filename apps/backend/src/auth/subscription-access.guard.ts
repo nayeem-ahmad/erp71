@@ -13,6 +13,7 @@ import {
     SUBSCRIPTION_FEATURE_KEY,
     SUBSCRIPTION_PLAN_KEY,
 } from './subscription-access.decorator';
+import { PENDING_ACTIVATION_CODE, isPendingActivation } from '../billing/activation-state.util';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -119,6 +120,17 @@ export class SubscriptionAccessGuard implements CanActivate {
         const pastDueOnAddonOnlyRequest = subscription?.status === 'PAST_DUE' && addonsCoverRequest;
 
         if (!hasActiveSubscription && !pastDueOnAddonOnlyRequest) {
+            // A workspace that has never been activated is not a lapsed customer,
+            // and telling its owner their subscription is inactive explains
+            // nothing — they signed up minutes ago and were never offered a way
+            // to pay. A distinct code lets the frontend show them what to do
+            // instead of a permission error. See activation-state.util.
+            if (isPendingActivation(subscription)) {
+                throw new ForbiddenException({
+                    code: PENDING_ACTIVATION_CODE,
+                    message: 'Your workspace is not activated yet. Complete payment to unlock this feature.',
+                });
+            }
             throw new ForbiddenException('This feature requires an active subscription.');
         }
 
