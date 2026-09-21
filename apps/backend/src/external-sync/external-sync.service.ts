@@ -134,6 +134,47 @@ class RunCancelledError extends Error {
  * document whose voucher and stock movement have already landed, and says so
  * in the run warnings instead.
  */
+
+/**
+ * Adoption links an imported record to one the tenant already has, writes a
+ * mapping for it and then bills every document the import creates against it —
+ * permanently, since `isImmutablyPosted` refuses to rewrite a posted document.
+ *
+ * Each builder therefore returns `null` rather than guessing when it has no key
+ * it can trust, leaving the caller to create a fresh record instead of adopting
+ * an arbitrary one.
+ */
+export function productAdoptionWhere(tenantId: string, sku: string | null) {
+    // `sku` is nullable on Product, so a null or blank one is not an identity:
+    // matching on it would adopt whichever untagged product came back first.
+    if (!sku) return null;
+    return { tenant_id: tenantId, sku, deleted_at: null };
+}
+
+export function customerAdoptionWhere(
+    tenantId: string,
+    // The phone as the provider sent it. `Customer.phone` stores raw input, so
+    // this lookup must be raw too — normalizing here would miss every row saved
+    // in a different format. Normalization belongs to candidate matching, which
+    // compares in memory with both sides normalized.
+    phone: string | null,
+    // Accepted so call sites read naturally, and to document that the code is
+    // deliberately unused: `dedupeCode` derives customer_code from the
+    // provider's own row id, so two unrelated parties can carry the same one.
+    _customerCode: string,
+) {
+    if (!phone) return null;
+    return { tenant_id: tenantId, phone, deleted_at: null };
+}
+
+export function supplierAdoptionWhere(tenantId: string, name: string) {
+    // `deleted_at: null` keeps a provider supplier out of a tombstone it would
+    // otherwise be mapped to permanently, billing purchases to a supplier no
+    // picker and no list will ever show (TODO.md:357).
+    if (!name) return null;
+    return { tenant_id: tenantId, name, deleted_at: null };
+}
+
 @Injectable()
 export class ExternalSyncService {
     private readonly logger = new Logger(ExternalSyncService.name);
@@ -617,10 +658,10 @@ export class ExternalSyncService {
 
                 // Adopt a product the tenant already has under the same SKU rather
                 // than colliding with the [tenant_id, sku] unique index.
-                const adopted = await this.db.product.findFirst({
-                    where: { tenant_id: connection.tenant_id, sku: mapped.sku },
-                    select: { id: true },
-                });
+                const productWhere = productAdoptionWhere(connection.tenant_id, mapped.sku);
+                const adopted = productWhere
+                    ? await this.db.product.findFirst({ where: productWhere, select: { id: true } })
+                    : null;
 
                 const productId =
                     adopted?.id ??
@@ -710,17 +751,23 @@ export class ExternalSyncService {
                     await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${mapped.customerCode}`);
                 }
 
-                // [tenant_id, phone] and [tenant_id, customer_code] are both unique.
-                const adopted = await this.db.customer.findFirst({
-                    where: {
-                        tenant_id: connection.tenant_id,
-                        OR: [
-                            ...(mapped.phone ? [{ phone: mapped.phone }] : []),
-                            { customer_code: mapped.customerCode },
-                        ],
-                    },
-                    select: { id: true },
-                });
+                // Phone is the only identity a customer carries. `customer_code`
+                // is generated per provider row, so it used to adopt unrelated
+                // parties that happened to collide on it.
+                //
+                // The raw phone goes to the database, not the normalized one:
+                // `Customer.phone` stores exactly what was typed, so a lookup
+                // for "+8801712345678" would miss a row saved as "01712345678"
+                // and silently create a duplicate. Normalization is for
+                // in-memory candidate matching, where both sides get it.
+                const customerWhere = customerAdoptionWhere(
+                    connection.tenant_id,
+                    mapped.phone,
+                    mapped.customerCode,
+                );
+                const adopted = customerWhere
+                    ? await this.db.customer.findFirst({ where: customerWhere, select: { id: true } })
+                    : null;
 
                 const customerId =
                     adopted?.id ??
@@ -821,10 +868,10 @@ export class ExternalSyncService {
                     await this.forgetStaleMapping(connection.id, 'SUPPLIER', mapped.externalId, map, warnings, `Supplier ${mapped.name}`);
                 }
 
-                const adopted = await this.db.supplier.findFirst({
-                    where: { tenant_id: connection.tenant_id, name: mapped.name },
-                    select: { id: true },
-                });
+                const supplierWhere = supplierAdoptionWhere(connection.tenant_id, mapped.name);
+                const adopted = supplierWhere
+                    ? await this.db.supplier.findFirst({ where: supplierWhere, select: { id: true } })
+                    : null;
 
                 const supplierId =
                     adopted?.id ??
