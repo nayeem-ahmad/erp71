@@ -22,7 +22,9 @@ describe('TenantExternalSyncController', () => {
         };
         const platformSettings = { isFeatureEnabledForTenant: jest.fn(async () => featureEnabled) };
         return {
-            controller: new TenantExternalSyncController(service as any, platformSettings as any),
+            // The match service is unused by these cases; the match routes have
+            // their own spec in external-sync.match.controller.spec.ts.
+            controller: new TenantExternalSyncController(service as any, platformSettings as any, {} as any),
             service,
             platformSettings,
         };

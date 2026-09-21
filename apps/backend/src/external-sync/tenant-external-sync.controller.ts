@@ -16,7 +16,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { ExternalSyncMatchService } from './external-sync.match.service';
 import { ExternalSyncService } from './external-sync.service';
+import { ApplyMatchDecisionsDto } from './external-sync.match.dto';
 import {
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
@@ -48,6 +50,7 @@ export class TenantExternalSyncController {
     constructor(
         private readonly externalSyncService: ExternalSyncService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly matchService: ExternalSyncMatchService,
     ) {}
 
     private async assertAllowed(tenant: TenantContext) {
@@ -58,6 +61,24 @@ export class TenantExternalSyncController {
         if (tenant.userRole !== 'OWNER') {
             throw new ForbiddenException('Only the workspace owner can configure the external ERP import.');
         }
+    }
+
+    /**
+     * The review workbook's contents. Owner-only like every other route here:
+     * it exposes the tenant's whole product, customer and supplier list beside
+     * the provider's.
+     */
+    @Get('match-candidates')
+    async getMatchCandidates(@Tenant() tenant: TenantContext, @Query('provider') provider?: string) {
+        await this.assertAllowed(tenant);
+        return this.matchService.getCandidates(tenant.tenantId, provider);
+    }
+
+    /** The reviewed workbook, applied as mappings a later run will honour. */
+    @Post('match-decisions')
+    async applyMatchDecisions(@Tenant() tenant: TenantContext, @Body() dto: ApplyMatchDecisionsDto) {
+        await this.assertAllowed(tenant);
+        return this.matchService.applyDecisions(tenant.tenantId, dto);
     }
 
     @Get('providers')
