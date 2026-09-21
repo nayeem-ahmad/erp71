@@ -102,6 +102,44 @@ describe('SubscriptionAccessGuard', () => {
         await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
     });
 
+    it('refuses a never-activated workspace with PENDING_ACTIVATION, not a generic block', async () => {
+        // A workspace minutes old sits at PAST_DUE with nothing charged. Telling
+        // its owner their subscription is inactive explains nothing — the code is
+        // what lets the frontend send them to the activation screen instead.
+        metadataFor(undefined, 'premiumManufacturing');
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'PAST_DUE',
+            activated_at: null,
+            plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
+        });
+
+        await expect(guard.canActivate(makeContext())).rejects.toMatchObject({
+            response: { code: 'PENDING_ACTIVATION' },
+        });
+    });
+
+    it('keeps the plain dunning message for a workspace that lapsed after paying', async () => {
+        metadataFor(undefined, 'premiumManufacturing');
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'PAST_DUE',
+            activated_at: new Date('2026-01-01'),
+            plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
+        });
+
+        await expect(guard.canActivate(makeContext())).rejects.toThrow(
+            'This feature requires an active subscription.',
+        );
+    });
+
+    it('treats a tenant with no subscription row at all as pending activation', async () => {
+        metadataFor(undefined, 'premiumManufacturing');
+        db.tenantSubscription.findUnique.mockResolvedValue(null);
+
+        await expect(guard.canActivate(makeContext())).rejects.toMatchObject({
+            response: { code: 'PENDING_ACTIVATION' },
+        });
+    });
+
     it('keeps an add-on-granted feature alive while the plan is PAST_DUE', async () => {
         metadataFor(undefined, 'teamChat');
         db.tenantSubscription.findUnique.mockResolvedValue({

@@ -11,6 +11,8 @@ import { redirectTo } from '@/lib/browser';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell } from '@/components/ui';
 import { setWorkspaceItem } from '@/lib/session-store';
+import ActivationPanel from '@/components/activation/ActivationPanel';
+import type { ActivationStatus } from '@/lib/api';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -93,6 +95,11 @@ function BillingPageContent() {
     const [addonCatalog, setAddonCatalog] = useState<AddonCatalogItem[]>([]);
     const [myAddons, setMyAddons] = useState<MyAddonSubscription[]>([]);
     const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
+    // Null until `/activation/status` answers. A workspace that has never been
+    // paid for gets the activation panel here in place of the checkout block:
+    // with no gateway live, the checkout's only working button would be one that
+    // grants a paid plan for nothing.
+    const [activation, setActivation] = useState<ActivationStatus | null>(null);
 
     const loadSummary = async () => {
         setIsLoading(true);
@@ -116,6 +123,15 @@ function BillingPageContent() {
         }
     };
 
+    const loadActivation = async () => {
+        try {
+            setActivation(await api.getActivationStatus());
+        } catch {
+            // Leaves `activation` null, which falls back to the ordinary checkout
+            // block — the same page this showed before activation existed.
+        }
+    };
+
     const loadAddons = async () => {
         try {
             const [catalog, mine] = await Promise.all([
@@ -132,7 +148,17 @@ function BillingPageContent() {
     useEffect(() => {
         void loadSummary();
         void loadAddons();
+        void loadActivation();
     }, []);
+
+    /**
+     * After a payment is submitted, both halves of this page are stale: the panel
+     * has to flip to its waiting state, and the summary above it changes the
+     * moment an admin approves. Reloading both keeps them from disagreeing.
+     */
+    const reloadAfterActivation = async () => {
+        await Promise.all([loadActivation(), loadSummary()]);
+    };
 
     useEffect(() => {
         const paymentStatus = searchParams.get('paymentStatus');
@@ -356,7 +382,9 @@ function BillingPageContent() {
                                 </div>
                             )}
 
-                            {summary.can_manage_billing ? (
+                            {activation?.pending_activation ? (
+                                <ActivationPanel status={activation} onSubmitted={reloadAfterActivation} />
+                            ) : summary.can_manage_billing ? (
                                 <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
                                     <div className="flex items-center gap-2 text-blue-700">
                                         <BadgeCheck className="w-5 h-5" />
@@ -499,14 +527,20 @@ function BillingPageContent() {
                         </section>
 
                         <aside className="rounded-lg border border-gray-100 bg-white p-6 space-y-4 h-fit">
-                            <div>
-                                <p className="text-xs font-medium text-gray-500">{copy.checkoutContext}</p>
-                                <h3 className="mt-2 text-lg font-bold tracking-tight">{isSslProvider ? copy.hostedProvider : copy.manualSandbox}</h3>
-                                <p className="mt-2 text-sm text-gray-500">
-                                    {isSslProvider ? copy.hostedProviderDescription : copy.manualSandboxDescription}
-                                </p>
-                            </div>
+                            {/* Both of these describe the gateway plumbing, which says
+                                nothing to a workspace that has not been activated yet —
+                                the panel on the left is that customer's whole story. */}
+                            {!activation?.pending_activation && (
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500">{copy.checkoutContext}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight">{isSslProvider ? copy.hostedProvider : copy.manualSandbox}</h3>
+                                    <p className="mt-2 text-sm text-gray-500">
+                                        {isSslProvider ? copy.hostedProviderDescription : copy.manualSandboxDescription}
+                                    </p>
+                                </div>
+                            )}
 
+                            {!activation?.pending_activation && (
                             <div className="rounded-lg bg-gray-50 p-4 space-y-2 text-sm text-gray-600">
                                 <div className="flex items-center justify-between gap-3">
                                     <span className="font-semibold">{copy.reference}</span>
@@ -521,6 +555,7 @@ function BillingPageContent() {
                                     <span>{billingCycle}</span>
                                 </div>
                             </div>
+                            )}
 
                             {summary.billing_history && summary.billing_history.length > 0 && (
                                 <div className="rounded-lg border border-gray-100 p-4 space-y-3">
@@ -545,9 +580,11 @@ function BillingPageContent() {
                                 </div>
                             )}
 
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                {isSslProvider ? copy.sslCallbackNote : copy.manualWebhookNote}
-                            </div>
+                            {!activation?.pending_activation && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                    {isSslProvider ? copy.sslCallbackNote : copy.manualWebhookNote}
+                                </div>
+                            )}
                         </aside>
                     </div>
                 )}

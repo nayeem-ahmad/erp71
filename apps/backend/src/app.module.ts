@@ -57,6 +57,7 @@ import { SalesReportsModule } from './sales-reports/sales-reports.module';
 import { MushakModule } from './mushak/mushak.module';
 import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
 import { BillingModule } from './billing/billing.module';
+import { ActivationModule } from './activation/activation.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { ExternalSyncModule } from './external-sync/external-sync.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
@@ -198,6 +199,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         MushakModule,
         PurchaseReportsModule,
         BillingModule,
+        ActivationModule,
         AdminTenantsModule,
         ExternalSyncModule,
         WarrantyClaimsModule,
