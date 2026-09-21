@@ -6,8 +6,15 @@ export interface ParsedSpreadsheet {
     rows: Record<string, string>[];
 }
 
-/** Reads a .csv, .xlsx or .xls file in the browser. The first sheet wins. */
-export async function parseSpreadsheetFile(file: File): Promise<ParsedSpreadsheet> {
+/**
+ * Reads a .csv, .xlsx or .xls file in the browser.
+ *
+ * Without `sheetName` the first sheet wins, which is what every import dialog
+ * wants. Pass one to read a specific tab of a multi-sheet workbook — the match
+ * review workbook keeps one tab per entity, and silently reading only the first
+ * would drop the rest.
+ */
+export async function parseSpreadsheetFile(file: File, sheetName?: string): Promise<ParsedSpreadsheet> {
     const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : undefined;
     if (!ext || !['csv', 'xlsx', 'xls'].includes(ext)) {
         throw new Error(`Unsupported file type ".${ext ?? ''}". Please upload a .csv or .xlsx file.`);
@@ -28,9 +35,21 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedSpreadshee
 
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
+    const resolved = sheetName ?? wb.SheetNames[0];
+    const ws = wb.Sheets[resolved];
+    if (!ws) {
+        throw new Error(
+            `This file has no sheet named "${resolved}". It contains: ${wb.SheetNames.join(', ')}.`,
+        );
+    }
     const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' });
     return { headers: json.length > 0 ? Object.keys(json[0]) : [], rows: json };
+}
+
+/** The workbook's tab names, in order — for checking a file before parsing it. */
+export async function listSheetNames(file: File): Promise<string[]> {
+    const buffer = await file.arrayBuffer();
+    return XLSX.read(buffer, { type: 'array' }).SheetNames;
 }
 
 /** Guesses which spreadsheet header feeds which field, by label then by key. */

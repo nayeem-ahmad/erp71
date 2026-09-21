@@ -388,6 +388,10 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "جاری",
+        open: "ٹائم ٹریکر",
+        openTracker: "ٹریکر کھولیں",
+        noTask: "کوئی کام نہیں",
         start: "شروع",
         stop: "روکیں",
         elsewhere: "کسی اور کام پر ٹائمر پہلے سے چل رہا ہے",

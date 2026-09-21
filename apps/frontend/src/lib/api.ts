@@ -15,6 +15,7 @@ import type {
     RefereePayoutRequestStatus,
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
+import type { CandidateRow, MatchManifest } from '@/types/match';
 import { normalizeApiBase } from './api-base';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
@@ -3439,6 +3440,18 @@ export const api = {
         fetchWithAuth(`/tenants/external-sync/runs?limit=${limit}`),
     cancelMyExternalSyncRun: (runId: string): Promise<{ cancelling: boolean }> =>
         fetchWithAuth(`/tenants/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
+    /** Proposed matches for the review workbook. Reads the provider; writes nothing. */
+    getMyMatchCandidates: (provider?: string): Promise<{ manifest: MatchManifest; rows: CandidateRow[] }> =>
+        fetchWithAuth(`/tenants/external-sync/match-candidates${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
+    /** The reviewed workbook. Rejected whole if any row is untrustworthy. */
+    applyMyMatchDecisions: (payload: {
+        manifest: MatchManifest;
+        rows: { entity: string; externalId: string; decision: string; matchId?: string | null; altIds?: string[]; notes?: string }[];
+    }): Promise<{ applied: number; skipped: number }> => fetchWithAuth('/tenants/external-sync/match-decisions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),

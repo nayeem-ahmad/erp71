@@ -15,6 +15,7 @@ import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import AiChatWidget from '@/components/AiChatWidget';
 import TimeTracker from '@/components/projects/TimeTracker';
+import TimerChip from '@/components/projects/TimerChip';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
@@ -656,6 +657,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <LanguageSwitcher />
                         </div>
                         <AppHeaderMobileMenu />
+                        {canTrackTime && canRenderChildren ? <TimerChip /> : null}
                         {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                         {canAccessAiChat ? <AiChatWidget /> : null}
                         <ChatBell />

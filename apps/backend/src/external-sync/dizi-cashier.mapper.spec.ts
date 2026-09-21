@@ -78,7 +78,9 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
         expect(mapped.phone).toBe('5252');
         expect(mapped.ownerName).toBe('Mr Z');
         expect(mapped.address).toBe('Dhaka');
-        expect(mapped.previousDue).toBe(1410);
+        // Dizi's Balance is a *current* figure, not an opening one — see the
+        // dedicated describe block below for why it must not be carried over.
+        expect(mapped.previousDue).toBe(0);
         expect(mapped.creditLimit).toBeNull();
     });
 
@@ -290,5 +292,52 @@ describe('mapDiziSaleReturn', () => {
         );
         expect(mapped.externalSaleId).toBeNull();
         expect(mapped.items[0].refundAmount).toBe(100);
+    });
+});
+
+/**
+ * Express sends `previous_due`, a true opening balance for the period before
+ * the imported history. Dizi sends `Balance`, the party's *current* net
+ * position, which already reflects every sale and payment the import is about
+ * to replay.
+ *
+ * `applyOpeningBalance` hard-sets `due_balance` to the figure it is given and
+ * the replayed documents then move it again, so carrying Dizi's Balance over
+ * would leave roughly double the true debt for any party with history in the
+ * window. Zeroing it lets the balance build from the documents themselves,
+ * which is what a full-history import should produce.
+ */
+describe('Dizi opening balances are not carried over', () => {
+    it('zeroes previousDue for a customer with a current balance', () => {
+        const mapped = mapDiziCustomer(
+            { Id: 'c9', Name: 'Indebted Customer', Balance: 12500 } as any,
+            new Set<string>(),
+        );
+        expect(mapped.previousDue).toBe(0);
+    });
+
+    it('zeroes previousDue for a supplier with a current balance', () => {
+        const mapped = mapDiziSupplier(
+            { Id: 's9', Name: 'Owed Supplier', Balance: 8000 } as any,
+            new Set<string>(),
+        );
+        expect(mapped.previousDue).toBe(0);
+    });
+
+    it('zeroes a negative balance too (advance paid, not a credit to replay)', () => {
+        const mapped = mapDiziCustomer(
+            { Id: 'c10', Name: 'In Credit', Balance: -3000 } as any,
+            new Set<string>(),
+        );
+        expect(mapped.previousDue).toBe(0);
+    });
+
+    it('still maps the rest of the trader row', () => {
+        const mapped = mapDiziCustomer(
+            { Id: 'c11', Name: 'Someone', ContactNo: '01712345678', Balance: 500 } as any,
+            new Set<string>(),
+        );
+        expect(mapped.name).toBe('Someone');
+        expect(mapped.phone).toBe('01712345678');
     });
 });

@@ -388,6 +388,10 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: 'Running',
+        open: 'Time tracker',
+        openTracker: 'open tracker',
+        noTask: 'No task',
         start: 'Start',
         stop: 'Stop',
         elsewhere: 'A timer is already running on another task',

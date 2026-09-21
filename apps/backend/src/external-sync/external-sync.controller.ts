@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { ExternalSyncMatchService } from './external-sync.match.service';
 import { ExternalSyncService } from './external-sync.service';
+import { ApplyMatchDecisionsDto } from './external-sync.match.dto';
 import {
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
@@ -17,7 +19,25 @@ import {
 @Controller('admin/tenants/:tenantId/external-sync')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class ExternalSyncController {
-    constructor(private readonly externalSyncService: ExternalSyncService) {}
+    constructor(
+        private readonly externalSyncService: ExternalSyncService,
+        private readonly matchService: ExternalSyncMatchService,
+    ) {}
+
+    /**
+     * The review workbook's contents: one row per provider record, with the
+     * tenant record it most likely already is. Reads only.
+     */
+    @Get('match-candidates')
+    getMatchCandidates(@Param('tenantId') tenantId: string, @Query('provider') provider?: string) {
+        return this.matchService.getCandidates(tenantId, provider);
+    }
+
+    /** The reviewed workbook, applied as mappings a later run will honour. */
+    @Post('match-decisions')
+    applyMatchDecisions(@Param('tenantId') tenantId: string, @Body() dto: ApplyMatchDecisionsDto) {
+        return this.matchService.applyDecisions(tenantId, dto);
+    }
 
     /** The external ERPs a connection can be created against. */
     @Get('providers')
