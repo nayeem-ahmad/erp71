@@ -19,6 +19,7 @@ import {
     MinLength,
     ValidateIf,
 } from 'class-validator';
+import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
 
 export enum ProjectStatusDto {
     DRAFT = 'DRAFT',
@@ -110,6 +111,18 @@ export class ListProjectsDto {
 export class CreateProjectDto {
     @IsString() @MinLength(1) @MaxLength(200)
     name!: string;
+
+    /**
+     * The project's short key, which task keys are built from — `ERP-14`.
+     * Generated as `PRJ-0001` when omitted. Changing it retires the old code
+     * to history rather than breaking every key already shared.
+     */
+    @IsOptional()
+    @IsString()
+    @Matches(PROJECT_CODE_PATTERN, {
+        message: 'code must be 2–12 characters, upper-case, starting with a letter (A–Z, 0–9 and - only)',
+    })
+    code?: string;
 
     /** Shown wherever the full name will not fit — a board card, a chip. */
     @IsOptional() @IsString() @MaxLength(20)
