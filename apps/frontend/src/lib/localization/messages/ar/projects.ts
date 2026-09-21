@@ -180,6 +180,24 @@ export const projectsMessages = {
         titleRequired: 'أعطِ القصة عنوانًا.',
     },
 
+    /**
+     * The cross-project backlog at /projects/stories. Its own block rather than
+     * more keys on `stories`, which belongs to the card on the project page —
+     * the same split `tasks` already makes against the per-project task table.
+     */
+    storyList: {
+        title: "قصص المستخدم",
+        subtitle: "كل قصة في كل مشروع",
+        empty: "لا توجد قصص مستخدم بعد. افتح مشروعًا لكتابة أول قصة.",
+        emptyFiltered: "لا توجد قصص تطابق عوامل التصفية هذه.",
+        searchPlaceholder: "ابحث في عناوين القصص أو ما تطلبه",
+        allProjects: "كل المشاريع",
+        anyStatus: "أي حالة",
+        anyPriority: "أي أولوية",
+        story: "قصة",
+        openInProject: "افتح في مشروعها",
+    },
+
     task: {
         title: "المهمة",
         newTask: "مهمة جديدة",
@@ -370,6 +388,10 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "قيد التشغيل",
+        open: "متتبّع الوقت",
+        openTracker: "فتح المتتبّع",
+        noTask: "بلا مهمة",
         start: "بدء",
         stop: "إيقاف",
         elsewhere: "هناك مؤقّت يعمل بالفعل على مهمة أخرى",

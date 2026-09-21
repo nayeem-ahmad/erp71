@@ -223,6 +223,10 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
   'projects.boards': { id: 'projects.boards', kind: 'link', icon: 'KanbanSquare', labelKey: 'sidebar.items.projectsBoards', href: '/projects/boards' },
   'projects.tasks': { id: 'projects.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsTasks', href: '/projects/tasks' },
+  // The cross-project backlog. The per-project one lives on the project page
+  // and always will — this is the same rows read the other way round, for
+  // whoever grooms scope across every project at once rather than one.
+  'projects.stories': { id: 'projects.stories', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.projectsStories', href: '/projects/stories' },
   'projects.sprints': { id: 'projects.sprints', kind: 'link', icon: 'Timer', labelKey: 'sidebar.items.projectsSprints', href: '/projects/sprints' },
   // `exact` because the report sits under /projects/hour-logs; without it both entries light up at once.
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
@@ -317,6 +321,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.tenant-management.tenants': { id: 'admin.tenant-management.tenants', kind: 'link', icon: 'Building2', labelKey: 'sidebar.items.tenants', href: '/admin/tenants' },
   'admin.tenant-management.ledger': { id: 'admin.tenant-management.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.tenantLedger', href: '/admin/tenants/ledger' },
   'admin.tenant-management.reminders': { id: 'admin.tenant-management.reminders', kind: 'link', icon: 'BellRing', labelKey: 'sidebar.items.tenantReminders', href: '/admin/tenants/reminders' },
+  // Payments a workspace says it sent, queued for a human to check against the
+  // bKash/Nagad merchant app. Sits beside the ledger it posts into once approved.
+  'admin.tenant-management.activation-requests': { id: 'admin.tenant-management.activation-requests', kind: 'link', icon: 'ShieldCheck', labelKey: 'sidebar.items.activationRequests', href: '/admin/activation-requests' },
   // The platform's own books, in the admin console. Hidden unless the
   // `platformAccounting` switch is on — like `projects` under platform-admin,
   // this is the operator's own tooling rather than anything a shop is sold.
@@ -383,6 +390,12 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
  * `npx tsx prisma/sync-nav-layout.ts --nodes=storefront,storefront.orders,storefront.pages,storefront.menu,storefront.blog,storefront.settings`
  * and then needs a reset from Navigation settings to drop the old placements,
  * since `addNavNodesToLayout` adds but never reparents.
+ *
+ * The 2026-09-20 cross-project backlog added `projects.stories`. It is a new
+ * leaf under an existing module, so a saved layout takes it with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.stories`
+ * and needs no reset — the `sortOrder` shuffle below only reorders this default,
+ * and a saved layout keeps whatever order its admin arranged.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -520,10 +533,11 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.sprints', 'projects', 3),
-  layoutNode('projects.hour-logs', 'projects', 4),
-  layoutNode('projects.hour-log-report', 'projects', 5),
-  layoutNode('projects.setup', 'projects', 6),
+  layoutNode('projects.stories', 'projects', 3),
+  layoutNode('projects.sprints', 'projects', 4),
+  layoutNode('projects.hour-logs', 'projects', 5),
+  layoutNode('projects.hour-log-report', 'projects', 6),
+  layoutNode('projects.setup', 'projects', 7),
 
   layoutNode('manufacturing', null, 10),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -571,8 +585,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
-  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
-  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
+  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 3),
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
@@ -605,6 +620,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
  * The 2026-09-02 platform project workspace added the `projects` module and its
  * seven links here. For a saved layout:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects,projects.list,projects.boards,projects.tasks,projects.sprints,projects.hour-logs,projects.hour-log-report,projects.setup`
+ * and, from 2026-09-20, `projects.stories` alongside them — the same one node
+ * the tenant layout takes, since one set of pages serves both consoles.
  */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
@@ -612,8 +629,9 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
-  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
-  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
+  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 3),
 
   // Directly under Tenant Management: the books are read alongside the tenant
   // ledger they are projected from, not filed away under Platform.
@@ -663,10 +681,11 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.sprints', 'projects', 3),
-  layoutNode('projects.hour-logs', 'projects', 4),
-  layoutNode('projects.hour-log-report', 'projects', 5),
-  layoutNode('projects.setup', 'projects', 6),
+  layoutNode('projects.stories', 'projects', 3),
+  layoutNode('projects.sprints', 'projects', 4),
+  layoutNode('projects.hour-logs', 'projects', 5),
+  layoutNode('projects.hour-log-report', 'projects', 6),
+  layoutNode('projects.setup', 'projects', 7),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

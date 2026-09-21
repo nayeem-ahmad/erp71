@@ -10,9 +10,11 @@ import {
     GitBranch,
     GripVertical,
     MessageSquare,
+    Play,
     Plus,
     Search,
     Settings,
+    Square,
     Trash2,
     X,
 } from 'lucide-react';
@@ -76,6 +78,9 @@ import {
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
+import { useIsTimerRunningFor } from '@/components/projects/TimerChip';
+import { useProjectTimerActions } from '@/components/projects/use-project-timer';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -1399,6 +1404,13 @@ function TaskCard({
     const { t, locale } = useI18n();
     const c = t.projects.board.card;
     const m = t.projects.boards;
+    const tm = t.projects.timer;
+
+    // Straight from the shared store, so the card, the header chip and the
+    // tracker cannot disagree about what is running.
+    const timerRunning = useIsTimerRunningFor(task.id);
+    const timerBusy = useProjectTimerStore((state) => state.busy);
+    const { start: startTimer, stop: stopTimer } = useProjectTimerActions();
 
     const d = density(view);
     const show = view.fields;
@@ -1461,7 +1473,14 @@ function TaskCard({
             // container before it will overflow it, so without this forty cards
             // squeeze into one screen of column instead of scrolling inside it.
             className={`group shrink-0 touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
-                selected ? 'border-blue-500 ring-1 ring-blue-300' : 'border-gray-200'
+                // Selection is a thing you are doing to the card; a running
+                // clock is a thing happening on it, and outlives navigating
+                // away — so it wins the border when both are true.
+                timerRunning
+                    ? 'border-emerald-500 ring-1 ring-emerald-300'
+                    : selected
+                      ? 'border-blue-500 ring-1 ring-blue-300'
+                      : 'border-gray-200'
             } ${dragging ? 'opacity-40' : ''} ${motionClass(view, 'card')}`}
         >
             {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}
@@ -1522,6 +1541,32 @@ function TaskCard({
                         </p>
                     )}
                 </div>
+                {/* Starting the clock without opening the card. Stays visible
+                    while it runs, where the other hover actions fade out —
+                    stopping has to be as reachable as starting was. */}
+                <button
+                    type="button"
+                    aria-label={timerRunning ? tm.stop : tm.start}
+                    title={timerRunning ? tm.stop : tm.start}
+                    tabIndex={-1}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        void (timerRunning ? stopTimer() : startTimer({ taskId: task.id, tagIds: [] }));
+                    }}
+                    disabled={timerBusy}
+                    className={`max-md:min-h-touch max-md:min-w-touch -me-0.5 rounded px-1 transition-opacity disabled:opacity-40 ${
+                        timerRunning
+                            ? 'text-emerald-600 hover:text-emerald-700'
+                            : 'text-gray-300 hover:text-emerald-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'
+                    }`}
+                >
+                    {timerRunning ? (
+                        <Square className="h-3.5 w-3.5" />
+                    ) : (
+                        <Play className="h-3.5 w-3.5" />
+                    )}
+                </button>
                 <button
                     type="button"
                     aria-label={m.removeCard}
@@ -1551,6 +1596,21 @@ function TaskCard({
                             {label.name}
                         </span>
                     ))}
+                </div>
+            )}
+
+            {/* Its own row, not folded into the badges above: those are hidden
+                by a board-view preference, and a clock somebody has running
+                should not be switchable off. */}
+            {timerRunning && (
+                <div className={`${d.row} flex items-center gap-1.5`}>
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        </span>
+                        {tm.running}
+                    </span>
                 </div>
             )}
 

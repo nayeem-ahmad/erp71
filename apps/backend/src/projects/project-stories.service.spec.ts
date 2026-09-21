@@ -212,6 +212,40 @@ describe('ProjectStoriesService', () => {
                 expect.arrayContaining([{ OR: ownTaskOr('user-9') }]),
             );
         });
+
+        it('narrows to one priority when asked, and to none when not', async () => {
+            await service.list(OWNER, { priority: 'URGENT' } as never);
+            expect(db.projectUserStory.findMany.mock.calls[0][0].where).toMatchObject({
+                priority: 'URGENT',
+            });
+
+            await service.list(OWNER, {} as never);
+            // Absent rather than undefined: a `priority: undefined` key reaches
+            // Prisma as a filter on nothing and is easy to read as intentional.
+            expect(db.projectUserStory.findMany.mock.calls[1][0].where).not.toHaveProperty('priority');
+        });
+
+        it('groups a cross-project list by project, keeping each backlog in its own order', async () => {
+            await service.list(OWNER, {} as never);
+
+            // Without the project key first this interleaves every project's
+            // US-1, then every project's US-2 — `sort_order` is only meaningful
+            // within one backlog.
+            expect(db.projectUserStory.findMany.mock.calls[0][0].orderBy).toEqual([
+                { project: { code: 'asc' } },
+                { sort_order: 'asc' },
+                { reference: 'asc' },
+            ]);
+        });
+
+        it('leaves one project’s backlog in the order somebody arranged it', async () => {
+            await service.list(OWNER, { projectId: 'project-1' } as never);
+
+            expect(db.projectUserStory.findMany.mock.calls[0][0].orderBy).toEqual([
+                { sort_order: 'asc' },
+                { reference: 'asc' },
+            ]);
+        });
     });
 
     describe('remove', () => {

@@ -15,6 +15,7 @@ import type {
     RefereePayoutRequestStatus,
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
+import type { CandidateRow, MatchManifest } from '@/types/match';
 import { normalizeApiBase } from './api-base';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
@@ -76,6 +77,53 @@ export type AdminTenantAddonSubscription = {
     current_period_start: string;
     current_period_end: string;
     cancel_at_period_end: boolean;
+};
+
+/** How a workspace can pay for its first period while no gateway is live. */
+export type ActivationPaymentMethod = 'BKASH' | 'NAGAD' | 'BANK_TRANSFER';
+
+export type ActivationRequestRecord = {
+    id: string;
+    method: ActivationPaymentMethod;
+    transaction_id: string;
+    sender_number: string | null;
+    amount: number;
+    note: string | null;
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    plan_code: string;
+    billing_cycle: string;
+    /** The admin's reason, shown verbatim when a submission was rejected. */
+    review_note: string | null;
+    reviewed_at: string | null;
+    created_at: string;
+};
+
+/**
+ * What the activation screen renders. `pending_activation` is the one field the
+ * shell branches on: true means this workspace has never been paid for, which is
+ * a different state from a paying tenant that fell behind.
+ */
+export type ActivationStatus = {
+    pending_activation: boolean;
+    /** Whether *this* member may submit a payment, as opposed to only read the screen. */
+    can_submit: boolean;
+    subscription_status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING' | null;
+    plan: { code: string; name: string } | null;
+    billing_cycle: string;
+    amount_due: number | null;
+    setup_fee: number | null;
+    currency: string;
+    instructions: {
+        methods: ActivationPaymentMethod[];
+        bkash_number: string | null;
+        nagad_number: string | null;
+        bank_details: string | null;
+        support_phone: string | null;
+        support_whatsapp: string | null;
+        sla_hours: number;
+        extra_instructions: string | null;
+    };
+    latest_request: ActivationRequestRecord | null;
 };
 
 const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
@@ -3161,6 +3209,39 @@ export const api = {
     cancelBillingAtPeriodEnd: () => fetchWithAuth('/billing/cancel-at-period-end', {
         method: 'POST',
     }),
+
+    // ── Manual activation ──────────────────────────────────────────────────────
+    // The path a workspace takes from signup to working while no payment gateway
+    // is live: it is told what it owes and where to send it, submits the bKash or
+    // Nagad transaction, and the platform team verifies and activates.
+    getActivationStatus: (): Promise<ActivationStatus> => fetchWithAuth('/activation/status'),
+    submitActivationRequest: (data: {
+        method: ActivationPaymentMethod;
+        transactionId: string;
+        senderNumber?: string;
+        amount: number;
+        note?: string;
+    }) => fetchWithAuth('/activation/requests', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getAdminActivationRequests: (params?: { status?: 'PENDING' | 'VERIFIED' | 'REJECTED' }) => {
+        const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : '';
+        return fetchWithAuth(`/admin/activation-requests${query}`);
+    },
+    approveActivationRequest: (id: string, data: { amount?: number; note?: string }) =>
+        fetchWithAuth(`/admin/activation-requests/${id}/approve`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    rejectActivationRequest: (id: string, data: { reason: string }) =>
+        fetchWithAuth(`/admin/activation-requests/${id}/reject`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSmsCreditSummary: () => fetchWithAuth('/sms-credits/summary'),
     purchaseSmsCredits: (data: { packageId: string }) => fetchWithAuth('/sms-credits/purchase', {
         method: 'POST',
@@ -3359,6 +3440,18 @@ export const api = {
         fetchWithAuth(`/tenants/external-sync/runs?limit=${limit}`),
     cancelMyExternalSyncRun: (runId: string): Promise<{ cancelling: boolean }> =>
         fetchWithAuth(`/tenants/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
+    /** Proposed matches for the review workbook. Reads the provider; writes nothing. */
+    getMyMatchCandidates: (provider?: string): Promise<{ manifest: MatchManifest; rows: CandidateRow[] }> =>
+        fetchWithAuth(`/tenants/external-sync/match-candidates${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
+    /** The reviewed workbook. Rejected whole if any row is untrustworthy. */
+    applyMyMatchDecisions: (payload: {
+        manifest: MatchManifest;
+        rows: { entity: string; externalId: string; decision: string; matchId?: string | null; altIds?: string[]; notes?: string }[];
+    }): Promise<{ applied: number; skipped: number }> => fetchWithAuth('/tenants/external-sync/match-decisions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),
@@ -4985,10 +5078,12 @@ export const api = {
 
     /**
      * User stories. `projectId` is optional on the list — omitted returns every
-     * story the caller can reach — but every screen that has a project passes
-     * one, because a backlog is read one project at a time.
+     * story the caller can reach, which is what the cross-project backlog at
+     * `/projects/stories` asks for; the card on a project page always passes one.
      */
-    getProjectStories: (params: { projectId?: string; status?: string; search?: string } = {}) => {
+    getProjectStories: (
+        params: { projectId?: string; status?: string; priority?: string; search?: string } = {},
+    ) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
             if (value) query.set(key, String(value));

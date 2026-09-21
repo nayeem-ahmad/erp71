@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
 import BoardPage from './page';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { api, ApiError } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { COLUMN_ATTR } from '@/components/projects/board-drag';
@@ -53,6 +54,10 @@ jest.mock('@/lib/api', () => {
             setBoardColumnCardOrder: jest.fn(),
             getMe: jest.fn(),
             getProject: jest.fn(),
+            // The card can start and stop the one running clock.
+            getProjectTimer: jest.fn(),
+            startProjectTimer: jest.fn(),
+            stopProjectTimer: jest.fn(),
         },
     };
 });
@@ -1282,5 +1287,79 @@ describe('BoardPage', () => {
             await waitFor(() => expect(screen.getByLabelText('Priority')).toHaveValue('HIGH'));
             expect(screen.getByLabelText('Search cards')).toHaveValue('');
         });
+    });
+});
+
+describe('the clock on a card', () => {
+    beforeEach(() => {
+        (api.getBoard as jest.Mock).mockReset().mockResolvedValue({
+            id: 'b1',
+            name: 'Release 4',
+            columns: [
+                {
+                    id: 'c1',
+                    name: 'To Do',
+                    category: 'TODO',
+                    wip_limit: null,
+                    tasks: [task('k1', 'Fix login', { id: 'p1', code: 'ALP' })],
+                },
+            ],
+            unsorted: [],
+        });
+        (api.getProjectLabels as jest.Mock).mockResolvedValue([]);
+        (api.getProjects as jest.Mock).mockResolvedValue({ items: [] });
+        (api.getMe as jest.Mock).mockResolvedValue({ id: 'u1' });
+        (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
+        (api.startProjectTimer as jest.Mock).mockResolvedValue({});
+        (api.stopProjectTimer as jest.Mock).mockResolvedValue({});
+        useProjectTimerStore.setState({ timer: null, loaded: true, busy: false, open: false });
+    });
+
+    it('starts a timer without opening the card', async () => {
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+        await waitFor(() =>
+            expect(api.startProjectTimer).toHaveBeenCalledWith({ taskId: 'k1', tagIds: [] }),
+        );
+        // The card did not open behind the click.
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('marks the card the clock is running on', async () => {
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 'k1' }, elapsed_seconds: 5 } as never,
+            loaded: true,
+        });
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+
+        expect(screen.getByText('Running')).toBeInTheDocument();
+    });
+
+    it('leaves other cards unmarked', async () => {
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 'somewhere-else' }, elapsed_seconds: 5 } as never,
+            loaded: true,
+        });
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+
+        expect(screen.queryByText('Running')).not.toBeInTheDocument();
+    });
+
+    it('offers to stop the clock it is running', async () => {
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 'k1' }, elapsed_seconds: 5 } as never,
+            loaded: true,
+        });
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+        await waitFor(() => expect(api.stopProjectTimer).toHaveBeenCalled());
     });
 });

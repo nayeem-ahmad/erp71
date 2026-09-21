@@ -85,29 +85,31 @@ export class BillingService {
         };
     }
 
-    async createCheckoutSession(ctx: TenantContext, dto: CreateCheckoutSessionDto) {
-        const membership = await this.requireTenantMembership(ctx.userId, ctx.tenantId);
-        await this.assertBillingAccess(ctx);
-
-        if (dto.planCode === 'FREE') {
-            throw new BadRequestException('The free plan is not available.');
-        }
-        if (isComingSoonSubscriptionPlan(dto.planCode)) {
-            throw new BadRequestException('The Premium plan is coming soon and is not available for checkout.');
-        }
-        if (!isSelfServeSubscriptionPlan(dto.planCode)) {
-            throw new BadRequestException('Selected subscription plan is not available.');
-        }
-
-        const billingCycle = this.normalizeBillingCycle(dto.billingCycle);
-        const plan = await this.getActivePlan(dto.planCode);
+    /**
+     * What this tenant owes to start (or restart) a subscription: the plan price
+     * for the cycle, both discounts that apply to it, any add-ons, and the
+     * one-time setup fee when it has not been collected yet.
+     *
+     * Extracted from `createCheckoutSession` so the manual activation flow can
+     * quote the identical figure without opening a checkout session. It must
+     * stay side-effect free: the screen that shows a price and the admin who
+     * approves the payment both read it, and neither is a purchase.
+     */
+    async quoteSubscriptionAmount(input: {
+        tenantId: string;
+        planCode: PlanCode;
+        billingCycle?: BillingCycle;
+        addonCodes?: string[];
+    }) {
+        const billingCycle = this.normalizeBillingCycle(input.billingCycle);
+        const plan = await this.getActivePlan(input.planCode);
         let planAmount = billingCycle === 'YEARLY'
             ? Number(plan.yearly_price ?? Number(plan.monthly_price) * 12)
             : Number(plan.monthly_price);
 
         // Apply referral discount if this tenant was referred (plan price only — add-ons are excluded)
         const referralSignup = await this.db.referralSignup.findUnique({
-            where: { tenant_id: ctx.tenantId },
+            where: { tenant_id: input.tenantId },
             select: { id: true, discount_pct: true, status: true },
         });
         if (referralSignup && referralSignup.status === 'PENDING' && Number(referralSignup.discount_pct) > 0) {
@@ -124,7 +126,7 @@ export class BillingService {
         // first, then the admin discount, so a FIXED grant means the same taka
         // off whatever the referral left.
         const existingSubscription = await this.db.tenantSubscription.findUnique({
-            where: { tenant_id: ctx.tenantId },
+            where: { tenant_id: input.tenantId },
             select: { discount_type: true, discount_value: true, setup_fee_paid_at: true },
         });
         if (existingSubscription) {
@@ -137,8 +139,8 @@ export class BillingService {
             );
         }
 
-        const addons = dto.addonCodes?.length
-            ? await this.addonModules.getActiveAddonsByCodes(dto.addonCodes)
+        const addons = input.addonCodes?.length
+            ? await this.addonModules.getActiveAddonsByCodes(input.addonCodes)
             : [];
         const addonLineItems = addons.map((addon) => ({
             code: addon.code,
@@ -175,6 +177,37 @@ export class BillingService {
         const amount = planAmount
             + addonLineItems.reduce((sum, item) => sum + item.price, 0)
             + setupFee;
+
+        return { plan, billingCycle, planAmount, addonLineItems, setupFee, amount };
+    }
+
+    async createCheckoutSession(ctx: TenantContext, dto: CreateCheckoutSessionDto) {
+        const membership = await this.requireTenantMembership(ctx.userId, ctx.tenantId);
+        await this.assertBillingAccess(ctx);
+
+        if (dto.planCode === 'FREE') {
+            throw new BadRequestException('The free plan is not available.');
+        }
+        if (isComingSoonSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('The Premium plan is coming soon and is not available for checkout.');
+        }
+        if (!isSelfServeSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('Selected subscription plan is not available.');
+        }
+
+        const {
+            plan,
+            billingCycle,
+            planAmount,
+            addonLineItems,
+            setupFee,
+            amount,
+        } = await this.quoteSubscriptionAmount({
+            tenantId: ctx.tenantId,
+            planCode: dto.planCode,
+            billingCycle: dto.billingCycle,
+            addonCodes: dto.addonCodes,
+        });
 
         const providerName = this.getProviderName();
         const referencePrefix = providerName === 'ssl-wireless' ? 'sslw' : 'manual';
@@ -226,9 +259,24 @@ export class BillingService {
         return { ...checkout, addons: addonLineItems };
     }
 
+    /**
+     * Mark a checkout paid without a gateway callback.
+     *
+     * This grants an ACTIVE subscription on the tenant's own say-so, which is
+     * only ever acceptable against a sandbox. With the manual provider — what a
+     * deployment with no gateway credentials falls back to — it is a button that
+     * hands the caller a paid plan for nothing, so it is refused outside
+     * development. A real deployment activates through the SSL Wireless callback
+     * or, while no gateway is live, through an admin approving an
+     * ActivationRequest against money they can see in the merchant app.
+     *
+     * `BILLING_ALLOW_MANUAL_CONFIRM=true` re-opens it for a staging box that
+     * needs to exercise the path without gateway credentials.
+     */
     async confirmCheckout(ctx: TenantContext, dto: ConfirmCheckoutDto) {
         await this.requireTenantMembership(ctx.userId, ctx.tenantId);
         await this.assertBillingAccess(ctx);
+        this.assertManualConfirmAllowed();
 
         if (dto.planCode === 'FREE') {
             throw new BadRequestException('The free plan is not available.');
@@ -537,10 +585,20 @@ export class BillingService {
 
         const priorSubscription = await this.db.tenantSubscription.findUnique({
             where: { tenant_id: input.tenantId },
-            select: { setup_fee_paid_at: true },
+            select: { setup_fee_paid_at: true, activated_at: true },
         });
         const existingSetupFeePaidAt = priorSubscription?.setup_fee_paid_at ?? null;
         const activationTime = periodStart;
+        const resolvedStatusForRow = input.status ?? 'ACTIVE';
+        // Only an ACTIVE outcome is an activation. `setup_fee_paid_at` above is
+        // stamped whatever the status resolves to — a known wrinkle tracked in
+        // TODO.md — and copying that here would tell a workspace that failed its
+        // first payment it had been activated, which is the one thing this
+        // column exists to answer. Kept with `??` for the same reason the fee
+        // stamp is: a re-subscribe after a lapse must not move the original date.
+        const existingActivatedAt = priorSubscription?.activated_at ?? null;
+        const nextActivatedAt = existingActivatedAt
+            ?? (resolvedStatusForRow === 'ACTIVE' || resolvedStatusForRow === 'TRIALING' ? activationTime : null);
 
         const subscription = await this.db.tenantSubscription.upsert({
             where: { tenant_id: input.tenantId },
@@ -561,6 +619,7 @@ export class BillingService {
                 // assignment so a re-subscribe after a lapse leaves the original
                 // date — and therefore the "already paid" answer — intact.
                 setup_fee_paid_at: existingSetupFeePaidAt ?? activationTime,
+                activated_at: nextActivatedAt,
             },
             create: {
                 tenant_id: input.tenantId,
@@ -574,6 +633,7 @@ export class BillingService {
                 provider_customer_ref: input.providerCustomerRef ?? `tenant_${input.tenantId}`,
                 provider_subscription_ref: input.providerSubscriptionRef ?? `manual_${input.tenantId}`,
                 setup_fee_paid_at: activationTime,
+                activated_at: nextActivatedAt,
             },
             include: { plan: true },
         });
@@ -586,7 +646,7 @@ export class BillingService {
             { planCode: input.planCode, status: input.status ?? 'ACTIVE', providerName: input.providerName },
         ).catch(() => {});
 
-        const resolvedStatus = input.status ?? 'ACTIVE';
+        const resolvedStatus = resolvedStatusForRow;
 
         if (resolvedStatus === 'ACTIVE' && input.addonCodes?.length) {
             const addons = await this.addonModules.getActiveAddonsByCodes(input.addonCodes);
@@ -789,6 +849,27 @@ export class BillingService {
             currency: event.currency,
             created_at: event.created_at,
         }));
+    }
+
+    /**
+     * Refuses a self-serve confirmation that no gateway stands behind.
+     *
+     * Keyed on the provider rather than the environment alone: with SSL Wireless
+     * configured, `confirmCheckout` is reconciling a session the gateway already
+     * took money for, and that stays open everywhere.
+     */
+    private assertManualConfirmAllowed(): void {
+        if (this.getProviderName() !== 'manual') return;
+
+        const explicitlyAllowed = process.env.BILLING_ALLOW_MANUAL_CONFIRM === 'true';
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (explicitlyAllowed || !isProduction) return;
+
+        throw new ForbiddenException({
+            code: 'MANUAL_CONFIRM_DISABLED',
+            message:
+                'Online payment is not available yet. Submit your bKash or Nagad transaction on the billing page and our team will activate your workspace.',
+        });
     }
 
     private getProviderName(): BillingProviderName {

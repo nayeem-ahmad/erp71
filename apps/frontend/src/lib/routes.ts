@@ -203,6 +203,17 @@ export const routes = {
         // A card is normally a modal opened from a list or a board. This is the
         // same card as a page, so a link to one task can be pasted somewhere.
         taskDetail: (id: string) => `/projects/tasks/${id}` as const,
+        // Every project's backlog on one screen. A story still belongs to one
+        // project and is edited on that project's page; this is the read across
+        // all of them.
+        stories: '/projects/stories',
+        /**
+         * A story opened on the page that owns it. The cross-project list links
+         * here rather than to a story route of its own: a story is edited in one
+         * place, beside the rest of its project's backlog.
+         */
+        storyInProject: (projectId: string, storyId: string) =>
+            `/projects/${projectId}?story=${storyId}` as const,
         sprints: '/projects/sprints',
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
@@ -289,6 +300,9 @@ export const routes = {
         tenantDetail: (tenantId: string) => `/admin/tenants/${tenantId}`,
         tenantPayments: '/admin/tenants/payments',
         tenantLedger: '/admin/tenants/ledger',
+        // Payments submitted by workspaces awaiting their first activation,
+        // queued for a human to check against the bKash/Nagad merchant app.
+        activationRequests: '/admin/activation-requests',
         users: '/admin/users',
         // The platform's own books. Deliberately `/admin/accounting`, not a
         // second entrance to `/accounting` — that one is a shop's ledger and

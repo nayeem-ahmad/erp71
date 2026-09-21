@@ -180,6 +180,24 @@ export const projectsMessages = {
         titleRequired: 'Give the story a title.',
     },
 
+    /**
+     * The cross-project backlog at /projects/stories. Its own block rather than
+     * more keys on `stories`, which belongs to the card on the project page —
+     * the same split `tasks` already makes against the per-project task table.
+     */
+    storyList: {
+        title: 'User stories',
+        subtitle: 'Every story across every project',
+        empty: 'No user stories yet. Open a project to write the first one.',
+        emptyFiltered: 'No stories match these filters.',
+        searchPlaceholder: 'Search a story title or what it asks for',
+        allProjects: 'All projects',
+        anyStatus: 'Any status',
+        anyPriority: 'Any priority',
+        story: 'Story',
+        openInProject: 'Open in its project',
+    },
+
     task: {
         title: 'Task',
         newTask: 'New Task',
@@ -370,6 +388,10 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: 'Running',
+        open: 'Time tracker',
+        openTracker: 'open tracker',
+        noTask: 'No task',
         start: 'Start',
         stop: 'Stop',
         elsewhere: 'A timer is already running on another task',

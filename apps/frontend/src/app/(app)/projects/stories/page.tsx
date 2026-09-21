@@ -1,0 +1,311 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { PageShell, PageHeader, Input, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import DataTable from '@/components/data-table/DataTable';
+import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { useI18n } from '@/lib/i18n';
+import { routes } from '@/lib/routes';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+
+/**
+ * Every project's backlog on one screen.
+ *
+ * The per-project card on `/projects/[id]` stays the place a story is written
+ * and edited; this is the same rows read the other way round, for whoever
+ * grooms scope across projects rather than inside one. So there is no form
+ * here — a row links to the story on the page that owns it, which keeps one
+ * editor for stories rather than a second copy of the same four fields.
+ */
+
+interface StoryRow {
+    id: string;
+    reference: number;
+    title: string;
+    i_want?: string | null;
+    status: string;
+    priority: string;
+    story_points?: number | null;
+    project?: { id: string; code: string; name: string; short_name?: string | null } | null;
+    progress?: { taskCount: number; doneTaskCount: number; percentComplete: number };
+}
+
+/** Matches `ProjectStoriesCard`, so a story reads the same in both places. */
+const STATUS_TONE: Record<string, StatusBadgeTone> = {
+    BACKLOG: 'neutral',
+    READY: 'info',
+    IN_PROGRESS: 'info',
+    DONE: 'success',
+};
+
+const PRIORITY_TONE: Record<string, StatusBadgeTone> = {
+    LOW: 'neutral',
+    MEDIUM: 'neutral',
+    HIGH: 'warning',
+    URGENT: 'danger',
+};
+
+const STATUSES = ['BACKLOG', 'READY', 'IN_PROGRESS', 'DONE'] as const;
+const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
+
+export default function ProjectStoriesPage() {
+    const { t, fmt } = useI18n();
+    const m = t.projects;
+
+    const [stories, setStories] = useState<StoryRow[]>([]);
+    const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    /**
+     * Remembered for the tab, like the sprint and task lists: opening a story in
+     * its project and coming back returns to the slice it was opened from.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('project-stories', {
+        search: '',
+        projectId: '',
+        status: '',
+        priority: '',
+    });
+    const { search, projectId, status, priority } = filters;
+
+    const load = useCallback(async () => {
+        // Nothing is asked for until the remembered filters are in, or a return
+        // visit fetches every story and then the remembered slice, painting the
+        // wrong list in between.
+        if (!filtersReady) return;
+        setLoading(true);
+        try {
+            // The three dropdowns go to the server: each is one deliberate
+            // change, and `projectId` in particular is the access-scoped one.
+            // Search stays local — see `filtered`.
+            const list = await api.getProjectStories({
+                projectId: projectId || undefined,
+                status: status || undefined,
+                priority: priority || undefined,
+            });
+            setStories(Array.isArray(list) ? (list as StoryRow[]) : []);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.stories.loadFailed);
+        } finally {
+            setLoading(false);
+        }
+    }, [filtersReady, m.stories.loadFailed, priority, projectId, status]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    useEffect(() => {
+        api.getProjects({ limit: 100 })
+            .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
+            .catch(() => setProjects([]));
+    }, []);
+
+    /**
+     * Search is applied here rather than sent, over the same two fields the
+     * endpoint searches. The list is unpaginated, so a round trip per keystroke
+     * would fetch the very rows already in hand in order to filter them
+     * remotely; this keeps typing instant and the result identical.
+     */
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return stories;
+        return stories.filter(
+            (story) =>
+                story.title.toLowerCase().includes(term)
+                || (story.i_want ?? '').toLowerCase().includes(term),
+        );
+    }, [stories, search]);
+
+    const columns = useMemo(
+        () => [
+            {
+                id: 'story',
+                header: m.storyList.story,
+                accessorKey: 'title',
+                cell: ({ row }: { row: { original: StoryRow } }) => {
+                    const story = row.original;
+                    return (
+                        <div className="min-w-0">
+                            <div className="flex min-w-0 items-baseline gap-2">
+                                <span className="shrink-0 text-xs tabular-nums text-gray-500">
+                                    {fmt(m.stories.reference, { number: story.reference })}
+                                </span>
+                                {/* Back to the card that owns it, with this story
+                                    already open — there is no story route, and a
+                                    second editor is what that would grow into. */}
+                                {story.project ? (
+                                    <Link
+                                        href={routes.projects.storyInProject(story.project.id, story.id)}
+                                        title={m.storyList.openInProject}
+                                        className="min-w-0 flex-1 truncate font-medium text-blue-600 hover:underline"
+                                    >
+                                        {story.title}
+                                    </Link>
+                                ) : (
+                                    <span className="min-w-0 flex-1 truncate font-medium">{story.title}</span>
+                                )}
+                            </div>
+                            {story.i_want ? (
+                                <span className="block truncate text-xs text-gray-500" title={story.i_want}>
+                                    {m.stories.iWant}: {story.i_want}
+                                </span>
+                            ) : null}
+                        </div>
+                    );
+                },
+            },
+            {
+                id: 'project',
+                header: m.fields.project,
+                // The column the page exists for, so it stays on a phone.
+                accessorFn: (row: StoryRow) => (row.project ? `${row.project.code} ${row.project.name}` : ''),
+                cell: ({ row }: { row: { original: StoryRow } }) => {
+                    const project = row.original.project;
+                    if (!project) return <span className="text-gray-400">—</span>;
+                    return (
+                        <Link
+                            href={routes.projects.detail(project.id)}
+                            className="text-blue-600 hover:underline"
+                            title={project.name}
+                        >
+                            <span className="tabular-nums">{project.code}</span>
+                            <span className="hidden md:inline"> · {project.short_name || project.name}</span>
+                        </Link>
+                    );
+                },
+            },
+            {
+                id: 'status',
+                header: m.fields.status,
+                accessorKey: 'status',
+                cell: ({ row }: { row: { original: StoryRow } }) => (
+                    <StatusBadge tone={STATUS_TONE[row.original.status] ?? 'neutral'}>
+                        {m.stories.statuses[row.original.status as keyof typeof m.stories.statuses]
+                            ?? row.original.status}
+                    </StatusBadge>
+                ),
+            },
+            {
+                id: 'priority',
+                header: m.fields.priority,
+                accessorKey: 'priority',
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoryRow } }) => (
+                    <StatusBadge tone={PRIORITY_TONE[row.original.priority] ?? 'neutral'}>
+                        {m.priority[row.original.priority as keyof typeof m.priority]
+                            ?? row.original.priority}
+                    </StatusBadge>
+                ),
+            },
+            {
+                id: 'points',
+                header: m.stories.points,
+                // Sorts on the number; an unsized story sorts below every sized
+                // one rather than reading as a zero-point story.
+                accessorFn: (row: StoryRow) => row.story_points ?? -1,
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoryRow } }) =>
+                    row.original.story_points == null ? (
+                        <span className="text-gray-400">—</span>
+                    ) : (
+                        <span className="tabular-nums">
+                            {fmt(m.stories.pointsShort, { points: row.original.story_points })}
+                        </span>
+                    ),
+            },
+            {
+                id: 'tasks',
+                header: m.fields.tasks,
+                accessorFn: (row: StoryRow) => row.progress?.taskCount ?? 0,
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoryRow } }) => {
+                    const progress = row.original.progress
+                        ?? { taskCount: 0, doneTaskCount: 0, percentComplete: 0 };
+                    return (
+                        <span className="tabular-nums text-gray-600">
+                            {fmt(m.stories.taskProgress, {
+                                done: progress.doneTaskCount,
+                                total: progress.taskCount,
+                            })}
+                        </span>
+                    );
+                },
+            },
+        ],
+        [fmt, m],
+    );
+
+    const anyFilter = Boolean(search.trim() || projectId || status || priority);
+
+    return (
+        <PageShell>
+            <PageHeader
+                title={m.storyList.title}
+                subtitle={m.storyList.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.projects,
+                    m.storyList.title,
+                    'projects',
+                )}
+            />
+
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <Input
+                    value={search}
+                    onChange={(e) => setFilter('search', e.target.value)}
+                    placeholder={m.storyList.searchPlaceholder}
+                    className="md:max-w-xs"
+                />
+                <Select
+                    value={projectId}
+                    onChange={(e) => setFilter('projectId', e.target.value)}
+                    className="md:w-52"
+                >
+                    <option value="">{m.storyList.allProjects}</option>
+                    {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                            {project.code} · {project.name}
+                        </option>
+                    ))}
+                </Select>
+                <Select value={status} onChange={(e) => setFilter('status', e.target.value)} className="md:w-44">
+                    <option value="">{m.storyList.anyStatus}</option>
+                    {STATUSES.map((value) => (
+                        <option key={value} value={value}>
+                            {m.stories.statuses[value]}
+                        </option>
+                    ))}
+                </Select>
+                <Select
+                    value={priority}
+                    onChange={(e) => setFilter('priority', e.target.value)}
+                    className="md:w-44"
+                >
+                    <option value="">{m.storyList.anyPriority}</option>
+                    {PRIORITIES.map((value) => (
+                        <option key={value} value={value}>
+                            {m.priority[value]}
+                        </option>
+                    ))}
+                </Select>
+            </div>
+
+            {/* Empty stays a table, as on the sprint list: the columns and the
+                filter row are what tell a first-time viewer what this holds. */}
+            <DataTable
+                title={m.storyList.title}
+                tableId="project-stories"
+                columns={columns as never}
+                data={filtered}
+                isLoading={loading}
+                showSearch={false}
+                emptyMessage={anyFilter ? m.storyList.emptyFiltered : m.storyList.empty}
+            />
+        </PageShell>
+    );
+}

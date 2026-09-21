@@ -180,6 +180,24 @@ export const projectsMessages = {
         titleRequired: 'स्टोरी को एक शीर्षक दें।',
     },
 
+    /**
+     * The cross-project backlog at /projects/stories. Its own block rather than
+     * more keys on `stories`, which belongs to the card on the project page —
+     * the same split `tasks` already makes against the per-project task table.
+     */
+    storyList: {
+        title: "यूज़र स्टोरी",
+        subtitle: "हर परियोजना की सभी स्टोरी",
+        empty: "अभी कोई यूज़र स्टोरी नहीं है। पहली लिखने के लिए कोई परियोजना खोलें।",
+        emptyFiltered: "इन फ़िल्टरों से कोई स्टोरी मेल नहीं खाती।",
+        searchPlaceholder: "स्टोरी शीर्षक या उसकी माँग खोजें",
+        allProjects: "सभी परियोजनाएँ",
+        anyStatus: "कोई भी स्थिति",
+        anyPriority: "कोई भी प्राथमिकता",
+        story: "स्टोरी",
+        openInProject: "इसकी परियोजना में खोलें",
+    },
+
     task: {
         title: "कार्य",
         newTask: "नया कार्य",
@@ -370,6 +388,10 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "चल रहा है",
+        open: "समय ट्रैकर",
+        openTracker: "ट्रैकर खोलें",
+        noTask: "कोई कार्य नहीं",
         start: "शुरू करें",
         stop: "रोकें",
         elsewhere: "किसी अन्य कार्य पर टाइमर पहले से चल रहा है",
