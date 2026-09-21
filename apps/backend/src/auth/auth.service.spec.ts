@@ -1184,7 +1184,11 @@ describe('AuthService.signup', () => {
             {} as any, refreshTokens as any, passwordPolicy() as any,
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
-        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
+            tenant: { id: 't1', name: 'Tenant One' },
+            store: { id: 's1' },
+            plan: { name: 'Growth' },
+        });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
         jest.spyOn(svc as any, 'sendVerificationEmail').mockResolvedValue(undefined);
         return svc;
@@ -1339,7 +1343,11 @@ describe('AuthService.googleSignIn', () => {
             {} as any, platformSettings as any, {} as any, {} as any, google as any,
             {} as any, refreshTokens as any, passwordPolicy() as any,
         );
-        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
+            tenant: { id: 't1', name: 'Tenant One' },
+            store: { id: 's1' },
+            plan: { name: 'Growth' },
+        });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
         return svc;
     };
@@ -1560,7 +1568,11 @@ describe('AuthService.mobileSignIn', () => {
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
             firebase as any, refreshTokens as any, passwordPolicy() as any,
         );
-        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
+            tenant: { id: 't1', name: 'Tenant One' },
+            store: { id: 's1' },
+            plan: { name: 'Growth' },
+        });
         jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
         jest.spyOn(svc as any, 'sendVerificationEmail').mockResolvedValue(undefined);
         return svc;

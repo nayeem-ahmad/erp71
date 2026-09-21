@@ -38,6 +38,24 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         merchant_public_key:  { isSecret: false },
         is_sandbox:           { isSecret: false, default: 'true' },
     },
+    // How a workspace pays for its first billing period while no card or wallet
+    // gateway is live: the team's own bKash/Nagad numbers, shown on the
+    // activation screen, plus who to call. Platform settings rather than env
+    // vars because these are the numbers a customer is asked to send money to —
+    // correcting a typo in one must not require a redeploy.
+    activation: {
+        bkash_number:     { isSecret: false },
+        nagad_number:     { isSecret: false },
+        bank_details:     { isSecret: false },
+        support_phone:    { isSecret: false },
+        support_whatsapp: { isSecret: false },
+        /// How long the activation screen and the signup email promise to take.
+        /// One number, so the two can never quote different turnarounds.
+        sla_hours:        { isSecret: false, default: '24' },
+        /// Optional extra line shown under the payment methods, e.g. a reference
+        /// format to put in the bKash reference field.
+        instructions:     { isSecret: false },
+    },
     whatsapp: {
         access_token:    { isSecret: true },
         phone_number_id: { isSecret: false },

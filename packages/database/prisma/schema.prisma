@@ -1023,6 +1023,7 @@ model Tenant {
   boardTasks                 BoardTask[]
   chatConversations          ChatConversation[]
   termsAcceptances           TermsAcceptance[]
+  activationRequests         ActivationRequest[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -4161,6 +4162,18 @@ model TenantSubscription {
   // discount_type: 'PERCENTAGE' (value = percent off) | 'FIXED' (value = amount off in BDT).
   discount_type             String?
   discount_value            Decimal?           @db.Decimal(12, 2)
+  /// When this workspace was first paid for and switched on — the line between
+  /// "never activated" and "activated, then fell behind".
+  ///
+  /// Both states sit at `PAST_DUE`: a workspace is provisioned there at signup
+  /// with a zero-length period and nothing charged, and a paying tenant lands
+  /// there when a fee goes unsettled. They need opposite handling. The first has
+  /// never been a customer and should be told how to become one; the second is a
+  /// customer in dunning and gets reminders and, eventually, suspension. Status
+  /// alone cannot tell them apart, so this records the crossing: null means the
+  /// workspace is awaiting its first activation, and every path that moves a
+  /// subscription to ACTIVE stamps it once and never clears it.
+  activated_at              DateTime?
   /// When the plan's one-time setup fee was collected. Null means the next
   /// checkout charges it. Without this the fee is charged again every time a
   /// tenant lapses to PAST_DUE and re-subscribes, because `createCheckout` has
@@ -4173,6 +4186,57 @@ model TenantSubscription {
 
   @@index([plan_id, status])
   @@index([status, past_due_since])
+}
+
+/// A tenant's claim that they have paid for their first billing period, made
+/// outside any payment gateway.
+///
+/// The product sells to Bangladeshi retailers before the SSL Wireless gateway is
+/// live, so the first payment is a bKash or Nagad send-money the platform team
+/// verifies by hand. This is the paper trail for that: the owner submits what
+/// they sent, an admin checks it against the merchant app and approves, and the
+/// approval — not this row — is what posts money to the ledger and activates the
+/// workspace. Nothing here moves a balance on its own, which is why it is a
+/// table of its own rather than another `BillingEvent` type: an unverified claim
+/// must never be mistaken for a collection.
+model ActivationRequest {
+  id             String    @id @default(uuid())
+  tenant_id      String
+  /// The member who submitted it — an owner or whoever else holds billing access.
+  submitted_by   String
+  /// BKASH | NAGAD | BANK_TRANSFER — how the money was sent.
+  method         String
+  /// The gateway's own reference: a bKash/Nagad TrxID, or a bank reference.
+  /// Unique per method so the same receipt cannot be submitted twice, here or
+  /// by a second workspace.
+  transaction_id String
+  /// The wallet or account the money came from, so an admin can match a receipt
+  /// that carries no memo. Optional: a bank transfer often has neither.
+  sender_number  String?
+  /// What the tenant says they sent. Recorded as claimed, not as owed — an
+  /// admin approving the request enters the real figure, which is what reaches
+  /// the ledger.
+  amount         Decimal   @db.Decimal(12, 2)
+  note           String?
+  /// PENDING | VERIFIED | REJECTED.
+  status         String    @default("PENDING")
+  /// The plan and cycle the tenant was buying when they submitted, so an
+  /// approval months later activates what was actually paid for rather than
+  /// whatever the subscription row has drifted to.
+  plan_code      String
+  billing_cycle  String    @default("MONTHLY")
+  reviewed_by    String?
+  reviewed_at    DateTime?
+  /// The admin's reason, shown to the tenant verbatim on a rejection.
+  review_note    String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([method, transaction_id])
+  @@index([status, created_at])
+  @@index([tenant_id, created_at])
 }
 
 model BillingEvent {
