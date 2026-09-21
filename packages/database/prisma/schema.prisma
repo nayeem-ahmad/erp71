@@ -2232,6 +2232,11 @@ model PurchaseReturnItem {
   purchaseItem   PurchaseItem?  @relation(fields: [purchase_item_id], references: [id])
   product        Product        @relation(fields: [product_id], references: [id])
   warehouse      Warehouse?     @relation("PurchaseReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([product_id])
+  @@index([purchase_item_id])
+  @@index([warehouse_id])
 }
 
 model PurchaseOrder {
@@ -2273,6 +2278,9 @@ model PurchaseOrderItem {
 
   purchaseOrder PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
   product       Product       @relation(fields: [product_id], references: [id])
+
+  @@index([po_id])
+  @@index([product_id])
 }
 
 model PurchaseQuotation {
@@ -2308,6 +2316,9 @@ model PurchaseQuotationItem {
 
   purchaseQuotation PurchaseQuotation @relation(fields: [rfq_id], references: [id], onDelete: Cascade)
   product           Product           @relation(fields: [product_id], references: [id])
+
+  @@index([rfq_id])
+  @@index([product_id])
 }
 
 // ---------------------------------------------------------------------------
@@ -3878,6 +3889,11 @@ model SalesReturnItem {
   sale_item SaleItem?   @relation(fields: [sale_item_id], references: [id])
   product   Product     @relation(fields: [product_id], references: [id])
   warehouse Warehouse?  @relation("SalesReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([product_id])
+  @@index([sale_item_id])
+  @@index([warehouse_id])
 }
 
 model SalesOrder {
@@ -3919,6 +3935,9 @@ model SalesOrderItem {
   // Relations
   order   SalesOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product Product    @relation(fields: [product_id], references: [id])
+
+  @@index([order_id])
+  @@index([product_id])
 }
 
 model OrderDeposit {
@@ -3930,6 +3949,8 @@ model OrderDeposit {
 
   // Relations
   order SalesOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
 }
 
 model Quotation {
@@ -4007,6 +4028,9 @@ model QuotationItem {
   // Relations
   quotation Quotation @relation(fields: [quotation_id], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [product_id], references: [id])
+
+  @@index([quotation_id])
+  @@index([product_id])
 }
 
 model SubscriptionPlan {
@@ -4131,6 +4155,9 @@ model CashTransaction {
   // Relations
   tenant  Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   session CashierSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@index([tenant_id])
 }
 
 model TenantSubscription {
@@ -4445,6 +4472,9 @@ model Feedback {
   thread SupportThread?
 
   @@map("feedbacks")
+
+  @@index([tenantId])
+  @@index([userId])
 }
 
 /// A single version of an agent-proposed implementation plan for a Feedback
@@ -4519,6 +4549,9 @@ model StorefrontOrderItem {
   product Product         @relation(fields: [productId], references: [id])
 
   @@map("storefront_order_items")
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model DeliveryOrder {
@@ -4574,6 +4607,9 @@ model BomComponent {
   product Product   @relation("BomComponent", fields: [productId], references: [id])
 
   @@map("bom_components")
+
+  @@index([recipeId])
+  @@index([productId])
 }
 
 // A production run: manufacture N units of a product

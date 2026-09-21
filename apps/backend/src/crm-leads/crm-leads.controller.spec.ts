@@ -17,7 +17,8 @@ describe('CrmLeadsController — subscription guard', () => {
     } as any;
 
     const db = {
-        tenantUser: { findUnique: jest.fn() },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         tenantSubscription: { findUnique: jest.fn() },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
@@ -55,7 +56,9 @@ describe('CrmLeadsController — subscription guard', () => {
     afterEach(() => app?.close());
 
     it('allows access for PREMIUM plan with premiumCrm feature', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { premiumCrm: true } },
@@ -70,7 +73,9 @@ describe('CrmLeadsController — subscription guard', () => {
     });
 
     it('blocks STANDARD plan with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'STANDARD', features_json: { premiumAccounting: true } },

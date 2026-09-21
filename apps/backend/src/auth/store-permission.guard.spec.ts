@@ -9,12 +9,14 @@ const makeContext = (overrides: Partial<{
     storeId: string;
     tenantId: string;
     userRole: string;
+    /** Leaves `request.userRole` unset, as a real request has it before TenantInterceptor runs. */
+    noPresetRole: boolean;
 }> = {}) => {
-    const req = {
+    const req: any = {
         user: { userId: overrides.userId ?? 'user-1' },
         storeId: overrides.storeId ?? 'store-1',
         tenantId: overrides.tenantId ?? 'tenant-1',
-        userRole: overrides.userRole ?? 'CASHIER',
+        userRole: overrides.noPresetRole ? undefined : overrides.userRole ?? 'CASHIER',
         headers: {
             'x-tenant-id': overrides.tenantId ?? 'tenant-1',
             'x-store-id': overrides.storeId ?? 'store-1',
@@ -34,9 +36,8 @@ describe('StorePermissionGuard', () => {
         userStorePermission: {
             findMany: jest.fn(),
         },
-        tenantUser: {
-            findUnique: jest.fn(),
-        },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         userStoreAccess: {
             findMany: jest.fn(),
         },
@@ -51,6 +52,56 @@ describe('StorePermissionGuard', () => {
     it('allows when no permissions are required', async () => {
         reflector.getAllAndOverride.mockReturnValue(undefined);
         await expect(guard.canActivate(makeContext())).resolves.toBe(true);
+    });
+
+    /**
+     * Guards run before `TenantInterceptor`, so on a real request `userRole` is
+     * not yet on the request and this guard resolves the membership itself —
+     * the branch every one of the 40 controllers behind it actually takes.
+     */
+    describe('when the request carries no resolved role yet', () => {
+        const membershipRows = (role: string) => [
+            {
+                tenant_id: 'tenant-1',
+                user_id: 'user-1',
+                role,
+                tenant_deleted_at: null,
+                tenant_timezone: null,
+                roles: [],
+            },
+        ];
+
+        it('resolves the role from the membership and enforces the permission', async () => {
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+            db.$queryRaw.mockResolvedValue(membershipRows('CASHIER'));
+            db.userStorePermission.findMany.mockResolvedValue([
+                { permission: StorePermission.CREATE_SALE },
+            ]);
+
+            const ctx = makeContext({ noPresetRole: true });
+            await expect(guard.canActivate(ctx)).resolves.toBe(true);
+            expect(ctx.switchToHttp().getRequest().userRole).toBe('CASHIER');
+        });
+
+        it('lets an OWNER resolved this way bypass the permission check', async () => {
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+            db.$queryRaw.mockResolvedValue(membershipRows('OWNER'));
+
+            await expect(guard.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+            expect(db.userStorePermission.findMany).not.toHaveBeenCalled();
+        });
+
+        it('reads the membership once when the loader already has it', async () => {
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+            db.$queryRaw.mockResolvedValue(membershipRows('OWNER'));
+
+            const ctx = makeContext({ noPresetRole: true });
+            await guard.canActivate(ctx);
+            // Same request object: a second guard on it must not re-query.
+            const second = new StorePermissionGuard(reflector, db as any);
+            await second.canActivate(ctx);
+            expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('allows OWNER regardless of permissions', async () => {

@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { STORE_PERMISSIONS_KEY } from './store-permission.decorator';
+import { loadTenantMembership } from '../database/tenant-membership.loader';
 
 @Injectable()
 export class StorePermissionGuard implements CanActivate {
@@ -43,14 +44,10 @@ export class StorePermissionGuard implements CanActivate {
 
         // Guards run before TenantInterceptor — resolve membership when context is not pre-set.
         if (!userRole) {
-            const membership = await this.db.tenantUser.findUnique({
-                where: {
-                    tenant_id_user_id: {
-                        tenant_id: tenantId,
-                        user_id: userId,
-                    },
-                },
-            });
+            // Through the shared loader: the interceptor reads this same row
+            // once this guard has let the request past, so whichever of them
+            // gets here first is the only one that pays for it.
+            const membership = await loadTenantMembership(this.db, request, tenantId, userId);
 
             if (!membership) {
                 throw new UnauthorizedException('Invalid tenant context');

@@ -10,6 +10,7 @@ import { Observable } from 'rxjs';
 import { TenantRecordScope, resolveRecordScope } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from './tenant-timezone.service';
+import { loadTenantMembership } from './tenant-membership.loader';
 
 @Injectable()
 export class TenantInterceptor implements NestInterceptor {
@@ -31,28 +32,39 @@ export class TenantInterceptor implements NestInterceptor {
 
         // --- Resolve & validate tenant ---
         let resolvedTenantId: string;
+        // Filled by the parallel read below, for the store section to use
+        // instead of issuing the same query a round trip later.
+        let prefetchedStoreRows: { store_id: string }[] | undefined;
 
         if (tenantId) {
-            const membership = await this.db.tenantUser.findFirst({
-                where: {
-                    tenant_id: tenantId as string,
-                    user_id: userId,
-                    tenant: { deleted_at: null },
-                },
-                // `timezone` rides along on a query that already runs. It is
-                // needed by nearly every endpoint downstream, so fetching it
-                // here costs a column on an existing join rather than a second
-                // round trip per request. The roles ride along for the same
-                // reason: the member's record scope is the widest of theirs, and
-                // reading it here keeps it off the request path of every service
-                // that filters on it.
-                select: {
-                    tenant_id: true,
-                    role: true,
-                    tenant: { select: { timezone: true } },
-                    roles: { select: { tenantRole: { select: { record_scope: true } } } },
-                },
-            });
+            // The header already names the tenant, so the auto-resolve store
+            // lookup — which needs nothing but the user and that tenant, and
+            // runs whatever the member's role — does not have to wait for the
+            // membership read. Issued together, the two cost one round trip
+            // instead of two.
+            //
+            // The `storeId`-present case is left out on purpose: there the
+            // lookup is skipped entirely for owners, so starting it here would
+            // trade a saved round trip for a query thrown away.
+            const [loaded, storeRows] = await Promise.all([
+                // Shared with `SubscriptionAccessGuard` and `TenantRoleGuard`,
+                // which run before this interceptor and read the same row.
+                // Whichever gets there first pays for it; the rest read it back
+                // off the request.
+                loadTenantMembership(this.db, request, tenantId as string, userId),
+                storeId
+                    ? undefined
+                    : this.db.userStoreAccess.findMany({
+                          where: { user_id: userId, tenant_id: tenantId as string },
+                          select: { store_id: true },
+                          take: 2,
+                      }),
+            ]);
+            prefetchedStoreRows = storeRows ?? undefined;
+
+            // A member of a soft-deleted tenant counts as no member at all, as
+            // it did when this read carried `tenant: { deleted_at: null }`.
+            const membership = loaded && loaded.tenant?.deleted_at == null ? loaded : null;
 
             if (!membership) {
                 // Forbidden, not Unauthorized: the caller is signed in perfectly
@@ -120,12 +132,17 @@ export class TenantInterceptor implements NestInterceptor {
 
             request.storeId = storeId as string;
         } else {
-            // Auto-resolve: if user has exactly one store in this tenant, set it automatically
-            const userStoreAccess = await this.db.userStoreAccess.findMany({
-                where: { user_id: userId, tenant_id: resolvedTenantId },
-                select: { store_id: true },
-                take: 2,
-            });
+            // Auto-resolve: if user has exactly one store in this tenant, set it automatically.
+            // Already in flight when the tenant came from the header (see above);
+            // the no-header path resolves the tenant too late for that, so it
+            // still issues the read here.
+            const userStoreAccess =
+                prefetchedStoreRows ??
+                (await this.db.userStoreAccess.findMany({
+                    where: { user_id: userId, tenant_id: resolvedTenantId },
+                    select: { store_id: true },
+                    take: 2,
+                }));
 
             if (userStoreAccess.length === 1) {
                 request.storeId = userStoreAccess[0].store_id;

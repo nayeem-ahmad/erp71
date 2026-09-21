@@ -14,6 +14,7 @@ import {
     SUBSCRIPTION_PLAN_KEY,
 } from './subscription-access.decorator';
 import { PENDING_ACTIVATION_CODE, isPendingActivation } from '../billing/activation-state.util';
+import { loadTenantMembership } from '../database/tenant-membership.loader';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -62,23 +63,16 @@ export class SubscriptionAccessGuard implements CanActivate {
             throw new UnauthorizedException('Missing tenant context');
         }
 
-        const membership = await this.db.tenantUser.findUnique({
-            where: {
-                tenant_id_user_id: {
-                    tenant_id: tenantId,
-                    user_id: userId,
-                },
-            },
-        });
-
-        if (!membership) {
-            throw new UnauthorizedException('Invalid tenant context');
-        }
-
         const activeAddonStatuses: Array<'ACTIVE' | 'TRIALING'> = ['ACTIVE', 'TRIALING'];
         const activeStatuses = new Set<string>(activeAddonStatuses);
 
-        const [subscription, activeAddons] = await Promise.all([
+        // All three are keyed by the tenant the header already names, so none of
+        // them needs another's answer — they go in one round trip rather than a
+        // membership read followed by the entitlement reads. The membership is
+        // shared with `TenantInterceptor`, which runs after every guard and
+        // reads the same row; loading it here means that one is free.
+        const [membership, subscription, activeAddons] = await Promise.all([
+            loadTenantMembership(this.db, request, tenantId, userId),
             this.db.tenantSubscription.findUnique({
                 where: { tenant_id: tenantId },
                 include: { plan: true },
@@ -92,6 +86,10 @@ export class SubscriptionAccessGuard implements CanActivate {
                 include: { addon: true },
             }),
         ]);
+
+        if (!membership) {
+            throw new UnauthorizedException('Invalid tenant context');
+        }
 
         const currentPlan = (subscription?.plan?.code ?? 'FREE') as PlanCode;
         const planFeatures = normalizePlanFeatures(
