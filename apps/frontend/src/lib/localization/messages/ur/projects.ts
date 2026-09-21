@@ -388,6 +388,7 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "جاری",
         open: "ٹائم ٹریکر",
         openTracker: "ٹریکر کھولیں",
         noTask: "کوئی کام نہیں",

@@ -388,6 +388,7 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "قيد التشغيل",
         open: "متتبّع الوقت",
         openTracker: "فتح المتتبّع",
         noTask: "بلا مهمة",

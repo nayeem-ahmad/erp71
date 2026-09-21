@@ -388,6 +388,7 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: "Läuft",
         open: "Zeiterfassung",
         openTracker: "Tracker öffnen",
         noTask: "Keine Aufgabe",

@@ -388,6 +388,7 @@ export const projectsMessages = {
     },
 
     timer: {
+        running: 'Berjalan',
         open: 'Penjejak masa',
         openTracker: 'buka penjejak',
         noTask: 'Tiada tugasan',

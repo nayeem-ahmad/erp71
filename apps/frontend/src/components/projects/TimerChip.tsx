@@ -44,6 +44,10 @@ export default function TimerChip() {
         setElapsed(timer.elapsed_seconds);
         const handle = setInterval(() => setElapsed((value) => value + 1), 1000);
         return () => clearInterval(handle);
+        // Keyed on the two fields, not on `timer`: it is a fresh object on every
+        // refetch, and depending on it would restart the interval — and the
+        // count — several times a minute.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timer?.id, timer?.elapsed_seconds]);
 
     if (!timer) {
