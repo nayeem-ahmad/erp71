@@ -180,6 +180,24 @@ export const projectsMessages = {
         titleRequired: 'Donnez un titre à la story.',
     },
 
+    /**
+     * The cross-project backlog at /projects/stories. Its own block rather than
+     * more keys on `stories`, which belongs to the card on the project page —
+     * the same split `tasks` already makes against the per-project task table.
+     */
+    storyList: {
+        title: "User stories",
+        subtitle: "Toutes les stories de tous les projets",
+        empty: "Aucune user story pour l'instant. Ouvrez un projet pour écrire la première.",
+        emptyFiltered: "Aucune story ne correspond à ces filtres.",
+        searchPlaceholder: "Rechercher un titre de story ou son besoin",
+        allProjects: "Tous les projets",
+        anyStatus: "Tout statut",
+        anyPriority: "Toute priorité",
+        story: "Story",
+        openInProject: "Ouvrir dans son projet",
+    },
+
     task: {
         title: "Tâche",
         newTask: "Nouvelle tâche",

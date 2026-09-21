@@ -323,6 +323,7 @@ export const coreMessages = {
             projectsList: 'تمام پروجیکٹ',
             projectsBoards: 'بورڈز',
             projectsTasks: 'ٹاسکس',
+            projectsStories: 'یوزر اسٹوریز',
             projectsSprints: 'اسپرنٹس',
             projectsHourLogs: 'گھنٹوں کا اندراج',
             projectsHourLogReport: 'گھنٹوں کی رپورٹ',
