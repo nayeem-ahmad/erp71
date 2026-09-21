@@ -78,6 +78,53 @@ export type AdminTenantAddonSubscription = {
     cancel_at_period_end: boolean;
 };
 
+/** How a workspace can pay for its first period while no gateway is live. */
+export type ActivationPaymentMethod = 'BKASH' | 'NAGAD' | 'BANK_TRANSFER';
+
+export type ActivationRequestRecord = {
+    id: string;
+    method: ActivationPaymentMethod;
+    transaction_id: string;
+    sender_number: string | null;
+    amount: number;
+    note: string | null;
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    plan_code: string;
+    billing_cycle: string;
+    /** The admin's reason, shown verbatim when a submission was rejected. */
+    review_note: string | null;
+    reviewed_at: string | null;
+    created_at: string;
+};
+
+/**
+ * What the activation screen renders. `pending_activation` is the one field the
+ * shell branches on: true means this workspace has never been paid for, which is
+ * a different state from a paying tenant that fell behind.
+ */
+export type ActivationStatus = {
+    pending_activation: boolean;
+    /** Whether *this* member may submit a payment, as opposed to only read the screen. */
+    can_submit: boolean;
+    subscription_status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING' | null;
+    plan: { code: string; name: string } | null;
+    billing_cycle: string;
+    amount_due: number | null;
+    setup_fee: number | null;
+    currency: string;
+    instructions: {
+        methods: ActivationPaymentMethod[];
+        bkash_number: string | null;
+        nagad_number: string | null;
+        bank_details: string | null;
+        support_phone: string | null;
+        support_whatsapp: string | null;
+        sla_hours: number;
+        extra_instructions: string | null;
+    };
+    latest_request: ActivationRequestRecord | null;
+};
+
 const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
@@ -3161,6 +3208,39 @@ export const api = {
     cancelBillingAtPeriodEnd: () => fetchWithAuth('/billing/cancel-at-period-end', {
         method: 'POST',
     }),
+
+    // ── Manual activation ──────────────────────────────────────────────────────
+    // The path a workspace takes from signup to working while no payment gateway
+    // is live: it is told what it owes and where to send it, submits the bKash or
+    // Nagad transaction, and the platform team verifies and activates.
+    getActivationStatus: (): Promise<ActivationStatus> => fetchWithAuth('/activation/status'),
+    submitActivationRequest: (data: {
+        method: ActivationPaymentMethod;
+        transactionId: string;
+        senderNumber?: string;
+        amount: number;
+        note?: string;
+    }) => fetchWithAuth('/activation/requests', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getAdminActivationRequests: (params?: { status?: 'PENDING' | 'VERIFIED' | 'REJECTED' }) => {
+        const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : '';
+        return fetchWithAuth(`/admin/activation-requests${query}`);
+    },
+    approveActivationRequest: (id: string, data: { amount?: number; note?: string }) =>
+        fetchWithAuth(`/admin/activation-requests/${id}/approve`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    rejectActivationRequest: (id: string, data: { reason: string }) =>
+        fetchWithAuth(`/admin/activation-requests/${id}/reject`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSmsCreditSummary: () => fetchWithAuth('/sms-credits/summary'),
     purchaseSmsCredits: (data: { packageId: string }) => fetchWithAuth('/sms-credits/purchase', {
         method: 'POST',

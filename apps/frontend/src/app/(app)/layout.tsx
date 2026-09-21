@@ -10,6 +10,7 @@ import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
+import ActivationPendingBanner from '@/components/ActivationPendingBanner';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import AiChatWidget from '@/components/AiChatWidget';
@@ -240,6 +241,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // first login never re-opens it. The localStorage flag is only a same-tab shortcut
     // for the moment between dismissing and /auth/me catching up.
     const onboardingDismissed = activeTenant?.onboarding_dismissed === true;
+
+    // This workspace has never been paid for and switched on. Read off the
+    // session rather than fetched, so it costs nothing for the vast majority of
+    // workspaces that are already active. Suppressed on /billing itself, where
+    // the activation panel says all of this at length.
+    const showActivationBanner =
+        activeTenant?.pending_activation === true && !pathname.startsWith(routes.billing);
 
     // Only the owner is prompted to run store setup — staff can't create the shop
     // and shouldn't be nagged about it. Recomputed (rather than only ever switched
@@ -677,6 +685,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         />
                     </div>
                 </header>
+
+                {/* Above the others: it explains why the workspace is half-locked,
+                    which outranks a demo nudge or a verification reminder. */}
+                {showActivationBanner && <ActivationPendingBanner />}
 
                 {showDemoBanner && (
                     <DemoSandboxBanner

@@ -39,6 +39,7 @@ import {
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
 import { normalizeBillingCycle, type BillingCycle } from '../billing/billing-cycle.util';
+import { isPendingActivation } from '../billing/activation-state.util';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -112,7 +113,7 @@ export class AuthService {
         const displayName = dto.name?.trim() || dto.email.split('@')[0];
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
-        const user = await this.db.$transaction(async (tx) => {
+        const created = await this.db.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
                     email: dto.email,
@@ -123,7 +124,7 @@ export class AuthService {
                 },
             });
 
-            let provisioned: { tenant: { id: string } } | null = null;
+            let provisioned: { tenant: { id: string; name: string }; plan: { name: string } } | null = null;
             if (dto.tenantName?.trim()) {
                 provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName,
@@ -143,12 +144,20 @@ export class AuthService {
                 meta,
             });
 
-            return createdUser;
+            return { createdUser, provisioned };
         });
 
-        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
-            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
-        });
+        const { createdUser: user, provisioned } = created;
+
+        this.sendSignupNotifications({
+            email: user.email,
+            name: user.name ?? user.email,
+            mobile: user.mobile,
+            tenantName: provisioned?.tenant.name ?? null,
+            planName: provisioned?.plan?.name ?? null,
+            billingCycle: normalizeBillingCycle(dto.billingCycle),
+            referralCode: dto.referralCode ?? null,
+        }).catch(() => {});
         // Fire-and-forget: send email verification
         this.sendVerificationEmail(user.id).catch((err) => {
             console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
@@ -399,7 +408,7 @@ export class AuthService {
         const wantsWorkspace = !!dto.tenantName?.trim();
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
-        const user = await this.db.$transaction(async (tx) => {
+        const created = await this.db.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
                     email: profile.email,
@@ -414,7 +423,7 @@ export class AuthService {
                 },
             });
 
-            let provisioned: { tenant: { id: string } } | null = null;
+            let provisioned: { tenant: { id: string; name: string }; plan: { name: string } } | null = null;
             if (wantsWorkspace) {
                 provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName!.trim(),
@@ -434,12 +443,20 @@ export class AuthService {
                 meta,
             });
 
-            return createdUser;
+            return { createdUser, provisioned };
         });
 
-        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
-            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
-        });
+        const { createdUser: user, provisioned } = created;
+
+        this.sendSignupNotifications({
+            email: user.email,
+            name: user.name ?? user.email,
+            mobile: user.mobile,
+            tenantName: provisioned?.tenant.name ?? null,
+            planName: provisioned?.plan?.name ?? null,
+            billingCycle: normalizeBillingCycle(dto.billingCycle),
+            referralCode: dto.referralCode ?? null,
+        }).catch(() => {});
         this.audit
             .logForUserTenants('USER_SIGNUP', 'User', { userId: user.id, ...meta }, user.id, {
                 email: user.email,
@@ -544,7 +561,7 @@ export class AuthService {
         const wantsWorkspace = !!dto.tenantName?.trim();
         const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
-        const user = await this.db.$transaction(async (tx) => {
+        const created = await this.db.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
                     email,
@@ -559,7 +576,7 @@ export class AuthService {
                 },
             });
 
-            let provisioned: { tenant: { id: string } } | null = null;
+            let provisioned: { tenant: { id: string; name: string }; plan: { name: string } } | null = null;
             if (wantsWorkspace) {
                 provisioned = await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName!.trim(),
@@ -579,12 +596,20 @@ export class AuthService {
                 meta,
             });
 
-            return createdUser;
+            return { createdUser, provisioned };
         });
 
-        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
-            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
-        });
+        const { createdUser: user, provisioned } = created;
+
+        this.sendSignupNotifications({
+            email: user.email,
+            name: user.name ?? user.email,
+            mobile: user.mobile,
+            tenantName: provisioned?.tenant.name ?? null,
+            planName: provisioned?.plan?.name ?? null,
+            billingCycle: normalizeBillingCycle(dto.billingCycle),
+            referralCode: dto.referralCode ?? null,
+        }).catch(() => {});
         // The number is verified; the address they just typed is not.
         this.sendVerificationEmail(user.id).catch((err) => {
             console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
@@ -1285,7 +1310,81 @@ export class AuthService {
             }
         }
 
-        return { tenant, store };
+        return { tenant, store, plan };
+    }
+
+    /**
+     * The two mails a signup owes: one to whoever signed up, one to the team.
+     *
+     * Split out because the password and Google paths both send them and had
+     * drifted to sending different things. What the new owner gets depends on
+     * whether a workspace was provisioned at all — someone joining an existing
+     * workspace by invitation is not waiting on an activation and should not be
+     * told to pay for one.
+     *
+     * Every send is fire-and-forget: a mail server having a bad minute must not
+     * fail a signup that already succeeded in the database.
+     */
+    private async sendSignupNotifications(input: {
+        email: string;
+        name: string;
+        mobile?: string | null;
+        tenantName?: string | null;
+        planName?: string | null;
+        billingCycle?: string | null;
+        referralCode?: string | null;
+    }) {
+        if (!input.tenantName) {
+            this.email.sendWelcome(input.email, input.name).catch((err) => {
+                console.warn(`[AuthService] Welcome email failed for ${input.email}:`, err?.message);
+            });
+            return;
+        }
+
+        const instructions = await this.activationInstructions();
+
+        this.email
+            .sendActivationPending(input.email, {
+                name: input.name,
+                tenantName: input.tenantName,
+                slaHours: instructions.slaHours,
+                supportPhone: instructions.supportPhone,
+            })
+            .catch((err) => {
+                console.warn(`[AuthService] Activation email failed for ${input.email}:`, err?.message);
+            });
+
+        this.email
+            .sendNewSignupAlert({
+                tenantName: input.tenantName,
+                ownerName: input.name,
+                ownerEmail: input.email,
+                ownerMobile: input.mobile ?? null,
+                planName: input.planName ?? 'Unknown plan',
+                billingCycle: input.billingCycle ?? 'MONTHLY',
+                referralCode: input.referralCode ?? null,
+            })
+            .catch((err) => {
+                console.warn('[AuthService] New-signup alert failed:', err?.message);
+            });
+    }
+
+    /**
+     * The turnaround and phone number the signup email quotes, read from the same
+     * platform settings the activation screen renders — so the mail and the
+     * screen can never promise different things.
+     */
+    private async activationInstructions(): Promise<{ slaHours: number; supportPhone: string | null }> {
+        const group = await this.platformSettings
+            .getGroup('activation')
+            .catch(() => ({} as Record<string, string | null>));
+        const rawHours = Number((group.sla_hours ?? '').toString().trim() || '24');
+        const phone = (group.support_phone ?? '').toString().trim();
+
+        return {
+            slaHours: Number.isFinite(rawHours) && rawHours > 0 ? Math.round(rawHours) : 24,
+            supportPhone: phone || null,
+        };
     }
 
     /**
@@ -1393,6 +1492,11 @@ export class AuthService {
                 allStorePermissions,
             ),
             stores: accessibleStores,
+            // Whether this workspace has ever been paid for and switched on. The
+            // shell reads it to show the activation banner, so it rides on the
+            // session payload it already fetches rather than costing every page
+            // load a second request. See billing/activation-state.util.
+            pending_activation: isPendingActivation(subscription),
             subscription: subscription
                 ? {
                       status: subscription.status,

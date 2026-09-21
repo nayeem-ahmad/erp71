@@ -300,6 +300,9 @@ export const routes = {
         tenantDetail: (tenantId: string) => `/admin/tenants/${tenantId}`,
         tenantPayments: '/admin/tenants/payments',
         tenantLedger: '/admin/tenants/ledger',
+        // Payments submitted by workspaces awaiting their first activation,
+        // queued for a human to check against the bKash/Nagad merchant app.
+        activationRequests: '/admin/activation-requests',
         users: '/admin/users',
         // The platform's own books. Deliberately `/admin/accounting`, not a
         // second entrance to `/accounting` — that one is a shop's ledger and
