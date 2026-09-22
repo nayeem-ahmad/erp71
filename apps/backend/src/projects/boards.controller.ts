@@ -3,6 +3,7 @@ import {
     Controller,
     Delete,
     Get,
+    NotFoundException,
     Param,
     Patch,
     Post,
@@ -53,6 +54,19 @@ export class BoardsController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateBoardDto) {
         return this.boards.create(tenant.tenantId, tenant.userId, dto);
+    }
+
+    /**
+     * Declared before `@Get(':id')` deliberately: Nest matches in declaration
+     * order, so an `:id` route first would read `/resolve/erp71` as a board
+     * whose id is "resolve".
+     */
+    @Get('resolve/:slug')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    async resolveBoard(@Tenant() tenant: TenantContext, @Param('slug') slug: string) {
+        const found = await this.boards.resolveSlug(tenant.tenantId, slug);
+        if (!found) throw new NotFoundException('Board not found');
+        return { id: found.boardId, currentKey: found.currentSlug, moved: found.moved };
     }
 
     @Get(':id')

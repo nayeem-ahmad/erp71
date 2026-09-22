@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
+import { composeTaskKey, parseTaskKey } from './url-keys/task-key';
 import { paginate } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { runImport, type ImportResult } from '../common/import.util';
@@ -61,6 +62,66 @@ export class ProjectTasksService {
         private readonly activity: ProjectActivityService,
         private readonly access: ProjectAccessService,
     ) {}
+
+    /**
+     * `ERP-1`, `ERP-2`, … within one project. Taken from the highest reference
+     * rather than a count so deleting ERP-2 does not hand its number to the
+     * next task written — two tasks called ERP-2 would make every older note
+     * about one of them wrong. Same rule user stories follow.
+     */
+    async nextReference(projectId: string): Promise<number> {
+        const last = await this.db.projectTask.findFirst({
+            where: { project_id: projectId },
+            orderBy: { reference: 'desc' },
+            select: { reference: true },
+        });
+        return (last?.reference ?? 0) + 1;
+    }
+
+    /**
+     * A task by `<code>-<reference>`, or by a code its project used to have.
+     *
+     * Every lookup is tenant-scoped: project codes are unique per tenant, not
+     * globally — two tenants each hold a `PRJ-0002` in production — so an
+     * unscoped resolve would answer with another workspace's task.
+     */
+    async resolveTaskKey(tenantId: string, key: string) {
+        const parsed = parseTaskKey(key);
+        if (!parsed) return null;
+
+        let project = await this.db.project.findFirst({
+            where: { tenant_id: tenantId, code: parsed.code, deleted_at: null },
+            select: { id: true, code: true },
+        });
+        let moved = false;
+
+        if (!project) {
+            const past = await this.db.projectCodeHistory.findFirst({
+                where: { tenant_id: tenantId, code: parsed.code },
+                select: { project_id: true },
+            });
+            if (!past) return null;
+
+            project = await this.db.project.findUnique({
+                where: { id: past.project_id },
+                select: { id: true, code: true },
+            });
+            if (!project) return null;
+            moved = true;
+        }
+
+        const task = await this.db.projectTask.findFirst({
+            where: { project_id: project.id, reference: parsed.reference, deleted_at: null },
+            select: { id: true, reference: true },
+        });
+        if (!task) return null;
+
+        return {
+            taskId: task.id,
+            currentKey: composeTaskKey(project.code, task.reference),
+            moved,
+        };
+    }
 
     async list(viewer: ProjectViewer, query: ListTasksDto) {
         const tenantId = viewer.tenantId;
@@ -311,6 +372,7 @@ export class ProjectTasksService {
             data: {
                 tenant_id: tenantId,
                 project_id: dto.projectId,
+                reference: await this.nextReference(dto.projectId),
                 title: dto.title.trim(),
                 description: dto.description?.trim() || null,
                 status_id: statusId,

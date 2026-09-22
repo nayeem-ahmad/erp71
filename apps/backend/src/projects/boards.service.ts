@@ -4,12 +4,14 @@ import {
     NotFoundException,
     ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
 import { parseImageUpload } from '../common/image-upload.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
+import { slugFallback, slugify, uniqueSlug } from './url-keys/board-slug';
 import {
     CreateBoardCardDto,
     CreateBoardDto,
@@ -64,9 +66,61 @@ export class BoardsService {
         private readonly assets: AssetsService,
     ) {}
 
-    private async assertBoard(tenantId: string, boardId: string) {
+    /**
+     * A board by slug, or by a slug it used to have.
+     *
+     * `moved` is what the caller turns into a 308: a link naming the old slug
+     * keeps working, and the browser learns the new one. Both lookups are
+     * tenant-scoped — slugs are unique per tenant, not globally.
+     */
+    async resolveSlug(tenantId: string, slug: string) {
+        const live = await this.db.board.findFirst({
+            where: { tenant_id: tenantId, slug, deleted_at: null },
+            select: { id: true, slug: true },
+        });
+        if (live) return { boardId: live.id, currentSlug: live.slug, moved: false };
+
+        const past = await this.db.boardSlugHistory.findFirst({
+            where: { tenant_id: tenantId, slug },
+            select: { board_id: true },
+        });
+        if (!past) return null;
+
         const board = await this.db.board.findFirst({
-            where: { id: boardId, tenant_id: tenantId, deleted_at: null },
+            where: { id: past.board_id, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, slug: true },
+        });
+        if (!board) return null;
+        return { boardId: board.id, currentSlug: board.slug, moved: true };
+    }
+
+    /**
+     * A free slug for a board. Checked against history as well as live boards:
+     * a slug freed by a rename must not be handed to a different board, or
+     * every link to the first one silently opens the second.
+     */
+    async nextSlug(tenantId: string, name: string, boardId?: string): Promise<string> {
+        const base = slugify(name) || slugFallback(boardId ?? randomUUID());
+        const [live, past] = await Promise.all([
+            this.db.board.findMany({ where: { tenant_id: tenantId }, select: { slug: true } }),
+            this.db.boardSlugHistory.findMany({ where: { tenant_id: tenantId }, select: { slug: true } }),
+        ]);
+        const taken = new Set([...live.map((b) => b.slug), ...past.map((h) => h.slug)]);
+        return uniqueSlug(base, taken);
+    }
+
+    /**
+     * Accepts an id or a slug. A UUID and a slug cannot collide — a slug is
+     * lowercase and carries no UUID shape — so trying the id first costs one
+     * indexed miss on the slug path and keeps every existing caller working.
+     */
+    private async assertBoard(tenantId: string, idOrSlug: string) {
+        const board = await this.db.board.findFirst({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+            },
         });
         if (!board) throw new NotFoundException('Board not found');
         return board;
@@ -106,6 +160,7 @@ export class BoardsService {
             data: {
                 tenant_id: tenantId,
                 name: dto.name,
+                slug: await this.nextSlug(tenantId, dto.name),
                 description: dto.description ?? null,
                 created_by: userId,
             },

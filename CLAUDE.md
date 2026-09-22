@@ -95,3 +95,10 @@ Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed U
 - Permissions are defined in `packages/shared-types/index.ts` — add new permissions there first
 - Database changes require a Prisma migration (`npm run db:migrate` in `packages/database`)
 - Seed data is in `packages/database/prisma/seed.ts`
+
+**After pulling changes that touch `schema.prisma` or `packages/shared-types/`, regenerate before trusting a build or a test run.** Both compile to gitignored artifacts (`node_modules/.prisma/client`, `packages/shared-types/dist`) that nothing rebuilds automatically, and a stale one fails in a way that looks like broken code rather than a stale artifact — a schema field the client has never heard of, or a nav entry the resolver cannot see. CI and the deploy always generate fresh, so these failures are local only:
+
+```bash
+npx prisma generate --schema packages/database/prisma/schema.prisma
+npm run build --workspace packages/shared-types
+```
