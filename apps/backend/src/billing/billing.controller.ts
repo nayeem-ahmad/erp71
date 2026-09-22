@@ -10,6 +10,7 @@ import {
     Request,
     UseGuards,
     UseInterceptors,
+    ValidationPipe,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -24,6 +25,14 @@ import {
     ManualBillingWebhookDto,
     RefundBillingDto,
 } from './billing.dto';
+
+/**
+ * Gateway callbacks carry more fields than BillingCallbackDto declares, so the
+ * strict global pipe (forbidNonWhitelisted) would 400 a real payment
+ * notification. These routes keep validation and stripping but drop the
+ * rejection — losing a payment confirmation costs more than an extra field.
+ */
+const callbackPipe = new ValidationPipe({ whitelist: true, transform: true });
 
 @Controller('billing')
 export class BillingController {
@@ -86,8 +95,8 @@ export class BillingController {
 
     @All('callbacks/ssl-wireless/success')
     async handleSslWirelessSuccess(
-        @Body() body: BillingCallbackDto,
-        @Query() query: BillingCallbackDto,
+        @Body(callbackPipe) body: BillingCallbackDto,
+        @Query(callbackPipe) query: BillingCallbackDto,
         @Res() res: any,
     ) {
         const redirectUrl = await this.billingService.handleSslWirelessCallback({ ...query, ...body }, 'success');
@@ -96,8 +105,8 @@ export class BillingController {
 
     @All('callbacks/ssl-wireless/fail')
     async handleSslWirelessFail(
-        @Body() body: BillingCallbackDto,
-        @Query() query: BillingCallbackDto,
+        @Body(callbackPipe) body: BillingCallbackDto,
+        @Query(callbackPipe) query: BillingCallbackDto,
         @Res() res: any,
     ) {
         const redirectUrl = await this.billingService.handleSslWirelessCallback({ ...query, ...body }, 'fail');
@@ -106,8 +115,8 @@ export class BillingController {
 
     @All('callbacks/ssl-wireless/cancel')
     async handleSslWirelessCancel(
-        @Body() body: BillingCallbackDto,
-        @Query() query: BillingCallbackDto,
+        @Body(callbackPipe) body: BillingCallbackDto,
+        @Query(callbackPipe) query: BillingCallbackDto,
         @Res() res: any,
     ) {
         const redirectUrl = await this.billingService.handleSslWirelessCallback({ ...query, ...body }, 'cancel');
@@ -116,8 +125,8 @@ export class BillingController {
 
     @All('webhooks/ssl-wireless')
     handleSslWirelessWebhook(
-        @Body() body: BillingCallbackDto,
-        @Query() query: BillingCallbackDto,
+        @Body(callbackPipe) body: BillingCallbackDto,
+        @Query(callbackPipe) query: BillingCallbackDto,
     ) {
         return this.billingService.handleSslWirelessCallback({ ...query, ...body }, 'ipn');
     }

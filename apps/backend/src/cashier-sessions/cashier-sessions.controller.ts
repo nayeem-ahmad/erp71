@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Param, UseGuards, UseInterceptors } from '
 import { CashierSessionsService } from './cashier-sessions.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
+import { CashTransactionDto } from './dto/cash-transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -77,7 +78,7 @@ export class CashierSessionsController {
   async addCashTransaction(
     @Tenant() tenant: TenantContext,
     @Param('sessionId') sessionId: string,
-    @Body() dto: { amount: number; type: string; description?: string },
+    @Body() dto: CashTransactionDto,
   ) {
     return this.cashierSessionsService.addCashTransaction(
       tenant.tenantId,
