@@ -708,6 +708,13 @@ export const salesMessages = {
             cashTransactions: "Tunai Transaksi",
             noActiveSession: "Tiada Active Sesi",
             noActiveSessionHint: "Buka a shift to start tracking cash",
+            shiftChip: {
+                counter: "Kaunter {counter}",
+                openSince: "Syif dibuka sejak {time}",
+                noShift: "Tiada syif dibuka",
+                noShiftHint: "Jualan ini tidak akan dikaitkan dengan mana-mana kaunter.",
+                openShift: "Buka syif",
+            },
             openShiftTitle: "Buka Syif",
             closeShiftTitle: "Tutup Syif",
             cashInOutTitle: "Tunai In/Out",
