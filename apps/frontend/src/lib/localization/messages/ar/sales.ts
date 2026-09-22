@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: 'الحركات النقدية',
         noActiveSession: 'لا توجد جلسة مفتوحة',
         noActiveSessionHint: 'افتح وردية لبدء متابعة النقدية',
+        shiftChip: {
+            counter: 'الكاشير {counter}',
+            openSince: 'الوردية مفتوحة منذ {time}',
+            noShift: 'لا توجد وردية مفتوحة',
+            noShiftHint: 'لن تُربط هذه المبيعة بأي صندوق.',
+            openShift: 'افتح وردية',
+        },
         openShiftTitle: 'فتح وردية',
         closeShiftTitle: 'إغلاق الوردية',
         cashInOutTitle: 'نقدية واردة/صادرة',
