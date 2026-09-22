@@ -25,6 +25,7 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import PaperSizeMenu from '../components/PaperSizeMenu';
+import ShiftContextChip from '../components/ShiftContextChip';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
@@ -470,6 +471,17 @@ function NewSalePageContent() {
         </div>
     ) : null;
 
+    // Which till this sale will be stamped with, above the form rather than
+    // discovered at reconciliation. Sits alongside the conversion notice when
+    // both apply, since an invoice raised from an order still belongs to a
+    // shift (or to none).
+    const entryBanner = (
+        <div className="space-y-2">
+            <ShiftContextChip />
+            {conversionBanner}
+        </div>
+    );
+
     if (loading || loadingSource) {
         return <div className="text-center py-8">Loading...</div>;
     }
@@ -481,7 +493,7 @@ function NewSalePageContent() {
                 ? `${t.common.duplicate}: ${source!.number}`
                 : source ? `New Sale from ${source.number}` : 'New Sale'}
             backHref={source ? source.href : routes.sales.list}
-            banner={conversionBanner}
+            banner={entryBanner}
             refNumber={refNumber}
             setRefNumber={setRefNumber}
             currentUser={currentUser}

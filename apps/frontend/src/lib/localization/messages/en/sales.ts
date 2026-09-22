@@ -714,6 +714,13 @@ export const salesMessages = {
         cashTransactions: 'Cash Transactions',
         noActiveSession: 'No Active Session',
         noActiveSessionHint: 'Open a shift to start tracking cash',
+        shiftChip: {
+            counter: 'Counter {counter}',
+            openSince: 'Shift open since {time}',
+            noShift: 'No open shift',
+            noShiftHint: 'This sale won\'t be attached to a till.',
+            openShift: 'Open a shift',
+        },
         openShiftTitle: 'Open Shift',
         closeShiftTitle: 'Close Shift',
         cashInOutTitle: 'Cash In/Out',

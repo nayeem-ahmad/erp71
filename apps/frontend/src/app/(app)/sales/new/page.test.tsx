@@ -13,6 +13,9 @@ jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
         getSalesSettings: jest.fn(),
+        // The shift chip above the form asks which till this sale will be
+        // stamped with.
+        getOpenCashierSession: jest.fn(),
         getCurrentUser: jest.fn(),
         createNewSale: jest.fn(),
         getCustomers: jest.fn(),
@@ -78,6 +81,7 @@ describe('NewSalePage — editable sale date', () => {
         jest.clearAllMocks();
         setSearchParams();
         (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getOpenCashierSession as jest.Mock).mockResolvedValue(null);
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);

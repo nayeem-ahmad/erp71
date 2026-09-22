@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: "Bargeldvorgänge",
         noActiveSession: "Keine aktive Sitzung",
         noActiveSessionHint: "Öffnen Sie eine Schicht, um Bargeld zu erfassen",
+        shiftChip: {
+            counter: "Kasse {counter}",
+            openSince: "Schicht offen seit {time}",
+            noShift: "Keine offene Schicht",
+            noShiftHint: "Dieser Verkauf wird keiner Kasse zugeordnet.",
+            openShift: "Schicht öffnen",
+        },
         openShiftTitle: "Schicht öffnen",
         closeShiftTitle: "Schicht schließen",
         cashInOutTitle: "Einlage/Entnahme",

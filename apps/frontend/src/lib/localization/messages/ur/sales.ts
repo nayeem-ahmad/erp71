@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: 'نقدی لین دین',
         noActiveSession: 'کوئی فعال سیشن نہیں',
         noActiveSessionHint: 'نقدی کی نگرانی شروع کرنے کے لیے شفٹ کھولیں',
+        shiftChip: {
+            counter: 'کاؤنٹر {counter}',
+            openSince: '{time} سے شفٹ کھلی ہے',
+            noShift: 'کوئی شفٹ کھلی نہیں',
+            noShiftHint: 'یہ فروخت کسی ٹل سے منسلک نہیں ہوگی۔',
+            openShift: 'شفٹ کھولیں',
+        },
         openShiftTitle: 'شفٹ کھولیں',
         closeShiftTitle: 'شفٹ بند کریں',
         cashInOutTitle: 'نقدی اندر/باہر',

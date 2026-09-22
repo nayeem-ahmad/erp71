@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: "Mouvements d'espèces",
         noActiveSession: "Aucune session active",
         noActiveSessionHint: "Ouvrez un poste pour commencer à suivre les espèces",
+        shiftChip: {
+            counter: "Caisse {counter}",
+            openSince: "Poste ouvert depuis {time}",
+            noShift: "Aucun poste ouvert",
+            noShiftHint: "Cette vente ne sera rattachée à aucune caisse.",
+            openShift: "Ouvrir un poste",
+        },
         openShiftTitle: "Ouvrir le poste",
         closeShiftTitle: "Fermer le poste",
         cashInOutTitle: "Entrée/sortie d'espèces",
