@@ -87,7 +87,14 @@ three of those eleven, *anyone signed in can approve*:
   `approved_by`.
 - **Warranty claim status** (`warranty-claims.controller.ts:43`,
   `PATCH warranty-claims/:id/status`) is likewise `JwtAuthGuard`-only, and
-  `APPROVED` is one of its six valid statuses.
+  `APPROVED` is one of its six valid statuses. One correction to this one,
+  found 2026-09-22: until that date `UpdateWarrantyClaimStatusDto` carried no
+  class-validator decorators, so the global pipe's whitelist was empty and the
+  endpoint rejected *every* request (§6.8). "Anyone signed in can approve a
+  warranty claim" was therefore true of the authorization and false of the
+  behaviour — nobody could call it at all. The DTO is decorated now, so the
+  endpoint works and the missing permission check is live rather than
+  theoretical. That makes it more urgent, not less.
 
 Each is worth fixing on its own, independent of this plan. They also make those
 three the cleanest Phase 4 adoptions, since there is no approval behaviour to
@@ -693,6 +700,25 @@ entitlement registry, so once a key was registered without being added there,
 `property teamChat should not exist` — every plan, for as long as the drift
 existed, and both spec files hand-listed the same stale keys so the suite
 asserted a payload the real editor never sent.
+
+The sharper form of the rule surfaced on 2026-09-22, and it is worse than a
+stale key list: **the decorators are the whitelist**. Whitelisting is driven
+entirely by class-validator metadata, and a TypeScript type annotation leaves no
+metadata behind at runtime — so a DTO carrying no decorators whitelists
+*nothing*, and every property of every request to it is rejected. Five files
+were in that state, and each one's `@Body()`-bound endpoints were simply dead:
+opening and closing a till both 400'd, as did adding a counter, and as did the
+warranty-claim status endpoint this document surveys in §1. A DTO is not a type;
+it is a runtime schema, and an undecorated one is an empty schema.
+
+The billing callbacks in the same fix show the opposite failure, which matters
+here because the engine has a payload of the same shape. SSL Wireless sends more
+fields than `BillingCallbackDto` declares, so strict whitelisting would have
+400'd genuine payment notifications — those bindings take a route-level pipe
+that strips unknown fields instead of rejecting them. A rule's condition tree is
+the same kind of payload: its operand keys come from a registry the DTO cannot
+enumerate, so it belongs behind an explicit validator over the raw JSON, not
+behind the global pipe's whitelist.
 
 The lesson transfers directly to `register()`: a module that registers a fact
 the rule validator does not know about must fail the suite, not the tenant's

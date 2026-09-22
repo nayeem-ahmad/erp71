@@ -10,6 +10,7 @@ describe('ProductsService', () => {
   let service: ProductsService;
   let db: any;
   let tx: any;
+  let redis: any;
 
   beforeEach(async () => {
     tx = {
@@ -67,9 +68,10 @@ describe('ProductsService', () => {
       },
       saleItem: { findMany: jest.fn().mockResolvedValue([]) },
       purchaseItem: { findMany: jest.fn().mockResolvedValue([]) },
+      inventorySettings: { findUnique: jest.fn().mockResolvedValue(null) },
     };
 
-    const redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
+    redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
 
     const priceLists = { addProductToAllActiveLists: jest.fn().mockResolvedValue(undefined) };
     const planEntitlements = {
@@ -257,6 +259,83 @@ describe('ProductsService', () => {
             },
           }),
         }),
+      );
+    });
+  });
+
+  describe('countLowStock()', () => {
+    it('returns the aggregate count, not a walked catalog', async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(7) }]);
+
+      const result = await service.countLowStock('tenant-1');
+
+      expect(result).toEqual({ count: 7 });
+      // One aggregate, and no page walk behind it.
+      expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(db.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('coerces the bigint COUNT() to a JSON-safe number', async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(3) }]);
+
+      const result = await service.countLowStock('tenant-1');
+
+      // A bigint here would throw on JSON.stringify when Nest serialises it.
+      expect(typeof result.count).toBe('number');
+      expect(() => JSON.stringify(result)).not.toThrow();
+    });
+
+    it('reads zero when the tenant has no low-stock products', async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(0) }]);
+
+      expect(await service.countLowStock('tenant-1')).toEqual({ count: 0 });
+    });
+
+    it('survives an empty result set', async () => {
+      db.$queryRaw.mockResolvedValue([]);
+
+      expect(await service.countLowStock('tenant-1')).toEqual({ count: 0 });
+    });
+
+    it('falls back to the tenant default reorder level', async () => {
+      db.inventorySettings.findUnique.mockResolvedValue({ default_reorder_level: 25 });
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(1) }]);
+
+      await service.countLowStock('tenant-1');
+
+      // The default is interpolated as a bound parameter, so it lands in the
+      // values array rather than the SQL text.
+      const params = db.$queryRaw.mock.calls[0].slice(1);
+      expect(params).toContain(25);
+    });
+
+    it('scopes the count to the tenant', async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(0) }]);
+
+      await service.countLowStock('tenant-1');
+
+      const params = db.$queryRaw.mock.calls[0].slice(1);
+      expect(params).toContain('tenant-1');
+    });
+
+    it('serves a cached count without querying', async () => {
+      redis.get.mockResolvedValue({ count: 4 });
+
+      const result = await service.countLowStock('tenant-1');
+
+      expect(result).toEqual({ count: 4 });
+      expect(db.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('caches the computed count', async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(2) }]);
+
+      await service.countLowStock('tenant-1');
+
+      expect(redis.set).toHaveBeenCalledWith(
+        'products:tenant-1:low-stock-count',
+        { count: 2 },
+        expect.any(Number),
       );
     });
   });
