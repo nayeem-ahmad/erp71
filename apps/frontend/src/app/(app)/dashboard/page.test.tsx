@@ -40,6 +40,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn(),
         getProducts: jest.fn(),
+        getLowStockCount: jest.fn(),
         getSalesList: jest.fn(),
         getFinancialKpis: jest.fn(),
         getFinancialTrends: jest.fn(),
@@ -105,9 +106,9 @@ describe('DashboardPage — Business Monitor v2', () => {
             name: 'Ada',
             tenants: [{ name: 'Northwind Retail' }],
         });
-        (api.getProducts as jest.Mock).mockResolvedValue([
-            { id: 'product-1', name: 'Coffee Beans', price: 15.5, stock_quantity: 2, reorder_level: 5, stocks: [{ quantity: 2 }] },
-        ]);
+        // The low-stock tile takes a server-side count rather than walking the
+        // catalog — one product below its reorder level.
+        (api.getLowStockCount as jest.Mock).mockResolvedValue({ count: 1 });
         // The dashboard makes two bounded calls: recent rows for the activity
         // panel, then a count-only probe for the delivery tile.
         (api.getSalesList as jest.Mock).mockResolvedValue({
@@ -262,7 +263,7 @@ describe('DashboardPage — variant selection', () => {
         jest.resetAllMocks();
         (api.getAccountingDashboardOverview as jest.Mock).mockResolvedValue(ACCOUNTING_OVERVIEW);
         (api.getFinancialTrends as jest.Mock).mockResolvedValue({ points: [] });
-        (api.getProducts as jest.Mock).mockResolvedValue([]);
+        (api.getLowStockCount as jest.Mock).mockResolvedValue({ count: 0 });
         (api.getSalesList as jest.Mock).mockResolvedValue({ items: [], total: 0 });
         (api.getSalesByCategory as jest.Mock).mockResolvedValue(EMPTY_CATEGORY);
         (api.getSalesByProduct as jest.Mock).mockResolvedValue(EMPTY_PRODUCT_REPORT);
@@ -290,7 +291,7 @@ describe('DashboardPage — variant selection', () => {
         // No retail panel, and none of the retail endpoints are touched.
         expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
         expect(screen.queryByText('Sales by category')).not.toBeInTheDocument();
-        expect(api.getProducts).not.toHaveBeenCalled();
+        expect(api.getLowStockCount).not.toHaveBeenCalled();
         expect(api.getSalesList).not.toHaveBeenCalled();
         expect(api.getSalesByCategory).not.toHaveBeenCalled();
     });
@@ -374,7 +375,7 @@ describe('DashboardPage — variant selection', () => {
         expect(screen.getByText('Hours This Week')).toBeInTheDocument();
 
         // Not the retail dashboard, and none of its endpoints are touched.
-        expect(api.getProducts).not.toHaveBeenCalled();
+        expect(api.getLowStockCount).not.toHaveBeenCalled();
         expect(api.getSalesList).not.toHaveBeenCalled();
     });
 });

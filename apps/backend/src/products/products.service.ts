@@ -183,6 +183,62 @@ export class ProductsService {
         return result;
     }
 
+    /**
+     * How many products have fallen to or below their reorder level.
+     *
+     * The dashboard's low-stock tile wants one integer, and used to get it by
+     * walking every page of `/products` and counting client-side. This answers
+     * the same question in one aggregate.
+     *
+     * On-hand is summed across every warehouse and compared against the
+     * product's own `reorder_level`, falling back to the tenant's
+     * `default_reorder_level` — the same rule the Inventory dashboard's
+     * low-stock panel applies, which is where the tile links. A product with no
+     * stock rows at all counts as zero on hand, so `COALESCE` rather than an
+     * inner join.
+     *
+     * Raw SQL because the sum spans warehouses: Prisma's `stocks: { some: … }`
+     * can only test one stock row at a time, which is why `stockStatusWhere`
+     * reads the default warehouse alone and cannot be reused here.
+     *
+     * Cached under the same `products:<tenant>:` prefix the product lists use,
+     * so editing a product clears it. Nothing invalidates on stock movement
+     * though — a sale can leave this count up to CACHE_TTL stale. That is the
+     * same bound the cached product lists already carry, and a minute-old
+     * reorder figure is worth the round trip it saves.
+     */
+    async countLowStock(tenantId: string): Promise<{ count: number }> {
+        const cacheKey = `products:${tenantId}:low-stock-count`;
+        const cached = await this.redis.get<{ count: number }>(cacheKey);
+        if (cached) return cached;
+
+        const settings = await this.db.inventorySettings.findUnique({
+            where: { tenant_id: tenantId },
+            select: { default_reorder_level: true },
+        });
+        const defaultReorderLevel = settings?.default_reorder_level ?? LOW_STOCK_THRESHOLD;
+
+        const rows = await this.db.$queryRaw<{ count: bigint }[]>`
+            SELECT COUNT(*) AS count
+            FROM (
+                SELECT p.id
+                FROM "Product" p
+                LEFT JOIN "ProductStock" ps
+                    ON ps.product_id = p.id AND ps.tenant_id = ${tenantId}
+                WHERE p.tenant_id = ${tenantId}
+                  AND p.deleted_at IS NULL
+                GROUP BY p.id, p.reorder_level
+                HAVING COALESCE(SUM(ps.quantity), 0)
+                    <= COALESCE(p.reorder_level, ${defaultReorderLevel})
+            ) low
+        `;
+
+        // COUNT() comes back as bigint, which does not survive JSON.
+        const result = { count: Number(rows[0]?.count ?? 0) };
+        await this.redis.set(cacheKey, result, CACHE_TTL);
+        return result;
+    }
+
     async findOne(tenantId: string, id: string) {
         const product = await this.db.product.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },

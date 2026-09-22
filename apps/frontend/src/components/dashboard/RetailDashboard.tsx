@@ -84,11 +84,6 @@ type SaleRow = {
     created_at: string;
 };
 
-type ProductRow = {
-    reorder_level?: number | null;
-    stock_quantity?: number;
-};
-
 const EMPTY_KPIS: FinancialKpis = {
     cash_inflow: 0,
     cash_outflow: 0,
@@ -138,11 +133,11 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
             const win = rangeToWindow(range);
             const prevWin = previousWindow(win);
 
-            const [kpisRes, prevKpisRes, trendRes, productsRes, salesRes, deliveryRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
+            const [kpisRes, prevKpisRes, trendRes, lowStockRes, salesRes, deliveryRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
                 api.getFinancialKpis(win),
                 api.getFinancialKpis(prevWin),
                 api.getFinancialTrends(win),
-                api.getProducts(),
+                api.getLowStockCount(),
                 // Two bounded calls instead of the whole history: five rows for
                 // the activity panel, and a count-only probe for the tile below.
                 api.getSalesList({ limit: 5 }),
@@ -172,12 +167,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                 setFinancialTrendError(trendRes.reason instanceof Error ? trendRes.reason.message : copy.financialTrendsUnavailable);
             }
 
-            if (productsRes.status === 'fulfilled') {
-                const list: ProductRow[] = productsRes.value ?? [];
-                setLowStockCount(list.filter((p) => p.reorder_level != null && (p.stock_quantity ?? 0) <= p.reorder_level).length);
-            } else {
-                setLowStockCount(0);
-            }
+            setLowStockCount(lowStockRes.status === 'fulfilled' ? (lowStockRes.value?.count ?? 0) : 0);
 
             setSales(salesRes.status === 'fulfilled' ? (salesRes.value?.items ?? []) : []);
             setDeliveryPendingCount(
