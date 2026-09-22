@@ -188,6 +188,15 @@ export class ProductsController {
     }
 
     /**
+     * The dashboard's low-stock tile. Declared before `:id`, which would
+     * otherwise match `low-stock-count` as a product id.
+     */
+    @Get('low-stock-count')
+    countLowStock(@Tenant() tenant: TenantContext) {
+        return this.productsService.countLowStock(tenant.tenantId);
+    }
+
+    /**
      * The last few rates this product traded at, for the rate hint on the sale
      * and purchase entry screens. Declared before `:id` only for readability —
      * the two paths differ in segment count and cannot shadow each other.
