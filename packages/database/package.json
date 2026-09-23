@@ -19,6 +19,8 @@
     "sync:lead-identity": "tsx prisma/sync-lead-identity.ts",
     "sync:user-mobile-unique": "tsx prisma/sync-user-mobile-unique.ts",
     "sync:store-name-unique": "tsx prisma/sync-store-name-unique.ts",
+    "sync:board-slug": "tsx prisma/sync-board-slug.ts",
+    "sync:task-reference": "tsx prisma/sync-task-reference.ts",
     "sync:warehouse-name-unique": "tsx prisma/sync-warehouse-name-unique.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:tenant-role-templates": "tsx prisma/sync-tenant-role-templates.ts",
