@@ -1,4 +1,11 @@
-import { groupIntoLanes, laneKeyOf, NO_LANE, UNSORTED_CELL } from './board-lanes';
+import {
+    groupIntoLanes,
+    laneFieldsOf,
+    laneKeyOf,
+    laneRefusalOf,
+    NO_LANE,
+    UNSORTED_CELL,
+} from './board-lanes';
 import type { BoardColumn, BoardTask } from './board-tasks';
 
 const task = (id: string, overrides: Partial<BoardTask> = {}): BoardTask => ({
@@ -15,8 +22,10 @@ const karim = { assigneeEmployee: { id: 'e1', name: 'Karim' } };
 
 const story = (id: string, code: string) => ({ userStory: { id, code, title: `Story ${code}` } });
 
-const column = (id: string, tasks: BoardTask[]): BoardColumn =>
-    ({ id, name: id, category: 'TODO', tasks }) as BoardColumn;
+const column = (id: string, tasks: BoardTask[], category = 'TODO'): BoardColumn =>
+    ({ id, name: id, category, tasks }) as BoardColumn;
+
+const inProject = (id: string) => ({ project: { id, code: id.toUpperCase(), name: id } });
 
 describe('laneKeyOf', () => {
     it('keys a user and an employee apart, so the same id in both is two lanes', () => {
@@ -90,5 +99,74 @@ describe('groupIntoLanes', () => {
         expect(lanes[0].cells[UNSORTED_CELL].map((t) => t.id)).toEqual(['u']);
         expect(lanes[0].cells.c1).toEqual([]);
         expect(lanes[0].count).toBe(1);
+    });
+});
+
+describe('lane progress and project', () => {
+    it('counts the cards sitting in DONE columns', () => {
+        const [lane] = groupIntoLanes(
+            [
+                column('todo', [task('a', story('s1', 'OTB-1'))]),
+                column('done', [task('b', story('s1', 'OTB-1')), task('c', story('s1', 'OTB-1'))], 'DONE'),
+            ],
+            [],
+            'story',
+        );
+        expect(lane.count).toBe(3);
+        expect(lane.done).toBe(2);
+    });
+
+    it('takes a story lane’s project from its cards, and gives other lanes none', () => {
+        const [storyLane] = groupIntoLanes(
+            [column('c1', [task('a', { ...story('s1', 'OTB-1'), ...inProject('p1') })])],
+            [],
+            'story',
+        );
+        expect(storyLane.projectId).toBe('p1');
+
+        const [personLane] = groupIntoLanes([column('c1', [task('a', { ...rafi, ...inProject('p1') })])], [], 'assignee');
+        expect(personLane.projectId).toBeUndefined();
+    });
+});
+
+describe('laneFieldsOf', () => {
+    const lanes = groupIntoLanes(
+        [column('c1', [task('a', { ...karim, ...story('s1', 'OTB-1') }), task('b')])],
+        [],
+        'assignee',
+    );
+
+    it('copies the holder off a card in the lane, clearing the other column', () => {
+        expect(laneFieldsOf(lanes[0], 'assignee')).toEqual({
+            assignee: null,
+            assigneeEmployee: { id: 'e1', name: 'Karim' },
+        });
+    });
+
+    it('clears the holder for the Unassigned lane', () => {
+        expect(laneFieldsOf(lanes[1], 'assignee')).toEqual({ assignee: null, assigneeEmployee: null });
+    });
+
+    it('copies the story for a story lane, and clears it for No story', () => {
+        const byStory = groupIntoLanes([column('c1', [task('a', story('s1', 'OTB-1')), task('b')])], [], 'story');
+        expect(laneFieldsOf(byStory[0], 'story')).toEqual({ userStory: story('s1', 'OTB-1').userStory });
+        expect(laneFieldsOf(byStory[1], 'story')).toEqual({ userStory: null });
+    });
+});
+
+describe('laneRefusalOf', () => {
+    const lane = { key: 'story:s1', projectId: 'p1' };
+
+    it('refuses a card from another project into a story lane', () => {
+        expect(laneRefusalOf(task('a', inProject('p2')), lane, 'story')).toBe('otherProject');
+    });
+
+    it('lets a same-project card in, and anyone into No story', () => {
+        expect(laneRefusalOf(task('a', inProject('p1')), lane, 'story')).toBeNull();
+        expect(laneRefusalOf(task('a', inProject('p2')), { key: NO_LANE }, 'story')).toBeNull();
+    });
+
+    it('never refuses on an assignee board', () => {
+        expect(laneRefusalOf(task('a', inProject('p2')), lane, 'assignee')).toBeNull();
     });
 });

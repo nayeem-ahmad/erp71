@@ -36,6 +36,9 @@ export default function BoardCardComposer({
     defaultAssigneeLabel,
     onAssigneeMenuOpen,
     onCreated,
+    userStory,
+    projectLocked = false,
+    compact = false,
 }: {
     boardId: string;
     columnId: string;
@@ -55,6 +58,25 @@ export default function BoardCardComposer({
     /** Fetches that roster lazily — a board need not pay for it unopened. */
     onAssigneeMenuOpen: () => void;
     onCreated: () => void | Promise<void>;
+    /**
+     * The story a card composed here joins — set in a story swimlane, so the
+     * card lands in the row it was typed into rather than in No story.
+     */
+    userStory?: { id: string; code: string; title: string };
+    /**
+     * The project is decided by where the composer sits, not picked: a story
+     * lane only takes tasks from its story's project. The picker is hidden
+     * rather than disabled, because a greyed-out choice invites a question the
+     * lane heading already answers.
+     */
+    projectLocked?: boolean;
+    /**
+     * A lane cell's composer: on a pointer device it stays out of sight until
+     * the cell is hovered or focused, since a grouped board has one per lane
+     * per column and a grid of "Add a card" buttons drowns the cards. Touch
+     * has no hover, so there it is always shown.
+     */
+    compact?: boolean;
 }) {
     const { t } = useI18n();
     const bm = t.projects.board;
@@ -94,6 +116,7 @@ export default function BoardCardComposer({
                 title: trimmed,
                 // Both columns, every time — see the API client's note.
                 ...assigneeColumns(chosen),
+                ...(userStory ? { userStoryId: userStory.id } : {}),
             });
             toast.success(t.projects.task.created);
             // Stays open with the field cleared: adding cards comes in runs, and
@@ -114,7 +137,11 @@ export default function BoardCardComposer({
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="flex min-h-touch w-full items-center gap-1.5 rounded-md px-2 py-2 text-start text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                className={`flex min-h-touch w-full items-center gap-1.5 rounded-md px-2 py-2 text-start text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 ${
+                    compact
+                        ? 'md:min-h-0 md:py-1 md:opacity-0 md:focus:opacity-100 md:group-focus-within/cell:opacity-100 md:group-hover/cell:opacity-100'
+                        : ''
+                }`}
             >
                 <Plus className="h-3.5 w-3.5" />
                 {bm.addCard}
@@ -143,18 +170,25 @@ export default function BoardCardComposer({
                     if (event.key === 'Escape') close();
                 }}
             />
-            <Select
-                aria-label={t.projects.fields.project}
-                value={projectId}
-                onChange={(event) => onProjectChange(event.target.value)}
-            >
-                <option value="">{t.projects.task.selectProject}</option>
-                {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                        {project.code} · {project.name}
-                    </option>
-                ))}
-            </Select>
+            {userStory && (
+                <p className="truncate text-xs text-gray-500" title={userStory.title}>
+                    <span className="font-mono text-blue-700">{userStory.code}</span> {userStory.title}
+                </p>
+            )}
+            {!projectLocked && (
+                <Select
+                    aria-label={t.projects.fields.project}
+                    value={projectId}
+                    onChange={(event) => onProjectChange(event.target.value)}
+                >
+                    <option value="">{t.projects.task.selectProject}</option>
+                    {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                            {project.code} · {project.name}
+                        </option>
+                    ))}
+                </Select>
+            )}
             <Select
                 aria-label={bm.assignCardTo}
                 value={chosen}

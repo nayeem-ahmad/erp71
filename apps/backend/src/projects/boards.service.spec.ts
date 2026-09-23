@@ -4,7 +4,7 @@ import {
     NotFoundException,
     ServiceUnavailableException,
 } from '@nestjs/common';
-import { BoardsService } from './boards.service';
+import { BoardsService, laneChangeOf } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
@@ -93,6 +93,7 @@ describe('BoardsService', () => {
         };
         tasks = {
             move: jest.fn().mockResolvedValue({ id: 'k1' }),
+            update: jest.fn().mockResolvedValue({ id: 'k1' }),
             assertTask: jest.fn().mockResolvedValue({ id: 'k1' }),
             create: jest.fn().mockResolvedValue({ id: 'k9', project_id: 'p1' }),
         };
@@ -368,6 +369,89 @@ describe('BoardsService', () => {
 
         expect(tasks.move).not.toHaveBeenCalled();
         expect(db.boardTask.update).not.toHaveBeenCalled();
+    });
+
+    describe('swimlane drops', () => {
+        it('hands the card to the lane’s person, clearing the other holder column', async () => {
+            await service.moveCard(owner, 'b1', 'k1', {
+                columnId: 'c2',
+                sortOrder: 0,
+                laneBy: 'assignee',
+                laneKey: 'employee:0b4f2f7e-8d1c-4c1e-9a55-6f1f0a2b3c4d',
+            });
+
+            expect(tasks.update).toHaveBeenCalledWith(owner, 'k1', {
+                assigneeId: '',
+                assigneeEmployeeId: '0b4f2f7e-8d1c-4c1e-9a55-6f1f0a2b3c4d',
+            });
+            expect(tasks.move).toHaveBeenCalled();
+        });
+
+        it('re-links the story, and changes hands before it changes status', async () => {
+            const order: string[] = [];
+            tasks.update.mockImplementation(async () => order.push('update'));
+            tasks.move.mockImplementation(async () => order.push('move'));
+
+            await service.moveCard(owner, 'b1', 'k1', {
+                columnId: 'c2',
+                sortOrder: 0,
+                laneBy: 'story',
+                laneKey: 'none',
+            });
+
+            expect(tasks.update).toHaveBeenCalledWith(owner, 'k1', { userStoryId: '' });
+            expect(order).toEqual(['update', 'move']);
+        });
+
+        it('changes the lane alone when the card stays in its column', async () => {
+            db.projectTask.findFirst.mockResolvedValue({ id: 'k1', project_id: 'p1', status_id: 's2' });
+
+            await service.moveCard(owner, 'b1', 'k1', {
+                columnId: 'c2',
+                sortOrder: 0,
+                laneBy: 'assignee',
+                laneKey: 'none',
+            });
+
+            expect(tasks.update).toHaveBeenCalledWith(owner, 'k1', { assigneeId: '', assigneeEmployeeId: '' });
+            expect(tasks.move).not.toHaveBeenCalled();
+        });
+
+        it('touches nothing when the column is unmapped, even with a lane change', async () => {
+            columns.resolveStatusId.mockResolvedValue(null);
+
+            await expect(
+                service.moveCard(owner, 'b1', 'k1', {
+                    columnId: 'c2',
+                    sortOrder: 0,
+                    laneBy: 'story',
+                    laneKey: 'none',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(tasks.update).not.toHaveBeenCalled();
+            expect(tasks.move).not.toHaveBeenCalled();
+        });
+
+        it('does not move the status when the lane is refused (a story from another project)', async () => {
+            tasks.update.mockRejectedValue(new BadRequestException('That user story belongs to a different project.'));
+
+            await expect(
+                service.moveCard(owner, 'b1', 'k1', {
+                    columnId: 'c2',
+                    sortOrder: 0,
+                    laneBy: 'story',
+                    laneKey: 'story:0b4f2f7e-8d1c-4c1e-9a55-6f1f0a2b3c4d',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(tasks.move).not.toHaveBeenCalled();
+            expect(db.boardTask.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses a key of the wrong kind for the grouping', () => {
+            expect(() =>
+                laneChangeOf({ laneBy: 'story', laneKey: 'user:0b4f2f7e-8d1c-4c1e-9a55-6f1f0a2b3c4d' }),
+            ).toThrow(BadRequestException);
+        });
     });
 
     it('refuses to move a card that is not on this board', async () => {

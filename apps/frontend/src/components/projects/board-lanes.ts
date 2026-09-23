@@ -31,6 +31,14 @@ export interface BoardLane {
     /** The lane's cards per column id (and `UNSORTED_CELL`), in the column's own order. */
     cells: Record<string, BoardTask[]>;
     count: number;
+    /** Of `count`, how many sit in a DONE column — a story lane's progress. */
+    done: number;
+    /**
+     * The story's project, on a story lane. A task can only join a story of its
+     * own project, so this is what a drop or a new card in the lane must match.
+     * Read off a card: a story's cards all share its project.
+     */
+    projectId?: string;
 }
 
 export function laneKeyOf(task: BoardTask, mode: BoardSwimlanes): string {
@@ -67,16 +75,23 @@ export function groupIntoLanes(
                 code: mode === 'story' && key !== NO_LANE ? task.userStory?.code : undefined,
                 cells: Object.fromEntries(cellIds.map((id) => [id, [] as BoardTask[]])),
                 count: 0,
+                done: 0,
             };
             lanes.set(key, lane);
         }
         lane.cells[cellId].push(task);
         lane.count += 1;
+        if (mode === 'story' && key !== NO_LANE && !lane.projectId) lane.projectId = task.project?.id;
     };
 
     for (const task of unsorted) file(task, UNSORTED_CELL);
     for (const column of columns) {
         for (const task of column.tasks) file(task, column.id);
+    }
+    for (const lane of lanes.values()) {
+        lane.done = columns
+            .filter((column) => column.category === 'DONE')
+            .reduce((sum, column) => sum + (lane.cells[column.id]?.length ?? 0), 0);
     }
 
     return [...lanes.values()].sort((a, b) => {
@@ -85,4 +100,30 @@ export function groupIntoLanes(
         if (mode === 'story') return byCode(a.code ?? '', b.code ?? '');
         return (a.title ?? '').localeCompare(b.title ?? '');
     });
+}
+
+/**
+ * The fields a card takes on when it is dropped into `lane`, so it can be
+ * redrawn there before the server answers. Copied off a card already in the
+ * lane — the lane key holds an id, and the card needs the name to show.
+ */
+export function laneFieldsOf(lane: BoardLane, mode: BoardSwimlanes): Partial<BoardTask> {
+    const sample = Object.values(lane.cells).flat()[0];
+    if (mode === 'story') return { userStory: lane.key === NO_LANE ? null : (sample?.userStory ?? null) };
+    if (lane.key === NO_LANE) return { assignee: null, assigneeEmployee: null };
+    return { assignee: sample?.assignee ?? null, assigneeEmployee: sample?.assigneeEmployee ?? null };
+}
+
+/**
+ * Why a card cannot go into `lane`, or null when it can. The one refusal the
+ * page can see coming is a story from another project — the server would
+ * refuse it too, but only after the card had visibly landed.
+ */
+export function laneRefusalOf(
+    task: BoardTask,
+    lane: Pick<BoardLane, 'key' | 'projectId'>,
+    mode: BoardSwimlanes,
+): 'otherProject' | null {
+    if (mode !== 'story' || lane.key === NO_LANE || !lane.projectId) return null;
+    return task.project?.id && task.project.id !== lane.projectId ? 'otherProject' : null;
 }

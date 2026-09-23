@@ -461,6 +461,7 @@ export class BoardsService {
             // composer's "unassigned" and a real holder take the same path.
             assigneeId: dto.assigneeId,
             assigneeEmployeeId: dto.assigneeEmployeeId,
+            userStoryId: dto.userStoryId || undefined,
         });
 
         // addTasks returns the reloaded board, which is exactly what the page
@@ -729,6 +730,11 @@ export class BoardsService {
 
         const reorderInPlace = boundStatusIds.includes(task.status_id);
 
+        // Resolved before anything is written, so a drop that cannot land —
+        // an unmapped column, a lane key of the wrong kind, a story from
+        // another project — fails with the task exactly as it was.
+        const laneChange = laneChangeOf(dto);
+
         // A same-column reorder must not touch the task's status. Resolving
         // one anyway would use resolveStatusId's tie-break (the bound status
         // with the lowest sort_order for this project), which can differ from
@@ -739,8 +745,9 @@ export class BoardsService {
         // flip it to "Doing": a STATUS_CHANGED activity row, a watcher
         // notification, and a task-list reshuffle for what the user
         // experiences as a no-op.
+        let statusId: string | null = null;
         if (!reorderInPlace) {
-            const statusId = await this.columns.resolveStatusId(
+            statusId = await this.columns.resolveStatusId(
                 tenantId,
                 boardId,
                 dto.columnId,
@@ -751,7 +758,16 @@ export class BoardsService {
                     'That column is not mapped to a status in this card’s project. Map it in board settings first.',
                 );
             }
+        }
 
+        // The lane first: it is the half that can still refuse (a story from
+        // another project), and the status move after it cannot. Through the
+        // task service's own update so the ASSIGNED activity row, the new
+        // assignee's watch and the watcher notification are the ones the task
+        // panel would have produced.
+        if (laneChange) await this.tasks.update(viewer, taskId, laneChange);
+
+        if (statusId) {
             await this.tasks.move(viewer, taskId, {
                 statusId,
                 sortOrder: dto.sortOrder,
@@ -794,4 +810,27 @@ export class BoardsService {
 
         return this.findOne(viewer, boardId);
     }
+}
+
+/**
+ * What a swimlane drop changes on the task, as the fields `UpdateTaskDto`
+ * takes. An assignee lane writes both holder columns — a task goes to a user
+ * or to an employee, never both, so taking one means clearing the other.
+ * `''` is the update's own spelling of "clear".
+ */
+export function laneChangeOf(
+    dto: Pick<MoveBoardCardDto, 'laneBy' | 'laneKey'>,
+): { assigneeId?: string; assigneeEmployeeId?: string; userStoryId?: string } | null {
+    if (!dto.laneBy || !dto.laneKey) return null;
+    const [kind, id = ''] = dto.laneKey.split(':');
+
+    if (dto.laneBy === 'assignee') {
+        if (kind === 'none') return { assigneeId: '', assigneeEmployeeId: '' };
+        if (kind === 'user') return { assigneeId: id, assigneeEmployeeId: '' };
+        if (kind === 'employee') return { assigneeId: '', assigneeEmployeeId: id };
+    } else {
+        if (kind === 'none') return { userStoryId: '' };
+        if (kind === 'story') return { userStoryId: id };
+    }
+    throw new BadRequestException('That swimlane does not match what the board is grouped by.');
 }

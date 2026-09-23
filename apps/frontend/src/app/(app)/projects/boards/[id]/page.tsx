@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
     AlignLeft,
     CheckSquare,
+    ChevronDown,
     FolderKanban,
     GitBranch,
     GripVertical,
@@ -81,8 +82,16 @@ import {
 } from '@/components/projects/board-tasks';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
 import {
+    laneStorageId,
+    readCollapsedLanes,
+    writeCollapsedLanes,
+} from '@/components/projects/board-lane-storage';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
+import {
     groupIntoLanes,
+    laneFieldsOf,
     laneKeyOf,
+    laneRefusalOf,
     NO_LANE,
     UNSORTED_CELL,
     type BoardLane,
@@ -132,6 +141,12 @@ interface DragState {
     /** False until a mouse gesture passes the threshold — before that it is a click. */
     active: boolean;
     target: DropTarget | null;
+    /**
+     * The pointer is over a lane the card cannot join — a story from another
+     * project. Held so the release can say why nothing happened, rather than
+     * the drop just silently not landing.
+     */
+    refused?: 'otherProject';
     title: string;
 }
 
@@ -193,6 +208,14 @@ export default function BoardPage() {
      * a Set's iteration order is an accident of insertion the reader cannot see.
      */
     const [selection, setSelection] = useState<string[]>([]);
+    /** Lanes this browser has folded on this board — see `board-lane-storage.ts`. */
+    const [collapsedLanes, setCollapsedLanes] = useState<string[]>([]);
+    useEffect(() => {
+        setCollapsedLanes(readCollapsedLanes(boardId));
+    }, [boardId]);
+    /** Below `md` a grouped board shows one column at a time — this one. */
+    const [mobileColumnId, setMobileColumnId] = useState<string | null>(null);
+    const isMdUp = useIsMdUp();
     /** One guard over every bulk action: two in flight would race on the board. */
     const [busy, setBusy] = useState(false);
     /** The cards waiting on `RemoveCardsDialog`: off this board, or deleted outright. */
@@ -251,6 +274,22 @@ export default function BoardPage() {
         () => groupIntoLanes(visibleColumns, visibleUnsorted, view.swimlanes),
         [visibleColumns, visibleUnsorted, view.swimlanes],
     );
+    /** The phone layout's column tabs: Unsorted first when it holds anything, as on the wide board. */
+    const mobileCells = useMemo(
+        () => [
+            ...(unsorted.length > 0
+                ? [{ id: UNSORTED_CELL, name: m.unsorted, count: visibleUnsorted.length }]
+                : []),
+            ...visibleColumns.map((column) => ({ id: column.id, name: column.name, count: column.tasks.length })),
+        ],
+        [unsorted.length, visibleUnsorted.length, visibleColumns, m.unsorted],
+    );
+    // Falls back to the first tab when the remembered one is gone — a column
+    // deleted, or Unsorted emptied.
+    const mobileCellId = mobileCells.some((cell) => cell.id === mobileColumnId)
+        ? mobileColumnId
+        : (mobileCells[0]?.id ?? null);
+    const mobileColumn = visibleColumns.find((column) => column.id === mobileCellId);
 
     /** Every card on the board, columns and Unsorted alike. */
     const boardTasks = useMemo(
@@ -408,11 +447,22 @@ export default function BoardPage() {
         });
     }, [visibleColumns, visibleUnsorted]);
 
-    const move = async (taskId: string, columnId: string, sortOrder: number) => {
-        const task =
+    /**
+     * `lane` makes the drop a swimlane change as well: the card is redrawn with
+     * the lane's person or story straight away, and the server's answer — the
+     * whole board — replaces the guess once it arrives.
+     */
+    const move = async (
+        taskId: string,
+        columnId: string,
+        sortOrder: number,
+        lane?: { key: string; fields: Partial<BoardTask> },
+    ) => {
+        const found =
             columns.flatMap((column) => column.tasks).find((tk) => tk.id === taskId) ??
             unsorted.find((tk) => tk.id === taskId);
-        if (!task) return;
+        if (!found) return;
+        const task = lane ? { ...found, ...lane.fields } : found;
 
         // Optimistic: the card should follow the cursor, not the round-trip.
         setUnsorted((list) => list.filter((tk) => tk.id !== taskId));
@@ -427,8 +477,21 @@ export default function BoardPage() {
         );
 
         try {
-            await api.moveBoardCard(boardId, taskId, { columnId, sortOrder });
+            const board = await api.moveBoardCard(boardId, taskId, {
+                columnId,
+                sortOrder,
+                ...(lane && grouped ? { laneBy: view.swimlanes as 'assignee' | 'story', laneKey: lane.key } : {}),
+            });
+            if (lane) applyBoard(board as BoardResponse);
         } catch (error) {
+            // A refused lane change has a reason of its own — the story is
+            // another project's — and the server's words for it are the right
+            // ones; the unmapped-column message below would be wrong.
+            if (lane && error instanceof ApiError && error.status === 400) {
+                toast.error(error.message);
+                await loadBoard();
+                return;
+            }
             // A 400 here means exactly one thing — the target column has no
             // status mapped for this card's project (moveCard's only
             // BadRequestException). Anything else — a 401, a 500, a dropped
@@ -617,17 +680,22 @@ export default function BoardPage() {
     };
 
     /**
-     * On a grouped board a drop only counts inside the card's own lane. Into
-     * another lane it would mean reassigning the card or moving it to another
-     * story, which the board does not do yet — and a move that quietly snapped
-     * back to the card's own row would read as the board ignoring the drop.
-     * A column's header cell carries no lane, so it is never a target either.
+     * On a grouped board a drop has to land in a lane cell — a column's header
+     * cell carries no lane, so it is never a target — and a card can join any
+     * lane but one: a story from another project, which the server would
+     * refuse anyway. That one is reported, so the release can say why.
      */
-    const withinOwnLane = (target: DropTarget | null, taskId: string): DropTarget | null => {
-        if (!grouped || !target) return target;
+    const laneTarget = (
+        target: DropTarget | null,
+        taskId: string,
+    ): { target: DropTarget | null; refused?: 'otherProject' } => {
+        if (!grouped || !target) return { target };
+        if (target.laneKey === undefined) return { target: null };
         const task = boardTasks.find((candidate) => candidate.id === taskId);
-        if (!task || target.laneKey !== laneKeyOf(task, view.swimlanes)) return null;
-        return target;
+        const lane = lanes.find((candidate) => candidate.key === target.laneKey);
+        if (!task || !lane) return { target: null };
+        const refused = laneRefusalOf(task, lane, view.swimlanes);
+        return refused ? { target: null, refused } : { target };
     };
 
     /**
@@ -638,6 +706,12 @@ export default function BoardPage() {
         grouped
             ? (lanes.find((lane) => lane.key === target.laneKey)?.cells[target.columnId] ?? [])
             : (visibleColumns.find((column) => column.id === target.columnId)?.tasks ?? []);
+
+    /** What `move` needs to carry a card into lane `key`. */
+    const laneMove = (key: string) => {
+        const lane = lanes.find((candidate) => candidate.key === key);
+        return { key, fields: lane ? laneFieldsOf(lane, view.swimlanes) : {} };
+    };
 
     const continueDrag = (e: React.PointerEvent) => {
         if (!drag || e.pointerId !== drag.pointerId) return;
@@ -654,7 +728,7 @@ export default function BoardPage() {
             ...drag,
             point,
             active: true,
-            target: withinOwnLane(resolveDropTarget(point, drag.taskId, document), drag.taskId),
+            ...laneTarget(resolveDropTarget(point, drag.taskId, document), drag.taskId),
         });
     };
 
@@ -667,17 +741,26 @@ export default function BoardPage() {
             setOpenTaskId(drag.taskId);
             return;
         }
-        if (!drag.target) return;
+        if (!drag.target) {
+            if (drag.refused === 'otherProject') toast.error(bm.laneOtherProject);
+            return;
+        }
 
         const target = drag.target;
         const sourceColumn = columns.find((column) =>
             column.tasks.some((task) => task.id === drag.taskId),
         );
         const visible = visibleAt(target);
+        const draggedTask = boardTasks.find((task) => task.id === drag.taskId);
+        const crossLane =
+            grouped &&
+            draggedTask !== undefined &&
+            target.laneKey !== laneKeyOf(draggedTask, view.swimlanes);
         // Measured among the cards the reader can see, which is what the drop
         // index counts: against the whole column, a filtered or grouped board
         // would take a card dropped back where it was for a move.
         const sameSpot =
+            !crossLane &&
             sourceColumn?.id === target.columnId &&
             visible.findIndex((task) => task.id === drag.taskId) === target.index;
         if (sameSpot) return;
@@ -691,6 +774,7 @@ export default function BoardPage() {
                 target.index,
                 drag.taskId,
             ),
+            crossLane ? laneMove(target.laneKey!) : undefined,
         );
     };
 
@@ -924,6 +1008,103 @@ export default function BoardPage() {
     const laneName = (lane: BoardLane) =>
         lane.title ?? (view.swimlanes === 'story' ? bm.laneNoStory : bm.laneUnassigned);
 
+    const isCollapsed = (lane: BoardLane) =>
+        collapsedLanes.includes(laneStorageId(view.swimlanes, lane.key));
+
+    const toggleLane = (lane: BoardLane) => {
+        const id = laneStorageId(view.swimlanes, lane.key);
+        setCollapsedLanes((current) => {
+            const next = current.includes(id) ? current.filter((other) => other !== id) : [...current, id];
+            writeCollapsedLanes(boardId, next);
+            return next;
+        });
+    };
+
+    const laneHeadingFor = (lane: BoardLane) => (
+        <LaneHeading
+            lane={lane}
+            name={laneName(lane)}
+            story={view.swimlanes === 'story'}
+            count={bm.laneCards.replace('{count}', String(lane.count))}
+            progress={
+                view.swimlanes === 'story' && lane.key !== NO_LANE
+                    ? bm.laneDone.replace('{done}', String(lane.done)).replace('{count}', String(lane.count))
+                    : undefined
+            }
+            collapsed={isCollapsed(lane)}
+            toggleLabel={isCollapsed(lane) ? bm.laneExpand : bm.laneCollapse}
+            onToggle={() => toggleLane(lane)}
+        />
+    );
+
+    /**
+     * "Add a card" inside a lane: the card is the lane's before it exists. A
+     * person's lane assigns it to them; a story's lane links it to the story
+     * and fixes the project to the story's, the only one it can join.
+     */
+    const laneComposerFor = (lane: BoardLane, columnId: string) => {
+        const story =
+            view.swimlanes === 'story' && lane.key !== NO_LANE
+                ? (laneFieldsOf(lane, 'story').userStory ?? undefined)
+                : undefined;
+        const byPerson = view.swimlanes === 'assignee';
+        const projectId = story && lane.projectId ? lane.projectId : composerProject;
+        return (
+            <BoardCardComposer
+                boardId={boardId}
+                columnId={columnId}
+                projects={projects}
+                projectId={projectId}
+                onProjectChange={setComposerProject}
+                projectLocked={Boolean(story && lane.projectId)}
+                userStory={story}
+                defaultAssignee={byPerson ? (lane.key === NO_LANE ? '' : lane.key) : composerAssignee}
+                defaultAssigneeLabel={byPerson ? laneName(lane) : composerAssigneeLabel}
+                assignees={projectMeta.peek(projectId)?.assignees ?? []}
+                onAssigneeMenuOpen={() => void projectMeta.load(projectId)}
+                onCreated={loadBoard}
+                compact
+            />
+        );
+    };
+
+    /** One lane's slice of one column: a drop target, its cards and a composer. */
+    const laneCellFor = (lane: BoardLane, columnId: string, sizeClass: string) => {
+        const cell = lane.cells[columnId] ?? [];
+        const dropIndex =
+            drag?.active && drag.target?.columnId === columnId && drag.target.laneKey === lane.key
+                ? drag.target.index
+                : null;
+        return (
+            <div
+                key={columnId}
+                {...{ [COLUMN_ATTR]: columnId, [LANE_ATTR]: lane.key }}
+                className={`group/cell flex min-h-12 ${sizeClass} flex-col ${d.columnGap} ${d.columnPad} rounded-lg border bg-gray-50 ${lift} ${
+                    dropIndex !== null ? 'border-blue-300' : 'border-gray-200'
+                }`}
+            >
+                {cell.map((task, index) => (
+                    <Fragment key={task.id}>
+                        {dropIndex === index && <DropIndicator animate={view.animate} />}
+                        {cardFor(task, index)}
+                    </Fragment>
+                ))}
+                {dropIndex === cell.length && <DropIndicator animate={view.animate} />}
+                <div className="mt-auto">{laneComposerFor(lane, columnId)}</div>
+            </div>
+        );
+    };
+
+    /** The lane's Unsorted cards. Not a drop target: nothing can be moved into Unsorted. */
+    const unsortedCellFor = (lane: BoardLane, sizeClass: string) => (
+        <div
+            key={UNSORTED_CELL}
+            className={`flex min-h-12 ${sizeClass} flex-col ${d.columnGap} ${d.columnPad} rounded-lg border border-amber-300 bg-amber-50 ${lift}`}
+        >
+            {(lane.cells[UNSORTED_CELL] ?? []).map((task, index) => cardFor(task, index))}
+        </div>
+    );
+
     return (
         <PageShell contentClassName={sc.shell}>
             {/* The background is painted here rather than on the column
@@ -1005,7 +1186,69 @@ export default function BoardPage() {
                 {/* Columns scroll inside their own container so the page body
                     never scrolls sideways on a phone. Sideways always; whether
                     they scroll downwards in here too is `sc` — see `SCROLL`. */}
-                {grouped ? (
+                {grouped && !isMdUp ? (
+                    // A phone cannot show lanes × columns — at 360px that is a
+                    // window onto one cell with the rest a sideways scroll
+                    // away. So one column at a time, picked from the strip of
+                    // tabs, with the lanes stacked under it at full width.
+                    // Dragging a card up or down into another lane still
+                    // reassigns it; changing column is the tabs' job, or the
+                    // selection bar's.
+                    <div className="space-y-3">
+                        <div
+                            role="tablist"
+                            aria-label={bm.laneColumn}
+                            className="flex gap-1 overflow-x-auto rounded-md bg-gray-100 p-0.5"
+                        >
+                            {mobileCells.map((cell) => {
+                                const selected = cell.id === mobileCellId;
+                                return (
+                                    <button
+                                        key={cell.id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={selected}
+                                        onClick={() => setMobileColumnId(cell.id)}
+                                        className={`flex min-h-touch shrink-0 items-center gap-1.5 rounded px-3 text-xs font-medium ${
+                                            selected ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'
+                                        }`}
+                                    >
+                                        {cell.name}
+                                        <span className="rounded bg-gray-100 px-1 text-gray-500">{cell.count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {mobileColumn && (
+                            <div
+                                className={`flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${lift}`}
+                            >
+                                {columnHeadFor(mobileColumn, visibleColumns.indexOf(mobileColumn))}
+                                {lanes.length === 0 && <div className={d.columnPad}>{composerFor(mobileColumn.id)}</div>}
+                            </div>
+                        )}
+
+                        {lanes.length === 0 && (
+                            <p className="rounded-md border border-dashed border-gray-200 bg-white/60 px-1 py-4 text-center text-xs text-gray-400">
+                                {filtered ? bm.noMatches : bm.emptyColumn}
+                            </p>
+                        )}
+
+                        {lanes.map((lane) => (
+                            <section key={lane.key} aria-label={laneName(lane)}>
+                                {laneHeadingFor(lane)}
+                                {!isCollapsed(lane) && (
+                                    <div className="mt-1.5">
+                                        {mobileCellId === UNSORTED_CELL
+                                            ? unsortedCellFor(lane, 'w-full')
+                                            : mobileColumn && laneCellFor(lane, mobileColumn.id, 'w-full')}
+                                    </div>
+                                )}
+                            </section>
+                        ))}
+                    </div>
+                ) : grouped ? (
                     <div className="overflow-x-auto pb-2">
                         <div className="flex min-w-max flex-col gap-3">
                             {/* The column heads, once, above every lane. Each
@@ -1013,7 +1256,7 @@ export default function BoardPage() {
                                 be dragged by its head and dropped over any of
                                 its cells further down. It carries no lane, which
                                 is what keeps it from being a place to drop a
-                                card — see `withinOwnLane`. */}
+                                card — see `laneTarget`. */}
                             <div className="flex items-start gap-3">
                                 {unsorted.length > 0 && (
                                     <div
@@ -1033,7 +1276,12 @@ export default function BoardPage() {
                                         className={`group/column flex ${widthClass} shrink-0 flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${columnRing(column.id)}`}
                                     >
                                         {columnHeadFor(column, columnIndex)}
-                                        <div className={d.columnPad}>{composerFor(column.id)}</div>
+                                        {/* Each lane cell has its own composer, which is
+                                            what decides whose card it is. Up here only
+                                            while there are no lanes to hold one. */}
+                                        {lanes.length === 0 && (
+                                            <div className={d.columnPad}>{composerFor(column.id)}</div>
+                                        )}
                                     </div>
                                 ))}
                                 <BoardColumnComposer
@@ -1056,53 +1304,15 @@ export default function BoardPage() {
                                     className={motionClass(view, 'column')}
                                     style={{ animationDelay: staggerDelay(view, laneIndex) }}
                                 >
-                                    <LaneHeading
-                                        lane={lane}
-                                        name={laneName(lane)}
-                                        story={view.swimlanes === 'story'}
-                                        count={bm.laneCards.replace('{count}', String(lane.count))}
-                                    />
-                                    <div className="mt-1.5 flex items-stretch gap-3">
-                                        {unsorted.length > 0 && (
-                                            <div
-                                                className={`flex ${widthClass} shrink-0 flex-col ${d.columnGap} ${d.columnPad} rounded-lg border border-amber-300 bg-amber-50 ${lift}`}
-                                            >
-                                                {(lane.cells[UNSORTED_CELL] ?? []).map((task, index) =>
-                                                    cardFor(task, index),
-                                                )}
-                                            </div>
-                                        )}
-                                        {visibleColumns.map((column) => {
-                                            const cell = lane.cells[column.id] ?? [];
-                                            const dropIndex =
-                                                drag?.active &&
-                                                drag.target?.columnId === column.id &&
-                                                drag.target.laneKey === lane.key
-                                                    ? drag.target.index
-                                                    : null;
-                                            return (
-                                                <div
-                                                    key={column.id}
-                                                    {...{ [COLUMN_ATTR]: column.id, [LANE_ATTR]: lane.key }}
-                                                    className={`flex min-h-12 ${widthClass} shrink-0 flex-col ${d.columnGap} ${d.columnPad} rounded-lg border bg-gray-50 ${lift} ${
-                                                        dropIndex !== null ? 'border-blue-300' : 'border-gray-200'
-                                                    }`}
-                                                >
-                                                    {cell.map((task, index) => (
-                                                        <Fragment key={task.id}>
-                                                            {dropIndex === index && (
-                                                                <DropIndicator animate={view.animate} />
-                                                            )}
-                                                            {cardFor(task, index)}
-                                                        </Fragment>
-                                                    ))}
-                                                    {dropIndex === cell.length && (
-                                                        <DropIndicator animate={view.animate} />
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                    {laneHeadingFor(lane)}
+                                    {!isCollapsed(lane) && (
+                                        <div className="mt-1.5 flex items-stretch gap-3">
+                                            {unsorted.length > 0 && unsortedCellFor(lane, `${widthClass} shrink-0`)}
+                                            {visibleColumns.map((column) =>
+                                                laneCellFor(lane, column.id, `${widthClass} shrink-0`),
+                                            )}
+                                        </div>
+                                    )}
                                 </section>
                             ))}
                         </div>
@@ -1283,37 +1493,72 @@ export default function BoardPage() {
 }
 
 /**
- * A swimlane's heading. Sticky to the start edge, so the name stays in view
- * while the board is scrolled sideways to its later columns — a row of cards
- * with its owner scrolled off screen is a row nobody can place.
+ * A swimlane's heading, and the switch that folds the lane away. Sticky to the
+ * start edge, so the name stays in view while the board is scrolled sideways
+ * to its later columns — a row of cards with its owner scrolled off screen is
+ * a row nobody can place.
  */
 function LaneHeading({
     lane,
     name,
     story,
     count,
+    progress,
+    collapsed,
+    toggleLabel,
+    onToggle,
 }: {
     lane: BoardLane;
     name: string;
     story: boolean;
     count: string;
+    /** `2/3 done` on a story lane — how far the story has got, at a glance. */
+    progress?: string;
+    collapsed: boolean;
+    toggleLabel: string;
+    onToggle: () => void;
 }) {
     return (
-        <h2 className="sticky start-0 flex w-max max-w-xs items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-800 shadow-sm md:max-w-md">
-            {story
-                ? lane.code && <span className="shrink-0 font-mono text-xs text-blue-700">{lane.code}</span>
-                : lane.key !== NO_LANE && (
-                      <span
-                          aria-hidden
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-medium text-blue-700"
-                      >
-                          {initialsOf(name)}
-                      </span>
-                  )}
-            <span className="truncate">{name}</span>
-            <span className="shrink-0 rounded bg-gray-100 px-1.5 text-xs font-normal text-gray-600">
-                {count}
-            </span>
+        <h2 className="sticky start-0 w-max max-w-full md:max-w-md">
+            <button
+                type="button"
+                aria-expanded={!collapsed}
+                title={toggleLabel}
+                onClick={onToggle}
+                className="flex min-h-touch max-w-full items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-start text-sm font-medium text-gray-800 shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:min-h-0"
+            >
+                <ChevronDown
+                    aria-hidden
+                    className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${
+                        collapsed ? '-rotate-90 rtl:rotate-90' : ''
+                    }`}
+                />
+                {story
+                    ? lane.code && <span className="shrink-0 font-mono text-xs text-blue-700">{lane.code}</span>
+                    : lane.key !== NO_LANE && (
+                          <span
+                              aria-hidden
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-medium text-blue-700"
+                          >
+                              {initialsOf(name)}
+                          </span>
+                      )}
+                <span className="truncate">{name}</span>
+                <span className="shrink-0 rounded bg-gray-100 px-1.5 text-xs font-normal text-gray-600">
+                    {count}
+                </span>
+                {progress && (
+                    <span
+                        className={`shrink-0 rounded px-1.5 text-xs font-normal ${
+                            lane.done === lane.count
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-gray-100 text-gray-600'
+                        }`}
+                    >
+                        {progress}
+                    </span>
+                )}
+            </button>
         </h2>
     );
 }
