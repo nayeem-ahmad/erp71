@@ -41,7 +41,7 @@ describe('TimerChip', () => {
     });
 
     it('shows the running clock', () => {
-        useProjectTimerStore.setState({ timer: running() as never, loaded: true });
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
         // 65s seeded from the server.
@@ -49,7 +49,7 @@ describe('TimerChip', () => {
     });
 
     it('names the task the clock belongs to', () => {
-        useProjectTimerStore.setState({ timer: running() as never, loaded: true });
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
         expect(screen.getByText('Wire the tracker')).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe('TimerChip', () => {
     it('ticks while it runs', () => {
         jest.useFakeTimers();
         try {
-            useProjectTimerStore.setState({ timer: running() as never, loaded: true });
+            useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
             render(<TimerChip />);
 
             expect(screen.getByText('1:05')).toBeInTheDocument();
@@ -71,8 +71,27 @@ describe('TimerChip', () => {
         }
     });
 
+    it('keeps the right time when the tab was throttled in the background', () => {
+        // A background tab gets its intervals throttled to about one a minute,
+        // so a clock counted by adding one per tick fell minutes behind. An
+        // hour after the answer arrived, the clock must show an hour more.
+        jest.useFakeTimers();
+        try {
+            useProjectTimerStore.setState({
+                timer: running() as never,
+                receivedAt: Date.now() - 3600 * 1000,
+                loaded: true,
+            });
+            render(<TimerChip />);
+
+            expect(screen.getByText('1:01:05')).toBeInTheDocument();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it('stops the clock through the shared action, so every surface agrees', async () => {
-        useProjectTimerStore.setState({ timer: running() as never, loaded: true });
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
@@ -83,7 +102,7 @@ describe('TimerChip', () => {
     });
 
     it('opens the tracker when the running chip is clicked, for the note and tags', () => {
-        useProjectTimerStore.setState({ timer: running() as never, loaded: true, open: false });
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true, open: false });
         render(<TimerChip />);
 
         fireEvent.click(screen.getByText('1:05'));
@@ -106,7 +125,7 @@ describe('TimerChip', () => {
     });
 
     it('survives a clock with no task attached', () => {
-        useProjectTimerStore.setState({ timer: running({ task: null }) as never, loaded: true });
+        useProjectTimerStore.setState({ timer: running({ task: null }) as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
         expect(screen.getByText('1:05')).toBeInTheDocument();

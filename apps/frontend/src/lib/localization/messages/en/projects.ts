@@ -789,6 +789,15 @@ export const projectsMessages = {
         cardsSorted: 'Cards sorted',
         cardsMoved: '{count} card(s) moved',
         cardsRemoved: '{count} card(s) removed',
+        // The confirmation behind a card's bin: take it off this board, or
+        // delete the task itself. Used for one card and for a selection.
+        removeTitle: 'Remove this card?',
+        removeTitleMany: 'Remove {count} cards?',
+        removeFromBoardHint: 'Only take it off this board. The task stays in its project and on any other board.',
+        deleteTasks: 'Delete task(s)',
+        deleteTasksHint: 'Delete the task itself. It disappears from its project and from every board.',
+        tasksDeleted: '{count} task(s) deleted',
+        tasksDeleteFailed: '{count} task(s) could not be deleted',
         searchPlaceholder: 'Search board name or description',
         emptyFiltered: 'No boards match these filters.',
         cards: 'Cards',

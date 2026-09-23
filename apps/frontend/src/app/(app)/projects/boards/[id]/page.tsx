@@ -28,6 +28,7 @@ import { defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
 import BoardColumnComposer from '@/components/projects/BoardColumnComposer';
 import BoardColumnHead from '@/components/projects/BoardColumnHead';
 import BoardSettingsModal from '@/components/projects/BoardSettingsModal';
+import RemoveCardsDialog, { type RemoveCardsMode } from '@/components/projects/RemoveCardsDialog';
 import { useBoardView } from '@/components/projects/use-board-view';
 import {
     boardCanvasClass,
@@ -79,6 +80,8 @@ import {
 } from '@/components/projects/board-tasks';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
 import { useIsTimerRunningFor } from '@/components/projects/TimerChip';
+import { useTimerElapsed } from '@/components/projects/use-timer-elapsed';
+import { formatElapsed } from '@/components/projects/hour-log-day';
 import { useProjectTimerActions } from '@/components/projects/use-project-timer';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { api, ApiError } from '@/lib/api';
@@ -179,6 +182,10 @@ export default function BoardPage() {
     const [selection, setSelection] = useState<string[]>([]);
     /** One guard over every bulk action: two in flight would race on the board. */
     const [busy, setBusy] = useState(false);
+    /** The cards waiting on `RemoveCardsDialog`: off this board, or deleted outright. */
+    const [pendingRemoval, setPendingRemoval] = useState<{ taskIds: string[]; title?: string } | null>(
+        null,
+    );
     const [projects, setProjects] = useState<ComposerProject[]>([]);
     // Which project a composed card belongs to. Held here rather than per
     // column so picking it once covers the whole board.
@@ -187,6 +194,7 @@ export default function BoardPage() {
     const [userId, setUserId] = useState<string | null>(null);
     /** The composer's assignee picker draws on the chosen project's roster. */
     const projectMeta = useProjectMeta();
+    const { load: loadTimer } = useProjectTimerActions();
 
     /**
      * Shadow under each column, but only on a painted board: gray-50 on white
@@ -312,7 +320,7 @@ export default function BoardPage() {
             // Distinguished from "still loading" below, so a 403/404/network
             // failure gets an exit rather than an indefinite spinner. A failure
             // once the board is already on screen is reported the same way
-            // `removeCard` reports its own failures — a toast, not a state wipe.
+            // a card removal reports its own failures — a toast, not a state wipe.
             setLoadError(true);
             toast.error(error instanceof Error ? error.message : t.common.error);
         } finally {
@@ -515,13 +523,29 @@ export default function BoardPage() {
         });
     };
 
-    const removeCards = (taskIds: string[]) => {
+    /**
+     * Carries out the choice made in `RemoveCardsDialog`, for one card or a
+     * selection alike. Deleting uses the bulk route even for one task: it skips
+     * rather than fails on a task somebody else deleted a moment earlier, and
+     * reports how many it skipped.
+     */
+    const confirmRemoval = (mode: RemoveCardsMode) => {
+        const taskIds = pendingRemoval?.taskIds ?? [];
         if (taskIds.length === 0) return;
         run(async () => {
-            const board = await api.removeBoardCards(boardId, taskIds);
-            applyBoard(board);
-            setSelection([]);
-            toast.success(m.cardsRemoved.replace('{count}', String(taskIds.length)));
+            if (mode === 'board') {
+                applyBoard(await api.removeBoardCards(boardId, taskIds));
+                toast.success(m.cardsRemoved.replace('{count}', String(taskIds.length)));
+            } else {
+                const { deleted, skipped } = await api.bulkDeleteProjectTasks(taskIds);
+                if (deleted > 0) toast.success(m.tasksDeleted.replace('{count}', String(deleted)));
+                if (skipped > 0) toast.error(m.tasksDeleteFailed.replace('{count}', String(skipped)));
+                // The clock may have been running on a task that just went.
+                loadTimer();
+                await loadBoard();
+            }
+            setSelection((current) => current.filter((id) => !taskIds.includes(id)));
+            setPendingRemoval(null);
         });
     };
 
@@ -544,15 +568,6 @@ export default function BoardPage() {
             ...current,
             ...visible.tasks.map((task) => task.id).filter((id) => !current.includes(id)),
         ]);
-    };
-
-    const removeCard = async (taskId: string) => {
-        try {
-            await api.removeBoardTask(boardId, taskId);
-            await loadBoard();
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : t.common.error);
-        }
     };
 
     // ── Pointer dragging ────────────────────────────────────────────────────
@@ -814,7 +829,7 @@ export default function BoardPage() {
                         columns={columns}
                         busy={busy}
                         onMove={(columnId) => moveCards(selection, columnId)}
-                        onRemove={() => removeCards(selection)}
+                        onRemove={() => setPendingRemoval({ taskIds: selection })}
                         onClear={() => setSelection([])}
                     />
                 )}
@@ -859,7 +874,7 @@ export default function BoardPage() {
                                         onPointerUp={endDrag}
                                         onPointerCancel={cancelDrag}
                                         onOpen={() => setOpenTaskId(task.id)}
-                                        onRemove={() => removeCard(task.id)}
+                                        onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
                                     />
                                 ))}
                             </div>
@@ -996,7 +1011,7 @@ export default function BoardPage() {
                                                     onPointerUp={endDrag}
                                                     onPointerCancel={cancelDrag}
                                                     onOpen={() => setOpenTaskId(task.id)}
-                                                    onRemove={() => removeCard(task.id)}
+                                                    onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
                                                 />
                                             </Fragment>
                                         ))}
@@ -1086,6 +1101,15 @@ export default function BoardPage() {
                     onChanged={() => loadBoard()}
                 />
             )}
+
+            <RemoveCardsDialog
+                open={pendingRemoval !== null}
+                count={pendingRemoval?.taskIds.length ?? 0}
+                title={pendingRemoval?.title}
+                busy={busy}
+                onCancel={() => setPendingRemoval(null)}
+                onConfirm={confirmRemoval}
+            />
 
             {adding && (
                 <AddBoardTasksModal
@@ -1447,7 +1471,30 @@ function TaskCard({
                 subtasks > 0 ||
                 task.remaining_hours != null,
         );
-    const showMeta = showDetails || show.assignee;
+    const showProject = show.project && Boolean(projectLabel);
+    const showMeta = showDetails || show.assignee || showProject;
+
+    // Start only: a running clock is stopped from its own row further down,
+    // which also shows how long it has run. The button sits in the meta row,
+    // beside the hours it adds to. A card with that row switched off gets it
+    // in the hover toolbar instead, so the clock can always be started.
+    const startButton = timerRunning ? null : (
+        <button
+            type="button"
+            aria-label={tm.start}
+            title={tm.start}
+            tabIndex={-1}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+                e.stopPropagation();
+                void startTimer({ taskId: task.id, tagIds: [] });
+            }}
+            disabled={timerBusy}
+            className="max-md:min-h-touch max-md:min-w-touch inline-flex items-center justify-center rounded px-1 text-gray-300 transition-colors hover:text-emerald-600 disabled:opacity-40 md:group-hover:text-gray-400 md:hover:!text-emerald-600"
+        >
+            <Play className="h-3.5 w-3.5" />
+        </button>
+    );
 
     return (
         <article
@@ -1472,7 +1519,7 @@ function TaskCard({
             // bounded one in column-scroll mode: a flex item shrinks to fit its
             // container before it will overflow it, so without this forty cards
             // squeeze into one screen of column instead of scrolling inside it.
-            className={`group shrink-0 touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+            className={`group relative shrink-0 touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 // Selection is a thing you are doing to the card; a running
                 // clock is a thing happening on it, and outlives navigating
                 // away — so it wins the border when both are true.
@@ -1487,10 +1534,6 @@ function TaskCard({
 
             <div className={d.cardPad}>
             <div className="flex items-start gap-1">
-                {/* Shown only while a selection is running, and then on every
-                    card: a permanent checkbox on every card of every board
-                    would be a column of boxes to read past for the majority of
-                    readers who never select anything. */}
                 {selecting && (
                     <span
                         className="pt-0.5"
@@ -1506,10 +1549,10 @@ function TaskCard({
                         />
                     </span>
                 )}
-                {/* Both chrome buttons fade in on hover on a pointer device, so a
-                    full column reads as cards rather than as rows of controls.
-                    They stay put on touch, where the grip is the only way to
-                    start a drag and there is no hover to reveal it. */}
+                {/* Touch only. On a pointer device the whole card starts a drag,
+                    so the grip only took width from the title. On touch, a finger
+                    on the card scrolls the column (`touch-pan-y`), so the grip is
+                    still the only way to start a drag there. */}
                 <button
                     type="button"
                     aria-label={c.drag}
@@ -1518,70 +1561,35 @@ function TaskCard({
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
-                    className="-ms-1 max-md:min-h-touch touch-none px-1 text-gray-300 transition-opacity hover:text-gray-500 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                    className="-ms-1 min-h-touch touch-none px-1 text-gray-300 hover:text-gray-500 md:hidden"
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
-                <div className="min-w-0 flex-1 pt-0.5">
-                    <p className={d.title}>{task.title}</p>
-                    {/* A card gets read away from its board — two boards open
-                        side by side, a screenshot pasted into a chat — so it
-                        names its own project. Short name first because the full
-                        one does not fit a 18rem column; that goes in the title
-                        attribute. Muted and under the heading so it never
-                        competes with the task itself. */}
-                    {show.project && projectLabel && (
-                        <p
-                            title={task.project?.name ?? undefined}
-                            className="mt-0.5 flex items-center gap-1 text-xs text-gray-500"
-                        >
-                            <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            <span className="sr-only">{c.project}: </span>
-                            <span className="truncate">{projectLabel}</span>
-                        </p>
-                    )}
-                </div>
-                {/* Starting the clock without opening the card. Stays visible
-                    while it runs, where the other hover actions fade out —
-                    stopping has to be as reachable as starting was. */}
-                <button
-                    type="button"
-                    aria-label={timerRunning ? tm.stop : tm.start}
-                    title={timerRunning ? tm.stop : tm.start}
-                    tabIndex={-1}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        void (timerRunning ? stopTimer() : startTimer({ taskId: task.id, tagIds: [] }));
-                    }}
-                    disabled={timerBusy}
-                    className={`max-md:min-h-touch max-md:min-w-touch -me-0.5 rounded px-1 transition-opacity disabled:opacity-40 ${
-                        timerRunning
-                            ? 'text-emerald-600 hover:text-emerald-700'
-                            : 'text-gray-300 hover:text-emerald-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'
-                    }`}
-                >
-                    {timerRunning ? (
-                        <Square className="h-3.5 w-3.5" />
-                    ) : (
-                        <Play className="h-3.5 w-3.5" />
-                    )}
-                </button>
-                <button
-                    type="button"
-                    aria-label={m.removeCard}
-                    tabIndex={-1}
-                    // Stopped here, before it reaches the article's handler, so a
-                    // click on this button never arms a drag or opens the card.
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onRemove();
-                    }}
-                    className="max-md:min-h-touch max-md:min-w-touch -me-1 rounded px-1 text-gray-300 transition-opacity hover:text-red-600 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-                >
-                    <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <p className={`min-w-0 flex-1 pt-0.5 ${d.title}`}>{task.title}</p>
+                {/* Beside the title on touch, where nothing hovers. On a pointer
+                    device a small toolbar over the top corner, shown only on
+                    hover or focus, so it takes no width from the title the rest
+                    of the time. */}
+                <span className="flex shrink-0 items-center md:absolute md:end-1 md:top-1 md:rounded md:border md:border-gray-200 md:bg-white md:p-0.5 md:opacity-0 md:shadow-sm md:transition-opacity md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+                    {!showMeta && startButton}
+                    <button
+                        type="button"
+                        aria-label={m.removeCard}
+                        title={m.removeCard}
+                        tabIndex={-1}
+                        // Stopped here, before it reaches the article's handler, so a
+                        // click on this button never arms a drag or opens the card.
+                        // It only asks: `RemoveCardsDialog` does the work.
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove();
+                        }}
+                        className="max-md:min-h-touch max-md:min-w-touch -me-1 inline-flex items-center justify-center rounded px-1 text-gray-300 hover:text-red-600 md:me-0 md:py-0.5 md:text-gray-400"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                </span>
             </div>
 
             {/* Above the badges, as on a Trello card: colour is what the eye
@@ -1603,14 +1611,13 @@ function TaskCard({
                 by a board-view preference, and a clock somebody has running
                 should not be switchable off. */}
             {timerRunning && (
-                <div className={`${d.row} flex items-center gap-1.5`}>
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                        <span className="relative flex h-1.5 w-1.5" aria-hidden>
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        </span>
-                        {tm.running}
-                    </span>
+                <div className={`${d.row} flex items-center gap-1`}>
+                    <RunningClock
+                        label={tm.running}
+                        stopLabel={tm.stop}
+                        busy={timerBusy}
+                        onStop={() => void stopTimer()}
+                    />
                 </div>
             )}
 
@@ -1629,6 +1636,22 @@ function TaskCard({
                 <div
                     className={`${d.row} flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500`}
                 >
+                    {/* The project, as a chip in this row rather than a line of
+                        its own under the title. A card gets read away from its
+                        board (two boards side by side, a screenshot in a chat),
+                        so it still names its project. Short name, because the
+                        full one does not fit an 18rem column; the full name is
+                        in the title attribute. */}
+                    {showProject && (
+                        <span
+                            title={task.project?.name ?? undefined}
+                            className="inline-flex min-w-0 max-w-[8rem] items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-gray-600"
+                        >
+                            <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            <span className="sr-only">{c.project}: </span>
+                            <span className="truncate">{projectLabel}</span>
+                        </span>
+                    )}
                     {showDetails && (
                         <>
                             {task.description && (
@@ -1668,6 +1691,7 @@ function TaskCard({
                             {task.remaining_hours != null && <span>{num(task.remaining_hours)}h</span>}
                         </>
                     )}
+                    {startButton}
 
                     {show.assignee &&
                         (assigneeName ? (
@@ -1685,5 +1709,57 @@ function TaskCard({
             )}
             </div>
         </article>
+    );
+}
+
+/**
+ * The running clock on the card it belongs to, with its stop button.
+ *
+ * A component of its own so that only the one card with a running clock
+ * re-renders every second, not every card on the board. The count is the same
+ * `useTimerElapsed` the header chip and the tracker read, so all three show the
+ * same time.
+ */
+function RunningClock({
+    label,
+    stopLabel,
+    busy,
+    onStop,
+}: {
+    label: string;
+    stopLabel: string;
+    busy: boolean;
+    onStop: () => void;
+}) {
+    const elapsed = formatElapsed(useTimerElapsed());
+    return (
+        <>
+            <span
+                className="inline-flex items-center gap-1.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700"
+                title={label}
+            >
+                <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="sr-only">{label}: </span>
+                <span className="font-mono tabular-nums">{elapsed}</span>
+            </span>
+            <button
+                type="button"
+                aria-label={stopLabel}
+                title={stopLabel}
+                tabIndex={-1}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onStop();
+                }}
+                disabled={busy}
+                className="max-md:min-h-touch max-md:min-w-touch inline-flex items-center justify-center rounded px-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40"
+            >
+                <Square className="h-3.5 w-3.5" />
+            </button>
+        </>
     );
 }
