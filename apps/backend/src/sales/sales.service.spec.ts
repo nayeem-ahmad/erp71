@@ -993,6 +993,208 @@ describe('SalesService', () => {
     });
   });
 
+  describe('create() — whole-bill adjustments and line discounts', () => {
+    beforeEach(() => {
+      tx.sale.create.mockImplementation(async ({ data }: any) => ({ id: 'sale-1', serial_number: 'SL-1', ...data }));
+      tx.saleItem.create.mockResolvedValue({});
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: null, sd_rate: null },
+        { id: 'prod-2', name: 'Product 2', warranty_enabled: false, vat_rate: null, sd_rate: null },
+        { id: 'prod-3', name: 'Product 3', warranty_enabled: false, vat_rate: null, sd_rate: null },
+      ]);
+    });
+
+    // The reproduction: three lines totalling ৳1,215 plus ৳50 transport.
+    const threeLines = [
+      { productId: 'prod-1', quantity: 2, priceAtSale: 380 },
+      { productId: 'prod-2', quantity: 1, priceAtSale: 255 },
+      { productId: 'prod-3', quantity: 4, priceAtSale: 50 },
+    ];
+
+    it('accepts transport, labour and rounding and stores them in the total', async () => {
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: threeLines,
+        transportAmount: 50,
+        laborAmount: 20,
+        roundingAmount: -0.5,
+        totalAmount: 1284.5,
+        amountPaid: 1284.5,
+      });
+
+      expect(tx.sale.create.mock.calls[0][0].data.total_amount).toBe(1284.5);
+      // The whole billed amount posts, the way the update path already stores it.
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ amount: 1284.5 }));
+    });
+
+    it('still rejects a total the adjustments do not account for', async () => {
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: threeLines,
+        transportAmount: 50,
+        totalAmount: 1215,
+        amountPaid: 1215,
+      })).rejects.toThrow('Expected ৳1265.00');
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('still rejects the ৳50 transport when the client leaves it out of the body', async () => {
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: threeLines,
+        totalAmount: 1265,
+        amountPaid: 1265,
+      })).rejects.toThrow(BadRequestException);
+    });
+
+    it('refuses a rounding that takes the bill below zero', async () => {
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 10 }],
+        roundingAmount: -20,
+        totalAmount: -10,
+        amountPaid: 0,
+      })).rejects.toThrow('below zero');
+    });
+
+    it('records the VAT inside the goods as output VAT and leaves transport untaxed', async () => {
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+        transportAmount: 50,
+        totalAmount: 1200,
+        amountPaid: 1200,
+      });
+
+      // Prices are tax-inclusive: the 150 is inside the 1150, and the ৳50
+      // delivery charge is not the value of a supply.
+      expect(tx.sale.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
+        total_amount: 1200,
+        vat_amount: 150,
+      }));
+    });
+
+    it('posts a line discount as the net unit price and totals on it', async () => {
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 380, discountPercent: 10 }],
+        totalAmount: 342,
+        amountPaid: 342,
+      });
+
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ price_at_sale: 342 }),
+      });
+      expect(tx.saleItem.create.mock.calls[0][0].data).not.toHaveProperty('discountPercent');
+      expect(tx.sale.create.mock.calls[0][0].data.total_amount).toBe(342);
+    });
+
+    it('rejects a total that ignores the line discount', async () => {
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 380, discountPercent: 10 }],
+        totalAmount: 380,
+        amountPaid: 380,
+      })).rejects.toThrow('Expected ৳342.00');
+    });
+
+    it('rounds the net unit price to the paisa and totals quantity × that price', async () => {
+      // 99.99 less 7% is 92.9907 — stored as 92.99, so 3 units bill 278.97.
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 3, priceAtSale: 99.99, discountPercent: 7 }],
+        totalAmount: 278.97,
+        amountPaid: 278.97,
+      });
+
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ price_at_sale: 92.99, quantity: 3 }),
+      });
+    });
+
+    it('parks a draft with net prices and the adjusted total', async () => {
+      tx.product.count = jest.fn().mockResolvedValue(1);
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 100, discountPercent: 50 }],
+        transportAmount: 30,
+        totalAmount: 130,
+        amountPaid: 0,
+        isDraft: true,
+      });
+
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ price_at_sale: 50 }),
+      });
+      expect(tx.sale.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
+        status: 'DRAFT',
+        total_amount: 130,
+      }));
+    });
+  });
+
+  describe('finalizeDraft() — adjustments', () => {
+    const draftWithTransport = {
+      id: 'draft-2',
+      tenant_id: 'tenant-1',
+      store_id: 'store-1',
+      counter_id: null,
+      customer_id: null,
+      serial_number: 'SL-2',
+      status: 'DRAFT',
+      // ৳1,215 of goods and ৳50 transport, parked as a single total.
+      total_amount: 1265,
+      amount_paid: 1265,
+      note: null,
+      items: [{ product_id: 'prod-1', quantity: 1, price_at_sale: 1215 }],
+      payments: [{ payment_method: 'Cash', amount: 1265, account_id: null }],
+    };
+
+    beforeEach(() => {
+      tx.sale.findFirst.mockResolvedValue(draftWithTransport);
+      tx.sale.update.mockImplementation(async ({ data }: any) => ({ ...draftWithTransport, ...data }));
+      tx.saleItem.create.mockResolvedValue({});
+      tx.paymentRecord.create.mockResolvedValue({});
+    });
+
+    it('posts a draft whose total sits above its lines instead of rejecting it', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-2');
+
+      expect(tx.sale.update.mock.calls[0][0].data.total_amount).toBe(1265);
+    });
+
+    it('takes the breakdown the caller states', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-2', { transportAmount: 50 });
+
+      expect(tx.sale.update.mock.calls[0][0].data.total_amount).toBe(1265);
+    });
+
+    it('rejects a stated breakdown that contradicts a stated total', async () => {
+      await expect(
+        service.finalizeDraft('tenant-1', 'user-1', 'draft-2', {
+          transportAmount: 50,
+          discountAmount: 0,
+          totalAmount: 1300,
+          amountPaid: 1265,
+        }),
+      ).rejects.toThrow('Expected ৳1265.00');
+    });
+
+    it('nets a line discount on lines edited on the way out', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-2', {
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1350, discountPercent: 10 }],
+        transportAmount: 50,
+      });
+
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ price_at_sale: 1215 }),
+      });
+    });
+  });
+
   describe('findAll()', () => {
     it('should return a page of sales with the server total', async () => {
       db.sale.findMany.mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
@@ -1253,6 +1455,24 @@ describe('SalesService', () => {
       });
 
       expect(tx.sale.update.mock.calls[0][0].data.total_amount).toBe(115);
+    });
+
+    it('stores an edited line discount as the net unit price', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+      tx.saleItem.create.mockResolvedValue({});
+
+      await service.update('tenant-1', 's1', {
+        items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 50, discountPercent: 20 }],
+      });
+
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ price_at_sale: 40 }),
+      });
+      // Without an explicit total the lines are the total — at their net price.
+      expect(tx.sale.update.mock.calls[0][0].data.total_amount).toBe(80);
     });
   });
 

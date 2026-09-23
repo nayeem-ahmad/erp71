@@ -14,7 +14,7 @@ import SaleEntryLayout, {
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
 import PrintInvoicePrompt from '../components/PrintInvoicePrompt';
-import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { lineDiscountAmount, useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import {
     printSalesInvoice,
@@ -222,7 +222,9 @@ function NewSalePageContent() {
             name: item.name,
             quantity: item.quantity,
             unitPrice: item.price,
-            discount: item.discount || 0,
+            // The printer takes the line's discount in taka, not the typed
+            // percentage — it prints the figure and subtracts it.
+            discount: lineDiscountAmount(item),
         })),
         payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
@@ -233,6 +235,7 @@ function NewSalePageContent() {
         discountPercent: totals.discountPercent > 0
             ? Math.round(totals.discountPercent * 100) / 100
             : undefined,
+        // Contained in the total, not added to it — the printer labels it so.
         vat: totals.vat > 0 ? totals.vat : undefined,
         transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
         laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
@@ -260,6 +263,9 @@ function NewSalePageContent() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            // The product's own VAT rate, so the VAT shown inside the total
+            // matches what the server snapshots. Absent → workspace default.
+            vatRate: product.vat_rate != null ? Number(product.vat_rate) : null,
             // Voice-entry products come without stock rows — leave availableQty
             // undefined there rather than claiming zero stock.
             availableQty: options?.availableQty
@@ -333,7 +339,11 @@ function NewSalePageContent() {
         items: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
+            // The list price and the line's "Disc %" travel separately; the
+            // server folds one into the other the same way `netUnitPrice`
+            // does here, and stores the net price it arrives at.
             priceAtSale: item.price,
+            discountPercent: item.discount > 0 ? item.discount : undefined,
             // Only sent while the per-line column is showing: a line keeps its
             // override in state when the column is hidden, and posting one the
             // user cannot see would be a trap.
@@ -342,6 +352,12 @@ function NewSalePageContent() {
         totalAmount: totals.total,
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
         discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        // Billed on top of the discounted goods, and counted by the server's
+        // total check — which rejected any sale carrying them until they were
+        // sent. VAT is not among them: it is already inside the line prices.
+        transportAmount: totals.transportCost > 0 ? totals.transportCost : undefined,
+        laborAmount: totals.laborCost > 0 ? totals.laborCost : undefined,
+        roundingAmount: totals.rounding ? totals.rounding : undefined,
         note: description || undefined,
         saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({

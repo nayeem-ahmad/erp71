@@ -41,6 +41,7 @@ export interface InvoiceData {
     subtotal: number;
     discountAmount?: number;
     discountPercent?: number;
+    /** VAT contained in `total` (prices are tax-inclusive) — never added to it. */
     vat?: number;
     transportCost?: number;
     laborCost?: number;
@@ -201,11 +202,11 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
         <table class="totals-table">
             <tr><td>Subtotal</td><td>${formatBDT(data.subtotal)}</td></tr>
             ${data.discountAmount ? `<tr class="neg"><td>Discount${data.discountPercent ? ` (${data.discountPercent}%)` : ''}</td><td>-${formatBDT(data.discountAmount)}</td></tr>` : ''}
-            ${data.vat ? `<tr><td>VAT</td><td>${formatBDT(data.vat)}</td></tr>` : ''}
             ${data.transportCost ? `<tr><td>Transport</td><td>${formatBDT(data.transportCost)}</td></tr>` : ''}
             ${data.laborCost ? `<tr><td>Labour</td><td>${formatBDT(data.laborCost)}</td></tr>` : ''}
             ${data.rounding ? `<tr><td>Rounding</td><td>${formatBDT(data.rounding)}</td></tr>` : ''}
             <tr class="grand-total"><td>TOTAL</td><td>${formatBDT(data.total)}</td></tr>
+            ${data.vat ? `<tr><td>Incl. VAT</td><td>${formatBDT(data.vat)}</td></tr>` : ''}
         </table>
     </div>
 

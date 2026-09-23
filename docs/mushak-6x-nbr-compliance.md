@@ -86,6 +86,12 @@ Without this the 6.3 would declare output VAT the business never collected, and
 would not foot to its own total. A total *above* the lines is left alone:
 transport, labour or a rounding-up adjustment is not the value of a supply.
 
+A per-line "Disc %" is different: it is folded into `price_at_sale` when the
+sale is stored (`apps/backend/src/sales/sale-line-pricing.ts`), so the line
+already carries its net price and nothing needs spreading. The sales entry
+screen follows the same inclusive convention — its VAT row shows the VAT
+*inside* the total and never adds to it.
+
 ### Which rate applies
 
 `resolveTaxRate(product.vat_rate, tenant.default_vat_rate)`:

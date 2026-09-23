@@ -29,6 +29,37 @@ export interface LineItem {
      * nothing is stored against the line.
      */
     warehouseId?: string;
+    /**
+     * The product's own VAT rate, where it has one. Undefined or null falls
+     * back to the workspace default, exactly as the server resolves it — only
+     * used to show the VAT a sale's total already contains.
+     */
+    vatRate?: number | null;
+}
+
+/** Money to the paisa — the same rounding the server applies to a sale line. */
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * A line's unit price after its "Disc %", to the paisa. This is what the
+ * server stores as `price_at_sale` (see `sale-line-pricing.ts` in the backend,
+ * which rounds identically), so it is also what every total on the entry
+ * screen is built from — the screen never shows one price and posts another.
+ */
+export function netUnitPrice(item: Pick<LineItem, 'price' | 'discount'>): number {
+    const percent = Math.min(Math.max(item.discount || 0, 0), 100);
+    if (percent === 0) return item.price;
+    return roundMoney(item.price * (1 - percent / 100));
+}
+
+/** What a line bills: quantity at its net unit price. */
+export function lineNetTotal(item: Pick<LineItem, 'price' | 'discount' | 'quantity'>): number {
+    return item.quantity * netUnitPrice(item);
+}
+
+/** The taka a line's "Disc %" takes off — what the printed invoice shows. */
+export function lineDiscountAmount(item: Pick<LineItem, 'price' | 'discount' | 'quantity'>): number {
+    return roundMoney(item.quantity * item.price - lineNetTotal(item));
 }
 
 /**

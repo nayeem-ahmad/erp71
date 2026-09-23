@@ -10,6 +10,7 @@ import {
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { applyLineDiscounts, saleSurcharges } from './sale-line-pricing';
 import { paymentRecordData } from './payment-record-data';
 import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
@@ -59,6 +60,11 @@ export class SalesService {
     ) { }
 
     async create(tenantId: string, userId: string, dto: CreateSaleDto) {
+        // Line discounts become net unit prices before anything reads the
+        // lines — the draft, the total check, the tax snapshot and the stored
+        // `price_at_sale` all see the price the goods actually went out at.
+        dto = { ...dto, items: applyLineDiscounts(dto.items) };
+
         if (dto.isDraft) {
             return this.createDraft(tenantId, userId, dto);
         }
@@ -257,6 +263,9 @@ export class SalesService {
         );
         const discountAmount = dto.discountAmount ?? 0;
         const preLoyaltyTotal = Math.max(0, itemsSubtotal - discountAmount);
+        // Transport, labour and rounding are billed after the discount and
+        // after loyalty: points buy down the goods, not the delivery.
+        const surcharges = saleSurcharges(dto);
 
         let loyaltyPreview = { loyaltyDiscount: 0, pointsRedeemed: 0 };
         if (dto.customerId && dto.pointsToRedeem && dto.pointsToRedeem > 0) {
@@ -270,10 +279,14 @@ export class SalesService {
         }
         const { loyaltyDiscount } = loyaltyPreview;
 
-        const computedTotal = Math.max(0, preLoyaltyTotal - loyaltyDiscount);
+        const goodsTotal = Math.max(0, preLoyaltyTotal - loyaltyDiscount);
+        const computedTotal = goodsTotal + surcharges;
+        if (computedTotal < -0.005) {
+            throw new BadRequestException('Rounding cannot take the sale total below zero.');
+        }
         if (Math.abs(computedTotal - dto.totalAmount) > 0.02) {
             throw new BadRequestException(
-                `Sale total mismatch. Expected ৳${computedTotal.toFixed(2)} after discounts and loyalty.`,
+                `Sale total mismatch. Expected ৳${computedTotal.toFixed(2)} after discounts, loyalty and adjustments.`,
             );
         }
 
@@ -319,6 +332,9 @@ export class SalesService {
         // discount or a loyalty redemption reduces the declared value of the
         // supply instead of leaving the business declaring tax it never
         // collected. See `snapshotSaleTax` for why this is stored, not derived.
+        // Transport and labour lift the total above the lines, which the tax
+        // arithmetic leaves untaxed; passing the same `total_amount` the 6.3 is
+        // later rebuilt from keeps the stored figures and the document equal.
         const tax = await snapshotSaleTax(
             tx,
             tenantId,
@@ -713,7 +729,9 @@ export class SalesService {
                 throw new BadRequestException('Only draft sales can be finalized.');
             }
 
-            const items = dto.items ?? draft.items.map((item) => ({
+            // A draft's parked lines already carry net prices; edited ones
+            // arriving here may still carry a line discount.
+            const items = dto.items ? applyLineDiscounts(dto.items) : draft.items.map((item) => ({
                 productId: item.product_id,
                 quantity: item.quantity,
                 priceAtSale: Number(item.price_at_sale),
@@ -743,10 +761,19 @@ export class SalesService {
                     ? dto.payments.reduce((sum, p) => sum + p.amount, 0)
                     : Number(draft.amount_paid));
             // A draft stores whatever total the entry screen sent, with no
-            // discount breakdown. Re-derive the discount from it so the shared
-            // total check sees a consistent pair instead of rejecting the draft
-            // the moment it is posted.
-            const discountAmount = dto.discountAmount ?? Math.max(0, itemsSubtotal - totalAmount);
+            // breakdown. What the caller states is used as stated; whatever it
+            // leaves out is re-derived from the gap between the lines and the
+            // total, so the shared total check sees a consistent set instead of
+            // rejecting the draft the moment it is posted. A total below the
+            // lines is a discount; one above them is an adjustment (transport,
+            // labour, rounding) — carried as rounding, the same way the sale
+            // screen and a duplicated sale carry a gap they cannot split.
+            const statedSurcharges = saleSurcharges(dto);
+            const gap = itemsSubtotal + statedSurcharges - totalAmount;
+            const discountAmount = dto.discountAmount ?? Math.max(0, gap);
+            const impliedRounding = dto.roundingAmount === undefined && dto.discountAmount === undefined && gap < 0
+                ? -gap
+                : 0;
 
             const saleDto: CreateSaleDto = {
                 storeId: draft.store_id,
@@ -762,6 +789,9 @@ export class SalesService {
                 totalAmount,
                 amountPaid,
                 discountAmount,
+                transportAmount: dto.transportAmount,
+                laborAmount: dto.laborAmount,
+                roundingAmount: (dto.roundingAmount ?? 0) + impliedRounding || undefined,
                 pointsToRedeem: dto.pointsToRedeem,
                 note: dto.note ?? draft.note ?? undefined,
                 saleDate: dto.saleDate,
@@ -974,6 +1004,11 @@ export class SalesService {
     }
 
     async update(tenantId: string, id: string, dto: UpdateSaleDto) {
+        // Same as create(): a line discount is stored as the net unit price.
+        if (dto.items) {
+            dto = { ...dto, items: applyLineDiscounts(dto.items) };
+        }
+
         return this.db.$transaction(async (tx) => {
             const sale = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },

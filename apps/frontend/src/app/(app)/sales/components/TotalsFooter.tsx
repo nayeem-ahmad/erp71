@@ -14,12 +14,18 @@ interface TotalsFooterProps {
         discountAmount?: number;
         discountMode?: DiscountMode;
         rounding: number;
+        /** VAT contained in `total` — shown for information, never added. */
         vat: number;
         transportCost: number;
         laborCost: number;
         total: number;
     };
     onTotalsChange: (newTotals: any) => void;
+    /**
+     * The workspace default VAT rate. Kept on the props for callers, but no
+     * longer printed in the label: a line's own product rate can differ, so
+     * a single percentage beside a mixed-rate sale's VAT would be wrong.
+     */
     tenantVatRate: number;
     /** Outstanding balance the selected customer already owes, if any. */
     previousDue?: number;
@@ -45,7 +51,6 @@ interface TotalsFooterProps {
 export default function TotalsFooter({
     totals,
     onTotalsChange,
-    tenantVatRate,
     previousDue = 0,
     readOnly = false,
     showAdjustments = true,
@@ -86,7 +91,6 @@ export default function TotalsFooter({
                 className: 'text-red-600',
             });
         }
-        if (Math.abs(totals.vat) > 0.005) rows.push({ label: `VAT (${tenantVatRate}%)`, value: totals.vat });
         if (Math.abs(totals.transportCost) > 0.005) rows.push({ label: 'Transport', value: totals.transportCost });
         if (Math.abs(totals.laborCost) > 0.005) rows.push({ label: 'Labor', value: totals.laborCost });
         if (Math.abs(totals.rounding) > 0.005) rows.push({ label: roundingLabel, value: totals.rounding });
@@ -172,11 +176,6 @@ export default function TotalsFooter({
                         )}
                     </div>
 
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-500">VAT ({tenantVatRate}%)</span>
-                        <span className="font-medium">{amount(totals.vat)}</span>
-                    </div>
-
                     <div className="flex justify-between items-center gap-2">
                         <span className="text-gray-500 whitespace-nowrap">Transport</span>
                         <input
@@ -218,6 +217,16 @@ export default function TotalsFooter({
                 <span className="font-semibold text-gray-900">{totalLabel}</span>
                 <span className="text-lg font-bold text-blue-600">{amount(totals.total)}</span>
             </div>
+
+            {/* Prices are tax-inclusive, so the VAT is already inside the total
+                above rather than added to it. It sits beneath the total, in
+                grey, so it cannot be read as one more thing being charged. */}
+            {showAdjustments && totals.vat > 0.005 && (
+                <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span>Incl. VAT</span>
+                    <span>{amount(totals.vat)}</span>
+                </div>
+            )}
 
             {/* What the customer already owed before this sale — informational
                 only; it is never rolled into the sale total. */}

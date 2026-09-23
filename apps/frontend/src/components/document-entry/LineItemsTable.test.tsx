@@ -231,3 +231,31 @@ describe('LineItemsTable — resizable columns', () => {
         expect(screen.queryByRole('button', { name: /reset widths/i })).not.toBeInTheDocument();
     });
 });
+
+describe('LineItemsTable — line discount', () => {
+    const lineTotalCell = (text: string) =>
+        screen.getAllByRole('cell').find((cell) => cell.textContent === text);
+
+    it('shows the line at its net price, rounded to the paisa as the server stores it', () => {
+        // Half of 10.05 is stored as a 5.03 unit price, so three units bill
+        // 15.09 — not the 15.08 that rounding the unrounded 15.075 would show.
+        render(
+            <LineItemsTable
+                items={[{ ...ITEM, price: 10.05, quantity: 3, discount: 50 }]}
+                onUpdateItem={jest.fn()}
+                onRemoveItem={jest.fn()}
+            />,
+        );
+
+        expect(lineTotalCell('৳15.09')).toBeDefined();
+    });
+
+    it('holds a typed discount at 100%', () => {
+        const onUpdateItem = jest.fn();
+        render(<LineItemsTable items={[ITEM]} onUpdateItem={onUpdateItem} onRemoveItem={jest.fn()} />);
+
+        fireEvent.change(screen.getByLabelText('Disc % — Coffee Beans'), { target: { value: '150' } });
+
+        expect(onUpdateItem).toHaveBeenCalledWith('prod-1', { discount: 100 });
+    });
+});

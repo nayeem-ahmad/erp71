@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trash2, Minus, Plus, History, RotateCcw } from 'lucide-react';
-import { LineItem } from '@/lib/hooks/useNewSaleCart';
+import { LineItem, lineNetTotal } from '@/lib/hooks/useNewSaleCart';
 import RateHistoryModal from './RateHistoryModal';
 import { type RateHistoryType } from './RateHistory';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
@@ -141,13 +141,13 @@ export default function LineItemsTable({
     };
 
     const handleDiscountChange = (productId: string, discount: number) => {
-        onUpdateItem(productId, { discount: Math.max(0, discount) });
+        onUpdateItem(productId, { discount: Math.min(100, Math.max(0, discount)) });
     };
 
-    const calculateLineTotal = (item: LineItem) => {
-        const subtotal = item.quantity * item.price;
-        return subtotal - subtotal * (item.discount / 100);
-    };
+    // The same figure the document's subtotal and the posted line are built
+    // from — a line total that disagreed with them is how a discount used to
+    // show here and then never be charged.
+    const calculateLineTotal = (item: LineItem) => lineNetTotal(item);
 
     return (
         <div className="h-full overflow-hidden rounded border bg-white flex flex-col">

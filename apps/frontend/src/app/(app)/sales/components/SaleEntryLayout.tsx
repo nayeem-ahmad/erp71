@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { computeSaleTax, resolveTaxRate } from '@erp71/shared-types';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
@@ -12,7 +13,7 @@ import TotalsFooter from './TotalsFooter';
 import PaymentSection from './PaymentSection';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
-import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
+import { lineNetTotal, netUnitPrice, type LineItem, type Payment } from '@/lib/hooks/useNewSaleCart';
 
 /**
  * Which of the two discount figures the user is typing. Shops that negotiate
@@ -34,6 +35,7 @@ export interface SaleAdjustments {
 }
 
 export interface SaleTotals extends SaleAdjustments {
+    /** The lines at their net prices — after each line's own "Disc %". */
     subtotal: number;
     /** What the discount actually comes to in taka, however it was entered. */
     discount: number;
@@ -43,6 +45,13 @@ export interface SaleTotals extends SaleAdjustments {
      * the printed invoice and anything else reading totals agree.
      */
     discountPercent: number;
+    /**
+     * The output VAT the total already contains. Prices are tax-inclusive —
+     * the convention the server, POS, the Mushak documents and the sale's
+     * own invoice page all share — so this is informational and is never
+     * added to `total`; it is the figure the server will store as the sale's
+     * `vat_amount`.
+     */
     vat: number;
     total: number;
 }
@@ -57,15 +66,19 @@ export const EMPTY_ADJUSTMENTS: SaleAdjustments = {
 };
 
 /**
- * Line subtotal plus the form's adjustments. Discount is taken off first, VAT
- * applies to the discounted amount, and the flat costs are added last.
+ * Line subtotal plus the form's adjustments — the same arithmetic the server
+ * re-runs before it accepts the sale (`SalesService.prepareSale`). Each line
+ * is taken at its net price, the invoice discount comes off that, and the flat
+ * costs are added last. VAT is worked out *inside* the result, not on top of
+ * it: `vatRate` is the workspace default, used for any line whose product sets
+ * no rate of its own.
  */
 export function computeSaleTotals(
     items: LineItem[],
     adjustments: SaleAdjustments,
     vatRate: number,
 ): SaleTotals {
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const subtotal = items.reduce((sum, item) => sum + lineNetTotal(item), 0);
     // A flat discount is taken as typed, a percentage one off the subtotal.
     // Either way it is capped at the subtotal: a discount on its own must
     // never drag the invoice below zero, and an over-typed figure would
@@ -78,13 +91,24 @@ export function computeSaleTotals(
         ? (subtotal > 0 ? (discount / subtotal) * 100 : 0)
         : adjustments.discountPercent || 0;
     const afterDiscount = subtotal - discount;
-    const vat = afterDiscount * (vatRate / 100);
     const total =
         afterDiscount
-        + vat
         + (adjustments.transportCost || 0)
         + (adjustments.laborCost || 0)
         + (adjustments.rounding || 0);
+    // Mirrors the snapshot the server takes: the lines' inclusive prices,
+    // with any reduction below them spread back pro rata, and anything above
+    // them (transport, labour, rounding up) left untaxed.
+    const vat = items.length === 0 ? 0 : computeSaleTax(
+        items.map((item, index) => ({
+            key: String(index),
+            quantity: item.quantity,
+            unitPrice: netUnitPrice(item),
+            vatRate: resolveTaxRate(item.vatRate ?? null, vatRate),
+            sdRate: 0,
+        })),
+        Math.max(0, total),
+    ).vatAmount;
 
     // Adjustments first: the derived figures below are what callers read, and
     // the typed percentage must not shadow the calculated one.
