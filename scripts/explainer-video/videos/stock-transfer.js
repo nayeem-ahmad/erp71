@@ -5,7 +5,8 @@ const DEST = 'Gulshan Back Storage';
 const OTHER_BRANCH = 'Banani Branch Main Warehouse';
 
 module.exports = {
-  warm: ['/inventory/transfers'],
+  // The detail route compiles on first visit; any id warms it.
+  warm: ['/inventory/transfers', '/inventory/transfers/00000000-0000-0000-0000-000000000000'],
   start: '/inventory',
 
   async run({ page, voice, wait, ov, box, union, click, type, say, clear, narrate, holdVoice, cardHtml, card }) {
