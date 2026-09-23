@@ -51,16 +51,15 @@ line (a missing one fails the run).
 **Sales entry**: 1. Sales → Sales list → New Sales Entry · 2. the three areas ·
 3. document details (Sales #, Ref #, date, warehouse) · 4. till / cashier shift ·
 5. customer search and card (+ new customer, walk-in) · 6. product search,
-previous sale rates, qty → Add · 7. more lines · 8. editing a line · 9. whole-bill
-discount and live total · 10. split payment (mobile wallet + cash), credit ·
+previous sale rates, qty → Add · 7. more lines · 8. editing a line (qty, Disc %) ·
+9. whole-bill discount, transport and live total · 10. split payment (mobile wallet + cash), credit ·
 11. note · 12. Save Draft vs Create Sale · 13. print prompt · 14. the sale in the
 list.
 
 **Purchase entry**: 1. Purchase → Purchases → Record Purchase · 2. the three
 areas · 3. purchase details (Purchase #, warehouse, per-line warehouse) ·
 4. supplier search and card (payable, + new supplier) · 5. product search ·
-6. unit cost: overwrite the selling price with the supplier's rate, using
-previous purchase rates · 7. more lines · 8. editing a line (In Stock is before
+6. unit cost starts at the last purchase cost, with previous purchase rates · 7. more lines · 8. editing a line (In Stock is before
 the purchase) · 9. freight / tax / discount and live total · 10. part-payment,
 the rest as supplier due · 11. note (supplier invoice no.) · 12. Post Purchase ·
 13. the purchase in the list with its posted voucher.
@@ -68,14 +67,14 @@ the rest as supplier due · 11. note (supplier invoice no.) · 12. Post Purchase
 **Customer payment** (setup: Karim Hossain buys ৳2,050 on credit and pays
 ৳500): 1. Sales → Customer Payment · 2. the list and filters · 3. New Customer
 Payment · 4. receive vs pay back · 5. pick the customer, due ৳1,550 · 6. ৳1,000
-part payment, advance on overpayment, note · 7. Record receipt · 8. the receipt
+part payment by bKash (method picker), advance on overpayment, note · 7. Record receipt · 8. the receipt
 on the list · 9. due balance now ৳550.
 
 **Supplier payment** (setup: Meghna Traders, one ৳6,320 purchase with ৳3,000
 paid, one ৳4,800 unpaid): 1. Purchase → Supplier Payment · 2. the list (the
 payment made on the purchase is there too) · 3. New Supplier Payment, pay vs
 receive · 4. pick the supplier, payable ৳8,120 and open bills · 5. ৳5,000 split
-across the two bills · 6. Record payment (unallocated = prepayment) · 7. on the
+across the two bills, paid from the bank · 6. Record payment (unallocated = prepayment) · 7. on the
 list · 8. payable now ৳3,120, one bill left.
 
 **Stock transfer**: 1. Inventory → Transfers · 2. form on top, list below ·
@@ -153,7 +152,5 @@ that step instead of recording a broken video. The captions are part of the
 page too, so a `getByText` that could also match a caption needs `.first()`
 (the app's element comes before the overlay).
 
-The sales video leaves out Transport, Labour, Rounding and per-line Disc % on
-purpose. Today the backend rejects a sale that uses them (see TODO.md), so it
-only shows paths that save successfully. Freight, tax and discount on a
-purchase do save, and the purchase video uses freight.
+Captions that point at a dialog use `ov('captionAt', 'side')`, so the payment
+dialogs' buttons stay visible while they are clicked.

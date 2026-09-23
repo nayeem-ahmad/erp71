@@ -127,7 +127,7 @@ module.exports = {
 
     // ── 8. line items ──────────────────────────────────────────────────────
     await say(8, 'Review and edit the lines',
-      'Each row shows <b>stock available</b>, the price and the qty — edit them right in the table, or use <b>− / +</b>. The line total updates as you type. The bin icon removes a line.');
+      'Each row shows <b>stock available</b>, the price, a line <b>Disc %</b> and the qty — edit them right in the table. The line total updates as you type. The bin icon removes a line.');
     const tbl = await box(page.locator('table').first());
     await ov('box', { ...tbl, h: Math.min(tbl.h, 170) }, null, { pad: 4 });
     const avail = await box(page.locator('th', { hasText: /avail/i }).first());
@@ -138,17 +138,27 @@ module.exports = {
     const dr = await box(tq);
     await ov('arrow', dr.x - 120, dr.y + 90, dr.x - 4, dr.y + dr.h - 2);
     await ov('label', 'changed 3 → 4', dr.x - 300, dr.y + 92);
-    await wait(4000);
+    await wait(2200);
+    await ov('clear');
+    const disc = page.locator('input[aria-label^="Disc % — Sunflower"]');
+    await type(disc, '10', { clear: true, after: 900 });
+    const ddr = await box(disc);
+    await ov('arrow', ddr.x - 110, ddr.y + 90, ddr.x - 6, ddr.y + ddr.h - 2);
+    await ov('label', '10% off this line only', ddr.x - 330, ddr.y + 92);
+    await wait(3000);
     await clear();
 
     // ── 9. totals ──────────────────────────────────────────────────────────
     await say(9, 'C · Totals and discount',
-      'Give a whole-bill <b>discount</b> as a <b>%</b> or a flat <b>৳</b> amount — toggle with the two small buttons. The <b>Total</b> is always live.');
+      'Give a whole-bill <b>discount</b> as a <b>%</b> or a flat <b>৳</b> amount, and add <b>transport</b>, <b>labour</b> or <b>rounding</b>. The <b>Total</b> is always live.');
     const discIn = page.locator('input[aria-label="Discount percent"]');
     await type(discIn, '5', { clear: true, after: 900 });
     const discRow = await box(page.getByText('Discount', { exact: true }).locator('xpath=..'));
     const totalRow = await box(page.locator('div.border-t.pt-2', { hasText: 'Total' }).first());
     await ov('box', discRow, '5% off the whole bill', { pos: 'left', pad: 4, dy: -30 });
+    const transport = page.getByText('Transport', { exact: true }).first().locator('xpath=..').locator('input');
+    await type(transport, '50', { clear: true, after: 700 });
+    await ov('box', await box(transport), 'delivery charge', { pos: 'left', pad: 4 });
     await ov('box', totalRow, null, { pad: 6, delay: 800, color: '#2563eb' });
     await ov('label', 'live total', totalRow.x + 4, totalRow.y + totalRow.h + 14, { color: '#2563eb', delay: 1300 });
     await wait(5000);

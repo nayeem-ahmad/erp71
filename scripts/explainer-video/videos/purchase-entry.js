@@ -94,8 +94,8 @@ module.exports = {
 
     // ── 6. cost ────────────────────────────────────────────────────────────
     await say(6, 'Enter what the supplier charged',
-      '<b>Unit Cost</b> starts at the product’s <b>selling price</b> — always change it to the supplier’s rate. <b>Previous purchase rates</b> underneath show what you paid last time.');
-    await ov('box', await box(cost), 'selling price!', { pos: 'above', pad: 4, dy: -4 });
+      '<b>Unit Cost</b> starts at what you <b>last paid</b> — this supplier’s rate first. <b>Previous purchase rates</b> underneath show the history. Change it if the price has moved.');
+    await ov('box', await box(cost), 'last cost', { pos: 'above', pad: 4, dy: -4 });
     await wait(1400);
     const hist = await box(page.getByText('Previous purchase rates', { exact: false }).first().locator('xpath=ancestor::div[2]'));
     await ov('box', hist, 'what you paid before', { pos: 'below', pad: 4, dy: 18, delay: 400 });

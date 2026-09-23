@@ -69,6 +69,7 @@ module.exports = {
     await ov('box', await box(newBtn), null, { pad: 5, color: '#2563eb' });
     await wait(1200);
     await click(newBtn, { after: 900 });
+    await ov('captionAt', 'side');
     const modal = page.locator('form', { hasText: 'New Customer Payment' });
     const [direction, customer] = [modal.locator('select').nth(0), modal.locator('select').nth(1)];
     await ov('clear');
@@ -94,22 +95,28 @@ module.exports = {
 
     // ── 6. amount ──────────────────────────────────────────────────────────
     await say(6, 'Enter the amount',
-      'He pays <b>৳1,000</b> today. Paying part is fine — the rest stays due. Pay more than is owed, and the extra is kept as an <b>advance</b> for next time.');
+      'He pays <b>৳1,000</b> today, by <b>bKash</b>. Paying part is fine — the rest stays due. Pay more than is owed, and the extra is kept as an <b>advance</b>. Choose how he paid, so it lands in the right account.');
     await type(modal.locator('input[type="number"]'), '1000', { after: 900 });
     await ov('box', await box(modal.getByText('excess becomes customer advance', { exact: false }).first()), 'overpaying? kept as advance', { pos: 'right', pad: 4 });
     await wait(1500);
-    await type(modal.locator('textarea'), 'Paid at counter — rest next week', { after: 1200, delay: 60 });
+    const method = modal.locator('select').nth(2);
+    await click(method, { after: 300 });
+    await method.selectOption({ label: 'Mobile Wallet' });
+    await wait(600);
+    await ov('box', await box(method), 'paid by bKash', { pos: 'right', pad: 5 });
+    await type(modal.locator('textarea'), 'bKash TrxID 9XK2L3 — rest next week', { after: 1200, delay: 60 });
     await ov('clear');
 
     // ── 7. record ──────────────────────────────────────────────────────────
     await say(7, 'Record the receipt',
-      '<b>Record receipt</b> saves it, lowers the customer’s due balance, and posts the entry to your accounts.');
+      '<b>Record receipt</b> saves it, lowers the customer’s due balance, and posts it to the account for the method you chose.');
     const recordBtn = modal.getByRole('button', { name: 'Record receipt' });
     await ov('box', await box(recordBtn), null, { pad: 5, color: '#2563eb' });
     await wait(1800);
     await clear();
     await click(recordBtn, { after: 0 });
     await page.getByText('Transaction recorded successfully').first().waitFor();
+    await ov('captionAt', 'bottom');
     await wait(1000);
 
     // ── 8. result ──────────────────────────────────────────────────────────
@@ -124,6 +131,7 @@ module.exports = {
     await say(9, 'The due balance went down',
       'Open a new payment for the same customer and his due balance is now <b>৳550</b> — the ৳1,550 he owed, less today’s ৳1,000.');
     await click(newBtn, { after: 900 });
+    await ov('captionAt', 'side');
     await modal.locator('select').nth(1).selectOption(option);
     await wait(900);
     await ov('box', await box(modal.getByText('Due balance', { exact: false }).first().locator('xpath=ancestor::div[1]')), 'was ৳1,550', { pos: 'right', pad: 5 });
@@ -131,6 +139,7 @@ module.exports = {
     await clear();
     await click(modal.getByRole('button', { name: 'Cancel' }), { after: 600 });
     await ov('hideCaption');
+    await ov('captionAt', 'bottom');
 
     // ── outro ──────────────────────────────────────────────────────────────
     await ov('showCursor', false);

@@ -81,14 +81,14 @@ module.exports = {
     await wait(900);
     await ov('box', await box(modal.getByText('Payable balance', { exact: false }).first().locator('xpath=ancestor::div[1]')), 'you owe ৳8,120', { pos: 'right', pad: 5 });
     await wait(1200);
-    const bills = modal.getByText('PUR-00007').first().locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
+    const bills = modal.getByText('PUR-00007').first().locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
     await ov('box', await box(bills), 'unpaid bills', { pos: 'right', pad: 5, delay: 300 });
     await wait(4500);
     await clear();
 
     // ── 5. amount and allocation ───────────────────────────────────────────
     await say(5, 'Enter the amount, split it across bills',
-      'We pay <b>৳5,000</b>. Clear the older bill first — <b>৳3,320</b> on PUR-00007 — and put the other <b>৳1,680</b> against PUR-00008. The line underneath counts down to zero.');
+      'We pay <b>৳5,000</b>. Clear the older bill first — <b>৳3,320</b> on PUR-00007 — and put the other <b>৳1,680</b> against PUR-00008. The line underneath counts down to zero. Pick how you paid — here, from the <b>bank</b>.');
     await type(modal.locator('input[placeholder]:not([placeholder="0.00"])[type="number"]').first(), '5000', { after: 800 });
     const billInput = (n) => modal.getByText(n).first().locator('xpath=..').locator('input');
     await type(billInput('PUR-00007'), '3320', { after: 600 });
@@ -96,6 +96,11 @@ module.exports = {
     const remaining = modal.getByText(/remaining|allocate/i).last();
     await ov('box', await box(remaining), 'all ৳5,000 matched', { pos: 'right', pad: 4 });
     await wait(1500);
+    const method = modal.locator('select').nth(2);
+    await click(method, { after: 300 });
+    await method.selectOption({ label: 'Bank' });
+    await wait(600);
+    await ov('box', await box(method), 'paid from the bank', { pos: 'right', pad: 5 });
     await type(modal.locator('textarea'), 'Bank transfer, ref BT-4471', { after: 1200, delay: 60 });
     await ov('clear');
 
