@@ -933,7 +933,10 @@ export default function BoardPage() {
                 {/* The column's stage, as a rule across its head. Colour is
                     the fastest way to tell three stages apart at a glance, and
                     it costs no row height. */}
-                <div aria-hidden className={`h-1 w-full ${tint.bar}`} />
+                {/* Rounded itself rather than clipped by the column: a grouped
+                    board's header cell cannot clip, or it would cut off the
+                    column's menu, which drops below the cell's short height. */}
+                <div aria-hidden className={`h-1 w-full rounded-t-lg ${tint.bar}`} />
                 <BoardColumnHead
                     columnId={column.id}
                     name={column.name}
@@ -1222,7 +1225,7 @@ export default function BoardPage() {
 
                         {mobileColumn && (
                             <div
-                                className={`flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 ${lift}`}
+                                className={`flex flex-col rounded-lg border border-gray-200 bg-gray-50 ${lift}`}
                             >
                                 {columnHeadFor(mobileColumn, visibleColumns.indexOf(mobileColumn))}
                                 {lanes.length === 0 && <div className={d.columnPad}>{composerFor(mobileColumn.id)}</div>}
@@ -1273,7 +1276,10 @@ export default function BoardPage() {
                                     <div
                                         key={column.id}
                                         {...{ [COLUMN_ATTR]: column.id }}
-                                        className={`group/column flex ${widthClass} shrink-0 flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${columnRing(column.id)}`}
+                                        // No overflow-hidden, unlike a plain column:
+                                        // this cell is only as tall as its head, and
+                                        // clipping would hide the column's menu.
+                                        className={`group/column flex ${widthClass} shrink-0 flex-col rounded-lg border bg-gray-50 ${lift} ${columnRing(column.id)}`}
                                     >
                                         {columnHeadFor(column, columnIndex)}
                                         {/* Each lane cell has its own composer, which is
