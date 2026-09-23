@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { ImportRowsDto } from '../common/import.dto';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ProjectStoriesService } from './project-stories.service';
 import {
@@ -46,6 +47,13 @@ export class ProjectStoriesController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateUserStoryDto) {
         return this.stories.create(tenant, dto);
+    }
+
+    /** Declared before `:id` so `/project-stories/import` is never read as a story id. */
+    @Post('import')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.stories.importRows(tenant, body.rows, body.mode);
     }
 
     @Get(':id')

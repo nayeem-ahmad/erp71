@@ -23,6 +23,7 @@ jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() 
 const story = (overrides: Partial<UserStory> = {}): UserStory => ({
     id: 'story-1',
     reference: 3,
+    code: 'OTB-3',
     title: 'Shopper pays with bKash',
     as_a: 'shopper',
     i_want: 'to pay with bKash',
@@ -62,7 +63,7 @@ describe('ProjectStoriesCard', () => {
     it('says how much work is under a story before it is opened', async () => {
         renderCard();
 
-        expect(await screen.findByText('US-3')).toBeInTheDocument();
+        expect(await screen.findByText('OTB-3')).toBeInTheDocument();
         // The whole point of the collapsed row: without the count people open
         // every story just to find out whether there is anything under it.
         expect(screen.getByText('1/4 tasks')).toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('ProjectStoriesCard', () => {
     it('sends no points as null, so an unsized story is not sized at zero', async () => {
         renderCard({ stories: [] });
 
-        fireEvent.click(await screen.findByText('New story'));
+        fireEvent.click(await screen.findByText('New user story'));
         fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Refunds' } });
         fireEvent.click(screen.getByText('Save'));
 
@@ -134,7 +135,7 @@ describe('ProjectStoriesCard', () => {
     it('refuses to save a story with no title', async () => {
         renderCard({ stories: [] });
 
-        fireEvent.click(await screen.findByText('New story'));
+        fireEvent.click(await screen.findByText('New user story'));
         fireEvent.click(screen.getByText('Save'));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Give the story a title.');
@@ -156,7 +157,7 @@ describe('ProjectStoriesCard', () => {
      */
     describe('openStoryId', () => {
         it('opens the story the link names, and loads its tasks', async () => {
-            renderCard({ stories: [story(), story({ id: 'story-2', reference: 4, title: 'Owner reads the day book' })], openStoryId: 'story-2' });
+            renderCard({ stories: [story(), story({ id: 'story-2', reference: 4, code: 'OTB-4', title: 'Owner reads the day book' })], openStoryId: 'story-2' });
 
             await waitFor(() => expect(getProjectStory).toHaveBeenCalledWith('story-2'));
             expect(getProjectStory).not.toHaveBeenCalledWith('story-1');

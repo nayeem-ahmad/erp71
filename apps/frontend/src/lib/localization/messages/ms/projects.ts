@@ -141,10 +141,16 @@ export const projectsMessages = {
      */
     stories: {
         title: 'Cerita pengguna',
-        add: 'Cerita baharu',
+        add: "Cerita pengguna baharu",
         edit: 'Sunting cerita',
         empty: 'Belum ada cerita pengguna. Tulis satu untuk menyatakan apa yang diminta daripada projek ini.',
-        reference: 'US-{number}',
+        code: "ID cerita",
+        codeHint: "Biarkan kosong untuk penomboran automatik, cth. {example}.",
+        codeAuto: "Automatik",
+        codeRequired: "Berikan ID kepada cerita.",
+        codeNoSpaces: "ID cerita tidak boleh mengandungi ruang.",
+        projectRequired: "Pilih projek.",
+        pickProject: "Pilih projek",
         asA: 'Sebagai',
         iWant: 'saya mahu',
         soThat: 'supaya',
@@ -188,7 +194,7 @@ export const projectsMessages = {
     storyList: {
         title: "Cerita pengguna",
         subtitle: "Setiap cerita merentas semua projek",
-        empty: "Belum ada cerita pengguna. Buka projek untuk menulis yang pertama.",
+        empty: "Belum ada cerita pengguna. Tulis satu, atau import backlog daripada hamparan.",
         emptyFiltered: "Tiada cerita sepadan dengan penapis ini.",
         searchPlaceholder: "Cari tajuk cerita atau keperluannya",
         allProjects: "Semua projek",

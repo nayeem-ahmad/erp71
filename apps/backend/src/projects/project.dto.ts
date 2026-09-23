@@ -253,18 +253,27 @@ class UserStoryFieldsDto {
     title!: string;
 
     /**
+     * The story's ID, e.g. `OTB-3`. Optional on create — the service fills in
+     * `<project.code>-<n>` — and editable after. No spaces, so it can be said,
+     * typed and pasted as one token.
+     */
+    @IsOptional() @IsString() @MaxLength(40)
+    @Matches(/^\S+$/, { message: 'Story ID cannot contain spaces' })
+    code?: string;
+
+    /**
      * "As a … I want … so that …" — three columns rather than one blob so the
      * card can compose the sentence in the reader's own language. `''` clears
      * one: the service stores `trim() || null`, and PATCH reads undefined as
      * "leave alone", so only the empty string can say "there is no why".
      */
-    @IsOptional() @IsString() @MaxLength(200)
+    @IsOptional() @IsString() @MaxLength(500)
     asA?: string;
 
-    @IsOptional() @IsString() @MaxLength(500)
+    @IsOptional() @IsString() @MaxLength(2000)
     iWant?: string;
 
-    @IsOptional() @IsString() @MaxLength(500)
+    @IsOptional() @IsString() @MaxLength(2000)
     soThat?: string;
 
     @IsOptional() @IsString() @MaxLength(5000)
