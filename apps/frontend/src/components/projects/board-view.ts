@@ -27,6 +27,8 @@ export type BoardColumnWidth = 'narrow' | 'standard' | 'wide';
 export type BoardColumnTint = 'none' | 'category';
 /** Whether the board's overflowing height is the page's to scroll, or each column's. */
 export type BoardScroll = 'page' | 'column';
+/** What the board's rows are, when it has any — see `board-lanes.ts`. */
+export type BoardSwimlanes = 'none' | 'assignee' | 'story';
 
 /** The optional parts of a card, each one hideable. The title is not on the list. */
 export type BoardCardField = 'cover' | 'labels' | 'project' | 'badges' | 'details' | 'assignee';
@@ -46,6 +48,13 @@ export interface BoardView {
     columnTint: BoardColumnTint;
     /** Where the board scrolls when it is taller than the window — see `SCROLL`. */
     scroll: BoardScroll;
+    /**
+     * Rows across the columns, one per person or per story. A way of reading
+     * the board rather than a property of it, so it is kept here with the other
+     * per-viewer settings: a lead grouping by assignee for a standup should not
+     * regroup the board under the developer reading it by story.
+     */
+    swimlanes: BoardSwimlanes;
     /** Entrance and drag motion. Independent of `prefers-reduced-motion`, which wins regardless. */
     animate: boolean;
     fields: Record<BoardCardField, boolean>;
@@ -56,6 +65,7 @@ export const DEFAULT_BOARD_VIEW: BoardView = {
     columnWidth: 'standard',
     columnTint: 'category',
     scroll: 'page',
+    swimlanes: 'none',
     animate: true,
     fields: {
         cover: true,
@@ -73,6 +83,7 @@ const DENSITIES: BoardDensity[] = ['comfortable', 'compact'];
 const WIDTHS: BoardColumnWidth[] = ['narrow', 'standard', 'wide'];
 const TINTS: BoardColumnTint[] = ['none', 'category'];
 const SCROLLS: BoardScroll[] = ['page', 'column'];
+const SWIMLANES: BoardSwimlanes[] = ['none', 'assignee', 'story'];
 
 function pick<T extends string>(allowed: T[], value: unknown, fallback: T): T {
     return typeof value === 'string' && (allowed as string[]).includes(value) ? (value as T) : fallback;
@@ -100,6 +111,7 @@ export function mergeBoardView(stored: unknown): BoardView {
         columnWidth: pick(WIDTHS, raw.columnWidth, DEFAULT_BOARD_VIEW.columnWidth),
         columnTint: pick(TINTS, raw.columnTint, DEFAULT_BOARD_VIEW.columnTint),
         scroll: pick(SCROLLS, raw.scroll, DEFAULT_BOARD_VIEW.scroll),
+        swimlanes: pick(SWIMLANES, raw.swimlanes, DEFAULT_BOARD_VIEW.swimlanes),
         animate: typeof raw.animate === 'boolean' ? raw.animate : DEFAULT_BOARD_VIEW.animate,
         fields,
     };
@@ -111,6 +123,7 @@ export function isDefaultBoardView(view: BoardView): boolean {
         view.columnWidth === DEFAULT_BOARD_VIEW.columnWidth &&
         view.columnTint === DEFAULT_BOARD_VIEW.columnTint &&
         view.scroll === DEFAULT_BOARD_VIEW.scroll &&
+        view.swimlanes === DEFAULT_BOARD_VIEW.swimlanes &&
         view.animate === DEFAULT_BOARD_VIEW.animate &&
         CARD_FIELDS.every((field) => view.fields[field] === DEFAULT_BOARD_VIEW.fields[field])
     );

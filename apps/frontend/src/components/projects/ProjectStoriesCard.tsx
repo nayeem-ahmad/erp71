@@ -503,167 +503,174 @@ export function StoryFormModal({
     };
 
     return (
-        <ModalShell onBackdropClick={onClose} dismissOnBackdrop={false} size="lg">
+        <ModalShell onBackdropClick={onClose} dismissOnBackdrop={false} size="xl">
             <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
                 <ModalHeader
                     title={story ? m.stories.edit : m.stories.add}
                     onClose={onClose}
                 />
-                <div className="space-y-3 overflow-y-auto p-4">
-                    {pickProject && (
-                        <Field
-                            label={m.fields.project}
-                            htmlFor="story-project"
-                            required
-                            error={errors.projectId}
-                        >
-                            <Select
-                                id="story-project"
-                                value={form.projectId}
-                                error={Boolean(errors.projectId)}
-                                onChange={(e) => {
-                                    clearError('projectId');
-                                    set({ projectId: e.target.value });
-                                }}
+                {/* Two columns from md up so the whole story fits on one
+                    screen: what is being asked for on the left, how it is
+                    judged and tracked on the right. A phone stacks them and
+                    scrolls, as every bottom sheet does. */}
+                <div className="grid gap-4 overflow-y-auto p-4 md:grid-cols-2">
+                    <div className="space-y-3">
+                        {pickProject && (
+                            <Field
+                                label={m.fields.project}
+                                htmlFor="story-project"
+                                required
+                                error={errors.projectId}
                             >
-                                <option value="">{m.stories.pickProject}</option>
-                                {(projects ?? []).map((project) => (
-                                    <option key={project.id} value={project.id}>
-                                        {project.code} · {project.name}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                    )}
+                                <Select
+                                    id="story-project"
+                                    value={form.projectId}
+                                    error={Boolean(errors.projectId)}
+                                    onChange={(e) => {
+                                        clearError('projectId');
+                                        set({ projectId: e.target.value });
+                                    }}
+                                >
+                                    <option value="">{m.stories.pickProject}</option>
+                                    {(projects ?? []).map((project) => (
+                                        <option key={project.id} value={project.id}>
+                                            {project.code} · {project.name}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                        )}
 
-                    <div className="grid gap-3 md:grid-cols-[12rem_1fr]">
-                        <Field
-                            label={m.stories.code}
-                            htmlFor="story-code"
-                            required={Boolean(story)}
-                            error={errors.code}
-                            hint={
-                                story || errors.code
-                                    ? undefined
-                                    : fmt(m.stories.codeHint, { example: `${prefix ?? 'OTB'}-1` })
-                            }
-                        >
-                            <Input
-                                id="story-code"
-                                value={form.code}
-                                maxLength={40}
-                                error={Boolean(errors.code)}
-                                placeholder={prefix ? `${prefix}-…` : m.stories.codeAuto}
-                                onChange={(e) => {
-                                    clearError('code');
-                                    set({ code: e.target.value });
-                                }}
+                        <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
+                            <Field
+                                label={m.stories.code}
+                                htmlFor="story-code"
+                                required={Boolean(story)}
+                                error={errors.code}
+                                hint={
+                                    story || errors.code
+                                        ? undefined
+                                        : fmt(m.stories.codeHint, { example: `${prefix ?? 'OTB'}-1` })
+                                }
+                            >
+                                <Input
+                                    id="story-code"
+                                    value={form.code}
+                                    maxLength={40}
+                                    error={Boolean(errors.code)}
+                                    placeholder={prefix ? `${prefix}-…` : m.stories.codeAuto}
+                                    onChange={(e) => {
+                                        clearError('code');
+                                        set({ code: e.target.value });
+                                    }}
+                                />
+                            </Field>
+                            <Field
+                                label={m.task.titleField}
+                                htmlFor="story-title"
+                                required
+                                error={errors.title}
+                            >
+                                <Input
+                                    id="story-title"
+                                    value={form.title}
+                                    maxLength={300}
+                                    error={Boolean(errors.title)}
+                                    autoFocus={!pickProject}
+                                    onChange={(e) => {
+                                        clearError('title');
+                                        set({ title: e.target.value });
+                                    }}
+                                />
+                            </Field>
+                        </div>
+
+                        {/* Three fields rather than one paragraph: a story missing
+                            its *why* is the one worth noticing, and a single blob
+                            hides that it is missing. */}
+                        <Field label={m.stories.asA} htmlFor="story-as-a">
+                            <Textarea
+                                id="story-as-a"
+                                rows={2}
+                                maxLength={500}
+                                value={form.asA}
+                                placeholder={m.stories.asAPlaceholder}
+                                onChange={(e) => set({ asA: e.target.value })}
                             />
                         </Field>
-                        <Field
-                            label={m.task.titleField}
-                            htmlFor="story-title"
-                            required
-                            error={errors.title}
-                        >
-                            <Input
-                                id="story-title"
-                                value={form.title}
-                                maxLength={300}
-                                error={Boolean(errors.title)}
-                                autoFocus={!pickProject}
-                                onChange={(e) => {
-                                    clearError('title');
-                                    set({ title: e.target.value });
-                                }}
+                        <Field label={m.stories.iWant} htmlFor="story-i-want">
+                            <Textarea
+                                id="story-i-want"
+                                rows={3}
+                                maxLength={2000}
+                                value={form.iWant}
+                                placeholder={m.stories.iWantPlaceholder}
+                                onChange={(e) => set({ iWant: e.target.value })}
+                            />
+                        </Field>
+                        <Field label={m.stories.soThat} htmlFor="story-so-that">
+                            <Textarea
+                                id="story-so-that"
+                                rows={2}
+                                maxLength={2000}
+                                value={form.soThat}
+                                placeholder={m.stories.soThatPlaceholder}
+                                onChange={(e) => set({ soThat: e.target.value })}
                             />
                         </Field>
                     </div>
 
-                    {/* Three fields rather than one paragraph: a story missing
-                        its *why* is the one worth noticing, and a single blob
-                        hides that it is missing. Stacked and multi-line, because
-                        "I want" is rarely one short phrase. */}
-                    <Field label={m.stories.asA} htmlFor="story-as-a">
-                        <Textarea
-                            id="story-as-a"
-                            rows={2}
-                            maxLength={500}
-                            value={form.asA}
-                            placeholder={m.stories.asAPlaceholder}
-                            onChange={(e) => set({ asA: e.target.value })}
-                        />
-                    </Field>
-                    <Field label={m.stories.iWant} htmlFor="story-i-want">
-                        <Textarea
-                            id="story-i-want"
-                            rows={4}
-                            maxLength={2000}
-                            value={form.iWant}
-                            placeholder={m.stories.iWantPlaceholder}
-                            onChange={(e) => set({ iWant: e.target.value })}
-                        />
-                    </Field>
-                    <Field label={m.stories.soThat} htmlFor="story-so-that">
-                        <Textarea
-                            id="story-so-that"
-                            rows={3}
-                            maxLength={2000}
-                            value={form.soThat}
-                            placeholder={m.stories.soThatPlaceholder}
-                            onChange={(e) => set({ soThat: e.target.value })}
-                        />
-                    </Field>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                            <Field label={m.fields.status} htmlFor="story-status">
+                                <Select
+                                    id="story-status"
+                                    value={form.status}
+                                    onChange={(e) => set({ status: e.target.value })}
+                                >
+                                    {STATUSES.map((status) => (
+                                        <option key={status} value={status}>
+                                            {m.stories.statuses[status]}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field label={m.fields.priority} htmlFor="story-priority">
+                                <Select
+                                    id="story-priority"
+                                    value={form.priority}
+                                    onChange={(e) => set({ priority: e.target.value })}
+                                >
+                                    {PRIORITIES.map((priority) => (
+                                        <option key={priority} value={priority}>
+                                            {m.priority[priority]}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field label={m.stories.points} htmlFor="story-points">
+                                <Input
+                                    id="story-points"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={form.storyPoints}
+                                    onChange={(e) => set({ storyPoints: e.target.value })}
+                                />
+                            </Field>
+                        </div>
+                        {/* Spans the row: under a third-width column it wrapped
+                            to four lines and pushed the whole column down. */}
+                        <p className="-mt-1 text-xs text-gray-500">{m.stories.pointsHint}</p>
 
-                    <Field label={m.stories.acceptance} htmlFor="story-acceptance">
-                        <Textarea
-                            id="story-acceptance"
-                            rows={8}
-                            maxLength={5000}
-                            value={form.acceptanceCriteria}
-                            placeholder={m.stories.acceptancePlaceholder}
-                            onChange={(e) => set({ acceptanceCriteria: e.target.value })}
-                        />
-                    </Field>
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <Field label={m.fields.status} htmlFor="story-status">
-                            <Select
-                                id="story-status"
-                                value={form.status}
-                                onChange={(e) => set({ status: e.target.value })}
-                            >
-                                {STATUSES.map((status) => (
-                                    <option key={status} value={status}>
-                                        {m.stories.statuses[status]}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field label={m.fields.priority} htmlFor="story-priority">
-                            <Select
-                                id="story-priority"
-                                value={form.priority}
-                                onChange={(e) => set({ priority: e.target.value })}
-                            >
-                                {PRIORITIES.map((priority) => (
-                                    <option key={priority} value={priority}>
-                                        {m.priority[priority]}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field
-                            label={m.stories.points}
-                            htmlFor="story-points"
-                            hint={m.stories.pointsHint}
-                        >
-                            <Input
-                                id="story-points"
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={form.storyPoints}
-                                onChange={(e) => set({ storyPoints: e.target.value })}
+                        <Field label={m.stories.acceptance} htmlFor="story-acceptance">
+                            <Textarea
+                                id="story-acceptance"
+                                rows={pickProject ? 16 : 11}
+                                maxLength={5000}
+                                value={form.acceptanceCriteria}
+                                placeholder={m.stories.acceptancePlaceholder}
+                                onChange={(e) => set({ acceptanceCriteria: e.target.value })}
                             />
                         </Field>
                     </div>

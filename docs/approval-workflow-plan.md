@@ -796,6 +796,18 @@ from each story's project code. It also moved the count in the paragraph above
 from nineteen to twenty within hours of that paragraph being written, which is
 why the paragraph no longer carries one.
 
+All of that reached production the same day, in `#703` and the release behind
+it, and the release record in `TODO.md` is the first evidence any of these
+pre-`db push` steps has run against real data rather than a scratch database:
+`sync-board-slug` filled 7 slugs, `sync-task-reference` numbered 872 tasks
+across 21 projects, `sync-story-code` filled 1 story code, and the log then
+reads "Nest application successfully started". Note what the alternative would
+have been — not three null columns, but `db push` refusing the first `SET NOT
+NULL` and the container never reaching `main.js`. The deploy has no automatic
+rollback, so the site would have stayed down until someone noticed. (The record
+is honest about its limits: nothing was opened in a browser, and the story table
+could not be queried directly from the container.)
+
 For this plan that settles Phase 2's placement, and both halves land on the
 safe side. The back-fill reads `require_voucher_approval` and writes rows into
 `ApprovalPolicy` — a table `db push` has just created — so it belongs **after**

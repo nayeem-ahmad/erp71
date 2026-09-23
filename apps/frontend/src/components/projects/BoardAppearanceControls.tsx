@@ -11,11 +11,12 @@ import {
     type BoardColumnWidth,
     type BoardDensity,
     type BoardScroll,
+    type BoardSwimlanes,
 } from './board-view';
 import type { BoardViewControls } from './use-board-view';
 
 /**
- * The board's appearance controls — card size, column width, column colour,
+ * The board's appearance controls — swimlanes, card size, column width, column colour,
  * where a board taller than the window scrolls, motion and which fields a card
  * shows.
  *
@@ -51,7 +52,22 @@ export default function BoardAppearanceControls({ view, set, toggleField, reset 
                 )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            {/* First, because it changes the board more than anything under
+                it: the rest restyle the same columns, this one reshapes them
+                into rows. */}
+            <Segmented<BoardSwimlanes>
+                label={v.swimlanes}
+                hint={v.swimlanesHint}
+                value={view.swimlanes}
+                onChange={(next) => set('swimlanes', next)}
+                options={[
+                    { value: 'none', label: v.swimlanesNone },
+                    { value: 'assignee', label: v.swimlanesAssignee },
+                    { value: 'story', label: v.swimlanesStory },
+                ]}
+            />
+
+            <div className="grid gap-3 border-t border-gray-100 pt-3 sm:grid-cols-3">
                 <Segmented<BoardDensity>
                     label={v.cardSize}
                     value={view.density}

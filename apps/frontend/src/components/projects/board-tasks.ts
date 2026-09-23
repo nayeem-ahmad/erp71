@@ -74,6 +74,8 @@ export interface BoardTask {
     // Phase 2 made an employee without a login assignable. Everything that asks
     // "who is this for" has to read both or those tasks look unassigned.
     assigneeEmployee?: { id: string; name?: string | null } | null;
+    /** The story the task delivers a piece of — what the story swimlanes group by. */
+    userStory?: { id: string; code: string; title: string } | null;
     checklistItems?: { id: string; is_done: boolean }[];
     _count?: { subtasks?: number; comments?: number } | null;
     status_id: string;

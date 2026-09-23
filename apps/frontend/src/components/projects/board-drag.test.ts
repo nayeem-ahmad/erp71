@@ -4,6 +4,7 @@ import {
     columnAtPoint,
     DRAG_THRESHOLD_PX,
     movedFar,
+    LANE_ATTR,
     resolveDropTarget,
     toFullIndex,
     withColumnMoved,
@@ -95,6 +96,18 @@ describe('resolveDropTarget', () => {
         expect(resolveDropTarget({ x: 5, y: 500 }, 'x', at(columnEl))).toEqual({
             columnId: 'todo',
             index: 3,
+        });
+    });
+
+    // A swimlane cell carries its lane, so the page can refuse a drop into
+    // somebody else's row — that would be a reassignment, not a move.
+    it('reports the lane of a swimlane cell', () => {
+        const cellEl = buildColumn('doing', ['a']);
+        cellEl.setAttribute(LANE_ATTR, 'user:u1');
+        expect(resolveDropTarget({ x: 5, y: 5 }, 'x', at(cellEl))).toEqual({
+            columnId: 'doing',
+            index: 0,
+            laneKey: 'user:u1',
         });
     });
 
