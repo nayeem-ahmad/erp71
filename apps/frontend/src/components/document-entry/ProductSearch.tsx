@@ -4,7 +4,7 @@ import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus, X, History } from 'lucide-react';
 import AnchoredDropdown from './AnchoredDropdown';
 import RateHistoryPopover from './RateHistoryPopover';
-import RateHistory, { useRateHistory, type RateHistoryType } from './RateHistory';
+import RateHistory, { lastRateFrom, useRateHistory, type RateHistoryType } from './RateHistory';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -16,9 +16,17 @@ interface ProductSearchProps {
     placeholder?: string;
     /**
      * Seed for the staged amount. Defaults to the product's sale price; a
-     * purchase passes the cost it wants to start from instead.
+     * purchase passes the cost it wants to start from instead. `null` leaves
+     * the box empty, so the operator has to type a figure.
      */
-    initialPriceOf?: (product: any) => number;
+    initialPriceOf?: (product: any) => number | null;
+    /**
+     * Replace the seed with the last rate from `historyType`'s history once it
+     * arrives — this party's if they have one, anyone's otherwise — unless the
+     * operator has already typed over it. A purchase uses it so a line starts
+     * at what the stock last cost, not at what it sells for.
+     */
+    seedPriceFromHistory?: boolean;
     /**
      * Show the last few rates the staged product traded at. Opt-in: quotation
      * and order entry share this component and have not asked for the hint, so
@@ -42,6 +50,7 @@ export default function ProductSearch({
     placeholder = 'Add product — search by name, SKU, or code…',
     initialPriceOf,
     historyType,
+    seedPriceFromHistory = false,
     historyPartyId,
     historyPartyName,
 }: ProductSearchProps) {
@@ -65,7 +74,24 @@ export default function ProductSearch({
     // Warm the cache the moment a product is staged, so the history panel
     // paints its rows on the click rather than after a round trip. The hook
     // caches per product+party, so opening the panel re-reads, never re-fetches.
-    useRateHistory(historyType && staged ? staged.id : undefined, historyType, historyPartyId);
+    const { data: stagedHistory } = useRateHistory(
+        historyType && staged ? staged.id : undefined,
+        historyType,
+        historyPartyId,
+    );
+    // Whether the operator has typed in the price box since the product was staged.
+    const priceTouched = useRef(false);
+
+    useEffect(() => {
+        if (!seedPriceFromHistory || !staged || priceTouched.current) return;
+        const last = lastRateFrom(stagedHistory);
+        if (last == null) return;
+        setStagedPrice(String(last));
+        // Keep the box ready to overtype, as it was when the seed went in.
+        requestAnimationFrame(() => {
+            if (document.activeElement === priceRef.current) priceRef.current?.select();
+        });
+    }, [seedPriceFromHistory, staged, stagedHistory]);
 
     // Fetch whenever the dropdown is open (including an empty query → browse all).
     useEffect(() => {
@@ -115,7 +141,8 @@ export default function ProductSearch({
     const handleSelectProduct = (product: any) => {
         setStaged(product);
         const seededPrice = initialPriceOf ? initialPriceOf(product) : Number(product.price);
-        setStagedPrice(String(Number.isFinite(seededPrice) ? seededPrice : 0));
+        priceTouched.current = false;
+        setStagedPrice(seededPrice == null ? '' : String(Number.isFinite(seededPrice) ? seededPrice : 0));
         setStagedQty('1');
         setQuery('');
         setShowDropdown(false);
@@ -292,7 +319,8 @@ export default function ProductSearch({
                                 partyName={historyPartyName}
                                 anchorRefs={[historyButtonRef]}
                                 onPickRate={(rate) => {
-                                    setStagedPrice(String(rate));
+                                    priceTouched.current = true;
+                            setStagedPrice(String(rate));
                                     requestAnimationFrame(() => priceRef.current?.select());
                                 }}
                                 onClose={() => setShowHistory(false)}
@@ -314,7 +342,7 @@ export default function ProductSearch({
                             step="0.01"
                             value={stagedPrice}
                             disabled={!staged}
-                            onChange={(e) => setStagedPrice(e.target.value)}
+                            onChange={(e) => { priceTouched.current = true; setStagedPrice(e.target.value); }}
                             onKeyDown={handleStagedKeyDown}
                             aria-label={priceLabel}
                             className={`${numberInput} w-24 disabled:bg-gray-50 disabled:text-gray-400`}
@@ -379,6 +407,7 @@ export default function ProductSearch({
                         partyId={historyPartyId}
                         variant="inline"
                         onPickRate={(rate) => {
+                            priceTouched.current = true;
                             setStagedPrice(String(rate));
                             requestAnimationFrame(() => priceRef.current?.select());
                         }}

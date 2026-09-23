@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import NewPurchasePage from './page';
 import { api } from '@/lib/api';
+import { clearRateHistoryCache } from '@/components/document-entry/RateHistory';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -59,8 +60,22 @@ const ANNEX_WAREHOUSE = {
     is_active: true,
 };
 
-/** The rate hint renders on every staged product; most cases don't exercise it. */
 const EMPTY_RATE_HISTORY = { type: 'purchase', forParty: [], recent: [], summary: null };
+const historyRow = (rate: number, partyId: string) => ({
+    documentId: `pur-${partyId}`,
+    documentNumber: 'PUR-00001',
+    date: '2026-09-01T00:00:00.000Z',
+    partyId,
+    partyName: partyId,
+    quantity: 5,
+    rate,
+    lineTotal: rate * 5,
+});
+/**
+ * Coffee last cost ৳8 from another supplier, against a ৳10 selling price, so
+ * every case starts a line at the cost and never at the price.
+ */
+const LAST_COST_HISTORY = { ...EMPTY_RATE_HISTORY, recent: [historyRow(8, 'sup-other')] };
 
 describe('NewPurchasePage', () => {
     beforeEach(() => {
@@ -72,7 +87,7 @@ describe('NewPurchasePage', () => {
         ]);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([COFFEE]);
         (api.getProduct as jest.Mock).mockResolvedValue(COFFEE);
-        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(LAST_COST_HISTORY);
         (api.createPurchase as jest.Mock).mockResolvedValue({
             id: 'purchase-2',
             purchase_number: 'PUR-00002',
@@ -96,6 +111,9 @@ describe('NewPurchasePage', () => {
         // relying on the one-shot localStorage bootstrap, which only runs for
         // whichever test happens to read the workspace first.
         window.sessionStorage.setItem('store_id', 'store-1');
+        // The history is cached per product for the life of the tab; each case
+        // sets its own.
+        clearRateHistoryCache();
     });
 
     const renderPage = async () => {
@@ -109,16 +127,50 @@ describe('NewPurchasePage', () => {
         fireEvent.change(search, { target: { value: 'coffee' } });
         await waitFor(() => screen.getAllByText('Coffee Beans'));
         fireEvent.click(screen.getAllByText('Coffee Beans')[0]);
+        await waitFor(() => expect((screen.getByLabelText('Unit Cost') as HTMLInputElement).value).not.toBe(''));
     };
 
-    it('stages a picked product at its cost before adding it to the receipt', async () => {
+    it('stages a picked product at its last purchase cost, not its selling price', async () => {
         await renderPage();
         await stageProduct();
 
         const costInput = screen.getByLabelText('Unit Cost') as HTMLInputElement;
-        expect(costInput.value).toBe('10');
+        expect(costInput.value).toBe('8');
         // Stock on hand is summed across warehouses.
         expect(screen.getByText(/Available 6/)).toBeInTheDocument();
+    });
+
+    it("prefers the chosen supplier's own last cost", async () => {
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue({
+            ...EMPTY_RATE_HISTORY,
+            forParty: [historyRow(7.25, 'sup-1')],
+            recent: [historyRow(8, 'sup-other')],
+        });
+        await renderPage();
+        const supplierSearch = screen.getByPlaceholderText(/Supplier/i);
+        fireEvent.focus(supplierSearch);
+        fireEvent.change(supplierSearch, { target: { value: 'Fresh' } });
+        fireEvent.click(await screen.findByText('Fresh Farms'));
+
+        await stageProduct();
+        expect((screen.getByLabelText('Unit Cost') as HTMLInputElement).value).toBe('7.25');
+        expect(api.getProductRateHistory).toHaveBeenCalledWith('prod-1', expect.objectContaining({ type: 'purchase', partyId: 'sup-1' }));
+    });
+
+    it('leaves the cost empty for a product never bought before', async () => {
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        await renderPage();
+        const search = screen.getByPlaceholderText(/search products/i);
+        fireEvent.focus(search);
+        fireEvent.change(search, { target: { value: 'coffee' } });
+        await waitFor(() => screen.getAllByText('Coffee Beans'));
+        fireEvent.click(screen.getAllByText('Coffee Beans')[0]);
+        await waitFor(() => expect(api.getProductRateHistory).toHaveBeenCalled());
+
+        expect((screen.getByLabelText('Unit Cost') as HTMLInputElement).value).toBe('');
+        // Nothing is added at a made-up cost until one is typed.
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        expect(screen.queryByLabelText('Qty — Coffee Beans')).not.toBeInTheDocument();
     });
 
     it('posts the purchase with the edited cost, quantity and supplier', async () => {
@@ -278,6 +330,7 @@ describe('NewPurchasePage', () => {
         fireEvent.change(search, { target: { value: 'sugar' } });
         await waitFor(() => screen.getAllByText('Loose Sugar'));
         fireEvent.click(screen.getAllByText('Loose Sugar')[0]);
+        await waitFor(() => expect((screen.getByLabelText('Unit Cost') as HTMLInputElement).value).toBe('8'));
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         const row = screen.getByRole('cell', { name: 'Loose Sugar' }).closest('tr') as HTMLElement;
