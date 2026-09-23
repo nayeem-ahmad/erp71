@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { CreateProjectDto, CreateTaskDto, UpdateProjectDto, UpdateTaskDto } from './project.dto';
-import { CreateBoardCardDto } from './board.dto';
+import { CreateBoardCardDto, MoveBoardCardDto } from './board.dto';
 
 const errorsFor = (payload: Record<string, unknown>) =>
     validateSync(plainToInstance(UpdateTaskDto, payload) as object).map((e) => e.property);
@@ -161,5 +161,34 @@ describe('CreateBoardCardDto assignees', () => {
         expect(cardErrors({ ...base, assigneeEmployeeId: 'nope' })).toEqual([
             'assigneeEmployeeId',
         ]);
+    });
+});
+
+describe('MoveBoardCardDto swimlanes', () => {
+    const errors = (payload: Record<string, unknown>) =>
+        validateSync(
+            plainToInstance(MoveBoardCardDto, { columnId: UUID, sortOrder: 0, ...payload }) as object,
+        ).map((e) => e.property);
+
+    it('is a plain move without either lane field', () => {
+        expect(errors({})).toEqual([]);
+    });
+
+    it('takes the keys the page builds', () => {
+        expect(errors({ laneBy: 'assignee', laneKey: `user:${UUID}` })).toEqual([]);
+        expect(errors({ laneBy: 'assignee', laneKey: `employee:${UUID}` })).toEqual([]);
+        expect(errors({ laneBy: 'story', laneKey: `story:${UUID}` })).toEqual([]);
+        expect(errors({ laneBy: 'story', laneKey: 'none' })).toEqual([]);
+    });
+
+    it('wants both halves — a key means nothing without what it keys', () => {
+        expect(errors({ laneKey: 'none' })).toEqual(['laneBy']);
+        expect(errors({ laneBy: 'story' })).toEqual(['laneKey']);
+    });
+
+    it('refuses anything that is not a lane key', () => {
+        expect(errors({ laneBy: 'priority', laneKey: 'none' })).toEqual(['laneBy']);
+        expect(errors({ laneBy: 'assignee', laneKey: 'user:not-a-uuid' })).toEqual(['laneKey']);
+        expect(errors({ laneBy: 'assignee', laneKey: `user:${UUID};drop` })).toEqual(['laneKey']);
     });
 });

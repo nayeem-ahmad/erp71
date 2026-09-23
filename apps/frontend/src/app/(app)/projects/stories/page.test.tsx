@@ -15,11 +15,15 @@ jest.mock('@/lib/api', () => ({
     api: {
         getProjectStories: jest.fn(),
         getProjects: jest.fn(),
+        createProjectStory: jest.fn(),
+        importProjectStories: jest.fn(),
     },
 }));
 
 // The global matchMedia mock always reports non-matching, so without this the
 // `hideOnMobile` columns this suite asserts on (priority, points, tasks) never render.
+jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+
 jest.mock('@/hooks/useMediaQuery', () => ({
     useMediaQuery: () => true,
     useIsMdUp: () => true,
@@ -28,6 +32,7 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 const story = (overrides: Record<string, unknown> = {}) => ({
     id: 'story-1',
     reference: 3,
+    code: 'OTB-3',
     title: 'Shopper pays with bKash',
     i_want: 'to pay with bKash',
     status: 'READY',
@@ -39,6 +44,7 @@ const story = (overrides: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
+    (api.createProjectStory as jest.Mock).mockReset();
     (api.getProjectStories as jest.Mock).mockReset().mockResolvedValue([story()]);
     (api.getProjects as jest.Mock)
         .mockReset()
@@ -50,7 +56,7 @@ describe('Cross-project user stories page', () => {
         render(<ProjectStoriesPage />);
 
         expect(await screen.findByText('Shopper pays with bKash')).toBeInTheDocument();
-        expect(screen.getByText('US-3')).toBeInTheDocument();
+        expect(screen.getByText('OTB-3')).toBeInTheDocument();
         expect(screen.getByText('PRJ-0001')).toBeInTheDocument();
         expect(screen.getByText('1/4 tasks')).toBeInTheDocument();
         expect(screen.getByText('5 pts')).toBeInTheDocument();
@@ -82,7 +88,7 @@ describe('Cross-project user stories page', () => {
     it('narrows by search text without re-querying the server', async () => {
         (api.getProjectStories as jest.Mock).mockResolvedValue([
             story(),
-            story({ id: 'story-2', reference: 4, title: 'Owner reads the day book', i_want: null }),
+            story({ id: 'story-2', reference: 4, code: 'OTB-4', title: 'Owner reads the day book', i_want: null }),
         ]);
         render(<ProjectStoriesPage />);
         await screen.findByText('Shopper pays with bKash');
@@ -101,7 +107,7 @@ describe('Cross-project user stories page', () => {
     it('searches the want as well as the title, the two fields the server searches', async () => {
         (api.getProjectStories as jest.Mock).mockResolvedValue([
             story(),
-            story({ id: 'story-2', reference: 4, title: 'Owner reads the day book', i_want: null }),
+            story({ id: 'story-2', reference: 4, code: 'OTB-4', title: 'Owner reads the day book', i_want: null }),
         ]);
         render(<ProjectStoriesPage />);
         await screen.findByText('Shopper pays with bKash');
@@ -138,5 +144,59 @@ describe('Cross-project user stories page', () => {
         fireEvent.change(screen.getByDisplayValue('Any status'), { target: { value: 'DONE' } });
 
         expect(await screen.findByText(/no stories match these filters/i)).toBeInTheDocument();
+    });
+
+    describe('writing and importing from here', () => {
+        it('asks for a project, then creates the story with the ID typed', async () => {
+            (api.createProjectStory as jest.Mock).mockResolvedValue(story());
+            render(<ProjectStoriesPage />);
+            await screen.findByText('Shopper pays with bKash');
+
+            fireEvent.click(screen.getByRole('button', { name: /New user story/ }));
+            fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Refunds' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            // No project picked yet: refused inline, nothing sent.
+            expect(await screen.findByText('Pick a project.')).toBeInTheDocument();
+            expect(api.createProjectStory).not.toHaveBeenCalled();
+
+            fireEvent.change(screen.getByLabelText(/Project/, { selector: 'select#story-project' }), {
+                target: { value: 'p1' },
+            });
+            fireEvent.change(screen.getByLabelText(/Story ID/), { target: { value: 'LEGACY-9' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() =>
+                expect(api.createProjectStory).toHaveBeenCalledWith(
+                    expect.objectContaining({ projectId: 'p1', code: 'LEGACY-9', title: 'Refunds' }),
+                ),
+            );
+        });
+
+        it('leaves the ID out when it is blank, so the server numbers it after the project code', async () => {
+            (api.createProjectStory as jest.Mock).mockResolvedValue(story());
+            render(<ProjectStoriesPage />);
+            await screen.findByText('Shopper pays with bKash');
+
+            fireEvent.click(screen.getByRole('button', { name: /New user story/ }));
+            fireEvent.change(screen.getByLabelText(/Project/, { selector: 'select#story-project' }), {
+                target: { value: 'p1' },
+            });
+            expect(screen.getByPlaceholderText('PRJ-0001-…')).toBeInTheDocument();
+            fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Refunds' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(api.createProjectStory).toHaveBeenCalled());
+            expect((api.createProjectStory as jest.Mock).mock.calls[0][0]).not.toHaveProperty('code');
+        });
+
+        it('opens the import dialog', async () => {
+            render(<ProjectStoriesPage />);
+            await screen.findByText('Shopper pays with bKash');
+
+            fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+
+            expect(await screen.findByText('Drag & drop or click to browse')).toBeInTheDocument();
+        });
     });
 });

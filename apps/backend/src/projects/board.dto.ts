@@ -7,6 +7,7 @@ import {
     IsOptional,
     IsString,
     IsUUID,
+    Matches,
     MaxLength,
     Min,
     MinLength,
@@ -104,7 +105,23 @@ export class CreateBoardCardDto {
 
     @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeEmployeeId?: string;
+
+    /**
+     * The story the card delivers a piece of — set when the card is composed
+     * inside a story swimlane, so it lands in the lane it was typed into.
+     * Checked against `projectId` by the task service like any other story.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
+    userStoryId?: string;
 }
+
+/** What a swimlane is keyed by. Mirrors `BoardSwimlanes` on the page, minus `none`. */
+export const BOARD_LANE_BY = ['assignee', 'story'] as const;
+export type BoardLaneBy = (typeof BOARD_LANE_BY)[number];
+
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+/** `none`, or a lane key the page builds: `user:<id>`, `employee:<id>`, `story:<id>`. */
+export const BOARD_LANE_KEY = new RegExp(`^(none|(user|employee|story):${UUID})$`, 'i');
 
 export class MoveBoardCardDto {
     @IsUUID()
@@ -113,6 +130,20 @@ export class MoveBoardCardDto {
     @IsInt()
     @Min(0)
     sortOrder!: number;
+
+    /**
+     * A drop into another swimlane: the card changes hands (or story) as well
+     * as column. Both or neither — a key means nothing without knowing which
+     * field it keys, and `none` is "nobody" or "no story" depending on it.
+     */
+    @ValidateIf((dto) => dto.laneKey !== undefined)
+    @IsIn(BOARD_LANE_BY)
+    laneBy?: BoardLaneBy;
+
+    @ValidateIf((dto) => dto.laneBy !== undefined)
+    @IsString()
+    @Matches(BOARD_LANE_KEY)
+    laneKey?: string;
 }
 
 export class CreateBoardColumnDto {

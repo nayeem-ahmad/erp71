@@ -7009,6 +7009,12 @@ model ProjectUserStory {
   /// unique violation — because a sequence table for this would be the only one
   /// in the schema.
   reference  Int
+  /// The ID people see and say — `OTB-3`. Defaults to `<project.code>-<reference>`
+  /// on create, and is editable after that, because a team moving a backlog in
+  /// from another tool wants to keep the IDs they already use. Stored rather
+  /// than composed (unlike a task key) for exactly that reason: an ID someone
+  /// typed cannot be recomputed. Unique within the project.
+  code       String
   title      String
 
   /// The classic template, kept as three columns rather than one blob so the
@@ -7042,6 +7048,7 @@ model ProjectUserStory {
   tasks ProjectTask[]
 
   @@unique([project_id, reference])
+  @@unique([project_id, code])
   @@index([tenant_id, project_id, sort_order])
   @@map("project_user_stories")
 }

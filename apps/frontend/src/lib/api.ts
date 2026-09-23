@@ -5113,6 +5113,12 @@ export const api = {
     /** The tasks under it are detached, never deleted with it. */
     deleteProjectStory: (storyId: string) =>
         fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
+    importProjectStories: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-stories/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),
@@ -5264,6 +5270,8 @@ export const api = {
             title: string;
             assigneeId?: string;
             assigneeEmployeeId?: string;
+            /** Set when the card is composed inside a story swimlane. */
+            userStoryId?: string;
         },
     ) =>
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {
@@ -5273,7 +5281,21 @@ export const api = {
         }),
     removeBoardTask: (id: string, taskId: string) =>
         fetchWithAuth(`/projects/boards/${id}/tasks/${taskId}`, { method: 'DELETE' }),
-    moveBoardCard: (id: string, taskId: string, data: { columnId: string; sortOrder: number }) =>
+    /**
+     * `laneBy` + `laneKey` together make the drop a swimlane change too: the
+     * server reassigns the task, or moves it to another story, before it
+     * moves its status.
+     */
+    moveBoardCard: (
+        id: string,
+        taskId: string,
+        data: {
+            columnId: string;
+            sortOrder: number;
+            laneBy?: 'assignee' | 'story';
+            laneKey?: string;
+        },
+    ) =>
         fetchWithAuth(`/projects/boards/${id}/tasks/${taskId}/move`, {
             method: 'PATCH',
             body: JSON.stringify(data),

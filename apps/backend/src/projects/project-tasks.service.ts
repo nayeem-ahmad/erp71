@@ -46,7 +46,7 @@ const TASK_INCLUDE = {
     assignee: { select: { id: true, name: true, email: true } },
     assigneeEmployee: { select: { id: true, name: true } },
     milestone: { select: { id: true, name: true } },
-    userStory: { select: { id: true, reference: true, title: true, status: true } },
+    userStory: { select: { id: true, reference: true, code: true, title: true, status: true } },
     sprint: { select: { id: true, name: true, status: true } },
     checklistItems: { orderBy: { sort_order: 'asc' } },
     labels: { include: { label: true } },

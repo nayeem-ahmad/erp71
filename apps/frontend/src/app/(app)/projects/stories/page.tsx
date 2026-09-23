@@ -2,8 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { PageShell, PageHeader, Input, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { Plus, Upload } from 'lucide-react';
+import {
+    Button,
+    PageShell,
+    PageHeader,
+    Input,
+    Select,
+    StatusBadge,
+    type StatusBadgeTone,
+} from '@/components/ui';
 import DataTable from '@/components/data-table/DataTable';
+import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { StoryFormModal, type StoryProjectOption } from '@/components/projects/ProjectStoriesCard';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -14,16 +25,17 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 /**
  * Every project's backlog on one screen.
  *
- * The per-project card on `/projects/[id]` stays the place a story is written
- * and edited; this is the same rows read the other way round, for whoever
- * grooms scope across projects rather than inside one. So there is no form
- * here — a row links to the story on the page that owns it, which keeps one
- * editor for stories rather than a second copy of the same four fields.
+ * Stories can be written and imported from here, for whoever grooms scope
+ * across projects rather than inside one. The form is the same `StoryFormModal`
+ * the per-project card uses, with a project picker in front — one editor for
+ * stories, not a second copy of the same fields. Editing stays on the project
+ * page: a row links to the story on the page that owns it.
  */
 
 interface StoryRow {
     id: string;
     reference: number;
+    code: string;
     title: string;
     i_want?: string | null;
     status: string;
@@ -48,6 +60,24 @@ const PRIORITY_TONE: Record<string, StatusBadgeTone> = {
     URGENT: 'danger',
 };
 
+/**
+ * The columns an import file may carry. The project is named by code or name,
+ * as in the task import; the ID is optional, and a blank one is numbered after
+ * the project code.
+ */
+const IMPORT_FIELDS: ImportField[] = [
+    { key: 'project', label: 'Project (code or name)', required: true },
+    { key: 'code', label: 'Story ID', required: false },
+    { key: 'title', label: 'Title', required: true },
+    { key: 'asA', label: 'As a', required: false },
+    { key: 'iWant', label: 'I want', required: false },
+    { key: 'soThat', label: 'So that', required: false },
+    { key: 'acceptanceCriteria', label: 'Acceptance criteria', required: false },
+    { key: 'status', label: 'Status (BACKLOG/READY/IN_PROGRESS/DONE)', required: false },
+    { key: 'priority', label: 'Priority (LOW/MEDIUM/HIGH/URGENT)', required: false },
+    { key: 'storyPoints', label: 'Story points', required: false },
+];
+
 const STATUSES = ['BACKLOG', 'READY', 'IN_PROGRESS', 'DONE'] as const;
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
@@ -56,8 +86,10 @@ export default function ProjectStoriesPage() {
     const m = t.projects;
 
     const [stories, setStories] = useState<StoryRow[]>([]);
-    const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
+    const [projects, setProjects] = useState<StoryProjectOption[]>([]);
     const [loading, setLoading] = useState(true);
+    const [creating, setCreating] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     /**
      * Remembered for the tab, like the sprint and task lists: opening a story in
@@ -100,12 +132,12 @@ export default function ProjectStoriesPage() {
 
     useEffect(() => {
         api.getProjects({ limit: 100 })
-            .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
+            .then((res) => setProjects((res?.items ?? []) as StoryProjectOption[]))
             .catch(() => setProjects([]));
     }, []);
 
     /**
-     * Search is applied here rather than sent, over the same two fields the
+     * Search is applied here rather than sent, over the same three fields the
      * endpoint searches. The list is unpaginated, so a round trip per keystroke
      * would fetch the very rows already in hand in order to filter them
      * remotely; this keeps typing instant and the result identical.
@@ -115,7 +147,8 @@ export default function ProjectStoriesPage() {
         if (!term) return stories;
         return stories.filter(
             (story) =>
-                story.title.toLowerCase().includes(term)
+                story.code.toLowerCase().includes(term)
+                || story.title.toLowerCase().includes(term)
                 || (story.i_want ?? '').toLowerCase().includes(term),
         );
     }, [stories, search]);
@@ -132,7 +165,7 @@ export default function ProjectStoriesPage() {
                         <div className="min-w-0">
                             <div className="flex min-w-0 items-baseline gap-2">
                                 <span className="shrink-0 text-xs tabular-nums text-gray-500">
-                                    {fmt(m.stories.reference, { number: story.reference })}
+                                    {story.code}
                                 </span>
                                 {/* Back to the card that owns it, with this story
                                     already open — there is no story route, and a
@@ -252,6 +285,22 @@ export default function ProjectStoriesPage() {
                     m.storyList.title,
                     'projects',
                 )}
+                actions={
+                    <>
+                        <Button
+                            variant="secondary"
+                            className="min-h-touch"
+                            onClick={() => setImportOpen(true)}
+                        >
+                            <Upload className="h-4 w-4" />
+                            {t.common.import}
+                        </Button>
+                        <Button className="min-h-touch" onClick={() => setCreating(true)}>
+                            <Plus className="h-4 w-4" />
+                            {m.stories.add}
+                        </Button>
+                    </>
+                }
             />
 
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -306,6 +355,29 @@ export default function ProjectStoriesPage() {
                 showSearch={false}
                 emptyMessage={anyFilter ? m.storyList.emptyFiltered : m.storyList.empty}
             />
+
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                entityLabel={m.storyList.title}
+                fields={IMPORT_FIELDS}
+                importFn={(rows, mode) => api.importProjectStories(rows, mode)}
+                onSuccess={() => void load()}
+            />
+
+            {creating && (
+                <StoryFormModal
+                    // The filtered project, if there is one, is the likeliest home.
+                    projects={projects}
+                    story={null}
+                    initialProjectId={projectId || undefined}
+                    onClose={() => setCreating(false)}
+                    onSaved={async () => {
+                        setCreating(false);
+                        await load();
+                    }}
+                />
+            )}
         </PageShell>
     );
 }

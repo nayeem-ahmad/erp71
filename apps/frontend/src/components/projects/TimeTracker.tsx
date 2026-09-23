@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
+import { useTimerElapsed } from './use-timer-elapsed';
 import { formatElapsed, type HourLogTag } from './hour-log-day';
 import TimeTrackerForm, {
     type CaptureProject,
@@ -138,22 +139,7 @@ export default function TimeTracker() {
         };
     }, [projectId, onlyMine, userId, visible]);
 
-    // Resynced from the server on every refetch rather than counted from a
-    // parsed timestamp against the device clock: a phone running two minutes
-    // fast should still show the elapsed time that will actually be recorded.
-    // Counted here rather than in the form so that collapsing the panel — which
-    // unmounts the form — does not restart the count.
-    const [elapsed, setElapsed] = useState(0);
-    useEffect(() => {
-        if (!timer) return;
-        setElapsed(timer.elapsed_seconds);
-        const handle = setInterval(() => setElapsed((value) => value + 1), 1000);
-        return () => clearInterval(handle);
-        // Deliberately keyed on the two fields rather than the object: `timer`
-        // is a fresh object on every refetch, and depending on it would restart
-        // the interval — and the count — several times a minute.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timer?.id, timer?.elapsed_seconds]);
+    const elapsed = useTimerElapsed();
 
     /**
      * Runs a log, and when the overlap guard refuses it, holds the retry behind
