@@ -3,6 +3,9 @@
 (() => {
   if (window.__ov) return;
   const FONT = '__CAVEAT__';
+  const BN_HAND = '__GALADA__';
+  const BN_400 = '__HIND_400__';
+  const BN_700 = '__HIND_700__';
   const INK = '#e11d48';      // annotation ink
   const BLUE = '#2563eb';
   const NS = 'http://www.w3.org/2000/svg';
@@ -13,8 +16,13 @@
     const st = document.createElement('style');
     st.textContent = `
       @font-face { font-family: 'OvHand'; src: url(${FONT}) format('woff2'); }
+      /* Bengali script: Caveat and Inter have no Bengali glyphs, so these take
+         over per character in the Bangla version. */
+      @font-face { font-family: 'OvHand'; src: url(${BN_HAND}) format('woff2'); unicode-range: U+0980-09FF; }
+      @font-face { font-family: 'OvBn'; font-weight: 400; src: url(${BN_400}) format('woff2'); }
+      @font-face { font-family: 'OvBn'; font-weight: 700; src: url(${BN_700}) format('woff2'); }
       nextjs-portal, [data-nextjs-toast], #__next-build-watcher { display: none !important; }
-      #__ov { position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; font-family: Inter, system-ui, sans-serif; }
+      #__ov { position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; font-family: Inter, OvBn, system-ui, sans-serif; }
       #__ov svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
       #__ov .lbl { position: absolute; font-family: OvHand, cursive; font-size: 30px; color: ${INK}; white-space: nowrap;
                    text-shadow: 0 0 4px #fff, 0 0 4px #fff, 0 0 8px #fff; opacity: 0; transition: opacity .35s; line-height: 1; }

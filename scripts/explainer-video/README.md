@@ -1,14 +1,21 @@
 # Sales entry explainer video
 
-`record.js` drives the real app through one complete sale and records it as
-`docs/user-manual/videos/sales-entry.mp4` (1440×900, ~3.5 min, with a male
-voice-over).
+`record.js` drives the real app through one complete sale and records it as an
+annotated screen video (1440×900, ~3.5 min):
+
+| Version | File | Voice |
+|---|---|---|
+| English | `docs/user-manual/videos/sales-entry.mp4` | male, Kokoro `am_michael` |
+| Bangla (Bangladesh) | `docs/user-manual/videos/sales-entry.bn.mp4` | male, Azure `bn-BD-PradeepNeural`. **Silent until an Azure Speech key is available** (see below) |
 
 It is a screen recording of the live UI, not a mock-up. `overlay.js` is injected
 into the page and draws on top of it: step captions, hand-drawn boxes, arrows
-and labels (Caveat font, `caveat.woff2`, SIL OFL), a visible cursor with click
-ripples, and the title and recap cards. Frames come from a Chrome DevTools
-screencast, so text stays sharp, and ffmpeg encodes them to H.264.
+and labels, a visible cursor with click ripples, and the title and recap cards.
+Frames come from a Chrome DevTools screencast, so text stays sharp, and ffmpeg
+encodes them to H.264.
+
+Fonts (`fonts/`, all SIL OFL): Caveat for the English handwriting, Galada for
+Bangla handwriting, Hind Siliguri for Bangla captions and cards.
 
 ## Scenes
 
@@ -27,36 +34,47 @@ screencast, so text stays sharp, and ffmpeg encodes them to H.264.
 13. Print prompt
 14. The sale in the sales list
 
+## Languages
+
+`lang/<code>.json` holds everything that changes per language:
+
+- `narration`: the spoken line for each scene, keyed by the English caption
+  title, plus `intro` and `outro`. It is written for the ear: *ERP71* becomes
+  "E R P seventy-one" in English and "ই আর পি সেভেন্টি ওয়ান" in Bangla.
+- `captions`, `labels`, `cards` (not needed for English, which is inline in
+  `record.js`): the translated on-screen text, keyed by the English string. A
+  missing key fails the run rather than leaking English into the video.
+
+The app UI stays in English in the Bangla version. The New Sale screen is only
+partly translated today (see TODO.md), so the Bangla captions name buttons by
+the English label actually on screen.
+
+To add a language, copy `lang/bn.json`, translate it, and run with
+`VIDEO_LANG=<code>`.
+
 ## Voice-over
 
-`narration.json` holds the spoken line for each caption (keyed by the caption
-title, plus `intro` and `outro`). It is written for the ear, so *ERP71* is
-spelled out as "E R P seventy-one" and *bKash* as "bee-cash".
+`narrate.py <lang>` turns the narration into one WAV per scene in
+`.audio/<lang>/` (gitignored), plus `durations.json`. `record.js` then holds
+each scene until its line has been spoken, logs when each caption appeared, and
+mixes the clips onto the video at those moments (loudness-normalised to
+−16 LUFS). With no `durations.json` it records a silent video on default pacing.
 
-`narrate.py` turns it into speech with [Kokoro](https://github.com/thewh1teagle/kokoro-onnx)
-(model Apache-2.0; voice `am_michael`, US English, male). It runs fully offline
-and writes the clips to `.audio/` (gitignored). `record.js` then holds each
-scene until its line has been spoken, logs when each caption appeared, and
-mixes the clips onto the video at those moments (loudness-normalised to −16 LUFS).
+| Engine (`TTS=`) | Used for | Needs |
+|---|---|---|
+| `kokoro` | English default | `pip install kokoro-onnx soundfile`; `KOKORO_DIR` holding `kokoro-v1.0.onnx` + `voices-v1.0.bin` (kokoro-onnx GitHub release `model-files-v1.0`). Offline, Apache-2.0. Optional `KOKORO_VOICE` (default `am_michael`), `KOKORO_SPEED` |
+| `azure` | Bangla default | `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` (default `southeastasia`), and network access to `<region>.tts.speech.microsoft.com`. Voice comes from the language file (`bn-BD-PradeepNeural`, male, Bangladeshi). Optional `AZURE_VOICE`, `AZURE_RATE` (e.g. `-5%`) |
+| `estimate` | Bangla when no Azure key is set | nothing. Writes timings from text length only, so a silent video is paced as if narrated |
+| `files` | human recordings | put `00.wav`, `01.wav`, … (narration order) in `.audio/<lang>/`; this measures them |
 
-```bash
-pip install kokoro-onnx soundfile
-# kokoro-v1.0.onnx + voices-v1.0.bin from the kokoro-onnx GitHub release "model-files-v1.0"
-KOKORO_DIR=/path/to/model-files python3 scripts/explainer-video/narrate.py
-```
-
-Optional env: `KOKORO_VOICE` (e.g. `am_fenrir`, `bm_george`) and `KOKORO_SPEED`.
-Skip this step to record a silent video.
-
-To change what is said, edit `narration.json` and re-run both steps. Scene
-timing follows the voice automatically.
-
-The Piper voices "Ryan" and "Alan" were ruled out: Ryan's training data is
-CC BY-NC-SA (non-commercial), and Alan is fine-tuned from Ryan.
+Voices ruled out: the Piper voices "Ryan" and "Alan" (Ryan's training data is
+CC BY-NC-SA, non-commercial; Alan is fine-tuned from Ryan). No offline model
+reachable here speaks Bangladeshi Bangla. Meta MMS-TTS Bengali is CC BY-NC, and
+Google Cloud only offers Indian Bangla (`bn-IN`).
 
 ## Re-recording
 
-Run this after changing the sales entry screen, so the video still matches it.
+Run this after changing the sales entry screen, so the videos still match it.
 
 1. Start the stack against a **freshly seeded** local database (the demo tenant
    from `packages/database/prisma/seed.ts`). The script signs in as
@@ -66,9 +84,11 @@ Run this after changing the sales entry screen, so the video still matches it.
    ```sql
    update "User" set email_verified_at = now();
    ```
-2. Generate the voice-over (above), then record:
+2. Generate the voice-over, then record (reseed between the two languages so
+   each video's sale is the only new one in the list):
    ```bash
-   node scripts/explainer-video/record.js
+   python3 scripts/explainer-video/narrate.py en && node scripts/explainer-video/record.js
+   python3 scripts/explainer-video/narrate.py bn && VIDEO_LANG=bn node scripts/explainer-video/record.js
    ```
    Optional env: `BASE_URL` (default `http://localhost:3000`), `CHROMIUM_PATH`
    (a Chromium binary, if Playwright's own is not installed) and `FFMPEG` (the

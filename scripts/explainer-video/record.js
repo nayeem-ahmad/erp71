@@ -8,15 +8,23 @@ const path = require('path');
 
 const DIR = __dirname;
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
-const OUT = path.resolve(DIR, '../../docs/user-manual/videos/sales-entry.mp4');
+// VIDEO_LANG=bn records the Bangla version: same scenes, captions, labels and
+// cards from lang/bn.json. The app UI itself stays in English.
+const LANG = process.env.VIDEO_LANG || 'en';
+const copy = JSON.parse(fs.readFileSync(path.join(DIR, 'lang', `${LANG}.json`), 'utf8'));
+const OUT = path.resolve(DIR, '../../docs/user-manual/videos', LANG === 'en' ? 'sales-entry.mp4' : `sales-entry.${LANG}.mp4`);
 const W = 1440, H = 900;
 // Voice-over from narrate.py. Absent means a silent recording.
-const VOICE_FILE = path.join(DIR, '.audio', 'durations.json');
+const VOICE_FILE = path.join(DIR, '.audio', LANG, 'durations.json');
 const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE, 'utf8')) : null;
 
 (async () => {
-  const font = 'data:font/woff2;base64,' + fs.readFileSync(path.join(DIR, 'caveat.woff2')).toString('base64');
-  const overlay = fs.readFileSync(path.join(DIR, 'overlay.js'), 'utf8').replace('__CAVEAT__', font);
+  const font = (f) => 'data:font/woff2;base64,' + fs.readFileSync(path.join(DIR, 'fonts', f)).toString('base64');
+  const overlay = fs.readFileSync(path.join(DIR, 'overlay.js'), 'utf8')
+    .replace('__CAVEAT__', font('caveat.woff2'))
+    .replace('__GALADA__', font('galada-bengali-400-normal.woff2'))
+    .replace('__HIND_400__', font('hind-siliguri-bengali-400-normal.woff2'))
+    .replace('__HIND_700__', font('hind-siliguri-bengali-700-normal.woff2'));
 
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
@@ -57,7 +65,24 @@ const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE,
 
   // ── helpers ────────────────────────────────────────────────────────────
   const wait = (ms) => page.waitForTimeout(ms);
-  const ov = (fn, ...args) => page.evaluate(([fn, args]) => __ov[fn](...args), [fn, args]);
+  // Hand-drawn labels are written in English here and swapped for the
+  // language's own on the way into the page.
+  const label = (text) => {
+    if (LANG === 'en' || typeof text !== 'string') return text;
+    if (!copy.labels?.[text]) throw new Error(`lang/${LANG}.json has no label for "${text}"`);
+    return copy.labels[text];
+  };
+  const ov = (fn, ...args) => {
+    if (fn === 'box') args[1] = label(args[1]);
+    if (fn === 'label') args[0] = label(args[0]);
+    return page.evaluate(([fn, args]) => __ov[fn](...args), [fn, args]);
+  };
+  const caption = (n, title, body) => {
+    if (LANG === 'en') return ov('caption', n, title, body);
+    const t = copy.captions?.[title];
+    if (!t) throw new Error(`lang/${LANG}.json has no caption for "${title}"`);
+    return ov('caption', n, t[0], t[1]);
+  };
   const box = async (loc) => {
     const b = await (typeof loc === 'string' ? page.locator(loc).first() : loc).boundingBox();
     return { x: b.x, y: b.y, w: b.width, h: b.height };
@@ -100,15 +125,16 @@ const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE,
     cues.push({ ...voice[key], t: Date.now() / 1000 });
     voiceEnd = Date.now() + voice[key].dur * 1000 + 400;
   };
-  const say = async (n, title, body, hold = 0) => { await narrate(title); await ov('caption', n, title, body); await wait(hold); };
+  const say = async (n, title, body, hold = 0) => { await narrate(title); await caption(n, title, body); await wait(hold); };
   // Scene-ending clear: keeps the drawings up until the voice has finished
   // talking about them. Mid-scene tidying uses ov('clear') directly.
   const clear = async () => { await holdVoice(); await ov('clear'); };
 
   const cardHtml = (k, h, p, extra = '') => `<div class="k">${k}</div><h1>${h}</h1><p>${p}</p>${extra}`;
+  const card = (name, html) => ov('card', LANG === 'en' ? html : copy.cards[name]);
 
   // ── 0. title card ──────────────────────────────────────────────────────
-  await ov('card', cardHtml('ERP71 · Sales',
+  await card('title', cardHtml('ERP71 · Sales',
     'How sales entry works',
     'Record a sale from start to finish — customer, products, discounts, payment and invoice — on one screen.',
     `<ol><li>Open New Sale</li><li>Pick the customer</li><li>Add products</li><li>Check totals &amp; take payment</li><li>Create the sale &amp; print</li></ol>`));
@@ -306,7 +332,7 @@ const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE,
   await page.goto(BASE + '/sales/list', { waitUntil: 'load' });
   await page.waitForSelector('tbody tr');
   await page.evaluate(() => { __ov.ensure(); });
-  await ov('caption', 14, 'Find it in the sales list', 'Every sale appears under <b>Sales → Sales list</b>, where you can open, reprint, duplicate or return it.');
+  await caption(14, 'Find it in the sales list', 'Every sale appears under <b>Sales → Sales list</b>, where you can open, reprint, duplicate or return it.');
   await wait(1500);
   const firstRow = page.locator('tbody tr').first();
   if (await firstRow.count()) {
@@ -318,7 +344,7 @@ const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE,
 
   // ── outro ──────────────────────────────────────────────────────────────
   await ov('showCursor', false);
-  await ov('card', cardHtml('Recap', 'A sale in five steps',
+  await card('recap', cardHtml('Recap', 'A sale in five steps',
     '', `<ol><li>Sales → New Sale</li><li>Search &amp; pick the customer (or walk-in)</li><li>Add products, adjust qty / price / discount</li><li>Check totals, split the payment</li><li>Create Sale → print the invoice</li></ol><div class="hand">That's it — happy selling!</div>`));
   await narrate('outro');
   await wait(voice ? 1500 : 7500);
@@ -340,15 +366,19 @@ const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE,
 
   // Each voice clip is delayed to the moment its caption appeared, then all
   // are mixed into one track (clips never overlap; see narrate()).
+  // A cue without a file is a timing-only estimate (narrate.py --estimate):
+  // it paced the scenes but adds no sound.
+  const spoken = cues.filter((c) => c.file);
   const audioArgs = [];
-  if (cues.length) {
+  if (spoken.length) {
+    const cues = spoken;
     const t0 = frames[0].t;
     cues.forEach((c) => audioArgs.push('-i', c.file));
     const delays = cues.map((c, i) => {
       const ms = Math.max(0, Math.round((c.t - t0) * 1000));
       return `[${i + 1}:a]adelay=${ms}:all=1[v${i}]`;
     });
-    const mix = cues.map((_, i) => `[v${i}]`).join('') + `amix=inputs=${cues.length}:normalize=0,aresample=48000,loudnorm=I=-16:TP=-1.5:LRA=11[aout]`;
+    const mix = cues.map((_, i) => `[v${i}]`).join('') + `amix=inputs=${cues.length}:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[aout]`;
     audioArgs.push('-filter_complex', [...delays, mix].join(';'), '-map', '0:v', '-map', '[aout]', '-c:a', 'aac', '-b:a', '160k');
   }
   execFileSync(process.env.FFMPEG || 'ffmpeg', [
