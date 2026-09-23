@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useI18n } from '@/lib/i18n';
 
 interface DocumentEntryLayoutProps {
     title: string;
@@ -54,7 +55,7 @@ interface DocumentEntryLayoutProps {
 export default function DocumentEntryLayout({
     title,
     backHref,
-    backLabel = 'Back',
+    backLabel,
     banner,
     metaBar,
     headerActions,
@@ -66,6 +67,7 @@ export default function DocumentEntryLayout({
     actions,
     onSubmit,
 }: DocumentEntryLayoutProps) {
+    const { t } = useI18n();
     const handleSubmit = (e: React.FormEvent) => {
         if (onSubmit) onSubmit(e);
         else e.preventDefault();
@@ -76,7 +78,7 @@ export default function DocumentEntryLayout({
             {/* Top strip: title + document meta fields, one slim row */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-b bg-white flex-shrink-0">
                 <div className="flex items-center gap-2">
-                    <Link href={backHref} className="text-gray-400 hover:text-gray-700" aria-label={backLabel}>
+                    <Link href={backHref} className="text-gray-400 hover:text-gray-700" aria-label={backLabel ?? t.common.back}>
                         <ChevronLeft className="w-5 h-5" />
                     </Link>
                     <h1 className="text-base font-bold text-gray-900 whitespace-nowrap">{title}</h1>

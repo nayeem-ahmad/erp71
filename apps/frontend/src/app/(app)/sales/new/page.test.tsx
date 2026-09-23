@@ -741,3 +741,112 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 });
+
+describe('NewSalePage — what the sale payload carries', () => {
+    const { printSalesInvoice } = require('@/lib/sales-invoice-printer');
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        // A VAT-registered workspace: the case where every sale used to be
+        // refused, because the screen added VAT the server never expected.
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 15 } });
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '380.00', vat_rate: null, stocks: [{ quantity: 7 }] },
+        ]);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+
+        Object.defineProperty(window, 'localStorage', {
+            value: { getItem: jest.fn(() => 'store-1'), setItem: jest.fn(), removeItem: jest.fn() },
+            writable: true,
+        });
+        window.sessionStorage.setItem('store_id', 'store-1');
+    });
+
+    /** The input on the totals panel's row labelled `label`. */
+    const adjustmentInput = (label: string) =>
+        screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
+
+    it('sends the line discount, transport, labour and rounding, and totals on them', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        // ৳380 at 10% is ৳342 on the line — and must be ৳342 on the bill.
+        fireEvent.change(screen.getByLabelText('Disc % — Rice 5kg'), { target: { value: '10' } });
+        fireEvent.change(adjustmentInput('Transport'), { target: { value: '50' } });
+        fireEvent.change(adjustmentInput('Labor'), { target: { value: '20' } });
+        fireEvent.change(adjustmentInput('Rounding'), { target: { value: '-2' } });
+
+        // 342 + 50 + 20 − 2. No VAT is added on top: it is inside the 342.
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '410' } });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Sale' })); });
+
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        const payload = (api.createNewSale as jest.Mock).mock.calls[0][0];
+        expect(payload).toEqual(expect.objectContaining({
+            items: [expect.objectContaining({ productId: 'prod-1', quantity: 1, priceAtSale: 380, discountPercent: 10 })],
+            transportAmount: 50,
+            laborAmount: 20,
+            roundingAmount: -2,
+            totalAmount: 410,
+            amountPaid: 410,
+        }));
+        expect(payload).not.toHaveProperty('vatAmount');
+        expect(payload.discountAmount).toBeUndefined();
+
+        // The invoice shows the line's discount in taka, and the VAT as
+        // contained in — not added to — the total.
+        await screen.findByRole('dialog');
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({
+                items: [expect.objectContaining({ unitPrice: 380, discount: 38 })],
+                subtotal: 342,
+                transportCost: 50,
+                laborCost: 20,
+                rounding: -2,
+                vat: 44.61,
+                total: 410,
+            }),
+            'A4',
+        );
+    });
+
+    it('leaves the adjustments out of a plain sale', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '380' } });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Sale' })); });
+
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        const payload = (api.createNewSale as jest.Mock).mock.calls[0][0];
+        expect(payload.totalAmount).toBe(380);
+        expect(payload.items[0].discountPercent).toBeUndefined();
+        expect(payload.transportAmount).toBeUndefined();
+        expect(payload.laborAmount).toBeUndefined();
+        expect(payload.roundingAmount).toBeUndefined();
+    });
+});

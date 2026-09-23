@@ -14,7 +14,7 @@ import SaleEntryLayout, {
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
 import PrintInvoicePrompt from '../components/PrintInvoicePrompt';
-import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { lineDiscountAmount, useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import {
     printSalesInvoice,
@@ -26,7 +26,7 @@ import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import PaperSizeMenu from '../components/PaperSizeMenu';
 import ShiftContextChip from '../components/ShiftContextChip';
-import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
+import { canKeepDue, creditDueAmount, keepDueReason } from '@/lib/customer-credit';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
 import {
@@ -39,7 +39,8 @@ import {
 import { useI18n } from '@/lib/i18n';
 
 function NewSalePageContent() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
+    const copy = t.sales.entry;
     const {
         items,
         customer,
@@ -124,7 +125,7 @@ function NewSalePageContent() {
                 if (!doc) {
                     toast.error(duplicateSaleId
                         ? t.sales.detail.duplicateLoadFailed
-                        : 'That document could not be found.');
+                        : copy.documentNotFound);
                     return;
                 }
 
@@ -132,7 +133,7 @@ function NewSalePageContent() {
                     // Same guard the server applies when a proforma becomes an
                     // order: no rate means no defensible BDT figure to invoice.
                     toast.error(
-                        `${doc.quote_number} is in ${doc.currency} but carries no exchange rate, so it cannot be converted.`,
+                        fmt(copy.noExchangeRate, { number: doc.quote_number, currency: doc.currency }),
                     );
                     return;
                 }
@@ -161,13 +162,15 @@ function NewSalePageContent() {
                 setSource(seeded.source);
             } catch (error: any) {
                 console.error('Failed to load the document being converted', error);
-                if (!cancelled) toast.error(error.message || 'Failed to load that document');
+                if (!cancelled) toast.error(error.message || copy.loadDocumentFailed);
             } finally {
                 if (!cancelled) setLoadingSource(false);
             }
         })();
 
         return () => { cancelled = true; };
+        // The copy is read when a load settles, not a reason to load again.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quotationId, salesOrderId, duplicateSaleId, loadCart, t.sales.detail.duplicateLoadFailed]);
 
     /**
@@ -222,7 +225,9 @@ function NewSalePageContent() {
             name: item.name,
             quantity: item.quantity,
             unitPrice: item.price,
-            discount: item.discount || 0,
+            // The printer takes the line's discount in taka, not the typed
+            // percentage — it prints the figure and subtracts it.
+            discount: lineDiscountAmount(item),
         })),
         payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
@@ -233,6 +238,7 @@ function NewSalePageContent() {
         discountPercent: totals.discountPercent > 0
             ? Math.round(totals.discountPercent * 100) / 100
             : undefined,
+        // Contained in the total, not added to it — the printer labels it so.
         vat: totals.vat > 0 ? totals.vat : undefined,
         transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
         laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
@@ -260,6 +266,9 @@ function NewSalePageContent() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            // The product's own VAT rate, so the VAT shown inside the total
+            // matches what the server snapshots. Absent → workspace default.
+            vatRate: product.vat_rate != null ? Number(product.vat_rate) : null,
             // Voice-entry products come without stock rows — leave availableQty
             // undefined there rather than claiming zero stock.
             availableQty: options?.availableQty
@@ -294,7 +303,7 @@ function NewSalePageContent() {
         const errors: string[] = [];
 
         if (items.length === 0) {
-            errors.push('Please add at least one item to the sale');
+            errors.push(copy.addItemRequired);
         }
 
         if (customerDraft && !customerDraft.name.trim()) {
@@ -307,11 +316,14 @@ function NewSalePageContent() {
         const keepDueCheck = canKeepDue(customer, creditDue);
 
         if (balance < -0.01) {
-            errors.push(`Payment amount exceeds total by ৳${Math.abs(balance).toFixed(2)}`);
+            errors.push(fmt(copy.overpaid, { amount: `৳${Math.abs(balance).toFixed(2)}` }));
         } else if (creditDue > 0.01 && !keepDueCheck.allowed) {
-            errors.push(keepDueCheck.reason ?? `Payment amount is ৳${creditDue.toFixed(2)} short of the total`);
+            errors.push(
+                keepDueReason(keepDueCheck, copy.credit, fmt)
+                    ?? fmt(copy.underpaid, { amount: `৳${creditDue.toFixed(2)}` }),
+            );
         } else if (creditDue <= 0.01 && payments.length === 0) {
-            errors.push('Please add at least one payment method');
+            errors.push(copy.paymentRequired);
         }
 
         return { valid: errors.length === 0, errors };
@@ -333,7 +345,11 @@ function NewSalePageContent() {
         items: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
+            // The list price and the line's "Disc %" travel separately; the
+            // server folds one into the other the same way `netUnitPrice`
+            // does here, and stores the net price it arrives at.
             priceAtSale: item.price,
+            discountPercent: item.discount > 0 ? item.discount : undefined,
             // Only sent while the per-line column is showing: a line keeps its
             // override in state when the column is hidden, and posting one the
             // user cannot see would be a trap.
@@ -342,6 +358,12 @@ function NewSalePageContent() {
         totalAmount: totals.total,
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
         discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        // Billed on top of the discounted goods, and counted by the server's
+        // total check — which rejected any sale carrying them until they were
+        // sent. VAT is not among them: it is already inside the line prices.
+        transportAmount: totals.transportCost > 0 ? totals.transportCost : undefined,
+        laborAmount: totals.laborCost > 0 ? totals.laborCost : undefined,
+        roundingAmount: totals.rounding ? totals.rounding : undefined,
         note: description || undefined,
         saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({
@@ -384,14 +406,14 @@ function NewSalePageContent() {
             setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
-            toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
+            toast.success(fmt(copy.created, { number: response.serial_number }));
             setPrintPrompt({
                 serialNumber: response.serial_number,
                 total: totals.total,
                 invoice,
             });
         } catch (error: any) {
-            const errorMsg = error.message || 'Failed to create sale';
+            const errorMsg = error.message || copy.createFailed;
             console.error('Sale creation error:', error);
             toast.error(errorMsg);
         } finally {
@@ -403,7 +425,7 @@ function NewSalePageContent() {
     // the backend posts nothing. Only "has at least one item" is required.
     const handleSaveDraft = async () => {
         if (items.length === 0) {
-            toast.error('Add at least one item before saving a draft');
+            toast.error(copy.draftNeedsItem);
             return;
         }
 
@@ -424,16 +446,19 @@ function NewSalePageContent() {
             setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
-            toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
+            toast.success(fmt(copy.draftSaved, { reference: response.reference_number || response.serial_number }));
         } catch (error: any) {
             console.error('Draft save error:', error);
-            toast.error(error.message || 'Failed to save draft');
+            toast.error(error.message || copy.draftSaveFailed);
         } finally {
             setSavingDraft(false);
         }
     };
 
-    const sourceLabel = source?.kind === 'quotation' ? 'quotation' : 'sales order';
+    const sourceLabel = source?.kind === 'quotation' ? copy.sourceQuotation : copy.sourceSalesOrder;
+    // Split around the number, like the duplicate banner, so it stays a link.
+    const [convertingBefore, convertingAfter = ''] = fmt(copy.convertingBanner, { source: sourceLabel })
+        .split('{number}');
     const isDuplicate = source?.kind === 'sale';
 
     const conversionBanner = source ? (
@@ -451,21 +476,21 @@ function NewSalePageContent() {
                 </span>
             ) : (
                 <span>
-                    Converting {sourceLabel}{' '}
+                    {convertingBefore}
                     <Link href={source.href} className="font-semibold underline">
                         {source.number}
                     </Link>
-                    . Lines and customer are prefilled — edit anything before saving.
+                    {convertingAfter}
                 </span>
             )}
             {source.exchangeRate !== 1 && (
                 <span className="text-xs text-blue-700">
-                    Converted from {source.currency} at {source.exchangeRate}.
+                    {fmt(copy.convertedCurrency, { currency: source.currency, rate: source.exchangeRate })}
                 </span>
             )}
             {source.amountPaid > 0 && (
                 <span className="text-xs text-blue-700">
-                    Deposits already collected on this order: {formatBDT(source.amountPaid)}.
+                    {fmt(copy.depositsCollected, { amount: formatBDT(source.amountPaid) })}
                 </span>
             )}
         </div>
@@ -483,7 +508,7 @@ function NewSalePageContent() {
     );
 
     if (loading || loadingSource) {
-        return <div className="text-center py-8">Loading...</div>;
+        return <div className="text-center py-8">{t.common.loading}</div>;
     }
 
     return (
@@ -491,7 +516,7 @@ function NewSalePageContent() {
         <SaleEntryLayout
             title={isDuplicate
                 ? `${t.common.duplicate}: ${source!.number}`
-                : source ? `New Sale from ${source.number}` : 'New Sale'}
+                : source ? fmt(copy.titleFrom, { number: source.number }) : t.sales.newSale}
             backHref={source ? source.href : routes.sales.list}
             banner={entryBanner}
             refNumber={refNumber}
@@ -529,30 +554,30 @@ function NewSalePageContent() {
                         href={source ? source.href : routes.sales.list}
                         className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
                     >
-                        Cancel
+                        {t.common.cancel}
                     </Link>
                     <button
                         type="button"
                         onClick={handleSaveDraft}
                         disabled={savingDraft || submitting || items.length === 0}
                         className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 disabled:text-gray-400 text-sm"
-                        title="Save without posting stock, payment or accounting entries"
+                        title={copy.saveDraftHint}
                     >
-                        {savingDraft ? 'Saving…' : 'Save Draft'}
+                        {savingDraft ? copy.saving : copy.saveDraft}
                     </button>
                     {/* Print button with paper-size dropdown */}
                     <PaperSizeMenu
                         paperSize={paperSize}
                         onPaperSizeChange={setPaperSize}
                         onPrint={(size) => handlePrint(size)}
-                        label="Paper Size"
+                        label={copy.paperSize}
                     />
                     <button
                         type="submit"
                         disabled={submitting || savingDraft || items.length === 0}
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
                     >
-                        {submitting ? 'Creating…' : 'Create Sale'}
+                        {submitting ? copy.creating : copy.createSale}
                     </button>
                 </>
             }

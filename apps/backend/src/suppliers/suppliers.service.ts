@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { resolveSettlementAccount } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
@@ -297,6 +298,16 @@ export class SuppliersService {
 
     private typeFromDirection(direction: SupplierPaymentDirectionDto): 'PAYMENT' | 'PAYOUT' {
         return direction === SupplierPaymentDirectionDto.PAY ? 'PAYMENT' : 'PAYOUT';
+    }
+
+    /**
+     * Where the chosen payment account goes on the voucher. Paying the supplier
+     * is Dr Purchase Payable / Cr Cash, so the cash leg is the credit; money
+     * received back from them is the mirror. Nothing chosen keeps the rule's.
+     */
+    private cashLegOverride(txType: 'PAYMENT' | 'PAYOUT', accountId: string | undefined) {
+        if (!accountId) return {};
+        return txType === 'PAYMENT' ? { overrideCreditAccountId: accountId } : { overrideDebitAccountId: accountId };
     }
 
     private async findCreditPaymentOrThrow(tenantId: string, paymentId: string) {
@@ -607,6 +618,12 @@ export class SuppliersService {
         }
 
         return this.db.$transaction(async (tx) => {
+            // A method left out of the edit keeps the one recorded, so an edit
+            // to the amount alone does not quietly move the money back to cash.
+            const settlement = dto.paymentMethod !== undefined || dto.accountId !== undefined
+                ? await resolveSettlementAccount(tx, tenantId, dto)
+                : { paymentMethod: payment.payment_method, accountId: payment.account_id ?? undefined };
+
             const supplier = await tx.supplier.findFirst({
                 where: { id: supplierId, tenant_id: tenantId, deleted_at: null },
                 select: { id: true, name: true, due_balance: true },
@@ -617,6 +634,11 @@ export class SuppliersService {
             let currentDue = Number(supplier.due_balance) + reverseDelta;
             const balanceAfter = currentDue + this.dueDelta(newType, newAmount);
 
+            // The voucher follows the edit, as a customer payment's does: void
+            // the one posted for the old amount/direction/account and post the
+            // current one. Leaving it kept the GL on the old figures.
+            await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', paymentId);
+
             const updated = await tx.supplierCreditTransaction.update({
                 where: { id: paymentId },
                 data: {
@@ -624,6 +646,8 @@ export class SuppliersService {
                     amount: newAmount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    payment_method: settlement.paymentMethod,
+                    account_id: settlement.accountId ?? null,
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -636,7 +660,30 @@ export class SuppliersService {
                 data: { due_balance: balanceAfter },
             });
 
-            return updated;
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: newType === 'PAYMENT' ? 'pay' : 'receive',
+                sourceModule: 'suppliers',
+                sourceType: 'supplier_payment',
+                sourceId: paymentId,
+                amount: newAmount,
+                description: `Auto-posted supplier ${newType === 'PAYMENT' ? 'payment' : 'receipt'} — ${supplier.name}`,
+                referenceNumber: payment.payment_number ?? paymentId,
+                date: payment.created_at,
+                partyType: 'SUPPLIER',
+                partyId: supplierId,
+                ...this.cashLegOverride(newType, settlement.accountId),
+            });
+
+            return {
+                ...updated,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
         });
     }
 
@@ -661,6 +708,8 @@ export class SuppliersService {
 
             const reverseDelta = -this.dueDelta(oldType, oldAmount);
             const newDue = Number(supplier.due_balance) + reverseDelta;
+
+            await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', paymentId);
 
             await tx.supplierCreditTransaction.delete({ where: { id: paymentId } });
 
@@ -699,6 +748,7 @@ export class SuppliersService {
 
         return this.db.$transaction(async (tx) => {
             const payment_number = await nextSupplierPaymentNumber(tenantId, tx, txType);
+            const settlement = await resolveSettlementAccount(tx, tenantId, dto);
 
             const payment = await tx.supplierCreditTransaction.create({
                 data: {
@@ -709,6 +759,8 @@ export class SuppliersService {
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method: settlement.paymentMethod,
+                    account_id: settlement.accountId ?? null,
                     created_by: userId,
                 },
                 include: {
@@ -746,6 +798,7 @@ export class SuppliersService {
                 date: payment.created_at,
                 partyType: 'SUPPLIER',
                 partyId: id,
+                ...this.cashLegOverride(txType, settlement.accountId),
             });
 
             return {

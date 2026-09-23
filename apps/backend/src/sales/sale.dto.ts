@@ -8,12 +8,63 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    Max,
     MaxLength,
+    Min,
     ValidateNested,
 } from 'class-validator';
 import { InlineCustomerDto } from '../customers/customer.dto';
 
-export class CreateSaleItemDto {
+/**
+ * Ceiling on any one whole-bill adjustment. Far above anything a shop types,
+ * far below what `Decimal(12, 2)` holds, so a stray keystroke is refused at
+ * the door instead of overflowing the column.
+ */
+const MAX_ADJUSTMENT = 99_999_999;
+
+/**
+ * The line's "Disc %" from the entry form. Folded into `priceAtSale` before
+ * anything is stored — see `sale-line-pricing.ts` for why.
+ */
+class SaleLineDiscountDto {
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    discountPercent?: number;
+}
+
+/**
+ * Whole-bill charges the entry form layers on after the discount. Each lands
+ * in `total_amount` and the total check counts it; none is the value of a
+ * line's supply, so none is taxed as one.
+ */
+class SaleAdjustmentsDto {
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(MAX_ADJUSTMENT)
+    transportAmount?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(MAX_ADJUSTMENT)
+    laborAmount?: number;
+
+    /**
+     * Either sign: rounding a bill up or down. Also how a duplicated sale
+     * carries the gap between its lines and its stored total, so it is not
+     * bounded to paisa — the service refuses one that drags the bill below 0.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(-MAX_ADJUSTMENT)
+    @Max(MAX_ADJUSTMENT)
+    roundingAmount?: number;
+}
+
+export class CreateSaleItemDto extends SaleLineDiscountDto {
     @IsString()
     @IsNotEmpty()
     productId: string;
@@ -95,7 +146,7 @@ export class CreatePaymentDto extends PaymentInstrumentDto {
     accountId?: string; // Links payment to account for accounting
 }
 
-export class CreateSaleDto {
+export class CreateSaleDto extends SaleAdjustmentsDto {
     @IsString()
     @IsNotEmpty()
     storeId: string;
@@ -207,7 +258,7 @@ export class CreateSaleDto {
  * post the draft exactly as it was parked, or supply the ones the user edited
  * on the way out (warranty serials can only arrive here — a draft has none).
  */
-export class FinalizeSaleDto {
+export class FinalizeSaleDto extends SaleAdjustmentsDto {
     @IsOptional()
     @IsString()
     customerId?: string | null;
@@ -255,7 +306,7 @@ export class FinalizeSaleDto {
     saleDate?: string;
 }
 
-export class UpdateSaleItemDto {
+export class UpdateSaleItemDto extends SaleLineDiscountDto {
     @IsString()
     @IsNotEmpty()
     productId: string;

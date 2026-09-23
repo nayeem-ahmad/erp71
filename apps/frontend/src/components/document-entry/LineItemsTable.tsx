@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trash2, Minus, Plus, History, RotateCcw } from 'lucide-react';
-import { LineItem } from '@/lib/hooks/useNewSaleCart';
+import { LineItem, lineNetTotal } from '@/lib/hooks/useNewSaleCart';
 import RateHistoryModal from './RateHistoryModal';
 import { type RateHistoryType } from './RateHistory';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
@@ -8,6 +8,7 @@ import { isCompoundUnit, type CompoundUnitType } from '@/lib/compound-units';
 import WarehouseSelect from './WarehouseSelect';
 import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
 import { useColumnWidths } from './useColumnWidths';
+import { useI18n, formatMessage } from '@/lib/i18n';
 
 interface LineItemsTableProps {
     items: LineItem[];
@@ -74,6 +75,8 @@ function Th({
     className?: string;
     children: React.ReactNode;
 }) {
+    const { t, locale } = useI18n();
+    const copy = t.components.documentEntry.lineItems;
     const width = columns.widthOf(id);
     const resizing = columns.resizingColumn === id;
 
@@ -85,11 +88,11 @@ function Th({
             {children}
             <div
                 role="separator"
-                aria-label={`Resize ${typeof children === 'string' ? children : id} column`}
+                aria-label={formatMessage(copy.resizeColumn, { column: typeof children === 'string' ? children : id }, locale)}
                 aria-orientation="vertical"
                 onMouseDown={(event) => columns.startResize(id, event)}
                 onDoubleClick={() => columns.resetColumn(id)}
-                title="Drag to resize · double-click to reset"
+                title={copy.resizeHint}
                 className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none transition-colors ${
                     resizing ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-400'
                 }`}
@@ -108,16 +111,22 @@ export default function LineItemsTable({
     readOnlyPrice = false,
     maxQuantityOf,
     emptyMessage,
-    priceLabel = 'Price',
-    availableLabel = 'Avail',
+    priceLabel: priceLabelProp,
+    availableLabel: availableLabelProp,
     showCompoundUnits = false,
     historyType,
     historyPartyId,
     historyPartyName,
     warehouses = [],
     entryWarehouseName,
-    warehouseLabel = 'Warehouse',
+    warehouseLabel: warehouseLabelProp,
 }: LineItemsTableProps) {
+    const { t, locale } = useI18n();
+    const copy = t.components.documentEntry.lineItems;
+    // Callers that name a column keep their wording; the rest follow the locale.
+    const priceLabel = priceLabelProp ?? copy.price;
+    const availableLabel = availableLabelProp ?? copy.available;
+    const warehouseLabel = warehouseLabelProp ?? copy.warehouse;
     const priceFrozen = readOnly || readOnlyPrice;
     const showHistory = !!historyType && !priceFrozen;
     const showWarehouse = warehouses.length > 0;
@@ -141,13 +150,13 @@ export default function LineItemsTable({
     };
 
     const handleDiscountChange = (productId: string, discount: number) => {
-        onUpdateItem(productId, { discount: Math.max(0, discount) });
+        onUpdateItem(productId, { discount: Math.min(100, Math.max(0, discount)) });
     };
 
-    const calculateLineTotal = (item: LineItem) => {
-        const subtotal = item.quantity * item.price;
-        return subtotal - subtotal * (item.discount / 100);
-    };
+    // The same figure the document's subtotal and the posted line are built
+    // from — a line total that disagreed with them is how a discount used to
+    // show here and then never be charged.
+    const calculateLineTotal = (item: LineItem) => lineNetTotal(item);
 
     return (
         <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
@@ -156,7 +165,7 @@ export default function LineItemsTable({
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                         <Th columns={columns} id="index" className="text-start w-8">#</Th>
-                        <Th columns={columns} id="name" className="text-start">Name</Th>
+                        <Th columns={columns} id="name" className="text-start">{copy.name}</Th>
                         {showWarehouse && (
                             <Th columns={columns} id="warehouse" className="text-start">{warehouseLabel}</Th>
                         )}
@@ -166,16 +175,16 @@ export default function LineItemsTable({
                             </Th>
                         )}
                         <Th columns={columns} id="price" className="text-end">{priceLabel}</Th>
-                        {showDiscount && <Th columns={columns} id="discount" className="text-end">Disc %</Th>}
-                        <Th columns={columns} id="quantity" className="text-center">Qty</Th>
-                        <Th columns={columns} id="total" className="text-end">Total</Th>
+                        {showDiscount && <Th columns={columns} id="discount" className="text-end">{copy.discount}</Th>}
+                        <Th columns={columns} id="quantity" className="text-center">{copy.qty}</Th>
+                        <Th columns={columns} id="total" className="text-end">{copy.total}</Th>
                         <th className="relative px-2 py-1.5 w-8">
                             {columns.isCustomised && (
                                 <button
                                     type="button"
                                     onClick={columns.resetAll}
-                                    title="Reset column widths"
-                                    aria-label="Reset widths"
+                                    title={copy.resetWidthsTitle}
+                                    aria-label={copy.resetWidths}
                                     className="text-gray-400 hover:text-blue-600"
                                 >
                                     <RotateCcw className="w-3.5 h-3.5" />
@@ -189,7 +198,7 @@ export default function LineItemsTable({
                         <tr>
                             <td colSpan={columnCount} className="px-3 py-10 text-center text-gray-400">
                                 {emptyMessage
-                                    ?? (readOnly ? 'No items on this sale.' : 'No items yet — search and add products above.')}
+                                    ?? (readOnly ? copy.emptyReadOnly : copy.empty)}
                             </td>
                         </tr>
                     ) : (
@@ -252,8 +261,8 @@ export default function LineItemsTable({
                                                     <button
                                                         type="button"
                                                         onClick={() => setHistoryFor(item)}
-                                                        aria-label={`Previous rates for ${item.name}`}
-                                                        title="Previous rates"
+                                                        aria-label={formatMessage(copy.previousRatesFor, { name: item.name }, locale)}
+                                                        title={copy.previousRates}
                                                         className="text-gray-400 hover:text-blue-600"
                                                     >
                                                         <History className="w-3.5 h-3.5" />
@@ -273,7 +282,7 @@ export default function LineItemsTable({
                                                     max="100"
                                                     value={item.discount}
                                                     onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                                    aria-label={`Disc % — ${item.name}`}
+                                                    aria-label={`${copy.discount} — ${item.name}`}
                                                     className="no-spinner w-[4.5rem] px-1.5 py-0.5 border rounded text-sm text-end"
                                                 />
                                             )}
@@ -304,7 +313,7 @@ export default function LineItemsTable({
                                                     max={maxQuantityOf?.(item)}
                                                     value={item.quantity}
                                                     onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
-                                                    aria-label={`Qty — ${item.name}`}
+                                                    aria-label={`${copy.qty} — ${item.name}`}
                                                     className="no-spinner w-16 px-1.5 py-0.5 border rounded text-sm text-center"
                                                 />
                                                 <button
@@ -326,7 +335,7 @@ export default function LineItemsTable({
                                                 type="button"
                                                 onClick={() => onRemoveItem(item.productId)}
                                                 className="text-red-500 hover:text-red-700"
-                                                title="Remove item"
+                                                title={copy.removeItem}
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>

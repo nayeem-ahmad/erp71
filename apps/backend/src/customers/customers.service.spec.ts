@@ -439,6 +439,153 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('recordCreditPayment() — how the money moved', () => {
+    const { autoPostFromRules } = require('../accounting/posting.utils');
+
+    beforeEach(() => {
+      (autoPostFromRules as jest.Mock).mockClear();
+      db.account = { findFirst: jest.fn() };
+      db.paymentMethod = { findFirst: jest.fn().mockResolvedValue(null) };
+      db.postingRule = { findFirst: jest.fn().mockResolvedValue(null) };
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-1', payment_number: 'CPY-00001' });
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+    });
+
+    const postedWith = () => (autoPostFromRules as jest.Mock).mock.calls[0][0];
+
+    it('stores the method and posts the receipt to the account linked to it', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acc-bkash', type: 'Mobile Wallet' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250, paymentMethod: 'bKash' });
+
+      expect(db.paymentMethod.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenant_id: 'tenant-1', name: 'bKash', is_active: true } }),
+      );
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ payment_method: 'bKash', account_id: 'acc-bkash' }),
+        }),
+      );
+      // Money coming in: Dr <bKash> / Cr Accounts Receivable.
+      expect(postedWith()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bkash' }));
+      expect(postedWith().overrideCreditAccountId).toBeUndefined();
+    });
+
+    it('puts the chosen account on the credit leg when paying the customer out', async () => {
+      db.account.findFirst.mockResolvedValue({ id: 'acc-bank' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', {
+        amount: 100,
+        direction: CustomerPaymentDirectionDto.PAY,
+        paymentMethod: 'Bank',
+        accountId: 'acc-bank',
+      });
+
+      expect(db.account.findFirst).toHaveBeenCalledWith({
+        where: { id: 'acc-bank', tenant_id: 'tenant-1' },
+        select: { id: true },
+      });
+      // Money going out: Dr Accounts Receivable / Cr <bank>.
+      expect(postedWith()).toEqual(expect.objectContaining({ overrideCreditAccountId: 'acc-bank' }));
+      expect(postedWith().overrideDebitAccountId).toBeUndefined();
+    });
+
+    it('falls back to the account the sale rules use for that mode when the method has none', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue({ account_id: null, type: 'Mobile Wallet' });
+      db.postingRule.findFirst.mockResolvedValue({ debit_account_id: 'acc-bkash-ledger' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250, paymentMethod: 'bKash' });
+
+      expect(db.postingRule.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ event_type: 'sale', condition_key: 'payment_mode', condition_value: 'bkash' }),
+        }),
+      );
+      expect(postedWith()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bkash-ledger' }));
+    });
+
+    it('keeps the rule default for cash', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250, paymentMethod: 'Cash' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_method: 'Cash', account_id: null }) }),
+      );
+      expect(db.postingRule.findFirst).not.toHaveBeenCalled();
+      expect(postedWith().overrideDebitAccountId).toBeUndefined();
+      expect(postedWith().overrideCreditAccountId).toBeUndefined();
+    });
+
+    it('posts exactly as before when no method is given', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250 });
+
+      expect(db.paymentMethod.findFirst).not.toHaveBeenCalled();
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_method: null, account_id: null }) }),
+      );
+      expect(postedWith().overrideDebitAccountId).toBeUndefined();
+      expect(postedWith().overrideCreditAccountId).toBeUndefined();
+    });
+
+    it('refuses an account that is not the tenant\'s', async () => {
+      db.account.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250, accountId: 'foreign' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateCreditPayment() — how the money moved', () => {
+    const { autoPostFromRules } = require('../accounting/posting.utils');
+    const recorded = {
+      id: 'pay-1',
+      tenant_id: 'tenant-1',
+      customer_id: 'c1',
+      type: 'PAYMENT',
+      amount: 200,
+      payment_number: 'CPY-00001',
+      notes: null,
+      payment_method: 'bKash',
+      account_id: 'acc-bkash',
+      customer: { id: 'c1', name: 'Alice', due_balance: 800 },
+    };
+
+    beforeEach(() => {
+      (autoPostFromRules as jest.Mock).mockClear();
+      db.account = { findFirst: jest.fn() };
+      db.paymentMethod = { findFirst: jest.fn().mockResolvedValue(null) };
+      db.postingRule = { findFirst: jest.fn().mockResolvedValue(null) };
+      db.customerCreditTransaction.findFirst.mockResolvedValue(recorded);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(recorded);
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+    });
+
+    it('keeps the recorded method when the edit does not mention one', async () => {
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300 });
+
+      expect(db.paymentMethod.findFirst).not.toHaveBeenCalled();
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_method: 'bKash', account_id: 'acc-bkash' }) }),
+      );
+      expect((autoPostFromRules as jest.Mock).mock.calls[0][0]).toEqual(
+        expect.objectContaining({ overrideDebitAccountId: 'acc-bkash' }),
+      );
+    });
+
+    it('re-posts to cash when the method is changed to cash', async () => {
+      await service.updateCreditPayment('tenant-1', 'pay-1', { paymentMethod: 'Cash' });
+
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_method: 'Cash', account_id: null }) }),
+      );
+      expect((autoPostFromRules as jest.Mock).mock.calls[0][0].overrideDebitAccountId).toBeUndefined();
+    });
+  });
+
   describe('updateCreditPayment()', () => {
     const existingPayment = {
       id: 'pay-1',

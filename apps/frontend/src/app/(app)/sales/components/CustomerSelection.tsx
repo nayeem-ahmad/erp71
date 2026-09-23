@@ -241,11 +241,11 @@ export default function CustomerSelection({
             selected={customer}
             onSelect={setCustomer}
             readOnly={readOnly}
-            readOnlyFallback="Walk-in customer"
-            label="Customer"
-            placeholder="Search by name or phone…"
-            noMatchLabel="No customers found"
-            clearLabel="Remove customer"
+            readOnlyFallback={t.sales.entry.walkInCustomer}
+            label={t.sales.entry.customer}
+            placeholder={t.sales.entry.customerPlaceholder}
+            noMatchLabel={t.shared.empty.noCustomers}
+            clearLabel={t.sales.entry.removeCustomer}
             action={setDraft && !readOnly ? (
                 <button
                     type="button"

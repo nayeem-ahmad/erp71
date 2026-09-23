@@ -1,4 +1,4 @@
-import type { LineItem } from '@/lib/hooks/useNewSaleCart';
+import { lineNetTotal, type LineItem } from '@/lib/hooks/useNewSaleCart';
 import { routes } from '@/lib/routes';
 
 /**
@@ -47,6 +47,9 @@ export function exchangeRateOf(doc: { currency?: string | null; exchange_rate?: 
     return Number(doc.exchange_rate ?? 0);
 }
 
+const rateOf = (value: unknown): number | null =>
+    value == null || value === '' ? null : Number(value);
+
 const lineFrom = (
     item: any,
     unitPrice: unknown,
@@ -66,6 +69,10 @@ const lineFrom = (
     // Only a sale line carries one; a quotation or order has no warehouse at
     // all, and `?? undefined` is what makes that a no-op rather than a null.
     warehouseId: item.warehouse_id ?? undefined,
+    // A sale line carries the rate it was taxed at; a quotation or order line
+    // only its product's, if the payload included it. Either way it is only
+    // what the entry screen shows as the VAT inside the total.
+    vatRate: rateOf(item.vat_rate ?? item.product?.vat_rate),
 });
 
 /** Cart contents for a sale being raised from a quotation or proforma. */
@@ -104,7 +111,10 @@ export function seedFromSale(sale: any): SeededSale & { rounding: number; wareho
     const items: LineItem[] = (sale.items ?? []).map((item: any) =>
         lineFrom(item, item.price_at_sale, 1, 'Item'),
     );
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    // A stored line's price is already net of any line discount it was sold
+    // with (the server folds "Disc %" into `price_at_sale`), so the copy comes
+    // across at discount 0 and the same price — and totals the same.
+    const subtotal = items.reduce((sum, item) => sum + lineNetTotal(item), 0);
 
     return {
         source: {

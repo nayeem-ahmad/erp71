@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { lineDiscountAmount, useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SaleEntryLayout, {
     computeSaleTotals,
@@ -182,6 +182,8 @@ function SaleDetailPageContent() {
                     productId: i.productId,
                     quantity: i.quantity,
                     priceAtSale: i.price,
+                    // Folded into the stored price server-side, as on a new sale.
+                    discountPercent: i.discount > 0 ? i.discount : undefined,
                     warehouseId: perLineWarehouse ? i.warehouseId : undefined,
                 })),
                 payments: payments.map((p) => ({
@@ -272,7 +274,8 @@ function SaleDetailPageContent() {
                 name: i.name,
                 quantity: i.quantity,
                 price: i.price,
-                discount: i.discount || 0,
+                // The printers take a line's discount in taka.
+                discount: lineDiscountAmount(i),
             })),
             payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
         };

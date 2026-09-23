@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { formatDateTime } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 
 const LABEL_CLASS = 'font-semibold uppercase tracking-wide text-[10px] text-gray-400';
 const FIELD_CLASS = 'px-1.5 py-0.5 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-transparent';
@@ -53,10 +54,10 @@ interface DocumentMetaBarProps {
 // compact inline row that lives in the page's top strip — no card, no heavy
 // padding. Shared by every entry screen so the strip cannot drift per module.
 export default function DocumentMetaBar({
-    docLabel = 'Sales #',
+    docLabel,
     refNumber = '',
     setRefNumber,
-    refLabel = 'Ref #',
+    refLabel,
     currentUser,
     documentDate = '',
     setDocumentDate,
@@ -67,22 +68,24 @@ export default function DocumentMetaBar({
     readOnly = false,
     refReadOnly = false,
 }: DocumentMetaBarProps) {
+    const { t } = useI18n();
+    const copy = t.components.documentEntry.metaBar;
     const labelClass = LABEL_CLASS;
     const displayDate = documentDate ? formatDateTime(documentDate) : '—';
 
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
-                <span className={labelClass}>{docLabel}</span>
+                <span className={labelClass}>{docLabel ?? copy.docLabel}</span>
                 {serialNumber ? (
                     <span className="text-gray-900 font-semibold">{serialNumber}</span>
                 ) : (
-                    <span className="text-gray-400 italic">Auto</span>
+                    <span className="text-gray-400 italic">{copy.auto}</span>
                 )}
             </span>
             {showRefNumber && (
                 <label className="flex items-center gap-1">
-                    <span className={labelClass}>{refLabel}</span>
+                    <span className={labelClass}>{refLabel ?? copy.refLabel}</span>
                     {readOnly || refReadOnly ? (
                         <span className="text-gray-700 font-medium">{refNumber || '—'}</span>
                     ) : (
@@ -90,7 +93,7 @@ export default function DocumentMetaBar({
                             type="text"
                             value={refNumber}
                             onChange={(e) => setRefNumber?.(e.target.value)}
-                            placeholder="Optional"
+                            placeholder={copy.optional}
                             className={`w-24 ${FIELD_CLASS}`}
                         />
                     )}
@@ -98,13 +101,13 @@ export default function DocumentMetaBar({
             )}
             {currentUser?.name && (
                 <span className="flex items-center gap-1">
-                    <span className={labelClass}>User</span>
+                    <span className={labelClass}>{copy.user}</span>
                     <span className="text-gray-700 font-medium">{currentUser.name}</span>
                 </span>
             )}
             {showDate && (
                 <label className="flex items-center gap-1">
-                    <span className={labelClass}>Date</span>
+                    <span className={labelClass}>{copy.date}</span>
                     {readOnly ? (
                         <span className="text-gray-700 font-medium">{displayDate}</span>
                     ) : (

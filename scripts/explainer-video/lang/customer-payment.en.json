@@ -1,0 +1,16 @@
+{
+  "_comment": "English voice-over for the customer payment video, keyed by caption title (plus intro/outro). Written for the ear: ERP71 is spelled out.",
+  "narration": {
+    "intro": "Welcome to E R P seventy-one. When a customer who bought on credit comes back to pay, here's how to record it, and watch their due balance go down.",
+    "Open Customer Payment": "In the sidebar, open Sales, then Customer Payment.",
+    "Every payment in one list": "Every payment you receive from a customer, and anything you pay back to them, is listed here. You can filter by date, or by one customer. The card at the top shows the total for the period.",
+    "Start a new payment": "To record a payment, click New Customer Payment.",
+    "Receive, or pay back": "First, the direction. Receive from customer is money coming in. Pay to customer is for a refund, or for paying back an advance they left with you.",
+    "Pick the customer": "Next, choose who is paying. Their due balance, which is what they still owe from earlier credit sales, shows up right underneath. Karim owes one thousand five hundred and fifty taka.",
+    "Enter the amount": "He's paying one thousand taka today. Paying part of it is fine, the rest simply stays due. And if someone pays more than they owe, the extra is kept as an advance for next time. Then choose how he paid. Here it's bKash, a mobile wallet, so the money lands in your bKash account, not in cash. Add a note, like the transaction ID.",
+    "Record the receipt": "Click Record receipt. It's saved, the customer's due balance goes down, and the entry is posted to the account for the method you chose.",
+    "It’s on the list": "The receipt appears on the list, with its own number. The icons on the row let you view, edit, duplicate, or print it.",
+    "The due balance went down": "To check, open a new payment for the same customer. His due balance is now five hundred and fifty taka. That's what he owed, less today's payment.",
+    "outro": "So, to recap. Open Customer Payment, click New Customer Payment, choose receive from customer and pick the customer, enter the amount, and record the receipt. Money in, and the balance goes down."
+  }
+}

@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: 'ادائیگی واؤچر پرنٹ کریں',
         voucherNumber: 'واؤچر نمبر',
         balanceAfter: 'بعد کا بیلنس',
+        paymentMethod: "طریقۂ ادائیگی",
+        paymentMethodHint: "اکاؤنٹنگ میں اس طریقے کے کھاتے میں درج ہوگا۔",
+        customerRequired: "ایک گاہک منتخب کریں۔",
+        methodTypes: {
+            cash: "نقد",
+            mobileWallet: "موبائل والیٹ",
+            card: "کارڈ",
+            bank: "بینک",
+        },
         print: {
             moneyReceipt: 'منی رسید',
             paymentVoucher: 'ادائیگی واؤچر',
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: 'درج کرنے والا',
             amount: 'رقم',
             notes: 'نوٹس',
+            method: "طریقہ",
             actions: 'کارروائیاں',
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: 'ادائیگی واؤچر پرنٹ کریں',
         voucherNumber: 'واؤچر نمبر',
         balanceAfter: 'بعد کا بیلنس',
+        paymentMethod: "طریقۂ ادائیگی",
+        paymentMethodHint: "اکاؤنٹنگ میں اس طریقے کے کھاتے میں درج ہوگا۔",
+        supplierRequired: "ایک سپلائر منتخب کریں۔",
+        methodTypes: {
+            cash: "نقد",
+            mobileWallet: "موبائل والیٹ",
+            card: "کارڈ",
+            bank: "بینک",
+        },
         print: {
             moneyReceipt: 'منی رسید',
             paymentVoucher: 'ادائیگی واؤچر',
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: 'درج کرنے والا',
             amount: 'رقم',
             notes: 'نوٹس',
+            method: "طریقہ",
             actions: 'کارروائیاں',
         },
         allocation: {

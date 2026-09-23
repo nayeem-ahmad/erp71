@@ -1,10 +1,11 @@
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'skipped' }),
+    voidAutoPostedVoucher: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 import { SupplierPaymentDirectionDto } from './supplier.dto';
 import { SuppliersService } from './suppliers.service';
@@ -283,6 +284,126 @@ describe('SuppliersService', () => {
                 sourceType: 'supplier_payment',
                 sourceId: 'tx-1',
             }));
+        });
+    });
+
+    describe('how the money moved', () => {
+        let tx: any;
+
+        beforeEach(() => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'skipped' });
+            (voidAutoPostedVoucher as jest.Mock).mockClear();
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500, name: 'ACME' });
+            tx = {
+                supplierCreditTransaction: {
+                    findFirst: jest.fn().mockResolvedValue(null),
+                    create: jest.fn().mockResolvedValue({ id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001' }),
+                    update: jest.fn().mockResolvedValue({ id: 'tx-1' }),
+                    delete: jest.fn().mockResolvedValue({ id: 'tx-1' }),
+                },
+                supplier: {
+                    findFirst: jest.fn().mockResolvedValue({ id: 'sup-1', due_balance: 300, name: 'ACME' }),
+                    update: jest.fn().mockResolvedValue({ id: 'sup-1' }),
+                },
+                account: { findFirst: jest.fn() },
+                paymentMethod: { findFirst: jest.fn().mockResolvedValue(null) },
+                postingRule: { findFirst: jest.fn().mockResolvedValue(null) },
+            };
+            db.$transaction.mockImplementation(async (fn: (t: any) => Promise<unknown>) => fn(tx));
+        });
+
+        const postedWith = () => (autoPostFromRules as jest.Mock).mock.calls[0][0];
+
+        it('stores the method and credits the account linked to it when paying the supplier', async () => {
+            tx.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acc-nagad', type: 'Mobile Wallet' });
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200, paymentMethod: 'Nagad' });
+
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ payment_method: 'Nagad', account_id: 'acc-nagad' }),
+            }));
+            // Dr Purchase Payable / Cr <Nagad>.
+            expect(postedWith()).toEqual(expect.objectContaining({ overrideCreditAccountId: 'acc-nagad' }));
+            expect(postedWith().overrideDebitAccountId).toBeUndefined();
+        });
+
+        it('debits the chosen account when money comes back from the supplier', async () => {
+            tx.supplierCreditTransaction.create.mockResolvedValue({ id: 'tx-2', type: 'PAYOUT', payment_number: 'SPO-00001' });
+            tx.account.findFirst.mockResolvedValue({ id: 'acc-bank' });
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 80,
+                direction: SupplierPaymentDirectionDto.RECEIVE,
+                paymentMethod: 'Bank',
+                accountId: 'acc-bank',
+            });
+
+            expect(postedWith()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bank' }));
+            expect(postedWith().overrideCreditAccountId).toBeUndefined();
+        });
+
+        it('falls back to the mode account the sale rules name when the method has none', async () => {
+            tx.paymentMethod.findFirst.mockResolvedValue({ account_id: null, type: 'Bank' });
+            tx.postingRule.findFirst.mockResolvedValue({ debit_account_id: 'acc-main-bank' });
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200, paymentMethod: 'Bank' });
+
+            expect(tx.postingRule.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+                where: expect.objectContaining({ condition_value: 'bank' }),
+            }));
+            expect(postedWith()).toEqual(expect.objectContaining({ overrideCreditAccountId: 'acc-main-bank' }));
+        });
+
+        it('posts to the rule default when no method is given', async () => {
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 });
+
+            expect(tx.paymentMethod.findFirst).not.toHaveBeenCalled();
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ payment_method: null, account_id: null }),
+            }));
+            expect(postedWith().overrideCreditAccountId).toBeUndefined();
+            expect(postedWith().overrideDebitAccountId).toBeUndefined();
+        });
+
+        it('voids and re-posts the voucher on edit, keeping the recorded method', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1',
+                supplier_id: 'sup-1',
+                type: 'PAYMENT',
+                amount: 200,
+                notes: null,
+                payment_number: 'SPY-00001',
+                payment_method: 'Nagad',
+                account_id: 'acc-nagad',
+                created_at: new Date('2026-07-17T00:00:00Z'),
+            });
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: null } });
+
+            await service.updateCreditPayment('tenant-1', 'tx-1', { amount: 250 });
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1');
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ amount: 250, payment_method: 'Nagad', account_id: 'acc-nagad' }),
+            }));
+            expect(postedWith()).toEqual(expect.objectContaining({
+                sourceId: 'tx-1',
+                amount: 250,
+                conditionValue: 'pay',
+                overrideCreditAccountId: 'acc-nagad',
+            }));
+        });
+
+        it('voids the voucher when a payment is deleted', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1', supplier_id: 'sup-1', type: 'PAYMENT', amount: 200,
+            });
+            db.supplierPaymentAllocation.count = jest.fn().mockResolvedValue(0);
+
+            await service.deleteCreditPayment('tenant-1', 'tx-1');
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1');
+            expect(tx.supplierCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'tx-1' } });
         });
     });
 

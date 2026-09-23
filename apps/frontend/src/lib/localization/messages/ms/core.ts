@@ -1326,6 +1326,15 @@ export const coreMessages = {
             printVoucher: "Cetak baucar bayaran",
             voucherNumber: "No. baucar",
             balanceAfter: "Baki selepas",
+            paymentMethod: "Kaedah bayaran",
+            paymentMethodHint: "Direkodkan ke akaun kaedah ini dalam perakaunan.",
+            customerRequired: "Pilih pelanggan.",
+            methodTypes: {
+                cash: "Tunai",
+                mobileWallet: "Dompet Mudah Alih",
+                card: "Kad",
+                bank: "Bank",
+            },
             print: {
                 moneyReceipt: "Resit Wang",
                 paymentVoucher: "Baucar Bayaran",
@@ -1341,6 +1350,7 @@ export const coreMessages = {
                 recordedBy: "Direkod oleh",
                 amount: "Jumlah",
                 notes: "Nota",
+                method: "Kaedah",
                 actions: "Tindakan",
             },
         },
@@ -1422,6 +1432,15 @@ export const coreMessages = {
             printVoucher: "Cetak baucar bayaran",
             voucherNumber: "No. baucar",
             balanceAfter: "Baki selepas",
+            paymentMethod: "Kaedah bayaran",
+            paymentMethodHint: "Direkodkan ke akaun kaedah ini dalam perakaunan.",
+            supplierRequired: "Pilih pembekal.",
+            methodTypes: {
+                cash: "Tunai",
+                mobileWallet: "Dompet Mudah Alih",
+                card: "Kad",
+                bank: "Bank",
+            },
             print: {
                 moneyReceipt: "Resit Wang",
                 paymentVoucher: "Baucar Bayaran",
@@ -1437,6 +1456,7 @@ export const coreMessages = {
                 recordedBy: "Direkod oleh",
                 amount: "Jumlah",
                 notes: "Nota",
+                method: "Kaedah",
                 actions: "Tindakan",
             },
             allocation: {

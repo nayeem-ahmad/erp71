@@ -16,6 +16,8 @@ export interface SupplierPaymentReceiptData {
     balanceAfter?: number;
     notes?: string;
     recordedBy?: string;
+    /** How the money moved ("Cash", "bKash", …); the row is left out when unknown. */
+    paymentMethod?: string | null;
     labels: {
         paymentVoucher: string;
         moneyReceipt: string;
@@ -26,6 +28,7 @@ export interface SupplierPaymentReceiptData {
         balanceAfter: string;
         notes: string;
         recordedBy: string;
+        method?: string;
         payTitle: string;
         receiveTitle: string;
         footer: string;
@@ -53,6 +56,7 @@ export function printSupplierPaymentReceipt(
         <tr><td>${escHtml(data.labels.serial)}</td><td>${escHtml(data.paymentNumber)}</td></tr>
         <tr><td>${escHtml(data.labels.date)}</td><td>${escHtml(data.date)}</td></tr>
         <tr><td>${escHtml(data.labels.supplier)}</td><td>${escHtml(data.supplierName)}${data.supplierPhone ? `<br>${escHtml(data.supplierPhone)}` : ''}</td></tr>
+        ${data.paymentMethod && data.labels.method ? `<tr><td>${escHtml(data.labels.method)}</td><td>${escHtml(data.paymentMethod)}</td></tr>` : ''}
         ${data.recordedBy ? `<tr><td>${escHtml(data.labels.recordedBy)}</td><td>${escHtml(data.recordedBy)}</td></tr>` : ''}
     </table>
     <div class="amount-box">

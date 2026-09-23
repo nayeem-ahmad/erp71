@@ -2,6 +2,7 @@
 
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import RateHistory, { type RateHistoryType } from './RateHistory';
+import { useI18n } from '@/lib/i18n';
 
 interface RateHistoryModalProps {
     productId: string;
@@ -32,14 +33,17 @@ export default function RateHistoryModal({
     onPickRate,
     onClose,
 }: RateHistoryModalProps) {
+    const { t } = useI18n();
+    const copy = t.components.documentEntry.rateHistory;
     return (
         <ModalShell size="md" onBackdropClick={onClose}>
             <ModalHeader
-                title={type === 'purchase' ? 'Previous purchase rates' : 'Previous sale rates'}
+                title={copy[type === 'purchase' ? 'purchase' : 'sale'].heading}
                 // The party is the comparison basis — whose rates lead the
                 // list — so the header says which one, not just the product.
                 subtitle={[productName, partyName].filter(Boolean).join(' · ') || undefined}
                 onClose={onClose}
+                closeLabel={copy.close}
             />
             <div className="overflow-y-auto p-4">
                 <RateHistory

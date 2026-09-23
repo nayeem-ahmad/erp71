@@ -1,7 +1,8 @@
 import { formatBDT } from '@/lib/format';
 import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
 import { Payment } from '@/lib/hooks/useNewSaleCart';
-import { canKeepDue, creditDueAmount, availableCustomerCredit } from '@/lib/customer-credit';
+import { canKeepDue, creditDueAmount, availableCustomerCredit, keepDueReason } from '@/lib/customer-credit';
+import { useI18n } from '@/lib/i18n';
 
 interface PaymentSectionProps {
     payments: Payment[];
@@ -25,6 +26,7 @@ interface PaymentSectionProps {
  * shared component keeps the panel opt-in rather than always-on.
  */
 export default function PaymentSection({ payments, total, customer, onPaymentChange, readOnly = false }: PaymentSectionProps) {
+    const { t, fmt, locale } = useI18n();
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const balance = total - totalPaid;
     const creditDue = creditDueAmount(total, totalPaid);
@@ -37,12 +39,13 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
             total={total}
             onPaymentChange={onPaymentChange}
             readOnly={readOnly}
+            locale={locale}
             captureInstrument
-            blockedReason={keepDueCheck.allowed ? undefined : keepDueCheck.reason}
+            blockedReason={keepDueReason(keepDueCheck, t.sales.entry.credit, fmt)}
             hint={
                 balance > 0.01 && customer && availableCredit != null ? (
                     <p className="text-[11px] text-gray-500">
-                        Available credit: {formatBDT(availableCredit)}
+                        {fmt(t.sales.entry.availableCredit, { amount: formatBDT(availableCredit, { locale }) })}
                     </p>
                 ) : null
             }

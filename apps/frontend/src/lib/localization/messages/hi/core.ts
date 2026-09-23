@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: "भुगतान वाउचर प्रिंट करें",
         voucherNumber: "वाउचर सं.",
         balanceAfter: "बाद का शेष",
+        paymentMethod: "भुगतान विधि",
+        paymentMethodHint: "लेखांकन में इस विधि के खाते में दर्ज होगा।",
+        customerRequired: "एक ग्राहक चुनें।",
+        methodTypes: {
+            cash: "नकद",
+            mobileWallet: "मोबाइल वॉलेट",
+            card: "कार्ड",
+            bank: "बैंक",
+        },
         print: {
             moneyReceipt: "मनी रसीद",
             paymentVoucher: "भुगतान वाउचर",
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: "किसने दर्ज किया",
             amount: "राशि",
             notes: "टिप्पणियाँ",
+            method: "विधि",
             actions: "क्रियाएँ",
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: "भुगतान वाउचर प्रिंट करें",
         voucherNumber: "वाउचर सं.",
         balanceAfter: "बाद का शेष",
+        paymentMethod: "भुगतान विधि",
+        paymentMethodHint: "लेखांकन में इस विधि के खाते में दर्ज होगा।",
+        supplierRequired: "एक आपूर्तिकर्ता चुनें।",
+        methodTypes: {
+            cash: "नकद",
+            mobileWallet: "मोबाइल वॉलेट",
+            card: "कार्ड",
+            bank: "बैंक",
+        },
         print: {
             moneyReceipt: "मनी रसीद",
             paymentVoucher: "भुगतान वाउचर",
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: "किसने दर्ज किया",
             amount: "राशि",
             notes: "टिप्पणियाँ",
+            method: "विधि",
             actions: "क्रियाएँ",
         },
         allocation: {

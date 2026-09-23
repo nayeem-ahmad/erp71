@@ -1,0 +1,23 @@
+{
+  "_comment": "English voice-over. Captions, labels and cards are inline in record.js; this file only holds what the voice says, keyed by caption title (plus intro/outro). Written for the ear: ERP71 is spelled out.",
+  "narration": {
+    "intro": "Welcome to E R P seventy-one. In this short video, you'll see how to record a sale from start to finish. Customer, products, discount, payment and invoice, all on one screen.",
+    "Open the New Sale screen": "To begin, open Sales in the sidebar and go to the sales list. Then click New Sales Entry, at the top right.",
+    "One screen, three areas": "The New Sale screen has three areas. At the top, the document details. On the left, who is buying, and what. And on the right, the totals and the payment.",
+    "A · Document details": "The sales number is generated automatically. The reference number is optional. Use it for something like a hand-written memo number. The date defaults to now, and the warehouse is where the stock leaves from.",
+    "Till / cashier shift": "This chip shows the cashier shift. If a shift is open, the sale is stamped to that till, for end-of-day cash counting. With no shift open, you can still sell. The sale just isn't tied to a till.",
+    "B · Pick the customer": "Now, pick the customer. Search by name, or phone number. Once selected, you'll see their phone, address, and any due balance. The plus button adds a new customer on the spot. For a walk-in customer who pays in full, just leave this empty.",
+    "Add products": "Next, add products. Type part of a product name or code. The list shows each product's price, and how much is in stock. Press Enter to pick the highlighted one.",
+    "Check the price, set the quantity": "The unit price fills in automatically, and the rates you charged before are listed underneath, so you can stay consistent. Set the quantity, and click Add.",
+    "Keep adding lines": "The cursor jumps straight back to the product box, so you can type, or scan, the next item right away. Here we add two bottles of sunflower oil, and three packs of green tea. Pressing Enter in the quantity box adds the line.",
+    "Review and edit the lines": "Every line shows the stock available, the price, a line discount, and the quantity, and you can edit them right in the table. Here, we change the tea from three packs to four, and give ten percent off the sunflower oil. The line totals update immediately.",
+    "C · Totals and discount": "On the right, you can give a discount on the whole bill, as a percentage, or as a fixed taka amount. You can also add transport, labour, or rounding. Here, five percent off, and fifty taka for delivery. The total always stays up to date.",
+    "Take payment — split it any way": "Now, take payment. You can split it across methods. Here, the customer pays five hundred taka by mobile wallet, like bee-cash or Nagad, and the rest in cash. Once it adds up, you'll see: Settled.",
+    "Selling on credit?": "Selling on credit? Leave part of it unpaid, and the balance is kept as due on the customer's account, within their credit limit. A walk-in customer must pay in full.",
+    "Add a note (optional)": "You can also add a note. It's saved with the sale, and printed on the invoice.",
+    "Save it": "When you're ready, click Create Sale. This posts the stock, the payments, and the accounts. Or, use Save Draft to park the sale without posting anything.",
+    "Done — print the invoice": "Done! The sale is saved, and gets its number. Print the invoice right away, or skip it, and print it later from the sale. The screen is already clear for the next customer.",
+    "Find it in the sales list": "Every sale appears in the sales list. Here's the one we just made, right at the top. From here you can open it, reprint it, duplicate it, or return it.",
+    "outro": "So, that's it. Open New Sale, pick the customer, add products, check the totals and take payment, then create the sale. Happy selling!"
+  }
+}

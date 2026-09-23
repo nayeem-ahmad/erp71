@@ -14,6 +14,7 @@ import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
 import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import ProductSearch, { availableQtyOf } from '@/components/document-entry/ProductSearch';
+import { lastRateFrom, loadRateHistory } from '@/components/document-entry/RateHistory';
 import type { PartyOption } from '@/components/document-entry/PartySearchSelect';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -87,7 +88,8 @@ function NewPurchasePageContent() {
             product: any,
             options?: { quantity?: number; price?: number; availableQty?: number },
         ) => {
-            const unitCost = options?.price ?? Number(product.price) ?? 0;
+            // Callers pass the cost; the selling price is never a stand-in for it.
+            const unitCost = options?.price ?? 0;
             setItems((prev) => {
                 const existing = prev.find((item) => item.productId === product.id);
                 if (existing) {
@@ -121,6 +123,19 @@ function NewPurchasePageContent() {
         [],
     );
 
+    /**
+     * For paths that add a product without a price of their own (voice entry,
+     * "purchase this product" from the product page): look the last cost up
+     * first. Zero when it has never been bought, which the line shows plainly.
+     */
+    const addProductAtLastCost = useCallback(
+        async (product: any, options?: { quantity?: number }) => {
+            const history = await loadRateHistory(product.id, 'purchase', supplier?.id).catch(() => null);
+            addProduct(product, { ...options, price: lastRateFrom(history) ?? 0 });
+        },
+        [addProduct, supplier?.id],
+    );
+
     // Seed the first line when the products list linked here to restock one item.
     useEffect(() => {
         if (!seedProductId) return;
@@ -128,12 +143,12 @@ function NewPurchasePageContent() {
         let cancelled = false;
         api.getProduct(seedProductId)
             .then((product: any) => {
-                if (!cancelled && product?.id) addProduct(product);
+                if (!cancelled && product?.id) void addProductAtLastCost(product);
             })
             .catch((error: unknown) => console.error('Failed to load the product to restock', error));
 
         return () => { cancelled = true; };
-    }, [seedProductId, addProduct]);
+    }, [seedProductId, addProductAtLastCost]);
 
     // Copy an existing purchase: supplier, lines and the three charge fields.
     // The purchase number and the posting it produced are not carried over —
@@ -201,7 +216,7 @@ function NewPurchasePageContent() {
         let added = 0;
         for (const item of result.items) {
             if (item.matched && item.product) {
-                addProduct(item.product, { quantity: item.quantity });
+                void addProductAtLastCost(item.product, { quantity: item.quantity });
                 added++;
             }
         }
@@ -331,6 +346,11 @@ function NewPurchasePageContent() {
                         priceLabel={t.purchaseShared.unitCost}
                         placeholder={t.purchaseShared.searchProducts}
                         historyType="purchase"
+                        // A line starts at what the stock last cost (this
+                        // supplier's rate first), never at its selling price,
+                        // and stays empty when there is no purchase history.
+                        initialPriceOf={() => null}
+                        seedPriceFromHistory
                         historyPartyId={supplier?.id}
                         historyPartyName={supplier?.name}
                     />
