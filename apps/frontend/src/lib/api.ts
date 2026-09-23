@@ -1121,6 +1121,11 @@ export const api = {
         if (params?.uncategorized) query.set('uncategorized', 'true');
         return fetchAllPages(`/products${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * How many products sit at or below their reorder level. Counted by the
+     * server so the dashboard tile does not have to walk the whole catalog.
+     */
+    getLowStockCount: (): Promise<{ count: number }> => fetchWithAuth('/products/low-stock-count'),
     getProductsPaged: (params?: {
         groupId?: string;
         subgroupId?: string;
@@ -5108,6 +5113,12 @@ export const api = {
     /** The tasks under it are detached, never deleted with it. */
     deleteProjectStory: (storyId: string) =>
         fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
+    importProjectStories: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-stories/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),

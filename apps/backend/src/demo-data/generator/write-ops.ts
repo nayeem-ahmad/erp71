@@ -257,6 +257,8 @@ export class OpsWriter {
                     data: {
                         tenant_id: this.world.tenantId,
                         project_id: project.id,
+                        // 1-based within the project, as the app numbers them.
+                        reference: index + 1,
                         milestone_id: milestone.id,
                         title,
                         status_id: statusIds[statusIndex],

@@ -129,6 +129,8 @@ describe('BoardsController permission-to-route mapping (access control surface)'
     const EXPECTED_PERMISSIONS: Record<string, StorePermission[]> = {
         list: [StorePermission.VIEW_PROJECTS],
         findOne: [StorePermission.VIEW_PROJECTS],
+        // Reads the same board findOne does, by slug rather than id.
+        resolveBoard: [StorePermission.VIEW_PROJECTS],
         listColumns: [StorePermission.VIEW_PROJECTS],
 
         create: [StorePermission.MANAGE_PROJECTS],

@@ -1,11 +1,27 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { runImport, type ImportResult } from '../common/import.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import {
     CreateUserStoryDto,
     ListUserStoriesDto,
+    ProjectPriorityDto,
     UpdateUserStoryDto,
+    UserStoryStatusDto,
 } from './project.dto';
+import {
+    importEnum,
+    importNumber,
+    importText,
+    lookup,
+    nameIndex,
+    requiredText,
+} from './project-import.util';
 
 /** What a story shows beside its title wherever it is listed. */
 const STORY_INCLUDE = {
@@ -61,6 +77,7 @@ export class ProjectStoriesService {
         const search = query.search?.trim();
         if (search) {
             base.OR = [
+                { code: { contains: search, mode: 'insensitive' } },
                 { title: { contains: search, mode: 'insensitive' } },
                 { i_want: { contains: search, mode: 'insensitive' } },
             ];
@@ -112,14 +129,18 @@ export class ProjectStoriesService {
         await this.access.assertProjectVisible(viewer, dto.projectId);
 
         const sortOrder = dto.sortOrder ?? (await this.nextSortOrder(tenantId, dto.projectId));
+        const typedCode = dto.code?.trim() || null;
+        if (typedCode) await this.assertCodeFree(dto.projectId, typedCode);
 
         for (let attempt = 0; attempt < REFERENCE_ATTEMPTS; attempt += 1) {
             try {
+                const reference = await this.nextReference(dto.projectId);
                 return await this.db.projectUserStory.create({
                     data: {
                         tenant_id: tenantId,
                         project_id: dto.projectId,
-                        reference: await this.nextReference(dto.projectId),
+                        reference,
+                        code: typedCode ?? (await this.defaultCode(dto.projectId, reference)),
                         title: dto.title.trim(),
                         as_a: dto.asA?.trim() || null,
                         i_want: dto.iWant?.trim() || null,
@@ -136,18 +157,29 @@ export class ProjectStoriesService {
             } catch (error: unknown) {
                 const code = (error as { code?: string })?.code;
                 if (code !== 'P2002' || attempt === REFERENCE_ATTEMPTS - 1) throw error;
+                // A typed ID that lost a race is the caller's clash to resolve,
+                // not something another attempt will fix.
+                if (typedCode) await this.assertCodeFree(dto.projectId, typedCode);
             }
         }
         throw new BadRequestException('Could not allocate a story reference.');
     }
 
     async update(viewer: ProjectViewer, storyId: string, dto: UpdateUserStoryDto) {
-        await this.assertStory(viewer, storyId);
+        const story = await this.assertStory(viewer, storyId);
+
+        let code: string | undefined;
+        if (dto.code !== undefined) {
+            code = dto.code.trim();
+            if (!code) throw new BadRequestException('Story ID cannot be empty');
+            if (code !== story.code) await this.assertCodeFree(story.project_id as string, code, storyId);
+        }
 
         return this.db.projectUserStory.update({
             where: { id: storyId },
             data: {
                 ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+                ...(code !== undefined ? { code } : {}),
                 ...(dto.asA !== undefined ? { as_a: dto.asA?.trim() || null } : {}),
                 ...(dto.iWant !== undefined ? { i_want: dto.iWant?.trim() || null } : {}),
                 ...(dto.soThat !== undefined ? { so_that: dto.soThat?.trim() || null } : {}),
@@ -160,6 +192,95 @@ export class ProjectStoriesService {
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
             },
             include: STORY_INCLUDE,
+        });
+    }
+
+    /**
+     * Stories from a spreadsheet — the backlog a team brings with them from
+     * another tool. Project is named by code or name, like the task import.
+     *
+     * A row is matched to an existing story by its ID when the file carries
+     * one, and by title within the project otherwise, so re-importing the same
+     * file updates rather than duplicates. A row with an ID that does not exist
+     * yet creates a story under that ID — which is how a team keeps the IDs
+     * they already use.
+     */
+    async importRows(
+        viewer: ProjectViewer,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        const tenantId = viewer.tenantId;
+        const projects = await this.db.project.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(await this.access.projectFilter(viewer)),
+            } as never,
+            select: { id: true, code: true, short_name: true, name: true },
+        });
+        const projectIndex = nameIndex(
+            projects,
+            (project) => [project.code, project.short_name, project.name],
+            (project) => project.id,
+        );
+
+        return runImport<StoryImportRow>(rows, mode, tenantId, {
+            requiredFields: ['project', 'title'],
+            castRow: (raw) => {
+                const code = importText(raw.code);
+                if (code && /\s/.test(code)) throw new Error(`Story ID cannot contain spaces (got "${code}")`);
+                if (code && code.length > 40) throw new Error('Story ID must be 40 characters or fewer');
+                const points = importNumber(raw.storyPoints, 'Story points');
+                if (points !== null && (!Number.isInteger(points) || points < 0 || points > 999)) {
+                    throw new Error(`Story points must be a whole number from 0 to 999 (got "${points}")`);
+                }
+                return {
+                    projectId: lookup(projectIndex, requiredText(raw.project, 'Project'), 'no project matches'),
+                    code,
+                    title: requiredText(raw.title, 'Title'),
+                    asA: importText(raw.asA),
+                    iWant: importText(raw.iWant),
+                    soThat: importText(raw.soThat),
+                    acceptanceCriteria: importText(raw.acceptanceCriteria),
+                    status: importEnum(raw.status, Object.values(UserStoryStatusDto), 'Status'),
+                    priority: importEnum(raw.priority, Object.values(ProjectPriorityDto), 'Priority'),
+                    storyPoints: points,
+                };
+            },
+            dedupeKeys: (row) =>
+                row.code
+                    ? [`code:${row.projectId}:${row.code.toLowerCase()}`]
+                    : [`title:${row.projectId}:${row.title.toLowerCase()}`],
+            describeDedupeKey: (key) => (key.startsWith('code:') ? 'story ID' : 'title on the same project'),
+            findDuplicate: async (row) => {
+                const existing = await this.db.projectUserStory.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        project_id: row.projectId,
+                        ...(row.code
+                            ? { code: { equals: row.code, mode: 'insensitive' } }
+                            : { title: { equals: row.title, mode: 'insensitive' } }),
+                    },
+                    select: { id: true },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                await this.create(viewer, {
+                    projectId: row.projectId,
+                    title: row.title,
+                    ...storyFieldsFrom(row),
+                    ...(row.code ? { code: row.code } : {}),
+                } as CreateUserStoryDto);
+            },
+            // Blank cells leave the stored value alone — see the task import.
+            update: async (id, row) => {
+                await this.update(viewer, id, {
+                    title: row.title,
+                    ...storyFieldsFrom(row),
+                } as UpdateUserStoryDto);
+            },
         });
     }
 
@@ -258,6 +379,43 @@ export class ProjectStoriesService {
     }
 
     /**
+     * `<project.code>-<reference>`, or the next free number after it when a
+     * story was already given that ID by hand — typing `OTB-5` on an older
+     * story must not make the fifth story unwritable.
+     */
+    private async defaultCode(projectId: string, reference: number): Promise<string> {
+        const project = await this.db.project.findUnique({
+            where: { id: projectId },
+            select: { code: true },
+        });
+        const prefix = project?.code ?? 'US';
+        const taken = await this.db.projectUserStory.findMany({
+            where: { project_id: projectId, code: { startsWith: `${prefix}-`, mode: 'insensitive' } },
+            select: { code: true },
+        });
+        const used = new Set(taken.map((row) => row.code.toLowerCase()));
+        let number = reference;
+        while (used.has(`${prefix}-${number}`.toLowerCase())) number += 1;
+        return `${prefix}-${number}`;
+    }
+
+    /**
+     * Story IDs are unique within a project, compared without case so `otb-3`
+     * and `OTB-3` cannot both exist and be confused for each other.
+     */
+    private async assertCodeFree(projectId: string, code: string, exceptId?: string) {
+        const clash = await this.db.projectUserStory.findFirst({
+            where: {
+                project_id: projectId,
+                code: { equals: code, mode: 'insensitive' },
+                ...(exceptId ? { id: { not: exceptId } } : {}),
+            },
+            select: { id: true },
+        });
+        if (clash) throw new ConflictException(`Story ID "${code}" is already used in this project`);
+    }
+
+    /**
      * Exists, is in this tenant, and hangs off a project this viewer can open.
      * One check rather than three, so a story on a private project is
      * indistinguishable from one that was never there.
@@ -275,6 +433,32 @@ export class ProjectStoriesService {
         if (!story) throw new NotFoundException('User story not found');
         return story as StoryRow;
     }
+}
+
+interface StoryImportRow {
+    projectId: string;
+    code: string | null;
+    title: string;
+    asA: string | null;
+    iWant: string | null;
+    soThat: string | null;
+    acceptanceCriteria: string | null;
+    status: UserStoryStatusDto | null;
+    priority: ProjectPriorityDto | null;
+    storyPoints: number | null;
+}
+
+/** Only the cells the file filled — a blank one is left out, not cleared. */
+function storyFieldsFrom(row: StoryImportRow) {
+    return {
+        ...(row.asA !== null ? { asA: row.asA } : {}),
+        ...(row.iWant !== null ? { iWant: row.iWant } : {}),
+        ...(row.soThat !== null ? { soThat: row.soThat } : {}),
+        ...(row.acceptanceCriteria !== null ? { acceptanceCriteria: row.acceptanceCriteria } : {}),
+        ...(row.status !== null ? { status: row.status } : {}),
+        ...(row.priority !== null ? { priority: row.priority } : {}),
+        ...(row.storyPoints !== null ? { storyPoints: row.storyPoints } : {}),
+    };
 }
 
 /** The part of a story row the rollup needs; the rest rides along untouched. */

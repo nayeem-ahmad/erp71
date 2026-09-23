@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: "Movimientos de efectivo",
         noActiveSession: "No hay ninguna sesión activa",
         noActiveSessionHint: "Abra un turno para empezar a controlar el efectivo",
+        shiftChip: {
+            counter: "Caja {counter}",
+            openSince: "Turno abierto desde {time}",
+            noShift: "Sin turno abierto",
+            noShiftHint: "Esta venta no se asociará a ninguna caja.",
+            openShift: "Abrir turno",
+        },
         openShiftTitle: "Abrir turno",
         closeShiftTitle: "Cerrar turno",
         cashInOutTitle: "Entrada/salida de efectivo",

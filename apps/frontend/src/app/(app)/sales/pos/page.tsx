@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, UserPlus, History, Receipt } from 'lucide-react';
+import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, UserPlus, History, Receipt, Monitor } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api, fetchWithAuth } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -698,6 +698,35 @@ export default function POSPage() {
                         className="flex items-center gap-1.5 text-xs font-bold bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 min-h-touch"
                     >
                         {t.pos.openShift}
+                    </Link>
+                </div>
+            )}
+
+            {/* Which till is selling, kept on screen rather than surfaced only
+                when something blocks. A cashier who can see "Counter 2" notices
+                the wrong drawer before a shift's takings land on it, not at
+                close. Read-only for the same reason the server ignores a
+                client-supplied counter: the open shift is the authority. */}
+            {sessionChecked && cashierSession && (
+                <div className="bg-blue-50 border-b border-blue-200 px-6 py-2 flex items-center justify-between gap-4 flex-shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+                        <Monitor className="w-4 h-4 flex-shrink-0 text-blue-600" />
+                        <span>
+                            {cashierSession.counter?.name
+                                ? interpolate(t.cashierSessions.shiftChip.counter, { counter: cashierSession.counter.name })
+                                : t.cashierSessions.sessionActive}
+                        </span>
+                        {cashierSession.opened_at && (
+                            <span className="text-xs font-normal text-blue-700 hidden sm:inline">
+                                {interpolate(t.cashierSessions.shiftChip.openSince, { time: formatDateTime(cashierSession.opened_at) })}
+                            </span>
+                        )}
+                    </div>
+                    <Link
+                        href="/sales/cashier-sessions"
+                        className="text-xs font-semibold text-blue-700 underline hover:text-blue-900 flex-shrink-0"
+                    >
+                        {t.cashierSessions.closeShift}
                     </Link>
                 </div>
             )}

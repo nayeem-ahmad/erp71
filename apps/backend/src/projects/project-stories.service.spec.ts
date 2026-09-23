@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ProjectStoriesService } from './project-stories.service';
 import { ProjectAccessService } from './project-access.service';
 import {
@@ -22,6 +22,7 @@ describe('ProjectStoriesService', () => {
         tenant_id: 'tenant-1',
         project_id: 'project-1',
         reference: 1,
+        code: 'OTB-1',
         title: 'Shopper pays with bKash',
         as_a: 'shopper',
         i_want: 'to pay with bKash',
@@ -44,7 +45,13 @@ describe('ProjectStoriesService', () => {
     beforeEach(async () => {
         db = {
             ...accessDbMock(),
-            project: { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) },
+            project: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }),
+                findUnique: jest.fn().mockResolvedValue({ code: 'OTB' }),
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'project-1', code: 'OTB', short_name: null, name: 'Online till' },
+                ]),
+            },
             projectUserStory: {
                 findFirst: jest.fn().mockResolvedValue(story()),
                 findMany: jest.fn().mockResolvedValue([story()]),
@@ -71,8 +78,9 @@ describe('ProjectStoriesService', () => {
     });
 
     describe('create', () => {
-        it('numbers the first story of a project US-1', async () => {
+        it('numbers the first story of a project OTB-1, after the project code', async () => {
             db.projectUserStory.findFirst.mockResolvedValue(null);
+            db.projectUserStory.findMany.mockResolvedValue([]);
 
             const created: any = await service.create(OWNER, {
                 projectId: 'project-1',
@@ -80,7 +88,47 @@ describe('ProjectStoriesService', () => {
             } as never);
 
             expect(created.reference).toBe(1);
+            expect(created.code).toBe('OTB-1');
             expect(created.sort_order).toBe(0);
+        });
+
+        it('skips past a default ID somebody already typed by hand', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue({ reference: 4, sort_order: 0 });
+            db.projectUserStory.findMany.mockResolvedValue([{ code: 'OTB-5' }, { code: 'otb-6' }]);
+
+            const created: any = await service.create(OWNER, {
+                projectId: 'project-1',
+                title: 'Refunds',
+            } as never);
+
+            expect(created.reference).toBe(5);
+            expect(created.code).toBe('OTB-7');
+        });
+
+        it('keeps a typed ID as written', async () => {
+            db.projectUserStory.findFirst
+                .mockResolvedValueOnce(null) // sort order
+                .mockResolvedValueOnce(null) // ID clash check
+                .mockResolvedValueOnce(null); // reference
+
+            const created: any = await service.create(OWNER, {
+                projectId: 'project-1',
+                title: 'Refunds',
+                code: ' LEGACY-42 ',
+            } as never);
+
+            expect(created.code).toBe('LEGACY-42');
+        });
+
+        it('refuses a typed ID another story in the project already has', async () => {
+            db.projectUserStory.findFirst
+                .mockResolvedValueOnce(null) // sort order
+                .mockResolvedValueOnce({ id: 'story-2' }); // ID clash check
+
+            await expect(
+                service.create(OWNER, { projectId: 'project-1', title: 'Refunds', code: 'otb-1' } as never),
+            ).rejects.toBeInstanceOf(ConflictException);
+            expect(db.projectUserStory.create).not.toHaveBeenCalled();
         });
 
         it('continues from the highest reference rather than the story count', async () => {
@@ -185,13 +233,13 @@ describe('ProjectStoriesService', () => {
             });
         });
 
-        it('searches the title and the want together, without losing the visibility filter', async () => {
+        it('searches the ID, the title and the want together, without losing the visibility filter', async () => {
             await service.list(staff('user-7'), { search: 'bKash' } as never);
 
             const where = db.projectUserStory.findMany.mock.calls[0][0].where;
             // Merged, not spread: the search owns `OR`, and a second `OR` key on
             // the same object would silently replace it.
-            expect(where.OR).toHaveLength(2);
+            expect(where.OR).toHaveLength(3);
             expect(where.AND).toEqual([{ project: { OR: visibilityOr('user-7') } }]);
         });
 
@@ -294,6 +342,83 @@ describe('ProjectStoriesService', () => {
 
             const data = db.projectUserStory.update.mock.calls[0][0].data;
             expect(data).not.toHaveProperty('project_id');
+        });
+
+        it('renames the story ID when it is free', async () => {
+            db.projectUserStory.findFirst
+                .mockResolvedValueOnce(story()) // assertStory
+                .mockResolvedValueOnce(null); // ID clash check
+
+            await service.update(OWNER, 'story-1', { code: 'OTB-100' } as never);
+
+            expect(db.projectUserStory.update.mock.calls[0][0].data).toEqual({ code: 'OTB-100' });
+        });
+
+        it('refuses a story ID another story in the project already has', async () => {
+            db.projectUserStory.findFirst
+                .mockResolvedValueOnce(story()) // assertStory
+                .mockResolvedValueOnce({ id: 'story-2' }); // ID clash check
+
+            await expect(
+                service.update(OWNER, 'story-1', { code: 'OTB-2' } as never),
+            ).rejects.toBeInstanceOf(ConflictException);
+            expect(db.projectUserStory.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('importRows', () => {
+        it('creates stories under the project named by code, keeping IDs the file gives', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue(null);
+            db.projectUserStory.findMany.mockResolvedValue([]);
+
+            const result = await service.importRows(
+                OWNER,
+                [
+                    { project: 'otb', code: 'JIRA-12', title: 'Refunds', priority: 'high', storyPoints: '3' },
+                    { project: 'OTB', title: 'Receipts' },
+                ],
+                'skip',
+            );
+
+            expect(result).toMatchObject({ created: 2, skipped: 0, errors: [] });
+            const created = db.projectUserStory.create.mock.calls.map((call: any) => call[0].data);
+            expect(created[0]).toMatchObject({ code: 'JIRA-12', priority: 'HIGH', story_points: 3 });
+            expect(created[1]).toMatchObject({ code: 'OTB-1', title: 'Receipts' });
+        });
+
+        it('reports a row naming an unknown project, and a bad status, without stopping', async () => {
+            const result = await service.importRows(
+                OWNER,
+                [
+                    { project: 'NOPE', title: 'Refunds' },
+                    { project: 'OTB', title: 'Refunds', status: 'finished' },
+                ],
+                'skip',
+            );
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toHaveLength(2);
+            expect(result.errors[0]).toContain('no project matches "NOPE"');
+            expect(result.errors[1]).toContain('Status must be one of');
+        });
+
+        it('skips a row whose story ID already exists, unless asked to update', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue(story());
+
+            const skipped = await service.importRows(
+                OWNER,
+                [{ project: 'OTB', code: 'OTB-1', title: 'Renamed' }],
+                'skip',
+            );
+            expect(skipped).toMatchObject({ created: 0, skipped: 1 });
+
+            const updated = await service.importRows(
+                OWNER,
+                [{ project: 'OTB', code: 'OTB-1', title: 'Renamed' }],
+                'upsert',
+            );
+            expect(updated).toMatchObject({ updated: 1 });
+            expect(db.projectUserStory.update.mock.calls[0][0].data).toEqual({ title: 'Renamed' });
         });
     });
 

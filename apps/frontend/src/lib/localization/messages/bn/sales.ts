@@ -708,6 +708,13 @@ export const salesMessages = {
             cashTransactions: "নগদ লেনদেন",
             noActiveSession: "কোনো Active সেশন",
             noActiveSessionHint: "খুলুন a shift to start tracking cash",
+            shiftChip: {
+                counter: "কাউন্টার {counter}",
+                openSince: "{time} থেকে শিফট চালু",
+                noShift: "কোনো শিফট চালু নেই",
+                noShiftHint: "এই বিক্রিটি কোনো টিলের সাথে যুক্ত হবে না।",
+                openShift: "শিফট খুলুন",
+            },
             openShiftTitle: "খুলুন শিফট",
             closeShiftTitle: "বন্ধ শিফট",
             cashInOutTitle: "নগদ In/Out",

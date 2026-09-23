@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
+import { isValidProjectCode } from './url-keys/project-code';
 import { ProjectSettingsService } from './project-settings.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
@@ -51,6 +52,55 @@ export class ProjectsService {
      * sequence table, and retried on unique violation, because two concurrent
      * creates would otherwise pick the same number.
      */
+    /**
+     * A code is free when no live project and no retired code holds it.
+     *
+     * History counts because a task key is composed from its project's code:
+     * handing a retired code to a different project would make every
+     * `PRJ-0002-14` ever shared resolve to the wrong project's task.
+     *
+     * `exceptProjectId` lets a project keep the code it already has.
+     */
+    async assertCodeFree(tenantId: string, code: string, exceptProjectId?: string): Promise<void> {
+        if (!isValidProjectCode(code)) {
+            throw new BadRequestException(
+                'A project code is 2–12 characters, upper-case, starting with a letter (A–Z, 0–9 and - only)',
+            );
+        }
+
+        const [live, retired] = await Promise.all([
+            this.db.project.findFirst({
+                where: { tenant_id: tenantId, code },
+                select: { id: true },
+            }),
+            this.db.projectCodeHistory.findFirst({
+                where: { tenant_id: tenantId, code },
+                select: { project_id: true },
+            }),
+        ]);
+
+        const heldByAnother =
+            (live && live.id !== exceptProjectId) ||
+            (retired && retired.project_id !== exceptProjectId);
+
+        if (heldByAnother) {
+            throw new ConflictException(`Project code ${code} is already in use`);
+        }
+    }
+
+    /** Records the code a project is leaving behind, so its old task keys resolve. */
+    async retireCode(
+        tenantId: string,
+        projectId: string,
+        previous: string | null,
+        next: string,
+    ): Promise<void> {
+        if (!previous || previous === next) return;
+        await this.db.projectCodeHistory.create({
+            data: { tenant_id: tenantId, project_id: projectId, code: previous },
+        });
+    }
+
     private async nextCode(tenantId: string): Promise<string> {
         const count = await this.db.project.count({ where: { tenant_id: tenantId } });
         return `PRJ-${String(count + 1).padStart(4, '0')}`;
@@ -299,7 +349,11 @@ export class ProjectsService {
                 const project = await this.db.project.create({
                     data: {
                         tenant_id: tenantId,
-                        code: await this.nextCode(tenantId),
+                        // A chosen code is checked against live projects and
+                        // retired ones; an omitted one is generated.
+                        code: dto.code
+                            ? (await this.assertCodeFree(tenantId, dto.code), dto.code)
+                            : await this.nextCode(tenantId),
                         name: dto.name.trim(),
                         short_name: dto.shortName?.trim() || null,
                         description: dto.description?.trim() || null,
@@ -351,9 +405,27 @@ export class ProjectsService {
         if (dto.customerId) await this.assertCustomer(tenantId, dto.customerId);
         if (dto.projectTypeId) await this.assertProjectType(tenantId, dto.projectTypeId);
 
+        // A code change retires the old one before taking the new, so every
+        // task key already shared under it keeps resolving. `assertProject`
+        // answers with the visibility triple only, so the current code is read
+        // here rather than widening a helper every other caller shares.
+        let changingCode = false;
+        if (dto.code !== undefined) {
+            const current = await this.db.project.findUnique({
+                where: { id },
+                select: { code: true },
+            });
+            changingCode = current?.code !== dto.code;
+            if (changingCode) {
+                await this.assertCodeFree(tenantId, dto.code, id);
+                await this.retireCode(tenantId, id, current?.code ?? null, dto.code);
+            }
+        }
+
         const updated = await this.db.project.update({
             where: { id },
             data: {
+                ...(changingCode && dto.code ? { code: dto.code } : {}),
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
                 ...(dto.shortName !== undefined ? { short_name: dto.shortName?.trim() || null } : {}),
                 ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),

@@ -52,6 +52,11 @@ describe('BoardsService', () => {
                 create: jest.fn().mockResolvedValue({ id: 'b1', name: 'Release' }),
                 update: jest.fn().mockResolvedValue({ id: 'b1' }),
             },
+            boardSlugHistory: {
+                findFirst: jest.fn().mockResolvedValue(null),
+                findMany: jest.fn().mockResolvedValue([]),
+                create: jest.fn().mockResolvedValue({}),
+            },
             boardTask: {
                 findMany: jest.fn().mockResolvedValue([]),
                 createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -116,7 +121,8 @@ describe('BoardsService', () => {
         await service.create(tenantId, userId, { name: 'Release' });
 
         expect(db.board.create).toHaveBeenCalledWith({
-            data: { tenant_id: tenantId, name: 'Release', description: null, created_by: userId },
+            // `slug` is derived from the name — see url-keys/board-slug.ts.
+            data: { tenant_id: tenantId, name: 'Release', slug: 'release', description: null, created_by: userId },
         });
         expect(columns.seedColumnsForNewBoard).toHaveBeenCalledWith(tenantId, 'b1');
     });
@@ -383,7 +389,7 @@ describe('BoardsService', () => {
         ).rejects.toBeInstanceOf(NotFoundException);
 
         expect(db.board.findFirst).toHaveBeenCalledWith({
-            where: { id: 'b1', tenant_id: 'other', deleted_at: null },
+            where: { tenant_id: 'other', deleted_at: null, OR: [{ id: 'b1' }, { slug: 'b1' }] },
         });
     });
 

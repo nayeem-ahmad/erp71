@@ -19,6 +19,7 @@ import {
     MinLength,
     ValidateIf,
 } from 'class-validator';
+import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
 
 export enum ProjectStatusDto {
     DRAFT = 'DRAFT',
@@ -110,6 +111,18 @@ export class ListProjectsDto {
 export class CreateProjectDto {
     @IsString() @MinLength(1) @MaxLength(200)
     name!: string;
+
+    /**
+     * The project's short key, which task keys are built from — `ERP-14`.
+     * Generated as `PRJ-0001` when omitted. Changing it retires the old code
+     * to history rather than breaking every key already shared.
+     */
+    @IsOptional()
+    @IsString()
+    @Matches(PROJECT_CODE_PATTERN, {
+        message: 'code must be 2–12 characters, upper-case, starting with a letter (A–Z, 0–9 and - only)',
+    })
+    code?: string;
 
     /** Shown wherever the full name will not fit — a board card, a chip. */
     @IsOptional() @IsString() @MaxLength(20)
@@ -240,18 +253,27 @@ class UserStoryFieldsDto {
     title!: string;
 
     /**
+     * The story's ID, e.g. `OTB-3`. Optional on create — the service fills in
+     * `<project.code>-<n>` — and editable after. No spaces, so it can be said,
+     * typed and pasted as one token.
+     */
+    @IsOptional() @IsString() @MaxLength(40)
+    @Matches(/^\S+$/, { message: 'Story ID cannot contain spaces' })
+    code?: string;
+
+    /**
      * "As a … I want … so that …" — three columns rather than one blob so the
      * card can compose the sentence in the reader's own language. `''` clears
      * one: the service stores `trim() || null`, and PATCH reads undefined as
      * "leave alone", so only the empty string can say "there is no why".
      */
-    @IsOptional() @IsString() @MaxLength(200)
+    @IsOptional() @IsString() @MaxLength(500)
     asA?: string;
 
-    @IsOptional() @IsString() @MaxLength(500)
+    @IsOptional() @IsString() @MaxLength(2000)
     iWant?: string;
 
-    @IsOptional() @IsString() @MaxLength(500)
+    @IsOptional() @IsString() @MaxLength(2000)
     soThat?: string;
 
     @IsOptional() @IsString() @MaxLength(5000)

@@ -74,7 +74,7 @@ interface Task {
     estimate_hours?: string | null;
     logged_hours?: number;
     status?: { id: string; name: string; category: string };
-    userStory?: { id: string; reference: number; title: string } | null;
+    userStory?: { id: string; reference: number; code: string; title: string } | null;
     sprint?: { id: string; name: string; status: string } | null;
     assignee?: { id: string; name?: string | null; email: string } | null;
     assigneeEmployee?: { id: string; name: string } | null;
@@ -95,11 +95,9 @@ export default function ProjectDetailPage() {
     // Set by a link from the cross-project backlog, so the story that was
     // clicked there is already open when the project page paints.
     const openStoryId = useSearchParams().get('story');
-    const { t, fmt } = useI18n();
+    const { t } = useI18n();
     const m = t.projects;
 
-    /** `US-3`, in the reader's own language — the abbreviation is translated. */
-    const storyRef = (reference: number) => fmt(m.stories.reference, { number: reference });
 
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -273,6 +271,7 @@ export default function ProjectDetailPage() {
                         same work seen flat. */}
                     <ProjectStoriesCard
                         projectId={projectId}
+                        projectCode={project?.code}
                         stories={stories}
                         openStoryId={openStoryId}
                         onStoriesChanged={loadStories}
@@ -339,7 +338,7 @@ export default function ProjectDetailPage() {
                                                     title={task.userStory?.title}
                                                 >
                                                     {task.userStory
-                                                        ? `${storyRef(task.userStory.reference)} · ${task.userStory.title}`
+                                                        ? `${task.userStory.code} · ${task.userStory.title}`
                                                         : '—'}
                                                 </td>
                                                 {/* No sprint IS the backlog — which is why the standalone
@@ -473,7 +472,7 @@ export default function ProjectDetailPage() {
                                         <option value="">{m.stories.none}</option>
                                         {(stories ?? []).map((story) => (
                                             <option key={story.id} value={story.id}>
-                                                {storyRef(story.reference)} · {story.title}
+                                                {story.code} · {story.title}
                                             </option>
                                         ))}
                                     </Select>

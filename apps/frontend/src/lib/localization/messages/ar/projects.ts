@@ -141,10 +141,16 @@ export const projectsMessages = {
      */
     stories: {
         title: 'قصص المستخدم',
-        add: 'قصة جديدة',
+        add: "قصة مستخدم جديدة",
         edit: 'تعديل القصة',
         empty: 'لا توجد قصص مستخدم بعد. اكتب واحدة لتوضيح ما هو المطلوب من هذا المشروع.',
-        reference: 'US-{number}',
+        code: "معرّف القصة",
+        codeHint: "اتركه فارغًا ليُرقَّم تلقائيًا، مثل {example}.",
+        codeAuto: "تلقائي",
+        codeRequired: "أعطِ القصة معرّفًا.",
+        codeNoSpaces: "لا يمكن أن يحتوي معرّف القصة على مسافات.",
+        projectRequired: "اختر مشروعًا.",
+        pickProject: "اختر مشروعًا",
         asA: 'بصفتي',
         iWant: 'أريد',
         soThat: 'حتى',
@@ -188,7 +194,7 @@ export const projectsMessages = {
     storyList: {
         title: "قصص المستخدم",
         subtitle: "كل قصة في كل مشروع",
-        empty: "لا توجد قصص مستخدم بعد. افتح مشروعًا لكتابة أول قصة.",
+        empty: "لا توجد قصص مستخدم بعد. اكتب واحدة، أو استورد قائمة من جدول بيانات.",
         emptyFiltered: "لا توجد قصص تطابق عوامل التصفية هذه.",
         searchPlaceholder: "ابحث في عناوين القصص أو ما تطلبه",
         allProjects: "كل المشاريع",

@@ -710,6 +710,13 @@ export const salesMessages = {
         cashTransactions: "नकद लेन-देन",
         noActiveSession: "कोई सक्रिय सत्र नहीं",
         noActiveSessionHint: "नकद ट्रैक करने के लिए शिफ़्ट खोलें",
+        shiftChip: {
+            counter: "काउंटर {counter}",
+            openSince: "{time} से शिफ़्ट खुली है",
+            noShift: "कोई शिफ़्ट खुली नहीं",
+            noShiftHint: "यह बिक्री किसी टिल से नहीं जुड़ेगी।",
+            openShift: "शिफ़्ट खोलें",
+        },
         openShiftTitle: "शिफ़्ट खोलें",
         closeShiftTitle: "शिफ़्ट बंद करें",
         cashInOutTitle: "नकद आवक/जावक",
