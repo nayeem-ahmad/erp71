@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { resolveSettlementAccount } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { ageBalance, type AgingEntry } from '../accounting/aging.utils';
 import {
@@ -200,6 +201,16 @@ export class CustomersService {
         });
         if (!payment) throw new NotFoundException('Customer payment not found');
         return payment;
+    }
+
+    /**
+     * Where the chosen payment account goes on the voucher. The cash leg is the
+     * debit when money comes in (Dr Cash / Cr AR) and the credit when it goes
+     * out to the customer (Dr AR / Cr Cash); nothing chosen keeps the rule's.
+     */
+    private cashLegOverride(isPayout: boolean, accountId: string | undefined) {
+        if (!accountId) return {};
+        return isPayout ? { overrideCreditAccountId: accountId } : { overrideDebitAccountId: accountId };
     }
 
     private async generatePaymentNumber(
@@ -686,6 +697,12 @@ export class CustomersService {
         if (newAmount <= 0) throw new BadRequestException('Amount must be positive');
 
         return this.db.$transaction(async (tx) => {
+            // A method left out of the edit keeps the one recorded, so an edit
+            // to the amount alone does not quietly move the money back to cash.
+            const settlement = dto.paymentMethod !== undefined || dto.accountId !== undefined
+                ? await resolveSettlementAccount(tx, tenantId, dto)
+                : { paymentMethod: payment.payment_method, accountId: payment.account_id ?? undefined };
+
             const customer = await tx.customer.findFirst({
                 where: { id: customerId, tenant_id: tenantId, deleted_at: null },
                 select: { id: true, name: true, due_balance: true },
@@ -707,6 +724,8 @@ export class CustomersService {
                     amount: newAmount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    payment_method: settlement.paymentMethod,
+                    account_id: settlement.accountId ?? null,
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -736,6 +755,7 @@ export class CustomersService {
                 storeId,
                 partyType: 'CUSTOMER',
                 partyId: customerId,
+                ...this.cashLegOverride(isPayout, settlement.accountId),
             });
 
             return {
@@ -799,6 +819,7 @@ export class CustomersService {
 
         return this.db.$transaction(async (tx) => {
             const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
+            const settlement = await resolveSettlementAccount(tx, tenantId, dto);
 
             const payment = await tx.customerCreditTransaction.create({
                 data: {
@@ -809,6 +830,8 @@ export class CustomersService {
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method: settlement.paymentMethod,
+                    account_id: settlement.accountId ?? null,
                     created_by: userId,
                 },
                 include: {
@@ -839,6 +862,7 @@ export class CustomersService {
                 storeId,
                 partyType: 'CUSTOMER',
                 partyId: id,
+                ...this.cashLegOverride(isPayout, settlement.accountId),
             });
 
             return {

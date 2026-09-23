@@ -313,7 +313,7 @@ export default function InventoryTransfersPage() {
                         'inventory',
                     )}
                     actions={(
-                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700">
+                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 max-md:min-h-touch">
                             <option value="">{t.inventoryTransfers.allStatuses}</option>
                             <option value="DRAFT">{t.inventoryTransfers.statuses.draft}</option>
                             <option value="PENDING_APPROVAL">{t.inventoryTransfers.statuses.pendingApproval}</option>
@@ -326,21 +326,21 @@ export default function InventoryTransfersPage() {
                 />
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-5 gap-3 items-end">
-                    <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                    <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                         <option value="">{t.inventoryTransfers.allSources}</option>
                         {warehouseOptions}
                     </select>
-                    <select value={destinationWarehouseId} onChange={(e) => setDestinationWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                    <select value={destinationWarehouseId} onChange={(e) => setDestinationWarehouseId(e.target.value)} className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                         <option value="">{t.inventoryTransfers.allDestinations}</option>
                         {warehouseOptions}
                     </select>
-                    <select value={productId} onChange={(e) => setProductId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                    <select value={productId} onChange={(e) => setProductId(e.target.value)} className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                         <option value="">{t.inventoryTransfers.allProducts}</option>
                         {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                     </select>
                     {/* Only a multi-branch tenant has a scope to filter by. */}
                     {warehouseGroups.length > 1 ? (
-                        <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                        <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)} className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                             <option value="">{t.inventoryTransfers.allScopes}</option>
                             <option value="cross">{t.inventoryTransfers.crossBranchOnly}</option>
                             <option value="within">{t.inventoryTransfers.withinBranchOnly}</option>
@@ -354,32 +354,32 @@ export default function InventoryTransfersPage() {
                         <Truck className="w-5 h-5 text-blue-600" />
                         <h2 className="font-bold text-lg">{t.inventoryTransfers.newTransfer}</h2>
                     </div>
-                    {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
+                    {message ? <div className="text-sm font-medium text-gray-700 bg-gray-50 rounded-md px-3 py-2">{message}</div> : null}
                     <div className="grid md:grid-cols-4 gap-4">
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.sourceWarehouse}</label>
-                            <select required value={form.sourceWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, sourceWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{t.inventoryTransfers.sourceWarehouse}</label>
+                            <select required value={form.sourceWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, sourceWarehouseId: e.target.value }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                                 <option value="">{t.inventoryTransfers.selectSource}</option>
                                 {warehouseOptions}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.destinationWarehouse}</label>
-                            <select required value={form.destinationWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, destinationWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{t.inventoryTransfers.destinationWarehouse}</label>
+                            <select required value={form.destinationWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, destinationWarehouseId: e.target.value }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                                 <option value="">{t.inventoryTransfers.selectDestination}</option>
                                 {warehouseOptions}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.initialStatus}</label>
-                            <select value={form.status} onChange={(e) => setForm((current: any) => ({ ...current, status: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{t.inventoryTransfers.initialStatus}</label>
+                            <select value={form.status} onChange={(e) => setForm((current: any) => ({ ...current, status: e.target.value }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                                 <option value="SENT">{t.inventoryTransfers.sendNow}</option>
                                 <option value="DRAFT">{t.inventoryTransfers.saveAsDraft}</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.notes}</label>
-                            <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.common.optional} />
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{t.common.notes}</label>
+                            <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch" placeholder={t.common.optional} />
                         </div>
                     </div>
 
@@ -394,17 +394,17 @@ export default function InventoryTransfersPage() {
                         {form.items.map((item: any, index: number) => (
                             <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.product}</label>
-                                    <select required value={item.productId} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.common.product}</label>
+                                    <select required value={item.productId} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: e.target.value } : line) }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch">
                                         <option value="">{t.inventoryTransfers.selectProduct}</option>
                                         {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>
-                                    <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.common.quantity}</label>
+                                    <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white max-md:min-h-touch" />
                                 </div>
-                                <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">
+                                <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-sm font-semibold max-md:min-h-touch">
                                     {t.inventoryShrinkage.remove}
                                 </button>
                             </div>

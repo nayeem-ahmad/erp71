@@ -2079,6 +2079,10 @@ model SupplierCreditTransaction {
   reference_id   String?
   payment_number String?
   notes          String?
+  /// How the money moved — see CustomerCreditTransaction.payment_method.
+  payment_method String?
+  /// Ledger account the cash leg posted to when not the rule default.
+  account_id     String?
   created_by     String?
   created_at     DateTime @default(now())
 
@@ -3348,6 +3352,14 @@ model CustomerCreditTransaction {
   reference_id   String?
   payment_number String?
   notes          String?
+  /// How the money moved on a PAYMENT / PAYOUT — the tenant's payment-method
+  /// name as picked ("Cash", "bKash", …). Null on rows written before it was
+  /// captured and on non-payment rows (credit sales, write-offs); those posted
+  /// to the rule's default cash account.
+  payment_method String?
+  /// The ledger account the cash leg posted to, when it was not the posting
+  /// rule's default. Null means the rule's own account was used.
+  account_id     String?
   created_by     String?
   created_at     DateTime @default(now())
 

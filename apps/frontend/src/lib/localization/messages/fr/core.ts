@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: "Imprimer le bon de paiement",
         voucherNumber: "N° de pièce",
         balanceAfter: "Solde après",
+        paymentMethod: "Mode de paiement",
+        paymentMethodHint: "Comptabilisé sur le compte associé à ce mode.",
+        customerRequired: "Sélectionnez un client.",
+        methodTypes: {
+            cash: "Espèces",
+            mobileWallet: "Portefeuille mobile",
+            card: "Carte",
+            bank: "Banque",
+        },
         print: {
             moneyReceipt: "Reçu",
             paymentVoucher: "Bon de paiement",
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: "Enregistré par",
             amount: "Montant",
             notes: "Notes",
+            method: "Mode",
             actions: "Actions",
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: "Imprimer le bon de paiement",
         voucherNumber: "N° de pièce",
         balanceAfter: "Solde après",
+        paymentMethod: "Mode de paiement",
+        paymentMethodHint: "Comptabilisé sur le compte associé à ce mode.",
+        supplierRequired: "Sélectionnez un fournisseur.",
+        methodTypes: {
+            cash: "Espèces",
+            mobileWallet: "Portefeuille mobile",
+            card: "Carte",
+            bank: "Banque",
+        },
         print: {
             moneyReceipt: "Reçu",
             paymentVoucher: "Bon de paiement",
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: "Enregistré par",
             amount: "Montant",
             notes: "Notes",
+            method: "Mode",
             actions: "Actions",
         },
         allocation: {

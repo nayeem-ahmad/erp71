@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: 'Print payment voucher',
         voucherNumber: 'Voucher no.',
         balanceAfter: 'Balance after',
+        paymentMethod: 'Payment method',
+        paymentMethodHint: 'Booked to this method\'s account in accounting.',
+        customerRequired: 'Select a customer.',
+        methodTypes: {
+            cash: 'Cash',
+            mobileWallet: 'Mobile Wallet',
+            card: 'Card',
+            bank: 'Bank',
+        },
         print: {
             moneyReceipt: 'Money Receipt',
             paymentVoucher: 'Payment Voucher',
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: 'Recorded by',
             amount: 'Amount',
             notes: 'Notes',
+            method: 'Method',
             actions: 'Actions',
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: 'Print payment voucher',
         voucherNumber: 'Voucher no.',
         balanceAfter: 'Balance after',
+        paymentMethod: 'Payment method',
+        paymentMethodHint: 'Booked to this method\'s account in accounting.',
+        supplierRequired: 'Select a supplier.',
+        methodTypes: {
+            cash: 'Cash',
+            mobileWallet: 'Mobile Wallet',
+            card: 'Card',
+            bank: 'Bank',
+        },
         print: {
             moneyReceipt: 'Money Receipt',
             paymentVoucher: 'Payment Voucher',
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: 'Recorded by',
             amount: 'Amount',
             notes: 'Notes',
+            method: 'Method',
             actions: 'Actions',
         },
         allocation: {

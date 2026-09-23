@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: "Zahlungsbeleg drucken",
         voucherNumber: "Beleg-Nr.",
         balanceAfter: "Saldo danach",
+        paymentMethod: "Zahlungsart",
+        paymentMethodHint: "Wird in der Buchhaltung auf das Konto dieser Zahlungsart gebucht.",
+        customerRequired: "Wählen Sie einen Kunden aus.",
+        methodTypes: {
+            cash: "Bar",
+            mobileWallet: "Mobile Wallet",
+            card: "Karte",
+            bank: "Bank",
+        },
         print: {
             moneyReceipt: "Quittung",
             paymentVoucher: "Zahlungsbeleg",
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: "Erfasst von",
             amount: "Betrag",
             notes: "Notizen",
+            method: "Zahlungsart",
             actions: "Aktionen",
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: "Zahlungsbeleg drucken",
         voucherNumber: "Beleg-Nr.",
         balanceAfter: "Saldo danach",
+        paymentMethod: "Zahlungsart",
+        paymentMethodHint: "Wird in der Buchhaltung auf das Konto dieser Zahlungsart gebucht.",
+        supplierRequired: "Wählen Sie einen Lieferanten aus.",
+        methodTypes: {
+            cash: "Bar",
+            mobileWallet: "Mobile Wallet",
+            card: "Karte",
+            bank: "Bank",
+        },
         print: {
             moneyReceipt: "Quittung",
             paymentVoucher: "Zahlungsbeleg",
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: "Erfasst von",
             amount: "Betrag",
             notes: "Notizen",
+            method: "Zahlungsart",
             actions: "Aktionen",
         },
         allocation: {

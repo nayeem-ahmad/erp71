@@ -12,10 +12,17 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
+import { toast } from '@/lib/toast';
+import {
+    paymentMethodDisplayName,
+    usePaymentMethodOptions,
+    withRecordedMethod,
+} from '@/lib/hooks/usePaymentMethodOptions';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, Field, Input, Select, Textarea, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import PaymentMethodField from '@/components/document-entry/PaymentMethodField';
 
 interface CustomerOption {
     id: string;
@@ -34,11 +41,17 @@ interface CustomerCreditPayment {
     amount: string | number;
     balance_after?: string | number;
     notes?: string | null;
+    payment_method?: string | null;
     created_at: string;
     customer?: { id: string; name: string; phone: string; customer_code?: string } | null;
     creator?: { id: string; name: string } | null;
     voucher_id?: string | null;
     accounting_voucher_number?: string | null;
+}
+
+interface FormErrors {
+    customer?: string;
+    amount?: string;
 }
 
 const columnHelper = createColumnHelper<CustomerCreditPayment>();
@@ -67,6 +80,7 @@ function CustomerPaymentsContent() {
     const printHeader = usePrintHeader('MONEY_RECEIPT');
     const searchParams = useSearchParams();
     const preselectedCustomerId = searchParams.get('customerId');
+    const { options: methodOptions, defaultMethod, accountIdFor } = usePaymentMethodOptions();
 
     const [payments, setPayments] = useState<CustomerCreditPayment[]>([]);
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -75,12 +89,15 @@ function CustomerPaymentsContent() {
     const [customerFilter, setCustomerFilter] = useState(preselectedCustomerId ?? '');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [formCustomerId, setFormCustomerId] = useState('');
     const [formDirection, setFormDirection] = useState<PaymentDirection>('receive');
     const [formAmount, setFormAmount] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    // Empty means "the default method" (Cash), resolved at render and submit
+    // time so a form opened before the tenant's methods load still picks it.
+    const [formMethod, setFormMethod] = useState('');
+    const [formErrors, setFormErrors] = useState<FormErrors>({});
     // Set when the create form was opened as a copy of an existing payment;
     // names the source in the modal so a duplicate is never mistaken for it.
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
@@ -90,6 +107,10 @@ function CustomerPaymentsContent() {
     const [editDirection, setEditDirection] = useState<PaymentDirection>('receive');
     const [editAmount, setEditAmount] = useState('');
     const [editNotes, setEditNotes] = useState('');
+    const [editMethod, setEditMethod] = useState('');
+    const [editAmountError, setEditAmountError] = useState('');
+
+    const methodName = (name?: string | null) => (name ? paymentMethodDisplayName(name, copy.methodTypes) : '—');
 
     const loadData = async () => {
         setLoading(true);
@@ -106,7 +127,7 @@ function CustomerPaymentsContent() {
             setCustomers(customersData ?? []);
         } catch (error) {
             console.error('Failed to load customer payments', error);
-            setToast({ type: 'error', message: copy.loadFailed });
+            toast.error(copy.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -136,6 +157,8 @@ function CustomerPaymentsContent() {
         setFormDirection('receive');
         setFormAmount('');
         setFormNotes('');
+        setFormMethod('');
+        setFormErrors({});
         setDuplicatedFrom('');
     };
 
@@ -151,6 +174,8 @@ function CustomerPaymentsContent() {
         setFormDirection(directionFromType(payment.type));
         setFormAmount(String(payment.amount));
         setFormNotes(payment.notes ?? '');
+        setFormMethod(payment.payment_method ?? '');
+        setFormErrors({});
         setDuplicatedFrom(payment.payment_number ?? '');
         setShowForm(true);
     };
@@ -160,31 +185,29 @@ function CustomerPaymentsContent() {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formCustomerId || !formAmount) {
-            setToast({ type: 'error', message: copy.requiredFields });
-            return;
-        }
         const amt = Number(formAmount);
-        if (Number.isNaN(amt) || amt <= 0) {
-            setToast({ type: 'error', message: copy.invalidAmount });
-            return;
-        }
+        const errors: FormErrors = {};
+        if (!formCustomerId) errors.customer = copy.customerRequired;
+        if (!formAmount || Number.isNaN(amt) || amt <= 0) errors.amount = copy.invalidAmount;
+        setFormErrors(errors);
+        if (errors.customer || errors.amount) return;
+
+        const method = formMethod || defaultMethod;
         setSaving(true);
         try {
             await api.recordCreditPayment(formCustomerId, {
                 amount: amt,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
+                paymentMethod: method,
+                accountId: accountIdFor(method),
             });
-            setToast({ type: 'success', message: copy.paymentSaved });
+            toast.success(copy.paymentSaved);
             setShowForm(false);
             resetForm();
             await loadData();
         } catch (error: unknown) {
-            setToast({
-                type: 'error',
-                message: error instanceof Error ? error.message : copy.saveFailed,
-            });
+            toast.error(error instanceof Error ? error.message : copy.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -195,6 +218,8 @@ function CustomerPaymentsContent() {
         setEditDirection(directionFromType(payment.type));
         setEditAmount(String(payment.amount));
         setEditNotes(payment.notes ?? '');
+        setEditMethod(payment.payment_method ?? '');
+        setEditAmountError('');
     };
 
     const handleUpdate = async (e: React.FormEvent) => {
@@ -202,24 +227,28 @@ function CustomerPaymentsContent() {
         if (!editPayment) return;
         const amt = Number(editAmount);
         if (Number.isNaN(amt) || amt <= 0) {
-            setToast({ type: 'error', message: copy.invalidAmount });
+            setEditAmountError(copy.invalidAmount);
             return;
         }
+        setEditAmountError('');
+        // Only send a method the operator actually changed: left alone, the
+        // payment keeps the method — and the account — it was recorded with,
+        // even if the tenant has since renamed or retired that method.
+        const method = editMethod || defaultMethod;
+        const methodChanged = method !== (editPayment.payment_method ?? defaultMethod);
         setSaving(true);
         try {
             await api.updateCustomerCreditPayment(editPayment.id, {
                 amount: amt,
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
+                ...(methodChanged ? { paymentMethod: method, accountId: accountIdFor(method) } : {}),
             });
-            setToast({ type: 'success', message: copy.paymentUpdated });
+            toast.success(copy.paymentUpdated);
             setEditPayment(null);
             await loadData();
         } catch (error: unknown) {
-            setToast({
-                type: 'error',
-                message: error instanceof Error ? error.message : copy.saveFailed,
-            });
+            toast.error(error instanceof Error ? error.message : copy.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -229,15 +258,12 @@ function CustomerPaymentsContent() {
         if (!globalThis.confirm(copy.deleteConfirm)) return;
         try {
             await api.deleteCustomerCreditPayment(payment.id);
-            setToast({ type: 'success', message: copy.paymentDeleted });
+            toast.success(copy.paymentDeleted);
             if (viewPayment?.id === payment.id) setViewPayment(null);
             if (editPayment?.id === payment.id) setEditPayment(null);
             await loadData();
         } catch (error: unknown) {
-            setToast({
-                type: 'error',
-                message: error instanceof Error ? error.message : copy.deleteFailed,
-            });
+            toast.error(error instanceof Error ? error.message : copy.deleteFailed);
         }
     };
 
@@ -257,6 +283,9 @@ function CustomerPaymentsContent() {
             notes: payment.notes ?? undefined,
             recordedBy: payment.creator?.name,
             voucherNumber: payment.accounting_voucher_number,
+            paymentMethod: payment.payment_method
+                ? paymentMethodDisplayName(payment.payment_method, copy.methodTypes)
+                : undefined,
             labels: {
                 moneyReceipt: copy.print.moneyReceipt,
                 paymentVoucher: copy.print.paymentVoucher,
@@ -268,6 +297,7 @@ function CustomerPaymentsContent() {
                 notes: copy.columns.notes,
                 recordedBy: copy.columns.recordedBy,
                 voucher: copy.voucherNumber,
+                method: copy.paymentMethod,
                 receiveTitle: copy.print.receiveTitle,
                 payTitle: copy.print.payTitle,
                 footer: copy.print.footer,
@@ -311,11 +341,19 @@ function CustomerPaymentsContent() {
                 },
                 size: 180,
             }),
+            columnHelper.accessor((row) => methodName(row.payment_method), {
+                id: 'method',
+                header: copy.columns.method,
+                cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                size: 120,
+                meta: { hideOnMobile: true },
+            }),
             columnHelper.accessor((row) => row.creator?.name ?? '—', {
                 id: 'recordedBy',
                 header: copy.columns.recordedBy,
                 cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
                 size: 140,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('amount', {
                 header: copy.columns.amount,
@@ -334,6 +372,7 @@ function CustomerPaymentsContent() {
                 header: copy.columns.notes,
                 cell: (info) => <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '—'}</span>,
                 size: 160,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
@@ -346,7 +385,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => setViewPayment(payment)}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
+                                className="p-1.5 rounded-md text-blue-600 hover:bg-blue-50 max-md:min-h-touch"
                                 title={t.common.view}
                             >
                                 <Eye className="w-4 h-4" />
@@ -354,7 +393,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => openEdit(payment)}
-                                className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50"
+                                className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 max-md:min-h-touch"
                                 title={t.common.edit}
                             >
                                 <Pencil className="w-4 h-4" />
@@ -362,7 +401,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => openDuplicate(payment)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 max-md:min-h-touch"
                                 title={t.common.duplicate}
                             >
                                 <Copy className="w-4 h-4" />
@@ -370,7 +409,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => handlePrint(payment)}
-                                className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50"
+                                className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 max-md:min-h-touch"
                                 title={isPayout ? copy.printVoucher : copy.printReceipt}
                             >
                                 <Printer className="w-4 h-4" />
@@ -378,7 +417,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => void handleDelete(payment)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
+                                className="p-1.5 rounded-md text-gray-400 hover:text-danger hover:bg-red-50 max-md:min-h-touch"
                                 title={t.common.delete}
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -390,6 +429,7 @@ function CustomerPaymentsContent() {
                 size: 160,
             }),
         ],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [copy, locale, t.common, handlePrint],
     );
 
@@ -403,7 +443,7 @@ function CustomerPaymentsContent() {
                 <PageHeader
                     title={
                         <span className="inline-flex items-center gap-2">
-                            <Wallet className="w-7 h-7 text-purple-600" />
+                            <Wallet className="w-6 h-6 text-blue-600" />
                             {copy.title}
                         </span>
                     }
@@ -415,27 +455,21 @@ function CustomerPaymentsContent() {
                         'sales',
                     )}
                     actions={
-                        <button
+                        <Button
                             type="button"
+                            size="md"
+                            icon={<Plus className="w-4 h-4" />}
                             onClick={() => { resetForm(); setShowForm(true); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
                         >
-                            <Plus className="w-4 h-4" />
                             {copy.newPayment}
-                        </button>
+                        </Button>
                     }
                 />
-
-                {toast && (
-                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
-                        {toast.message}
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                         <p className="text-xs font-medium text-gray-500">{copy.periodTotal}</p>
-                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{formatMessage(copy.paymentCount, { count: payments.length })}</p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
@@ -444,15 +478,18 @@ function CustomerPaymentsContent() {
                                 <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.filterCustomer}</span>
-                                <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+                            <Field label={copy.filterCustomer} htmlFor="customer-payments-filter">
+                                <Select
+                                    id="customer-payments-filter"
+                                    value={customerFilter}
+                                    onChange={(e) => setCustomerFilter(e.target.value)}
+                                >
                                     <option value="">{copy.allCustomers}</option>
                                     {customers.map((customer) => (
                                         <option key={customer.id} value={customer.id}>{customer.name}</option>
                                     ))}
-                                </select>
-                            </label>
+                                </Select>
+                            </Field>
                         </div>
                     </div>
                 </div>
@@ -472,46 +509,49 @@ function CustomerPaymentsContent() {
                         emptyMessage={copy.noPayments}
                     />
                 )}
-            
 
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
-                    <form onSubmit={handleCreate} className="flex flex-col overflow-hidden">
+                    <form onSubmit={handleCreate} noValidate className="flex flex-col overflow-hidden">
                         <ModalHeader
                             title={duplicatedFrom ? copy.duplicatePayment : copy.newPayment}
                             subtitle={duplicatedFrom || undefined}
                             onClose={() => setShowForm(false)}
                         />
-                        <div className="p-6 space-y-4 overflow-y-auto">
+                        <div className="p-4 space-y-3 overflow-y-auto">
                             {duplicatedFrom ? (
-                                <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                <Alert tone="info">
                                     {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
-                                </p>
+                                </Alert>
                             ) : null}
                             {customers.length === 0 ? (
-                                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                    {copy.noCustomers}
-                                </p>
+                                <Alert tone="warning">{copy.noCustomers}</Alert>
                             ) : (
                                 <>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.direction}</span>
-                                        <select
+                                    <Field label={copy.direction} htmlFor="customer-payment-direction">
+                                        <Select
+                                            id="customer-payment-direction"
                                             value={formDirection}
                                             onChange={(e) => setFormDirection(e.target.value as PaymentDirection)}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
                                         >
                                             <option value="receive">{copy.directionReceive}</option>
                                             <option value="pay">{copy.directionPay}</option>
-                                        </select>
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.selectCustomer}</span>
-                                        <select
+                                        </Select>
+                                    </Field>
+                                    <Field
+                                        label={copy.selectCustomer}
+                                        htmlFor="customer-payment-customer"
+                                        required
+                                        error={formErrors.customer}
+                                    >
+                                        <Select
+                                            id="customer-payment-customer"
                                             value={formCustomerId}
-                                            onChange={(e) => setFormCustomerId(e.target.value)}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                            required
+                                            onChange={(e) => {
+                                                setFormCustomerId(e.target.value);
+                                                setFormErrors((prev) => ({ ...prev, customer: undefined }));
+                                            }}
+                                            error={!!formErrors.customer}
                                         >
                                             <option value="">{copy.pickCustomerOption}</option>
                                             {customers.map((customer) => (
@@ -519,46 +559,54 @@ function CustomerPaymentsContent() {
                                                     {customer.name} ({customer.phone})
                                                 </option>
                                             ))}
-                                        </select>
-                                    </label>
+                                        </Select>
+                                    </Field>
                                     {selectedFormCustomer ? (
-                                        <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3 text-sm">
+                                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                                             <span className="text-gray-600">
                                                 {dueBalance < 0 ? copy.advanceBalance : copy.dueBalance}:{' '}
                                             </span>
                                             <span className={`font-bold ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                                 {formatBDT(Math.abs(dueBalance))}
                                             </span>
-                                            {formDirection === 'receive' ? (
-                                                <p className="mt-1 text-xs text-gray-500">{copy.receiveHint}</p>
-                                            ) : (
-                                                <p className="mt-1 text-xs text-gray-500">{copy.payHint}</p>
-                                            )}
+                                            <p className="mt-1 text-xs text-gray-500">
+                                                {formDirection === 'receive' ? copy.receiveHint : copy.payHint}
+                                            </p>
                                         </div>
                                     ) : null}
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
-                                        <input
+                                    <Field label={copy.amount} htmlFor="customer-payment-amount" required error={formErrors.amount}>
+                                        <Input
+                                            id="customer-payment-amount"
                                             type="number"
                                             min="0.01"
                                             step="0.01"
                                             value={formAmount}
-                                            onChange={(e) => setFormAmount(e.target.value)}
+                                            onChange={(e) => {
+                                                setFormAmount(e.target.value);
+                                                setFormErrors((prev) => ({ ...prev, amount: undefined }));
+                                            }}
                                             placeholder={copy.amountPlaceholder}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                            required
+                                            error={!!formErrors.amount}
                                         />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
-                                        <textarea
+                                    </Field>
+                                    <PaymentMethodField
+                                        id="customer-payment-method"
+                                        label={copy.paymentMethod}
+                                        hint={copy.paymentMethodHint}
+                                        value={formMethod || defaultMethod}
+                                        onChange={setFormMethod}
+                                        options={withRecordedMethod(methodOptions, formMethod)}
+                                        typeLabels={copy.methodTypes}
+                                    />
+                                    <Field label={copy.notes} htmlFor="customer-payment-notes">
+                                        <Textarea
+                                            id="customer-payment-notes"
                                             value={formNotes}
                                             onChange={(e) => setFormNotes(e.target.value)}
                                             rows={2}
                                             placeholder={copy.notesPlaceholder}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
                                         />
-                                    </label>
+                                    </Field>
                                 </>
                             )}
                         </div>
@@ -588,7 +636,7 @@ function CustomerPaymentsContent() {
                         subtitle={viewPayment.payment_number}
                         onClose={() => setViewPayment(null)}
                     />
-                        <div className="p-6 space-y-3 text-sm">
+                        <div className="p-4 space-y-3 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.direction}</span>
                                 <span className={`font-bold ${viewPayment.type === 'PAYOUT' ? 'text-danger' : 'text-emerald-700'}`}>
@@ -612,6 +660,10 @@ function CustomerPaymentsContent() {
                                     {formatBDT(Number(viewPayment.amount))}
                                 </span>
                             </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">{copy.paymentMethod}</span>
+                                <span className="font-medium">{methodName(viewPayment.payment_method)}</span>
+                            </div>
                             {viewPayment.balance_after !== undefined && (
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">{copy.balanceAfter}</span>
@@ -631,7 +683,7 @@ function CustomerPaymentsContent() {
                             {viewPayment.notes && (
                                 <div>
                                     <span className="text-gray-500 block mb-1">{copy.columns.notes}</span>
-                                    <p className="text-gray-700 bg-gray-50 rounded-xl p-3">{viewPayment.notes}</p>
+                                    <p className="text-gray-700 bg-gray-50 rounded-lg p-3">{viewPayment.notes}</p>
                                 </div>
                             )}
                         </div>
@@ -680,50 +732,56 @@ function CustomerPaymentsContent() {
 
             {editPayment && (
                 <ModalShell size="sm" onBackdropClick={() => setEditPayment(null)}>
-                    <form onSubmit={handleUpdate} className="flex flex-col overflow-hidden">
+                    <form onSubmit={handleUpdate} noValidate className="flex flex-col overflow-hidden">
                         <ModalHeader
                             title={copy.editPayment}
                             subtitle={editPayment.payment_number}
                             onClose={() => setEditPayment(null)}
                         />
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm">
+                        <div className="p-4 space-y-3 overflow-y-auto">
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                                 <span className="text-gray-500">{copy.columns.customer}: </span>
                                 <span className="font-bold">{editPayment.customer?.name}</span>
                                 <span className="block text-xs text-gray-400">{editPayment.customer?.phone}</span>
                             </div>
-                            <label className="block space-y-1">
-                                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.direction}</span>
-                                <select
+                            <Field label={copy.direction} htmlFor="customer-payment-edit-direction">
+                                <Select
+                                    id="customer-payment-edit-direction"
                                     value={editDirection}
                                     onChange={(e) => setEditDirection(e.target.value as PaymentDirection)}
-                                    className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
                                 >
                                     <option value="receive">{copy.directionReceive}</option>
                                     <option value="pay">{copy.directionPay}</option>
-                                </select>
-                            </label>
-                            <label className="block space-y-1">
-                                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
-                                <input
+                                </Select>
+                            </Field>
+                            <Field label={copy.amount} htmlFor="customer-payment-edit-amount" required error={editAmountError || undefined}>
+                                <Input
+                                    id="customer-payment-edit-amount"
                                     type="number"
                                     min="0.01"
                                     step="0.01"
                                     value={editAmount}
-                                    onChange={(e) => setEditAmount(e.target.value)}
-                                    className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                    required
+                                    onChange={(e) => { setEditAmount(e.target.value); setEditAmountError(''); }}
+                                    error={!!editAmountError}
                                 />
-                            </label>
-                            <label className="block space-y-1">
-                                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
-                                <textarea
+                            </Field>
+                            <PaymentMethodField
+                                id="customer-payment-edit-method"
+                                label={copy.paymentMethod}
+                                hint={copy.paymentMethodHint}
+                                value={editMethod || defaultMethod}
+                                onChange={setEditMethod}
+                                options={withRecordedMethod(methodOptions, editPayment.payment_method)}
+                                typeLabels={copy.methodTypes}
+                            />
+                            <Field label={copy.notes} htmlFor="customer-payment-edit-notes">
+                                <Textarea
+                                    id="customer-payment-edit-notes"
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
                                     rows={2}
-                                    className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
                                 />
-                            </label>
+                            </Field>
                         </div>
                         <ModalFooter>
                             <Button type="button" variant="secondary" size="md" className="flex-1 justify-center" onClick={() => setEditPayment(null)}>

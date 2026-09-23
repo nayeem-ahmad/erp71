@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: 'طباعة سند صرف',
         voucherNumber: 'رقم السند',
         balanceAfter: 'الرصيد بعدها',
+        paymentMethod: "طريقة الدفع",
+        paymentMethodHint: "يُقيَّد في حساب هذه الطريقة في المحاسبة.",
+        customerRequired: "اختر زبونًا.",
+        methodTypes: {
+            cash: "نقدًا",
+            mobileWallet: "محفظة جوال",
+            card: "بطاقة",
+            bank: "بنك",
+        },
         print: {
             moneyReceipt: 'سند قبض',
             paymentVoucher: 'سند صرف',
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: 'سجّلها',
             amount: 'المبلغ',
             notes: 'ملاحظات',
+            method: "الطريقة",
             actions: 'إجراءات',
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: 'طباعة سند صرف',
         voucherNumber: 'رقم السند',
         balanceAfter: 'الرصيد بعدها',
+        paymentMethod: "طريقة الدفع",
+        paymentMethodHint: "يُقيَّد في حساب هذه الطريقة في المحاسبة.",
+        supplierRequired: "اختر مورّدًا.",
+        methodTypes: {
+            cash: "نقدًا",
+            mobileWallet: "محفظة جوال",
+            card: "بطاقة",
+            bank: "بنك",
+        },
         print: {
             moneyReceipt: 'سند قبض',
             paymentVoucher: 'سند صرف',
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: 'سجّلها',
             amount: 'المبلغ',
             notes: 'ملاحظات',
+            method: "الطريقة",
             actions: 'إجراءات',
         },
         allocation: {

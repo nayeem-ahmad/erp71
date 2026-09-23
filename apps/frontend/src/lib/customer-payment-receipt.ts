@@ -17,6 +17,8 @@ export interface CustomerPaymentReceiptData {
     notes?: string;
     recordedBy?: string;
     voucherNumber?: string | null;
+    /** How the money moved ("Cash", "bKash", …); the row is left out when unknown. */
+    paymentMethod?: string | null;
     labels: {
         moneyReceipt: string;
         paymentVoucher: string;
@@ -28,6 +30,7 @@ export interface CustomerPaymentReceiptData {
         notes: string;
         recordedBy: string;
         voucher: string;
+        method?: string;
         receiveTitle: string;
         payTitle: string;
         footer: string;
@@ -81,6 +84,7 @@ export function printCustomerPaymentReceipt(
                 ${data.customerCode ? `<br>${escHtml(data.customerCode)}` : ''}
             </td>
         </tr>
+        ${data.paymentMethod && data.labels.method ? `<tr><td>${escHtml(data.labels.method)}</td><td>${escHtml(data.paymentMethod)}</td></tr>` : ''}
         ${data.recordedBy ? `<tr><td>${escHtml(data.labels.recordedBy)}</td><td>${escHtml(data.recordedBy)}</td></tr>` : ''}
         ${data.voucherNumber ? `<tr><td>${escHtml(data.labels.voucher)}</td><td>${escHtml(data.voucherNumber)}</td></tr>` : ''}
     </table>

@@ -1325,6 +1325,15 @@ export const coreMessages = {
             printVoucher: "পেমেন্ট ভাউচার প্রিন্ট",
             voucherNumber: "ভাউচার নং",
             balanceAfter: "পরবর্তী ব্যালেন্স",
+            paymentMethod: "পেমেন্ট পদ্ধতি",
+            paymentMethodHint: "হিসাবে এই পদ্ধতির অ্যাকাউন্টে লেখা হবে।",
+            customerRequired: "একজন গ্রাহক নির্বাচন করুন।",
+            methodTypes: {
+                cash: "নগদ",
+                mobileWallet: "মোবাইল ওয়ালেট",
+                card: "কার্ড",
+                bank: "ব্যাংক",
+            },
             print: {
                 moneyReceipt: "মানি রসিদ",
                 paymentVoucher: "পেমেন্ট ভাউচার",
@@ -1340,6 +1349,7 @@ export const coreMessages = {
                 recordedBy: "রেকর্ড করেছেন",
                 amount: "পরিমাণ",
                 notes: "নোট",
+                method: "পদ্ধতি",
                 actions: "কার্যক্রম",
             },
         },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
             printVoucher: "পেমেন্ট ভাউচার প্রিন্ট",
             voucherNumber: "ভাউচার নং",
             balanceAfter: "পরবর্তী ব্যালেন্স",
+            paymentMethod: "পেমেন্ট পদ্ধতি",
+            paymentMethodHint: "হিসাবে এই পদ্ধতির অ্যাকাউন্টে লেখা হবে।",
+            supplierRequired: "একজন সরবরাহকারী নির্বাচন করুন।",
+            methodTypes: {
+                cash: "নগদ",
+                mobileWallet: "মোবাইল ওয়ালেট",
+                card: "কার্ড",
+                bank: "ব্যাংক",
+            },
             print: {
                 moneyReceipt: "মানি রসিদ",
                 paymentVoucher: "পেমেন্ট ভাউচার",
@@ -1436,6 +1455,7 @@ export const coreMessages = {
                 recordedBy: "রেকর্ড করেছেন",
                 amount: "পরিমাণ",
                 notes: "নোট",
+                method: "পদ্ধতি",
                 actions: "কার্যক্রম",
             },
             allocation: {

@@ -1325,6 +1325,15 @@ export const coreMessages = {
         printVoucher: "Imprimir comprobante de pago",
         voucherNumber: "N.º de comprobante",
         balanceAfter: "Saldo posterior",
+        paymentMethod: "Método de pago",
+        paymentMethodHint: "Se contabiliza en la cuenta de este método.",
+        customerRequired: "Seleccione un cliente.",
+        methodTypes: {
+            cash: "Efectivo",
+            mobileWallet: "Billetera móvil",
+            card: "Tarjeta",
+            bank: "Banco",
+        },
         print: {
             moneyReceipt: "Recibo de dinero",
             paymentVoucher: "Comprobante de pago",
@@ -1340,6 +1349,7 @@ export const coreMessages = {
             recordedBy: "Registrado por",
             amount: "Importe",
             notes: "Notas",
+            method: "Método",
             actions: "Acciones",
         },
     },
@@ -1421,6 +1431,15 @@ export const coreMessages = {
         printVoucher: "Imprimir comprobante de pago",
         voucherNumber: "N.º de comprobante",
         balanceAfter: "Saldo posterior",
+        paymentMethod: "Método de pago",
+        paymentMethodHint: "Se contabiliza en la cuenta de este método.",
+        supplierRequired: "Seleccione un proveedor.",
+        methodTypes: {
+            cash: "Efectivo",
+            mobileWallet: "Billetera móvil",
+            card: "Tarjeta",
+            bank: "Banco",
+        },
         print: {
             moneyReceipt: "Recibo de dinero",
             paymentVoucher: "Comprobante de pago",
@@ -1436,6 +1455,7 @@ export const coreMessages = {
             recordedBy: "Registrado por",
             amount: "Importe",
             notes: "Notas",
+            method: "Método",
             actions: "Acciones",
         },
         allocation: {

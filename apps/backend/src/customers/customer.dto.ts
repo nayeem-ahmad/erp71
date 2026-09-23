@@ -214,6 +214,24 @@ export class RecordCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * How the money moved — the tenant's payment-method name as picked
+     * ("Cash", "bKash", …). Optional: omitted, the payment posts to the rule's
+     * default cash account exactly as before.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    paymentMethod?: string;
+
+    /**
+     * The ledger account the cash leg posts to, when the method is linked to
+     * one. Wins over anything derived from `paymentMethod`.
+     */
+    @IsOptional()
+    @IsString()
+    accountId?: string;
 }
 
 /**
@@ -307,6 +325,24 @@ export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * How the money moved — the tenant's payment-method name as picked
+     * ("Cash", "bKash", …). Optional: omitted, the payment posts to the rule's
+     * default cash account exactly as before.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    paymentMethod?: string;
+
+    /**
+     * The ledger account the cash leg posts to, when the method is linked to
+     * one. Wins over anything derived from `paymentMethod`.
+     */
+    @IsOptional()
+    @IsString()
+    accountId?: string;
 }
 
 export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
