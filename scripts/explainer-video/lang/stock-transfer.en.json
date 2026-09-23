@@ -1,0 +1,16 @@
+{
+  "_comment": "English voice-over for the stock transfer video, keyed by caption title (plus intro/outro). Written for the ear: ERP71 is spelled out.",
+  "narration": {
+    "intro": "Welcome to E R P seventy-one. Here's how to move stock from one warehouse to another: send it now, and receive it when it actually arrives.",
+    "Open Transfers": "In the sidebar, open Inventory, then Transfers.",
+    "Create on top, track below": "The new transfer form is at the top of the page. Every transfer, and where it stands, is listed underneath.",
+    "Where from, and where to": "Pick the source warehouse, where the stock leaves from, and the destination, where it's going. If the destination is in another branch, the transfer waits for approval before any stock moves. Here, we'll keep it within the same branch, and send it to the back storage.",
+    "Send now, or save a draft": "Send now takes the stock out of the source straight away. Save as draft keeps it as a plan, to send later. You can also leave a note, for whoever unloads it.",
+    "Add the products": "Now choose a product and the quantity. Click add line for each extra product. Remove takes a line out. Here, twenty bags of rice, and ten packs of lentils.",
+    "Create the transfer": "Click Create Transfer. It gets a number, and shows as sent. The stock has left the source, and is in transit, until someone receives it.",
+    "Receive it when it arrives": "At the other end, open the transfer with View. Each line shows what was sent, what has arrived, and what's still outstanding.",
+    "Receive what actually came": "Count what actually arrived. All twenty bags of rice came, but only eight of the ten packs of lentils. So type eight, and click Receive Stock. The transfer is now partially received, with two still on the way.",
+    "Receive the rest later": "When the last two arrive, receive them the same way. Once nothing is outstanding, the transfer is complete, and the timeline shows every step, with the time it happened.",
+    "outro": "So, to recap. Open Transfers, choose the source and destination, add the products, create the transfer, and receive it at the other end, in part or all at once. Stock where you need it."
+  }
+}

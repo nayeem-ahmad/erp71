@@ -7,6 +7,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { connect } = require('./api');
 
 const DIR = path.resolve(__dirname, '..');
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
@@ -33,8 +34,15 @@ async function record(name, LANG = 'en') {
     .replace('__HIND_400__', font('hind-siliguri-bengali-400-normal.woff2'))
     .replace('__HIND_700__', font('hind-siliguri-bengali-700-normal.woff2'));
 
+  // Starting state the video needs (a customer who owes money, a supplier
+  // with open bills), created through the app's own API before recording.
+  if (video.setup) await video.setup(await connect());
+
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1,
+    // What a shop in Bangladesh sees; a UTC runner would show some times six
+    // hours off from the ones the server formats in the tenant's zone.
+    timezoneId: 'Asia/Dhaka', locale: 'en-GB' });
   await ctx.addInitScript(overlay);
   const page = await ctx.newPage();
   page.setDefaultTimeout(120000);

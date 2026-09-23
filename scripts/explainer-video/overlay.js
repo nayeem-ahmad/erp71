@@ -31,6 +31,10 @@
                    background: rgba(15,23,42,.92); color: #fff; border-radius: 12px; padding: 14px 22px 16px;
                    box-shadow: 0 10px 30px rgba(0,0,0,.3); display: flex; gap: 16px; align-items: flex-start; }
       #__ov .cap.on { opacity: 1; transform: translate(-50%, 0); }
+      /* Beside a centred dialog, when the bottom bar would cover its footer. */
+      #__ov .cap.side { left: 24px; bottom: auto; top: 140px; max-width: 430px; transform: translate(0, 20px); }
+      #__ov .cap.side.on { transform: translate(0, 0); }
+      #__ov .cap.side .b { max-width: 370px; }
       #__ov .cap .n { flex: none; width: 34px; height: 34px; border-radius: 50%; background: ${BLUE}; color: #fff;
                       font-weight: 700; font-size: 17px; display: grid; place-items: center; margin-top: 2px; }
       #__ov .cap .t { font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
@@ -146,6 +150,7 @@
       }, cap.innerHTML ? 250 : 0);
     },
     hideCaption() { ensure(); cap.classList.remove('on'); },
+    captionAt(where) { ensure(); cap.classList.toggle('side', where === 'side'); },
     box(r, text, opts = {}) {
       ensure();
       const { color = INK, pos = 'below', pad = 8, dx = 0, dy = 0, delay = 0 } = opts;

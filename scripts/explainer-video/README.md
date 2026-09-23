@@ -8,6 +8,9 @@ complete task:
 | Sales entry | `docs/user-manual/videos/sales-entry.mp4` | ~3.5 min | male, Kokoro `am_michael` |
 | Sales entry, Bangla | `docs/user-manual/videos/sales-entry.bn.mp4` | ~3.5 min | male, Azure `bn-BD-PradeepNeural`. **Silent until an Azure Speech key is available** (see below) |
 | Purchase entry | `docs/user-manual/videos/purchase-entry.mp4` | ~3 min | male, Kokoro `am_michael` |
+| Customer payment | `docs/user-manual/videos/customer-payment.mp4` | ~2 min | male, Kokoro `am_michael` |
+| Supplier payment | `docs/user-manual/videos/supplier-payment.mp4` | ~2 min | male, Kokoro `am_michael` |
+| Stock transfer | `docs/user-manual/videos/stock-transfer.mp4` | ~2 min | male, Kokoro `am_michael` |
 
 These are not mock-ups. `overlay.js` is injected into the live page and draws on
 top of it: step captions, hand-drawn boxes, arrows and labels, a visible cursor
@@ -23,9 +26,21 @@ Bangla handwriting, Hind Siliguri for Bangla captions and cards.
 |---|---|
 | `record.js` | CLI: `node record.js <video>` |
 | `lib/recorder.js` | the shared engine: sign-in, page warm-up, overlay, screencast, helpers (`say`, `click`, `type`, `box`, …), voice pacing, encoding |
-| `videos/<video>.js` | one video's scenes only: `{ warm, start, run(helpers) }` |
+| `videos/<video>.js` | one video's scenes only: `{ warm, start, setup?(api), run(helpers) }` |
+| `lib/api.js` | a small API client for `setup` |
 | `lang/<video>.<lang>.json` | the voice-over, plus translated captions/labels/cards for non-English versions |
 | `narrate.py` | text-to-speech: `python3 narrate.py <video> [lang]` |
+
+`setup(api)`, when a video has one, runs before the browser opens and creates
+the state the video starts from through the app's own API: a credit sale so a
+customer owes money, or purchases so a supplier has open bills. The balances
+on screen are then ones the app computed itself. The seeded demo data can't be
+used for this, because its purchases and part-paid sales never updated the
+customer and supplier balances (see TODO.md).
+
+The browser runs in the `Asia/Dhaka` time zone, as a shop's would.
+`ov('captionAt', 'side')` moves the caption beside a centred dialog when the
+bottom bar would cover the dialog's buttons; `'bottom'` puts it back.
 
 To add a video, copy `videos/purchase-entry.js` and `lang/purchase-entry.en.json`,
 rewrite the scenes and lines, and make sure every caption title has a narration
@@ -49,6 +64,25 @@ previous purchase rates · 7. more lines · 8. editing a line (In Stock is befor
 the purchase) · 9. freight / tax / discount and live total · 10. part-payment,
 the rest as supplier due · 11. note (supplier invoice no.) · 12. Post Purchase ·
 13. the purchase in the list with its posted voucher.
+
+**Customer payment** (setup: Karim Hossain buys ৳2,050 on credit and pays
+৳500): 1. Sales → Customer Payment · 2. the list and filters · 3. New Customer
+Payment · 4. receive vs pay back · 5. pick the customer, due ৳1,550 · 6. ৳1,000
+part payment, advance on overpayment, note · 7. Record receipt · 8. the receipt
+on the list · 9. due balance now ৳550.
+
+**Supplier payment** (setup: Meghna Traders, one ৳6,320 purchase with ৳3,000
+paid, one ৳4,800 unpaid): 1. Purchase → Supplier Payment · 2. the list (the
+payment made on the purchase is there too) · 3. New Supplier Payment, pay vs
+receive · 4. pick the supplier, payable ৳8,120 and open bills · 5. ৳5,000 split
+across the two bills · 6. Record payment (unallocated = prepayment) · 7. on the
+list · 8. payable now ৳3,120, one bill left.
+
+**Stock transfer**: 1. Inventory → Transfers · 2. form on top, list below ·
+3. source and destination (another branch needs approval) · 4. Send Now vs
+draft, note · 5. products and quantities, Add Line · 6. Create Transfer → Sent,
+in transit · 7. View · 8. receive 20 rice and 8 of 10 lentils → partially
+received · 9. receive the last 2 → complete, with the timeline.
 
 ## Languages
 
@@ -107,6 +141,7 @@ Run this after changing a screen a video covers, so the video still matches it.
    python3 scripts/explainer-video/narrate.py sales-entry && node scripts/explainer-video/record.js sales-entry
    python3 scripts/explainer-video/narrate.py sales-entry bn && VIDEO_LANG=bn node scripts/explainer-video/record.js sales-entry
    python3 scripts/explainer-video/narrate.py purchase-entry && node scripts/explainer-video/record.js purchase-entry
+   # …and the same for customer-payment, supplier-payment, stock-transfer
    ```
    Optional env: `BASE_URL` (default `http://localhost:3000`), `CHROMIUM_PATH`
    (a Chromium binary, if Playwright's own is not installed) and `FFMPEG` (the
