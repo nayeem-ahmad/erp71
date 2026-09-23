@@ -51,6 +51,7 @@ jest.mock('@/lib/api', () => {
             getProjectColumns: jest.fn(),
             moveBoardCards: jest.fn(),
             removeBoardCards: jest.fn(),
+            bulkDeleteProjectTasks: jest.fn(),
             setBoardColumnCardOrder: jest.fn(),
             getMe: jest.fn(),
             getProject: jest.fn(),
@@ -109,6 +110,7 @@ describe('BoardPage', () => {
             columns: [],
             unsorted: [],
         });
+        (api.bulkDeleteProjectTasks as jest.Mock).mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
         (api.removeBoardCards as jest.Mock).mockReset().mockResolvedValue({
             id: 'b1',
             name: 'Release 4',
@@ -174,13 +176,51 @@ describe('BoardPage', () => {
         expect(screen.getByText('Orphan card')).toBeInTheDocument();
     });
 
-    it('removes a card from the board without touching the task', async () => {
-        render(<BoardPage />);
-        await screen.findByText('Fix login');
+    describe('the bin on a card', () => {
+        const openBin = async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            fireEvent.click(screen.getAllByRole('button', { name: /remove from board/i })[0]);
+            return screen.getByRole('dialog');
+        };
 
-        fireEvent.click(screen.getAllByRole('button', { name: /remove from board/i })[0]);
+        it('asks before doing anything', async () => {
+            const dialog = await openBin();
 
-        await waitFor(() => expect(api.removeBoardTask).toHaveBeenCalledWith('b1', 'k1'));
+            expect(within(dialog).getByText('Remove this card?')).toBeInTheDocument();
+            expect(within(dialog).getByText('Fix login')).toBeInTheDocument();
+            expect(api.removeBoardCards).not.toHaveBeenCalled();
+            expect(api.bulkDeleteProjectTasks).not.toHaveBeenCalled();
+        });
+
+        it('takes the card off the board by default, leaving the task alone', async () => {
+            const dialog = await openBin();
+
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Remove from board' }));
+
+            await waitFor(() => expect(api.removeBoardCards).toHaveBeenCalledWith('b1', ['k1']));
+            expect(api.bulkDeleteProjectTasks).not.toHaveBeenCalled();
+        });
+
+        it('deletes the task itself when the reader chooses that', async () => {
+            const dialog = await openBin();
+
+            fireEvent.click(within(dialog).getByRole('radio', { name: /Delete task/ }));
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Delete task(s)' }));
+
+            await waitFor(() => expect(api.bulkDeleteProjectTasks).toHaveBeenCalledWith(['k1']));
+            expect(api.removeBoardCards).not.toHaveBeenCalled();
+        });
+
+        it('does nothing when cancelled', async () => {
+            const dialog = await openBin();
+
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(api.removeBoardCards).not.toHaveBeenCalled();
+            expect(api.bulkDeleteProjectTasks).not.toHaveBeenCalled();
+        });
     });
 
     it('narrows the board by label, including cards sitting in Unsorted', async () => {
@@ -1086,6 +1126,11 @@ describe('BoardPage', () => {
                 ),
             );
 
+            const dialog = screen.getByRole('dialog');
+            expect(within(dialog).getByText('Remove 2 cards?')).toBeInTheDocument();
+            expect(api.removeBoardCards).not.toHaveBeenCalled();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Remove from board' }));
+
             await waitFor(() =>
                 expect(api.removeBoardCards).toHaveBeenCalledWith('b1', ['k1', 'k2']),
             );
@@ -1328,15 +1373,28 @@ describe('the clock on a card', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('marks the card the clock is running on', async () => {
+    it('marks the card the clock is running on, with how long it has run', async () => {
         useProjectTimerStore.setState({
             timer: { id: 'tm1', task: { id: 'k1' }, elapsed_seconds: 5 } as never,
+            receivedAt: Date.now(),
             loaded: true,
         });
         render(<BoardPage />);
         await screen.findByText('Fix login');
 
-        expect(screen.getByText('Running')).toBeInTheDocument();
+        expect(screen.getByTitle('Running')).toHaveTextContent('0:05');
+    });
+
+    it('counts from when the server answered, not from ticks a background tab skipped', async () => {
+        useProjectTimerStore.setState({
+            timer: { id: 'tm1', task: { id: 'k1' }, elapsed_seconds: 5 } as never,
+            receivedAt: Date.now() - 90 * 60 * 1000,
+            loaded: true,
+        });
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+
+        expect(screen.getByTitle('Running')).toHaveTextContent('1:30:05');
     });
 
     it('leaves other cards unmarked', async () => {
@@ -1347,7 +1405,7 @@ describe('the clock on a card', () => {
         render(<BoardPage />);
         await screen.findByText('Fix login');
 
-        expect(screen.queryByText('Running')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Running')).not.toBeInTheDocument();
     });
 
     it('offers to stop the clock it is running', async () => {

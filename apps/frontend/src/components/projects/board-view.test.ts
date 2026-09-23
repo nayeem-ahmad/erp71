@@ -58,6 +58,13 @@ describe('mergeBoardView', () => {
         expect(merged.scroll).toBe(DEFAULT_BOARD_VIEW.scroll);
     });
 
+    it('keeps a stored swimlane choice and starts older entries ungrouped', () => {
+        expect(mergeBoardView({ swimlanes: 'story' }).swimlanes).toBe('story');
+        expect(mergeBoardView({ density: 'compact' }).swimlanes).toBe('none');
+        expect(mergeBoardView({ swimlanes: 'priority' }).swimlanes).toBe('none');
+        expect(isDefaultBoardView(withView({ swimlanes: 'assignee' }))).toBe(false);
+    });
+
     it('takes only the card fields it knows, and only booleans', () => {
         const merged = mergeBoardView({ fields: { labels: false, cover: 'no', invented: false } });
         expect(merged.fields.labels).toBe(false);

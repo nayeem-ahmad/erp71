@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Square, Timer } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
+import { useTimerElapsed } from './use-timer-elapsed';
 import { formatElapsed } from './hour-log-day';
 import { useProjectTimerActions } from './use-project-timer';
 
@@ -35,20 +36,7 @@ export default function TimerChip() {
         if (!loaded) load();
     }, [loaded, load]);
 
-    // Seeded from the server and ticked locally, keyed on the two fields rather
-    // than the object so a refetch does not restart the count. Same approach as
-    // the tracker, which may be showing the very same clock beside this one.
-    const [elapsed, setElapsed] = useState(0);
-    useEffect(() => {
-        if (!timer) return;
-        setElapsed(timer.elapsed_seconds);
-        const handle = setInterval(() => setElapsed((value) => value + 1), 1000);
-        return () => clearInterval(handle);
-        // Keyed on the two fields, not on `timer`: it is a fresh object on every
-        // refetch, and depending on it would restart the interval — and the
-        // count — several times a minute.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timer?.id, timer?.elapsed_seconds]);
+    const elapsed = useTimerElapsed();
 
     if (!timer) {
         // Nothing running: one button that opens the tracker, so a timer can be

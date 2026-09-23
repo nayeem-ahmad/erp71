@@ -11,6 +11,12 @@ import type { RunningTimer } from '@/components/projects/hour-log-day';
  */
 interface ProjectTimerStore {
     timer: RunningTimer | null;
+    /**
+     * `Date.now()` when `timer` arrived. Its `elapsed_seconds` is the server's
+     * count at that moment, so the clock on screen is that plus the time since —
+     * see `useTimerElapsed`.
+     */
+    receivedAt: number;
     /** False until the first `GET /project-time/timer` has answered. */
     loaded: boolean;
     /** True while a start/stop/log is in flight, so a double press cannot double-write. */
@@ -30,11 +36,12 @@ interface ProjectTimerStore {
 
 export const useProjectTimerStore = create<ProjectTimerStore>((set) => ({
     timer: null,
+    receivedAt: 0,
     loaded: false,
     busy: false,
     open: false,
     revision: 0,
-    setTimer: (timer) => set({ timer, loaded: true }),
+    setTimer: (timer) => set({ timer, receivedAt: Date.now(), loaded: true }),
     setBusy: (busy) => set({ busy }),
     setOpen: (open) => set({ open }),
     bumpRevision: () => set((state) => ({ revision: state.revision + 1 })),
